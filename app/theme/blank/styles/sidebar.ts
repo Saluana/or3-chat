@@ -25,6 +25,21 @@ export const sidebarOverrides = {
             base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)] shadow text-[14px]! h-[40px]!',
         },
     },
+    'selectmenu#sidebar.project-select': {
+        class: 'h-[40px] rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] ring-0 data-[state=open]:ring-1! data-[state=open]:bg-[var(--md-surface-hover)]! w-full cursor-pointer',
+        ui: {
+            base: 'text-[16px]! poop',
+            value: 'text-[16px]!',
+            placeholder: 'text-[16px]!',
+            content:
+                'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[16px]!',
+        },
+        searchInput: {
+            ui: {
+                base: 'text-[14px]! rounded-none',
+            },
+        },
+    },
 
     /* --- Sidenav content --- */
 

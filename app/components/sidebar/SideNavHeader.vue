@@ -130,6 +130,7 @@
                     >
                         <div class="flex flex-col space-y-3">
                             <UFormField
+                                v-bind="sidebarFormFieldProps"
                                 label="Title"
                                 name="name"
                                 :error="createProjectErrors.name"
@@ -143,7 +144,11 @@
                                     @keyup.enter="submitCreateProject"
                                 />
                             </UFormField>
-                            <UFormField label="Description" name="description">
+                            <UFormField
+                                v-bind="sidebarFormFieldProps"
+                                label="Description"
+                                name="description"
+                            >
                                 <UTextarea
                                     class="w-full border-[var(--md-border-width)] rounded-[6px]"
                                     v-model="createProjectState.description"
@@ -208,14 +213,18 @@
                         </button>
                     </div>
                     <div v-if="addMode === 'select'" class="space-y-3">
-                        <UFormField label="Project" name="project">
+                        <UFormField
+                            v-bind="sidebarFormFieldProps"
+                            label="Project"
+                            name="project"
+                        >
                             <USelectMenu
                                 v-model="selectedProjectId"
                                 :items="projectSelectOptions"
                                 :value-key="'value'"
                                 searchable
                                 placeholder="Select project"
-                                class="w-full"
+                                v-bind="sidebarProjectSelectProps"
                             />
                         </UFormField>
                         <p v-if="addToProjectError" class="text-error text-xs">
@@ -223,7 +232,11 @@
                         </p>
                     </div>
                     <div v-else class="space-y-3">
-                        <UFormField label="Project Title" name="newProjectName">
+                        <UFormField
+                            v-bind="sidebarFormFieldProps"
+                            label="Project Title"
+                            name="newProjectName"
+                        >
                             <UInput
                                 v-model="newProjectName"
                                 placeholder="Project name"
@@ -232,6 +245,7 @@
                             />
                         </UFormField>
                         <UFormField
+                            v-bind="sidebarFormFieldProps"
                             label="Description"
                             name="newProjectDescription"
                         >
@@ -286,6 +300,7 @@
                         @submit.prevent="submitCreateDocument"
                     >
                         <UFormField
+                            v-bind="sidebarFormFieldProps"
                             label="Title"
                             name="title"
                             :error="newDocumentErrors.title"
@@ -424,6 +439,32 @@ const filterItemButtonProps = computed(() => {
         block: true,
         ...(overrides.value as any),
     };
+});
+
+const sidebarProjectSelectOverrides = useThemeOverrides({
+    component: 'selectmenu',
+    context: 'sidebar',
+    identifier: 'sidebar.project-select',
+    isNuxtUI: true,
+});
+
+const sidebarProjectSelectProps = computed(() => {
+    const overrideValue =
+        (sidebarProjectSelectOverrides.value as Record<string, any>) || {};
+    const mergedClass = ['w-full', overrideValue.class || '']
+        .filter(Boolean)
+        .join(' ');
+
+    return {
+        ...overrideValue,
+        class: mergedClass,
+    };
+});
+
+const sidebarFormFieldProps = useThemeOverrides({
+    component: 'formField',
+    context: 'sidebar',
+    isNuxtUI: true,
 });
 
 // Section visibility (multi-select) defaults to all on

@@ -42,19 +42,41 @@ const selectMenuProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
-        // Default props
-        class: 'h-[32px] text-sm rounded-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]',
-        searchInput: {
-            icon: 'pixelarticons:search',
-            autofocus: !isMobile.value,
-            ui: {
-                base: 'border-0 border-b-1 rounded-none!',
-                leadingIcon: 'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
-            },
+    const overrideValue = (overrides.value as Record<string, any>) || {};
+    const {
+        searchInput: themeSearchInput,
+        class: themeClass,
+        ...restOverrides
+    } = overrideValue;
+
+    const baseClass =
+        'h-[32px] text-[14px] rounded-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]';
+    const mergedClass = [baseClass, themeClass].filter(Boolean).join(' ');
+
+    const defaultSearchInput = {
+        icon: 'pixelarticons:search',
+        autofocus: !isMobile.value,
+        ui: {
+            base: 'border-0 border-b-1 rounded-none!',
+            leadingIcon: 'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
         },
-        // Theme overrides
-        ...(overrides.value as any),
+    };
+
+    const mergedSearchInput = themeSearchInput
+        ? {
+              ...defaultSearchInput,
+              ...themeSearchInput,
+              ui: {
+                  ...defaultSearchInput.ui,
+                  ...(themeSearchInput.ui || {}),
+              },
+          }
+        : defaultSearchInput;
+
+    return {
+        class: mergedClass,
+        searchInput: mergedSearchInput,
+        ...restOverrides,
     };
 });
 

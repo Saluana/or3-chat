@@ -140,6 +140,13 @@ export default defineTheme({
     // Component overrides using the new selector syntax
     // These provide default styling for all retro-themed components
     overrides: {
+        formField: {
+            ui: {
+                base: 'flex flex-col',
+                label: 'text-xs font-light px-1 text-[var(--md-on-surface)]/70 -mb-0.5!',
+                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
+            },
+        },
         // Global input overrides
         input: {
             ui: {
@@ -155,6 +162,17 @@ export default defineTheme({
                         lg: { base: 'h-[48px] text-[16px]!' },
                     },
                 },
+            },
+        },
+        selectmenu: {
+            ui: {
+                base: 'text-[15px] leading-[20px]',
+                value: 'text-[15px]',
+                placeholder: 'text-[15px]',
+                label: 'text-[15px]',
+                item: 'text-[15px]',
+                itemLabel: 'text-[15px]',
+                content: 'text-[15px]',
             },
         },
         // Global button overrides
@@ -177,7 +195,7 @@ export default defineTheme({
                     'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
                 content:
                     'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)]  py-0! px-0!',
+                body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)]  p-4',
                 header: 'border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-[var(--md-on-primary)]!',
                 title: 'text-[var(--md-on-primary)] font-semibold text-xs sm:text-sm',
                 description: 'hidden',
