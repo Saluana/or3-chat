@@ -130,15 +130,6 @@ export default defineTheme({
         baseWeight: '400',
     },
 
-    ui: {
-        tooltip: {
-            slots: {
-                content:
-                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]! ring-0 rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[var(--md-on-surface)] shadow-lg p-2 text-sm',
-            },
-        },
-    },
-
     // Component overrides using the new selector syntax
     // These provide default styling for all retro-themed components
     overrides: {
@@ -177,37 +168,7 @@ export default defineTheme({
                 content: 'text-[15px]',
             },
         },
-        // Global button overrides
-        button: {
-            ui: {
-                variants: {
-                    size: {
-                        xs: {
-                            leadingIcon: 'w-[25px]! h-[25px]! text-[20px]!',
-                            trailingIcon: 'w-[25px]! h-[25px]! text-[20px]!',
-                            base: 'h-[25px] w-[25px] !px-0 ',
-                        },
-                        sm: { base: 'h-[32px] !px-[12px] !text-[14px]' },
-                        md: { base: 'h-[40px] !px-[16px] !text-[14px]' },
-                        lg: { base: 'h-[56px] !px-[24px] !text-[20px]' },
-                    },
-                },
-            },
-        },
-        // Global modal overrides
-        modal: {
-            ui: {
-                overlay:
-                    'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
-                content:
-                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)]  p-4',
-                header: 'border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-[var(--md-on-primary)]!',
-                title: 'text-[var(--md-on-primary)] font-semibold text-xs sm:text-sm',
-                description: 'hidden',
-                close: 'relative! top-auto! end-auto! flex items-center justify-center leading-none h-[32px] w-[32px] p-0 bg-white! hover:bg-white/90! active:bg-white/80! dark:text-black dark:hover:bg-white/80!',
-            },
-        },
+
         ...chatOverrides,
         ...sidebarOverrides,
         ...dashboardOverrides,

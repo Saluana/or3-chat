@@ -17,6 +17,7 @@ import {
     loadThemeStylesheets,
     unloadThemeStylesheets,
     updateManifestEntry,
+    loadThemeAppConfig,
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
 import { generateThemeCssVariables } from '~/theme/_shared/generate-css-variables';
@@ -57,14 +58,24 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     }
 
     const appConfig = useAppConfig() as any;
-    const baseUiConfig = cloneUiConfig(appConfig.ui || {});
+    const baseAppConfig = cloneDeep(appConfig);
+    const themeAppConfigOverrides = new Map<
+        string,
+        Record<string, any> | null
+    >();
 
     const applyThemeUiConfig = (theme?: CompiledTheme | null) => {
-        const mergedUi = mergeUiConfig(
-            cloneUiConfig(baseUiConfig),
-            theme?.ui as Record<string, any> | undefined
+        const baseUi = cloneDeep(appConfig.ui || {});
+        const mergedUi = deepMerge(
+            baseUi,
+            (theme?.ui as Record<string, any> | undefined) || undefined
         );
         appConfig.ui = mergedUi;
+    };
+
+    const applyThemeAppConfigPatch = (patch?: Record<string, any> | null) => {
+        const merged = deepMerge(cloneDeep(baseAppConfig), patch || undefined);
+        replaceObject(appConfig, merged);
     };
 
     // Determine current default theme from manifest
@@ -270,6 +281,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 };
 
                 themeRegistry.set(themeName, compiledTheme);
+                const themeSpecificConfig =
+                    (await loadThemeAppConfig(manifestEntry)) ?? null;
+                themeAppConfigOverrides.set(themeName, themeSpecificConfig);
 
                 const resolver = new RuntimeResolver(compiledTheme);
                 resolverRegistry.set(themeName, resolver);
@@ -387,6 +401,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             localStorage.setItem(activeThemeStorageKey, fallback);
             writeActiveThemeCookie(fallback);
             await ensureThemeLoaded(fallback);
+            const fallbackPatch =
+                themeAppConfigOverrides.get(fallback) ?? null;
+            applyThemeAppConfigPatch(fallbackPatch);
             applyThemeUiConfig(themeRegistry.get(fallback) || null);
             return;
         }
@@ -412,6 +429,8 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         // Load CSS file and apply classes for new theme
         const theme = themeRegistry.get(target);
         const manifest = themeManifest.get(target);
+        const themePatch = themeAppConfigOverrides.get(target) ?? null;
+        applyThemeAppConfigPatch(themePatch);
         applyThemeUiConfig(theme ?? null);
 
         if (theme && manifest) {
@@ -575,25 +594,23 @@ function injectThemeVariables(themeName: string, css: string) {
     style.textContent = css;
 }
 
-function cloneUiConfig(
-    config: Record<string, any> | undefined
-): Record<string, any> {
-    if (!config) {
-        return {};
+function cloneDeep<T>(value: T): T {
+    if (value === undefined || value === null) {
+        return value;
     }
 
     if (typeof globalThis.structuredClone === 'function') {
         try {
-            return globalThis.structuredClone(config);
+            return globalThis.structuredClone(value);
         } catch {
-            // Fallback to JSON if structuredClone fails (non-cloneable values)
+            // Fallback below
         }
     }
 
-    return JSON.parse(JSON.stringify(config));
+    return JSON.parse(JSON.stringify(value));
 }
 
-function mergeUiConfig(
+function deepMerge(
     base: Record<string, any>,
     patch?: Record<string, any>
 ): Record<string, any> {
@@ -608,7 +625,7 @@ function mergeUiConfig(
             !Array.isArray(value)
         ) {
             const current = base[key];
-            base[key] = mergeUiConfig(
+            base[key] = deepMerge(
                 current && typeof current === 'object' && !Array.isArray(current)
                     ? current
                     : {},
@@ -620,4 +637,18 @@ function mergeUiConfig(
     }
 
     return base;
+}
+
+function replaceObject(
+    target: Record<string, any>,
+    source: Record<string, any>
+) {
+    for (const key of Object.keys(target)) {
+        if (!(key in source)) {
+            delete target[key];
+        }
+    }
+    for (const [key, value] of Object.entries(source)) {
+        target[key] = value;
+    }
 }

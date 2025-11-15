@@ -66,7 +66,7 @@ const sidebarToggleOverrides = theme
 const sidebarToggleFallback = {
     class: 'theme-btn',
     variant: 'ghost',
-    size: 'xs',
+    size: 'sm',
     color: 'neutral',
     ui: { base: 'theme-btn' },
 } as const;

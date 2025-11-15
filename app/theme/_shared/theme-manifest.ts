@@ -11,6 +11,12 @@ type ThemeModuleLoader = () => Promise<{ default: ThemeDefinition }>;
 
 type StylesheetModuleLoader = () => Promise<string>;
 
+type ThemeAppConfig = Record<string, any>;
+
+type ThemeAppConfigLoader = () => Promise<
+    { default: ThemeAppConfig } | ThemeAppConfig
+>;
+
 interface RawThemeEntry {
     path: string;
     dirName: string;
@@ -30,6 +36,11 @@ const stylesheetModules = import.meta.glob('../**/*.css', {
     query: '?url',
     import: 'default',
 }) as Record<string, StylesheetModuleLoader>;
+
+const configModules = import.meta.glob('../*/app.config.ts') as Record<
+    string,
+    ThemeAppConfigLoader
+>;
 
 const rawThemeEntries: RawThemeEntry[] = Object.entries(themeModules).map(
     ([path, loader]) => {
@@ -57,6 +68,8 @@ export interface ThemeManifestEntry {
     isDefault: boolean;
     /** Whether cssSelectors include style blocks (requires static CSS) */
     hasCssSelectorStyles: boolean;
+    /** Optional theme-specific app config loader */
+    appConfigLoader?: ThemeAppConfigLoader;
 }
 
 /**
@@ -87,6 +100,8 @@ export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
                 stylesheets: definition.stylesheets ?? [],
                 isDefault: Boolean(definition.isDefault),
                 hasCssSelectorStyles: containsStyleSelectors(definition),
+                appConfigLoader:
+                    configModules[`../${entry.dirName}/app.config.ts`],
             });
         } catch (error) {
             if (import.meta.dev) {
@@ -185,6 +200,31 @@ export function updateManifestEntry(
     entry.stylesheets = definition.stylesheets ?? [];
     entry.isDefault = Boolean(definition.isDefault);
     entry.hasCssSelectorStyles = containsStyleSelectors(definition);
+}
+
+export async function loadThemeAppConfig(
+    entry: ThemeManifestEntry
+): Promise<ThemeAppConfig | null> {
+    if (!entry.appConfigLoader) {
+        return null;
+    }
+
+    try {
+        const module = await entry.appConfigLoader();
+        const config = (module as any)?.default ?? module;
+        if (config && typeof config === 'object') {
+            return config as ThemeAppConfig;
+        }
+    } catch (error) {
+        if (import.meta.dev) {
+            console.warn(
+                `[theme] Failed to load app.config.ts for theme "${entry.name}":`,
+                error
+            );
+        }
+    }
+
+    return null;
 }
 
 function containsStyleSelectors(definition: ThemeDefinition): boolean {

@@ -217,14 +217,11 @@ const newChatButtonProps = computed(() => {
     });
 
     const themeUi = (overrides.value as any)?.ui || {};
-    const componentUi = {
-        base: 'w-[38.5px]! h-[39px]',
-        leadingIcon: 'w-5 h-5',
-    };
-    const mergedUi = { ...componentUi, ...themeUi };
+
+    const mergedUi = { ...themeUi };
 
     return {
-        size: 'md' as const,
+        size: 'sb' as const,
         icon: 'pixelarticons:message-plus' as const,
         ...(overrides.value as any),
         ui: mergedUi,

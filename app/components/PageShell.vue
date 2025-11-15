@@ -112,8 +112,16 @@
                                     entry.action.label ||
                                     entry.action.id
                                 "
-                                :icon="!entry.action.label ? entry.action.icon : undefined"
-                                :leading-icon="entry.action.label ? entry.action.icon : undefined"
+                                :icon="
+                                    !entry.action.label
+                                        ? entry.action.icon
+                                        : undefined
+                                "
+                                :leading-icon="
+                                    entry.action.label
+                                        ? entry.action.icon
+                                        : undefined
+                                "
                                 @click="() => handleHeaderAction(entry)"
                             >
                                 <span
@@ -319,28 +327,28 @@ function useButtonThemeProps(
 const sidebarToggleButtonProps = useButtonThemeProps('shell.sidebar-toggle', {
     class: 'theme-btn',
     variant: 'ghost',
-    size: 'xs',
+    size: 'sm',
     color: 'neutral',
     ui: { base: 'theme-btn' },
 });
 const newPaneButtonProps = useButtonThemeProps('shell.new-pane', {
     class: 'theme-btn',
     variant: 'ghost',
-    size: 'xs',
+    size: 'sm',
     color: 'neutral',
     ui: { base: 'theme-btn' },
 });
 const themeToggleButtonProps = useButtonThemeProps('shell.theme-toggle', {
     class: 'theme-btn',
     variant: 'ghost',
-    size: 'xs',
+    size: 'sm',
     color: 'neutral',
     ui: { base: 'theme-btn' },
 });
 const headerActionButtonProps = useButtonThemeProps('shell.header-action', {
     class: 'theme-btn',
     variant: 'ghost',
-    size: 'xs',
+    size: 'sm',
     ui: { base: 'theme-btn' },
 });
 const paneCloseButtonProps = useButtonThemeProps('shell.pane-close', {

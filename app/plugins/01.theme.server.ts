@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue';
 import type { NuxtApp } from '#app';
+import { useAppConfig } from '#imports';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
 import type { CompiledTheme } from '~/theme/_shared/types';
@@ -9,6 +10,7 @@ import {
     loadThemeManifest,
     loadThemeStylesheets,
     updateManifestEntry,
+    loadThemeAppConfig,
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
 
@@ -20,6 +22,27 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     for (const entry of manifestEntries) {
         themeManifest.set(entry.name, entry);
     }
+
+    const appConfig = useAppConfig() as any;
+    const baseAppConfig = cloneDeep(appConfig);
+    const themeAppConfigOverrides = new Map<
+        string,
+        Record<string, any> | null
+    >();
+
+    const applyThemeAppConfigPatch = (patch?: Record<string, any> | null) => {
+        const merged = deepMerge(cloneDeep(baseAppConfig), patch || undefined);
+        replaceObject(appConfig, merged);
+    };
+
+    const applyThemeUiConfig = (theme?: CompiledTheme | null) => {
+        const startingUi = cloneDeep(appConfig.ui || {});
+        const mergedUi = deepMerge(
+            startingUi,
+            (theme?.ui as Record<string, any> | undefined) || undefined
+        );
+        appConfig.ui = mergedUi;
+    };
 
     if (manifestEntries.length === 0 && import.meta.dev) {
         console.warn(
@@ -109,6 +132,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 };
 
                 themeRegistry.set(themeName, compiledTheme);
+                const themeSpecificConfig =
+                    (await loadThemeAppConfig(manifestEntry)) ?? null;
+                themeAppConfigOverrides.set(themeName, themeSpecificConfig);
 
                 const resolver = new RuntimeResolver(compiledTheme);
                 resolverRegistry.set(themeName, resolver);
@@ -271,7 +297,12 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         }
 
         activeTheme.value = target;
+        const patch = themeAppConfigOverrides.get(target) ?? null;
+        applyThemeAppConfigPatch(patch);
+        applyThemeUiConfig(themeRegistry.get(target) || null);
     };
+
+    await setActiveTheme(activeTheme.value);
 
     const themeApi: ThemePlugin = {
         set,
@@ -317,4 +348,64 @@ function readActiveThemeCookie(
     }
 
     return null;
+}
+
+function cloneDeep<T>(value: T): T {
+    if (value === undefined || value === null) {
+        return value;
+    }
+
+    if (typeof globalThis.structuredClone === 'function') {
+        try {
+            return globalThis.structuredClone(value);
+        } catch {
+            // ignore
+        }
+    }
+
+    return JSON.parse(JSON.stringify(value));
+}
+
+function deepMerge(
+    base: Record<string, any>,
+    patch?: Record<string, any>
+): Record<string, any> {
+    if (!patch) {
+        return base;
+    }
+
+    for (const [key, value] of Object.entries(patch)) {
+        if (
+            value &&
+            typeof value === 'object' &&
+            !Array.isArray(value)
+        ) {
+            const current = base[key];
+            base[key] = deepMerge(
+                current && typeof current === 'object' && !Array.isArray(current)
+                    ? current
+                    : {},
+                value as Record<string, any>
+            );
+        } else if (value !== undefined) {
+            base[key] = value;
+        }
+    }
+
+    return base;
+}
+
+function replaceObject(
+    target: Record<string, any>,
+    source: Record<string, any>
+) {
+    for (const key of Object.keys(target)) {
+        if (!(key in source)) {
+            delete target[key];
+        }
+    }
+
+    for (const [key, value] of Object.entries(source)) {
+        target[key] = value;
+    }
 }
