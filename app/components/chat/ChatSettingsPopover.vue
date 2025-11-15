@@ -20,20 +20,20 @@
             />
         </div>
         <div
-            class="chat-settings-popover-switch flex justify-between w-full items-center py-1 px-2 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
+            class="chat-settings-popover-switch chat-settings-switch flex justify-between w-full items-center py-1 px-3 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
         >
             <USwitch
                 v-bind="webSearchSwitchProps"
                 class="w-full"
                 v-model="webSearchEnabled"
             ></USwitch>
-            <UIcon name="pixelarticons:visible" class="w-4 h-4" />
+            <UIcon name="pixelarticons:visible" class="w-5 h-5" />
         </div>
         <div
-            class="flex justify-between w-full items-center py-1 px-2 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
+            class="chat-settings-switch flex justify-between w-full items-center py-1 px-3 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
         >
             <USwitch v-bind="thinkingSwitchProps" class="w-full"></USwitch>
-            <UIcon name="pixelarticons:lightbulb-on" class="w-4 h-4" />
+            <UIcon name="pixelarticons:lightbulb-on" class="w-5 h-5" />
         </div>
 
         <!-- Tool Toggles Section -->
@@ -44,10 +44,10 @@
             <div
                 v-for="tool in registeredTools"
                 :key="tool.name"
-                class="chat-settings-popover-tool flex flex-col py-1 px-2"
+                class="chat-settings-popover-tool flex flex-col py-1 px-3"
             >
                 <div
-                    class="chat-settings-popover-tool-switch flex justify-between w-full items-center"
+                    class="chat-settings-popover-tool-switch chat-settings-switch flex justify-between w-full items-center"
                 >
                     <USwitch
                         v-bind="getToolSwitchProps(tool.name)"
@@ -66,9 +66,9 @@
                     <UIcon
                         v-if="tool.definition.ui?.icon"
                         :name="tool.definition.ui.icon"
-                        class="w-4 h-4"
+                        class="w-5 h-5"
                     />
-                    <UIcon v-else name="pixelarticons:wrench" class="w-4 h-4" />
+                    <UIcon v-else name="pixelarticons:wrench" class="w-5 h-5" />
                 </div>
                 <p
                     v-if="
@@ -91,14 +91,14 @@
             class="chat-settings-popover-button"
             @click="$emit('open-system-prompts')"
         >
-            <span class="px-1">System prompts</span>
+            System prompts
         </UButton>
         <UButton
             v-bind="modelCatalogButtonProps"
             class="chat-settings-popover-button"
             @click="$emit('open-model-catalog')"
         >
-            <span class="px-1">Model Catalog</span>
+            Model Catalog
         </UButton>
     </div>
 </template>
@@ -168,6 +168,7 @@ const webSearchSwitchProps = computed(() => {
     });
     return {
         color: 'primary',
+        size: 'sm',
         label: 'Enable web search',
         ...(overrides.value as any),
     };
@@ -183,6 +184,7 @@ const thinkingSwitchProps = computed(() => {
     });
     return {
         color: 'primary',
+        size: 'sm',
         label: 'Enable thinking',
         ...(overrides.value as any),
     };
@@ -198,6 +200,7 @@ const getToolSwitchProps = (toolName: string) => {
     });
     return {
         color: 'primary',
+        size: 'sm',
         ...(overrides.value as any),
     };
 };
@@ -210,13 +213,20 @@ const systemPromptsButtonProps = computed(() => {
         identifier: 'settings.system-prompts',
         isNuxtUI: true,
     });
+    const overrideValue = (overrides.value as any) || {};
+    const baseClass =
+        'flex justify-between w-full items-center py-1 px-2 font-normal';
+    const mergedClass = [baseClass, overrideValue.class]
+        .filter(Boolean)
+        .join(' ');
     return {
-        class: 'flex justify-between w-full items-center py-1 px-2 border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
         variant: 'ghost',
+        size: 'sm',
         block: true,
         trailing: true,
         trailingIcon: 'pixelarticons:script-text',
-        ...(overrides.value as any),
+        ...overrideValue,
+        class: mergedClass,
     };
 });
 
@@ -228,13 +238,20 @@ const modelCatalogButtonProps = computed(() => {
         identifier: 'settings.model-catalog',
         isNuxtUI: true,
     });
+    const overrideValue = (overrides.value as any) || {};
+    const baseClass =
+        'flex justify-between w-full items-center py-1 px-2 font-normal';
+    const mergedClass = [baseClass, overrideValue.class]
+        .filter(Boolean)
+        .join(' ');
     return {
-        class: 'flex justify-between w-full items-center py-1 px-2 retro-settings-item',
         variant: 'ghost',
+        size: 'sm',
         block: true,
         trailing: true,
         trailingIcon: 'pixelarticons:android',
-        ...(overrides.value as any),
+        ...overrideValue,
+        class: mergedClass,
     };
 });
 </script>

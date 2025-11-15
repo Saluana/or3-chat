@@ -45,6 +45,7 @@ export default {
                     basic: 'border-[var(--md-border-width)] shadow-none! drop-shadow-none!  hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[color:var(--md-border-color)] text-[var(--md-on-surface)]',
                     popover:
                         'flex items-center! hover:bg-[var(--md-primary)]/5 active:bg-[var(--md-primary)]/10 justify-start!',
+                    ghost: 'font-base',
                 },
                 color: {
                     primary:
@@ -58,7 +59,7 @@ export default {
                 size: {
                     xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
                     sm: {
-                        base: 'h-[32px] px-[12px]! text-[16px]',
+                        base: 'h-[32px] px-[12px]! text-[15px]',
                         leadingIcon: 'shrink-0 h-5 w-5',
                         trailingIcon: 'shrink-0 h-5 w-5',
                     },
@@ -140,10 +141,42 @@ export default {
         switch: {
             // Retro styled switch theme (square, hard borders, pixel shadow)
             slots: {
-                root: 'relative inline-flex items-center select-none ',
-                base: 'border-[var(--md-border-width)] border-black rounded-[var(--md-border-radius)] h-[20px] w-[39px]! cursor-pointer',
-                thumb: 'border-[var(--md-border-width)] border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[var(--md-border-radius)] ',
-                label: 'block font-medium text-default cursor-pointer',
+                root: 'relative flex items-start',
+                base: [
+                    'inline-flex items-center shrink-0 rounded-full border-2 border-transparent focus-visible:outline-2 focus-visible:outline-offset-2 data-[state=unchecked]:bg-accented',
+                    'transition-[background] duration-200',
+                ],
+                container: 'flex items-center',
+                thumb: 'group pointer-events-none rounded-full bg-default shadow-lg ring-0 transition-transform duration-200 data-[state=unchecked]:translate-x-0 data-[state=unchecked]:rtl:-translate-x-0 flex items-center justify-center',
+                icon: [
+                    'absolute shrink-0 group-data-[state=unchecked]:text-dimmed opacity-0 size-10/12',
+                    'transition-[color,opacity] duration-200',
+                ],
+                wrapper: 'ms-2',
+                label: 'block font-medium text-default',
+                description: 'text-muted',
+            },
+            variants: {
+                size: {
+                    xs: {
+                        base: 'w-7',
+                        container: 'h-4',
+                        thumb: 'size-3 data-[state=checked]:translate-x-3 data-[state=checked]:rtl:-translate-x-3',
+                        wrapper: 'text-xs',
+                    },
+                    sm: {
+                        base: 'w-8',
+                        container: 'h-4',
+                        thumb: 'size-3.5 data-[state=checked]:translate-x-3.5 data-[state=checked]:rtl:-translate-x-3.5',
+                        wrapper: 'text-xs',
+                    },
+                    md: {
+                        base: 'w-9',
+                        container: 'h-5',
+                        thumb: 'size-4 data-[state=checked]:translate-x-4 data-[state=checked]:rtl:-translate-x-4',
+                        wrapper: 'text-sm',
+                    },
+                },
             },
         },
         textarea: {

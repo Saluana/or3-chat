@@ -655,7 +655,6 @@ const settingsButtonProps = computed(() => {
         square: true,
         size: 'sm' as const,
         color: 'info' as const,
-        class: 'theme-btn text-black dark:text-white flex items-center justify-center',
         ...(overrides.value as any),
     };
 });

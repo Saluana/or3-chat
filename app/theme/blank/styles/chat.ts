@@ -44,7 +44,10 @@ export const chatOverrides = {
         },
     },
     'button.settings': {
-        class: 'rounded-none text-[var(--md-on-surface)]/90 hover:bg-primary/10 active:bg-[var(--md-info)]/80 not-last:border-b-[length:var(--md-border-width)] not-last:border-b-[color:var(--md-border-color)] last:rounded-b-[var(--md-border-radius)]',
+        class: 'rounded-none text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] not-last:border-b-[length:var(--md-border-width)] not-last:border-b-[color:var(--md-border-color)] last:rounded-b-[var(--md-border-radius)]',
+        ui: {
+            label: 'text-[14px]!',
+        },
     },
     'modal#dashboard.shell': {
         ui: {
@@ -103,6 +106,11 @@ export const chatCssSelectors = {
     '.cm-assistant': {
         style: {
             backgroundColor: 'transparent',
+        },
+    },
+    '.chat-settings-switch': {
+        style: {
+            height: '32px',
         },
     },
 };
