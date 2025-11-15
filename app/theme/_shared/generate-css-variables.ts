@@ -70,6 +70,12 @@ function applyFontVars(
     if (fonts.mono) {
         target['--font-mono'] = fonts.mono;
     }
+    if (fonts.baseSize) {
+        target['--app-font-size-root'] = fonts.baseSize;
+    }
+    if (fonts.baseWeight) {
+        target['--app-font-weight-root'] = fonts.baseWeight;
+    }
 }
 
 function toCssBlock(

@@ -30,6 +30,10 @@
   color: var(--md-on-surface)/70%;
 }
 
+[data-theme="pog"] #nav-top-section .iconify {
+  font-size: 25px !important;
+}
+
 [data-theme="pog"] #btn-reasoning-toggle {
   background-color: var(--md-surface) !important;
   border: var(--md-border-width) solid var(--md-border-color);

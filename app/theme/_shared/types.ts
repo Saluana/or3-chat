@@ -247,6 +247,16 @@ export interface ThemeFontSet {
     sans?: string;
     heading?: string;
     mono?: string;
+    /**
+     * Base font size for the theme (e.g., '16px', '1rem')
+     * Applied to --app-font-size-root.
+     */
+    baseSize?: string;
+    /**
+     * Base font weight for the theme body text (e.g., '400', '500').
+     * Applied to --app-font-weight-root.
+     */
+    baseWeight?: string;
 }
 
 export interface ThemeFonts extends ThemeFontSet {

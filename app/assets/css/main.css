@@ -46,6 +46,8 @@
 
 	/* Theme customization variables (defaults mirror shipped design) */
 	--app-font-size-root: 20px; /* base font size */
+	--app-font-weight-root: 400; /* base font weight */
+	--app-icon-size-base: 20px; /* default icon font size */
 	/* Content background layer 1 */
 	--app-content-bg-1: none;
 	--app-content-bg-1-opacity: 1;
@@ -83,6 +85,7 @@
 html, body {
         font-family: var(--app-font-sans-current, var(--font-sans)) !important;
     font-size: var(--app-font-size-root, 20px);
+    font-weight: var(--app-font-weight-root, 400);
     height: 100%;
     min-height: 100%;
     overscroll-behavior: none;
@@ -119,6 +122,11 @@ body,
 
 h1, h2, h3, h4, h5, h6, .font-heading {
 	font-family: var(--app-font-heading-current, var(--font-heading)) !important;
+}
+
+.iconify, .nui-icon, .ui-icon {
+	font-size: var(--app-icon-size-base, 20px);
+	line-height: 1;
 }
 
 /* Theme-specific utility classes (theme-input, theme-btn, etc.) are now loaded 

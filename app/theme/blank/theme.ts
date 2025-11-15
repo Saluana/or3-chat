@@ -126,6 +126,8 @@ export default defineTheme({
     fonts: {
         sans: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
         heading: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+        baseSize: '16px',
+        baseWeight: '400',
     },
 
     ui: {
@@ -178,6 +180,8 @@ export default defineTheme({
         // Global button overrides
         button: {
             ui: {
+                leadingIcon: 'w-[25px] h-[25px] text-[20px]!',
+                trailingIcon: 'w-[25px] h-[25px] text-[20px]!',
                 variants: {
                     size: {
                         xs: { base: 'h-[24px] w-[24px] !px-0 !text-[14px]' },

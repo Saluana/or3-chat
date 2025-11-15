@@ -101,14 +101,16 @@ export const sidebarOverrides = {
     /* --- Collapsed sidebar buttons --- */
     'button#sidebar.collapsed-page': {
         ui: {
-            base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
-            leadingIcon: 'w-5 h-5',
+            base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]  ',
+            leadingIcon:
+                'w-[25px]! h-[25px]! min-w-[25px]! min-h-[25px]! text-[25px]! leading-none!',
         },
     },
     'button#sidebar.collapsed-page:active': {
         ui: {
-            base: 'border-[length:var(--md-border-width)] bg-[var(--md-primary)]/10 border-[color:var(--md-border-color)] active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
-            leadingIcon: 'w-5 h-5',
+            base: 'border-[length:var(--md-border-width)] bg-[var(--md-primary)]/10 border-[color:var(--md-border-color)] active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]  ',
+            leadingIcon:
+                'w-[25px]! h-[25px]! min-w-[25px]! min-h-[25px]! text-[25px]! leading-none!',
         },
     },
 };
@@ -154,6 +156,11 @@ export const sidebarCssSelectors = {
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
             color: 'var(--md-on-surface)/70%',
+        },
+    },
+    '#nav-top-section .iconify': {
+        style: {
+            fontSize: '25px !important',
         },
     },
 };

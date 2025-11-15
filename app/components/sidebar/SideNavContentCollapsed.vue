@@ -75,7 +75,7 @@
             <ClientOnly>
                 <div
                     id="nav-pages-section"
-                    class="pt-2 flex flex-col space-y-2 border-t-[var(--md-border-width)]"
+                    class="pt-2 flex flex-col space-y-2 border-t-[length:var(--md-border-width)] border-t-[color:var(--md-border-color)]"
                 >
                     <UTooltip
                         id="tooltip-home"
@@ -139,15 +139,7 @@
         <div
             id="nav-middle-section"
             class="px-1 pt-2 flex flex-col space-y-2 mb-2"
-        >
-            <UButton
-                v-bind="dashboardButtonProps"
-                id="btn-dashboard"
-                aria-label="Toggle dashboard"
-                class="flex item-center justify-center"
-                @click="emit('toggle-dashboard')"
-            ></UButton>
-        </div>
+        ></div>
         <div
             id="nav-footer-section"
             v-if="sidebarFooterActions.length"
@@ -229,7 +221,7 @@ const newChatButtonProps = computed(() => {
         base: 'w-[38.5px]! h-[39px]',
         leadingIcon: 'w-5 h-5',
     };
-    const mergedUi = { ...themeUi, ...componentUi };
+    const mergedUi = { ...componentUi, ...themeUi };
 
     return {
         size: 'md' as const,
@@ -252,7 +244,7 @@ const searchButtonProps = computed(() => {
         base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
         leadingIcon: 'w-5 h-5',
     };
-    const mergedUi = { ...themeUi, ...componentUi };
+    const mergedUi = { ...componentUi, ...themeUi };
 
     return {
         size: 'md' as const,
@@ -275,7 +267,7 @@ const newDocButtonProps = computed(() => {
         base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
         leadingIcon: 'w-5 h-5',
     };
-    const mergedUi = { ...themeUi, ...componentUi };
+    const mergedUi = { ...componentUi, ...themeUi };
 
     return {
         icon: 'pixelarticons:note-plus' as const,
@@ -297,7 +289,7 @@ const newProjectButtonProps = computed(() => {
         base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
         leadingIcon: 'w-5 h-5',
     };
-    const mergedUi = { ...themeUi, ...componentUi };
+    const mergedUi = { ...componentUi, ...themeUi };
 
     return {
         icon: 'pixelarticons:folder-plus' as const,
@@ -319,7 +311,7 @@ const dashboardButtonProps = computed(() => {
         base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
         leadingIcon: 'w-5 h-5',
     };
-    const mergedUi = { ...themeUi, ...componentUi };
+    const mergedUi = { ...componentUi, ...themeUi };
 
     return {
         size: 'md' as const,

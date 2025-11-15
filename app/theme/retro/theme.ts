@@ -130,6 +130,8 @@ export default defineTheme({
     fonts: {
         sans: '"VT323", ui-sans-serif, system-ui, sans-serif',
         heading: '"Press Start 2P", ui-sans-serif, system-ui, sans-serif',
+        baseSize: '20px',
+        baseWeight: '400',
     },
 
     // Component overrides using the new selector syntax
