@@ -50,13 +50,9 @@
                             :square="true"
                             aria-label="Open sidebar"
                             title="Open sidebar"
+                            icon="pixelarticons:arrow-bar-right"
                             @click="openMobileSidebar"
-                        >
-                            <UIcon
-                                name="pixelarticons:arrow-bar-right"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
+                        />
                     </UTooltip>
                 </div>
                 <div
@@ -75,13 +71,9 @@
                             ]"
                             aria-label="New window"
                             title="New window"
+                            icon="pixelarticons:card-plus"
                             @click="addPane"
-                        >
-                            <UIcon
-                                name="pixelarticons:card-plus"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
+                        />
                     </UTooltip>
                 </div>
                 <div class="h-full flex items-center justify-center px-4">
@@ -92,10 +84,9 @@
                             :class="'pointer-events-auto backdrop-blur'"
                             :aria-label="themeAriaLabel"
                             :title="themeAriaLabel"
+                            :icon="themeIcon"
                             @click="toggleTheme"
-                        >
-                            <UIcon :name="themeIcon" class="w-5 h-5" />
-                        </UButton>
+                        />
                     </UTooltip>
                     <div
                         v-if="headerActions.length"
@@ -121,12 +112,10 @@
                                     entry.action.label ||
                                     entry.action.id
                                 "
+                                :icon="!entry.action.label ? entry.action.icon : undefined"
+                                :leading-icon="entry.action.label ? entry.action.icon : undefined"
                                 @click="() => handleHeaderAction(entry)"
                             >
-                                <UIcon
-                                    :name="entry.action.icon"
-                                    class="w-4 h-4"
-                                />
                                 <span
                                     v-if="entry.action.label"
                                     class="text-xs font-medium"
@@ -177,13 +166,9 @@
                                 :square="true"
                                 aria-label="Close window"
                                 title="Close window"
+                                icon="pixelarticons:close"
                                 @click.stop="closePane(i)"
-                            >
-                                <UIcon
-                                    name="pixelarticons:close"
-                                    class="w-4 h-4"
-                                />
-                            </UButton>
+                            />
                         </UTooltip>
                     </div>
 

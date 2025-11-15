@@ -180,11 +180,13 @@ export default defineTheme({
         // Global button overrides
         button: {
             ui: {
-                leadingIcon: 'w-[25px] h-[25px] text-[20px]!',
-                trailingIcon: 'w-[25px] h-[25px] text-[20px]!',
                 variants: {
                     size: {
-                        xs: { base: 'h-[24px] w-[24px] !px-0 !text-[14px]' },
+                        xs: {
+                            leadingIcon: 'w-[25px]! h-[25px]! text-[20px]!',
+                            trailingIcon: 'w-[25px]! h-[25px]! text-[20px]!',
+                            base: 'h-[25px] w-[25px] !px-0 ',
+                        },
                         sm: { base: 'h-[32px] !px-[12px] !text-[14px]' },
                         md: { base: 'h-[40px] !px-[16px] !text-[14px]' },
                         lg: { base: 'h-[56px] !px-[24px] !text-[20px]' },

@@ -32,12 +32,11 @@
             <UButton
                 v-bind="sidebarToggleButtonProps"
                 :square="true"
+                :icon="toggleIcon"
                 @click="onToggle"
                 :aria-label="toggleAria"
                 :title="toggleAria"
-            >
-                <UIcon :name="toggleIcon" class="w-5 h-5" />
-            </UButton>
+            />
         </slot>
     </div>
 </template>
