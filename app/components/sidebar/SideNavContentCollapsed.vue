@@ -37,7 +37,9 @@
                     aria-label="Search"
                     class="flex item-center justify-center"
                     @click="emit('focus-search')"
-                ></UButton>
+                >
+                    <span class="sr-only">Search</span>
+                </UButton>
             </UTooltip>
             <UTooltip
                 id="tooltip-doc"
@@ -53,7 +55,9 @@
                     aria-label="Create document"
                     class="flex item-center justify-center"
                     @click="emit('new-document')"
-                />
+                >
+                    <span class="sr-only">Create document</span>
+                </UButton>
             </UTooltip>
             <UTooltip
                 id="tooltip-project"
@@ -69,7 +73,9 @@
                     aria-label="Create project"
                     class="flex item-center justify-center"
                     @click="emit('new-project')"
-                />
+                >
+                    <span class="sr-only">Create project</span>
+                </UButton>
             </UTooltip>
 
             <ClientOnly>
@@ -221,7 +227,7 @@ const newChatButtonProps = computed(() => {
     const mergedUi = { ...themeUi };
 
     return {
-        size: 'sb' as const,
+        size: 'sb-square' as const,
         icon: 'pixelarticons:message-plus' as const,
         ...(overrides.value as any),
         ui: mergedUi,
@@ -237,14 +243,12 @@ const searchButtonProps = computed(() => {
     });
 
     const themeUi = (overrides.value as any)?.ui || {};
-    const componentUi = {
-        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
-        leadingIcon: 'w-5 h-5',
-    };
-    const mergedUi = { ...componentUi, ...themeUi };
+    const mergedUi = { ...themeUi };
 
     return {
-        size: 'md' as const,
+        size: 'sb-base' as const,
+        color: 'on-surface' as const,
+        square: false as const,
         icon: 'pixelarticons:search' as const,
         ...(overrides.value as any),
         ui: mergedUi,
@@ -260,14 +264,13 @@ const newDocButtonProps = computed(() => {
     });
 
     const themeUi = (overrides.value as any)?.ui || {};
-    const componentUi = {
-        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
-        leadingIcon: 'w-5 h-5',
-    };
-    const mergedUi = { ...componentUi, ...themeUi };
+
+    const mergedUi = { ...themeUi };
 
     return {
         icon: 'pixelarticons:note-plus' as const,
+        size: 'sb-base' as const,
+        color: 'on-surface' as const,
         ...(overrides.value as any),
         ui: mergedUi,
     };
@@ -282,37 +285,13 @@ const newProjectButtonProps = computed(() => {
     });
 
     const themeUi = (overrides.value as any)?.ui || {};
-    const componentUi = {
-        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
-        leadingIcon: 'w-5 h-5',
-    };
-    const mergedUi = { ...componentUi, ...themeUi };
+
+    const mergedUi = { ...themeUi };
 
     return {
         icon: 'pixelarticons:folder-plus' as const,
-        ...(overrides.value as any),
-        ui: mergedUi,
-    };
-});
-
-const dashboardButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.collapsed-dashboard',
-        isNuxtUI: true,
-    });
-
-    const themeUi = (overrides.value as any)?.ui || {};
-    const componentUi = {
-        base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
-        leadingIcon: 'w-5 h-5',
-    };
-    const mergedUi = { ...componentUi, ...themeUi };
-
-    return {
-        size: 'md' as const,
-        icon: 'pixelarticons:dashboard' as const,
+        size: 'sb-base' as const,
+        color: 'on-surface' as const,
         ...(overrides.value as any),
         ui: mergedUi,
     };
@@ -320,12 +299,12 @@ const dashboardButtonProps = computed(() => {
 
 const collapsedPageButtonUiDefaults = {
     default: {
-        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
-        leadingIcon: 'w-5 h-5',
+        base: 'bg-transparent hover:bg-[var(--md-surface-hover)] hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] text-[var(--md-on-surface)]',
+        leadingIcon: 'w-6 h-6',
     },
     active: {
-        base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
-        leadingIcon: 'w-5 h-5',
+        base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]  text-[var(--md-on-surface)]',
+        leadingIcon: 'w-6 h-6',
     },
 } as const;
 
@@ -349,7 +328,8 @@ function createCollapsedPageButtonProps(state?: 'active') {
         };
 
         return {
-            size: 'md' as const,
+            size: 'sb-base' as const,
+            color: 'on-surface' as const,
             ...restOverrides,
             ui: mergedUi,
         };

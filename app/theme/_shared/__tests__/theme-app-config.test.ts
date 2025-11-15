@@ -16,7 +16,9 @@ describe('theme manifest app config integration', () => {
 
         const config = await loadThemeAppConfig(blankEntry);
         expect(config).toBeTruthy();
-        expect(config?.ui?.themeMeta?.blankTheme).toBe(true);
+        expect(
+            config?.ui?.button?.variants?.size?.sbSquare?.base
+        ).toContain('h-[40px]');
     });
 
     it('returns null when a theme has no app.config.ts', async () => {

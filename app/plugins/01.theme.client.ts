@@ -11,6 +11,7 @@ import {
 import {
     applyThemeBackgrounds,
     createThemeBackgroundTokenResolver,
+    revokeBackgroundBlobs,
 } from '~/core/theme/backgrounds';
 import {
     loadThemeManifest,
@@ -51,6 +52,23 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         themeManifest.set(entry.name, entry);
     }
 
+    const cleanupCallbacks: Array<() => void> = [];
+    const registerCleanup = (fn: () => void) => {
+        cleanupCallbacks.push(fn);
+    };
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => {
+            while (cleanupCallbacks.length > 0) {
+                const cleanup = cleanupCallbacks.pop();
+                try {
+                    cleanup?.();
+                } catch (error) {
+                    console.error('[theme] cleanup failed', error);
+                }
+            }
+        });
+    }
+
     if (manifestEntries.length === 0 && import.meta.dev) {
         console.warn(
             '[theme] No theme definitions discovered. Falling back to "retro".'
@@ -59,6 +77,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     const appConfig = useAppConfig() as any;
     const baseAppConfig = cloneDeep(appConfig);
+    registerCleanup(() => {
+        replaceObject(appConfig, cloneDeep(baseAppConfig));
+    });
     const themeAppConfigOverrides = new Map<
         string,
         Record<string, any> | null
@@ -194,18 +215,12 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         }
     };
     media.addEventListener('change', onChange);
+    registerCleanup(() => media.removeEventListener('change', onChange));
 
     nuxtApp.hook('app:beforeMount', () => {
         current.value = read() || getSystemPref();
         apply(current.value);
     });
-
-    // Cleanup for HMR in dev so we don't stack listeners
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() =>
-            media.removeEventListener('change', onChange)
-        );
-    }
 
     // ===== REFINED THEME SYSTEM INTEGRATION =====
     // Load compiled theme configs and initialize resolvers
@@ -213,6 +228,33 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     // Registry of compiled themes and their resolvers
     const themeRegistry = new Map<string, CompiledTheme>();
     const resolverRegistry = new Map<string, RuntimeResolver>();
+    registerCleanup(() => {
+        if (typeof document === 'undefined') return;
+        themeRegistry.forEach((theme, name) => {
+            if (theme.cssSelectors) {
+                removeThemeClasses(theme.cssSelectors);
+            }
+            if (theme.hasStyleSelectors) {
+                unloadThemeCSS(name);
+            }
+        });
+        themeManifest.forEach((entry) => {
+            unloadThemeStylesheets(entry.name);
+        });
+        document
+            .querySelectorAll('[data-theme-style]')
+            .forEach((el) => el.remove());
+        document.documentElement.removeAttribute('data-theme');
+        for (const cls of THEME_CLASSES) {
+            root.classList.remove(cls);
+        }
+        revokeBackgroundBlobs();
+    });
+    registerCleanup(() => {
+        themeRegistry.clear();
+        resolverRegistry.clear();
+        themeAppConfigOverrides.clear();
+    });
 
     const sanitizeThemeName = (themeName: string | null) => {
         if (!themeName) return null;
@@ -578,6 +620,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             }
         });
     }
+    registerCleanup(() => {
+        delete (globalThis as any)[HOOK_REGISTERED_KEY];
+    });
 });
 
 // Maintain one <style> element per theme for CSS vars

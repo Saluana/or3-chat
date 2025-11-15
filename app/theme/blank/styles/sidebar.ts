@@ -9,9 +9,7 @@ const SidebarPopoverButtonConfig = {
 
 export const sidebarOverrides = {
     /* --- core --- */
-    'button.sidebar': {
-        class: 'font-[IBM_Plex_Sans] text-xs uppercase tracking-wide hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
-    },
+
     // Note: border for chat containers is applied via CSS selector below to avoid duplicate class merges
 
     /* --- Sidebar header --- */
@@ -54,10 +52,6 @@ export const sidebarOverrides = {
     'button#sidebar.new-chat': {
         variant: 'solid',
         color: 'primary',
-        class: 'text-[color:var(--md-on-primary)] hover:bg-[var(--md-primary-hover)]! active:bg-[var(--md-primary-active)]!',
-        ui: {
-            base: 'bg-primary text-[color:var(--md-on-primary)] hover:bg-primary! active:bg-primary/90!',
-        },
     },
 
     //Sidebar popover buttons for threads, documents, projects
@@ -101,16 +95,14 @@ export const sidebarOverrides = {
     /* --- Collapsed sidebar buttons --- */
     'button#sidebar.collapsed-page': {
         ui: {
-            base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]  ',
-            leadingIcon:
-                'w-[25px]! h-[25px]! min-w-[25px]! min-h-[25px]! text-[25px]! leading-none!',
+            base: 'bg-transparent hover:bg-[var(--md-surface-hover)] hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] text-[var(--md-on-surface)]',
+            leadingIcon: 'w-6 h-6',
         },
     },
     'button#sidebar.collapsed-page:active': {
         ui: {
-            base: 'border-[length:var(--md-border-width)] bg-[var(--md-primary)]/10 border-[color:var(--md-border-color)] active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]  ',
-            leadingIcon:
-                'w-[25px]! h-[25px]! min-w-[25px]! min-h-[25px]! text-[25px]! leading-none!',
+            base: 'bg-[var(--md-surface-active)] ring-1 ring-[var(--md-primary-border)]/20 hover:ring-1 hover:ring-[var(--md-primary-border)]/50 hover:bg-[var(--md-surface-active)]  text-[var(--md-on-surface)]',
+            leadingIcon: 'w-6 h-6',
         },
     },
 };

@@ -2,7 +2,7 @@ export const dashboardOverrides = {
     'button#dashboard.back': {
         variant: 'basic' as const,
         ui: {
-            base: 'ml-0! border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)]! hover:bg-[var(--md-primary)]/10! active:bg-[var(--md-primary)]/20!',
+            base: 'ml-0! border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]!',
         },
     },
 };

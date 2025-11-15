@@ -47,8 +47,12 @@ export default {
                         'flex items-center! hover:bg-[var(--md-primary)]/5 active:bg-[var(--md-primary)]/10 justify-start!',
                 },
                 color: {
+                    primary:
+                        'text-[color:var(--md-on-primary)] hover:bg-[var(--md-primary-hover)] active:bg-[var(--md-primary-active)]',
                     'inverse-primary':
                         'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
+                    'on-surface':
+                        'bg-[var(--md-on-surface)] text-[var(--md-surface)] hover:backdrop-blur-sm hover:bg-[var(--md-on-surface)]/80',
                 },
                 // Override size variant so padding wins over defaults
                 size: {
@@ -60,14 +64,20 @@ export default {
                     },
                     md: { base: 'h-[40px] px-[16px]! text-[17px]' },
                     lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                    sb: {
+                    'sb-square': {
                         base: 'h-[40px] w-[40px] text-[20px]',
                         trailingIcon: 'shrink-0 h-6 w-6',
                         leadingIcon: 'shrink-0 h-6 w-6',
                     },
-                },
-                square: {
-                    true: 'px-0! aspect-square!',
+                    'sb-base': {
+                        base: 'bg-transparent hover:bg-[var(--md-surface-hover)] hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] border-0! shadow-none! text-[var(--md-on-surface)] h-[40px]',
+                        trailingIcon: 'shrink-0 h-6 w-6',
+                        leadingIcon: 'shrink-0 h-6 w-6',
+                    },
+                    square: {
+                        true: 'px-0! aspect-square!',
+                        false: '',
+                    },
                 },
                 buttonGroup: {
                     horizontal:
