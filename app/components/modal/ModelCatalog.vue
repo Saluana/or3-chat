@@ -8,10 +8,10 @@
         <template #body>
             <div class="model-catalog-shell flex flex-col h-full">
                 <div
-                    class="model-catalog-header px-6 h-[50px] bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
+                    class="model-catalog-header px-6 h-[50px] bg-surface backdrop-blur-sm flex items-center"
                 >
                     <div
-                        class="model-catalog-search flex items-center gap-3 w-full"
+                        class="model-catalog-search flex items-center justify-between gap-3 w-full"
                     >
                         <div
                             class="model-catalog-search-input-wrapper relative w-full max-w-md"
@@ -19,7 +19,7 @@
                             <UInput
                                 v-model="searchQuery"
                                 v-bind="searchInputProps"
-                                class="model-catalog-search-input w-full pr-8"
+                                class="model-catalog-search-input w-full"
                                 autofocus
                             />
                             <button
@@ -81,7 +81,7 @@
                             <div
                                 v-for="m in row"
                                 :key="m.id"
-                                class="model-catalog-item group relative mb-5 flex flex-col justify-between px-4 py-5 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 backdrop-blur-sm overflow-hidden h-[170px]"
+                                class="model-catalog-item group relative mb-5 flex flex-col justify-between px-4 py-5 bg-[var(--md-surface)] not-odd:bg-[var(--md-surface-hover)] sm:not-odd:bg-[var(--md-surface)] backdrop-blur-sm overflow-hidden h-[170px]"
                                 :data-model-id="m.id"
                             >
                                 <div
@@ -208,9 +208,9 @@ const modelCatalogModalOverrides = useThemeOverrides({
 
 const modelCatalogModalProps = computed(() => {
     const baseClass =
-        'border-[var(--md-border-width)] w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden';
+        'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden';
     const baseUi = {
-        footer: 'justify-end border-t-[var(--md-border-width)]',
+        footer: 'justify-end border-t-[var(--md-border-width)] border-[color:var(--md-border-color)]',
         body: 'p-0!',
     } as Record<string, unknown>;
 

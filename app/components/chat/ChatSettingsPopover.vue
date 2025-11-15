@@ -215,7 +215,7 @@ const systemPromptsButtonProps = computed(() => {
     });
     const overrideValue = (overrides.value as any) || {};
     const baseClass =
-        'flex justify-between w-full items-center py-1 px-2 font-normal';
+        'flex justify-between w-full items-center py-1 px-2 font-medium';
     const mergedClass = [baseClass, overrideValue.class]
         .filter(Boolean)
         .join(' ');
@@ -240,7 +240,7 @@ const modelCatalogButtonProps = computed(() => {
     });
     const overrideValue = (overrides.value as any) || {};
     const baseClass =
-        'flex justify-between w-full items-center py-1 px-2 font-normal';
+        'flex justify-between w-full items-center py-1 px-2 font-medium';
     const mergedClass = [baseClass, overrideValue.class]
         .filter(Boolean)
         .join(' ');
