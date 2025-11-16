@@ -30,7 +30,10 @@ export default {
         button: {
             slots: {
                 // Make base styles clearly different so it's obvious when applied
-                base: ['transition-colors', 'cursor-pointer text-start'],
+                base: [
+                    'transition-colors',
+                    'cursor-pointer text-start rounded-[var(--md-border-radius)]',
+                ],
                 // Label tweaks are rarely overridden by variants, good to verify
                 label: 'truncate tracking-wider',
                 leadingIcon: 'shrink-0',
@@ -42,18 +45,19 @@ export default {
                 variant: {
                     light: 'theme-btn flex items-center justify-center bg-[var(--md-surface)] dark:bg-[var(--md-on-background)] dark:text-black dark:hover:bg-[var(--md-on-background)]/90 backdrop-blur-sm',
                     subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
-                    basic: 'border-[var(--md-border-width)] shadow-none! drop-shadow-none!  hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[color:var(--md-border-color)] text-[var(--md-on-surface)]',
+                    basic: 'border-[var(--md-border-width)] shadow-none! drop-shadow-none!  hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-[color:var(--md-border-color)] text-[var(--md-on-surface)]',
                     popover:
                         'flex items-center! hover:bg-[var(--md-primary)]/5 active:bg-[var(--md-primary)]/10 justify-start!',
                     ghost: 'font-base',
+                    outline:
+                        'border-[color:var(--md-border-color)] border-[length:var(--md-border-width)] ring-0! hover:shadow hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
                 },
                 color: {
-                    primary:
-                        'text-[color:var(--md-on-primary)] hover:bg-[var(--md-primary-hover)] active:bg-[var(--md-primary-active)]',
+                    primary: 'text-[color:var(--md-on-primary)]',
                     'inverse-primary':
                         'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
                     'on-surface':
-                        'bg-[var(--md-on-surface)] text-[var(--md-surface)] hover:backdrop-blur-sm hover:bg-[var(--md-on-surface)]/80',
+                        'bg-[var(--md-surface)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
                 },
                 // Override size variant so padding wins over defaults
                 size: {
@@ -96,6 +100,10 @@ export default {
                 // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
                 leading: { true: 'ps-10!' },
                 trailing: { true: 'pe-10!' },
+                size: {
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                },
                 /*size: {
                     sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
                     md: { base: 'h-[40px] px-[16px]! text-[17px]' },

@@ -2,9 +2,7 @@
     <div
         class="prompt-editor-shell flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
     >
-        <div
-            class="prompt-editor-header flex items-center pb-5"
-        >
+        <div class="prompt-editor-header flex items-center pb-5">
             <UButton
                 v-bind="backButtonProps"
                 @click="emit('back')"
@@ -27,15 +25,21 @@
             </div>
         </div>
         <div class="prompt-editor-body flex-1 min-h-0 overflow-y-auto">
-            <div v-if="loading" class="prompt-editor-loading p-6 text-sm text-neutral-500">
+            <div
+                v-if="loading"
+                class="prompt-editor-loading p-6 text-sm text-neutral-500"
+            >
                 Loading…
             </div>
-            <div v-else-if="!record" class="prompt-editor-missing p-6 text-sm text-error">
+            <div
+                v-else-if="!record"
+                class="prompt-editor-missing p-6 text-sm text-error"
+            >
                 Prompt not found.
             </div>
             <div
                 v-else
-                class="prompt-editor-body-shell w-full max-h-[70dvh] overflow-auto max-w-[820px] mx-auto p-8 pb-24"
+                class="prompt-editor-body-shell w-full max-w-[820px] mx-auto p-8 pb-24"
             >
                 <EditorContent
                     :editor="editor as Editor"
@@ -47,7 +51,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue';
+import {
+    ref,
+    onMounted,
+    onBeforeUnmount,
+    watch,
+    computed,
+    nextTick,
+} from 'vue';
 import { Editor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
@@ -74,12 +85,6 @@ async function load(id: string) {
         record.value = rec || null;
         if (rec) {
             titleDraft.value = rec.title;
-            if (editor.value) {
-                editor.value.commands.setContent(
-                    rec.content || { type: 'doc', content: [] },
-                    { emitUpdate: false }
-                );
-            }
             status.value = 'idle';
         } else {
             status.value = 'error';
@@ -135,23 +140,48 @@ function emitContent() {
     scheduleSave();
 }
 
-function makeEditor() {
-    editor.value = new Editor({
-        extensions: [
-            StarterKit.configure({ heading: { levels: [1, 2] } }),
-            Placeholder.configure({
-                placeholder: 'Type your system instructions…',
-            }),
-        ],
-        content: record.value?.content || { type: 'doc', content: [] },
-        autofocus: false,
-        onUpdate: () => emitContent(),
-    });
+const defaultContent = { type: 'doc', content: [] };
+
+async function ensureEditor(content?: any) {
+    if (!import.meta.client) return;
+    if (editor.value) {
+        if (content) {
+            editor.value.commands.setContent(content || defaultContent, {
+                emitUpdate: false,
+            });
+        }
+        return;
+    }
+    await nextTick();
+    try {
+        editor.value = new Editor({
+            extensions: [
+                StarterKit.configure({ heading: { levels: [1, 2] } }),
+                Placeholder.configure({
+                    placeholder: 'Type your system instructions…',
+                }),
+            ],
+            content: content || defaultContent,
+            autofocus: false,
+            onUpdate: () => emitContent(),
+        });
+    } catch (error) {
+        console.warn('[PromptEditor] failed to initialize editor', error);
+    }
 }
 
+watch(
+    record,
+    async (rec) => {
+        if (!rec) return;
+        await ensureEditor(rec.content || defaultContent);
+    },
+    { immediate: true }
+);
+
 onMounted(async () => {
+    await ensureEditor(defaultContent);
     await load(props.promptId);
-    makeEditor();
 });
 
 watch(
@@ -210,15 +240,14 @@ const backButtonProps = computed(() => {
     const { class: overrideClass = '', ...restOverrides } = overridesValue;
     return {
         variant: 'outline' as const,
-        color: 'neutral' as const,
-        size: 'md' as const,
-        ...restOverrides,
+        size: 'sm' as const,
         class: [
             'prompt-editor-back-btn flex items-center justify-center h-[40px] w-[40px] mr-3',
             overrideClass,
         ]
             .filter(Boolean)
             .join(' '),
+        ...restOverrides,
     };
 });
 

@@ -118,7 +118,14 @@
                     <div
                         class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
                     >
-                        <div class="flex items-start gap-3 text-left">
+                        <div
+                            class="flex items-start gap-3 text-left cursor-pointer"
+                            role="button"
+                            tabindex="0"
+                            @click="handleUploadPanelClick"
+                            @keydown.enter.prevent="handleUploadPanelClick"
+                            @keydown.space.prevent="handleUploadPanelClick"
+                        >
                             <UIcon
                                 name="pixelarticons:cloud-upload"
                                 class="theme-upload-icon"
@@ -413,7 +420,8 @@ const exportButtonProps = computed(() => {
         isNuxtUI: true,
     });
     return {
-        variant: 'light' as const,
+        variant: 'outline' as const,
+        class: 'text-[var(--md-on-surface)]',
         ...(overrides.value as any),
     };
 });
@@ -427,7 +435,8 @@ const browseButtonProps = computed(() => {
     });
     return {
         size: 'sm' as const,
-        variant: 'basic' as const,
+        variant: 'outline' as const,
+
         ...(overrides.value as any),
     };
 });
@@ -443,6 +452,7 @@ const clearFileButtonProps = computed(() => {
         size: 'sm' as const,
         color: 'error' as const,
         variant: 'basic' as const,
+        type: 'button' as const,
         ...(overrides.value as any),
     };
 });
@@ -457,6 +467,7 @@ const importModeButtonProps = computed(() => {
     return {
         variant: 'ghost' as const,
         color: 'primary' as const,
+        type: 'button' as const,
         ...(overrides.value as any),
     };
 });
@@ -469,8 +480,9 @@ const importButtonProps = computed(() => {
         isNuxtUI: true,
     });
     return {
-        color: 'primary' as const,
-        variant: 'light' as const,
+        variant: 'outline' as const,
+        class: 'text-[var(--md-on-surface)]',
+        type: 'button' as const,
         ...(overrides.value as any),
     };
 });
@@ -754,6 +766,12 @@ function clearSelection() {
         state.error.value = null;
         state.progress.value = 0;
     }
+}
+
+function handleUploadPanelClick(event: Event) {
+    const element = event.target as HTMLElement;
+    if (element.closest('button')) return;
+    onBrowse();
 }
 
 async function onFilePicked(event: Event) {
