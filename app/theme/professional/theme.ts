@@ -664,6 +664,19 @@ export default defineTheme({
             color: 'primary',
         },
 
+        // Images page gallery actions
+        'button#images.gallery.download': {
+            class: 'pro-btn',
+            variant: 'light',
+            size: 'sm',
+        },
+
+        'button#images.gallery.copy': {
+            class: 'pro-btn',
+            variant: 'light',
+            size: 'sm',
+        },
+
         // Dashboard navigation buttons
         'button#dashboard.back': {
             class: '',

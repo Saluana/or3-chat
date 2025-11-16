@@ -130,7 +130,7 @@ export default {
         // Make the toast close button md-sized by default
         toast: {
             slots: {
-                root: 'border border-[var(--md-border-width)] theme-shadow rounded-[var(--md-border-radius)]',
+                root: 'border-[length:var(--md-border-width)] rounded-[var(--md-border-radius)]',
                 // Match our md button height (40px) and enforce perfect centering
                 close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
             },

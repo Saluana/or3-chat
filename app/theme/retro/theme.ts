@@ -723,6 +723,19 @@ export default defineTheme({
             color: 'primary',
         },
 
+        // Images page gallery actions
+        'button#images.gallery.download': {
+            class: 'retro-btn',
+            variant: 'light',
+            size: 'sm',
+        },
+
+        'button#images.gallery.copy': {
+            class: 'retro-btn',
+            variant: 'light',
+            size: 'sm',
+        },
+
         // Dashboard navigation buttons
         'button#dashboard.back': {
             class: '',
