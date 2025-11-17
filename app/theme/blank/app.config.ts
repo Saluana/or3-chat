@@ -189,7 +189,7 @@ export default {
         },
         textarea: {
             slots: {
-                base: 'mt-0 rounded-md border-[2px] border-[color:var(--md-border-color)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)]',
             },
         },
         selectMenu: {

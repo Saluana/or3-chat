@@ -960,7 +960,8 @@ const themeModeButtonProps = computed(() => {
     });
     return {
         size: 'sm' as const,
-        variant: 'basic' as const,
+        variant: 'outline' as const,
+        color: 'on-surface' as const,
         ...(overrides.value as any),
     };
 });
@@ -974,7 +975,8 @@ const presetButtonProps = computed(() => {
     });
     return {
         size: 'sm' as const,
-        variant: 'basic' as const,
+        variant: 'outline' as const,
+        color: 'on-surface' as const,
         ...(overrides.value as any),
     };
 });
@@ -988,7 +990,8 @@ const removeLayerButtonProps = computed(() => {
     });
     return {
         size: 'sm' as const,
-        variant: 'basic' as const,
+        variant: 'outline' as const,
+        color: 'on-surface' as const,
         ...(overrides.value as any),
     };
 });
@@ -1002,7 +1005,8 @@ const repeatButtonProps = computed(() => {
     });
     return {
         size: 'sm' as const,
-        variant: 'basic' as const,
+        variant: 'outline' as const,
+        color: 'on-surface' as const,
         ...(overrides.value as any),
     };
 });
@@ -1036,7 +1040,8 @@ const resetAllButtonProps = computed(() => {
     });
     return {
         size: 'sm' as const,
-        variant: 'basic' as const,
+        variant: 'outline' as const,
+        color: 'on-surface' as const,
         ...(overrides.value as any),
     };
 });

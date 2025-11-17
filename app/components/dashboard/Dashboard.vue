@@ -13,19 +13,16 @@
             <div
                 v-if="state.view === 'dashboard'"
                 id="dashboard-grid-view"
-                class="p-4 flex justify-center"
+                class="p-4 flex justify-start w-full"
             >
-                <div
-                    id="dashboard-plugin-grid"
-                    class="dashboard-plugin-grid grid gap-y-6 gap-x-4 place-items-center grid-cols-4 xs:grid-cols-4 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8"
-                >
+                <div id="dashboard-plugin-grid" class="dashboard-plugin-grid">
                     <plugin-icons
                         v-for="item in dashboardItems"
                         :key="item.id"
                         class="dashboard-plugin-icon-item"
                         :icon="item.icon"
                         :label="item.label"
-                        :size="74"
+                        :size="pluginIconSize"
                         :radius="3"
                         @click="handlePluginClick(item.id)"
                     />
@@ -149,6 +146,7 @@ import {
     type DashboardPlugin,
 } from '~/composables';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { isMobile } from '~/state/global';
 
 const props = defineProps<{
     showModal: boolean;
@@ -319,4 +317,40 @@ const landingPageButtonProps = computed(() => {
     });
     return overrides.value;
 });
+
+const pluginIconSize = computed(() => (isMobile.value ? 52 : 74));
 </script>
+
+<style scoped>
+#dashboard-plugin-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 64px);
+    gap: 26px 28px;
+    justify-items: center;
+    justify-content: flex-start;
+    width: min(340px, 100%);
+}
+
+@media (max-width: 349px) {
+    #dashboard-plugin-grid {
+        grid-template-columns: repeat(3, 64px);
+        width: min(248px, 100%);
+    }
+}
+
+@media (min-width: 820px) {
+    #dashboard-plugin-grid {
+        grid-template-columns: repeat(6, 86px);
+        gap: 48px 58px;
+        width: min(806px, 100%);
+    }
+}
+
+@media (min-width: 1200px) {
+    #dashboard-plugin-grid {
+        grid-template-columns: repeat(7, 86px);
+        gap: 54px 70px;
+        width: min(962px, 100%);
+    }
+}
+</style>

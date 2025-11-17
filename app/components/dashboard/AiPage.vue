@@ -24,7 +24,7 @@
                 v-bind="masterPromptTextareaProps"
                 :value="local.masterPrompt"
                 @input="onPromptInput"
-                :aria-describedby="'ai-master-help ai-master-count'"
+                :aria-describedby="'ai-master-prompt-input'"
                 spellcheck="false"
                 placeholder="e.g. You are a concise, helpful assistant who prefers structured, minimal answers."
             ></UTextarea>
@@ -70,13 +70,11 @@
                     <UButton
                         id="dashboard-ai-model-last-selected-btn"
                         v-bind="modelModeButtonProps"
-                        :class="{
-                            'bg-primary/50 hover:bg-primary/50':
-                                settings.defaultModelMode === 'lastSelected',
-                        }"
+                        class="model-mode-btn"
                         :aria-pressed="
                             settings.defaultModelMode === 'lastSelected'
                         "
+                        :active="settings.defaultModelMode === 'lastSelected'"
                         :disabled="settings.defaultModelMode === 'lastSelected'"
                         @click="set({ defaultModelMode: 'lastSelected' })"
                         >Use last selected</UButton
@@ -84,11 +82,9 @@
                     <UButton
                         id="dashboard-ai-model-fixed-btn"
                         v-bind="modelModeButtonProps"
-                        :class="{
-                            'bg-primary/50 hover:bg-primary/50':
-                                settings.defaultModelMode === 'fixed',
-                        }"
+                        class="model-mode-btn"
                         :aria-pressed="settings.defaultModelMode === 'fixed'"
+                        :active="settings.defaultModelMode === 'fixed'"
                         :disabled="settings.defaultModelMode === 'fixed'"
                         @click="set({ defaultModelMode: 'fixed' })"
                         >Use fixed model</UButton
@@ -118,17 +114,13 @@
                     role="listbox"
                     aria-label="Model results"
                 >
-                    <button
+                    <UButton
                         v-for="m in limitedResults"
                         :key="m.id"
                         :id="`dashboard-model-option-${m.id}`"
-                        type="button"
                         v-bind="modelItemButtonProps"
-                        :class="[
-                            'model-result-item theme-btn px-2 py-0.5 hover:bg-primary/5 cursor-pointer w-full flex items-center justify-between',
-                            m.id === settings.fixedModelId ? 'active' : '',
-                            (modelItemButtonProps as any)?.class || '',
-                        ]"
+                        :class="m.id === settings.fixedModelId ? 'active' : ''"
+                        :active="m.id === settings.fixedModelId"
                         @click="onPickModel(m.id)"
                         :aria-selected="m.id === settings.fixedModelId"
                         role="option"
@@ -139,7 +131,7 @@
                         <span class="opacity-60 text-xs ml-2 truncate">{{
                             m.canonical_slug || m.id
                         }}</span>
-                    </button>
+                    </UButton>
                     <div
                         v-if="!limitedResults.length && !modelsBusy"
                         class="text-xs opacity-70 px-1 py-2"
@@ -267,7 +259,8 @@ const savePromptButtonProps = computed(() => {
     });
     return {
         size: 'sm' as const,
-        variant: 'basic' as const,
+        variant: 'solid' as const,
+        color: 'primary' as const,
         ...(overrides.value as any),
     };
 });
@@ -281,7 +274,12 @@ const modelModeButtonProps = computed(() => {
     });
     return {
         size: 'sm' as const,
-        variant: 'basic' as const,
+        variant: 'soft' as const,
+        color: 'primary' as const,
+        activeVariant: 'solid' as const,
+        activeColor: 'primary' as const,
+        activeClass: 'model-mode-btn--active',
+        inactiveClass: 'model-mode-btn--inactive',
         ...(overrides.value as any),
     };
 });
@@ -304,9 +302,15 @@ const modelItemButtonProps = computed(() => {
         component: 'button',
         context: 'dashboard',
         identifier: 'dashboard.ai.model-item',
-        isNuxtUI: false,
+        isNuxtUI: true,
     });
-    return overrides.value;
+    return {
+        size: 'md' as const,
+        variant: 'ghost' as const,
+        class: 'model-result-item theme-btn px-2 py-0.5 hover:bg-primary/5 cursor-pointer w-full flex items-center justify-between',
+        block: true as const,
+        ...(overrides.value as any),
+    };
 });
 
 const clearModelButtonProps = computed(() => {
@@ -318,7 +322,8 @@ const clearModelButtonProps = computed(() => {
     });
     return {
         size: 'sm' as const,
-        variant: 'basic' as const,
+        variant: 'outline' as const,
+        color: 'primary' as const,
         ...(overrides.value as any),
     };
 });
@@ -349,8 +354,9 @@ const masterPromptTextareaProps = computed(() => {
     return {
         ...(overridesValue as any),
         ui: {
-            ...overrideUi,
+            root: 'w-full',
             textarea: textareaClasses,
+            ...overrideUi,
         },
     };
 });
@@ -364,7 +370,8 @@ const resetButtonProps = computed(() => {
     });
     return {
         size: 'sm' as const,
-        variant: 'basic' as const,
+        variant: 'outline' as const,
+        color: 'primary' as const,
         ...(overrides.value as any),
     };
 });
@@ -382,5 +389,18 @@ const resetButtonProps = computed(() => {
     max-width: 82ch;
     color: var(--md-on-surface-variant, var(--md-on-surface));
     opacity: 0.7;
+}
+.model-mode-btn {
+    text-transform: none;
+    padding-inline: 0.75rem;
+    min-width: 8rem;
+}
+.model-mode-btn--active {
+    box-shadow: inset 0 0 0 1px var(--md-on-surface),
+        0 0 0 1px var(--md-primary);
+}
+.model-mode-btn--inactive {
+    opacity: 0.7;
+    border-color: var(--md-outline-variant);
 }
 </style>
