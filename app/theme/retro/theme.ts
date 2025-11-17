@@ -9,27 +9,33 @@
  */
 
 import { defineTheme } from '../_shared/define-theme';
+import { sidebarOverrides, sidebarCssSelectors } from './styles/sidebar';
+import { chatOverrides, chatCssSelectors } from './styles/chat';
+import { dashboardOverrides, dashboardStyles } from './styles/dashboard';
+import { documentsOverrides, documentsStyles } from './styles/documents';
 
 export default defineTheme({
     name: 'retro',
-    displayName: 'Retro',
+    displayName: 'Retro theme',
     description:
         'Classic retro aesthetic with pixel-perfect styling and nostalgic vibes',
-    isDefault: false,
+    isDefault: true,
     stylesheets: ['~/theme/retro/styles.css'],
-
-    // Retro theme styling defaults
     borderWidth: '2px',
     borderRadius: '3px',
-
     // Material Design 3 color palette for retro theme
     // These will generate CSS variables for both light and dark modes
     colors: {
         // Primary colors
-        primary: '#2C638B',
+        primary: '#086DB8',
+        primaryTint: '#2A8FD6',
+        primaryShade: '#064F89',
         onPrimary: '#ffffff',
         primaryContainer: '#2C638B',
         onPrimaryContainer: '#002020',
+        primaryBorder: '#0A5D99',
+        primaryHover: '#0A7FD1',
+        primaryActive: '#075A8F',
 
         // Secondary colors
         secondary: '#ff6b6b',
@@ -44,29 +50,39 @@ export default defineTheme({
         onTertiaryContainer: '#1f1b00',
 
         // Surface colors
-        surface: '#fefbff',
-        onSurface: '#1a1c1e',
-        surfaceVariant: '#dfe3eb',
+        surface: '#ffffff',
+        surfaceHover: '#F2F7FC',
+        surfaceActive: '#EBF3FB',
+        onSurface: '#022344',
+        surfaceVariant: '#ffffff',
         onSurfaceVariant: '#43474e',
         inverseSurface: '#2f3033',
         inverseOnSurface: '#f1f0f4',
 
         // Outline & borders
         outline: '#73777f',
-        borderColor: '#000000',
+        borderColor: '#054575',
 
         // Semantic colors
         success: '#51cf66',
         warning: '#ffa94d',
         error: '#ff6b6b',
-        info: '#8BAECC',
+        info: '#E8F1F8',
+        infoHover: '#DCEAF4',
+        infoActive: '#C6DDEE',
+        onInfo: '#000000',
 
         // Dark mode overrides
         dark: {
             primary: '#2C638B',
-            onPrimary: '#003735',
+            primaryTint: '#4E8FBC',
+            primaryShade: '#204968',
+            onPrimary: '#FFFFFF',
             primaryContainer: '#00504e',
             onPrimaryContainer: '#b2f5ea',
+            primaryBorder: '#234E6D',
+            primaryHover: '#3978A4',
+            primaryActive: '#234C67',
 
             secondary: '#ffb3b3',
             onSecondary: '#5f1314',
@@ -78,16 +94,22 @@ export default defineTheme({
             tertiaryContainer: '#554600',
             onTertiaryContainer: '#fff9c4',
 
-            surface: '#1a1c1e',
+            surface: '#000000',
+            surfaceHover: '#172332',
+            surfaceActive: '#223344',
             onSurface: '#e2e2e6',
-            surfaceVariant: '#43474e',
+            surfaceVariant: '#000000',
             onSurfaceVariant: '#c3c7cf',
             inverseSurface: '#e2e2e6',
             inverseOnSurface: '#2f3033',
 
             outline: '#8d9199',
-            borderColor: '#8d9199',
+            borderColor: '#577a94',
 
+            info: '#111417',
+            infoHover: '#1A1F23',
+            infoActive: '#0C0E10',
+            onInfo: '#DDE3E8',
             success: '#51cf66',
             warning: '#ffa94d',
             error: '#ffb3b3',
@@ -96,752 +118,94 @@ export default defineTheme({
 
     backgrounds: {
         content: {
-            base: {
-                image: '/bg-repeat.v2.webp',
-                opacity: 0.08,
-                repeat: 'repeat',
-                size: '150px',
-            },
-            overlay: {
-                image: '/bg-repeat-2.v2.webp',
-                opacity: 0.125,
-                repeat: 'repeat',
-                size: '380px',
-            },
+            base: { color: 'var(--md-surface)' },
         },
-        sidebar: {
-            image: '/sidebar-repeater.v2.webp',
-            opacity: 0.1,
-            repeat: 'repeat',
-            size: '240px',
-        },
-        headerGradient: {
-            image: '/gradient-x.webp',
-            repeat: 'repeat',
-            size: 'auto 100%',
-        },
-        bottomNavGradient: {
-            image: '/gradient-x.webp',
-            repeat: 'repeat',
-            size: 'auto 100%',
-        },
+        sidebar: {},
     },
 
     fonts: {
-        sans: '"VT323", ui-sans-serif, system-ui, sans-serif',
+        sans: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
         heading: '"Press Start 2P", ui-sans-serif, system-ui, sans-serif',
-        baseSize: '20px',
+        baseSize: '16px',
         baseWeight: '400',
     },
 
     // Component overrides using the new selector syntax
     // These provide default styling for all retro-themed components
     overrides: {
-        // Global button styling
-        button: {
-            class: 'retro-btn',
-            variant: 'solid',
-            size: 'md',
-        },
-
-        // Theme Settings: copy color button in palette/background sections
-        'button#dashboard.theme.copy-color': {
-            variant: 'ghost',
-            size: 'sm',
-        },
-
-        // Shell/PageShell specific buttons
-        'button#shell.sidebar-toggle': {
-            class: 'retro-btn',
-            variant: 'ghost',
-            size: 'xs',
-        },
-
-        'button#shell.new-pane': {
-            class: 'retro-btn',
-            variant: 'ghost',
-            size: 'xs',
-        },
-
-        'button#shell.theme-toggle': {
-            class: 'retro-btn',
-            variant: 'ghost',
-            size: 'xs',
-        },
-
-        'button#shell.pane-toggle': {
-            class: 'retro-btn',
-            size: 'xs',
-        },
-
-        'button#shell.pane-close': {
-            class: 'retro-btn',
-            variant: 'ghost',
-            size: 'xs',
-            color: 'error',
-        },
-
-        'button#shell.header-action': {
-            class: 'retro-btn',
-            variant: 'ghost',
-            size: 'xs',
-        },
-
-        // Sidebar specific buttons
-        'button#sidebar.toggle': {
-            class: 'retro-btn',
-            variant: 'ghost',
-            size: 'xs',
-        },
-
-        'button#sidebar.new-chat': {
-            class: 'retro-btn',
-            variant: 'solid',
-            size: 'sm',
-            color: 'primary',
-        },
-
-        'button#sidebar.new-document': {
-            class: 'retro-btn',
-            variant: 'soft',
-            size: 'sm',
-        },
-
-        'button#sidebar.new-project': {
-            class: 'retro-btn',
-            variant: 'soft',
-            size: 'sm',
-        },
-
-        'button#sidebar.search-clear': {
-            class: 'retro-btn',
-            variant: 'subtle',
-            size: 'xs',
-        },
-
-        'button#sidebar.filter': {
-            class: 'retro-btn',
-            variant: 'ghost',
-            size: 'md',
-        },
-
-        // Sidebar thread item actions
-        'button#sidebar.thread-rename': {
-            class: 'retro-btn',
-            variant: 'popover',
-            size: 'sm',
-            color: 'neutral',
-        },
-
-        'button#sidebar.thread-add-to-project': {
-            class: 'retro-btn',
-            variant: 'popover',
-            size: 'sm',
-            color: 'neutral',
-        },
-
-        'button#sidebar.thread-delete': {
-            class: 'retro-btn',
-            variant: 'popover',
-            size: 'sm',
-            color: 'error',
-        },
-
-        'button#sidebar.thread-extra-action': {
-            class: 'retro-btn',
-            variant: 'popover',
-            size: 'sm',
-            color: 'neutral',
-        },
-
-        // Sidebar project actions
-        'button#sidebar.project-rename': {
-            class: 'retro-btn',
-            variant: 'popover',
-            size: 'sm',
-            color: 'neutral',
-        },
-
-        'button#sidebar.project-delete': {
-            class: 'retro-btn',
-            variant: 'popover',
-            size: 'sm',
-            color: 'error',
-        },
-
-        'button#sidebar.project-extra-action': {
-            class: 'retro-btn',
-            variant: 'popover',
-            size: 'sm',
-            color: 'neutral',
-        },
-
-        // Sidebar document item actions
-        'button#sidebar.document-rename': {
-            class: 'retro-btn',
-            variant: 'popover',
-            size: 'sm',
-            color: 'neutral',
-        },
-
-        'button#sidebar.document-add-to-project': {
-            class: 'retro-btn',
-            variant: 'popover',
-            size: 'sm',
-            color: 'neutral',
-        },
-
-        'button#sidebar.document-delete': {
-            class: 'retro-btn',
-            variant: 'popover',
-            size: 'sm',
-            color: 'error',
-        },
-
-        'button#sidebar.document-extra-action': {
-            class: 'retro-btn',
-            variant: 'popover',
-            size: 'sm',
-            color: 'neutral',
-        },
-
-        // Sidebar project entry actions
-        'button#sidebar.project-entry-rename': {
-            class: 'retro-btn',
-            variant: 'popover',
-            size: 'sm',
-            color: 'neutral',
-        },
-
-        'button#sidebar.project-entry-remove': {
-            class: 'retro-btn',
-            variant: 'popover',
-            size: 'sm',
-            color: 'error',
-        },
-
-        // Sidebar collapsed navigation
-        'button#sidebar.collapsed-search': {
-            class: 'retro-btn',
-            variant: 'ghost',
-            size: 'md',
-        },
-
-        'button#sidebar.collapsed-dashboard': {
-            class: 'retro-btn',
-            variant: 'soft',
-            size: 'md',
-        },
-
-        // Sidebar search input
-        'input#sidebar.search': {
-            variant: 'outline',
-            size: 'md',
+        formField: {
             ui: {
-                root: 'shadow-none! bg-transparent! border-[var(--md-border-width)]! border-[var(--md-border-color)]! rounded-[var(--md-border-radius)]',
+                base: 'flex flex-col',
+                label: 'text-xs font-light px-1 text-[var(--md-on-surface)]/70 -mb-0.5!',
+                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
             },
         },
-        // Sidebar footer action buttons
-        'button#sidebar.footer-action': {
-            class: 'retro-btn pointer-events-auto',
-            variant: 'ghost',
-            size: 'xs',
-        },
-
-        'div#sidebar.project-group-container': {
-            class: 'border-[length:var(--md-border-width)]! border-(--md-border-color)! rounded-(--md-border-radius) shadow-[2px_2px_0_var(--md-border-color)]',
-        },
-
-        // UI Glass Button (used in sidebar items)
-        'button#ui.glass-button': {
-            class: 'w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]',
-            variant: 'ghost',
-            size: 'md',
-        },
-
-        'button#chat.send': {
-            class: 'retro-btn text-white! dark:text-black!',
-            variant: 'solid',
-            size: 'sm',
-            color: 'primary',
-        },
-
-        'button#chat.stop': {
-            class: 'retro-btn',
-            variant: 'solid',
-            size: 'sm',
-            color: 'error',
-        },
-
-        'button#chat.attach': {
-            class: 'retro-btn text-black dark:text-white flex items-center justify-center',
-            variant: 'solid',
-            size: 'sm',
-            color: 'info',
-        },
-
-        'button#chat.settings': {
-            class: 'retro-btn text-black dark:text-white flex items-center justify-center',
-            variant: 'solid',
-            size: 'sm',
-            color: 'info',
-        },
-
-        'button#chat.composer-action': {
-            class: 'retro-btn',
-            variant: 'ghost',
-            size: 'sm',
-        },
-
-        'div#chat.input-main-container': {
-            class: '',
-        },
-
-        'div#chat.input-container': {
-            // Container styling can be customized here
-            class: '',
-        },
-
-        'div#chat.editor': {
-            // Editor wrapper styling can be customized here
-            class: '',
-        },
-
-        'div#chat.attachment-pdf-container': {
-            class: 'border-[length:var(--md-border-width)] border-(--md-border-color) rounded-(--md-border-radius) shadow-[2px_2px_0_var(--md-inverse-surface)]',
-        },
-
-        'div#chat.attachment-text-container': {
-            class: 'border-[length:var(--md-border-width)] border-(--md-border-color) rounded-(--md-border-radius) shadow-[2px_2px_0_var(--md-inverse-surface)]',
-        },
-
-        'button#chat.attachment-remove-btn': {
-            class: 'rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
-        },
-
-        'div#chat.drag-overlay': {
-            class: 'border-[length:var(--md-border-width)] border-dashed rounded-2xl',
-        },
-
-        'button#chat.model-select': {
-            class: 'retro-btn',
-            variant: 'soft',
-            size: 'sm',
-        },
-
-        // Model select menu (USelectMenu component)
-        'selectmenu#chat.model-select': {
-            class: 'h-[32px] retro-shadow border-[length:var(--md-border-width)] border-(--md-inverse-surface) rounded-(--md-border-radius) text-sm px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]',
+        // Global input overrides
+        input: {
             ui: {
-                content:
-                    'border-[length:var(--md-border-width)] border-(--md-border-color) rounded-(--md-border-radius) w-[320px]',
-                input: 'border-0 rounded-none!',
-                arrow: 'h-[18px] w-[18px]',
-                itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
-            },
-            searchInput: {
-                icon: 'pixelarticons:search',
-                ui: {
-                    base: 'border-0 border-b-1 rounded-none!',
-                    leadingIcon: 'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
+                root: 'font-[IBM_Plex_Sans]!',
+                variants: {
+                    variant: {
+                        outline:
+                            'text-highlighted bg-default ring-0 focus-visible:ring-1 focus-visible:ring-[color:var(--md-primary)]',
+                    },
+                    size: {
+                        sm: { base: 'h-[32px] text-[12px]!' },
+                        md: { base: 'h-[40px] text-[14px]!' },
+                        lg: { base: 'h-[48px] text-[16px]!' },
+                    },
                 },
             },
         },
-
-        // Message action buttons (all buttons in message context)
-        'button.message': {
-            class: 'retro-btn text-black dark:text-white/95 flex items-center justify-center',
-            variant: 'solid',
-            size: 'sm',
-            color: 'info',
-        },
-
-        'button#message.copy': {
-            class: 'retro-btn text-black dark:text-white/95 flex items-center justify-center',
-            variant: 'solid',
-            size: 'sm',
-            color: 'info',
-        },
-
-        'button#message.retry': {
-            class: 'retro-btn text-black dark:text-white/95 flex items-center justify-center',
-            variant: 'solid',
-            size: 'sm',
-            color: 'info',
-        },
-
-        'button#message.branch': {
-            class: 'retro-btn text-black dark:text-white/95 flex items-center justify-center',
-            variant: 'solid',
-            size: 'sm',
-            color: 'info',
-        },
-
-        'button#message.edit': {
-            class: 'retro-btn text-black dark:text-white/95 flex items-center justify-center',
-            variant: 'solid',
-            size: 'sm',
-            color: 'info',
-        },
-
-        'button#message.save-edit': {
-            class: 'retro-btn',
-            variant: 'solid',
-            size: 'sm',
-            color: 'success',
-        },
-
-        'button#message.cancel-edit': {
-            class: 'retro-btn',
-            variant: 'solid',
-            size: 'sm',
-            color: 'error',
-        },
-
-        'button#message.attachment-thumb': {
-            class: 'rounded-[4px] shadow-[2px_2px_0_var(--md-inverse-surface)]',
-        },
-
-        'div#message.attachment-item': {
-            class: 'border-[length:var(--md-border-width)] border-(--md-border-color) rounded-(--md-border-radius) shadow-[2px_2px_0_var(--md-inverse-surface)]',
-        },
-
-        'button#message.reasoning-toggle': {
-            class: 'retro-btn',
-            variant: 'ghost',
-            size: 'sm',
-        },
-
-        'button#message.collapse-attachments': {
-            class: 'text-xs underline',
-        },
-
-        'div#message.user-container': {
-            // User message container styling
-            class: '',
-        },
-
-        'div#message.assistant-container': {
-            // Assistant message container styling
-            class: '',
-        },
-
-        // Modal buttons (System Prompts Modal)
-        'button.modal': {
-            class: 'retro-btn',
-            variant: 'solid',
-            size: 'sm',
-        },
-
-        'button#modal.new-prompt': {
-            class: 'retro-btn',
-            variant: 'solid',
-            size: 'sm',
-            color: 'primary',
-        },
-
-        'button#modal.clear-active': {
-            class: 'retro-btn',
-            variant: 'outline',
-            size: 'sm',
-            color: 'neutral',
-        },
-
-        'button#modal.select-prompt': {
-            class: 'retro-btn',
-            size: 'sm',
-        },
-
-        // Settings switches (all switches in settings context)
-        'switch.settings': {
-            color: 'primary',
-            class: 'w-full',
-        },
-
-        'switch#settings.web-search': {
-            color: 'primary',
-            class: 'w-full',
-        },
-
-        'switch#settings.thinking': {
-            color: 'primary',
-            class: 'w-full',
-        },
-
-        // Tool switches (dynamic - will match any tool)
-        'switch#settings.tool-*': {
-            color: 'primary',
-            class: 'w-full',
-        },
-
-        // Settings buttons
-        'button.settings': {
-            variant: 'ghost',
-            class: 'justify-between shadow-none! px-2! text-(--md-inverse-surface) border-x-0! border-t-0! border-b-1! last:border-b-0! rounded-none! w-full',
+        selectmenu: {
             ui: {
-                trailingIcon: 'w-[20px] h-[20px] shrink-0',
+                base: 'text-[15px] leading-[20px]',
+                value: 'text-[15px]',
+                placeholder: 'text-[15px]',
+                label: 'text-[15px]',
+                item: 'text-[15px]',
+                itemLabel: 'text-[15px]',
+                content: 'text-[15px]',
             },
         },
 
-        'button#settings.system-prompts': {
-            variant: 'ghost',
-            block: true,
-            trailing: true,
-            trailingIcon: 'pixelarticons:script-text',
-            class: 'flex justify-between w-full items-center py-1 px-2 border-b',
-        },
-
-        'button#settings.model-catalog': {
-            variant: 'ghost',
-            block: true,
-            trailing: true,
-            trailingIcon: 'pixelarticons:android',
-            class: 'flex justify-between w-full items-center py-1 px-2 rounded-[var(--md-border-radius)]',
-        },
-
-        // Dashboard buttons
-        'button.dashboard': {
-            class: 'retro-btn',
-            variant: 'soft',
-            size: 'md',
-        },
-
-        'button#dashboard.export': {
-            class: 'retro-btn',
-            variant: 'light',
-            size: 'md',
-        },
-
-        'button#dashboard.import': {
-            class: 'retro-btn',
-            variant: 'solid',
-            size: 'md',
-            color: 'primary',
-        },
-
-        // AI Page buttons
-        'button#dashboard.ai.save-prompt': {
-            class: 'retro-btn',
-            variant: 'basic',
-            size: 'sm',
-        },
-
-        'button#dashboard.ai.model-mode': {
-            class: 'retro-chip',
-            variant: 'basic',
-            size: 'sm',
-        },
-
-        'button#dashboard.ai.model-item': {
-            class: 'retro-btn',
-        },
-
-        'button#dashboard.ai.clear-model': {
-            class: 'retro-btn',
-            variant: 'basic',
-            size: 'sm',
-        },
-
-        'button#dashboard.ai.reset': {
-            class: 'retro-btn',
-            variant: 'basic',
-            size: 'sm',
-        },
-
-        'textarea#dashboard.ai.master-prompt': {
-            class: 'w-full',
-            ui: {
-                textarea: 'retro-input',
-            },
-        },
-
-        // Theme Page buttons
-        'button#dashboard.theme.mode': {
-            class: 'retro-chip',
-            variant: 'basic',
-            size: 'sm',
-        },
-
-        'button#dashboard.theme.preset': {
-            class: 'retro-chip',
-            variant: 'basic',
-            size: 'sm',
-        },
-
-        'button#dashboard.theme.remove-layer': {
-            class: 'retro-chip',
-            variant: 'basic',
-            size: 'sm',
-        },
-
-        'button#dashboard.theme.repeat': {
-            class: 'retro-chip',
-            variant: 'basic',
-            size: 'sm',
-        },
-
-        'button#dashboard.theme.gradient': {
-            class: 'retro-chip',
-            variant: 'basic',
-            size: 'sm',
-        },
-
-        'button#dashboard.theme.reset-all': {
-            class: 'retro-btn',
-            variant: 'basic',
-            size: 'sm',
-        },
-
-        // Workspace Backup buttons
-        'button#dashboard.workspace.export': {
-            class: 'retro-btn',
-            variant: 'light',
-        },
-
-        'button#dashboard.workspace.browse': {
-            class: 'retro-btn',
-            variant: 'basic',
-            size: 'sm',
-        },
-
-        'button#dashboard.workspace.clear-file': {
-            class: 'retro-btn',
-            variant: 'basic',
-            size: 'sm',
-            color: 'error',
-        },
-
-        'button#dashboard.workspace.import-mode': {
-            class: '',
-            variant: 'ghost',
-            color: 'primary',
-        },
-
-        'button#dashboard.workspace.import': {
-            class: 'retro-btn',
-            variant: 'light',
-            color: 'primary',
-        },
-
-        // Images page gallery actions
-        'button#images.gallery.download': {
-            class: 'retro-btn',
-            variant: 'light',
-            size: 'sm',
-        },
-
-        'button#images.gallery.copy': {
-            class: 'retro-btn',
-            variant: 'light',
-            size: 'sm',
-        },
-
-        // Dashboard navigation buttons
-        'button#dashboard.back': {
-            class: '',
-            variant: 'subtle',
-            color: 'primary',
-            size: 'sm',
-        },
-
-        'button#dashboard.landing-page': {
-            class: 'border-[length:var(--md-border-width)] border-(--md-border-color) retro-shadow hover:border-(--md-primary) hover:shadow-[2px_2px_0_var(--md-primary)] transition-all',
-        },
-
-        'button#dashboard.plugin-icon': {
-            class: '',
-        },
-
-        // AI page input
-        'input#dashboard.ai.model-search': {
-            class: '',
-            type: 'text',
-        },
-
-        // Document toolbar buttons
-        'button#document.toolbar': {
-            variant: 'ghost',
-            size: 'sm',
-            activeClass:
-                'bg-primary/60 hover:bg-primary-60 text-(--md-on-surface) ring-2 ring-primary/30 shadow-md',
-
-            ui: {
-                root: '!shadow-none bg-transparent !border-[var(--md-border-width)] border-[var(--md-border-color)] rounded-[var(--md-border-radius)]',
-            },
-        },
-
-        'button#document.search': {
-            class: 'retro-btn',
-            variant: 'soft',
-            size: 'sm',
-        },
-
-        'button#document.retry': {
-            class: 'retro-btn',
-            variant: 'solid',
-            size: 'md',
-            color: 'primary',
-        },
-
-        'button#document.search-retry': {
-            class: 'retro-btn',
-            variant: 'solid',
-            size: 'sm',
-            color: 'primary',
-        },
-
-        // Document inputs
-        'input#document.title': {
-            variant: 'outline',
-            size: 'md',
-            ui: {
-                root: 'shadow-none! border-0! bg-transparent! rounded-[var(--md-border-radius)] px-2',
-            },
-        },
-
-        // Document search result cards
-        'card#document.search-result': {
-            class: 'cursor-pointer hover:border-[var(--md-primary)] transition-colors',
-        },
-
-        // Global input styling
-        input: {
-            variant: 'outline',
-            size: 'md',
-        },
-
-        // Sidebar inputs
-        'input.sidebar': {
-            size: 'md',
-        },
-
-        // Chat context inputs
-        'input.chat': {
-            size: 'sm',
-        },
-
-        // Dashboard inputs
-        'input.dashboard': {
-            size: 'sm',
-        },
-
-        // Textarea styling
-        textarea: {},
-
-        // Chip/toggle buttons
-        'button[data-chip]': {
-            class: 'retro-chip',
-        },
-
-        // Copy buttons (used in theme palette)
-        'button[data-copy]': {
-            class: 'retro-btn-copy',
-        },
+        ...chatOverrides,
+        ...sidebarOverrides,
+        ...dashboardOverrides,
+        ...documentsOverrides,
     },
-
     // CSS Selectors for direct DOM targeting
     // These target elements that can't easily be integrated with the component override system
     cssSelectors: {
+        ...sidebarCssSelectors,
+        ...chatCssSelectors,
+        ...dashboardStyles,
+        ...documentsStyles,
+        '.theme-btn': {
+            style: {
+                border: 'var(--md-border-width) solid var(--md-border-color)',
+                borderRadius: 'var(--md-border-radius)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+            },
+        },
+        '.theme-btn:hover': {
+            style: {
+                backgroundColor: 'var(--md-surface-hover)',
+            },
+        },
+        '.theme-btn:active': {
+            style: {
+                backgroundColor: 'var(--md-surface-active)',
+            },
+        },
+        '#top-header .theme-btn': {
+            style: {
+                minHeight: '24px',
+                minWidth: '24px',
+            },
+        },
         // Example: Third-party Monaco editor styling
         // '.monaco-editor': {
         //     style: {
