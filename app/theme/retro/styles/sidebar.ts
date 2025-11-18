@@ -118,6 +118,16 @@ export const sidebarOverrides = {
             leadingIcon: 'w-6 h-6',
         },
     },
+    'div#sidebar.header': {
+        class: 'header-pattern flex items-center min-h-12 max-h-12 py-2 border-b-(--md-border-width) border-(--md-border-color)',
+    },
+    'div#sidebar.header:collapsed': {
+        class: 'px-0 justify-center w-[63.5px]',
+        style: { width: '62px' },
+    },
+    'div#sidebar.header:expanded': {
+        class: 'px-3 justify-between w-full',
+    },
 };
 
 export const sidebarCssSelectors = {
@@ -147,9 +157,18 @@ export const sidebarCssSelectors = {
             backgroundColor: 'var(--md-surface)',
         },
     },
+    '#top-header[data-sidebar-state="collapsed"]': {
+        style: {
+            width: '62px !important',
+            paddingLeft: '0',
+            paddingRight: '0',
+        },
+    },
     '#bottom-nav': {
         style: {
-            backgroundColor: 'var(--md-surface)',
+            backgroundColor: 'transparent',
+            width: '62px !important',
+            paddingLeft: '0px !important',
         },
     },
     '.sidebar-section-heading': {
@@ -166,4 +185,17 @@ export const sidebarCssSelectors = {
             fontSize: '25px !important',
         },
     },
+    '#nav-collapsed-container': {
+        style: {
+            minWidth: '64px !important',
+            maxWidth: '64px !important',
+            borderRight: 'var(--md-border-width) solid var(--md-border-color)',
+        },
+    },
+    '#nav-top-section, #nav-footer-section, #nav-pages-section, #nav-middle-section':
+        {
+            style: {
+                backgroundColor: 'transparent',
+            },
+        },
 };

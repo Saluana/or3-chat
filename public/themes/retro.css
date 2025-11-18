@@ -17,8 +17,16 @@
   background-color: var(--md-surface);
 }
 
+[data-theme="retro"] #top-header[data-sidebar-state="collapsed"] {
+  width: 62px !important;
+  padding-left: 0;
+  padding-right: 0;
+}
+
 [data-theme="retro"] #bottom-nav {
-  background-color: var(--md-surface);
+  background-color: transparent;
+  width: 62px !important;
+  padding-left: 0px !important;
 }
 
 [data-theme="retro"] .sidebar-section-heading {
@@ -31,6 +39,16 @@
 
 [data-theme="retro"] #nav-top-section .iconify {
   font-size: 25px !important;
+}
+
+[data-theme="retro"] #nav-collapsed-container {
+  min-width: 64px !important;
+  max-width: 64px !important;
+  border-right: var(--md-border-width) solid var(--md-border-color);
+}
+
+[data-theme="retro"] #nav-top-section, #nav-footer-section, #nav-pages-section, #nav-middle-section {
+  background-color: transparent;
 }
 
 [data-theme="retro"] #btn-reasoning-toggle {

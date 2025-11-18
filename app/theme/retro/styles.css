@@ -42,6 +42,27 @@
 		var(--tw-shadow);
 }
 
+.retro-press {
+	transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.retro-press:active {
+	transform: translate(2px, 2px);
+	box-shadow:
+		var(--tw-ring-offset-shadow, 0 0 #0000),
+		var(--tw-ring-shadow, 0 0 #0000),
+		0 0 0 var(--md-border-color),
+		inset 0 2px 0 rgba(0, 0, 0, 0.25),
+		inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+.retro-press:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
+}
+.retro-press:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
 #top-header {
 	border-bottom: var(--md-border-width) solid var(--md-border-color);
 }

@@ -1,6 +1,8 @@
 export const documentsOverrides = {
     'button.document': {
-        class: 'bg-info hover:bg-[var(--md-info-hover)] dark:text-[var(--md-primary-tint)] active:bg-primary',
+        variant: 'solid',
+        color: 'info',
+        class: 'text-[var(--md-primary-shade)] dark:text-[var(--md-primary-tint)]',
     },
 };
 export const documentsStyles = {

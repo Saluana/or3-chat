@@ -120,20 +120,20 @@ export default defineTheme({
         content: {
             base: {
                 image: '/bg-repeat.v2.webp',
-                opacity: 0.08,
+                opacity: 0.055,
                 repeat: 'repeat',
                 size: '150px',
             },
             overlay: {
                 image: '/bg-repeat-2.v2.webp',
-                opacity: 0.125,
+                opacity: 0.085,
                 repeat: 'repeat',
-                size: '380px',
+                size: '420px',
             },
         },
         sidebar: {
             image: '/sidebar-repeater.v2.webp',
-            opacity: 0.1,
+            opacity: 0.065,
             repeat: 'repeat',
             size: '240px',
         },
@@ -143,9 +143,8 @@ export default defineTheme({
             size: 'auto 100%',
         },
         bottomNavGradient: {
-            image: '/gradient-x.webp',
-            repeat: 'repeat',
-            size: 'auto 100%',
+            image: null,
+            color: 'transparent',
         },
     },
 
@@ -175,6 +174,15 @@ export default defineTheme({
                 item: 'text-[15px]',
                 itemLabel: 'text-[15px]',
                 content: 'text-[15px]',
+            },
+        },
+        modal: {
+            close: {
+                square: true,
+                size: 'sm',
+                variant: 'solid',
+                color: 'on-surface',
+                class: 'flex items-center justify-center leading-none',
             },
         },
 

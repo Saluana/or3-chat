@@ -1,7 +1,9 @@
 <template>
     <div
         :class="[
-            collapsed ? 'px-0 justify-center' : 'px-3 justify-between w-full',
+            collapsed
+                ? 'px-0 justify-center w-[63.5px]'
+                : 'px-3 justify-between w-full',
             'flex items-center min-h-12 max-h-12 header-pattern py-2 border-b-(--md-border-width) border-(--md-border-color)',
             sidebarHeaderProps.class || '',
         ]"
@@ -151,9 +153,7 @@ const sidebarHeaderProps = computed<HeaderOverrideProps>(() => {
         ...stateOverrides,
         class: mergedClass,
         style:
-            mergedStyle.length > 1
-                ? mergedStyle
-                : mergedStyle[0] ?? undefined,
+            mergedStyle.length > 1 ? mergedStyle : mergedStyle[0] ?? undefined,
     };
 });
 

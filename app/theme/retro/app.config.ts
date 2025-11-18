@@ -23,10 +23,10 @@ export default {
                 content:
                     'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none retro-shadow',
                 body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)]  p-4',
-                header: 'border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-[var(--md-on-primary)]!',
+                header: 'relative border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-[var(--md-on-primary)]!',
                 title: 'text-[var(--md-on-primary)] font-semibold text-lg!',
                 description: 'hidden',
-                close: 'relative! top-auto! end-auto! flex items-center justify-center leading-none h-[32px] w-[32px] p-0 bg-white! hover:bg-white/90! active:bg-white/80! dark:text-black dark:hover:bg-white/80!',
+                close: 'relative! top-auto! end-auto! flex items-center justify-center',
             },
         },
         button: {
@@ -34,7 +34,7 @@ export default {
                 // Make base styles clearly different so it's obvious when applied
                 base: [
                     'transition-colors',
-                    'cursor-pointer text-start border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] theme-shadow',
+                    'cursor-pointer text-start border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] theme-shadow retro-press',
                 ],
                 // Label tweaks are rarely overridden by variants, good to verify
                 label: 'truncate tracking-wider',
@@ -55,6 +55,7 @@ export default {
                         'border-[color:var(--md-border-color)] border-[length:var(--md-border-width)] ring-0! hover:shadow hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
                 },
                 color: {
+                    info: 'bg-info hover:bg-[var(--md-info-hover)] active:bg-[var(--md-info-active)]',
                     primary: 'text-[color:var(--md-on-primary)]',
                     'inverse-primary':
                         'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
