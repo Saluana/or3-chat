@@ -13,6 +13,9 @@ export const sidebarOverrides = {
     // Note: border for chat containers is applied via CSS selector below to avoid duplicate class merges
 
     /* --- Sidebar header --- */
+    'div#sidebar.header:collapsed': {
+        class: 'w-[63px]!',
+    },
     'button[data-id="sidebar.filter"]': {
         class: 'shadow',
     },
@@ -153,6 +156,13 @@ export const sidebarCssSelectors = {
     '#nav-top-section .iconify': {
         style: {
             fontSize: '25px !important',
+        },
+    },
+    '#nav-collapsed-container': {
+        style: {
+            minWidth: '64px !important',
+            maxWidth: '64px !important',
+            borderRight: 'var(--md-border-width) solid var(--md-border-color)',
         },
     },
 };

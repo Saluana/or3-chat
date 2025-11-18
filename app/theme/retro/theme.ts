@@ -19,7 +19,7 @@ export default defineTheme({
     displayName: 'Retro theme',
     description:
         'Classic retro aesthetic with pixel-perfect styling and nostalgic vibes',
-    isDefault: true,
+    isDefault: false,
     stylesheets: ['~/theme/retro/styles.css'],
     borderWidth: '2px',
     borderRadius: '3px',

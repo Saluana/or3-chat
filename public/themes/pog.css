@@ -34,6 +34,12 @@
   font-size: 25px !important;
 }
 
+[data-theme="pog"] #nav-collapsed-container {
+  min-width: 64px !important;
+  max-width: 64px !important;
+  border-right: var(--md-border-width) solid var(--md-border-color);
+}
+
 [data-theme="pog"] #btn-reasoning-toggle {
   background-color: var(--md-surface) !important;
   border: var(--md-border-width) solid var(--md-border-color);

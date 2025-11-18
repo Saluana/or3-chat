@@ -19,7 +19,7 @@ export default defineTheme({
     displayName: 'Pog theme',
     description:
         'Classic retro aesthetic with pixel-perfect styling and nostalgic vibes',
-    isDefault: false,
+    isDefault: true,
 
     borderWidth: '1px',
     borderRadius: '8px',

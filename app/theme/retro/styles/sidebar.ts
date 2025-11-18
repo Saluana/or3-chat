@@ -122,7 +122,7 @@ export const sidebarOverrides = {
         class: 'header-pattern flex items-center min-h-12 max-h-12 py-2 border-b-(--md-border-width) border-(--md-border-color)',
     },
     'div#sidebar.header:collapsed': {
-        class: 'px-0 justify-center w-[63.5px]',
+        class: 'px-0 justify-center',
         style: { width: '62px' },
     },
     'div#sidebar.header:expanded': {
