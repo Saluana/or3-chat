@@ -20,10 +20,7 @@
             >
                 <template #default>
                     <span class="flex flex-col items-center gap-1 w-full">
-                        <UIcon
-                            :name="iconUser"
-                            class="h-[18px] w-[18px]"
-                        />
+                        <UIcon :name="iconUser" class="h-[18px] w-[18px]" />
                         <span class="text-[7px] uppercase tracking-wider"
                             >INFO</span
                         >
@@ -36,20 +33,14 @@
                         v-bind="activityButtonProps"
                         @click="navigateToActivity"
                     >
-                        <UIcon
-                            :name="iconActivity"
-                            class="mr-1.5"
-                        />
+                        <UIcon :name="iconActivity" class="mr-1.5" />
                         Activity
                     </UButton>
                     <UButton
                         v-bind="creditsButtonProps"
                         @click="navigateToCredits"
                     >
-                        <UIcon
-                            :name="iconCredits"
-                            class="mr-1.5"
-                        />
+                        <UIcon :name="iconCredits" class="mr-1.5" />
                         Credits
                     </UButton>
                 </div>
@@ -124,10 +115,7 @@
         >
             <template #default>
                 <span class="flex flex-col items-center gap-1 w-full">
-                    <UIcon
-                        class="w-[18px] h-[18px]"
-                        :name="iconDashboard"
-                    />
+                    <UIcon class="w-[18px] h-[18px]" :name="iconDashboard" />
                     <span class="text-[7px] uppercase tracking-wider"
                         >Dashboard</span
                     >

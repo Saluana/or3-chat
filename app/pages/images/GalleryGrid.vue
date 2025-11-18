@@ -340,11 +340,7 @@ defineExpose({ ensureUrl });
                     @click.stop="toggleSelect(m.hash)"
                 >
                     <UIcon
-                        :name="
-                            isSelected(m.hash)
-                                ? iconCheck
-                                : iconPlus
-                        "
+                        :name="isSelected(m.hash) ? iconCheck : iconPlus"
                         class="h-5 w-5"
                     />
                 </UButton>

@@ -173,10 +173,7 @@
                 >
                     <span v-if="!creatingProject">Create</span>
                     <span v-else class="inline-flex items-center gap-1">
-                        <UIcon
-                            :name="iconLoading"
-                            class="animate-spin"
-                        />
+                        <UIcon :name="iconLoading" class="animate-spin" />
                         Creating
                     </span>
                 </UButton>
@@ -333,10 +330,7 @@
                 >
                     <span v-if="!creatingDocument">Create</span>
                     <span v-else class="inline-flex items-center gap-1">
-                        <UIcon
-                            :name="iconLoading"
-                            class="animate-spin"
-                        />
+                        <UIcon :name="iconLoading" class="animate-spin" />
                         Creating
                     </span>
                 </UButton>

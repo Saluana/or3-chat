@@ -9,11 +9,7 @@
             @click="emit('select')"
         >
             <UIcon
-                :name="
-                    child.kind === 'doc'
-                        ? iconNote
-                        : iconChat
-                "
+                :name="child.kind === 'doc' ? iconNote : iconChat"
                 class="project-child-icon shrink-0 size-4"
             />
             <span

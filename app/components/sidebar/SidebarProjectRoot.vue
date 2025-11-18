@@ -8,11 +8,7 @@
             @click="emit('toggle-expand')"
         >
             <UIcon
-                :name="
-                    expanded
-                        ? iconExpand
-                        : iconCollapse
-                "
+                :name="expanded ? iconExpand : iconCollapse"
                 class="project-icon shrink-0 size-4 transition-transform duration-200"
             />
             <span class="project-label truncate text-start flex-1 min-w-0">{{

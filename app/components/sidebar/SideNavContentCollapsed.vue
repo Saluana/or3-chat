@@ -129,10 +129,7 @@
                             "
                             :id="`btn-page-${page.id}`"
                             class="flex item-center justify-center"
-                            :icon="
-                                page.icon ||
-                                iconPageDefault
-                            "
+                            :icon="page.icon || iconPageDefault"
                             :aria-pressed="activePageId === page.id"
                             :aria-label="page.label"
                             @click="() => handlePageSelect(page.id)"
