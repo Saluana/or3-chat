@@ -2,21 +2,21 @@
 
 ## 1. Core Infrastructure
 
--   [ ] **1.1 Define Canonical Token List**
+-   [x] **1.1 Define Canonical Token List**
 
     -   Create `app/config/icon-tokens.ts`.
     -   Define `DEFAULT_ICONS` object with all necessary semantic tokens and their default values (Lucide/Heroicons).
     -   Export `IconToken` type derived from keys.
     -   _Requirements: 2.1.1, 2.1.3, 2.4.1_
 
--   [ ] **1.2 Implement Icon Registry**
+-   [x] **1.2 Implement Icon Registry**
 
     -   Create `app/theme/_shared/icon-registry.ts`.
     -   Implement `IconRegistry` class with `registerTheme`, `setActiveTheme`, and `resolve` methods.
     -   Ensure fallback logic is robust.
     -   _Requirements: 2.3.1, 2.3.2, 2.3.3, 3.1.1_
 
--   [ ] **1.3 Create Vue Plugin/Composable**
+-   [x] **1.3 Create Vue Plugin/Composable**
     -   Create `app/plugins/icon-registry.ts` to instantiate and inject the registry.
     -   Create `app/composables/useIcon.ts` for reactive token resolution.
     -   _Requirements: 2.4.2, 3.2.1_
