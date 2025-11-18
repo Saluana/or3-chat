@@ -19,6 +19,7 @@ export const DEFAULT_ICONS = {
     'chat.clear': 'i-lucide:x',
     'chat.model.search': 'pixelarticons:search',
     'chat.model.settings': 'pixelarticons:sliders',
+    'chat.model.catalog': 'pixelarticons:android',
     'chat.system_prompt': 'pixelarticons:script-text',
 
     // Chat Messages
@@ -47,7 +48,11 @@ export const DEFAULT_ICONS = {
     'sidebar.note': 'pixelarticons:note',
     'sidebar.settings': 'pixelarticons:sliders',
     'sidebar.user': 'pixelarticons:user',
+    'sidebar.activity': 'pixelarticons:human-run',
+    'sidebar.credits': 'pixelarticons:coin',
     'sidebar.project.root': 'pixelarticons:home',
+    'sidebar.page.home': 'pixelarticons:home',
+    'sidebar.page.default': 'pixelarticons:view-grid',
 
     // Common UI
     'ui.check': 'pixelarticons:check',
@@ -70,11 +75,23 @@ export const DEFAULT_ICONS = {
     'ui.unlock': 'pixelarticons:lock-open',
     'ui.settings': 'pixelarticons:sliders',
     'ui.unknown': 'pixelarticons:alert',
+    'ui.clock': 'pixelarticons:clock',
+    'ui.chart': 'pixelarticons:chart-bar',
+    'ui.shield': 'pixelarticons:shield',
+    'ui.chevron.left': 'pixelarticons:chevron-left',
+    'ui.chevron.down': 'pixelarticons:chevron-down',
+    'ui.wait': 'pixelarticons:hourglass',
+    'ui.minus': 'pixelarticons:minus',
+    'ui.help': 'pixelarticons:message-processing',
+    'ui.refresh': 'pixelarticons:reload',
+    'ui.fullscreen': 'material-symbols:fullscreen',
+    'ui.fullscreen.exit': 'material-symbols:fullscreen-exit',
 
     // Dashboard
     'dashboard.home': 'pixelarticons:dashboard',
     'dashboard.plugins': 'pixelarticons:zap',
     'dashboard.settings': 'pixelarticons:sliders',
+    'dashboard.images': 'pixelarticons:image',
     'dashboard.backup': 'pixelarticons:briefcase-download',
     'dashboard.restore': 'pixelarticons:briefcase-upload',
 

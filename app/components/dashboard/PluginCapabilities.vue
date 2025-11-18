@@ -5,12 +5,12 @@
         class="plugin-capabilities"
     >
         <div class="capabilities-header">
-            <UIcon name="pixelarticons:shield" class="w-4 h-4" />
+            <UIcon :name="useIcon('ui.shield').value" class="w-4 h-4" />
             <span class="font-semibold">Capabilities</span>
         </div>
         <ul class="capabilities-list">
             <li v-for="cap in capabilities" :key="cap" class="capability-item">
-                <UIcon name="pixelarticons:check" class="w-3 h-3" />
+                <UIcon :name="useIcon('ui.check').value" class="w-3 h-3" />
                 <span>{{ formatCapability(cap) }}</span>
             </li>
         </ul>

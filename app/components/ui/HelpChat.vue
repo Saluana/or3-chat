@@ -22,8 +22,8 @@
                             :square="true"
                             :icon="
                                 isFullscreen
-                                    ? 'material-symbols:fullscreen-exit'
-                                    : 'material-symbols:fullscreen'
+                                    ? useIcon('ui.fullscreen.exit').value
+                                    : useIcon('ui.fullscreen').value
                             "
                             class="theme-btn aspect-square hidden md:flex"
                             :ui="{
@@ -39,7 +39,7 @@
                         <UButton
                             size="xs"
                             :square="true"
-                            icon="pixelarticons:close"
+                            :icon="useIcon('ui.close').value"
                             class="theme-btn aspect-square"
                             :ui="{
                                 base: 'theme-btn aspect-square flex items-center justify-center',
@@ -154,7 +154,7 @@
                             :disabled="!canSend"
                         >
                             <UIcon
-                                name="pixelarticons:arrow-up"
+                                :name="useIcon('chat.send').value"
                                 class="h-4 w-4"
                             />
                             <span>Send</span>
@@ -182,7 +182,7 @@
             <div v-if="!isExpanded">
                 <UButton
                     size="md"
-                    icon="pixelarticons:message-processing"
+                    :icon="useIcon('ui.help').value"
                     :class="launcherClass"
                     :ui="{
                         base: 'theme-btn aspect-square w-12 h-12 flex items-center justify-center',

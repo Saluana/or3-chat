@@ -8,7 +8,11 @@
             @click="emit('toggle-expand')"
         >
             <UIcon
-                :name="expanded ? 'i-lucide:folder-open' : 'i-lucide:folder'"
+                :name="
+                    expanded
+                        ? useIcon('shell.expand').value
+                        : useIcon('shell.collapse').value
+                "
                 class="project-icon shrink-0 size-4 transition-transform duration-200"
             />
             <span class="project-label truncate text-start flex-1 min-w-0">{{
@@ -25,7 +29,7 @@
                         aria-label="Add chat to project"
                     >
                         <UIcon
-                            name="pixelarticons:message-plus"
+                            :name="useIcon('sidebar.new_chat').value"
                             class="project-add-icon w-4 h-4 opacity-70"
                         />
                     </button>
@@ -35,7 +39,7 @@
                         aria-label="Add document to project"
                     >
                         <UIcon
-                            name="pixelarticons:note-plus"
+                            :name="useIcon('sidebar.new_note').value"
                             class="project-add-icon w-4 h-4 opacity-70"
                         />
                     </button>
@@ -52,7 +56,7 @@
                             aria-label="Project actions"
                         >
                             <UIcon
-                                name="pixelarticons:more-vertical"
+                                :name="useIcon('ui.more').value"
                                 class="project-menu-icon w-4 h-4 opacity-70"
                             />
                         </button>
@@ -85,6 +89,7 @@
 import { computed } from 'vue';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 
 interface Project {
     id: string;
@@ -117,7 +122,7 @@ const renameButtonProps = computed(() => {
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:edit' as const,
+        icon: useIcon('ui.edit').value,
         ...(overrides.value as any),
     };
 });
@@ -133,7 +138,7 @@ const deleteButtonProps = computed(() => {
         color: 'error' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:trash' as const,
+        icon: useIcon('ui.trash').value,
         ...(overrides.value as any),
     };
 });

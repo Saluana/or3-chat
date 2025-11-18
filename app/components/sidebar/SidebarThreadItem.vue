@@ -10,7 +10,7 @@
         <div class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
             <UIcon
                 v-if="thread.forked"
-                name="pixelarticons:git-branch"
+                :name="useIcon('chat.message.branch').value"
                 class="shrink-0"
             />
             <span
@@ -29,7 +29,7 @@
                 aria-label="Thread actions"
             >
                 <UIcon
-                    name="pixelarticons:more-vertical"
+                    :name="useIcon('ui.more').value"
                     class="w-4 h-4 opacity-70"
                 />
             </span>
@@ -72,6 +72,7 @@ import { computed } from 'vue';
 import RetroGlassBtn from '~/components/ui/RetroGlassBtn.vue';
 import type { Thread } from '~/db';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 
 const props = defineProps<{ thread: Thread; active?: boolean }>();
 const emit = defineEmits<{
@@ -93,7 +94,7 @@ const renameButtonProps = computed(() => {
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:edit' as const,
+        icon: useIcon('ui.edit').value,
         ...(overrides.value as any),
     };
 });
@@ -109,7 +110,7 @@ const addToProjectButtonProps = computed(() => {
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:folder-plus' as const,
+        icon: useIcon('sidebar.new_folder').value,
         ...(overrides.value as any),
     };
 });
@@ -125,7 +126,7 @@ const deleteButtonProps = computed(() => {
         color: 'error' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:trash' as const,
+        icon: useIcon('ui.trash').value,
         ...(overrides.value as any),
     };
 });

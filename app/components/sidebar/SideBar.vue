@@ -70,7 +70,7 @@
                     :placeholder="
                         isRenamingDoc ? 'Document title' : 'Thread title'
                     "
-                    icon="pixelarticons:edit"
+                    :icon="useIcon('ui.edit').value"
                     @keyup.enter="saveRename"
                 />
             </div>
@@ -95,7 +95,7 @@
                 <UInput
                     v-model="renameProjectName"
                     placeholder="Project name"
-                    icon="pixelarticons:folder"
+                    :icon="useIcon('sidebar.folder').value"
                     @keyup.enter="saveRenameProject"
                 />
             </div>
@@ -194,7 +194,7 @@
                                 v-model="createProjectState.name"
                                 required
                                 placeholder="Project title"
-                                icon="pixelarticons:folder"
+                                :icon="useIcon('sidebar.folder').value"
                                 class="w-full"
                                 @keyup.enter="submitCreateProject"
                             />
@@ -292,7 +292,7 @@
                         <UInput
                             v-model="newProjectName"
                             placeholder="Project name"
-                            icon="pixelarticons:folder"
+                            :icon="useIcon('sidebar.folder').value"
                             class="w-full"
                         />
                     </UFormField>
@@ -358,7 +358,7 @@
                             v-model="newDocumentState.title"
                             required
                             placeholder="Document title"
-                            icon="pixelarticons:note"
+                            :icon="useIcon('sidebar.note').value"
                             class="w-full"
                             @keyup.enter="submitCreateDocument"
                         />
@@ -405,6 +405,7 @@ import { updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/documents/useDocumentsStore';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 import {
     normalizeProjectData,
     type ProjectEntry,

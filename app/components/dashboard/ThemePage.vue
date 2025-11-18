@@ -1089,7 +1089,7 @@ const copyButtonProps = computed(() => {
     return {
         size: 'sm' as const,
         variant: 'ghost' as const,
-        icon: 'pixelarticons:copy' as const,
+        icon: useIcon('ui.copy').value,
         square: true,
         ...(overrides.value as any),
     };

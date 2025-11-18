@@ -39,7 +39,7 @@
                         v-if="loading"
                     >
                         <UIcon
-                            name="pixelarticons:loader"
+                            :name="useIcon('ui.loading').value"
                             class="w-4 h-4 animate-spin opacity-70"
                         />
                     </div>
@@ -62,7 +62,10 @@
                             aria-label="Add attachments"
                             :disabled="loading"
                         >
-                            <UIcon name="i-lucide:plus" class="w-4 h-4" />
+                            <UIcon
+                                :name="useIcon('chat.attach').value"
+                                class="w-4 h-4"
+                            />
                         </UButton>
                     </div>
 
@@ -77,7 +80,7 @@
                                 :disabled="loading"
                             >
                                 <UIcon
-                                    name="pixelarticons:sliders"
+                                    :name="useIcon('chat.model.settings').value"
                                     class="w-4 h-4"
                                 />
                             </UButton>
@@ -162,7 +165,10 @@
                         type="button"
                         aria-label="Send message"
                     >
-                        <UIcon name="pixelarticons:arrow-up" class="w-4 h-4" />
+                        <UIcon
+                            :name="useIcon('chat.send').value"
+                            class="w-4 h-4"
+                        />
                     </UButton>
                     <UButton
                         class="chat-input-stop-btn"
@@ -172,7 +178,10 @@
                         type="button"
                         aria-label="Stop generation"
                     >
-                        <UIcon name="pixelarticons:pause" class="w-4 h-4" />
+                        <UIcon
+                            :name="useIcon('chat.stop').value"
+                            class="w-4 h-4"
+                        />
                     </UButton>
                 </div>
             </div>
@@ -299,7 +308,7 @@
         >
             <div class="text-center">
                 <UIcon
-                    name="i-lucide:upload-cloud"
+                    :name="useIcon('chat.upload').value"
                     class="w-12 h-12 mx-auto mb-3 text-blue-500"
                 />
                 <p class="text-blue-600 dark:text-blue-400 text-sm font-medium">
@@ -709,9 +718,8 @@ const attachmentRemoveBtnProps = computed(() => {
         variant: 'solid' as const,
         size: 'xs' as const,
         square: true as const,
-        icon: 'i-lucide:x',
-        class:
-            'chat-input-attachment-remove-btn absolute top-1 right-1 h-[22px] w-[22px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 border border-black text-white bg-[var(--md-error)]/85 hover:bg-[var(--md-error)]',
+        icon: useIcon('ui.close').value,
+        class: 'chat-input-attachment-remove-btn absolute top-1 right-1 h-[22px] w-[22px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 border border-black text-white bg-[var(--md-error)]/85 hover:bg-[var(--md-error)]',
     };
     const overrideValue = (overrides.value as Record<string, any>) || {};
     const mergedClass = [fallback.class, overrideValue.class]

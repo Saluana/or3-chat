@@ -277,6 +277,7 @@ import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import { useRafFn } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };
@@ -300,7 +301,7 @@ const copyButtonProps = computed(() => {
     });
 
     return {
-        icon: 'pixelarticons:copy' as const,
+        icon: useIcon('chat.message.copy').value,
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
@@ -317,7 +318,7 @@ const retryButtonProps = computed(() => {
     });
 
     return {
-        icon: 'pixelarticons:reload' as const,
+        icon: useIcon('chat.message.retry').value,
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
@@ -334,7 +335,7 @@ const branchButtonProps = computed(() => {
     });
 
     return {
-        icon: 'pixelarticons:git-branch' as const,
+        icon: useIcon('chat.message.branch').value,
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
@@ -351,7 +352,7 @@ const editButtonProps = computed(() => {
     });
 
     return {
-        icon: 'pixelarticons:edit-box' as const,
+        icon: useIcon('chat.message.edit').value,
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',

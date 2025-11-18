@@ -21,7 +21,7 @@
                 <template #default>
                     <span class="flex flex-col items-center gap-1 w-full">
                         <UIcon
-                            name="pixelarticons:user"
+                            :name="useIcon('sidebar.user').value"
                             class="h-[18px] w-[18px]"
                         />
                         <span class="text-[7px] uppercase tracking-wider"
@@ -36,14 +36,20 @@
                         v-bind="activityButtonProps"
                         @click="navigateToActivity"
                     >
-                        <UIcon name="pixelarticons:human-run" class="mr-1.5" />
+                        <UIcon
+                            :name="useIcon('sidebar.activity').value"
+                            class="mr-1.5"
+                        />
                         Activity
                     </UButton>
                     <UButton
                         v-bind="creditsButtonProps"
                         @click="navigateToCredits"
                     >
-                        <UIcon name="pixelarticons:coin" class="mr-1.5" />
+                        <UIcon
+                            :name="useIcon('sidebar.credits').value"
+                            class="mr-1.5"
+                        />
                         Credits
                     </UButton>
                 </div>
@@ -120,7 +126,7 @@
                 <span class="flex flex-col items-center gap-1 w-full">
                     <UIcon
                         class="w-[18px] h-[18px]"
-                        name="pixelarticons:dashboard"
+                        :name="useIcon('dashboard.home').value"
                     />
                     <span class="text-[7px] uppercase tracking-wider"
                         >Dashboard</span
@@ -139,6 +145,7 @@
 import { computed, onMounted, ref, useAttrs } from 'vue';
 import { state } from '~/state/global';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 
 defineOptions({ inheritAttrs: false });
 

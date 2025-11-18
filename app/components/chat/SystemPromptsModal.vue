@@ -31,7 +31,7 @@
                     <UInput
                         v-model="searchQuery"
                         placeholder="Search prompts..."
-                        icon="i-heroicons-magnifying-glass"
+                        :icon="useIcon('ui.search').value"
                         v-bind="searchInputProps"
                     />
                 </div>
@@ -46,7 +46,7 @@
                             class="flex flex-col items-center justify-center h-full text-center p-8"
                         >
                             <UIcon
-                                name="pixelarticons:script-text"
+                                :name="useIcon('chat.system_prompt').value"
                                 class="w-16 h-16 text-gray-400 mb-4"
                             />
                             <h3
@@ -115,7 +115,9 @@
                                     >
                                         <span class="flex items-center gap-1">
                                             <UIcon
-                                                name="pixelarticons:clock"
+                                                :name="
+                                                    useIcon('ui.clock').value
+                                                "
                                                 class="w-3.5 h-3.5 opacity-70"
                                             />
                                             Updated
@@ -127,7 +129,9 @@
                                         >
                                         <span class="flex items-center gap-1">
                                             <UIcon
-                                                name="pixelarticons:chart-bar"
+                                                :name="
+                                                    useIcon('ui.chart').value
+                                                "
                                                 class="w-3.5 h-3.5 opacity-70"
                                             />
                                             {{ tokenCounts[prompt.id] || 0 }}
@@ -305,11 +309,12 @@ let promptEditorLoadPromise: Promise<unknown> | null = null;
 const ensurePromptEditorLoaded = async () => {
     if (!import.meta.client) return;
     if (!promptEditorLoadPromise) {
-        promptEditorLoadPromise = import('~/components/prompts/PromptEditor.vue')
-            .catch((error) => {
-                promptEditorLoadPromise = null;
-                throw error;
-            });
+        promptEditorLoadPromise = import(
+            '~/components/prompts/PromptEditor.vue'
+        ).catch((error) => {
+            promptEditorLoadPromise = null;
+            throw error;
+        });
     }
     await promptEditorLoadPromise;
 };
@@ -469,7 +474,7 @@ const moreActionsButtonProps = computed(() => {
         variant: 'outline' as const,
         color: 'neutral' as const,
         square: true as const,
-        icon: 'pixelarticons:more-vertical' as const,
+        icon: useIcon('ui.more').value,
         ...overrideValue,
         class: mergedClass,
     };
@@ -493,7 +498,7 @@ const editPromptButtonProps = computed(() => {
         size: 'sm' as const,
         block: true,
         leading: true as const,
-        leadingIcon: 'pixelarticons:edit' as const,
+        leadingIcon: useIcon('ui.edit').value,
         ...overrideValue,
         class: mergedClass,
     };
@@ -518,7 +523,7 @@ const deletePromptButtonProps = computed(() => {
         block: true,
         color: 'error' as const,
         leading: true as const,
-        leadingIcon: 'pixelarticons:trash' as const,
+        leadingIcon: useIcon('ui.trash').value,
         ...overrideValue,
         class: mergedClass,
     };

@@ -142,7 +142,7 @@ const toolbarButtons = computed(() => [
     },
     {
         id: 'code',
-        icon: 'pixelarticons:code',
+        icon: useIcon('editor.code').value,
         label: 'Code',
         getActive: () => isActive('code'),
         onActivate: () => cmd('toggleCode'),
@@ -170,7 +170,7 @@ const toolbarButtons = computed(() => [
     },
     {
         id: 'bulletList',
-        icon: 'pixelarticons:list',
+        icon: useIcon('editor.list').value,
         label: 'Bullet list',
         getActive: () => isActive('bulletList'),
         onActivate: () => cmd('toggleBulletList'),
@@ -184,21 +184,21 @@ const toolbarButtons = computed(() => [
     },
     {
         id: 'horizontalRule',
-        icon: 'pixelarticons:minus',
+        icon: useIcon('ui.minus').value,
         label: 'Horizontal Rule',
         getActive: () => false,
         onActivate: () => cmd('setHorizontalRule'),
     },
     {
         id: 'undo',
-        icon: 'pixelarticons:undo',
+        icon: useIcon('editor.undo').value,
         label: 'Undo',
         getActive: () => false,
         onActivate: () => cmd('undo'),
     },
     {
         id: 'redo',
-        icon: 'pixelarticons:redo',
+        icon: useIcon('editor.redo').value,
         label: 'Redo',
         getActive: () => false,
         onActivate: () => cmd('redo'),

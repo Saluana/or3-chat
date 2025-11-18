@@ -54,7 +54,7 @@
             >
                 <SidebarHeader
                     :collapsed="collapsed"
-                    :toggle-icon="toggleIcon"
+                    :toggle-icon="toggleIcon.value"
                     :toggle-aria="toggleAria"
                     @toggle="toggleCollapse"
                 >
@@ -164,6 +164,7 @@ import {
 } from 'vue';
 import SidebarHeader from './sidebar/SidebarHeader.vue';
 import ResizeHandle from './sidebar/ResizeHandle.vue';
+import { useIcon } from '~/composables/useIcon';
 
 type Side = 'left' | 'right';
 
@@ -388,13 +389,13 @@ const toggleIcon = computed(() => {
     // When collapsed, show the icon that suggests expanding back toward content area
     if (collapsed.value) {
         return side.value === 'right'
-            ? 'pixelarticons:arrow-bar-left'
-            : 'pixelarticons:arrow-bar-right';
+            ? useIcon('shell.sidebar.toggle.left').value
+            : useIcon('shell.sidebar.toggle.right').value;
     }
     // When expanded, show icon pointing into the sidebar to collapse it
     return side.value === 'right'
-        ? 'pixelarticons:arrow-bar-right'
-        : 'pixelarticons:arrow-bar-left';
+        ? useIcon('shell.sidebar.toggle.right').value
+        : useIcon('shell.sidebar.toggle.left').value;
 });
 const toggleAria = computed(() =>
     collapsed.value ? 'Expand sidebar' : 'Collapse sidebar'
