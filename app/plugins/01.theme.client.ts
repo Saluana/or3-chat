@@ -325,7 +325,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 };
 
                 themeRegistry.set(themeName, compiledTheme);
-                
+
                 // Register icons with the registry
                 if (compiledTheme.icons) {
                     iconRegistry.registerTheme(themeName, compiledTheme.icons);
@@ -451,8 +451,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             localStorage.setItem(activeThemeStorageKey, fallback);
             writeActiveThemeCookie(fallback);
             await ensureThemeLoaded(fallback);
-            const fallbackPatch =
-                themeAppConfigOverrides.get(fallback) ?? null;
+            const fallbackPatch = themeAppConfigOverrides.get(fallback) ?? null;
             applyThemeAppConfigPatch(fallbackPatch);
             applyThemeUiConfig(themeRegistry.get(fallback) || null);
             return;
@@ -672,14 +671,12 @@ function deepMerge(
     }
 
     for (const [key, value] of Object.entries(patch)) {
-        if (
-            value &&
-            typeof value === 'object' &&
-            !Array.isArray(value)
-        ) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
             const current = base[key];
             base[key] = deepMerge(
-                current && typeof current === 'object' && !Array.isArray(current)
+                current &&
+                    typeof current === 'object' &&
+                    !Array.isArray(current)
                     ? current
                     : {},
                 value as Record<string, any>

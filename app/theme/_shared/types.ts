@@ -55,7 +55,6 @@ interface BaseColorPalette {
     success?: string;
     warning?: string;
     info?: string;
-
 }
 
 export interface ColorPalette extends BaseColorPalette {

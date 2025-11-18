@@ -155,34 +155,37 @@ export class ThemeCompiler {
             try {
                 const iconModule = await import(iconConfigPath);
                 const icons = iconModule.default || iconModule;
-                
+
                 // Validate icon tokens
                 const validTokens = new Set(Object.keys(DEFAULT_ICONS));
                 const invalidTokens: string[] = [];
-                
+
                 // Flatten nested structure if necessary, or assume flat map
                 // The plan suggests a nested structure in icons.config.ts but the registry expects a flat map.
                 // Let's support both or enforce one. The plan example showed:
                 // { shell: { 'new-pane': '...' } }
                 // But the registry expects 'shell.new-pane'.
                 // We should flatten it here.
-                
+
                 const flattenedIcons: Record<string, string> = {};
-                
+
                 const flatten = (obj: any, prefix = '') => {
                     for (const key in obj) {
                         const value = obj[key];
                         const newKey = prefix ? `${prefix}.${key}` : key;
                         if (typeof value === 'string') {
                             flattenedIcons[newKey] = value;
-                        } else if (typeof value === 'object' && value !== null) {
+                        } else if (
+                            typeof value === 'object' &&
+                            value !== null
+                        ) {
                             flatten(value, newKey);
                         }
                     }
                 };
-                
+
                 flatten(icons);
-                
+
                 for (const token of Object.keys(flattenedIcons)) {
                     if (!validTokens.has(token)) {
                         invalidTokens.push(token);
@@ -193,19 +196,22 @@ export class ThemeCompiler {
                     warnings.push({
                         severity: 'warning',
                         code: 'COMPILER_003',
-                        message: `Invalid icon tokens found: ${invalidTokens.join(', ')}`,
+                        message: `Invalid icon tokens found: ${invalidTokens.join(
+                            ', '
+                        )}`,
                         file: iconConfigPath,
-                        suggestion: 'Check app/config/icon-tokens.ts for valid tokens'
+                        suggestion:
+                            'Check app/config/icon-tokens.ts for valid tokens',
                     });
                 }
-                
+
                 themeIcons = flattenedIcons;
             } catch (e) {
                 errors.push({
                     severity: 'error',
                     code: 'COMPILER_004',
                     message: `Failed to load icons.config.ts: ${e}`,
-                    file: iconConfigPath
+                    file: iconConfigPath,
                 });
             }
         }
