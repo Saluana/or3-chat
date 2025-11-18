@@ -33,8 +33,17 @@
 /* Utility class for retro shadow (used globally) */
 .retro-shadow,
 .theme-shadow {
-	box-shadow: 2px 2px 0 var(--md-border-color);
+	/* Use Tailwind shadow vars so we can layer with ring utilities */
+	--tw-shadow: 2px 2px 0 var(--md-border-color);
+	--tw-shadow-colored: 2px 2px 0 var(--tw-shadow-color);
+	box-shadow:
+		var(--tw-ring-offset-shadow, 0 0 #0000),
+		var(--tw-ring-shadow, 0 0 #0000),
+		var(--tw-shadow);
 }
 
+#top-header {
+	border-bottom: var(--md-border-width) solid var(--md-border-color);
+}
 
 } /* End [data-theme="retro"] */

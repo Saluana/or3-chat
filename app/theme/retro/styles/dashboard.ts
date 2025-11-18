@@ -5,6 +5,13 @@ export const dashboardOverrides = {
             base: 'ml-0! border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]!',
         },
     },
+    'button#dashboard.theme.copy-color': {
+        class: 'flex items-center justify-center',
+    },
+    'button#dashboard.workspace.import-mode': {
+        variant: 'solid',
+        color: 'on-surface',
+    },
 };
 export const dashboardStyles = {
     '.dashboard-plugin-icon-label': {

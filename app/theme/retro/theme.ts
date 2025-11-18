@@ -61,7 +61,7 @@ export default defineTheme({
 
         // Outline & borders
         outline: '#73777f',
-        borderColor: '#054575',
+        borderColor: '#032640',
 
         // Semantic colors
         success: '#51cf66',
@@ -118,9 +118,35 @@ export default defineTheme({
 
     backgrounds: {
         content: {
-            base: { color: 'var(--md-surface)' },
+            base: {
+                image: '/bg-repeat.v2.webp',
+                opacity: 0.08,
+                repeat: 'repeat',
+                size: '150px',
+            },
+            overlay: {
+                image: '/bg-repeat-2.v2.webp',
+                opacity: 0.125,
+                repeat: 'repeat',
+                size: '380px',
+            },
         },
-        sidebar: {},
+        sidebar: {
+            image: '/sidebar-repeater.v2.webp',
+            opacity: 0.1,
+            repeat: 'repeat',
+            size: '240px',
+        },
+        headerGradient: {
+            image: '/gradient-x.webp',
+            repeat: 'repeat',
+            size: 'auto 100%',
+        },
+        bottomNavGradient: {
+            image: '/gradient-x.webp',
+            repeat: 'repeat',
+            size: 'auto 100%',
+        },
     },
 
     fonts: {
@@ -138,23 +164,6 @@ export default defineTheme({
                 base: 'flex flex-col',
                 label: 'text-xs font-light px-1 text-[var(--md-on-surface)]/70 -mb-0.5!',
                 help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
-            },
-        },
-        // Global input overrides
-        input: {
-            ui: {
-                root: 'font-[IBM_Plex_Sans]!',
-                variants: {
-                    variant: {
-                        outline:
-                            'text-highlighted bg-default ring-0 focus-visible:ring-1 focus-visible:ring-[color:var(--md-primary)]',
-                    },
-                    size: {
-                        sm: { base: 'h-[32px] text-[12px]!' },
-                        md: { base: 'h-[40px] text-[14px]!' },
-                        lg: { base: 'h-[48px] text-[16px]!' },
-                    },
-                },
             },
         },
         selectmenu: {
@@ -206,25 +215,5 @@ export default defineTheme({
                 minWidth: '24px',
             },
         },
-        // Example: Third-party Monaco editor styling
-        // '.monaco-editor': {
-        //     style: {
-        //         border: '2px solid var(--md-outline)',
-        //         borderRadius: '3px',
-        //     },
-        //     class: 'retro-shadow',
-        // },
-        // Example: TipTap editor styling
-        // '.tiptap': {
-        //     style: {
-        //         fontFamily: 'VT323, monospace',
-        //         fontSize: '20px',
-        //     },
-        //     class: 'prose prose-retro',
-        // },
-        // Example: Modal overlays
-        // '.modal-overlay': {
-        //     class: 'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
-        // },
     },
 });

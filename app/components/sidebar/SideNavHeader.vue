@@ -29,7 +29,7 @@
                 <template #content>
                     <div class="space-y-2 min-w-[140px]">
                         <div
-                            class="px-2 pb-1 border-b border-[color:var(--md-border-color)]"
+                            class="px-2 pb-1 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
                         >
                             <span
                                 class="text-xs font-medium text-[color:var(--md-on-surface)]/60 tracking-wide"

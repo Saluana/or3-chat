@@ -1,3 +1,5 @@
+import { search } from '@orama/orama';
+
 export default {
     ui: {
         tooltip: {
@@ -32,7 +34,7 @@ export default {
                 // Make base styles clearly different so it's obvious when applied
                 base: [
                     'transition-colors',
-                    'cursor-pointer text-start border-[var(--md-border-width)] rounded-[var(--md-border-radius)] theme-shadow',
+                    'cursor-pointer text-start border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] theme-shadow',
                 ],
                 // Label tweaks are rarely overridden by variants, good to verify
                 label: 'truncate tracking-wider',
@@ -48,7 +50,7 @@ export default {
                     basic: 'border-[var(--md-border-width)] shadow-none! drop-shadow-none!  hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-[color:var(--md-border-color)] text-[var(--md-on-surface)]',
                     popover:
                         'flex items-center! hover:bg-[var(--md-primary)]/5 active:bg-[var(--md-primary)]/10 justify-start!',
-                    ghost: 'font-base',
+                    ghost: 'font-base border-none shadow-none',
                     outline:
                         'border-[color:var(--md-border-color)] border-[length:var(--md-border-width)] ring-0! hover:shadow hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
                 },
@@ -92,23 +94,21 @@ export default {
                 },
             },
         },
+        // Global input overrides
         input: {
             slots: {
                 base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)]',
             },
             variants: {
-                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
-                leading: { true: 'ps-10!' },
-                trailing: { true: 'pe-10!' },
-                size: {
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                variant: {
+                    outline:
+                        'text-highlighted bg-default ring-0 focus-visible:ring-1 focus-visible:ring-[color:var(--md-primary)] retro-shadow',
                 },
-                /*size: {
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },*/
+                size: {
+                    sm: { base: 'h-[32px] text-[12px]!' },
+                    md: { base: 'h-[40px] text-[14px]!' },
+                    lg: { base: 'h-[48px] text-[16px]!' },
+                },
             },
         },
         formField: {
@@ -119,7 +119,7 @@ export default {
             },
         },
         buttonGroup: {
-            base: 'relative',
+            base: 'relative border-none',
             variants: {
                 orientation: {
                     horizontal: 'inline-flex -space-x-px',
@@ -194,10 +194,10 @@ export default {
         },
         selectMenu: {
             slots: {
-                base: 'rounded-[var(--md-border-radius)] border-[var(--md-border-width)] border-[color:var(--md-border-color)] retro-shadow',
+                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
                 content:
                     'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)]',
-                input: 'border-0 rounded-none!',
+                input: 'border-0 rounded-none! retro-shadow-none',
                 arrow: 'h-[18px] w-[18px]',
                 itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
             },

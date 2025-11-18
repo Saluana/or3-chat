@@ -1,5 +1,5 @@
 const SidebarPopoverButtonConfig = {
-    class: 'justify-start font-light !normal-case',
+    class: 'justify-start font-light !normal-case shadow-none!',
     variant: 'ghost',
     size: 'sm',
     ui: {
@@ -13,28 +13,35 @@ export const sidebarOverrides = {
     // Note: border for chat containers is applied via CSS selector below to avoid duplicate class merges
 
     /* --- Sidebar header --- */
-    'button[data-id="sidebar.filter"]': {
-        class: 'shadow',
+    'button#sidebar.filter': {
+        variant: 'solid',
+        color: 'on-surface',
+        size: 'md',
     },
     'button#sidebar.filter-item': SidebarPopoverButtonConfig,
 
     'input#sidebar.search': {
+        size: 'md',
+        variant: 'outline',
+        /*
         ui: {
             base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)] text-[14px]! h-[40px]!',
-        },
+        },*/
     },
     'selectmenu#sidebar.project-select': {
-        class: 'h-[40px] rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] ring-0 data-[state=open]:ring-1! data-[state=open]:bg-[var(--md-surface-hover)]! w-full cursor-pointer',
+        class: 'w-full',
         ui: {
-            base: 'text-[16px]! poop',
-            value: 'text-[16px]!',
-            placeholder: 'text-[16px]!',
+            base: 'text-[14px]!',
+            value: 'text-[14px]!',
+            placeholder: 'text-[14px]!',
+            item: 'text-[14px]!',
+            itemLabel: 'text-[14px]!',
             content:
-                'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[16px]!',
+                'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[14px]!',
         },
         searchInput: {
             ui: {
-                base: 'text-[14px]! rounded-none rounded-t-[var(--md-border-radius)]!',
+                base: 'text-[14px]! rounded-none border-x-0 border-t-0 border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]',
             },
         },
     },

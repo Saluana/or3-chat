@@ -253,12 +253,14 @@
             <!-- Preview row -->
             <div class="flex items-center gap-3">
                 <div
-                    class="pattern-thumb drop-zone"
+                    class="pattern-thumb drop-zone relative flex h-24 w-[140px] flex-col items-center justify-center overflow-hidden rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)]/90 text-[var(--md-on-surface)] shadow-[2px_2px_0_var(--md-border-color)] transition-all duration-150"
                     :class="[
                         !contentBg1Url || local.contentBg1Opacity === 0
-                            ? 'opacity-30'
+                            ? 'opacity-60'
                             : '',
-                        dragOver.contentBg1 ? 'is-dragover' : '',
+                        dragOver.contentBg1
+                            ? 'ring-2 ring-[color:var(--md-primary)] ring-offset-2 ring-offset-[var(--md-surface)] scale-[1.01]'
+                            : '',
                     ]"
                     :style="contentBg1PreviewStyle"
                     aria-label="Content background layer 1 (click or drop to upload)"
@@ -271,7 +273,16 @@
                     @dragleave.prevent="onDragLeave($event, 'contentBg1')"
                     @drop.prevent="onDrop($event, 'contentBg1')"
                 >
-                    <span class="dz-hint" aria-hidden="true">Drop / Tap</span>
+                    <div
+                        v-if="contentBg1Url"
+                        class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"
+                    ></div>
+                    <span
+                        class="relative z-10 rounded bg-[var(--md-surface)]/85 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em]"
+                        aria-hidden="true"
+                    >
+                        {{ contentBg1Url ? 'Replace' : 'Drop / Tap' }}
+                    </span>
                 </div>
                 <span
                     class="text-xs truncate max-w-40"
@@ -419,12 +430,14 @@
             </p>
             <div class="flex items-center gap-3">
                 <div
-                    class="pattern-thumb drop-zone"
+                    class="pattern-thumb drop-zone relative flex h-24 w-[140px] flex-col items-center justify-center overflow-hidden rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)]/90 text-[var(--md-on-surface)] shadow-[2px_2px_0_var(--md-border-color)] transition-all duration-150"
                     :class="[
                         !contentBg2Url || local.contentBg2Opacity === 0
-                            ? 'opacity-30'
+                            ? 'opacity-60'
                             : '',
-                        dragOver.contentBg2 ? 'is-dragover' : '',
+                        dragOver.contentBg2
+                            ? 'ring-2 ring-[color:var(--md-primary)] ring-offset-2 ring-offset-[var(--md-surface)] scale-[1.01]'
+                            : '',
                     ]"
                     :style="contentBg2PreviewStyle"
                     aria-label="Content background layer 2 (click or drop to upload)"
@@ -437,7 +450,16 @@
                     @dragleave.prevent="onDragLeave($event, 'contentBg2')"
                     @drop.prevent="onDrop($event, 'contentBg2')"
                 >
-                    <span class="dz-hint" aria-hidden="true">Drop / Tap</span>
+                    <div
+                        v-if="contentBg2Url"
+                        class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"
+                    ></div>
+                    <span
+                        class="relative z-10 rounded bg-[var(--md-surface)]/85 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em]"
+                        aria-hidden="true"
+                    >
+                        {{ contentBg2Url ? 'Replace' : 'Drop / Tap' }}
+                    </span>
                 </div>
                 <span
                     class="text-xs truncate max-w-40"
@@ -587,12 +609,14 @@
             </p>
             <div class="flex items-center gap-3">
                 <div
-                    class="pattern-thumb drop-zone"
+                    class="pattern-thumb drop-zone relative flex h-24 w-[140px] flex-col items-center justify-center overflow-hidden rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)]/90 text-[var(--md-on-surface)] shadow-[2px_2px_0_var(--md-border-color)] transition-all duration-150"
                     :class="[
                         !sidebarBgUrl || local.sidebarBgOpacity === 0
-                            ? 'opacity-30'
+                            ? 'opacity-60'
                             : '',
-                        dragOver.sidebarBg ? 'is-dragover' : '',
+                        dragOver.sidebarBg
+                            ? 'ring-2 ring-[color:var(--md-primary)] ring-offset-2 ring-offset-[var(--md-surface)] scale-[1.01]'
+                            : '',
                     ]"
                     :style="sidebarBgPreviewStyle"
                     aria-label="Sidebar background (click or drop to upload)"
@@ -605,7 +629,16 @@
                     @dragleave.prevent="onDragLeave($event, 'sidebarBg')"
                     @drop.prevent="onDrop($event, 'sidebarBg')"
                 >
-                    <span class="dz-hint" aria-hidden="true">Drop / Tap</span>
+                    <div
+                        v-if="sidebarBgUrl"
+                        class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"
+                    ></div>
+                    <span
+                        class="relative z-10 rounded bg-[var(--md-surface)]/85 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em]"
+                        aria-hidden="true"
+                    >
+                        {{ sidebarBgUrl ? 'Replace' : 'Drop / Tap' }}
+                    </span>
                 </div>
                 <span
                     class="text-xs truncate max-w-40"

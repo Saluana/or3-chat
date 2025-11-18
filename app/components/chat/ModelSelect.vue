@@ -50,16 +50,13 @@ const selectMenuProps = computed(() => {
     } = overrideValue;
 
     const baseClass =
-        'h-[32px] text-[14px] rounded-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-full truncate whitespace-nowrap';
+        'h-[32px] text-[14px] px-2 w-full min-w-[100px] max-w-full truncate whitespace-nowrap';
     const mergedClass = [baseClass, themeClass].filter(Boolean).join(' ');
 
     const defaultSearchInput = {
         icon: 'pixelarticons:search',
         autofocus: !isMobile.value,
-        ui: {
-            base: 'border-0 border-b-1 rounded-none!',
-            leadingIcon: 'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
-        },
+        ui: {},
     };
 
     const mergedSearchInput = themeSearchInput

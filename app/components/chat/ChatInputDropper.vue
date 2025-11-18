@@ -5,10 +5,10 @@
         @dragleave.prevent="onDragLeave"
         @drop.prevent="handleDrop"
         :class="[
-            'chat-input-main flex flex-col bg-[var(--md-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative cursor-text z-10',
+            'chat-input-main flex flex-col bg-(--md-surface) mx-2 md:mx-0 items-stretch transition-all duration-300 relative cursor-text z-10',
             isDragging
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                : 'hover:border-[color:var(--md-primary)] focus-within:border-[color:var(--md-primary)] dark:focus-within:border-gray-600',
+                : 'hover:border-(--md-primary) focus-within:border-(--md-primary) dark:focus-within:border-gray-600',
             loading ? 'opacity-90 pointer-events-auto' : '',
             mainContainerProps?.class || '',
         ]"
@@ -19,7 +19,7 @@
             <!-- Main Input Area -->
             <div class="relative">
                 <div
-                    class="chat-input-editor-container max-h-[160px] md:max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]"
+                    class="chat-input-editor-container max-h-40 md:max-h-96 w-full overflow-y-auto wrap-break-word min-h-4 md:min-h-12"
                     :class="editorProps?.class || ''"
                     :data-theme-target="editorProps?.['data-theme-target']"
                     :data-theme-matches="editorProps?.['data-theme-matches']"
@@ -196,23 +196,12 @@
                     :alt="'Uploaded Image ' + (index + 1)"
                     class="chat-input-attachment-image w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
                 />
-                <button
+                <UButton
+                    v-bind="attachmentRemoveBtnProps"
                     @click="() => removeImage(uploadedImages.indexOf(image))"
-                    :class="[
-                        'chat-input-attachment-image-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] bg-error border-black border bg-opacity-60 text-white opacity-0 hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75',
-                        attachmentRemoveBtnProps?.class || '',
-                    ]"
-                    :data-theme-target="
-                        attachmentRemoveBtnProps?.['data-theme-target']
-                    "
-                    :data-theme-matches="
-                        attachmentRemoveBtnProps?.['data-theme-matches']
-                    "
-                    aria-label="Remove image"
                     :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
-                </button>
+                    aria-label="Remove image"
+                />
                 <div
                     class="chat-input-attachment-image-name absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
                 >
@@ -226,7 +215,7 @@
                 )"
                 :key="'pdf-' + index"
                 :class="[
-                    'chat-input-attachment-pdf-container relative group aspect-square overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center',
+                    'chat-input-attachment-pdf-container relative group aspect-square overflow-hidden flex items-center justify-center bg-(--md-surface-container-low) p-2 text-center',
                     attachmentPdfContainerProps?.class || '',
                 ]"
                 :data-theme-target="
@@ -244,35 +233,24 @@
                         >PDF</span
                     >
                     <span
-                        class="chat-input-attachment-pdf-inner-name text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        class="chat-input-attachment-pdf-inner-name text-[11px] leading-snug line-clamp-4 px-1 wrap-break-word"
                         :title="pdf.name"
                         >{{ pdf.name }}</span
                     >
                 </div>
-                <button
+                <UButton
+                    v-bind="attachmentRemoveBtnProps"
                     @click="() => removeImage(uploadedImages.indexOf(pdf))"
-                    :class="[
-                        'chat-input-attachment-pdf-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] bg-error border-black border bg-opacity-60 text-white opacity-0 hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75',
-                        attachmentRemoveBtnProps?.class || '',
-                    ]"
-                    :data-theme-target="
-                        attachmentRemoveBtnProps?.['data-theme-target']
-                    "
-                    :data-theme-matches="
-                        attachmentRemoveBtnProps?.['data-theme-matches']
-                    "
-                    aria-label="Remove PDF"
                     :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
-                </button>
+                    aria-label="Remove PDF"
+                />
             </div>
             <!-- Large Text Blocks -->
             <div
                 v-for="(block, tIndex) in largeTextBlocks"
                 :key="'txt-' + block.id"
                 :class="[
-                    'chat-input-attachment-text-container relative group aspect-square overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center',
+                    'chat-input-attachment-text-container relative group aspect-square overflow-hidden flex items-center justify-center bg-(--md-surface-container-low) p-2 text-center',
                     attachmentTextContainerProps?.class || '',
                 ]"
                 :data-theme-target="
@@ -300,23 +278,12 @@
                         >{{ block.wordCount }}w</span
                     >
                 </div>
-                <button
+                <UButton
+                    v-bind="attachmentRemoveBtnProps"
                     @click="removeTextBlock(tIndex)"
-                    :class="[
-                        'chat-input-attachment-text-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] bg-error border-black border bg-opacity-60 text-white opacity-0 hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75',
-                        attachmentRemoveBtnProps?.class || '',
-                    ]"
-                    :data-theme-target="
-                        attachmentRemoveBtnProps?.['data-theme-target']
-                    "
-                    :data-theme-matches="
-                        attachmentRemoveBtnProps?.['data-theme-matches']
-                    "
-                    aria-label="Remove text block"
                     :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
-                </button>
+                    aria-label="Remove text block"
+                />
             </div>
         </div>
 
@@ -734,9 +701,27 @@ const attachmentRemoveBtnProps = computed(() => {
         component: 'button',
         context: 'chat',
         identifier: 'chat.attachment-remove-btn',
-        isNuxtUI: false,
+        isNuxtUI: true,
     });
-    return overrides.value;
+    const fallback = {
+        type: 'button' as const,
+        color: 'error' as const,
+        variant: 'solid' as const,
+        size: 'xs' as const,
+        square: true as const,
+        icon: 'i-lucide:x',
+        class:
+            'chat-input-attachment-remove-btn absolute top-1 right-1 h-[22px] w-[22px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 border border-black text-white bg-[var(--md-error)]/85 hover:bg-[var(--md-error)]',
+    };
+    const overrideValue = (overrides.value as Record<string, any>) || {};
+    const mergedClass = [fallback.class, overrideValue.class]
+        .filter(Boolean)
+        .join(' ');
+    return {
+        ...fallback,
+        ...overrideValue,
+        class: mergedClass,
+    };
 });
 
 const dragOverlayProps = computed(() => {

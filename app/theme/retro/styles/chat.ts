@@ -12,7 +12,7 @@ export const chatOverrides = {
     },
     // All ChatMessage action buttons (copy/retry/branch/edit/etc.)
     'button.message': {
-        class: 'flex items-center justify-center bg-info text-[var(--md-on-info)] hover:bg-[var(--md-info-hover)] active:bg-[var(--md-info)]/80',
+        class: 'flex items-center justify-center bg-info text-[var(--md-on-info)] hover:bg-[var(--md-info-hover)] active:bg-[var(--md-info)]/80 shadow-none!',
     },
     'button#message.reasoning-toggle': {
         class: 'flex items-center justify-center bg-info/20 text-[var(--md-on-surface)]/90 hover:bg-[var(--md-info-hover)]/30 active:bg-[var(--md-info)]/80 retro-shadow',
@@ -39,12 +39,13 @@ export const chatOverrides = {
         },
         searchInput: {
             ui: {
-                base: 'text-[14px]! rounded-none rounded-t-[var(--md-border-radius)]!',
+                base: 'text-[14px]! rounded-none border-x-0 border-t-0 border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]',
             },
         },
     },
     'button.settings': {
-        class: 'rounded-none text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] not-last:border-b-[length:var(--md-border-width)] not-last:border-b-[color:var(--md-border-color)] last:rounded-b-[var(--md-border-radius)] shadow-none!',
+        variant: 'basic',
+        class: 'rounded-none border-x-0 border-t-0 text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] not-last:border-b-[length:var(--md-border-width)] not-last:border-b-[color:var(--md-border-color)] last:border-b-0 last:rounded-b-[var(--md-border-radius)]',
         ui: {
             label: 'text-[14px]!',
         },
@@ -86,8 +87,6 @@ export const chatCssSelectors = {
     '.cm-action-group': {
         style: {
             backgroundColor: 'var(--md-surface-container-high)',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
         },
     },
     // Chat container vertical dividers: apply a right border to every chat container except the last one

@@ -39,7 +39,7 @@ export const chatOverrides = {
         },
         searchInput: {
             ui: {
-                base: 'text-[14px]! rounded-none rounded-t-[var(--md-border-radius)]!',
+                base: 'text-[14px]! rounded-none shadow-none! rounded-t-[var(--md-border-radius)]!',
             },
         },
     },

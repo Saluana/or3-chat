@@ -56,8 +56,6 @@
 
 [data-theme="retro"] .cm-action-group {
   background-color: var(--md-surface-container-high);
-  border: var(--md-border-width) solid var(--md-border-color);
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 }
 
 [data-theme="retro"] .chat-container-root:not(:last-child) {
