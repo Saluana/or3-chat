@@ -27,11 +27,8 @@ export const useIcon = (token: IconToken) => {
         // $iconRegistry is typed as any usually in Nuxt plugins unless we extend the type,
         // but we know it's there.
         const registry = $iconRegistry as any;
-        // Track registry updates (e.g. when a theme's icons are lazy-loaded)
-        if (registry.version) {
-            // eslint-disable-next-line no-unused-expressions
-            registry.version.value;
-        }
+        // Registry uses a reactive Map internally, so accessing resolve -> themes.get()
+        // will automatically track the dependency on the specific theme's icons.
         return registry.resolve(token, activeTheme.value);
     });
 };

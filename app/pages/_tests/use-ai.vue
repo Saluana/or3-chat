@@ -75,17 +75,17 @@
                         >
                             <UIcon
                                 v-if="result.status === 'pass'"
-                                :name="useIcon('ui.check')"
+                                :name="useIcon('ui.check').value"
                                 class="w-4 h-4"
                             />
                             <UIcon
                                 v-else-if="result.status === 'fail'"
-                                :name="useIcon('ui.close')"
+                                :name="useIcon('ui.close').value"
                                 class="w-4 h-4"
                             />
                             <UIcon
                                 v-else
-                                :name="useIcon('ui.wait')"
+                                :name="useIcon('ui.wait').value"
                                 class="w-4 h-4 animate-pulse"
                             />
                             <span>{{ result.status.toUpperCase() }}</span>

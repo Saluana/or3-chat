@@ -39,7 +39,7 @@
                         v-if="loading"
                     >
                         <UIcon
-                            :name="useIcon('ui.loading').value"
+                            :name="iconLoading"
                             class="w-4 h-4 animate-spin opacity-70"
                         />
                     </div>
@@ -54,6 +54,7 @@
                     class="chat-input-bottom-controls-left relative flex-1 flex items-center gap-2 shrink min-w-0"
                 >
                     <!-- Attachment Button -->
+                    <!-- Attachment Button -->
                     <div class="chat-input-attachment-btn relative shrink-0">
                         <UButton
                             v-bind="attachButtonProps"
@@ -62,13 +63,9 @@
                             aria-label="Add attachments"
                             :disabled="loading"
                         >
-                            <UIcon
-                                :name="useIcon('chat.attach').value"
-                                class="w-4 h-4"
-                            />
+                            <UIcon :name="iconAttach" class="w-4 h-4" />
                         </UButton>
                     </div>
-
                     <!-- Settings Button (stub) -->
                     <div class="chat-input-settings-btn relative shrink-0">
                         <UPopover class="chat-input-settings-popover">
@@ -80,7 +77,7 @@
                                 :disabled="loading"
                             >
                                 <UIcon
-                                    :name="useIcon('chat.model.settings').value"
+                                    :name="iconModelSettings"
                                     class="w-4 h-4"
                                 />
                             </UButton>
@@ -165,10 +162,7 @@
                         type="button"
                         aria-label="Send message"
                     >
-                        <UIcon
-                            :name="useIcon('chat.send').value"
-                            class="w-4 h-4"
-                        />
+                        <UIcon :name="iconSend" class="w-4 h-4" />
                     </UButton>
                     <UButton
                         class="chat-input-stop-btn"
@@ -178,10 +172,7 @@
                         type="button"
                         aria-label="Stop generation"
                     >
-                        <UIcon
-                            :name="useIcon('chat.stop').value"
-                            class="w-4 h-4"
-                        />
+                        <UIcon :name="iconStop" class="w-4 h-4" />
                     </UButton>
                 </div>
             </div>
@@ -308,7 +299,7 @@
         >
             <div class="text-center">
                 <UIcon
-                    :name="useIcon('chat.upload').value"
+                    :name="iconUpload"
                     class="w-12 h-12 mx-auto mb-3 text-blue-500"
                 />
                 <p class="text-blue-600 dark:text-blue-400 text-sm font-medium">
@@ -351,6 +342,7 @@ import {
     type ComposerActionContext,
 } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 
 const props = defineProps<{
     loading?: boolean;
@@ -359,6 +351,14 @@ const props = defineProps<{
     streaming?: boolean; // assistant response streaming
     paneId?: string; // provided by ChatContainer so the bridge can key this input
 }>();
+
+const iconLoading = useIcon('ui.loading');
+const iconAttach = useIcon('chat.attach');
+const iconModelSettings = useIcon('chat.model.settings');
+const iconSend = useIcon('chat.send');
+const iconStop = useIcon('chat.stop');
+const iconUpload = useIcon('chat.upload');
+const iconClose = useIcon('ui.close');
 
 const { favoriteModels, getFavoriteModels } = useModelStore();
 const { settings: aiSettings } = useAiSettings();
@@ -718,7 +718,7 @@ const attachmentRemoveBtnProps = computed(() => {
         variant: 'solid' as const,
         size: 'xs' as const,
         square: true as const,
-        icon: useIcon('ui.close').value,
+        icon: iconClose.value,
         class: 'chat-input-attachment-remove-btn absolute top-1 right-1 h-[22px] w-[22px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 border border-black text-white bg-[var(--md-error)]/85 hover:bg-[var(--md-error)]',
     };
     const overrideValue = (overrides.value as Record<string, any>) || {};

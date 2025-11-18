@@ -52,4 +52,35 @@ describe('IconRegistry', () => {
         const icon = registry.resolve('invalid.token');
         expect(icon).toBe('pixelarticons:alert');
     });
+
+    it('is reactive when a theme is registered after initial resolution', () => {
+        const { computed } = require('vue');
+        registry.setActiveTheme('late-theme');
+
+        const icon = computed(() => registry.resolve('ui.trash'));
+
+        // Initially falls back to default because 'late-theme' is not registered
+        expect(icon.value).toBe(DEFAULT_ICONS['ui.trash']);
+
+        // Register the theme
+        registry.registerTheme('late-theme', {
+            'ui.trash': 'late:trash-icon',
+        });
+
+        // Should update
+        expect(icon.value).toBe('late:trash-icon');
+    });
+
+    it('hydrates state correctly', () => {
+        const state = {
+            themes: {
+                'hydrated-theme': { 'ui.trash': 'hydrated:trash' },
+            },
+            activeTheme: 'hydrated-theme',
+        };
+
+        registry.hydrate(state);
+
+        expect(registry.resolve('ui.trash')).toBe('hydrated:trash');
+    });
 });

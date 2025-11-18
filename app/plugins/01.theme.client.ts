@@ -467,6 +467,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             localStorage.setItem(activeThemeStorageKey, fallback);
             writeActiveThemeCookie(fallback);
             await ensureThemeLoaded(fallback);
+            iconRegistry.setActiveTheme(fallback);
             const fallbackPatch = themeAppConfigOverrides.get(fallback) ?? null;
             applyThemeAppConfigPatch(fallbackPatch);
             applyThemeUiConfig(themeRegistry.get(fallback) || null);
@@ -490,6 +491,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         activeTheme.value = target;
         localStorage.setItem(activeThemeStorageKey, target);
         writeActiveThemeCookie(target);
+        iconRegistry.setActiveTheme(target);
 
         // Load CSS file and apply classes for new theme
         const theme = themeRegistry.get(target);
