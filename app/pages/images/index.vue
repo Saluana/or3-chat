@@ -729,7 +729,10 @@ const loadMoreButtonProps = computed(() => {
                     @click="toggleSelectionMode"
                     :disabled="isMutating"
                 >
-                    <UIcon :name="useIcon('image.multiple').value" class="mr-0.5" />
+                    <UIcon
+                        :name="useIcon('image.multiple').value"
+                        class="mr-0.5"
+                    />
                     {{ selectionMode ? 'Cancel' : 'Select' }}
                 </UButton>
             </div>
