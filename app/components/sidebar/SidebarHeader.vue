@@ -1,11 +1,14 @@
 <template>
     <div
-        :class="{
-            'px-0 justify-center w-[63.5px]': collapsed,
-            'px-3 justify-between w-full': !collapsed,
-        }"
+        :class="[
+            collapsed ? 'px-0 justify-center' : 'px-3 justify-between w-full',
+            'flex items-center min-h-12 max-h-12 header-pattern py-2 border-b-(--md-border-width) border-(--md-border-color)',
+            sidebarHeaderProps.class || '',
+        ]"
         id="top-header"
-        class="flex items-center min-h-[48px] max-h-[48px] header-pattern py-2 border-b-[var(--md-border-width)] border-[color:var(--md-border-color)]"
+        :style="sidebarHeaderStyle"
+        :data-theme-target="sidebarHeaderProps['data-theme-target']"
+        :data-theme-matches="sidebarHeaderProps['data-theme-matches']"
     >
         <div v-show="!collapsed">
             <slot name="sidebar-header">
@@ -42,7 +45,13 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, defineEmits, computed } from 'vue';
+import {
+    defineProps,
+    defineEmits,
+    computed,
+    type StyleValue,
+    type ComputedRef,
+} from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/01.theme.client';
 
@@ -75,6 +84,97 @@ const sidebarToggleButtonProps = computed(() => ({
     ...sidebarToggleFallback,
     ...sidebarToggleOverrides.value,
 }));
+
+type HeaderOverrideProps = {
+    class?: string;
+    style?: StyleValue;
+    'data-theme-target'?: string;
+    'data-theme-matches'?: string;
+    [key: string]: unknown;
+};
+
+const createEmptyOverride = () =>
+    computed<HeaderOverrideProps>(() => ({} as HeaderOverrideProps));
+
+const sidebarHeaderBaseOverrides = theme
+    ? (useThemeOverrides({
+          component: 'div',
+          context: 'sidebar',
+          identifier: 'sidebar.header',
+          isNuxtUI: false,
+      }) as ComputedRef<HeaderOverrideProps>)
+    : createEmptyOverride();
+
+const sidebarHeaderCollapsedOverrides = theme
+    ? (useThemeOverrides({
+          component: 'div',
+          context: 'sidebar',
+          identifier: 'sidebar.header',
+          state: 'collapsed',
+          isNuxtUI: false,
+      }) as ComputedRef<HeaderOverrideProps>)
+    : createEmptyOverride();
+
+const sidebarHeaderExpandedOverrides = theme
+    ? (useThemeOverrides({
+          component: 'div',
+          context: 'sidebar',
+          identifier: 'sidebar.header',
+          state: 'expanded',
+          isNuxtUI: false,
+      }) as ComputedRef<HeaderOverrideProps>)
+    : createEmptyOverride();
+
+const flattenStyle = (style: StyleValue | undefined): StyleValue[] => {
+    if (style === undefined) return [];
+    return Array.isArray(style) ? style : [style];
+};
+
+const sidebarHeaderProps = computed<HeaderOverrideProps>(() => {
+    const base = sidebarHeaderBaseOverrides.value || {};
+    const stateOverrides = props.collapsed
+        ? sidebarHeaderCollapsedOverrides.value || {}
+        : sidebarHeaderExpandedOverrides.value || {};
+
+    const mergedClass = [base.class, stateOverrides.class]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+
+    const mergedStyle = [
+        ...flattenStyle(base.style as StyleValue | undefined),
+        ...flattenStyle(stateOverrides.style as StyleValue | undefined),
+    ];
+
+    return {
+        ...base,
+        ...stateOverrides,
+        class: mergedClass,
+        style:
+            mergedStyle.length > 1
+                ? mergedStyle
+                : mergedStyle[0] ?? undefined,
+    };
+});
+
+const sidebarHeaderStyle = computed<StyleValue>(() => {
+    const baseStyle: StyleValue = props.collapsed
+        ? { width: '63.5px' }
+        : undefined;
+    const overrides = sidebarHeaderProps.value.style;
+
+    if (!baseStyle) {
+        return overrides || undefined;
+    }
+
+    if (!overrides) {
+        return baseStyle;
+    }
+
+    return Array.isArray(overrides)
+        ? [baseStyle, ...overrides]
+        : [baseStyle, overrides];
+});
 
 function onToggle() {
     emit('toggle');
