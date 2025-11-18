@@ -113,4 +113,11 @@ export const chatCssSelectors = {
             height: '32px',
         },
     },
+    '#btn-collapse-attachments': {
+        style: {
+            backgroundColor: 'transparent !important',
+            color: 'var(--md-on-primary) !important',
+            cursor: 'pointer',
+        },
+    },
 };
