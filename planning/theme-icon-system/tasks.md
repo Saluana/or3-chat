@@ -37,34 +37,34 @@
 
 ## 3. Migration & Refactoring
 
--   [ ] **3.1 Inventory Hardcoded Icons**
+-   [x] **3.1 Inventory Hardcoded Icons**
 
     -   Search codebase for `icon="`, `icon:`, and specific icon prefixes (e.g., `i-lucide`, `heroicons`).
     -   Map found icons to semantic tokens in `app/config/icon-tokens.ts`.
 
--   [ ] **3.2 Refactor Components (Phase 1: Shell)**
+-   [x] **3.2 Refactor Components (Phase 1: Shell)**
 
     -   Update `PageShell.vue`, `Sidebar.vue`, and navigation components to use `useIcon`.
     -   _Requirements: 2.1.2_
 
--   [ ] **3.3 Refactor Components (Phase 2: Chat)**
+-   [x] **3.3 Refactor Components (Phase 2: Chat)**
 
     -   Update chat input, message actions, and thread list to use `useIcon`.
     -   _Requirements: 2.1.2_
 
--   [ ] **3.4 Refactor Components (Phase 3: Dashboard & Settings)**
+-   [x] **3.4 Refactor Components (Phase 3: Dashboard & Settings)**
     -   Update remaining UI components.
     -   _Requirements: 2.1.2_
 
 ## 4. Documentation & Testing
 
--   [ ] **4.1 Add Unit Tests**
+-   [x] **4.1 Add Unit Tests**
 
     -   Test `IconRegistry` logic (overrides, fallbacks).
     -   Test `useIcon` reactivity.
     -   _Requirements: 3.2.2_
 
--   [ ] **4.2 Create Developer Documentation**
+-   [x] **4.2 Create Developer Documentation**
     -   Create `docs/theme-icons.md`.
     -   Document how to add new tokens.
     -   Document how to override icons in a theme.

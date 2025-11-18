@@ -54,7 +54,7 @@
             >
                 <SidebarHeader
                     :collapsed="collapsed"
-                    :toggle-icon="toggleIcon.value"
+                    :toggle-icon="toggleIcon"
                     :toggle-aria="toggleAria"
                     @toggle="toggleCollapse"
                 >

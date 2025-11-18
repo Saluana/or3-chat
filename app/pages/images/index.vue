@@ -16,7 +16,7 @@ import {
 import GalleryGrid from './GalleryGrid.vue';
 import ImageViewer from './ImageViewer.vue';
 import { reportError } from '../../utils/errors';
-import { useToast } from '#imports';
+import { useToast, useIcon } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const PAGE_SIZE = 50;
@@ -716,8 +716,8 @@ const loadMoreButtonProps = computed(() => {
                     <UIcon
                         :name="
                             trashMode
-                                ? 'pixelarticons:image-multiple'
-                                : 'pixelarticons:trash'
+                                ? useIcon('image.multiple')
+                                : useIcon('ui.trash')
                         "
                         class="mr-0.5"
                     />
@@ -729,7 +729,7 @@ const loadMoreButtonProps = computed(() => {
                     @click="toggleSelectionMode"
                     :disabled="isMutating"
                 >
-                    <UIcon name="pixelarticons:image-multiple" class="mr-0.5" />
+                    <UIcon :name="useIcon('image.multiple')" class="mr-0.5" />
                     {{ selectionMode ? 'Cancel' : 'Select' }}
                 </UButton>
             </div>

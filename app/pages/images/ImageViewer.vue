@@ -6,6 +6,7 @@ import { onKeyStroke } from '@vueuse/core';
 import { reportError } from '~/utils/errors';
 import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '#imports';
 
 const props = defineProps<{
     modelValue: boolean;
@@ -152,14 +153,14 @@ watch(
             <div class="fixed inset-x-0 top-0 z-1200 px-2 pt-2">
                 <div
                     @click.stop.prevent
-                    class="mx-auto flex max-w-[min(540px,90vw)] flex-wrap items-center justify-between gap-2 rounded-md border-[var(--md-border-width)] border-(--md-outline-variant) bg-(--md-surface-container-highest)/95 p-1 backdrop-blur"
+                    class="mx-auto flex max-w-[min(540px,90vw)] flex-wrap items-center justify-between gap-2 rounded-md border-(length:--md-border-width) border-(--md-outline-variant) bg-(--md-surface-container-highest)/95 p-1 backdrop-blur"
                 >
                     <div class="flex items-center">
                         <UButtonGroup v-if="!props.trashMode">
                             <UButton
                                 variant="light"
                                 size="sm"
-                                icon="pixelarticons:download"
+                                :icon="useIcon('image.download')"
                                 @click.stop.self="
                                     meta && emit('download', meta)
                                 "
@@ -168,7 +169,7 @@ watch(
                             </UButton>
                             <UButton
                                 variant="light"
-                                icon="pixelarticons:copy"
+                                :icon="useIcon('image.copy')"
                                 size="sm"
                                 @click.stop.self="meta && emit('copy', meta)"
                             >
@@ -178,7 +179,7 @@ watch(
                                 variant="light"
                                 class="text-(--md-error)"
                                 size="sm"
-                                icon="pixelarticons:image-delete"
+                                :icon="useIcon('image.delete')"
                                 @click.stop.self="meta && emit('delete', meta)"
                             >
                                 Delete
@@ -188,7 +189,7 @@ watch(
                             <UButton
                                 variant="light"
                                 size="sm"
-                                icon="pixelarticons:repeat"
+                                :icon="useIcon('image.repeat')"
                                 @click.stop.self="meta && emit('restore', meta)"
                             >
                                 Restore
@@ -197,7 +198,7 @@ watch(
                                 variant="light"
                                 class="text-(--md-error)"
                                 size="sm"
-                                icon="pixelarticons:trash"
+                                :icon="useIcon('ui.trash')"
                                 @click.stop.self="meta && emit('delete', meta)"
                             >
                                 Delete permanently
@@ -205,7 +206,7 @@ watch(
                         </UButtonGroup>
                     </div>
                     <UButton
-                        icon="pixelarticons:close"
+                        :icon="useIcon('ui.close')"
                         variant="light"
                         size="sm"
                         @click="close"

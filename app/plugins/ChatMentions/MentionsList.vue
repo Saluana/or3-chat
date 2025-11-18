@@ -8,7 +8,7 @@
         >
             <UInput
                 v-model="searchTerm"
-                icon="pixelarticons:search"
+                :icon="useIcon('ui.search').value"
                 placeholder="Search documents or chats..."
                 class="w-full"
                 @keydown="handleSearchKeydown"
@@ -23,7 +23,7 @@
                     class="flex-1"
                 >
                     <template #leading>
-                        <UIcon name="pixelarticons:notes" />
+                        <UIcon :name="useIcon('ui.notes').value" />
                     </template>
                     Docs
                 </UButton>
@@ -35,7 +35,7 @@
                     class="flex-1"
                 >
                     <template #leading>
-                        <UIcon name="pixelarticons:message-text" />
+                        <UIcon :name="useIcon('ui.chat').value" />
                     </template>
                     Chats
                 </UButton>
@@ -103,8 +103,8 @@
                                 v-if="section.key === 'recommended'"
                                 :name="
                                     item.source === 'document'
-                                        ? 'pixelarticons:notes'
-                                        : 'pixelarticons:message-text'
+                                        ? useIcon('ui.notes').value
+                                        : useIcon('ui.chat').value
                                 "
                                 class="w-4 h-4 text-[var(--md-on-surface-variant)]"
                             />
@@ -144,6 +144,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import { useIcon } from '~/composables/useIcon';
 
 interface MentionItem {
     id: string;
@@ -213,7 +214,7 @@ const sections = computed<SectionBucket[]>(() => {
         list.push({
             key: 'recommended',
             title: 'Search Results',
-            icon: 'pixelarticons:search',
+            icon: useIcon('ui.search').value,
             items: recommendedItems.value,
         });
     }
@@ -221,7 +222,7 @@ const sections = computed<SectionBucket[]>(() => {
         list.push({
             key: 'documents',
             title: 'Documents',
-            icon: 'pixelarticons:notes-multiple',
+            icon: useIcon('ui.notes.multiple').value,
             items: documentItems.value,
         });
     }
@@ -229,7 +230,7 @@ const sections = computed<SectionBucket[]>(() => {
         list.push({
             key: 'chats',
             title: 'Chats',
-            icon: 'pixelarticons:message-processing',
+            icon: useIcon('ui.help').value,
             items: chatItems.value,
         });
     }
