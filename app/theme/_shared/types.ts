@@ -354,6 +354,9 @@ export interface CompiledTheme {
 
     /** Theme background metadata (optional) */
     backgrounds?: ThemeBackgrounds;
+
+    /** Icon overrides for this theme */
+    icons?: Record<string, string>;
 }
 
 /**

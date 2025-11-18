@@ -23,14 +23,14 @@
 
 ## 2. Build System Updates
 
--   [ ] **2.1 Update Theme Compiler**
+-   [x] **2.1 Update Theme Compiler**
 
     -   Modify `scripts/theme-compiler.ts` to look for `icons.config.ts`.
     -   Implement validation logic to ensure keys match `IconToken`.
     -   Include the `icons` object in the compiled theme JSON output.
     -   _Requirements: 2.2.1, 2.2.2, 2.2.3_
 
--   [ ] **2.2 Update Theme Loader**
+-   [x] **2.2 Update Theme Loader**
     -   Modify `app/plugins/theme.client.ts` (or equivalent) to read the `icons` property from the loaded theme JSON.
     -   Call `iconRegistry.registerTheme` with the loaded data.
     -   _Requirements: 2.3.1, 3.1.2_

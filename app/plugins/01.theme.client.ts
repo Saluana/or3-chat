@@ -22,6 +22,7 @@ import {
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
 import { generateThemeCssVariables } from '~/theme/_shared/generate-css-variables';
+import { iconRegistry } from '~/theme/_shared/icon-registry';
 
 export interface ThemePlugin {
     set: (name: string) => void;
@@ -320,9 +321,16 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     ui: definition.ui,
                     propMaps: definition.propMaps,
                     backgrounds: definition.backgrounds,
+                    icons: definition.icons,
                 };
 
                 themeRegistry.set(themeName, compiledTheme);
+                
+                // Register icons with the registry
+                if (compiledTheme.icons) {
+                    iconRegistry.registerTheme(themeName, compiledTheme.icons);
+                }
+
                 const themeSpecificConfig =
                     (await loadThemeAppConfig(manifestEntry)) ?? null;
                 themeAppConfigOverrides.set(themeName, themeSpecificConfig);
