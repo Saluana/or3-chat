@@ -1,27 +1,27 @@
-[data-theme="pog"] #sidebar-container-outer {
+[data-theme="blank"] #sidebar-container-outer {
   border-right: var(--md-border-width) solid var(--md-border-color);
 }
 
-[data-theme="pog"] .sidenav-header-separator {
+[data-theme="blank"] .sidenav-header-separator {
   border-bottom: var(--md-border-width) solid var(--md-border-color);
 }
 
-[data-theme="pog"] .hud-button {
+[data-theme="blank"] .hud-button {
   background: color-mix(in srgb, var(--md-surface) 30%, transparent);
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius);
   box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 }
 
-[data-theme="pog"] #top-header {
+[data-theme="blank"] #top-header {
   background-color: var(--md-surface);
 }
 
-[data-theme="pog"] #bottom-nav {
+[data-theme="blank"] #bottom-nav {
   background-color: var(--md-surface);
 }
 
-[data-theme="pog"] .sidebar-section-heading {
+[data-theme="blank"] .sidebar-section-heading {
   font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   font-size: 18px;
   font-weight: 700;
@@ -30,80 +30,80 @@
   color: var(--md-on-surface)/70%;
 }
 
-[data-theme="pog"] #nav-top-section .iconify {
+[data-theme="blank"] #nav-top-section .iconify {
   font-size: 25px !important;
 }
 
-[data-theme="pog"] #nav-collapsed-container {
+[data-theme="blank"] #nav-collapsed-container {
   min-width: 64px !important;
   max-width: 64px !important;
   border-right: var(--md-border-width) solid var(--md-border-color);
 }
 
-[data-theme="pog"] #btn-reasoning-toggle {
+[data-theme="blank"] #btn-reasoning-toggle {
   background-color: var(--md-surface) !important;
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius);
 }
 
-[data-theme="pog"] #btn-reasoning-toggle:hover {
+[data-theme="blank"] #btn-reasoning-toggle:hover {
   background-color: var(--md-surface-hover) !important;
 }
 
-[data-theme="pog"] .reasoning-box {
+[data-theme="blank"] .reasoning-box {
   background: var(--md-surface);
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius);
 }
 
-[data-theme="pog"] .cm-text-user {
+[data-theme="blank"] .cm-text-user {
   font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   font-size: 16px;
 }
 
-[data-theme="pog"] .cm-action-group {
+[data-theme="blank"] .cm-action-group {
   background-color: var(--md-surface-container-high);
   border: var(--md-border-width) solid var(--md-border-color);
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 }
 
-[data-theme="pog"] .chat-container-root:not(:last-child) {
+[data-theme="blank"] .chat-container-root:not(:last-child) {
   border-right: var(--md-border-width) solid var(--md-border-color);
 }
 
-[data-theme="pog"] .chat-container-root:not(:first-child) {
+[data-theme="blank"] .chat-container-root:not(:first-child) {
   border-top: var(--md-border-width) solid var(--md-border-color) !important;
 }
 
-[data-theme="pog"] .cm-assistant {
+[data-theme="blank"] .cm-assistant {
   background-color: transparent;
 }
 
-[data-theme="pog"] .chat-settings-switch {
+[data-theme="blank"] .chat-settings-switch {
   height: 32px;
 }
 
-[data-theme="pog"] .dashboard-plugin-icon-label {
+[data-theme="blank"] .dashboard-plugin-icon-label {
   font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   font-size: 12px;
 }
 
-[data-theme="pog"] .dashboard-plugin-icon-button {
+[data-theme="blank"] .dashboard-plugin-icon-button {
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius) !important;
   background-color: var(--md-surface);
   color: var(--md-on-surface);
 }
 
-[data-theme="pog"] .dashboard-plugin-icon-button:hover {
+[data-theme="blank"] .dashboard-plugin-icon-button:hover {
   background-color: var(--md-surface-hover);
 }
 
-[data-theme="pog"] .dashboard-plugin-icon-button:active {
+[data-theme="blank"] .dashboard-plugin-icon-button:active {
   background-color: var(--md-surface-active);
 }
 
-[data-theme="pog"] .dashboard-landing-item {
+[data-theme="blank"] .dashboard-landing-item {
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius) !important;
   background-color: var(--md-surface);
@@ -111,30 +111,30 @@
   cursor: pointer;
 }
 
-[data-theme="pog"] .dashboard-landing-item:hover {
+[data-theme="blank"] .dashboard-landing-item:hover {
   background-color: var(--md-surface-hover);
 }
 
-[data-theme="pog"] .section-card {
+[data-theme="blank"] .section-card {
   background-color: var(--md-surface);
   border: var(--md-border-width) solid var(--md-border-color) !important;
   border-radius: var(--md-border-radius) !important;
   padding: 20px 16px;
 }
 
-[data-theme="pog"] .document-editor-toolbar {
+[data-theme="blank"] .document-editor-toolbar {
   border-bottom: var(--md-border-width) solid var(--md-border-color);
 }
 
-[data-theme="pog"] .document-editor-shell:not(:last-child) {
+[data-theme="blank"] .document-editor-shell:not(:last-child) {
   border-right: var(--md-border-width) solid var(--md-border-color);
 }
 
-[data-theme="pog"] .document-editor-shell:not(:first-child) {
+[data-theme="blank"] .document-editor-shell:not(:first-child) {
   border-top: var(--md-border-width) solid var(--md-border-color) !important;
 }
 
-[data-theme="pog"] .theme-btn {
+[data-theme="blank"] .theme-btn {
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius);
   display: flex;
@@ -142,19 +142,19 @@
   justify-content: center;
 }
 
-[data-theme="pog"] .theme-btn:hover {
+[data-theme="blank"] .theme-btn:hover {
   background-color: var(--md-surface-hover);
 }
 
-[data-theme="pog"] .theme-btn:active {
+[data-theme="blank"] .theme-btn:active {
   background-color: var(--md-surface-active);
 }
 
-[data-theme="pog"] #top-nav .theme-btn {
+[data-theme="blank"] #top-nav .theme-btn {
   border: none !important;
 }
 
-[data-theme="pog"] #top-header .theme-btn {
+[data-theme="blank"] #top-header .theme-btn {
   border: none !important;
   min-height: 24px;
   min-width: 24px;

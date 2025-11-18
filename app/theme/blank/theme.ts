@@ -15,10 +15,9 @@ import { dashboardOverrides, dashboardStyles } from './styles/dashboard';
 import { documentsOverrides, documentsStyles } from './styles/documents';
 
 export default defineTheme({
-    name: 'pog',
-    displayName: 'Pog theme',
-    description:
-        'Classic retro aesthetic with pixel-perfect styling and nostalgic vibes',
+    name: 'blank',
+    displayName: 'Blank theme',
+    description: 'Minimalist blank theme with clean and simple design',
     isDefault: true,
 
     borderWidth: '1px',

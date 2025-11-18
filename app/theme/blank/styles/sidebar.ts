@@ -29,7 +29,7 @@ export const sidebarOverrides = {
     'selectmenu#sidebar.project-select': {
         class: 'h-[40px] rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] ring-0 data-[state=open]:ring-1! data-[state=open]:bg-[var(--md-surface-hover)]! w-full cursor-pointer',
         ui: {
-            base: 'text-[16px]! poop',
+            base: 'text-[16px]!',
             value: 'text-[16px]!',
             placeholder: 'text-[16px]!',
             content:
