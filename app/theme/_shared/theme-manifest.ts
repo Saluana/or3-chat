@@ -17,6 +17,8 @@ type ThemeAppConfigLoader = () => Promise<
     { default: ThemeAppConfig } | ThemeAppConfig
 >;
 
+type ThemeIconsLoader = () => Promise<{ default: Record<string, string> }>;
+
 interface RawThemeEntry {
     path: string;
     dirName: string;
@@ -26,6 +28,11 @@ interface RawThemeEntry {
 const themeModules = import.meta.glob('../*/theme.ts') as Record<
     string,
     ThemeModuleLoader
+>;
+
+const iconModules = import.meta.glob('../*/icons.config.ts') as Record<
+    string,
+    ThemeIconsLoader
 >;
 
 // Stylesheet asset loaders. These are resolved lazily so the CSS is only
@@ -70,6 +77,8 @@ export interface ThemeManifestEntry {
     hasCssSelectorStyles: boolean;
     /** Optional theme-specific app config loader */
     appConfigLoader?: ThemeAppConfigLoader;
+    /** Optional theme-specific icons loader */
+    iconsLoader?: ThemeIconsLoader;
 }
 
 /**
@@ -102,6 +111,7 @@ export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
                 hasCssSelectorStyles: containsStyleSelectors(definition),
                 appConfigLoader:
                     configModules[`../${entry.dirName}/app.config.ts`],
+                iconsLoader: iconModules[`../${entry.dirName}/icons.config.ts`],
             });
         } catch (error) {
             if (import.meta.dev) {

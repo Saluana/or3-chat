@@ -14,6 +14,11 @@ import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '#imports';
 
+const iconDownload = useIcon('image.download');
+const iconCopy = useIcon('image.copy');
+const iconCheck = useIcon('ui.check');
+const iconPlus = useIcon('ui.plus');
+
 const props = defineProps<{
     items: FileMeta[];
     selectionMode?: boolean;
@@ -272,7 +277,7 @@ const downloadButtonProps = computed(() => {
         color: 'on-surface' as const,
         square: true as const,
         class: 'flex items-center justify-center',
-        icon: useIcon('image.download'),
+        icon: iconDownload.value,
         ...(overrides.value as any),
     };
 });
@@ -290,7 +295,7 @@ const copyButtonProps = computed(() => {
         color: 'on-surface' as const,
         square: true as const,
         class: 'flex items-center justify-center',
-        icon: useIcon('image.copy'),
+        icon: iconCopy.value,
         ...(overrides.value as any),
     };
 });
@@ -337,8 +342,8 @@ defineExpose({ ensureUrl });
                     <UIcon
                         :name="
                             isSelected(m.hash)
-                                ? useIcon('ui.check')
-                                : useIcon('ui.plus')
+                                ? iconCheck
+                                : iconPlus
                         "
                         class="h-5 w-5"
                     />

@@ -1,3 +1,4 @@
+import { ref, type Ref } from 'vue';
 import { DEFAULT_ICONS, type IconToken } from '~/config/icon-tokens';
 
 export type IconMap = Partial<Record<IconToken, string>>;
@@ -6,6 +7,7 @@ export class IconRegistry {
     private defaults: typeof DEFAULT_ICONS;
     private themes: Map<string, IconMap> = new Map();
     private activeTheme: string = 'default';
+    public version: Ref<number> = ref(0);
 
     constructor(defaults: typeof DEFAULT_ICONS = DEFAULT_ICONS) {
         this.defaults = defaults;
@@ -16,6 +18,7 @@ export class IconRegistry {
      */
     registerTheme(themeName: string, icons: IconMap) {
         this.themes.set(themeName, icons);
+        this.version.value++;
     }
 
     /**

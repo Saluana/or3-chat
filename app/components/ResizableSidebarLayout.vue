@@ -384,18 +384,23 @@ function expand() {
 defineExpose({ toggle, close, openSidebar, expand, isCollapsed: collapsed });
 
 const side = computed<Side>(() => (props.side === 'right' ? 'right' : 'left'));
+
+// Pre-resolve icons to ensure reactivity tracks the registry updates correctly
+const iconToggleLeft = useIcon('shell.sidebar.toggle.left');
+const iconToggleRight = useIcon('shell.sidebar.toggle.right');
+
 // Icon and aria label for collapse/expand button
 const toggleIcon = computed(() => {
     // When collapsed, show the icon that suggests expanding back toward content area
     if (collapsed.value) {
         return side.value === 'right'
-            ? useIcon('shell.sidebar.toggle.left').value
-            : useIcon('shell.sidebar.toggle.right').value;
+            ? iconToggleLeft.value
+            : iconToggleRight.value;
     }
     // When expanded, show icon pointing into the sidebar to collapse it
     return side.value === 'right'
-        ? useIcon('shell.sidebar.toggle.right').value
-        : useIcon('shell.sidebar.toggle.left').value;
+        ? iconToggleRight.value
+        : iconToggleLeft.value;
 });
 const toggleAria = computed(() =>
     collapsed.value ? 'Expand sidebar' : 'Collapse sidebar'

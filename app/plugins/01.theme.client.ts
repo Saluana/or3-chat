@@ -304,6 +304,22 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     definition.stylesheets
                 );
 
+                // Load icons if available
+                let themeIcons = definition.icons;
+                if (!themeIcons && manifestEntry.iconsLoader) {
+                    try {
+                        const iconsModule = await manifestEntry.iconsLoader();
+                        themeIcons = iconsModule?.default || iconsModule;
+                    } catch (e) {
+                        if (import.meta.dev) {
+                            console.warn(
+                                `[theme] Failed to load icons for theme "${themeName}":`,
+                                e
+                            );
+                        }
+                    }
+                }
+
                 const hasStyleSelectors = manifestEntry.hasCssSelectorStyles;
 
                 const compiledTheme: CompiledTheme = {
@@ -321,7 +337,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     ui: definition.ui,
                     propMaps: definition.propMaps,
                     backgrounds: definition.backgrounds,
-                    icons: definition.icons,
+                    icons: themeIcons,
                 };
 
                 themeRegistry.set(themeName, compiledTheme);

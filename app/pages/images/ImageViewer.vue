@@ -8,6 +8,13 @@ import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '#imports';
 
+const iconDownload = useIcon('image.download');
+const iconCopy = useIcon('image.copy');
+const iconDelete = useIcon('image.delete');
+const iconRepeat = useIcon('image.repeat');
+const iconTrash = useIcon('ui.trash');
+const iconClose = useIcon('ui.close');
+
 const props = defineProps<{
     modelValue: boolean;
     meta: FileMeta | null;
@@ -160,7 +167,7 @@ watch(
                             <UButton
                                 variant="light"
                                 size="sm"
-                                :icon="useIcon('image.download')"
+                                :icon="iconDownload"
                                 @click.stop.self="
                                     meta && emit('download', meta)
                                 "
@@ -169,7 +176,7 @@ watch(
                             </UButton>
                             <UButton
                                 variant="light"
-                                :icon="useIcon('image.copy')"
+                                :icon="iconCopy"
                                 size="sm"
                                 @click.stop.self="meta && emit('copy', meta)"
                             >
@@ -179,7 +186,7 @@ watch(
                                 variant="light"
                                 class="text-(--md-error)"
                                 size="sm"
-                                :icon="useIcon('image.delete')"
+                                :icon="iconDelete"
                                 @click.stop.self="meta && emit('delete', meta)"
                             >
                                 Delete
@@ -189,7 +196,7 @@ watch(
                             <UButton
                                 variant="light"
                                 size="sm"
-                                :icon="useIcon('image.repeat')"
+                                :icon="iconRepeat"
                                 @click.stop.self="meta && emit('restore', meta)"
                             >
                                 Restore
@@ -198,7 +205,7 @@ watch(
                                 variant="light"
                                 class="text-(--md-error)"
                                 size="sm"
-                                :icon="useIcon('ui.trash')"
+                                :icon="iconTrash"
                                 @click.stop.self="meta && emit('delete', meta)"
                             >
                                 Delete permanently
@@ -206,7 +213,7 @@ watch(
                         </UButtonGroup>
                     </div>
                     <UButton
-                        :icon="useIcon('ui.close')"
+                        :icon="iconClose"
                         variant="light"
                         size="sm"
                         @click="close"

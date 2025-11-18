@@ -11,8 +11,8 @@
             <UIcon
                 :name="
                     child.kind === 'doc'
-                        ? useIcon('sidebar.note').value
-                        : useIcon('sidebar.chat').value
+                        ? iconNote
+                        : iconChat
                 "
                 class="project-child-icon shrink-0 size-4"
             />
@@ -39,7 +39,7 @@
                         aria-label="Entry actions"
                     >
                         <UIcon
-                            :name="useIcon('ui.more').value"
+                            :name="iconMore"
                             class="project-child-menu-icon w-4 h-4 opacity-70"
                         />
                     </span>
@@ -73,6 +73,12 @@ import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 
+const iconNote = useIcon('sidebar.note');
+const iconChat = useIcon('sidebar.chat');
+const iconMore = useIcon('ui.more');
+const iconEdit = useIcon('ui.edit');
+const iconTrash = useIcon('ui.trash');
+
 defineProps<{
     child: ProjectEntry;
     parentId: string;
@@ -97,7 +103,7 @@ const renameButtonProps = computed(() => {
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: useIcon('ui.edit').value,
+        icon: iconEdit.value,
         ...(overrides.value as any),
     };
 });
@@ -113,7 +119,7 @@ const removeButtonProps = computed(() => {
         color: 'error' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: useIcon('ui.trash').value,
+        icon: iconTrash.value,
         ...(overrides.value as any),
     };
 });

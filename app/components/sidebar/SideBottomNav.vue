@@ -21,7 +21,7 @@
                 <template #default>
                     <span class="flex flex-col items-center gap-1 w-full">
                         <UIcon
-                            :name="useIcon('sidebar.user').value"
+                            :name="iconUser"
                             class="h-[18px] w-[18px]"
                         />
                         <span class="text-[7px] uppercase tracking-wider"
@@ -37,7 +37,7 @@
                         @click="navigateToActivity"
                     >
                         <UIcon
-                            :name="useIcon('sidebar.activity').value"
+                            :name="iconActivity"
                             class="mr-1.5"
                         />
                         Activity
@@ -47,7 +47,7 @@
                         @click="navigateToCredits"
                     >
                         <UIcon
-                            :name="useIcon('sidebar.credits').value"
+                            :name="iconCredits"
                             class="mr-1.5"
                         />
                         Credits
@@ -126,7 +126,7 @@
                 <span class="flex flex-col items-center gap-1 w-full">
                     <UIcon
                         class="w-[18px] h-[18px]"
-                        :name="useIcon('dashboard.home').value"
+                        :name="iconDashboard"
                     />
                     <span class="text-[7px] uppercase tracking-wider"
                         >Dashboard</span
@@ -146,6 +146,11 @@ import { computed, onMounted, ref, useAttrs } from 'vue';
 import { state } from '~/state/global';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+
+const iconUser = useIcon('sidebar.user');
+const iconActivity = useIcon('sidebar.activity');
+const iconCredits = useIcon('sidebar.credits');
+const iconDashboard = useIcon('dashboard.home');
 
 defineOptions({ inheritAttrs: false });
 

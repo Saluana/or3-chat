@@ -99,7 +99,7 @@
                             "
                             id="btn-home"
                             class="flex item-center justify-center"
-                            :icon="useIcon('sidebar.page.home').value"
+                            :icon="iconPageHome"
                             :aria-pressed="activePageId === DEFAULT_PAGE_ID"
                             aria-label="Home"
                             @click="() => handlePageSelect(DEFAULT_PAGE_ID)"
@@ -131,7 +131,7 @@
                             class="flex item-center justify-center"
                             :icon="
                                 page.icon ||
-                                useIcon('sidebar.page.default').value
+                                iconPageDefault
                             "
                             :aria-pressed="activePageId === page.id"
                             :aria-label="page.label"
@@ -211,6 +211,13 @@ import SideBottomNav from './SideBottomNav.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 
+const iconNewChat = useIcon('sidebar.new_chat');
+const iconSearch = useIcon('sidebar.search');
+const iconNewNote = useIcon('sidebar.new_note');
+const iconNewFolder = useIcon('sidebar.new_folder');
+const iconPageHome = useIcon('sidebar.page.home');
+const iconPageDefault = useIcon('sidebar.page.default');
+
 const props = defineProps<{
     activeThread?: string;
 }>();
@@ -232,7 +239,7 @@ const newChatButtonProps = computed(() => {
 
     return {
         size: 'sb-square' as const,
-        icon: useIcon('sidebar.new_chat').value,
+        icon: iconNewChat.value,
         ...(overrides.value as any),
         ui: mergedUi,
     };
@@ -253,7 +260,7 @@ const searchButtonProps = computed(() => {
         size: 'sb-base' as const,
         color: 'on-surface' as const,
         square: false as const,
-        icon: useIcon('sidebar.search').value,
+        icon: iconSearch.value,
         ...(overrides.value as any),
         ui: mergedUi,
     };
@@ -272,7 +279,7 @@ const newDocButtonProps = computed(() => {
     const mergedUi = { ...themeUi };
 
     return {
-        icon: useIcon('sidebar.new_note').value,
+        icon: iconNewNote.value,
         size: 'sb-base' as const,
         color: 'on-surface' as const,
         ...(overrides.value as any),
@@ -293,7 +300,7 @@ const newProjectButtonProps = computed(() => {
     const mergedUi = { ...themeUi };
 
     return {
-        icon: useIcon('sidebar.new_folder').value,
+        icon: iconNewFolder.value,
         size: 'sb-base' as const,
         color: 'on-surface' as const,
         ...(overrides.value as any),

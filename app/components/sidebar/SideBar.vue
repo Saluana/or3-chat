@@ -70,7 +70,7 @@
                     :placeholder="
                         isRenamingDoc ? 'Document title' : 'Thread title'
                     "
-                    :icon="useIcon('ui.edit').value"
+                    :icon="iconEdit"
                     @keyup.enter="saveRename"
                 />
             </div>
@@ -95,7 +95,7 @@
                 <UInput
                     v-model="renameProjectName"
                     placeholder="Project name"
-                    :icon="useIcon('sidebar.folder').value"
+                    :icon="iconFolder"
                     @keyup.enter="saveRenameProject"
                 />
             </div>
@@ -194,7 +194,7 @@
                                 v-model="createProjectState.name"
                                 required
                                 placeholder="Project title"
-                                :icon="useIcon('sidebar.folder').value"
+                                :icon="iconFolder"
                                 class="w-full"
                                 @keyup.enter="submitCreateProject"
                             />
@@ -292,7 +292,7 @@
                         <UInput
                             v-model="newProjectName"
                             placeholder="Project name"
-                            :icon="useIcon('sidebar.folder').value"
+                            :icon="iconFolder"
                             class="w-full"
                         />
                     </UFormField>
@@ -358,7 +358,7 @@
                             v-model="newDocumentState.title"
                             required
                             placeholder="Document title"
-                            :icon="useIcon('sidebar.note').value"
+                            :icon="iconNote"
                             class="w-full"
                             @keyup.enter="submitCreateDocument"
                         />
@@ -412,6 +412,10 @@ import {
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
+
+const iconEdit = useIcon('ui.edit');
+const iconFolder = useIcon('sidebar.folder');
+const iconNote = useIcon('sidebar.note');
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 // (Temporarily removed virtualization for chats — use simple list for now)

@@ -26,6 +26,12 @@ export const useIcon = (token: IconToken) => {
     return computed(() => {
         // $iconRegistry is typed as any usually in Nuxt plugins unless we extend the type,
         // but we know it's there.
-        return ($iconRegistry as any).resolve(token, activeTheme.value);
+        const registry = $iconRegistry as any;
+        // Track registry updates (e.g. when a theme's icons are lazy-loaded)
+        if (registry.version) {
+            // eslint-disable-next-line no-unused-expressions
+            registry.version.value;
+        }
+        return registry.resolve(token, activeTheme.value);
     });
 };
