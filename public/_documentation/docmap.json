@@ -560,6 +560,12 @@
             "path": "/themes",
             "files": [
                 {
+                    "name": "architecture.md",
+                    "path": "/themes/architecture",
+                    "category": "Reference",
+                    "summary": "Deep dive into the internal architecture of the OR3 theme system. Explains the compilation process (validation, CSS generation, selector parsing), runtime resolution (matching, merging, prop mapping), hybrid CSS selector approach, and integration points (v-theme directive, composables). Includes architecture diagrams and directory structure overview."
+                },
+                {
                     "name": "quick-start.md",
                     "path": "/themes/quick-start",
                     "category": "Tutorial",

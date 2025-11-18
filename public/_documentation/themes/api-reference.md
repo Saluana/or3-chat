@@ -4,12 +4,12 @@ Complete reference for OR3's refined theme system APIs, types, and functions.
 
 ## Table of Contents
 
-- [Theme Definition](#theme-definition)
-- [defineTheme()](#definetheme)
-- [v-theme Directive](#v-theme-directive)
-- [RuntimeResolver](#runtimeresolver)
-- [CLI Commands](#cli-commands)
-- [TypeScript Types](#typescript-types)
+-   [Theme Definition](#theme-definition)
+-   [defineTheme()](#definetheme)
+-   [v-theme Directive](#v-theme-directive)
+-   [RuntimeResolver](#runtimeresolver)
+-   [CLI Commands](#cli-commands)
+-   [TypeScript Types](#typescript-types)
 
 ---
 
@@ -22,13 +22,108 @@ The core interface for defining themes.
 ```typescript
 interface ThemeDefinition {
     name: string;
-    displayName: string;
+    displayName?: string;
     description?: string;
+    isDefault?: boolean;
     colors: ColorPalette;
+    borderWidth?: string;
+    borderRadius?: string;
     overrides?: Record<string, OverrideProps>;
-    extends?: string;
+    cssSelectors?: Record<string, CSSelectorConfig>;
+    stylesheets?: string[];
+    ui?: Record<string, unknown>;
+    propMaps?: PropClassMaps;
+    backgrounds?: ThemeBackgrounds;
+    fonts?: ThemeFonts;
 }
 ```
+
+#### Properties
+
+-   **`name`** (required): Unique theme identifier (kebab-case)
+-   **`displayName`** (optional): Human-readable name shown in UI
+-   **`description`** (optional): Brief description of the theme
+-   **`isDefault`** (optional): Whether this is the default theme
+-   **`colors`** (required): Material Design 3 color palette
+-   **`borderWidth`** (optional): Default border width (e.g., '2px')
+-   **`borderRadius`** (optional): Default border radius (e.g., '3px')
+-   **`overrides`** (optional): Component-specific prop overrides
+-   **`cssSelectors`** (optional): Direct DOM targeting configuration
+-   **`stylesheets`** (optional): External CSS files to load
+-   **`ui`** (optional): Nuxt UI config extensions
+-   **`propMaps`** (optional): Custom semantic prop-to-class mappings
+-   **`backgrounds`** (optional): Background layer configuration
+-   **`fonts`** (optional): Font family definitions
+
+---
+
+## Theme Backgrounds
+
+Configuration for app background layers.
+
+### Interface
+
+```typescript
+interface ThemeBackgrounds {
+    content?: {
+        base?: ThemeBackgroundLayer;
+        overlay?: ThemeBackgroundLayer;
+    };
+    sidebar?: ThemeBackgroundLayer;
+    headerGradient?: ThemeBackgroundLayer;
+    bottomNavGradient?: ThemeBackgroundLayer;
+}
+
+interface ThemeBackgroundLayer {
+    image?: string | null;
+    color?: string;
+    opacity?: number;
+    repeat?: 'repeat' | 'no-repeat' | 'repeat-x' | 'repeat-y';
+    size?: string;
+    fit?: 'cover' | 'contain';
+}
+```
+
+---
+
+## Theme Fonts
+
+Font family definitions.
+
+### Interface
+
+```typescript
+interface ThemeFonts {
+    sans?: string;
+    heading?: string;
+    mono?: string;
+    baseSize?: string; // e.g. '16px'
+    baseWeight?: string; // e.g. '400'
+    dark?: ThemeFontSet; // Dark mode overrides
+}
+```
+
+---
+
+## Prop Class Maps
+
+Map semantic props to CSS classes for non-Nuxt UI components.
+
+### Interface
+
+```typescript
+interface PropClassMaps {
+    variant?: Record<string, string>;
+    size?: Record<string, string>;
+    color?: Record<string, string>;
+}
+```
+
+---
+
+## defineTheme()
+
+````
 
 #### Properties
 
@@ -49,11 +144,11 @@ Factory function for creating type-safe themes.
 
 ```typescript
 function defineTheme(definition: ThemeDefinition): ThemeDefinition
-```
+````
 
 ### Parameters
 
-- **`definition`**: `ThemeDefinition` - The theme configuration object
+-   **`definition`**: `ThemeDefinition` - The theme configuration object
 
 ### Returns
 
@@ -76,8 +171,8 @@ export default defineTheme({
         onSurface: '#1f2937',
     },
     overrides: {
-        'button': { variant: 'solid' }
-    }
+        button: { variant: 'solid' },
+    },
 });
 ```
 
@@ -85,9 +180,9 @@ export default defineTheme({
 
 `defineTheme()` performs compile-time validation:
 
-- Required colors: `primary`, `onPrimary`, `secondary`, `onSecondary`, `surface`, `onSurface`
-- Valid selector syntax in overrides
-- Type-safe override props
+-   Required colors: `primary`, `onPrimary`, `secondary`, `onSecondary`, `surface`, `onSurface`
+-   Valid selector syntax in overrides
+-   Type-safe override props
 
 ---
 
@@ -104,29 +199,29 @@ interface ColorPalette {
     onPrimary: string;
     primaryContainer?: string;
     onPrimaryContainer?: string;
-    
+
     // Secondary
     secondary: string;
     onSecondary: string;
     secondaryContainer?: string;
     onSecondaryContainer?: string;
-    
+
     // Surface
     surface: string;
     onSurface: string;
     surfaceVariant?: string;
     onSurfaceVariant?: string;
-    
+
     // Background
     background?: string;
     onBackground?: string;
-    
+
     // App-specific
     success?: string;
     warning?: string;
     error?: string;
     info?: string;
-    
+
     // Dark mode overrides
     dark?: Partial<ColorPalette>;
 }
@@ -136,9 +231,9 @@ interface ColorPalette {
 
 #### Required Colors (Light Mode)
 
-- `primary`, `onPrimary`
-- `secondary`, `onSecondary`
-- `surface`, `onSurface`
+-   `primary`, `onPrimary`
+-   `secondary`, `onSecondary`
+-   `surface`, `onSurface`
 
 #### Optional Colors
 
@@ -152,7 +247,7 @@ Define `dark: {}` to override colors for dark mode:
 colors: {
     primary: '#6366f1',
     // ... other light colors
-    
+
     dark: {
         primary: '#818cf8',  // Lighter shade for dark mode
         surface: '#1f2937',
@@ -173,10 +268,10 @@ Vue directive for applying theme overrides to components.
 <template>
     <!-- Auto-detect context -->
     <UButton v-theme>Click</UButton>
-    
+
     <!-- Explicit identifier (string) -->
     <UButton v-theme="'chat.send'">Send</UButton>
-    
+
     <!-- Full options (object) -->
     <UButton v-theme="{ identifier: 'chat.send', theme: 'ocean' }">
         Send
@@ -193,9 +288,10 @@ Vue directive for applying theme overrides to components.
 ```
 
 Automatically detects:
-- Component name from VNode
-- Context from nearest provider or route
-- Uses active theme from localStorage
+
+-   Component name from VNode
+-   Context from nearest provider or route
+-   Uses active theme from localStorage
 
 #### 2. String Binding (Identifier)
 
@@ -204,8 +300,9 @@ Automatically detects:
 ```
 
 Parses identifier as `context.id`:
-- `'chat.send'` → context: `chat`, id: `send`
-- `'send'` → context: auto-detect, id: `send`
+
+-   `'chat.send'` → context: `chat`, id: `send`
+-   `'send'` → context: auto-detect, id: `send`
 
 #### 3. Object Binding (Full Control)
 
@@ -216,14 +313,16 @@ Parses identifier as `context.id`:
 ```
 
 **Options:**
-- `identifier?: string` - Full identifier (overrides context/id)
-- `context?: string` - Theme context
-- `id?: string` - Component identifier
-- `theme?: string` - Specific theme name (overrides active theme)
+
+-   `identifier?: string` - Full identifier (overrides context/id)
+-   `context?: string` - Theme context
+-   `id?: string` - Component identifier
+-   `theme?: string` - Specific theme name (overrides active theme)
 
 ### Directive Lifecycle
 
 The directive:
+
 1. **Mounted**: Resolves overrides and applies to component instance
 2. **Updated**: Re-applies when binding value changes
 3. **Unmounted**: Cleans up watchers (automatic)
@@ -231,9 +330,10 @@ The directive:
 ### SSR Compatibility
 
 The directive is SSR-safe:
-- No-op during SSR rendering
-- `getSSRProps()` returns empty object
-- Hydrates correctly on client
+
+-   No-op during SSR rendering
+-   `getSSRProps()` returns empty object
+-   Hydrates correctly on client
 
 ---
 
@@ -246,7 +346,7 @@ Resolves theme overrides at runtime with <1ms performance.
 ```typescript
 class RuntimeResolver {
     constructor(overrides: Record<string, OverrideProps>);
-    
+
     resolve(
         component: string,
         context?: string,
@@ -263,13 +363,15 @@ class RuntimeResolver {
 Creates a resolver instance with compiled overrides.
 
 **Parameters:**
-- `overrides`: Theme overrides object from `ThemeDefinition`
+
+-   `overrides`: Theme overrides object from `ThemeDefinition`
 
 **Example:**
+
 ```typescript
 const resolver = new RuntimeResolver({
-    'button': { variant: 'solid' },
-    'button.chat': { variant: 'ghost' }
+    button: { variant: 'solid' },
+    'button.chat': { variant: 'ghost' },
 });
 ```
 
@@ -278,15 +380,17 @@ const resolver = new RuntimeResolver({
 Resolves the best matching override for a component.
 
 **Parameters:**
-- `component`: Component name (e.g., `'button'`, `'input'`)
-- `context?`: Theme context (e.g., `'chat'`, `'sidebar'`)
-- `identifier?`: Component ID (e.g., `'send'`, `'new-chat'`)
-- `state?`: Component state (e.g., `'hover'`, `'focus'`)
+
+-   `component`: Component name (e.g., `'button'`, `'input'`)
+-   `context?`: Theme context (e.g., `'chat'`, `'sidebar'`)
+-   `identifier?`: Component ID (e.g., `'send'`, `'new-chat'`)
+-   `state?`: Component state (e.g., `'hover'`, `'focus'`)
 
 **Returns:**
 `OverrideProps | null` - Merged props or `null` if no match
 
 **Example:**
+
 ```typescript
 const props = resolver.resolve('button', 'chat', 'send');
 // Returns: { variant: 'solid', color: 'primary', size: 'lg' }
@@ -306,6 +410,7 @@ Selectors are matched by specificity (higher wins):
 ```
 
 **Example:**
+
 ```typescript
 'button'                     → specificity: 1
 'button.chat'                → specificity: 11
@@ -315,9 +420,9 @@ Selectors are matched by specificity (higher wins):
 
 ### Performance
 
-- **Selector parsing**: ~0.1ms per selector (build-time cached)
-- **Resolution**: <1ms per component (runtime)
-- **Memory**: ~50KB per theme with 100 overrides
+-   **Selector parsing**: ~0.1ms per selector (build-time cached)
+-   **Resolution**: <1ms per component (runtime)
+-   **Memory**: ~50KB per theme with 100 overrides
 
 ---
 
@@ -328,11 +433,13 @@ Selectors are matched by specificity (higher wins):
 Interactive wizard to create a new theme.
 
 **Prompts:**
-- Theme name (kebab-case)
-- Display name
-- Description
+
+-   Theme name (kebab-case)
+-   Display name
+-   Description
 
 **Creates:**
+
 ```
 app/theme/<name>/
   ├── theme.ts
@@ -340,6 +447,7 @@ app/theme/<name>/
 ```
 
 **Usage:**
+
 ```bash
 bun run theme:create
 ```
@@ -351,15 +459,18 @@ bun run theme:create
 Validates theme definition(s).
 
 **Arguments:**
-- `name` (optional): Specific theme to validate (validates all if omitted)
+
+-   `name` (optional): Specific theme to validate (validates all if omitted)
 
 **Checks:**
-- Required colors present
-- Valid selector syntax
-- No specificity conflicts
-- TypeScript type errors
+
+-   Required colors present
+-   Valid selector syntax
+-   No specificity conflicts
+-   TypeScript type errors
 
 **Usage:**
+
 ```bash
 # Validate all themes
 bun run theme:validate
@@ -369,6 +480,7 @@ bun run theme:validate ocean
 ```
 
 **Output:**
+
 ```
 ✓ Theme 'ocean' is valid
   - 8/8 required colors defined
@@ -383,13 +495,16 @@ bun run theme:validate ocean
 Interactive theme switcher.
 
 **Prompts:**
-- Select theme from list
+
+-   Select theme from list
 
 **Updates:**
-- `localStorage.activeTheme`
-- Reloads page to apply
+
+-   `localStorage.activeTheme`
+-   Reloads page to apply
 
 **Usage:**
+
 ```bash
 bun run theme:switch
 ```
@@ -401,17 +516,20 @@ bun run theme:switch
 Compiles all themes and generates TypeScript types.
 
 **Generates:**
-- `types/theme-generated.d.ts` - TypeScript declarations
-- Compiled CSS variables in `app/theme/*/compiled.css`
+
+-   `types/theme-generated.d.ts` - TypeScript declarations
+-   Compiled CSS variables in `app/theme/*/compiled.css`
 
 **Usage:**
+
 ```bash
 bun run theme:compile
 ```
 
 **Runs automatically:**
-- During `bun run dev`
-- Before `bun run build`
+
+-   During `bun run dev`
+-   Before `bun run build`
 
 ---
 
@@ -426,6 +544,7 @@ type ThemeName = 'light' | 'dark' | 'ocean' | 'forest' | ...;
 ```
 
 **Usage:**
+
 ```typescript
 const theme: ThemeName = 'ocean';
 ```
@@ -451,6 +570,7 @@ type ThemeIdentifier = `${ThemeContext}.${string}` | string;
 ```
 
 **Examples:**
+
 ```typescript
 const id1: ThemeIdentifier = 'chat.send';
 const id2: ThemeIdentifier = 'sidebar.new-chat';
@@ -511,15 +631,15 @@ function useTheme(): {
     set: (theme: ThemeName) => void;
     toggle: () => void;
     available: ThemeName[];
-}
+};
 ```
 
 ### Returns
 
-- **`current`**: Reactive ref to active theme
-- **`set(theme)`**: Switch to a specific theme
-- **`toggle()`**: Toggle between light/dark
-- **`available`**: Array of all available themes
+-   **`current`**: Reactive ref to active theme
+-   **`set(theme)`**: Switch to a specific theme
+-   **`toggle()`**: Toggle between light/dark
+-   **`available`**: Array of all available themes
 
 ### Example
 
@@ -554,7 +674,7 @@ Composable for accessing the RuntimeResolver instance.
 ### Signature
 
 ```typescript
-function useRuntimeResolver(): RuntimeResolver | null
+function useRuntimeResolver(): RuntimeResolver | null;
 ```
 
 ### Returns
@@ -581,10 +701,11 @@ if (resolver) {
 Parses a CSS-like selector into structured format.
 
 ```typescript
-function parseSelector(selector: string): ParsedSelector
+function parseSelector(selector: string): ParsedSelector;
 ```
 
 **Example:**
+
 ```typescript
 const parsed = parseSelector('button.chat#send:hover[type="submit"]');
 
@@ -605,16 +726,17 @@ const parsed = parseSelector('button.chat#send:hover[type="submit"]');
 Calculates CSS specificity score.
 
 ```typescript
-function calculateSpecificity(parsed: ParsedSelector): number
+function calculateSpecificity(parsed: ParsedSelector): number;
 ```
 
 **Example:**
+
 ```typescript
 const specificity = calculateSpecificity({
     element: 'button',
     context: 'chat',
     identifier: 'send',
-    state: 'hover'
+    state: 'hover',
 });
 
 // Result: 41 (1 + 10 + 20 + 10)
@@ -656,12 +778,14 @@ See [Migration Guide](./migration-guide.md) for detailed migration instructions.
 ### Quick Comparison
 
 **Old System:**
+
 ```typescript
 // Hard-coded component props
 <UButton variant="solid" color="primary" />
 ```
 
 **Refined System:**
+
 ```typescript
 // Theme-driven with v-theme
 <UButton v-theme="'chat.send'" />

@@ -4,9 +4,9 @@ Get started with OR3's refined theme system in under 30 minutes. This guide walk
 
 ## Prerequisites
 
-- OR3 development environment set up
-- Basic understanding of Material Design color tokens
-- Familiarity with CSS selectors
+-   OR3 development environment set up
+-   Basic understanding of Material Design color tokens
+-   Familiarity with CSS selectors
 
 ## Create a New Theme
 
@@ -17,11 +17,13 @@ bun run theme:create
 ```
 
 Follow the prompts:
-- **Theme name**: `my-theme` (kebab-case, alphanumeric + hyphens)
-- **Display name**: `My Custom Theme` (human-readable)
-- **Description**: Brief description of your theme
+
+-   **Theme name**: `my-theme` (kebab-case, alphanumeric + hyphens)
+-   **Display name**: `My Custom Theme` (human-readable)
+-   **Description**: Brief description of your theme
 
 This creates:
+
 ```
 app/theme/my-theme/
   ├── theme.ts      # Theme definition
@@ -39,54 +41,77 @@ export default defineTheme({
     name: 'my-theme',
     displayName: 'My Custom Theme',
     description: 'A custom theme with vibrant colors',
-    
+
     // Material Design 3 color palette
     colors: {
-        primary: '#6366f1',      // Indigo
+        primary: '#6366f1', // Indigo
         onPrimary: '#ffffff',
-        secondary: '#ec4899',     // Pink
+        secondary: '#ec4899', // Pink
         onSecondary: '#ffffff',
         surface: '#ffffff',
         onSurface: '#1f2937',
-        
+
         // Optional: Auto-calculated if omitted
         primaryContainer: '#e0e7ff',
         secondaryContainer: '#fce7f3',
-        
+
         // App-specific
         success: '#10b981',
         warning: '#f59e0b',
         error: '#ef4444',
-        
+
         // Dark mode (optional)
         dark: {
             primary: '#818cf8',
             surface: '#1f2937',
             onSurface: '#f9fafb',
-        }
+        },
     },
-    
+
+    // Fonts
+    fonts: {
+        sans: '"Inter", sans-serif',
+        heading: '"Poppins", sans-serif',
+        mono: '"Fira Code", monospace',
+        baseSize: '16px',
+    },
+
+    // Backgrounds
+    backgrounds: {
+        content: {
+            base: {
+                color: '#f8fafc',
+                image: '/patterns/noise.png',
+                opacity: 0.05,
+                repeat: 'repeat',
+            },
+        },
+        sidebar: {
+            color: '#f1f5f9',
+        },
+    },
+
     // Component overrides (optional)
     overrides: {
         // Global button style
-        'button': {
+        button: {
             variant: 'solid',
-            class: 'rounded-lg shadow-sm'
+            class: 'rounded-lg shadow-sm',
         },
-        
+
         // Context-specific: buttons in chat
         'button.chat': {
             variant: 'ghost',
-            color: 'primary'
+            color: 'primary',
         },
-        
+
         // Identifier-specific: send button
         'button#chat.send': {
             variant: 'solid',
             color: 'primary',
-            size: 'lg'
-        }
-    }
+            size: 'lg',
+        },
+    },
 });
 ```
 
@@ -216,10 +241,11 @@ bun run theme:validate my-theme
 ```
 
 This reports:
-- Missing required colors
-- Invalid selectors
-- Specificity conflicts
-- Type errors
+
+-   Missing required colors
+-   Invalid selectors
+-   Specificity conflicts
+-   Type errors
 
 ### 2. Switch to Your Theme
 
@@ -247,10 +273,10 @@ The refined theme system automatically applies overrides via the `v-theme` direc
 <template>
     <!-- Auto-detect context -->
     <UButton v-theme>Click Me</UButton>
-    
+
     <!-- Explicit identifier -->
     <UButton v-theme="'chat.send'">Send</UButton>
-    
+
     <!-- Full control -->
     <UButton v-theme="{ identifier: 'chat.send', theme: 'my-theme' }">
         Send
@@ -260,10 +286,10 @@ The refined theme system automatically applies overrides via the `v-theme` direc
 
 ## Next Steps
 
-- **Customize further**: Add more overrides for specific components
-- **Read API Reference**: Learn about all available options
-- **Check Best Practices**: Optimize your theme for performance
-- **Share your theme**: Submit a PR to the theme gallery
+-   **Customize further**: Add more overrides for specific components
+-   **Read API Reference**: Learn about all available options
+-   **Check Best Practices**: Optimize your theme for performance
+-   **Share your theme**: Submit a PR to the theme gallery
 
 ## Quick Troubleshooting
 
@@ -275,15 +301,15 @@ The refined theme system automatically applies overrides via the `v-theme` direc
 
 ### Colors look wrong?
 
-- Ensure all required colors are defined: `primary`, `secondary`, `surface`
-- Check contrast: use Material Design 3 guidelines
-- Test both light and dark modes
+-   Ensure all required colors are defined: `primary`, `secondary`, `surface`
+-   Check contrast: use Material Design 3 guidelines
+-   Test both light and dark modes
 
 ### Overrides not working?
 
-- Check selector specificity (use Chrome DevTools)
-- Verify component has `v-theme` directive
-- Check if explicit props override theme defaults
+-   Check selector specificity (use Chrome DevTools)
+-   Verify component has `v-theme` directive
+-   Check if explicit props override theme defaults
 
 ## Example: Complete Theme
 
@@ -294,7 +320,7 @@ export default defineTheme({
     name: 'ocean',
     displayName: 'Ocean Blue',
     description: 'A calm, ocean-inspired theme',
-    
+
     colors: {
         primary: '#0ea5e9',
         onPrimary: '#ffffff',
@@ -302,35 +328,35 @@ export default defineTheme({
         onSecondary: '#ffffff',
         surface: '#f0f9ff',
         onSurface: '#0c4a6e',
-        
+
         success: '#10b981',
         warning: '#f59e0b',
         error: '#ef4444',
-        
+
         dark: {
             primary: '#38bdf8',
             surface: '#0c4a6e',
             onSurface: '#f0f9ff',
-        }
+        },
     },
-    
+
     overrides: {
-        'button': {
+        button: {
             variant: 'soft',
-            class: 'rounded-full'
+            class: 'rounded-full',
         },
         'button.chat': {
-            variant: 'ghost'
+            variant: 'ghost',
         },
         'button#chat.send': {
             variant: 'solid',
             color: 'primary',
-            class: 'shadow-lg'
+            class: 'shadow-lg',
         },
-        'input': {
-            class: 'border-2 focus:border-primary'
-        }
-    }
+        input: {
+            class: 'border-2 focus:border-primary',
+        },
+    },
 });
 ```
 

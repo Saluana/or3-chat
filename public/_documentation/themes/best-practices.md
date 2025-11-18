@@ -19,17 +19,19 @@ Performance, maintainability, and scalability guidelines for OR3 themes.
 **Use kebab-case** for theme identifiers:
 
 ✅ **Good:**
+
 ```typescript
-name: 'ocean-blue'
-name: 'high-contrast-dark'
-name: 'retro-green'
+name: 'ocean-blue';
+name: 'high-contrast-dark';
+name: 'retro-green';
 ```
 
 ❌ **Bad:**
+
 ```typescript
-name: 'OceanBlue'    // PascalCase
-name: 'ocean_blue'   // snake_case
-name: 'ocean blue'   // spaces
+name: 'OceanBlue'; // PascalCase
+name: 'ocean_blue'; // snake_case
+name: 'ocean blue'; // spaces
 ```
 
 ### Component Identifiers
@@ -37,39 +39,41 @@ name: 'ocean blue'   // spaces
 **Use semantic, descriptive names:**
 
 ✅ **Good:**
+
 ```typescript
-'button#chat.send'
-'button#sidebar.new-chat'
-'input#search.global'
-'button#modal.confirm'
+'button#chat.send';
+'button#sidebar.new-chat';
+'input#search.global';
+'button#modal.confirm';
 ```
 
 ❌ **Bad:**
+
 ```typescript
-'button#btn1'         // Generic
-'button#x'            // Cryptic
-'button#sendMessage'  // Too verbose (camelCase)
+'button#btn1'; // Generic
+'button#x'; // Cryptic
+'button#sendMessage'; // Too verbose (camelCase)
 ```
 
 **Naming patterns:**
 
-- **Actions**: `send`, `cancel`, `confirm`, `delete`
-- **Navigation**: `new-chat`, `settings`, `profile`
-- **States**: `active`, `disabled`, `loading`
-- **Locations**: `sidebar`, `header`, `footer`
+-   **Actions**: `send`, `cancel`, `confirm`, `delete`
+-   **Navigation**: `new-chat`, `settings`, `profile`
+-   **States**: `active`, `disabled`, `loading`
+-   **Locations**: `sidebar`, `header`, `footer`
 
 ### Context Names
 
 **Use consistent area names:**
 
 ```typescript
-type ThemeContext = 
-    | 'chat'       // Chat interface
-    | 'sidebar'    // Left/right sidebar
-    | 'dashboard'  // Dashboard/home
-    | 'header'     // Top navigation
-    | 'modal'      // Modal dialogs
-    | 'global'     // App-wide
+type ThemeContext =
+    | 'chat' // Chat interface
+    | 'sidebar' // Left/right sidebar
+    | 'dashboard' // Dashboard/home
+    | 'header' // Top navigation
+    | 'modal' // Modal dialogs
+    | 'global'; // App-wide
 ```
 
 Don't create too many contexts—5-7 is optimal.
@@ -83,6 +87,7 @@ Don't create too many contexts—5-7 is optimal.
 Use the **minimum specificity** needed:
 
 **1. Start broad** (default styles):
+
 ```typescript
 overrides: {
     'button': {
@@ -93,6 +98,7 @@ overrides: {
 ```
 
 **2. Add context** (area-specific):
+
 ```typescript
 overrides: {
     'button': { variant: 'solid' },
@@ -101,6 +107,7 @@ overrides: {
 ```
 
 **3. Add identifier** (component-specific):
+
 ```typescript
 overrides: {
     'button': { variant: 'solid' },
@@ -112,6 +119,7 @@ overrides: {
 ### Avoid Over-Specification
 
 ❌ **Bad** (too specific):
+
 ```typescript
 overrides: {
     'button.chat#send[type="submit"]:hover': { /* ... */ }
@@ -119,6 +127,7 @@ overrides: {
 ```
 
 ✅ **Good** (appropriate):
+
 ```typescript
 overrides: {
     'button.chat#send': { /* ... */ }
@@ -138,12 +147,12 @@ overrides: {
     'button.chat': { variant: 'ghost' },
     'button.chat#send': { variant: 'solid', color: 'primary' },
     'button.sidebar': { size: 'sm' },
-    
+
     // Inputs
     'input': { size: 'md' },
     'input.search': { variant: 'outline' },
     'input#search.global': { size: 'lg' },
-    
+
     // Cards
     'card': { variant: 'outline' },
     'card.chat': { variant: 'ghost' },
@@ -159,18 +168,21 @@ overrides: {
 Follow MD3 color roles:
 
 **Primary**: Main brand color, primary actions
+
 ```typescript
 primary: '#6366f1',       // Indigo
 onPrimary: '#ffffff',     // White text on primary
 ```
 
 **Secondary**: Accent color, secondary actions
+
 ```typescript
 secondary: '#ec4899',     // Pink
 onSecondary: '#ffffff',
 ```
 
 **Surface**: Background for cards, modals
+
 ```typescript
 surface: '#ffffff',
 onSurface: '#1f2937',     // Text on surface
@@ -181,20 +193,23 @@ onSurface: '#1f2937',     // Text on surface
 Ensure **WCAG AA compliance** (4.5:1 for text):
 
 ✅ **Good contrast:**
+
 ```typescript
 primary: '#6366f1',      // Indigo
 onPrimary: '#ffffff',    // 8.3:1 contrast ✓
 ```
 
 ❌ **Poor contrast:**
+
 ```typescript
 primary: '#a5b4fc',      // Light indigo
 onPrimary: '#e0e7ff',    // 1.4:1 contrast ✗
 ```
 
 **Test contrast:**
-- Use [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/)
-- Chrome DevTools > Inspect > Color picker shows contrast ratio
+
+-   Use [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/)
+-   Chrome DevTools > Inspect > Color picker shows contrast ratio
 
 ### Dark Mode Strategy
 
@@ -227,6 +242,7 @@ colors: {
 Let the system calculate container colors:
 
 ✅ **Good** (minimal):
+
 ```typescript
 colors: {
     primary: '#6366f1',
@@ -236,6 +252,7 @@ colors: {
 ```
 
 ❌ **Bad** (unnecessary):
+
 ```typescript
 colors: {
     primary: '#6366f1',
@@ -249,6 +266,43 @@ Only override if design requires **specific** container colors.
 
 ---
 
+## Backgrounds & Fonts
+
+### Layered Backgrounds
+
+Use the `backgrounds` property for complex, layered backgrounds instead of custom CSS.
+
+✅ **Good:**
+
+```typescript
+backgrounds: {
+    content: {
+        base: { color: '#f0f9ff' },
+        overlay: {
+            image: '/patterns/noise.png',
+            opacity: 0.05,
+            repeat: 'repeat'
+        }
+    }
+}
+```
+
+### Font Configuration
+
+Define fonts centrally in `fonts` rather than CSS variables.
+
+✅ **Good:**
+
+```typescript
+fonts: {
+    sans: '"Inter", sans-serif',
+    heading: '"Poppins", sans-serif',
+    baseSize: '16px'
+}
+```
+
+---
+
 ## Performance Optimization
 
 ### Minimize Overrides
@@ -256,6 +310,7 @@ Only override if design requires **specific** container colors.
 **Each override adds ~0.5ms** to resolution time. Keep totals under 100.
 
 ✅ **Good** (60 overrides):
+
 ```typescript
 overrides: {
     'button': { /* ... */ },
@@ -266,6 +321,7 @@ overrides: {
 ```
 
 ❌ **Bad** (300 overrides):
+
 ```typescript
 overrides: {
     'button#btn1': { /* ... */ },
@@ -280,11 +336,13 @@ overrides: {
 **Don't compute selectors at runtime:**
 
 ❌ **Bad:**
+
 ```vue
 <UButton :v-theme="`chat.${action}`">{{ label }}</UButton>
 ```
 
 ✅ **Good:**
+
 ```vue
 <UButton v-theme="'chat.send'" v-if="action === 'send'">Send</UButton>
 <UButton v-theme="'chat.cancel'" v-else>Cancel</UButton>
@@ -297,23 +355,25 @@ Or keep explicit props for dynamic cases.
 **Don't create new resolvers per component:**
 
 ❌ **Bad:**
+
 ```typescript
 export default {
     setup() {
-        const resolver = new RuntimeResolver(overrides);  // New instance!
+        const resolver = new RuntimeResolver(overrides); // New instance!
         // ...
-    }
-}
+    },
+};
 ```
 
 ✅ **Good:**
+
 ```typescript
 export default {
     setup() {
-        const resolver = useRuntimeResolver();  // Reused from plugin
+        const resolver = useRuntimeResolver(); // Reused from plugin
         // ...
-    }
-}
+    },
+};
 ```
 
 ### Lazy-Load Themes
@@ -325,8 +385,8 @@ export default {
 export default defineNuxtConfig({
     // Don't import all themes at once
     theme: {
-        lazyLoad: true  // Load theme on switch
-    }
+        lazyLoad: true, // Load theme on switch
+    },
 });
 ```
 
@@ -339,6 +399,7 @@ export default defineNuxtConfig({
 **Every component should have `v-theme`:**
 
 ✅ **Good:**
+
 ```vue
 <template>
     <UButton v-theme="'chat.send'">Send</UButton>
@@ -350,10 +411,13 @@ export default defineNuxtConfig({
 ```
 
 ❌ **Bad:**
+
 ```vue
 <template>
-    <UButton variant="solid">Send</UButton>  <!-- Hard-coded -->
-    <UInput />  <!-- No theme -->
+    <UButton variant="solid">Send</UButton>
+    <!-- Hard-coded -->
+    <UInput />
+    <!-- No theme -->
     <UCard>
         <p>Message content</p>
     </UCard>
@@ -365,12 +429,9 @@ export default defineNuxtConfig({
 **If props are dynamic, keep them explicit:**
 
 ✅ **Good:**
+
 ```vue
-<UButton 
-    v-theme="'chat.send'"
-    :disabled="!canSend"
-    :loading="isSending"
->
+<UButton v-theme="'chat.send'" :disabled="!canSend" :loading="isSending">
     Send
 </UButton>
 ```
@@ -382,6 +443,7 @@ Theme provides `variant`, `color`, `size`; component controls state.
 **Use theme overrides or Tailwind classes:**
 
 ❌ **Bad:**
+
 ```vue
 <UButton style="background: #6366f1; color: white;">
     Send
@@ -389,6 +451,7 @@ Theme provides `variant`, `color`, `size`; component controls state.
 ```
 
 ✅ **Good (theme):**
+
 ```typescript
 overrides: {
     'button#chat.send': {
@@ -415,6 +478,7 @@ overrides: {
 ```
 
 **Usage:**
+
 ```vue
 <ChatSendButton :disabled="!canSend">Send</ChatSendButton>
 ```
@@ -440,7 +504,7 @@ describe('my-theme', () => {
         expect(myTheme.colors.secondary).toBeDefined();
         expect(myTheme.colors.surface).toBeDefined();
     });
-    
+
     it('has valid overrides', () => {
         expect(myTheme.overrides?.['button']).toBeDefined();
     });
@@ -460,10 +524,10 @@ describe('Theme Switching', () => {
     it('applies theme to button', async () => {
         const { set } = useTheme();
         const wrapper = mount(MyComponent);
-        
+
         set('ocean');
         await wrapper.vm.$nextTick();
-        
+
         const button = wrapper.find('button');
         expect(button.attributes('variant')).toBe('solid');
     });
@@ -483,7 +547,7 @@ test('chat page with ocean theme', async ({ page }) => {
         localStorage.setItem('activeTheme', 'ocean');
     });
     await page.reload();
-    
+
     await expect(page).toHaveScreenshot('chat-ocean.png');
 });
 ```
@@ -501,23 +565,26 @@ Run for all themes to catch visual regressions.
 ```typescript
 export default defineTheme({
     name: 'ocean',
-    version: '1.2.0',  // Semantic versioning
+    version: '1.2.0', // Semantic versioning
     // ...
 });
 ```
 
 **Breaking changes** (2.0.0):
-- Removed colors
-- Changed selector names
-- Incompatible override structure
+
+-   Removed colors
+-   Changed selector names
+-   Incompatible override structure
 
 **Minor updates** (1.2.0):
-- Added new overrides
-- New optional colors
+
+-   Added new overrides
+-   New optional colors
 
 **Patches** (1.2.1):
-- Color tweaks
-- Bug fixes
+
+-   Color tweaks
+-   Bug fixes
 
 ### Deprecation Strategy
 
@@ -527,7 +594,7 @@ export default defineTheme({
 overrides: {
     // @deprecated Use 'button.chat#send' instead
     'button#send': { /* ... */ },
-    
+
     'button.chat#send': { /* ... */ }  // New
 }
 ```
@@ -544,9 +611,9 @@ export default defineTheme({
     colors: {
         primary: '#0ea5e9',
         // Custom app colors
-        chatBubble: '#e0f2fe',       // Document purpose
+        chatBubble: '#e0f2fe', // Document purpose
         codeBlock: '#1e293b',
-    }
+    },
 });
 ```
 
@@ -560,7 +627,7 @@ export default defineTheme({
 
 ```typescript
 // ❌ Bad: Unsanitized CSS injection
-const userColor = userInput;  // #ff0000; background: url(evil.com)
+const userColor = userInput; // #ff0000; background: url(evil.com)
 theme.colors.primary = userColor;
 
 // ✅ Good: Validate hex colors
@@ -597,18 +664,18 @@ overrides: {
 
 ## Checklist: Production-Ready Themes
 
-- [ ] All required colors defined (primary, secondary, surface)
-- [ ] WCAG AA contrast ratios met (4.5:1 minimum)
-- [ ] Dark mode tested and working
-- [ ] Less than 100 overrides
-- [ ] Semantic, consistent naming
-- [ ] Unit tests for theme definition
-- [ ] Visual regression tests for key pages
-- [ ] Documentation for custom colors/overrides
-- [ ] Validated with `bun run theme:validate`
-- [ ] Performance tested (<1ms resolution time)
-- [ ] SSR-safe (no client-only dependencies)
-- [ ] Versioned and changelog maintained
+-   [ ] All required colors defined (primary, secondary, surface)
+-   [ ] WCAG AA contrast ratios met (4.5:1 minimum)
+-   [ ] Dark mode tested and working
+-   [ ] Less than 100 overrides
+-   [ ] Semantic, consistent naming
+-   [ ] Unit tests for theme definition
+-   [ ] Visual regression tests for key pages
+-   [ ] Documentation for custom colors/overrides
+-   [ ] Validated with `bun run theme:validate`
+-   [ ] Performance tested (<1ms resolution time)
+-   [ ] SSR-safe (no client-only dependencies)
+-   [ ] Versioned and changelog maintained
 
 ---
 
@@ -617,6 +684,7 @@ overrides: {
 ### 1. Over-Specification
 
 **Problem:** Too many specific selectors
+
 ```typescript
 overrides: {
     'button.chat#send[type="submit"]:hover': { /* ... */ }
@@ -624,6 +692,7 @@ overrides: {
 ```
 
 **Solution:** Use minimum specificity
+
 ```typescript
 overrides: {
     'button.chat#send': { /* ... */ }
@@ -633,11 +702,13 @@ overrides: {
 ### 2. Inline Styles
 
 **Problem:** Inline styles bypass theme
+
 ```vue
 <UButton style="color: red;">Delete</UButton>
 ```
 
 **Solution:** Use theme overrides
+
 ```typescript
 overrides: {
     'button#delete': { color: 'error' }
@@ -647,11 +718,13 @@ overrides: {
 ### 3. Hard-Coded Props
 
 **Problem:** Component can't be themed
+
 ```vue
 <UButton variant="solid" color="primary">Send</UButton>
 ```
 
 **Solution:** Use `v-theme`
+
 ```vue
 <UButton v-theme="'chat.send'">Send</UButton>
 ```
@@ -659,11 +732,13 @@ overrides: {
 ### 4. Dynamic Selectors
 
 **Problem:** Runtime selector computation
+
 ```vue
 <UButton :v-theme="`${context}.${action}`">{{ label }}</UButton>
 ```
 
 **Solution:** Explicit conditions
+
 ```vue
 <UButton v-theme="'chat.send'" v-if="action === 'send'">Send</UButton>
 ```
@@ -671,6 +746,7 @@ overrides: {
 ### 5. Ignoring Dark Mode
 
 **Problem:** Theme looks bad in dark mode
+
 ```typescript
 colors: {
     primary: '#6366f1',  // Good in light mode
@@ -679,6 +755,7 @@ colors: {
 ```
 
 **Solution:** Define dark overrides
+
 ```typescript
 colors: {
     primary: '#6366f1',
@@ -723,14 +800,14 @@ overrides: {
 ```typescript
 export default defineTheme({
     name: 'ocean-dark',
-    extends: 'ocean',  // Inherit from ocean theme
+    extends: 'ocean', // Inherit from ocean theme
     colors: {
         // Only override dark mode
         dark: {
             surface: '#0c4a6e',
             onSurface: '#f0f9ff',
-        }
-    }
+        },
+    },
 });
 ```
 
@@ -738,10 +815,10 @@ export default defineTheme({
 
 ## Resources
 
-- **Material Design 3**: [m3.material.io](https://m3.material.io)
-- **Contrast Checker**: [webaim.org/resources/contrastchecker](https://webaim.org/resources/contrastchecker/)
-- **Color Palette Generator**: [coolors.co](https://coolors.co)
-- **Nuxt UI Docs**: [ui.nuxt.com](https://ui.nuxt.com)
+-   **Material Design 3**: [m3.material.io](https://m3.material.io)
+-   **Contrast Checker**: [webaim.org/resources/contrastchecker](https://webaim.org/resources/contrastchecker/)
+-   **Color Palette Generator**: [coolors.co](https://coolors.co)
+-   **Nuxt UI Docs**: [ui.nuxt.com](https://ui.nuxt.com)
 
 ---
 
