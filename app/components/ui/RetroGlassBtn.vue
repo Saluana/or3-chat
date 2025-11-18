@@ -1,9 +1,21 @@
 <template>
-    <UButton
-        v-bind="$attrs"
-        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-        ><slot></slot
-    ></UButton>
+    <UButton v-bind="glassButtonProps"><slot></slot></UButton>
 </template>
 
-<script setup></script>
+<script setup lang="ts">
+import { computed } from 'vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+
+const glassButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'ui',
+        identifier: 'ui.glass-button',
+        isNuxtUI: true,
+    });
+    return {
+        class: 'w-full',
+        ...(overrides.value as any),
+    };
+});
+</script>

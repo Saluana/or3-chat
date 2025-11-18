@@ -1,13 +1,16 @@
 <template>
-    <div v-if="show" class="inline-block">
+    <div
+        id="model-select-root"
+        v-if="show"
+        class="model-select-container inline-flex w-full justify-end min-w-0 max-w-full"
+    >
         <USelectMenu
+            id="model-select-menu"
             v-model="internalModel"
             :items="items"
             :value-key="'value'"
             :disabled="loading"
-            :ui="ui"
-            :search-input="searchInput"
-            class="retro-btn h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]"
+            v-bind="selectMenuProps"
         />
     </div>
 </template>
@@ -15,6 +18,7 @@
 <script setup lang="ts">
 import { computed, watch, ref } from 'vue';
 import { isMobile } from '~/state/global';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 interface Emits {
     (e: 'update:model', value: string): void;
@@ -28,6 +32,50 @@ const props = defineProps<{
 const emit = defineEmits<Emits>();
 
 const { favoriteModels } = useModelStore();
+
+// Theme overrides for select menu
+const selectMenuProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'selectmenu',
+        context: 'chat',
+        identifier: 'chat.model-select',
+        isNuxtUI: true,
+    });
+
+    const overrideValue = (overrides.value as Record<string, any>) || {};
+    const {
+        searchInput: themeSearchInput,
+        class: themeClass,
+        ...restOverrides
+    } = overrideValue;
+
+    const baseClass =
+        'h-[32px] text-[14px] px-2 w-full min-w-[100px] max-w-full truncate whitespace-nowrap';
+    const mergedClass = [baseClass, themeClass].filter(Boolean).join(' ');
+
+    const defaultSearchInput = {
+        icon: 'pixelarticons:search',
+        autofocus: !isMobile.value,
+        ui: {},
+    };
+
+    const mergedSearchInput = themeSearchInput
+        ? {
+              ...defaultSearchInput,
+              ...themeSearchInput,
+              ui: {
+                  ...defaultSearchInput.ui,
+                  ...(themeSearchInput.ui || {}),
+              },
+          }
+        : defaultSearchInput;
+
+    return {
+        class: mergedClass,
+        searchInput: mergedSearchInput,
+        ...restOverrides,
+    };
+});
 
 // Mirror v-model
 const internalModel = ref<string | undefined>(props.model);
@@ -57,22 +105,6 @@ const items = computed(() =>
         value: m.canonical_slug,
     }))
 );
-
-const ui = {
-    content: 'border-[2px] border-black rounded-[3px] w-[320px]',
-    input: 'border-0 rounded-none!',
-    arrow: 'h-[18px] w-[18px]',
-    itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
-};
-
-const searchInput = computed(() => ({
-    icon: 'pixelarticons:search',
-    autofocus: !isMobile.value,
-    ui: {
-        base: 'border-0 border-b-1 rounded-none!',
-        leadingIcon: 'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
-    },
-}));
 </script>
 
 <style scoped></style>

@@ -14,6 +14,7 @@
         <template #sidebar-collapsed>
             <lazy-sidebar-side-nav-content-collapsed
                 :active-thread="activeChatThreadId"
+                class="w-[65px]"
                 @new-chat="onNewChat"
                 @new-document="openCollapsedCreateDocumentModal"
                 @new-project="openCollapsedCreateProjectModal"
@@ -22,11 +23,18 @@
                 @expand-sidebar="expandSidebar"
             />
         </template>
-        <div class="flex-1 h-[100dvh] w-full relative">
+        <div
+            class="flex-1 h-dvh w-full relative"
+            :class="legacyCompatClasses.height"
+        >
             <div
                 id="top-nav"
                 :class="{
-                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
+                    'border-(--md-inverse-surface) border-b-[var(--md-border-width)] bg-(--md-surface-variant)/20 backdrop-blur-sm':
+                        panes.length > 1 || isMobile,
+                    [legacyCompatClasses.borderInverse]:
+                        panes.length > 1 || isMobile,
+                    [legacyCompatClasses.bgSurfaceVariant20]:
                         panes.length > 1 || isMobile,
                 }"
                 class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
@@ -37,22 +45,14 @@
                 >
                     <UTooltip :delay-duration="0" text="Open sidebar">
                         <UButton
+                            v-bind="sidebarToggleButtonProps"
                             label="Open"
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
                             :square="true"
                             aria-label="Open sidebar"
                             title="Open sidebar"
-                            :class="'retro-btn'"
-                            :ui="{ base: 'retro-btn' }"
+                            icon="pixelarticons:arrow-bar-right"
                             @click="openMobileSidebar"
-                        >
-                            <UIcon
-                                name="pixelarticons:arrow-bar-right"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
+                        />
                     </UTooltip>
                 </div>
                 <div
@@ -60,44 +60,33 @@
                 >
                     <UTooltip :delay-duration="0" :text="newWindowTooltip">
                         <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
+                            v-bind="newPaneButtonProps"
                             :square="true"
                             :disabled="!canAddPane"
-                            :class="
-                                'retro-btn backdrop-blur pointer-events-auto mr-2 ' +
-                                (!canAddPane
+                            :class="[
+                                'backdrop-blur pointer-events-auto mr-2',
+                                !canAddPane
                                     ? 'opacity-50 cursor-not-allowed'
-                                    : '')
-                            "
-                            :ui="{ base: 'retro-btn' }"
+                                    : '',
+                            ]"
                             aria-label="New window"
                             title="New window"
+                            icon="pixelarticons:card-plus"
                             @click="addPane"
-                        >
-                            <UIcon
-                                name="pixelarticons:card-plus"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
+                        />
                     </UTooltip>
                 </div>
                 <div class="h-full flex items-center justify-center px-4">
                     <UTooltip :delay-duration="0" text="Toggle theme">
                         <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
+                            v-bind="themeToggleButtonProps"
                             :square="true"
-                            :class="'retro-btn pointer-events-auto backdrop-blur'"
-                            :ui="{ base: 'retro-btn' }"
+                            :class="'pointer-events-auto backdrop-blur'"
                             :aria-label="themeAriaLabel"
                             :title="themeAriaLabel"
+                            :icon="themeIcon"
                             @click="toggleTheme"
-                        >
-                            <UIcon :name="themeIcon" class="w-5 h-5" />
-                        </UButton>
+                        />
                     </UTooltip>
                     <div
                         v-if="headerActions.length"
@@ -110,27 +99,31 @@
                             :text="entry.action.tooltip || entry.action.label"
                         >
                             <UButton
-                                size="xs"
-                                variant="ghost"
+                                v-bind="headerActionButtonProps"
                                 :color="(entry.action.color || 'neutral') as any"
                                 :square="!entry.action.label"
                                 :disabled="entry.disabled"
                                 :class="[
-                                    'retro-btn pointer-events-auto flex items-center gap-1',
+                                    'pointer-events-auto flex items-center gap-1',
                                     entry.action.label ? 'px-3' : '',
                                 ]"
-                                :ui="{ base: 'retro-btn' }"
                                 :aria-label="
                                     entry.action.tooltip ||
                                     entry.action.label ||
                                     entry.action.id
                                 "
+                                :icon="
+                                    !entry.action.label
+                                        ? entry.action.icon
+                                        : undefined
+                                "
+                                :leading-icon="
+                                    entry.action.label
+                                        ? entry.action.icon
+                                        : undefined
+                                "
                                 @click="() => handleHeaderAction(entry)"
                             >
-                                <UIcon
-                                    :name="entry.action.icon"
-                                    class="w-4 h-4"
-                                />
                                 <span
                                     v-if="entry.action.label"
                                     class="text-xs font-medium"
@@ -145,18 +138,25 @@
             <div
                 :class="[
                     showTopOffset ? 'pt-[46px]' : 'pt-0',
-                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden pane-container',
+                    ' h-full flex flex-row gap-0 items-stretch w-full pane-container',
                 ]"
             >
                 <div
                     v-for="(pane, i) in panes"
                     :key="pane.id"
-                    class="relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    class="relative flex flex-col border-l-[var(--md-border-width)] first:border-l-0 outline-none focus-visible:ring-0 overflow-visible"
                     :style="{ width: getPaneWidth(i) }"
                     :class="[
-                        i === activePaneIndex && panes.length > 1
-                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
-                            : 'border-[var(--md-inverse-surface)]',
+                        ...(i === activePaneIndex && panes.length > 1
+                            ? [
+                                  'pane-active border-(--md-primary) bg-(--md-surface-variant)/10',
+                                  legacyCompatClasses.borderPrimary,
+                                  legacyCompatClasses.bgSurfaceVariant10,
+                              ]
+                            : [
+                                  'border-(--md-inverse-surface)',
+                                  legacyCompatClasses.borderInverse,
+                              ]),
                         'transition-colors',
                         panes.length === 1 ? 'min-w-0' : '',
                     ]"
@@ -170,23 +170,13 @@
                     >
                         <UTooltip :delay-duration="0" text="Close window">
                             <UButton
-                                size="xs"
-                                color="neutral"
-                                variant="ghost"
+                                v-bind="paneCloseButtonProps"
                                 :square="true"
-                                :class="'retro-btn'"
-                                :ui="{
-                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
-                                }"
                                 aria-label="Close window"
                                 title="Close window"
+                                icon="pixelarticons:close"
                                 @click.stop="closePane(i)"
-                            >
-                                <UIcon
-                                    name="pixelarticons:close"
-                                    class="w-4 h-4"
-                                />
-                            </UButton>
+                            />
                         </UTooltip>
                     </div>
 
@@ -239,6 +229,7 @@ import type {
 import { useMagicKeys, whenever } from '@vueuse/core';
 import {
     type Component,
+    computed,
     shallowRef,
     markRaw,
     nextTick,
@@ -249,6 +240,16 @@ import {
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
 import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+import type { ThemePlugin } from '~/plugins/01.theme.client';
+
+const legacyCompatClasses = {
+    height: `h-[${'100dvh'}]`,
+    borderInverse: `border-[${'var(--md-inverse-surface)'}]`,
+    borderPrimary: `border-[${'var(--md-primary)'}]`,
+    bgSurfaceVariant20: `bg-[${'var(--md-surface-variant)'}]/20`,
+    bgSurfaceVariant10: `bg-[${'var(--md-surface-variant)'}]/10`,
+} as const;
 
 const DocumentEditorAsync = defineAsyncComponent(
     () => import('~/components/documents/DocumentEditor.vue')
@@ -302,6 +303,63 @@ const {
 // Store min/max for use in keyboard handlers
 const minPaneWidth = 280;
 const maxPaneWidth = 2000;
+
+function useButtonThemeProps(
+    identifier: string,
+    fallback: Record<string, unknown> = {}
+) {
+    const theme = useNuxtApp().$theme as ThemePlugin | undefined;
+
+    const overrides = theme
+        ? useThemeOverrides({
+              component: 'button',
+              identifier,
+              isNuxtUI: true,
+          })
+        : computed(() => ({} as Record<string, unknown>));
+
+    return computed(() => ({
+        ...fallback,
+        ...overrides.value,
+    }));
+}
+
+const sidebarToggleButtonProps = useButtonThemeProps('shell.sidebar-toggle', {
+    class: 'theme-btn',
+    variant: 'ghost',
+    size: 'sm',
+    color: 'neutral',
+    ui: { base: 'theme-btn' },
+});
+const newPaneButtonProps = useButtonThemeProps('shell.new-pane', {
+    class: 'theme-btn',
+    variant: 'ghost',
+    size: 'sm',
+    color: 'neutral',
+    ui: { base: 'theme-btn' },
+});
+const themeToggleButtonProps = useButtonThemeProps('shell.theme-toggle', {
+    class: 'theme-btn',
+    variant: 'ghost',
+    size: 'sm',
+    color: 'neutral',
+    ui: { base: 'theme-btn' },
+});
+const headerActionButtonProps = useButtonThemeProps('shell.header-action', {
+    class: 'theme-btn',
+    variant: 'ghost',
+    size: 'sm',
+    ui: { base: 'theme-btn' },
+});
+const paneCloseButtonProps = useButtonThemeProps('shell.pane-close', {
+    class: 'theme-btn',
+    variant: 'ghost',
+    size: 'xs',
+    color: 'neutral',
+    ui: {
+        base: 'theme-btn bg-[var(--md-surface-variant)]/60',
+    },
+});
 
 // -------- Pane Resize Handlers --------
 let resizingPaneIndex: number | null = null;
@@ -998,23 +1056,17 @@ if (process.client) {
 }
 .pane-active {
     position: relative;
-    transition: box-shadow 0.4s ease, background-color 0.3s ease;
 }
-.pane-active::after {
+.pane-active::before {
     content: '';
     pointer-events: none;
     position: absolute;
-    inset: 0;
-    border: 1px solid var(--md-primary);
-    box-shadow: inset 0 0 0 1px var(--md-primary),
-        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
-    mix-blend-mode: normal;
-    opacity: 0.6;
-    animation: panePulse 3.2s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-    .pane-active::after {
-        animation: none;
-    }
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    box-shadow: inset 0 0 0 2px var(--md-primary);
+    z-index: 100;
+    transition: opacity 0.2s ease;
 }
 </style>

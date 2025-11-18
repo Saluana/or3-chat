@@ -286,8 +286,15 @@ export async function* parseOpenRouterSSE(
                             }
                         }
                     }
-                } catch {
-                    // ignore invalid json segments
+                } catch (parseError) {
+                    // Log parse errors in dev for debugging
+                    if (import.meta.dev) {
+                        console.warn(
+                            '[parseOpenRouterSSE] Failed to parse SSE chunk:',
+                            { line, parseError }
+                        );
+                    }
+                    // Skip malformed chunk
                 }
             }
         }

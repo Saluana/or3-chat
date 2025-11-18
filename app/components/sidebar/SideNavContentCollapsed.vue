@@ -1,9 +1,12 @@
 <template>
     <div
-        class="flex min-w-[64px] max-w-[64px] flex-col justify-between h-[calc(100dvh-49.818px)] relative"
+        id="nav-collapsed-container"
+        class="flex min-w-[63.8px] max-w-[63.8px] flex-col justify-between h-[calc(100dvh-49.818px)] relative bg-[color:var(--md-surface)]/5 dark:bg-transparent backdrop-blur-xs"
     >
-        <div class="px-1 pt-2 flex flex-col space-y-2">
-            <div class="flex items-center justify-center w-full pr-0.5">
+        <div id="nav-top-section" class="px-1 pt-2 flex flex-col space-y-2">
+            <div
+                class="new-chat-wrapper flex items-center justify-center w-full pr-0.5"
+            >
                 <UTooltip
                     :delay-duration="0"
                     :content="{
@@ -12,18 +15,16 @@
                     text="New chat"
                 >
                     <UButton
-                        size="md"
+                        v-bind="newChatButtonProps"
+                        id="btn-new-chat"
+                        aria-label="New chat"
                         class="flex item-center justify-center"
-                        icon="pixelarticons:message-plus"
-                        :ui="{
-                            base: 'w-[38.5px]! h-[39px]',
-                            leadingIcon: 'w-5 h-5',
-                        }"
                         @click="emit('new-chat')"
                     ></UButton>
                 </UTooltip>
             </div>
             <UTooltip
+                id="tooltip-search"
                 :delay-duration="0"
                 :content="{
                     side: 'right',
@@ -31,17 +32,17 @@
                 text="Search"
             >
                 <UButton
-                    size="md"
+                    v-bind="searchButtonProps"
+                    id="btn-search"
+                    aria-label="Search"
                     class="flex item-center justify-center"
-                    icon="pixelarticons:search"
-                    :ui="{
-                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
-                        leadingIcon: 'w-5 h-5',
-                    }"
                     @click="emit('focus-search')"
-                ></UButton>
+                >
+                    <span class="sr-only">Search</span>
+                </UButton>
             </UTooltip>
             <UTooltip
+                id="tooltip-doc"
                 :delay-duration="0"
                 :content="{
                     side: 'right',
@@ -49,16 +50,17 @@
                 text="Create document"
             >
                 <UButton
+                    v-bind="newDocButtonProps"
+                    id="btn-new-doc"
+                    aria-label="Create document"
                     class="flex item-center justify-center"
-                    icon="pixelarticons:note-plus"
-                    :ui="{
-                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
-                        leadingIcon: 'w-5 h-5',
-                    }"
                     @click="emit('new-document')"
-                />
+                >
+                    <span class="sr-only">Create document</span>
+                </UButton>
             </UTooltip>
             <UTooltip
+                id="tooltip-project"
                 :delay-duration="0"
                 :content="{
                     side: 'right',
@@ -66,19 +68,23 @@
                 text="Create project"
             >
                 <UButton
+                    v-bind="newProjectButtonProps"
+                    id="btn-new-project"
+                    aria-label="Create project"
                     class="flex item-center justify-center"
-                    icon="pixelarticons:folder-plus"
-                    :ui="{
-                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
-                        leadingIcon: 'w-5 h-5',
-                    }"
                     @click="emit('new-project')"
-                />
+                >
+                    <span class="sr-only">Create project</span>
+                </UButton>
             </UTooltip>
 
             <ClientOnly>
-                <div class="pt-2 flex flex-col space-y-2 border-t-2">
+                <div
+                    id="nav-pages-section"
+                    class="pt-2 flex flex-col space-y-2 border-t-[length:var(--md-border-width)] border-t-[color:var(--md-border-color)]"
+                >
                     <UTooltip
+                        id="tooltip-home"
                         :delay-duration="0"
                         :content="{
                             side: 'right',
@@ -86,12 +92,16 @@
                         text="Home"
                     >
                         <UButton
-                            size="md"
+                            v-bind="
+                                activePageId === DEFAULT_PAGE_ID
+                                    ? pageButtonActiveProps
+                                    : pageButtonProps
+                            "
+                            id="btn-home"
                             class="flex item-center justify-center"
                             icon="pixelarticons:home"
                             :aria-pressed="activePageId === DEFAULT_PAGE_ID"
                             aria-label="Home"
-                            :ui="pageButtonUi(activePageId === DEFAULT_PAGE_ID)"
                             @click="() => handlePageSelect(DEFAULT_PAGE_ID)"
                             @keydown.enter="
                                 () => handlePageSelect(DEFAULT_PAGE_ID)
@@ -109,14 +119,19 @@
                         }"
                         :delay-duration="0"
                         :text="page.label"
+                        class="page-nav-item"
                     >
                         <UButton
-                            size="md"
+                            v-bind="
+                                activePageId === page.id
+                                    ? pageButtonActiveProps
+                                    : pageButtonProps
+                            "
+                            :id="`btn-page-${page.id}`"
                             class="flex item-center justify-center"
                             :icon="page.icon || 'pixelarticons:view-grid'"
                             :aria-pressed="activePageId === page.id"
                             :aria-label="page.label"
-                            :ui="pageButtonUi(activePageId === page.id)"
                             @click="() => handlePageSelect(page.id)"
                             @keydown.enter="() => handlePageSelect(page.id)"
                             @keydown.space.prevent="
@@ -127,19 +142,12 @@
                 </div>
             </ClientOnly>
         </div>
-        <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
-            <UButton
-                size="md"
-                class="flex item-center justify-center"
-                icon="pixelarticons:dashboard"
-                :ui="{
-                    base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
-                    leadingIcon: 'w-5 h-5',
-                }"
-                @click="emit('toggle-dashboard')"
-            ></UButton>
-        </div>
         <div
+            id="nav-middle-section"
+            class="px-1 pt-2 flex flex-col space-y-2 mb-2"
+        ></div>
+        <div
+            id="nav-footer-section"
             v-if="sidebarFooterActions.length"
             class="px-1 pb-2 flex flex-col space-y-2"
         >
@@ -148,15 +156,17 @@
                 :key="`sidebar-collapsed-footer-${entry.action.id}`"
                 :delay-duration="0"
                 :text="entry.action.tooltip || entry.action.label"
+                class="footer-action-item"
             >
                 <UButton
+                    :id="`btn-footer-${entry.action.id}`"
                     size="md"
                     variant="ghost"
                     :color="(entry.action.color || 'neutral') as any"
                     :square="!entry.action.label"
                     :disabled="entry.disabled"
-                    class="retro-btn pointer-events-auto flex items-center justify-center gap-1"
-                    :ui="{ base: 'retro-btn' }"
+                    class="theme-btn pointer-events-auto flex items-center justify-center gap-1"
+                    :ui="{ base: 'theme-btn' }"
                     :aria-label="
                         entry.action.tooltip ||
                         entry.action.label ||
@@ -164,15 +174,24 @@
                     "
                     @click="() => handleSidebarFooterAction(entry)"
                 >
-                    <UIcon :name="entry.action.icon" class="w-5 h-5" />
-                    <span v-if="entry.action.label" class="text-xs font-medium">
+                    <UIcon
+                        :name="entry.action.icon"
+                        class="footer-icon w-5 h-5"
+                    />
+                    <span
+                        v-if="entry.action.label"
+                        class="footer-label text-xs font-medium"
+                    >
                         {{ entry.action.label }}
                     </span>
                 </UButton>
             </UTooltip>
         </div>
         <ClientOnly>
-            <SideBottomNav @toggle-dashboard="emit('toggle-dashboard')" />
+            <SideBottomNav
+                id="bottom-nav"
+                @toggle-dashboard="emit('toggle-dashboard')"
+            />
         </ClientOnly>
     </div>
 </template>
@@ -186,12 +205,139 @@ import {
 import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import SideBottomNav from './SideBottomNav.vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
     activeThread?: string;
 }>();
 
 const DEFAULT_PAGE_ID = 'sidebar-home';
+
+// Theme overrides for collapsed sidebar buttons
+const newChatButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.new-chat',
+        isNuxtUI: true,
+    });
+
+    const themeUi = (overrides.value as any)?.ui || {};
+
+    const mergedUi = { ...themeUi };
+
+    return {
+        size: 'sb-square' as const,
+        icon: 'pixelarticons:message-plus' as const,
+        ...(overrides.value as any),
+        ui: mergedUi,
+    };
+});
+
+const searchButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.collapsed-search',
+        isNuxtUI: true,
+    });
+
+    const themeUi = (overrides.value as any)?.ui || {};
+    const mergedUi = { ...themeUi };
+
+    return {
+        size: 'sb-base' as const,
+        color: 'on-surface' as const,
+        square: false as const,
+        icon: 'pixelarticons:search' as const,
+        ...(overrides.value as any),
+        ui: mergedUi,
+    };
+});
+
+const newDocButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.new-document',
+        isNuxtUI: true,
+    });
+
+    const themeUi = (overrides.value as any)?.ui || {};
+
+    const mergedUi = { ...themeUi };
+
+    return {
+        icon: 'pixelarticons:note-plus' as const,
+        size: 'sb-base' as const,
+        color: 'on-surface' as const,
+        ...(overrides.value as any),
+        ui: mergedUi,
+    };
+});
+
+const newProjectButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.new-project',
+        isNuxtUI: true,
+    });
+
+    const themeUi = (overrides.value as any)?.ui || {};
+
+    const mergedUi = { ...themeUi };
+
+    return {
+        icon: 'pixelarticons:folder-plus' as const,
+        size: 'sb-base' as const,
+        color: 'on-surface' as const,
+        ...(overrides.value as any),
+        ui: mergedUi,
+    };
+});
+
+const collapsedPageButtonUiDefaults = {
+    default: {
+        base: 'bg-transparent hover:bg-[var(--md-surface-hover)] hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] text-[var(--md-on-surface)]',
+        leadingIcon: 'w-6 h-6',
+    },
+    active: {
+        base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]  text-[var(--md-on-surface)]',
+        leadingIcon: 'w-6 h-6',
+    },
+} as const;
+
+function createCollapsedPageButtonProps(state?: 'active') {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.collapsed-page',
+        state,
+        isNuxtUI: true,
+    });
+
+    const stateKey = state === 'active' ? 'active' : 'default';
+
+    return computed(() => {
+        const overrideValue = (overrides.value as any) || {};
+        const { ui: themeUi = {}, ...restOverrides } = overrideValue;
+        const mergedUi = {
+            ...collapsedPageButtonUiDefaults[stateKey],
+            ...(themeUi as Record<string, unknown>),
+        };
+
+        return {
+            size: 'sb-base' as const,
+            color: 'on-surface' as const,
+            ...restOverrides,
+            ui: mergedUi,
+        };
+    });
+}
+
+const pageButtonProps = createCollapsedPageButtonProps();
+const pageButtonActiveProps = createCollapsedPageButtonProps('active');
 
 const { listSidebarPages } = useSidebarPages();
 const { activePageId, setActivePage } = useActiveSidebarPage();
@@ -281,15 +427,6 @@ async function handlePageSelect(pageId: string) {
             color: 'error',
         });
     }
-}
-
-function pageButtonUi(isActive: boolean) {
-    const base =
-        'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]';
-    if (!isActive) return { base };
-    return {
-        base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
-    };
 }
 
 const emit = defineEmits<{

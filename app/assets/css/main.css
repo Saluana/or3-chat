@@ -10,6 +10,7 @@
 /* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
 	so classes used in Nuxt UI theme overrides are generated. */
 @source "../../../app.config.ts";
+@source "../../**/*.{vue,ts,tsx,js,jsx,mjs,mts,md,mdx}";
 
 
 /* Your Material theme variable files (scoped: .light, .dark, etc.) */
@@ -17,46 +18,74 @@
 
 /* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
 @import "~/assets/css/nuxt-ui-map.css";
-@import "./retro.css"; /* shared retro utility classes */
-/* mentions.css removed: .mention styles live in ChatInputDropper.vue */
+
+/* Generic prose styles (theme-agnostic, renamed from prose-retro) */
+@import "./or3-prose.css";
+
+/* Theme-specific styles are loaded dynamically by the theme system via loadThemeStylesheets() */
+/* DO NOT import theme styles here - they should only load when their theme is active */
 
 /* Font setup: body uses VT323, headings use Press Start 2P */
 :root {
-	/* Tailwind v4 token vars (optional for font utilities) */
-	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
-	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
 	/* Dynamic current font choices (updated by theme settings) */
-	--app-font-sans-current: var(--font-sans);
-	--app-font-heading-current: var(--font-heading);
+	--app-font-sans-current: var(
+		--font-sans,
+		"VT323",
+		ui-sans-serif,
+		system-ui,
+		sans-serif
+	);
+	--app-font-heading-current: var(
+		--font-heading,
+		"Press Start 2P",
+		ui-sans-serif,
+		system-ui,
+		sans-serif
+	);
     --ui-radius: 3px;
 
 	/* Theme customization variables (defaults mirror shipped design) */
 	--app-font-size-root: 20px; /* base font size */
+	--app-font-weight-root: 400; /* base font weight */
+	--app-icon-size-base: 20px; /* default icon font size */
 	/* Content background layer 1 */
-	--app-content-bg-1: url('/bg-repeat.webp');
-	--app-content-bg-1-opacity: 0.08;
+	--app-content-bg-1: none;
+	--app-content-bg-1-opacity: 1;
 	/* Content background layer 2 (overlay) */
-	--app-content-bg-2: url('/bg-repeat-2.webp');
-	--app-content-bg-2-opacity: 0.125;
+	--app-content-bg-2: none;
+	--app-content-bg-2-opacity: 1;
 	/* Repeat flag for content layers */
 	--app-content-bg-repeat: repeat;
 	/* Sidebar background */
-	--app-sidebar-bg-1: url('/sidebar-repeater.webp');
-	--app-sidebar-bg-1-opacity: 0.1;
+	--app-sidebar-bg-1: none;
+	--app-sidebar-bg-1-opacity: 1;
 	--app-sidebar-bg-repeat: repeat;
 }
 
 .font-ps2 {
-	font-family: var(--font-heading) !important;
+	font-family: var(
+		--font-heading,
+		"Press Start 2P",
+		ui-sans-serif,
+		system-ui,
+		sans-serif
+	) !important;
 }
 
 .font-vt323 {
-	font-family: var(--font-sans) !important;
+	font-family: var(
+		--font-sans,
+		"VT323",
+		ui-sans-serif,
+		system-ui,
+		sans-serif
+	) !important;
 }
 
 html, body {
         font-family: var(--app-font-sans-current, var(--font-sans)) !important;
     font-size: var(--app-font-size-root, 20px);
+    font-weight: var(--app-font-weight-root, 400);
     height: 100%;
     min-height: 100%;
     overscroll-behavior: none;
@@ -95,15 +124,13 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 	font-family: var(--app-font-heading-current, var(--font-heading)) !important;
 }
 
-.active-element {
-	box-shadow: 0 0 0 var(--md-inverse-surface),
-		inset 0 2px 0 rgba(0, 0, 0, 0.25),
-		inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+.iconify, .nui-icon, .ui-icon {
+	font-size: var(--app-icon-size-base, 20px);
+	line-height: 1;
 }
 
-.retro-shadow {
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
+/* Theme-specific utility classes (theme-input, theme-btn, etc.) are now loaded 
+   dynamically by each theme's stylesheet with proper scoping to prevent conflicts */
 
 /* Global thin colored scrollbars (WebKit + Firefox) */
 /* Firefox */
@@ -137,7 +164,7 @@ html {
 /* Hardcoded header pattern repeating horizontally */
 .header-pattern-flipped {
     background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
+    background-image: var(--app-header-gradient, none);
     rotate: 180deg;
     background-repeat: repeat-x;
     background-position: left center;
@@ -147,7 +174,7 @@ html {
 /* Hardcoded header pattern repeating horizontally */
 .header-pattern {
     background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
+    background-image: var(--app-header-gradient, none);
     background-repeat: repeat-x;
     background-position: left center;
     background-size: auto 100%;

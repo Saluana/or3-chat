@@ -4,14 +4,12 @@
     >
         <!-- Header -->
         <header
-            class="flex-shrink-0 flex flex-col gap-3 px-4 py-3 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)] z-10 md:flex-row md:items-center md:justify-between md:gap-0"
+            class="docs-header flex-shrink-0 flex flex-col gap-3 px-4 py-3 border-b-[var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] z-10 md:flex-row md:items-center md:justify-between md:gap-0"
         >
             <div class="flex w-full items-center gap-3 md:w-[250px]">
                 <UButton
+                    v-bind="sidebarToggleButtonProps"
                     icon="i-heroicons-bars-3"
-                    size="sm"
-                    variant="basic"
-                    square
                     class="sm:hidden!"
                     :aria-controls="sidebarId"
                     :aria-expanded="sidebarOpen"
@@ -28,10 +26,7 @@
                 </NuxtLink>
                 <div class="ml-auto md:hidden">
                     <UButton
-                        variant="basic"
-                        size="sm"
-                        square
-                        icon="i-heroicons-sun"
+                        v-bind="headerThemeButtonProps"
                         :aria-label="'Toggle theme'"
                         @click="toggleTheme"
                     />
@@ -39,13 +34,12 @@
             </div>
 
             <!-- Search -->
-            <div class="w-full md:mx-4 md:flex-1 md:max-w-md">
+            <div
+                class="docs-header-search w-full md:mx-4 md:flex-1 md:max-w-md"
+            >
                 <UInput
-                    class="w-full"
+                    v-bind="searchInputProps"
                     v-model="searchQuery"
-                    placeholder="Search docs..."
-                    size="md"
-                    leading-icon="i-heroicons-magnifying-glass"
                     @keydown.meta.k.prevent="focusSearch"
                 />
             </div>
@@ -54,13 +48,7 @@
             <div
                 class="hidden w-full items-center justify-end md:flex md:w-[250px]"
             >
-                <UButton
-                    variant="basic"
-                    size="sm"
-                    square
-                    icon="i-heroicons-sun"
-                    @click="toggleTheme"
-                />
+                <UButton v-bind="headerThemeButtonProps" @click="toggleTheme" />
             </div>
         </header>
 
@@ -73,13 +61,13 @@
             >
                 <div
                     v-if="isMobile && sidebarOpen"
-                    class="fixed inset-0 z-[60] flex"
+                    class="docs-mobile-sidebar-root fixed inset-0 z-[60] flex"
                     role="dialog"
                     aria-modal="true"
                     :aria-labelledby="sidebarLabelId"
                 >
                     <div
-                        class="absolute inset-0 bg-black/50"
+                        class="docs-mobile-sidebar-backdrop absolute inset-0 bg-black/50"
                         aria-hidden="true"
                         @click="closeSidebar"
                     ></div>
@@ -93,33 +81,33 @@
                             v-if="sidebarOpen"
                             ref="mobileSidebarRef"
                             :id="sidebarId"
-                            class="relative z-[61] h-full w-[min(80vw,320px)] max-w-full transform bg-[var(--md-surface)] border-r-2 border-[var(--md-inverse-surface)] shadow-lg overflow-y-auto scrollbars"
+                            class="docs-mobile-sidebar relative z-[61] h-full w-[min(80vw,320px)] max-w-full transform bg-[var(--md-surface)] border-r-[var(--md-border-width)] border-[color:var(--md-border-color)] shadow-lg overflow-y-auto scrollbars"
                             @keydown="onSidebarKeydown"
                         >
                             <h2 :id="sidebarLabelId" class="sr-only">
                                 Documentation navigation
                             </h2>
-                            <nav class="p-4">
+                            <nav class="docs-mobile-nav p-4">
                                 <div class="space-y-6">
                                     <div
                                         v-for="category in resolvedNavigation"
                                         :key="category.label"
-                                        class="space-y-3"
+                                        class="docs-nav-category space-y-3"
                                     >
                                         <h3
                                             class="font-ps2 text-sm text-[var(--md-on-surface-variant)] border-b-4 border-b-primary pb-2 px-2 uppercase tracking-wide"
                                         >
                                             {{ category.label }}
                                         </h3>
-                                        <div class="space-y-2">
+                                        <div class="docs-nav-groups space-y-2">
                                             <div
                                                 v-for="group in category.groups"
                                                 :key="`${category.label}-${group.label}`"
-                                                class="rounded-md bg-[var(--md-surface)]/40 border border-[var(--md-inverse-surface)]/40"
+                                                class="docs-nav-group rounded-md bg-[var(--md-surface)]/40 border border-[color:var(--md-border-color)] border-opacity-40"
                                             >
                                                 <button
                                                     type="button"
-                                                    class="w-full flex items-center justify-between px-3 py-2 text-left font-ps2 text-xs text-[var(--md-on-surface)] uppercase tracking-wide transition-colors hover:bg-[var(--md-primary)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]"
+                                                    class="docs-nav-group-toggle w-full flex items-center justify-between px-3 py-2 text-left font-ps2 text-xs text-[var(--md-on-surface)] uppercase tracking-wide transition-colors hover:bg-[var(--md-primary)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]"
                                                     @click="
                                                         toggleGroup(
                                                             category.label,
@@ -164,7 +152,7 @@
                                                         >
                                                             <NuxtLink
                                                                 :to="item.path"
-                                                                class="flex h-[40px] items-center px-3 text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
+                                                                class="docs-nav-link flex h-[40px] items-center px-3 text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
                                                                 active-class=" dark:text-white text-black  bg-primary/20 hover:bg-primary/20"
                                                                 @click="
                                                                     closeSidebar
@@ -187,34 +175,34 @@
         </Teleport>
 
         <!-- Main Layout -->
-        <div class="flex flex-1 min-h-0 overflow-hidden">
+        <div class="docs-layout flex flex-1 min-h-0 overflow-hidden">
             <!-- Sidebar -->
             <aside
                 :id="sidebarId"
                 class="docs-sidebar flex-shrink-0 w-64 bg-[var(--md-surface)] overflow-y-auto scrollbars hidden md:block"
             >
-                <nav class="p-4">
+                <nav class="docs-sidebar-nav p-4">
                     <div class="space-y-6">
                         <!-- Categories -->
                         <div
                             v-for="category in resolvedNavigation"
                             :key="category.label"
-                            class="space-y-3"
+                            class="docs-nav-category space-y-3"
                         >
                             <h3
                                 class="font-ps2 text-sm text-[var(--md-on-surface-variant)] border-b-4 border-b-primary pb-2 px-2 uppercase tracking-wide"
                             >
                                 {{ category.label }}
                             </h3>
-                            <div class="space-y-2">
+                            <div class="docs-nav-groups space-y-2">
                                 <div
                                     v-for="group in category.groups"
                                     :key="`${category.label}-${group.label}`"
-                                    class="rounded-md bg-[var(--md-surface)]/40 border border-[var(--md-inverse-surface)]/40"
+                                    class="docs-nav-group rounded-md bg-[var(--md-surface)]/40 border border-[color:var(--md-border-color)] border-opacity-40"
                                 >
                                     <button
                                         type="button"
-                                        class="w-full flex items-center justify-between px-3 py-2 text-left font-ps2 text-xs text-[var(--md-on-surface)] uppercase tracking-wide transition-colors hover:bg-[var(--md-primary)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]"
+                                        class="docs-nav-group-toggle w-full flex items-center justify-between px-3 py-2 text-left font-ps2 text-xs text-[var(--md-on-surface)] uppercase tracking-wide transition-colors hover:bg-[var(--md-primary)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]"
                                         @click="
                                             toggleGroup(
                                                 category.label,
@@ -256,7 +244,7 @@
                                             >
                                                 <NuxtLink
                                                     :to="item.path"
-                                                    class="flex h-[40px] items-center px-3 text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
+                                                    class="docs-nav-link flex h-[40px] items-center px-3 text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
                                                     active-class=" dark:text-white text-black  bg-primary/20 hover:bg-primary/20"
                                                 >
                                                     {{ item.label }}
@@ -273,7 +261,7 @@
 
             <!-- Content Area -->
             <main
-                class="flex-1 min-w-0 max-w-[100dvw] overflow-x-hidden overflow-y-auto scrollbars"
+                class="docs-main flex-1 min-w-0 max-w-[100dvw] overflow-x-hidden overflow-y-auto scrollbars"
             >
                 <div
                     class="max-w-[100dvw] sm:max-w-[680px] lg:max-w-[720px] mx-auto pt-5 pb-24 px-4 md:p-8"
@@ -312,7 +300,7 @@
                             <!-- Mobile TOC (collapsible) -->
                             <div
                                 v-if="computedShowToc && tocList.length > 0"
-                                class="lg:hidden mb-6 border-2 border-[var(--md-inverse-surface)] rounded-[3px] bg-[var(--md-surface)]/40"
+                                class="lg:hidden mb-6 border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)]/40"
                             >
                                 <button
                                     type="button"
@@ -330,7 +318,7 @@
                                 <Transition name="collapsible">
                                     <div
                                         v-if="mobileTocOpen"
-                                        class="px-4 py-3 border-t-2 border-[var(--md-inverse-surface)]"
+                                        class="px-4 py-3 border-t-[var(--md-border-width)] border-[color:var(--md-border-color)]"
                                     >
                                         <TocListView
                                             :toc="tocList"
@@ -342,7 +330,7 @@
 
                             <StreamMarkdown
                                 :content="displayContent"
-                                class="prose prose-pre:font-mono prose-retro max-w-none"
+                                class="prose prose-pre:font-mono or3-prose max-w-none"
                                 :allowed-link-prefixes="[
                                     'https://',
                                     'http://',
@@ -364,7 +352,7 @@
             <!-- Table of Contents (Right Sidebar) -->
             <aside
                 v-if="computedShowToc && tocList.length > 0"
-                class="flex-shrink-0 w-64 border-l-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)] overflow-y-auto scrollbars hidden lg:block"
+                class="docs-toc flex-shrink-0 w-64 border-l-[var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] overflow-y-auto scrollbars hidden lg:block"
             >
                 <nav class="p-4 sticky top-0">
                     <h3
@@ -397,6 +385,7 @@ import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import { useScrollLock } from '~/composables/core/useScrollLock';
 import LazySearchPanel from '~/components/documents/LazySearchPanel.vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const { $theme } = useNuxtApp();
 
@@ -474,7 +463,7 @@ const TocListView = defineComponent({
                             {
                                 href: `#${heading.id}`,
                                 class: [
-                                    'block py-1 px-2 text-[var(--md-on-surface)] transition-colors rounded-[3px] hover:text-[var(--md-primary)] hover:bg-[var(--md-primary)]/5',
+                                    'block py-1 px-2 text-[var(--md-on-surface)] transition-colors rounded-[var(--md-border-radius)] hover:text-[var(--md-primary)] hover:bg-[var(--md-primary)]/5',
                                     heading.level === 3
                                         ? 'pl-4'
                                         : heading.level === 4
@@ -547,6 +536,68 @@ let lastFocusedElement: HTMLElement | null = null;
 let shouldRestoreFocus = true;
 
 const { lock: lockScroll, unlock: unlockScroll } = useScrollLock();
+
+function useDocsButtonProps(
+    identifier: string,
+    fallback: Record<string, unknown> = {}
+) {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'docs',
+        identifier,
+        isNuxtUI: true,
+    });
+    return computed(() => ({
+        ...fallback,
+        ...(overrides.value as Record<string, unknown>),
+    }));
+}
+
+const sidebarToggleButtonProps = useDocsButtonProps('docs.sidebar-toggle', {
+    class: 'docs-sidebar-toggle-btn theme-btn',
+    variant: 'basic',
+    size: 'sm',
+    square: true,
+    color: 'neutral',
+});
+const headerThemeButtonProps = useDocsButtonProps('docs.theme-toggle', {
+    class: 'docs-theme-toggle-btn theme-btn',
+    variant: 'basic',
+    size: 'sm',
+    square: true,
+    color: 'neutral',
+});
+
+const searchInputProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'input',
+        context: 'docs',
+        identifier: 'docs.search-input',
+        isNuxtUI: true,
+    });
+    const overridesValue = (overrides.value as Record<string, any>) || {};
+    const {
+        class: overrideClass = '',
+        ui: overrideUi = {},
+        ...rest
+    } = overridesValue;
+    const uiOverrides = (overrideUi as Record<string, any>) || {};
+    const baseUi = ['w-full', uiOverrides.base]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+    return {
+        placeholder: 'Search docs...',
+        size: 'md' as const,
+        leadingIcon: 'i-heroicons-magnifying-glass',
+        ...rest,
+        ui: {
+            ...uiOverrides,
+            base: baseUi,
+        },
+        class: ['docs-search-input', overrideClass].filter(Boolean).join(' '),
+    };
+});
 
 // Internal navigation state (shallow to avoid deep watchers)
 const internalNavigation = shallowRef<NavCategory[]>([]);
@@ -1136,7 +1187,7 @@ function onMobileTocSelect(id: string) {
 </script>
 
 <style scoped>
-@import '~/assets/css/prose-retro.css';
+@import '~/assets/css/or3-prose.css';
 
 .docs-shell {
     font-family: var(--font-sans);

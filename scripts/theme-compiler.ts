@@ -1,0 +1,611 @@
+/**
+ * Refined Theme System - Theme Compiler
+ *
+ * This module compiles theme definitions into optimized runtime configurations.
+ * It handles CSS variable generation, selector parsing, specificity calculation,
+ * and type generation.
+ */
+
+import type {
+    ThemeDefinition,
+    CompiledTheme,
+    CompiledOverride,
+    ParsedSelector,
+    ThemeCompilationResult,
+    CompilationResult,
+    ValidationError,
+    AttributeMatcher,
+    AttributeOperator,
+    ThemeFontSet,
+} from '../app/theme/_shared/types';
+import { validateThemeDefinition } from '../app/theme/_shared/validate-theme';
+import { KNOWN_THEME_CONTEXTS } from '../app/theme/_shared/contexts';
+
+/**
+ * Theme Compiler
+ *
+ * Transforms theme definitions into optimized runtime configs
+ */
+export class ThemeCompiler {
+    private knownContexts = [...KNOWN_THEME_CONTEXTS];
+
+    /**
+     * Compile all themes in the app/theme directory
+     */
+    async compileAll(): Promise<CompilationResult> {
+        const themes = await this.discoverThemes();
+        const results: ThemeCompilationResult[] = [];
+
+        for (const themePath of themes) {
+            try {
+                const result = await this.compileTheme(themePath);
+                results.push(result);
+            } catch (error) {
+                console.error(
+                    `[theme-compiler] Failed to compile theme at ${themePath}:`,
+                    error
+                );
+                results.push({
+                    name: themePath,
+                    theme: {} as CompiledTheme,
+                    errors: [
+                        {
+                            severity: 'error',
+                            code: 'COMPILER_001',
+                            message: `Failed to compile theme: ${error}`,
+                            file: themePath,
+                        },
+                    ],
+                    warnings: [],
+                    success: false,
+                });
+            }
+        }
+
+        // Generate type definitions
+        if (results.some((r) => r.success)) {
+            await this.generateTypes(results.filter((r) => r.success));
+        }
+
+        const totalErrors = results.reduce(
+            (sum, r) => sum + r.errors.length,
+            0
+        );
+        const totalWarnings = results.reduce(
+            (sum, r) => sum + r.warnings.length,
+            0
+        );
+
+        return {
+            themes: results,
+            success: results.every((r) => r.success),
+            totalErrors,
+            totalWarnings,
+        };
+    }
+
+    /**
+     * Discover all theme files
+     */
+    private async discoverThemes(): Promise<string[]> {
+        const { readdir, access } = await import('fs/promises');
+        const { constants } = await import('fs');
+        const { join } = await import('path');
+
+        const themeDir = join(process.cwd(), 'app/theme');
+        const entries = await readdir(themeDir, { withFileTypes: true });
+
+        const themes: string[] = [];
+        for (const entry of entries) {
+            if (entry.isDirectory() && !entry.name.startsWith('_')) {
+                const themePath = join(themeDir, entry.name, 'theme.ts');
+                try {
+                    await access(themePath, constants.F_OK);
+                    themes.push(themePath);
+                } catch (error) {
+                    if (process.env.NODE_ENV !== 'test') {
+                        console.warn(
+                            `[theme-compiler] Skipping directory "${entry.name}" (no theme.ts)`
+                        );
+                    }
+                }
+            }
+        }
+
+        return themes;
+    }
+
+    /**
+     * Compile a single theme
+     */
+    private async compileTheme(
+        themePath: string
+    ): Promise<ThemeCompilationResult> {
+        // Dynamic import the theme definition
+        const themeModule = await import(themePath);
+        const definition: ThemeDefinition = themeModule.default || themeModule;
+
+        const errors: ValidationError[] = [];
+        const warnings: ValidationError[] = [];
+
+        // Validate structure
+        const validation = validateThemeDefinition(definition);
+        errors.push(...validation.errors);
+        warnings.push(...validation.warnings);
+
+        if (!validation.valid) {
+            return {
+                name: definition.name || 'unknown',
+                theme: {} as CompiledTheme,
+                errors,
+                warnings,
+                success: false,
+            };
+        }
+
+        // Generate CSS variables
+        const cssVariables = this.generateCSSVariables(
+            definition.colors,
+            definition.borderWidth,
+            definition.borderRadius,
+            definition.fonts
+        );
+
+        // Compile overrides
+        const compiledOverrides = this.compileOverrides(
+            definition.overrides || {}
+        );
+
+        // Validate selectors
+        this.validateSelectors(compiledOverrides, warnings);
+
+        // Sort by specificity (descending)
+        const sortedOverrides = compiledOverrides.sort(
+            (a, b) => b.specificity - a.specificity
+        );
+
+        const compiledTheme: CompiledTheme = {
+            name: definition.name,
+            displayName: definition.displayName,
+            description: definition.description,
+            cssVariables,
+            overrides: sortedOverrides,
+            ui: definition.ui,
+            propMaps: definition.propMaps,
+        };
+
+        return {
+            name: definition.name,
+            theme: compiledTheme,
+            errors,
+            warnings,
+            success: errors.length === 0,
+        };
+    }
+
+    /**
+     * Generate CSS variables from color palette
+     */
+    private generateCSSVariables(
+        colors: ThemeDefinition['colors'],
+        borderWidth?: string,
+        borderRadius?: string,
+        fonts?: ThemeDefinition['fonts']
+    ): string {
+        let css = '';
+
+        // Light mode variables
+        css += '.light {\n';
+        css += this.generateColorVars(colors);
+        css += this.generateFontVars(fonts);
+        if (borderWidth) {
+            css += `  --md-border-width: ${borderWidth};\n`;
+        }
+        if (borderRadius) {
+            css += `  --md-border-radius: ${borderRadius};\n`;
+        }
+        css += '}\n\n';
+
+        // Dark mode variables
+        const hasDarkBlock = Boolean(colors.dark || fonts?.dark);
+        if (hasDarkBlock) {
+            css += '.dark {\n';
+            // Create merged object without dark property
+            const { dark, ...baseColors } = colors;
+            const darkColors = { ...baseColors, ...dark };
+            css += this.generateColorVars(darkColors);
+            css += this.generateFontVars(fonts?.dark);
+            if (borderWidth) {
+                css += `  --md-border-width: ${borderWidth};\n`;
+            }
+            if (borderRadius) {
+                css += `  --md-border-radius: ${borderRadius};\n`;
+            }
+            css += '}\n';
+        }
+
+        return css;
+    }
+
+    /**
+     * Generate CSS variable declarations for a color palette
+     */
+    private generateColorVars(colors: Record<string, any>): string {
+        let css = '';
+
+        const colorMap: Record<string, string> = {
+            primary: '--md-primary',
+            onPrimary: '--md-on-primary',
+            primaryContainer: '--md-primary-container',
+            onPrimaryContainer: '--md-on-primary-container',
+            secondary: '--md-secondary',
+            onSecondary: '--md-on-secondary',
+            secondaryContainer: '--md-secondary-container',
+            onSecondaryContainer: '--md-on-secondary-container',
+            tertiary: '--md-tertiary',
+            onTertiary: '--md-on-tertiary',
+            tertiaryContainer: '--md-tertiary-container',
+            onTertiaryContainer: '--md-on-tertiary-container',
+            error: '--md-error',
+            onError: '--md-on-error',
+            errorContainer: '--md-error-container',
+            onErrorContainer: '--md-on-error-container',
+            surface: '--md-surface',
+            onSurface: '--md-on-surface',
+            surfaceVariant: '--md-surface-variant',
+            onSurfaceVariant: '--md-on-surface-variant',
+            inverseSurface: '--md-inverse-surface',
+            inverseOnSurface: '--md-inverse-on-surface',
+            outline: '--md-outline',
+            outlineVariant: '--md-outline-variant',
+            borderColor: '--md-border-color',
+            success: '--md-success',
+            warning: '--md-warning',
+            info: '--md-info',
+        };
+
+        const emittedKeys = new Set<string>();
+
+        for (const [key, cssVar] of Object.entries(colorMap)) {
+            const value = colors[key];
+            if (typeof value === 'string') {
+                css += `  ${cssVar}: ${value};\n`;
+                emittedKeys.add(key);
+            }
+        }
+
+        // Emit any additional custom tokens (camelCase → kebab-case)
+        for (const [key, value] of Object.entries(colors)) {
+            if (key === 'dark' || emittedKeys.has(key)) continue;
+            if (typeof value !== 'string') continue;
+            const cssVar = `--md-${this.toKebabCase(key)}`;
+            css += `  ${cssVar}: ${value};\n`;
+        }
+
+        return css;
+    }
+
+    private generateFontVars(fonts?: ThemeDefinition['fonts']): string {
+        if (!fonts) return '';
+        let css = '';
+        const fontMap: Record<string, string> = {
+            sans: '--font-sans',
+            heading: '--font-heading',
+            mono: '--font-mono',
+        };
+        const fontEntries = Object.entries(fontMap) as Array<
+            [keyof ThemeFontSet, string]
+        >;
+        for (const [key, cssVar] of fontEntries) {
+            const value = fonts[key];
+            if (typeof value === 'string' && value.length > 0) {
+                css += `  ${cssVar}: ${value};\n`;
+            }
+        }
+        return css;
+    }
+
+    private toKebabCase(value: string): string {
+        return value
+            .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+            .replace(/[\s_]+/g, '-')
+            .toLowerCase();
+    }
+
+    /**
+     * Compile overrides from CSS selectors to runtime rules
+     */
+    private compileOverrides(
+        overrides: Record<string, any>
+    ): CompiledOverride[] {
+        const compiled: CompiledOverride[] = [];
+
+        for (const [selector, props] of Object.entries(overrides)) {
+            const parsed = this.parseSelector(selector);
+            const specificity = this.calculateSpecificity(selector, parsed);
+
+            compiled.push({
+                component: parsed.component,
+                context: parsed.context,
+                identifier: parsed.identifier,
+                state: parsed.state,
+                attributes: parsed.attributes,
+                props,
+                selector,
+                specificity,
+            });
+        }
+
+        return compiled;
+    }
+
+    /**
+     * Parse CSS selector into override components
+     */
+    private parseSelector(selector: string): ParsedSelector {
+        // Normalize simple syntax to attribute selectors
+        let normalized = this.normalizeSelector(selector);
+
+        // Extract component type (first word)
+        const component = normalized.match(/^(\w+)/)?.[1] || 'button';
+
+        // Extract data-context
+        const context = normalized.match(/\[data-context="([^"]+)"\]/)?.[1];
+
+        // Extract data-id
+        const identifier = normalized.match(/\[data-id="([^"]+)"\]/)?.[1];
+
+        // Extract pseudo-class state
+        const state = normalized.match(/:(\w+)(?:\(|$)/)?.[1];
+
+        // Extract HTML attribute selectors
+        const attributes = this.extractAttributes(normalized);
+
+        return {
+            component,
+            context,
+            identifier,
+            state,
+            attributes: attributes.length > 0 ? attributes : undefined,
+        };
+    }
+
+    /**
+     * Escape special regex characters
+     */
+    private escapeRegex(str: string): string {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    /**
+     * Normalize simple selector syntax to attribute selectors
+     */
+    private normalizeSelector(selector: string): string {
+        let result = selector;
+
+        // Convert #identifier to [data-id="identifier"] first to preserve dot-separated identifiers
+        result = result.replace(
+            /(\w+)#([\w.-]+)(?=[:\[]|$)/g,
+            '$1[data-id="$2"]'
+        );
+
+        // Convert .context to [data-context="context"] (after identifiers are normalized)
+        for (const context of this.knownContexts) {
+            const escapedContext = this.escapeRegex(context);
+            const regex = new RegExp(
+                '(\\w+)\\.' + escapedContext + '(?=[:\\[]|$)',
+                'g'
+            );
+            result = result.replace(regex, `$1[data-context="${context}"]`);
+        }
+
+        return result;
+    }
+
+    /**
+     * Extract HTML attribute selectors from normalized selector
+     */
+    private extractAttributes(selector: string): AttributeMatcher[] {
+        const attributes: AttributeMatcher[] = [];
+        // Match: [attribute] or [attribute="value"] or [attribute*="value"] etc.
+        // Group 1: attribute name (without operator)
+        // Group 2: full operator+value part (optional)
+        // Group 3: operator (optional)
+        // Group 4: value (optional)
+        const attrRegex = /\[([a-zA-Z0-9-]+)([~|^$*]?=)?(?:"([^"]+)")?\]/g;
+        let match;
+
+        while ((match = attrRegex.exec(selector)) !== null) {
+            const attrName = match[1];
+            if (!attrName) continue;
+
+            // Skip data-context and data-id (already handled)
+            if (attrName === 'data-context' || attrName === 'data-id') continue;
+
+            const hasOperator = match[2] !== undefined;
+            const operator = hasOperator
+                ? (match[2] as AttributeOperator)
+                : ('exists' as AttributeOperator);
+            const value = match[3];
+
+            attributes.push({
+                attribute: attrName,
+                operator,
+                value,
+            });
+        }
+
+        return attributes;
+    }
+
+    /**
+     * Calculate CSS selector specificity
+     */
+    private calculateSpecificity(
+        selector: string,
+        parsed: ParsedSelector
+    ): number {
+        let specificity = 0;
+
+        // Element: 1 point
+        specificity += 1;
+
+        // Context adds attribute specificity
+        if (parsed.context) {
+            specificity += 10;
+        }
+
+        // Identifier gets extra weight (it's also an attribute)
+        if (parsed.identifier) {
+            specificity += 20; // 10 for attribute + 10 extra
+        }
+
+        // Other HTML attributes: 10 points each
+        if (parsed.attributes) {
+            specificity += parsed.attributes.length * 10;
+        }
+
+        // Pseudo-classes: 10 points each
+        const pseudoCount = (selector.match(/:/g) || []).length;
+        specificity += pseudoCount * 10;
+
+        return specificity;
+    }
+
+    /**
+     * Validate compiled selectors
+     */
+    private validateSelectors(
+        overrides: CompiledOverride[],
+        warnings: ValidationError[]
+    ): void {
+        // Check for potential conflicts
+        const selectorMap = new Map<string, CompiledOverride[]>();
+
+        for (const override of overrides) {
+            const key = `${override.component}:${override.context || ''}:${
+                override.identifier || ''
+            }`;
+            const existing = selectorMap.get(key) || [];
+            existing.push(override);
+            selectorMap.set(key, existing);
+        }
+
+        // Warn about exact duplicates
+        for (const [key, matches] of selectorMap.entries()) {
+            if (matches.length > 1) {
+                const selectors = matches.map((m) => m.selector).join(', ');
+                warnings.push({
+                    severity: 'warning',
+                    code: 'COMPILER_002',
+                    message: `Multiple overrides match "${key}": ${selectors}`,
+                    file: 'theme.ts',
+                    suggestion:
+                        'Consider consolidating or adjusting specificity',
+                });
+            }
+        }
+    }
+
+    /**
+     * Generate TypeScript type definitions
+     */
+    private async generateTypes(
+        results: ThemeCompilationResult[]
+    ): Promise<void> {
+        const { writeFile, mkdir } = await import('fs/promises');
+        const { join } = await import('path');
+
+        const identifiers = new Set<string>();
+        const themeNames = new Set<string>();
+        const contexts = new Set<string>();
+
+        for (const result of results) {
+            themeNames.add(result.name);
+
+            for (const override of result.theme.overrides) {
+                if (override.identifier) {
+                    identifiers.add(override.identifier);
+                }
+                if (override.context) {
+                    contexts.add(override.context);
+                }
+            }
+        }
+
+        // Add known contexts
+        for (const ctx of this.knownContexts) {
+            contexts.add(ctx);
+        }
+
+        const typeFile = `/**
+ * Auto-generated by theme compiler
+ * Do not edit manually - changes will be overwritten
+ * Generated: ${new Date().toISOString()}
+ */
+
+/**
+ * Available theme names
+ */
+export type ThemeName = ${
+            Array.from(themeNames).length > 0
+                ? Array.from(themeNames)
+                      .map((n) => `'${n}'`)
+                      .join(' | ')
+                : 'string'
+        };
+
+/**
+ * Available theme identifiers for v-theme directive
+ */
+export type ThemeIdentifier = ${
+            Array.from(identifiers).length > 0
+                ? Array.from(identifiers)
+                      .map((id) => `'${id}'`)
+                      .join(' | ')
+                : 'string'
+        };
+
+/**
+ * Available context names
+ */
+export type ThemeContext = ${
+            Array.from(contexts).length > 0
+                ? Array.from(contexts)
+                      .map((ctx) => `'${ctx}'`)
+                      .join(' | ')
+                : 'string'
+        };
+
+/**
+ * Theme directive value
+ */
+export interface ThemeDirective {
+    /** Theme identifier */
+    identifier?: ThemeIdentifier;
+    
+    /** Theme name to use */
+    theme?: ThemeName;
+    
+    /** Context override */
+    context?: ThemeContext;
+}
+
+/**
+ * String shorthand for theme directive (just the identifier)
+ */
+export type ThemeDirectiveValue = ThemeIdentifier | ThemeDirective;
+`;
+
+        const typesDir = join(process.cwd(), 'types');
+        await mkdir(typesDir, { recursive: true });
+
+        const typesPath = join(typesDir, 'theme-generated.d.ts');
+        await writeFile(typesPath, typeFile, 'utf-8');
+
+        console.log(`[theme-compiler] Generated types at ${typesPath}`);
+        console.log(`[theme-compiler] - ${themeNames.size} themes`);
+        console.log(`[theme-compiler] - ${identifiers.size} identifiers`);
+        console.log(`[theme-compiler] - ${contexts.size} contexts`);
+    }
+}

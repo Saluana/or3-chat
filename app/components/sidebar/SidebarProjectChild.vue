@@ -1,8 +1,10 @@
 <template>
-    <div class="border-l-2! my-0.5 border-primary-500 h-[40px]">
+    <div
+        class="project-child-container border-l-[3px]! my-0.5 border-primary-500 h-[40px] transition-all duration-150 ease-out"
+    >
         <button
             type="button"
-            class="relative group w-full flex items-center h-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/10 backdrop-blur-md px-2.5 gap-1.5 text-[13px] rounded-r-[4px] py-1"
+            class="project-child-toggle relative group w-full flex items-center h-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/10 backdrop-blur-md px-2.5 gap-1.5 rounded-r-[4px] py-1 transition-colors duration-150"
             :class="{ 'bg-primary/25 hover:bg-primary/25': active }"
             @click="emit('select')"
         >
@@ -12,12 +14,15 @@
                         ? 'pixelarticons:note'
                         : 'pixelarticons:chat'
                 "
-                class="shrink-0 size-4"
+                class="project-child-icon shrink-0 size-4"
             />
-            <span class="truncate text-start text-[15px] flex-1 min-w-0">{{
-                child.name || '(untitled)'
-            }}</span>
-            <span class="ms-auto inline-flex gap-1.5 items-center">
+            <span
+                class="project-child-label truncate text-start flex-1 min-w-0"
+                >{{ child.name || '(untitled)' }}</span
+            >
+            <span
+                class="project-child-actions-container ms-auto inline-flex gap-1.5 items-center"
+            >
                 <UPopover
                     :content="{
                         side: 'right',
@@ -26,32 +31,31 @@
                     }"
                 >
                     <span
-                        class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                        class="project-child-actions-menu inline-flex items-center justify-center w-5 h-5 rounded-[var(--md-border-radius)] hover:bg-black/10 active:bg-black/20"
+                        role="button"
+                        tabindex="0"
                         @click.stop
+                        @keydown="handlePopoverTriggerKey"
                         aria-label="Entry actions"
                     >
                         <UIcon
                             name="pixelarticons:more-vertical"
-                            class="w-4 h-4 opacity-70"
+                            class="project-child-menu-icon w-4 h-4 opacity-70"
                         />
                     </span>
                     <template #content>
-                        <div class="p-1 w-48 space-y-1">
+                        <div
+                            class="project-child-menu-content p-1 w-48 space-y-1"
+                        >
                             <UButton
-                                color="neutral"
-                                variant="popover"
-                                size="sm"
+                                v-bind="renameButtonProps"
                                 class="w-full justify-start"
-                                icon="pixelarticons:edit"
                                 @click.stop.prevent="emit('rename')"
                                 >Rename</UButton
                             >
                             <UButton
-                                color="error"
-                                variant="popover"
-                                size="sm"
+                                v-bind="removeButtonProps"
                                 class="w-full justify-start text-error-500"
-                                icon="pixelarticons:trash"
                                 @click.stop.prevent="emit('remove')"
                                 >Remove from Project</UButton
                             >
@@ -64,7 +68,9 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 defineProps<{
     child: ProjectEntry;
@@ -77,4 +83,46 @@ const emit = defineEmits<{
     (e: 'rename'): void;
     (e: 'remove'): void;
 }>();
+
+// Theme overrides for project child action buttons
+const renameButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.project-entry-rename',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'neutral' as const,
+        variant: 'popover' as const,
+        size: 'sm' as const,
+        icon: 'pixelarticons:edit' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const removeButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.project-entry-remove',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'error' as const,
+        variant: 'popover' as const,
+        size: 'sm' as const,
+        icon: 'pixelarticons:trash' as const,
+        ...(overrides.value as any),
+    };
+});
+
+function handlePopoverTriggerKey(event: KeyboardEvent) {
+    const key = event.key;
+    if (key !== 'Enter' && key !== ' ') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.currentTarget as HTMLElement | null;
+    target?.click();
+}
 </script>

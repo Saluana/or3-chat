@@ -1,31 +1,42 @@
 <template>
     <div
+        id="chat-input-main"
         @dragover.prevent="onDragOver"
         @dragleave.prevent="onDragLeave"
         @drop.prevent="handleDrop"
         :class="[
-            'flex flex-col bg-[var(--md-surface)]  border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
+            'chat-input-main flex flex-col bg-(--md-surface) mx-2 md:mx-0 items-stretch transition-all duration-300 relative cursor-text z-10',
             isDragging
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
+                : 'hover:border-(--md-primary) focus-within:border-(--md-primary) dark:focus-within:border-gray-600',
             loading ? 'opacity-90 pointer-events-auto' : '',
+            mainContainerProps?.class || '',
         ]"
+        :data-theme-target="mainContainerProps?.['data-theme-target']"
+        :data-theme-matches="mainContainerProps?.['data-theme-matches']"
     >
-        <div class="flex flex-col gap-3.5 m-3.5">
+        <div class="chat-input-inner-container flex flex-col gap-3.5 m-3.5">
             <!-- Main Input Area -->
             <div class="relative">
                 <div
-                    class="max-h-[160px] md:max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]"
+                    class="chat-input-editor-container max-h-40 md:max-h-96 w-full overflow-y-auto wrap-break-word min-h-4 md:min-h-12"
+                    :class="editorProps?.class || ''"
+                    :data-theme-target="editorProps?.['data-theme-target']"
+                    :data-theme-matches="editorProps?.['data-theme-matches']"
                 >
                     <!-- TipTap Editor -->
                     <EditorContent
+                        class="chat-input-editor prosemirror-host"
                         :editor="editor as Editor"
-                        class="prosemirror-host"
+                        :data-theme-target="editorProps?.['data-theme-target']"
+                        :data-theme-matches="
+                            editorProps?.['data-theme-matches']
+                        "
                     ></EditorContent>
 
                     <div
+                        class="chat-input-loading-indicator absolute top-1 right-1 flex items-center gap-2"
                         v-if="loading"
-                        class="absolute top-1 right-1 flex items-center gap-2"
                     >
                         <UIcon
                             name="pixelarticons:loader"
@@ -36,18 +47,17 @@
             </div>
 
             <!-- Bottom Controls -->
-            <div class="flex gap-2.5 w-full items-center">
+            <div
+                class="chat-input-bottom-controls flex flex-wrap gap-2.5 w-full items-center"
+            >
                 <div
-                    class="relative flex-1 flex items-center gap-2 shrink min-w-0"
+                    class="chat-input-bottom-controls-left relative flex-1 flex items-center gap-2 shrink min-w-0"
                 >
                     <!-- Attachment Button -->
-                    <div class="relative shrink-0">
+                    <div class="chat-input-attachment-btn relative shrink-0">
                         <UButton
+                            v-bind="attachButtonProps"
                             @click="triggerFileInput"
-                            :square="true"
-                            size="sm"
-                            color="info"
-                            class="retro-btn text-black dark:text-white flex items-center justify-center"
                             type="button"
                             aria-label="Add attachments"
                             :disabled="loading"
@@ -57,14 +67,11 @@
                     </div>
 
                     <!-- Settings Button (stub) -->
-                    <div class="relative shrink-0">
-                        <UPopover id="chat-input-settings-popover">
+                    <div class="chat-input-settings-btn relative shrink-0">
+                        <UPopover class="chat-input-settings-popover">
                             <UButton
+                                v-bind="settingsButtonProps"
                                 label="Open"
-                                :square="true"
-                                size="sm"
-                                color="info"
-                                class="retro-btn text-black dark:text-white flex items-center justify-center"
                                 type="button"
                                 aria-label="Settings"
                                 :disabled="loading"
@@ -75,148 +82,29 @@
                                 />
                             </UButton>
                             <template #content>
-                                <div class="flex flex-col w-[320px]">
-                                    <!-- Model Selector extracted -->
-                                    <div
-                                        class="flex justify-between w-full items-center py-1 px-2"
-                                    >
-                                        <LazyChatModelSelect
-                                            hydrate-on-interaction="focus"
-                                            v-if="
-                                                containerWidth &&
-                                                containerWidth < 400
-                                            "
-                                            v-model:model="selectedModel"
-                                            :loading="loading"
-                                            class="w-full!"
-                                        />
-                                    </div>
-                                    <div
-                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
-                                    >
-                                        <USwitch
-                                            color="primary"
-                                            label="Enable web search"
-                                            class="w-full"
-                                            v-model="webSearchEnabled"
-                                        ></USwitch>
-                                        <UIcon
-                                            name="pixelarticons:visible"
-                                            class="w-4 h-4"
-                                        />
-                                    </div>
-                                    <div
-                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
-                                    >
-                                        <USwitch
-                                            color="primary"
-                                            label="Enable thinking"
-                                            class="w-full"
-                                        ></USwitch>
-                                        <UIcon
-                                            name="pixelarticons:lightbulb-on"
-                                            class="w-4 h-4"
-                                        />
-                                    </div>
-
-                                    <!-- Tool Toggles Section -->
-                                    <div
-                                        v-if="registeredTools.length > 0"
-                                        class="border-b"
-                                    >
-                                        <div
-                                            v-for="tool in registeredTools"
-                                            :key="tool.name"
-                                            class="flex flex-col py-1 px-2"
-                                        >
-                                            <div
-                                                class="flex justify-between w-full items-center"
-                                            >
-                                                <USwitch
-                                                    color="primary"
-                                                    :label="
-                                                        tool.definition.ui
-                                                            ?.label ||
-                                                        tool.definition.function
-                                                            .name
-                                                    "
-                                                    class="w-full"
-                                                    :model-value="
-                                                        tool.enabledValue
-                                                    "
-                                                    @update:model-value="(val: boolean) => {
-                                                        toolRegistry.setEnabled(tool.name, val);
-                                                    }"
-                                                    :disabled="
-                                                        loading ||
-                                                        props.streaming
-                                                    "
-                                                    :aria-describedby="`tool-desc-${tool.name}`"
-                                                ></USwitch>
-                                                <UIcon
-                                                    v-if="
-                                                        tool.definition.ui?.icon
-                                                    "
-                                                    :name="
-                                                        tool.definition.ui.icon
-                                                    "
-                                                    class="w-4 h-4"
-                                                />
-                                                <UIcon
-                                                    v-else
-                                                    name="pixelarticons:wrench"
-                                                    class="w-4 h-4"
-                                                />
-                                            </div>
-                                            <p
-                                                v-if="
-                                                    tool.definition.ui
-                                                        ?.descriptionHint ||
-                                                    tool.definition.function
-                                                        .description
-                                                "
-                                                :id="`tool-desc-${tool.name}`"
-                                                class="text-xs opacity-70 mt-0.5 px-1"
-                                            >
-                                                {{
-                                                    tool.definition.ui
-                                                        ?.descriptionHint ||
-                                                    tool.definition.function
-                                                        .description
-                                                }}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 border-b cursor-pointer"
-                                        @click="showSystemPrompts = true"
-                                    >
-                                        <span class="px-1">System prompts</span>
-                                        <UIcon
-                                            name="pixelarticons:script-text"
-                                            class="w-4 h-4"
-                                        />
-                                    </button>
-                                    <button
-                                        @click="showModelCatalog = true"
-                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 rounded-[3px] cursor-pointer"
-                                    >
-                                        <span class="px-1">Model Catalog</span>
-                                        <UIcon
-                                            name="pixelarticons:android"
-                                            class="w-4 h-4"
-                                        />
-                                    </button>
-                                </div>
+                                <ChatSettingsPopover
+                                    :container-width="containerWidth"
+                                    :loading="loading"
+                                    :streaming="props.streaming"
+                                    v-model:model="selectedModel"
+                                    v-model:web-search-enabled="
+                                        webSearchEnabled
+                                    "
+                                    @open-system-prompts="
+                                        showSystemPrompts = true
+                                    "
+                                    @open-model-catalog="
+                                        showModelCatalog = true
+                                    "
+                                />
                             </template>
                         </UPopover>
                     </div>
                 </div>
 
                 <div
+                    class="chat-input-composer-actions flex items-center gap-1 shrink-0"
                     v-if="composerActions.length"
-                    class="flex items-center gap-1 shrink-0"
                 >
                     <UTooltip
                         v-for="entry in composerActions"
@@ -225,13 +113,10 @@
                         :text="entry.action.tooltip || entry.action.label"
                     >
                         <UButton
-                            size="sm"
-                            variant="ghost"
+                            v-bind="composerActionButtonProps"
                             :color="(entry.action.color || 'neutral') as any"
                             :square="!entry.action.label"
                             :disabled="entry.disabled"
-                            class="retro-btn pointer-events-auto flex items-center gap-1"
-                            :ui="{ base: 'retro-btn' }"
                             :aria-label="
                                 entry.action.tooltip ||
                                 entry.action.label ||
@@ -251,39 +136,39 @@
                 </div>
 
                 <!-- Model Selector extracted -->
-                <LazyChatModelSelect
-                    hydrate-on-interaction="focus"
+                <div
                     v-if="!isMobile && containerWidth && containerWidth > 400"
-                    v-model:model="selectedModel"
-                    :loading="loading"
-                    class="shrink-0 hidden sm:block"
-                />
+                    class="chat-input-model-select hidden sm:block sm:flex-1 min-w-0 sm:min-w-[200px] sm:max-w-full"
+                >
+                    <LazyChatModelSelect
+                        hydrate-on-interaction="focus"
+                        v-model:model="selectedModel"
+                        :loading="loading"
+                        class="w-full min-w-0 max-w-full"
+                    />
+                </div>
 
                 <!-- Send / Stop Button -->
-                <div>
+                <div class="chat-input-bottom-controls-right">
                     <UButton
+                        class="chat-input-send-btn"
                         v-if="!props.streaming"
+                        v-bind="sendButtonProps"
                         @click="handleSend"
                         :disabled="
                             loading ||
                             (!promptText.trim() && uploadedImages.length === 0)
                         "
-                        :square="true"
-                        size="sm"
-                        color="primary"
-                        class="retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center"
                         type="button"
                         aria-label="Send message"
                     >
                         <UIcon name="pixelarticons:arrow-up" class="w-4 h-4" />
                     </UButton>
                     <UButton
+                        class="chat-input-stop-btn"
                         v-else
+                        v-bind="stopButtonProps"
                         @click="emit('stop-stream')"
-                        :square="true"
-                        size="sm"
-                        color="error"
-                        class="retro-btn text-white dark:text-black flex items-center justify-center"
                         type="button"
                         aria-label="Stop generation"
                     >
@@ -296,7 +181,7 @@
         <!-- Attachment Thumbnails (Images + Large Text Blocks) -->
         <div
             v-if="uploadedImages.length > 0 || largeTextBlocks.length > 0"
-            class="mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
+            class="chat-input-attachments mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
         >
             <!-- Images -->
             <div
@@ -304,23 +189,21 @@
                     (att: any) => att.kind === 'image'
                 )"
                 :key="'img-' + index"
-                class="relative group aspect-square"
+                class="chat-input-attachment-image-container relative group aspect-square"
             >
                 <img
                     :src="image.url"
                     :alt="'Uploaded Image ' + (index + 1)"
-                    class="w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+                    class="chat-input-attachment-image w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
                 />
-                <button
+                <UButton
+                    v-bind="attachmentRemoveBtnProps"
                     @click="() => removeImage(uploadedImages.indexOf(image))"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
-                    aria-label="Remove image"
                     :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
-                </button>
+                    aria-label="Remove image"
+                />
                 <div
-                    class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
+                    class="chat-input-attachment-image-name absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
                 >
                     {{ image.name }}
                 </div>
@@ -331,68 +214,88 @@
                     (att: any) => att.kind === 'pdf'
                 )"
                 :key="'pdf-' + index"
-                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+                :class="[
+                    'chat-input-attachment-pdf-container relative group aspect-square overflow-hidden flex items-center justify-center bg-(--md-surface-container-low) p-2 text-center',
+                    attachmentPdfContainerProps?.class || '',
+                ]"
+                :data-theme-target="
+                    attachmentPdfContainerProps?.['data-theme-target']
+                "
+                :data-theme-matches="
+                    attachmentPdfContainerProps?.['data-theme-matches']
+                "
             >
                 <div
-                    class="flex flex-col items-center justify-center w-full h-full"
+                    class="chat-input-attachment-pdf-inner flex flex-col items-center justify-center w-full h-full"
                 >
                     <span
-                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
+                        class="chat-input-attachment-pdf-inner-label text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
                         >PDF</span
                     >
                     <span
-                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        class="chat-input-attachment-pdf-inner-name text-[11px] leading-snug line-clamp-4 px-1 wrap-break-word"
                         :title="pdf.name"
                         >{{ pdf.name }}</span
                     >
                 </div>
-                <button
+                <UButton
+                    v-bind="attachmentRemoveBtnProps"
                     @click="() => removeImage(uploadedImages.indexOf(pdf))"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
-                    aria-label="Remove PDF"
                     :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
-                </button>
+                    aria-label="Remove PDF"
+                />
             </div>
             <!-- Large Text Blocks -->
             <div
                 v-for="(block, tIndex) in largeTextBlocks"
                 :key="'txt-' + block.id"
-                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+                :class="[
+                    'chat-input-attachment-text-container relative group aspect-square overflow-hidden flex items-center justify-center bg-(--md-surface-container-low) p-2 text-center',
+                    attachmentTextContainerProps?.class || '',
+                ]"
+                :data-theme-target="
+                    attachmentTextContainerProps?.['data-theme-target']
+                "
+                :data-theme-matches="
+                    attachmentTextContainerProps?.['data-theme-matches']
+                "
             >
                 <div
-                    class="flex flex-col items-center justify-center w-full h-full"
+                    class="chat-input-attachment-text-inner flex flex-col items-center justify-center w-full h-full"
                 >
                     <span
-                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
+                        class="chat-input-attachment-text-inner-label text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
                         >TXT</span
                     >
                     <span
-                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        class="chat-input-attachment-text-inner-name text-[11px] leading-snug line-clamp-4 px-1 wrap-break-word"
                         :title="block.previewFull"
                     >
                         {{ block.preview }}
                     </span>
-                    <span class="mt-1 text-[10px] opacity-70"
+                    <span
+                        class="chat-input-attachment-text-inner-wordcount mt-1 text-[10px] opacity-70"
                         >{{ block.wordCount }}w</span
                     >
                 </div>
-                <button
+                <UButton
+                    v-bind="attachmentRemoveBtnProps"
                     @click="removeTextBlock(tIndex)"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
-                    aria-label="Remove text block"
                     :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
-                </button>
+                    aria-label="Remove text block"
+                />
             </div>
         </div>
 
         <!-- Drag and Drop Overlay -->
         <div
             v-if="isDragging"
-            class="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
+            :class="[
+                'chat-input-drag-and-drop-overlay absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-blue-500 flex items-center justify-center z-50',
+                dragOverlayProps?.class || '',
+            ]"
+            :data-theme-target="dragOverlayProps?.['data-theme-target']"
+            :data-theme-matches="dragOverlayProps?.['data-theme-matches']"
         >
             <div class="text-center">
                 <UIcon
@@ -438,7 +341,7 @@ import {
     type ComposerActionEntry,
     type ComposerActionContext,
 } from '#imports';
-import { useToolRegistry } from '~/utils/chat/tools-public';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
     loading?: boolean;
@@ -447,16 +350,6 @@ const props = defineProps<{
     streaming?: boolean; // assistant response streaming
     paneId?: string; // provided by ChatContainer so the bridge can key this input
 }>();
-
-// Tool Registry
-const toolRegistry = useToolRegistry();
-const registeredTools = computed(() =>
-    toolRegistry.listTools.value.map((tool) => ({
-        definition: tool.definition,
-        enabledValue: tool.enabled.value,
-        name: tool.definition.function.name,
-    }))
-);
 
 const { favoriteModels, getFavoriteModels } = useModelStore();
 const { settings: aiSettings } = useAiSettings();
@@ -552,6 +445,12 @@ onMounted(async () => {
 
         editor.value = new Editor({
             extensions,
+            editorProps: {
+                attributes: {
+                    'aria-label': 'Message input',
+                    role: 'textbox',
+                },
+            },
             onUpdate: ({ editor: ed }) => {
                 promptText.value = ed.getText();
                 autoResize();
@@ -658,6 +557,182 @@ async function handleComposerAction(entry: ComposerActionEntry) {
         // Silently handle composer action failure
     }
 }
+
+// Theme overrides for buttons
+const sendButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.send',
+        isNuxtUI: true,
+    });
+
+    return {
+        square: true,
+        size: 'sm' as const,
+        color: 'primary' as const,
+        class: 'theme-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const stopButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.stop',
+        isNuxtUI: true,
+    });
+
+    return {
+        square: true,
+        size: 'sm' as const,
+        color: 'error' as const,
+        class: 'theme-btn text-white dark:text-black flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const attachButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.attach',
+        isNuxtUI: true,
+    });
+
+    return {
+        square: true,
+        size: 'sm' as const,
+        color: 'info' as const,
+        class: 'theme-btn text-black dark:text-white flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const settingsButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.settings',
+        isNuxtUI: true,
+    });
+
+    return {
+        square: true,
+        size: 'sm' as const,
+        color: 'info' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const composerActionButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.composer-action',
+        isNuxtUI: true,
+    });
+
+    return {
+        size: 'sm' as const,
+        variant: 'ghost' as const,
+        class: 'theme-btn pointer-events-auto flex items-center gap-1',
+        ui: { base: 'theme-btn' },
+        ...(overrides.value as any),
+    };
+});
+
+const mainContainerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'chat',
+        identifier: 'chat.input-main-container',
+        isNuxtUI: false,
+    });
+
+    return overrides.value;
+});
+
+const containerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'chat',
+        identifier: 'chat.input-container',
+        isNuxtUI: false,
+    });
+
+    return overrides.value;
+});
+
+const editorProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'chat',
+        identifier: 'chat.editor',
+        isNuxtUI: false,
+    });
+
+    return overrides.value;
+});
+
+const attachmentPdfContainerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'chat',
+        identifier: 'chat.attachment-pdf-container',
+        isNuxtUI: false,
+    });
+    return overrides.value;
+});
+
+const attachmentTextContainerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'chat',
+        identifier: 'chat.attachment-text-container',
+        isNuxtUI: false,
+    });
+    return overrides.value;
+});
+
+const attachmentRemoveBtnProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.attachment-remove-btn',
+        isNuxtUI: true,
+    });
+    const fallback = {
+        type: 'button' as const,
+        color: 'error' as const,
+        variant: 'solid' as const,
+        size: 'xs' as const,
+        square: true as const,
+        icon: 'i-lucide:x',
+        class:
+            'chat-input-attachment-remove-btn absolute top-1 right-1 h-[22px] w-[22px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 border border-black text-white bg-[var(--md-error)]/85 hover:bg-[var(--md-error)]',
+    };
+    const overrideValue = (overrides.value as Record<string, any>) || {};
+    const mergedClass = [fallback.class, overrideValue.class]
+        .filter(Boolean)
+        .join(' ');
+    return {
+        ...fallback,
+        ...overrideValue,
+        class: mergedClass,
+    };
+});
+
+const dragOverlayProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'chat',
+        identifier: 'chat.drag-overlay',
+        isNuxtUI: false,
+    });
+    return overrides.value;
+});
 
 const attachments = ref<UploadedImage[]>([]);
 // Backward compatibility: expose as uploadedImages for template
@@ -993,30 +1068,54 @@ const handlePromptModalClosed = () => {
     /* modal closed */
 };
 
-// Emit live height via ResizeObserver (debounced with rAF)
-let __resizeRaf: number | null = null;
-// Flattened observer setup (avoids build transform splitting issues)
+// Emit live height via ResizeObserver using provided measurements to avoid extra layout passes
 if (process.client && 'ResizeObserver' in window) {
     let ro: ResizeObserver | null = null;
+    let lastHeight: number | null = null;
+
+    const readEntryHeight = (entry: ResizeObserverEntry): number | null => {
+        const target = entry.target as HTMLElement;
+        const borderSize = Array.isArray(entry.borderBoxSize)
+            ? entry.borderBoxSize[0]
+            : entry.borderBoxSize;
+        if (borderSize && typeof borderSize.blockSize === 'number') {
+            return borderSize.blockSize;
+        }
+        if (entry.contentRect && typeof entry.contentRect.height === 'number') {
+            return entry.contentRect.height;
+        }
+        // Fallback – should rarely run, but keeps behavior consistent if box sizes unavailable
+        return target?.offsetHeight ?? null;
+    };
+
+    const handleEntries = (entries: ResizeObserverEntry[]) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const nextHeight = readEntryHeight(entry);
+        if (nextHeight == null) return;
+        // Round to whole px so we don't emit micro-deltas that cause extra renders
+        const normalized = Math.round(nextHeight);
+        if (lastHeight === normalized) return;
+        lastHeight = normalized;
+        emit('resize', { height: normalized });
+    };
+
     onMounted(() => {
         const inst = getCurrentInstance();
         const rootEl = (inst?.proxy?.$el as HTMLElement) || null;
         if (!rootEl) return;
-        ro = new ResizeObserver(() => {
-            if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
-            __resizeRaf = requestAnimationFrame(() => {
-                emit('resize', { height: rootEl.offsetHeight });
-            });
-        });
+        ro = new ResizeObserver(handleEntries);
         ro.observe(rootEl);
     });
+
     const dispose = () => {
         try {
             ro?.disconnect();
         } catch {}
-        if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
         ro = null;
+        lastHeight = null;
     };
+
     onBeforeUnmount(dispose);
     if (import.meta.hot) import.meta.hot.dispose(dispose);
 }

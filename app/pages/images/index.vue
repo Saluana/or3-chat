@@ -17,6 +17,7 @@ import GalleryGrid from './GalleryGrid.vue';
 import ImageViewer from './ImageViewer.vue';
 import { reportError } from '../../utils/errors';
 import { useToast } from '#imports';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const PAGE_SIZE = 50;
 const items = ref<FileMeta[]>([]);
@@ -520,6 +521,10 @@ async function deleteSelected() {
     return outcome.removed.length > 0;
 }
 
+const handleDeleteSelectedClick = async () => {
+    await deleteSelected();
+};
+
 async function restoreSingle(meta: FileMeta | null) {
     if (!meta) return false;
     const name = meta.name || 'this image';
@@ -536,6 +541,10 @@ async function restoreSingle(meta: FileMeta | null) {
     }
     return outcome.restored.length > 0;
 }
+
+const handleRestoreSelectedClick = async () => {
+    await restoreSelected();
+};
 
 async function restoreSelected() {
     const hashes = Array.from(selectedHashes.value);
@@ -554,6 +563,137 @@ async function restoreSelected() {
     }
     return outcome.restored.length > 0;
 }
+
+const trashToggleButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'images',
+        identifier: 'images.trash-toggle',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'outline' as const,
+        class: 'flex items-center gap-1',
+        type: 'button' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const selectionToggleButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'images',
+        identifier: 'images.selection-toggle',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'outline' as const,
+        class: 'px-3 py-1 text-sm',
+        type: 'button' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const selectAllButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'images',
+        identifier: 'images.select-all',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'outline' as const,
+        class: 'px-3 py-1 text-sm',
+        type: 'button' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const restoreSelectedButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'images',
+        identifier: 'images.restore',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'outline' as const,
+        color: 'success' as const,
+        class: 'px-3 py-1 text-sm',
+        type: 'button' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const deletePermanentlyButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'images',
+        identifier: 'images.delete',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'outline' as const,
+        color: 'error' as const,
+        class: 'px-3 py-1 text-sm',
+        type: 'button' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const clearSelectionButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'images',
+        identifier: 'images.clear-selection',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'outline' as const,
+        class: 'px-3 py-1 text-sm',
+        type: 'button' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const deleteSelectionButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'images',
+        identifier: 'images.delete-selection',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'outline' as const,
+        color: 'error' as const,
+        class: 'px-3 py-1 text-sm',
+        type: 'button' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const loadMoreButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'images',
+        identifier: 'images.load-more',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'outline' as const,
+        class: 'px-3 py-1',
+        type: 'button' as const,
+        ...(overrides.value as any),
+    };
+});
 </script>
 
 <template>
@@ -566,9 +706,8 @@ async function restoreSelected() {
                 {{ trashMode ? 'Trash' : 'Images' }}
             </h1>
             <div class="flex items-center gap-2">
-                <button
-                    class="retro-btn px-3 py-1 text-sm flex items-center gap-1"
-                    type="button"
+                <UButton
+                    v-bind="trashToggleButtonProps"
                     data-test="trash-toggle"
                     :aria-pressed="trashMode"
                     @click="toggleTrashMode"
@@ -583,17 +722,16 @@ async function restoreSelected() {
                         class="mr-0.5"
                     />
                     {{ trashMode ? 'Show library' : 'Show trash' }}
-                </button>
-                <button
-                    class="retro-btn px-3 py-1 text-sm flex items-center gap-1"
-                    type="button"
+                </UButton>
+                <UButton
+                    v-bind="selectionToggleButtonProps"
                     data-test="multi-toggle"
                     @click="toggleSelectionMode"
                     :disabled="isMutating"
                 >
                     <UIcon name="pixelarticons:image-multiple" class="mr-0.5" />
                     {{ selectionMode ? 'Cancel' : 'Select' }}
-                </button>
+                </UButton>
             </div>
         </div>
         <p v-if="trashMode" class="mb-3 text-sm opacity-80">
@@ -601,24 +739,22 @@ async function restoreSelected() {
         </p>
         <div
             v-if="selectionMode"
-            class="fixed inset-x-0 bottom-0 z-[1000] border-t-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-high)]/80 backdrop-blur-md"
+            class="fixed inset-x-0 bottom-0 z-[1000] border-t-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-high)]/80 backdrop-blur-md"
         >
             <div
                 class="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2 px-4 py-2"
             >
-                <button
-                    class="retro-btn px-3 py-1 text-sm"
-                    type="button"
+                <UButton
+                    v-bind="selectionToggleButtonProps"
                     data-test="multi-toggle"
                     @click="toggleSelectionMode"
                     :disabled="isMutating"
                 >
                     {{ selectionMode ? 'Cancel' : 'Select' }}
-                </button>
+                </UButton>
                 <template v-if="trashMode">
-                    <button
-                        class="retro-btn px-3 py-1 text-sm"
-                        type="button"
+                    <UButton
+                        v-bind="selectAllButtonProps"
                         :disabled="!canSelectAll || isMutating"
                         @click="selectAllVisible"
                     >
@@ -627,55 +763,51 @@ async function restoreSelected() {
                                 ? `Select all (${items.length})`
                                 : 'All selected'
                         }}
-                    </button>
-                    <button
-                        class="retro-btn px-3 py-1 text-sm"
-                        type="button"
+                    </UButton>
+                    <UButton
+                        v-bind="restoreSelectedButtonProps"
                         :disabled="!hasSelection || isMutating"
-                        @click="restoreSelected"
+                        @click="handleRestoreSelectedClick"
                     >
                         {{
                             isRestoring
                                 ? 'Restoring…'
                                 : `Restore (${selectedCount})`
                         }}
-                    </button>
-                    <button
-                        class="retro-btn px-3 py-1 text-sm"
-                        type="button"
+                    </UButton>
+                    <UButton
+                        v-bind="deletePermanentlyButtonProps"
                         :disabled="!hasSelection || isMutating"
                         data-test="delete-selected"
-                        @click="deleteSelected"
+                        @click="handleDeleteSelectedClick"
                     >
                         {{
                             isHardDeleting
                                 ? 'Deleting…'
                                 : `Delete permanently (${selectedCount})`
                         }}
-                    </button>
+                    </UButton>
                 </template>
                 <template v-else>
-                    <button
-                        class="retro-btn px-3 py-1 text-sm"
-                        type="button"
+                    <UButton
+                        v-bind="clearSelectionButtonProps"
                         :disabled="!hasSelection || isMutating"
                         @click="clearSelection"
                     >
                         Clear
-                    </button>
-                    <button
-                        class="retro-btn px-3 py-1 text-sm"
-                        type="button"
+                    </UButton>
+                    <UButton
+                        v-bind="deleteSelectionButtonProps"
                         :disabled="!hasSelection || isMutating"
                         data-test="delete-selected"
-                        @click="deleteSelected"
+                        @click="handleDeleteSelectedClick"
                     >
                         {{
                             isSoftDeleting
                                 ? 'Deleting…'
                                 : `Delete (${selectedCount})`
                         }}
-                    </button>
+                    </UButton>
                 </template>
                 <span
                     class="ml-auto text-sm opacity-80 hidden sm:inline"
@@ -699,8 +831,8 @@ async function restoreSelected() {
             @toggle-select="toggleSelect"
         />
         <div class="mt-4 flex justify-center">
-            <button
-                class="px-3 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50"
+            <UButton
+                v-bind="loadMoreButtonProps"
                 :disabled="loading || done || isMutating"
                 @click="loadMore"
             >
@@ -708,7 +840,7 @@ async function restoreSelected() {
                     loading ? 'Loading…' : 'Load more'
                 }}</span>
                 <span v-else>All loaded</span>
-            </button>
+            </UButton>
         </div>
         <ImageViewer
             v-model="showViewer"

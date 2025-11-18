@@ -1,94 +1,41 @@
 <template>
     <div
-        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+        class="document-editor-root flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
     >
         <div
-            class="flex items-center justify-between sm:justify-center px-3 pt-2 pb-2"
+            class="document-editor-header flex items-center justify-between sm:justify-center px-3 pt-2 pb-2"
         >
             <UInput
+                v-bind="titleInputProps"
                 v-model="titleDraft"
-                placeholder="Untitled"
-                size="md"
-                class="flex-1 max-w-[60%]"
+                class="document-title-input flex-1 max-w-[60%]"
                 @update:model-value="onTitleChange"
             />
             <div class="flex items-center gap-1">
                 <UTooltip :text="statusText">
                     <span
-                        class="text-xs opacity-70 w-16 text-right select-none"
+                        class="document-title-status text-xs opacity-70 w-16 text-right select-none"
                         >{{ statusText }}</span
                     >
                 </UTooltip>
             </div>
         </div>
         <div
-            class="flex flex-row items-stretch border-b-2 border-[var(--md-inverse-surface)] px-3 md:px-2 py-1 gap-2 md:gap-1 flex-wrap pb-2"
+            class="document-editor-toolbar retro-document-toolbar flex flex-row items-stretch px-3 md:px-2 py-1 gap-2 md:gap-1 flex-wrap pb-2"
         >
             <ToolbarButton
-                icon="carbon:text-bold"
-                :active="isActive('bold')"
-                label="Bold (⌘B)"
-                @activate="cmd('toggleBold')"
-            />
-            <ToolbarButton
-                icon="carbon:text-italic"
-                :active="isActive('italic')"
-                label="Italic (⌘I)"
-                @activate="cmd('toggleItalic')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:code"
-                :active="isActive('code')"
-                label="Code"
-                @activate="cmd('toggleCode')"
-            />
-            <ToolbarButton
-                text="H1"
-                :active="isActiveHeading(1)"
-                label="H1"
-                @activate="toggleHeading(1)"
-            />
-            <ToolbarButton
-                text="H2"
-                :active="isActiveHeading(2)"
-                label="H2"
-                @activate="toggleHeading(2)"
-            />
-            <ToolbarButton
-                text="H3"
-                :active="isActiveHeading(3)"
-                label="H3"
-                @activate="toggleHeading(3)"
-            />
-            <ToolbarButton
-                icon="pixelarticons:list"
-                :active="isActive('bulletList')"
-                label="Bullet list"
-                @activate="cmd('toggleBulletList')"
-            />
-            <ToolbarButton
-                icon="carbon:list-numbered"
-                :active="isActive('orderedList')"
-                label="Ordered list"
-                @activate="cmd('toggleOrderedList')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:minus"
-                label="Horizontal Rule"
-                @activate="cmd('setHorizontalRule')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:undo"
-                label="Undo"
-                @activate="cmd('undo')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:redo"
-                label="Redo"
-                @activate="cmd('redo')"
+                class="document-toolbar-button-instance"
+                v-for="button in toolbarButtons"
+                :key="button.id"
+                :icon="button.icon"
+                :text="button.text"
+                :active="button.getActive?.()"
+                :label="button.label"
+                @activate="button.onActivate"
             />
             <!-- Plugin-registered toolbar buttons -->
             <ToolbarButton
+                class="document-toolbar-button-instance document-toolbar-plugin-button"
                 v-for="btn in pluginButtons"
                 :key="btn.id"
                 :icon="btn.icon"
@@ -97,14 +44,17 @@
                 @activate="handleButtonClick(btn)"
             />
         </div>
-        <div class="flex-1 min-h-0 overflow-y-auto">
+        <div class="document-editor-content flex-1 min-h-0 overflow-y-auto">
             <div
-                class="w-full max-w-[820px] mx-auto p-8 pb-24"
+                class="document-editor-viewport w-full max-w-[820px] mx-auto p-8 pb-24"
                 @mousedown="handleContainerClick"
             >
                 <div
                     ref="editorMountEl"
-                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                    class="document-editor-mount prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                    role="textbox"
+                    aria-label="Document body"
+                    aria-multiline="true"
                 ></div>
             </div>
         </div>
@@ -141,6 +91,7 @@ import {
     type EditorToolbarButton,
 } from '~/composables';
 import { loadEditorExtensions } from '~/composables/editor/useEditorExtensionLoader';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{ documentId: string }>();
 
@@ -172,6 +123,102 @@ let didUnmount = false;
 
 // Get plugin-registered toolbar buttons
 const pluginButtons = useEditorToolbarButtons(editor as Ref<Editor | null>);
+
+// Define core toolbar buttons
+const toolbarButtons = computed(() => [
+    {
+        id: 'bold',
+        icon: 'carbon:text-bold',
+        label: 'Bold (⌘B)',
+        getActive: () => isActive('bold'),
+        onActivate: () => cmd('toggleBold'),
+    },
+    {
+        id: 'italic',
+        icon: 'carbon:text-italic',
+        label: 'Italic (⌘I)',
+        getActive: () => isActive('italic'),
+        onActivate: () => cmd('toggleItalic'),
+    },
+    {
+        id: 'code',
+        icon: 'pixelarticons:code',
+        label: 'Code',
+        getActive: () => isActive('code'),
+        onActivate: () => cmd('toggleCode'),
+    },
+    {
+        id: 'h1',
+        text: 'H1',
+        label: 'H1',
+        getActive: () => isActiveHeading(1),
+        onActivate: () => toggleHeading(1),
+    },
+    {
+        id: 'h2',
+        text: 'H2',
+        label: 'H2',
+        getActive: () => isActiveHeading(2),
+        onActivate: () => toggleHeading(2),
+    },
+    {
+        id: 'h3',
+        text: 'H3',
+        label: 'H3',
+        getActive: () => isActiveHeading(3),
+        onActivate: () => toggleHeading(3),
+    },
+    {
+        id: 'bulletList',
+        icon: 'pixelarticons:list',
+        label: 'Bullet list',
+        getActive: () => isActive('bulletList'),
+        onActivate: () => cmd('toggleBulletList'),
+    },
+    {
+        id: 'orderedList',
+        icon: 'carbon:list-numbered',
+        label: 'Ordered list',
+        getActive: () => isActive('orderedList'),
+        onActivate: () => cmd('toggleOrderedList'),
+    },
+    {
+        id: 'horizontalRule',
+        icon: 'pixelarticons:minus',
+        label: 'Horizontal Rule',
+        getActive: () => false,
+        onActivate: () => cmd('setHorizontalRule'),
+    },
+    {
+        id: 'undo',
+        icon: 'pixelarticons:undo',
+        label: 'Undo',
+        getActive: () => false,
+        onActivate: () => cmd('undo'),
+    },
+    {
+        id: 'redo',
+        icon: 'pixelarticons:redo',
+        label: 'Redo',
+        getActive: () => false,
+        onActivate: () => cmd('redo'),
+    },
+]);
+
+// Theme integration for title input
+const titleInputProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'input',
+        context: 'document',
+        identifier: 'document.title',
+        isNuxtUI: true,
+    });
+    return {
+        placeholder: 'Untitled',
+        size: 'md' as const,
+        ...(overrides.value as any),
+    };
+});
 
 function onTitleChange() {
     setDocumentTitle(props.documentId, titleDraft.value);
@@ -370,6 +417,20 @@ const statusText = computed(() => {
 
 .prose :where(h1, h2, h3, h4, h5, h6) {
     font-family: 'IBM Plex Sans', system-ui !important;
+}
+
+.prose :deep(a) {
+    color: var(--md-primary);
+    text-decoration: underline;
+}
+
+.prose :deep(a:visited) {
+    color: var(--md-primary);
+}
+
+.dark .prose :deep(a),
+.dark .prose :deep(a:visited) {
+    color: var(--md-primary-fixed, var(--md-primary));
 }
 
 /* ProseMirror (TipTap) base styles */

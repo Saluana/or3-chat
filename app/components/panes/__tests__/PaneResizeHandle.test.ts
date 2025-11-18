@@ -58,8 +58,9 @@ describe('PaneResizeHandle', () => {
             clientY: 200,
         });
 
-        expect(wrapper.emitted('resizeStart')).toBeTruthy();
-        expect(wrapper.emitted('resizeStart')![0][1]).toBe(0); // paneIndex
+        const resizeStartEvents = wrapper.emitted('resizeStart');
+        expect(resizeStartEvents).toBeTruthy();
+        expect(resizeStartEvents?.[0]?.[1]).toBe(0); // paneIndex
     });
 
     it('emits resizeKeydown on keyboard event', async () => {
@@ -74,8 +75,9 @@ describe('PaneResizeHandle', () => {
         const handle = wrapper.find('.pane-resize-handle');
         await handle.trigger('keydown', { key: 'ArrowRight' });
 
-        expect(wrapper.emitted('resizeKeydown')).toBeTruthy();
-        expect(wrapper.emitted('resizeKeydown')![0][1]).toBe(1); // paneIndex
+        const resizeKeydownEvents = wrapper.emitted('resizeKeydown');
+        expect(resizeKeydownEvents).toBeTruthy();
+        expect(resizeKeydownEvents?.[0]?.[1]).toBe(1); // paneIndex
     });
 
     it('has correct ARIA attributes', () => {

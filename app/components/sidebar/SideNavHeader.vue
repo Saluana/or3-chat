@@ -1,26 +1,19 @@
 <template>
     <div id="side-nav-content-header" class="px-2 pt-2 flex flex-col space-y-2">
         <div class="flex w-full items-center gap-2 mb-1">
-            <div class="relative flex-1 ml-[1px]">
+            <div class="relative flex-1">
                 <UInput
                     ref="searchInputWrapper"
                     v-model="sidebarQuery"
-                    icon="pixelarticons:search"
-                    size="md"
-                    :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
-                    variant="outline"
-                    placeholder="Search..."
+                    v-bind="searchInputProps"
                     aria-label="Search"
                     class="w-full"
                     @keydown.escape.prevent.stop="onEscapeClear"
                 >
                     <template v-if="sidebarQuery.length > 0" #trailing>
                         <UButton
-                            color="neutral"
-                            variant="subtle"
-                            size="xs"
+                            v-bind="searchClearButtonProps"
                             class="flex items-center justify-center p-0"
-                            icon="pixelarticons:close-box"
                             aria-label="Clear input"
                             @click="sidebarQuery = ''"
                         />
@@ -29,47 +22,50 @@
             </div>
             <UPopover :content="{ side: 'bottom', align: 'end' }">
                 <UButton
-                    size="md"
-                    color="neutral"
-                    variant="ghost"
-                    icon="material-symbols:filter-alt-sharp"
-                    :square="true"
+                    v-bind="filterButtonProps"
                     aria-label="Filter sections"
-                    :ui="{ base: 'shadow-none!' }"
-                    class="filter-trigger flex items-center justify-center h-[40px] w-[40px] rounded-[3px] border-3! bg-[var(--md-inverse-surface)]/5 backdrop-blur"
+                    class="filter-trigger flex items-center justify-center h-[40px] w-[40px] rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/5 backdrop-blur"
                 />
                 <template #content>
-                    <div class="p-2 space-y-1 min-w-[140px]">
-                        <button
-                            v-for="item in filterItems"
-                            :key="item.key"
-                            class="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted rounded-[4px] transition-colors"
-                            @click="toggleSection(item.key)"
+                    <div class="space-y-2 min-w-[140px]">
+                        <div
+                            class="px-2 pb-1 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
                         >
-                            <UIcon
-                                :name="
+                            <span
+                                class="text-xs font-medium text-[color:var(--md-on-surface)]/60 tracking-wide"
+                            >
+                                Toggle sections
+                            </span>
+                        </div>
+                        <div class="space-y-1">
+                            <UButton
+                                v-for="item in filterItems"
+                                :key="item.key"
+                                v-bind="filterItemButtonProps"
+                                :leading-icon="
                                     activeSections[item.key]
                                         ? 'pixelarticons:eye'
                                         : 'pixelarticons:eye-closed'
                                 "
-                                class="w-4 h-4"
-                            />
-                            <span>{{ item.label }}</span>
-                        </button>
+                                @click="toggleSection(item.key)"
+                            >
+                                {{ item.label }}
+                            </UButton>
+                        </div>
                     </div>
                 </template>
             </UPopover>
         </div>
 
-        <div class="border-b-3 border-primary/50 pb-2"></div>
+        <div
+            class="border-b-3 border-primary/50 pb-2 sidenav-header-separator"
+        ></div>
 
         <!-- Rename modal -->
         <UModal
+            v-bind="renameModalProps"
             v-model:open="showRenameModal"
             :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
-            :ui="{
-                footer: 'justify-end ',
-            }"
         >
             <template #body>
                 <div class="space-y-4">
@@ -93,9 +89,9 @@
 
         <!-- Rename Project Modal -->
         <UModal
+            v-bind="renameProjectModalProps"
             v-model:open="showRenameProjectModal"
             title="Rename project"
-            :ui="{ footer: 'justify-end' }"
         >
             <template #body>
                 <div class="space-y-4">
@@ -122,9 +118,9 @@
 
         <!-- Create Project Modal -->
         <UModal
+            v-bind="createProjectModalProps"
             v-model:open="showCreateProjectModal"
             title="New project"
-            :ui="{ footer: 'justify-end' }"
         >
             <template #body>
                 <div class="space-y-4">
@@ -134,6 +130,7 @@
                     >
                         <div class="flex flex-col space-y-3">
                             <UFormField
+                                v-bind="sidebarFormFieldProps"
                                 label="Title"
                                 name="name"
                                 :error="createProjectErrors.name"
@@ -147,9 +144,13 @@
                                     @keyup.enter="submitCreateProject"
                                 />
                             </UFormField>
-                            <UFormField label="Description" name="description">
+                            <UFormField
+                                v-bind="sidebarFormFieldProps"
+                                label="Description"
+                                name="description"
+                            >
                                 <UTextarea
-                                    class="w-full border-2 rounded-[6px]"
+                                    class="w-full border-[var(--md-border-width)] rounded-[6px]"
                                     v-model="createProjectState.description"
                                     :rows="3"
                                     placeholder="Optional description"
@@ -181,15 +182,15 @@
 
         <!-- Add To Project Modal -->
         <UModal
+            v-bind="addToProjectModalProps"
             v-model:open="showAddToProjectModal"
             title="Add thread to project"
-            :ui="{ footer: 'justify-end' }"
         >
             <template #body>
                 <div class="space-y-4">
                     <div class="flex gap-2 text-xs font-mono">
                         <button
-                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                            class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
                             :class="
                                 addMode === 'select'
                                     ? 'bg-primary/30'
@@ -200,7 +201,7 @@
                             Select Existing
                         </button>
                         <button
-                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                            class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
                             :class="
                                 addMode === 'create'
                                     ? 'bg-primary/30'
@@ -212,14 +213,18 @@
                         </button>
                     </div>
                     <div v-if="addMode === 'select'" class="space-y-3">
-                        <UFormField label="Project" name="project">
+                        <UFormField
+                            v-bind="sidebarFormFieldProps"
+                            label="Project"
+                            name="project"
+                        >
                             <USelectMenu
                                 v-model="selectedProjectId"
                                 :items="projectSelectOptions"
                                 :value-key="'value'"
                                 searchable
                                 placeholder="Select project"
-                                class="w-full"
+                                v-bind="sidebarProjectSelectProps"
                             />
                         </UFormField>
                         <p v-if="addToProjectError" class="text-error text-xs">
@@ -227,7 +232,11 @@
                         </p>
                     </div>
                     <div v-else class="space-y-3">
-                        <UFormField label="Project Title" name="newProjectName">
+                        <UFormField
+                            v-bind="sidebarFormFieldProps"
+                            label="Project Title"
+                            name="newProjectName"
+                        >
                             <UInput
                                 v-model="newProjectName"
                                 placeholder="Project name"
@@ -236,6 +245,7 @@
                             />
                         </UFormField>
                         <UFormField
+                            v-bind="sidebarFormFieldProps"
                             label="Description"
                             name="newProjectDescription"
                         >
@@ -243,7 +253,7 @@
                                 v-model="newProjectDescription"
                                 :rows="3"
                                 placeholder="Optional description"
-                                class="w-full border-2 rounded-[6px]"
+                                class="w-full border-[var(--md-border-width)] rounded-[6px]"
                             />
                         </UFormField>
                         <p v-if="addToProjectError" class="text-error text-xs">
@@ -279,9 +289,9 @@
 
         <!-- New Document Naming Modal -->
         <UModal
+            v-bind="createDocumentModalProps"
             v-model:open="showCreateDocumentModal"
             title="Name new document"
-            :ui="{ footer: 'justify-end' }"
         >
             <template #body>
                 <div class="space-y-4">
@@ -290,6 +300,7 @@
                         @submit.prevent="submitCreateDocument"
                     >
                         <UFormField
+                            v-bind="sidebarFormFieldProps"
                             label="Title"
                             name="title"
                             :error="newDocumentErrors.title"
@@ -330,6 +341,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 
 const props = defineProps<{
     sidebarQuery: string;
@@ -354,6 +367,105 @@ const emit = defineEmits<{
 
 const { createProject: createProjectCrud, renameProject: renameProjectCrud } =
     useProjectsCrud();
+
+// Theme overrides for interactive elements
+const searchInputProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'input',
+        context: 'sidebar',
+        identifier: 'sidebar.search',
+        isNuxtUI: true,
+    });
+
+    // Merge theme UI with component-specific UI
+    const themeUi = (overrides.value as any)?.ui || {};
+    const componentUi = { leadingIcon: 'h-[20px] w-[20px]' };
+    const mergedUi = { ...themeUi, ...componentUi };
+
+    return {
+        icon: 'pixelarticons:search' as const,
+        size: 'md' as const,
+        variant: 'outline' as const,
+        placeholder: 'Search...',
+        ...(overrides.value as any),
+        ui: mergedUi,
+    };
+});
+
+const searchClearButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.search-clear',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'neutral' as const,
+        variant: 'subtle' as const,
+        size: 'xs' as const,
+        icon: 'pixelarticons:close-box' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const filterButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.filter',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'md' as const,
+        color: 'neutral' as const,
+        variant: 'ghost' as const,
+        icon: 'material-symbols:filter-alt-sharp' as const,
+        square: true,
+        ...(overrides.value as any),
+    };
+});
+
+const filterItemButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.filter-item',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'neutral' as const,
+        variant: 'ghost' as const,
+        size: 'sm' as const,
+        block: true,
+        ...(overrides.value as any),
+    };
+});
+
+const sidebarProjectSelectOverrides = useThemeOverrides({
+    component: 'selectmenu',
+    context: 'sidebar',
+    identifier: 'sidebar.project-select',
+    isNuxtUI: true,
+});
+
+const sidebarProjectSelectProps = computed(() => {
+    const overrideValue =
+        (sidebarProjectSelectOverrides.value as Record<string, any>) || {};
+    const mergedClass = ['w-full', overrideValue.class || '']
+        .filter(Boolean)
+        .join(' ');
+
+    return {
+        ...overrideValue,
+        class: mergedClass,
+    };
+});
+
+const sidebarFormFieldProps = useThemeOverrides({
+    component: 'formField',
+    context: 'sidebar',
+    isNuxtUI: true,
+});
 
 // Section visibility (multi-select) defaults to all on
 const filterItems = [
@@ -400,6 +512,10 @@ const renameTitle = ref('');
 const renameMetaKind = ref<'chat' | 'doc' | null>(null);
 const isRenamingDoc = computed(() => renameMetaKind.value === 'doc');
 
+const renameModalProps = createSidebarModalProps('sidebar.rename', {
+    ui: { footer: 'justify-end' },
+});
+
 async function openRename(target: any) {
     emit('open-rename', target);
 }
@@ -420,6 +536,13 @@ async function saveRename() {
 const showRenameProjectModal = ref(false);
 const renameProjectId = ref<string | null>(null);
 const renameProjectName = ref('');
+
+const renameProjectModalProps = createSidebarModalProps(
+    'sidebar.rename-project',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
 
 async function openRenameProject(projectId: string) {
     emit('open-rename-project', projectId);
@@ -447,6 +570,13 @@ const createProjectState = ref<{ name: string; description: string }>({
     description: '',
 });
 const createProjectErrors = ref<{ name?: string }>({});
+
+const createProjectModalProps = createSidebarModalProps(
+    'sidebar.create-project',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
 
 function openCreateProject() {
     showCreateProjectModal.value = true;
@@ -495,6 +625,13 @@ const projectSelectOptions = computed(() =>
     props.projects.map((p) => ({ label: p.name, value: p.id }))
 );
 
+const addToProjectModalProps = createSidebarModalProps(
+    'sidebar.add-to-project',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
+
 function openAddToProject(thread: any) {
     emit('add-to-project', thread);
 }
@@ -526,6 +663,13 @@ const showCreateDocumentModal = ref(false);
 const creatingDocument = ref(false);
 const newDocumentState = ref<{ title: string }>({ title: '' });
 const newDocumentErrors = ref<{ title?: string }>({});
+
+const createDocumentModalProps = createSidebarModalProps(
+    'sidebar.create-document',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
 
 function openCreateDocumentModal() {
     showCreateDocumentModal.value = true;

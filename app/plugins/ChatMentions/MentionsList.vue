@@ -1,10 +1,10 @@
 <template>
     <div
-        class="w-[85dvw] sm:w-[480px] max-h-[60dvh] bg-[var(--md-surface)] flex flex-col rounded-[3px] border-2 border-[var(--md-inverse-surface)] retro-shadow"
+        class="w-[85dvw] sm:w-[480px] max-h-[60dvh] bg-[var(--md-surface)] flex flex-col border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] shadow"
     >
         <!-- Search & Filters Header -->
         <div
-            class="sticky top-0 bg-[var(--md-surface)] border-b-2 border-[var(--md-inverse-surface)] p-3 z-10"
+            class="sticky top-0 bg-[var(--md-surface)] border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-t-[var(--md-border-radius)] p-3 z-10"
         >
             <UInput
                 v-model="searchTerm"
@@ -56,7 +56,7 @@
                     v-if="section.items.length"
                     class="py-2"
                     :class="{
-                        'border-t-2 border-[var(--md-inverse-surface)] mt-2':
+                        'border-t-[var(--md-border-width)] border-[color:var(--md-border-color)] mt-2':
                             section.key !== sections[0]?.key,
                     }"
                 >

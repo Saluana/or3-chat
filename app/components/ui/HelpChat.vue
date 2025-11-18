@@ -10,7 +10,7 @@
         >
             <div v-if="isExpanded" :class="panelClass">
                 <div
-                    class="flex h-10 items-center justify-between border-b-2 border-[var(--md-inverse-surface)] px-3"
+                    class="flex h-10 items-center justify-between border-b-[var(--md-border-width)] border-[color:var(--md-border-color)] px-3"
                 >
                     <span class="text-sm font-medium uppercase tracking-wide"
                         >Help Chat</span
@@ -25,9 +25,9 @@
                                     ? 'material-symbols:fullscreen-exit'
                                     : 'material-symbols:fullscreen'
                             "
-                            class="retro-btn aspect-square hidden md:flex"
+                            class="theme-btn aspect-square hidden md:flex"
                             :ui="{
-                                base: 'retro-btn aspect-square flex items-center justify-center',
+                                base: 'theme-btn aspect-square flex items-center justify-center',
                             }"
                             :aria-label="
                                 isFullscreen
@@ -40,9 +40,9 @@
                             size="xs"
                             :square="true"
                             icon="pixelarticons:close"
-                            class="retro-btn aspect-square"
+                            class="theme-btn aspect-square"
                             :ui="{
-                                base: 'retro-btn aspect-square flex items-center justify-center',
+                                base: 'theme-btn aspect-square flex items-center justify-center',
                             }"
                             aria-label="Close help chat"
                             @click="collapse"
@@ -60,9 +60,9 @@
                         )"
                         :key="msg.id"
                         :class="[
-                            'rounded-[3px] flex flex-col px-3 py-2 leading-relaxed text-sm break-words',
+                            'rounded-[var(--md-border-radius)] flex flex-col px-3 py-2 leading-relaxed text-sm break-words',
                             msg.role === 'user'
-                                ? 'border-2 border-[var(--md-inverse-surface)] retro-shadow ml-auto text-left bg-[var(--md-primary)]/15 text-[var(--md-on-primary-container)] w-fit max-w-[85%]'
+                                ? 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] theme-shadow ml-auto text-left bg-[var(--md-primary)]/15 text-[var(--md-on-primary-container)] w-fit max-w-[85%]'
                                 : 'w-full max-w-full px-2',
                             msg.kind === 'error'
                                 ? 'bg-[var(--md-error-container)] text-[var(--md-on-error-container)]'
@@ -112,7 +112,7 @@
                                         ? 'max-w-[820px]'
                                         : 'max-w-full',
                                 ]"
-                                class="prose prose-pre:font-mono prose-retro prose-pre:max-w-full prose-pre:overflow-x-auto"
+                                class="prose prose-pre:font-mono or3-prose prose-pre:max-w-full prose-pre:overflow-x-auto"
                                 :allowed-link-prefixes="[
                                     'https://',
                                     'http://',
@@ -146,9 +146,9 @@
                         <UButton
                             type="submit"
                             size="md"
-                            class="retro-btn px-4"
+                            class="theme-btn px-4"
                             :ui="{
-                                base: 'retro-btn px-4 flex items-center gap-2 font-medium',
+                                base: 'theme-btn px-4 flex items-center gap-2 font-medium',
                             }"
                             :loading="isSending"
                             :disabled="!canSend"
@@ -185,7 +185,7 @@
                     icon="pixelarticons:message-processing"
                     :class="launcherClass"
                     :ui="{
-                        base: 'retro-btn aspect-square w-12 h-12 flex items-center justify-center',
+                        base: 'theme-btn aspect-square w-12 h-12 flex items-center justify-center',
                     }"
                     aria-label="Open help chat"
                     @click="expand"
@@ -255,14 +255,14 @@ const containerClass = computed(() =>
 
 const panelClass = computed(() => {
     const base = [
-        'flex flex-col min-h-0 transition-all duration-300 ease-in-out retro-shadow bg-[var(--md-surface)] overflow-hidden',
+        'flex flex-col min-h-0 transition-all duration-300 ease-in-out theme-shadow bg-[var(--md-surface)] overflow-hidden',
     ];
 
     if (isMobile.value) {
         base.push('fixed inset-0 z-50 h-full w-full border-0 rounded-none');
     } else {
         base.push(
-            'absolute bottom-0 right-0 border-2 border-[var(--md-inverse-surface)] rounded-[3px]'
+            'absolute bottom-0 right-0 border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)]'
         );
         base.push(
             isFullscreen.value
@@ -280,7 +280,7 @@ const chatBodyClass = computed(() => [
 ]);
 
 const formClass = computed(() => [
-    'border-t-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)]',
+    'border-t-[var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)]',
     isMobile.value ? 'px-4 pt-3' : 'px-3 py-3',
 ]);
 
@@ -294,7 +294,7 @@ const formStyle = computed(() =>
 
 const launcherClass = computed(
     () =>
-        'retro-btn fixed bottom-4 right-4 aspect-square w-12 h-12 flex items-center justify-center z-[60]'
+        'theme-btn fixed bottom-4 right-4 aspect-square w-12 h-12 flex items-center justify-center z-[60]'
 );
 
 let messageId = 0;
@@ -769,5 +769,5 @@ watch(isMobile, (mobile) => {
 </script>
 
 <style scoped>
-@import '~/assets/css/prose-retro.css';
+@import '~/assets/css/or3-prose.css';
 </style>

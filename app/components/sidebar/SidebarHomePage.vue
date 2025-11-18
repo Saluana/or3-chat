@@ -33,7 +33,9 @@
                 :active-threads="activeThreadIds"
                 :active-documents="activeDocumentIds"
                 @addChat="emit('add-chat-to-project', $event)"
-                @addDocument="emit('add-document-to-project', $event)"
+                @addDocumentToProjectRoot="
+                    emit('add-document-to-project-root', $event)
+                "
                 @renameProject="emit('rename-project', $event)"
                 @deleteProject="emit('delete-project', $event)"
                 @renameEntry="emit('rename-entry', $event)"
@@ -141,6 +143,7 @@ const props = defineProps<{
 const emit = defineEmits([
     'add-chat-to-project',
     'add-document-to-project',
+    'add-document-to-project-root',
     'rename-project',
     'delete-project',
     'rename-entry',

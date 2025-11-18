@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onBeforeUnmount, reactive, watch, ref, nextTick } from 'vue';
+import { onBeforeUnmount, reactive, watch, ref, nextTick, computed } from 'vue';
 import type { FileMeta } from '~/db/schema';
 import { getFileBlob } from '~/db/files';
 import { onKeyStroke } from '@vueuse/core';
 import { reportError } from '~/utils/errors';
 import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
     modelValue: boolean;
@@ -24,6 +25,48 @@ const state = reactive<{ url?: string }>({ url: undefined });
 const overlayEl = ref<HTMLElement | null>(null);
 const cache = useSharedPreviewCache();
 const currentHash = ref<string | null>(null);
+
+const imageViewerModalOverrides = useThemeOverrides({
+    component: 'modal',
+    context: 'modal',
+    identifier: 'modal.image-viewer',
+    isNuxtUI: true,
+});
+
+const imageViewerModalProps = computed(() => {
+    const baseUi = {
+        footer: 'justify-end border-t-[var(--md-border-width)]',
+        body: 'overflow-hidden flex-1 p-0! h-[100dvh] w-[100dvw]',
+    } as Record<string, unknown>;
+
+    const overrideValue =
+        (imageViewerModalOverrides.value as Record<string, unknown>) || {};
+    const overrideClass =
+        typeof overrideValue.class === 'string'
+            ? (overrideValue.class as string)
+            : '';
+    const overrideUi =
+        (overrideValue.ui as Record<string, unknown> | undefined) || {};
+
+    const mergedUi = { ...baseUi, ...overrideUi };
+    const rest = Object.fromEntries(
+        Object.entries(overrideValue).filter(
+            ([key]) => key !== 'class' && key !== 'ui'
+        )
+    ) as Record<string, unknown>;
+
+    const result: Record<string, unknown> = {
+        ...rest,
+        ui: mergedUi,
+    };
+
+    const mergedClass = [overrideClass].filter(Boolean).join(' ');
+    if (mergedClass) {
+        result.class = mergedClass;
+    }
+
+    return result;
+});
 
 async function load() {
     if (!cache) return;
@@ -104,15 +147,12 @@ watch(
             v-if="modelValue"
             role="dialog"
             fullscreen
-            :ui="{
-                footer: 'justify-end border-t-2',
-                body: 'overflow-hidden flex-1 p-0! h-[100dvh] w-[100dvw]',
-            }"
+            v-bind="imageViewerModalProps"
         >
-            <div class="fixed inset-x-0 top-0 z-[1200] px-2 pt-2">
+            <div class="fixed inset-x-0 top-0 z-1200 px-2 pt-2">
                 <div
                     @click.stop.prevent
-                    class="mx-auto flex max-w-[min(540px,90vw)] flex-wrap items-center justify-between gap-2 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-highest)]/95 p-1 backdrop-blur"
+                    class="mx-auto flex max-w-[min(540px,90vw)] flex-wrap items-center justify-between gap-2 rounded-md border-[var(--md-border-width)] border-(--md-outline-variant) bg-(--md-surface-container-highest)/95 p-1 backdrop-blur"
                 >
                     <div class="flex items-center">
                         <UButtonGroup v-if="!props.trashMode">
@@ -136,7 +176,7 @@ watch(
                             </UButton>
                             <UButton
                                 variant="light"
-                                class="text-[var(--md-error)]"
+                                class="text-(--md-error)"
                                 size="sm"
                                 icon="pixelarticons:image-delete"
                                 @click.stop.self="meta && emit('delete', meta)"
@@ -155,7 +195,7 @@ watch(
                             </UButton>
                             <UButton
                                 variant="light"
-                                class="text-[var(--md-error)]"
+                                class="text-(--md-error)"
                                 size="sm"
                                 icon="pixelarticons:trash"
                                 @click.stop.self="meta && emit('delete', meta)"
@@ -174,7 +214,7 @@ watch(
                 </div>
             </div>
             <div
-                class="bg-black/75 dark:bg-white/5 backdrop-blur-xs w-[100dvw] h-[100dvh] z-[99] overflow-hidden absolute top-0 left-0"
+                class="bg-black/75 dark:bg-white/5 backdrop-blur-xs w-dvw h-dvh z-99 overflow-hidden absolute top-0 left-0"
                 @click.self="close"
             >
                 <div

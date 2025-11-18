@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, reactive, watch, ref } from 'vue';
+import {
+    computed,
+    onMounted,
+    onBeforeUnmount,
+    reactive,
+    watch,
+    ref,
+} from 'vue';
 import type { FileMeta } from '../../db/schema';
 import { getFileBlob } from '../../db/files';
 import { reportError } from '../../utils/errors';
 import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
     items: FileMeta[];
@@ -250,6 +258,42 @@ function toggleSelect(hash: string) {
     emit('toggle-select', hash);
 }
 
+const downloadButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'images.gallery',
+        identifier: 'images.gallery.download',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'solid' as const,
+        color: 'on-surface' as const,
+        square: true as const,
+        class: 'flex items-center justify-center',
+        icon: 'pixelarticons:download' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const copyButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'images.gallery',
+        identifier: 'images.gallery.copy',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'solid' as const,
+        color: 'on-surface' as const,
+        square: true as const,
+        class: 'flex items-center justify-center',
+        icon: 'pixelarticons:copy' as const,
+        ...(overrides.value as any),
+    };
+});
+
 defineExpose({ ensureUrl });
 </script>
 
@@ -265,19 +309,20 @@ defineExpose({ ensureUrl });
             class="mb-4 break-inside-avoid"
         >
             <div
-                class="group relative w-full overflow-hidden rounded-md border-2 transition duration-150"
+                class="group relative w-full overflow-hidden rounded-md border-[length:var(--md-border-width)] transition duration-150"
                 :class="
                     props.selectionMode && isSelected(m.hash)
-                        ? 'border-[var(--md-primary)] shadow-[2px_2px_0_var(--md-primary)]'
-                        : 'border-[var(--md-outline-variant)] shadow-[2px_2px_0_var(--md-outline)]'
+                        ? 'border-[var(--md-primary)]'
+                        : 'border-[var(--md-border-color)]'
                 "
             >
                 <UButton
                     v-if="props.selectionMode"
                     type="button"
                     size="sm"
+                    color="primary"
                     square
-                    class="retro-btn absolute! z-[11] top-2 left-2 flex items-center justify-center"
+                    class="absolute! z-[11] top-2 left-2 flex items-center justify-center"
                     :aria-pressed="isSelected(m.hash)"
                     role="checkbox"
                     :aria-checked="isSelected(m.hash)"
@@ -330,21 +375,13 @@ defineExpose({ ensureUrl });
                 >
                     <div class="pointer-events-auto mb-3 flex gap-1.5">
                         <UButton
-                            size="sm"
-                            variant="light"
-                            square
-                            class="flex item-center justify-center"
-                            :icon="'pixelarticons:download'"
+                            v-bind="downloadButtonProps"
                             :disabled="props.isDeleting"
                             aria-label="Download image"
                             @click.stop="download(m)"
                         />
                         <UButton
-                            size="sm"
-                            square
-                            variant="light"
-                            class="flex item-center justify-center"
-                            :icon="'pixelarticons:copy'"
+                            v-bind="copyButtonProps"
                             :disabled="props.isDeleting"
                             aria-label="Copy image"
                             @click.stop="copy(m)"
