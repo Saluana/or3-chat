@@ -1,7 +1,8 @@
 <template>
     <div
         v-if="isDesktop && paneCount > 1"
-        class="pane-resize-handle absolute top-0 bottom-0 w-1 cursor-col-resize select-none group z-20 -right-0.5"
+        class="pane-resize-handle absolute top-0 bottom-0 w-2 cursor-col-resize select-none group z-20 pointer-events-auto right-0 translate-x-full"
+        :data-pane-index="paneIndex"
         @pointerdown="onPointerDown"
         @mouseenter="isHovered = true"
         @mouseleave="isHovered = false"
@@ -15,16 +16,16 @@
     >
         <!-- Invisible hit area that extends 2px on each side -->
         <div
-            class="absolute inset-y-0 -left-[2px] -right-[2px] pointer-events-auto"
+            class="pane-resize-handle__hit-area absolute inset-y-0 left-0 right-0 pointer-events-auto"
         ></div>
-        
+
         <!-- Visible indicator (only on hover or focus) -->
         <div
             :class="[
-                'absolute inset-y-0 my-auto h-24 rounded-full transition-all duration-200',
+                'pane-resize-handle__indicator absolute inset-y-0 left-1/2 -translate-x-1/2 my-auto h-18 rounded-full transition-all duration-200 pointer-events-none',
                 isHovered || isFocused
-                    ? 'w-1.5 bg-[var(--md-primary)] opacity-100'
-                    : 'w-0 opacity-0'
+                    ? 'w-1.5 bg-[var(--md-primary)] opacity-100 shadow-[0_0_6px_rgba(0,0,0,0.15)]'
+                    : 'w-1.5 bg-[var(--md-primary)]/0 opacity-100',
             ]"
         ></div>
     </div>
@@ -58,9 +59,4 @@ function onHandleKeydown(e: KeyboardEvent) {
 }
 </script>
 
-<style scoped>
-.pane-resize-handle {
-    /* Position on the exact border */
-    transform: translateX(50%);
-}
-</style>
+<style scoped></style>

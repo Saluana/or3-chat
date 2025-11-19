@@ -1,8 +1,6 @@
 <template>
     <div v-if="projects.length" class="space-y-1">
-        <h1 class="text-xs uppercase opacity-70 px-1 py-3 select-none">
-            Projects
-        </h1>
+        <h1 class="sidebar-section-heading px-1 py-3 select-none">Projects</h1>
         <UTree
             v-model:expanded="internalExpanded"
             :items="treeItems"
@@ -15,22 +13,22 @@
                     <!-- Root-level quick add buttons (appear on hover) -->
                     <template v-if="level === 0">
                         <button
-                            class="cursor-pointer sm:opacity-0 sm:group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            class="cursor-pointer sm:opacity-0 sm:group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[var(--md-border-radius)] hover:bg-black/10 active:bg-black/20"
                             @click.stop="emit('addChat', item.value)"
                             aria-label="Add chat to project"
                         >
                             <UIcon
-                                name="pixelarticons:message-plus"
+                                :name="useIcon('sidebar.new_chat').value"
                                 class="w-4 h-4 opacity-70"
                             />
                         </button>
                         <button
-                            class="cursor-pointer sm:opacity-0 sm:group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            class="cursor-pointer sm:opacity-0 sm:group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[var(--md-border-radius)] hover:bg-black/10 active:bg-black/20"
                             @click.stop="emit('addDocument', item.value)"
                             aria-label="Add document to project"
                         >
                             <UIcon
-                                name="pixelarticons:note-plus"
+                                :name="useIcon('sidebar.new_note').value"
                                 class="w-4 h-4 opacity-70"
                             />
                         </button>
@@ -43,8 +41,11 @@
                         }"
                     >
                         <span
-                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-[var(--md-border-radius)] hover:bg-black/10 active:bg-black/20"
+                            role="button"
+                            tabindex="0"
                             @click.stop
+                            @keydown="handlePopoverTriggerKey"
                             :aria-label="
                                 level === 0
                                     ? 'Project actions'
@@ -52,7 +53,7 @@
                             "
                         >
                             <UIcon
-                                name="pixelarticons:more-vertical"
+                                :name="useIcon('ui.more').value"
                                 class="w-4 h-4 opacity-70"
                             />
                         </span>
@@ -60,22 +61,14 @@
                             <div class="p-1 w-48 space-y-1">
                                 <template v-if="level === 0">
                                     <UButton
-                                        color="neutral"
-                                        variant="popover"
-                                        size="sm"
-                                        class="w-full justify-start cursor-pointer"
-                                        icon="pixelarticons:edit"
+                                        v-bind="renameProjectButtonProps"
                                         @click.stop.prevent="
                                             emit('renameProject', item.value)
                                         "
                                         >Rename Project</UButton
                                     >
                                     <UButton
-                                        color="error"
-                                        variant="popover"
-                                        size="sm"
-                                        class="w-full justify-start cursor-pointer text-error-500"
-                                        icon="pixelarticons:trash"
+                                        v-bind="deleteProjectButtonProps"
                                         @click.stop.prevent="
                                             emit('deleteProject', item.value)
                                         "
@@ -90,11 +83,8 @@
                                                 !action.showOn ||
                                                 action.showOn.includes('root')
                                             "
+                                            v-bind="extraActionButtonProps"
                                             :icon="action.icon"
-                                            color="neutral"
-                                            variant="popover"
-                                            size="sm"
-                                            class="w-full justify-start"
                                             @click="
                                                 () =>
                                                     runExtraAction(action, {
@@ -107,11 +97,7 @@
                                 </template>
                                 <template v-else>
                                     <UButton
-                                        color="neutral"
-                                        variant="popover"
-                                        size="sm"
-                                        class="w-full justify-start"
-                                        icon="pixelarticons:edit"
+                                        v-bind="renameEntryButtonProps"
                                         @click.stop.prevent="
                                             emit('renameEntry', {
                                                 projectId: item.parentId!,
@@ -122,11 +108,7 @@
                                         >Rename</UButton
                                     >
                                     <UButton
-                                        color="error"
-                                        variant="popover"
-                                        size="sm"
-                                        class="w-full justify-start text-error-500"
-                                        icon="pixelarticons:trash"
+                                        v-bind="removeEntryButtonProps"
                                         @click.stop.prevent="
                                             emit('removeFromProject', {
                                                 projectId: item.parentId!,
@@ -142,11 +124,8 @@
                                     >
                                         <UButton
                                             v-if="!action.showOn || action.showOn.includes(item.kind as ProjectTreeKind)"
+                                            v-bind="extraActionButtonProps"
                                             :icon="action.icon"
-                                            color="neutral"
-                                            variant="popover"
-                                            size="sm"
-                                            class="w-full justify-start"
                                             @click="
                                                 () =>
                                                     runExtraAction(action, {
@@ -173,6 +152,8 @@ import {
     type ProjectEntry,
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 
 interface ProjectRow {
     id: string;
@@ -232,6 +213,91 @@ watch(
 );
 watch(internalExpanded, (val) => emit('update:expanded', val));
 
+// Theme overrides for project action buttons
+const renameProjectButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.project-rename',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'neutral' as const,
+        variant: 'popover' as const,
+        size: 'sm' as const,
+        icon: useIcon('ui.edit').value,
+        class: 'w-full justify-start cursor-pointer',
+        ...(overrides.value as any),
+    };
+});
+
+const deleteProjectButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.project-delete',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'error' as const,
+        variant: 'popover' as const,
+        size: 'sm' as const,
+        icon: useIcon('ui.trash').value,
+        class: 'w-full justify-start cursor-pointer text-error-500',
+        ...(overrides.value as any),
+    };
+});
+
+const renameEntryButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.project-entry-rename',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'neutral' as const,
+        variant: 'popover' as const,
+        size: 'sm' as const,
+        icon: useIcon('ui.edit').value,
+        class: 'w-full justify-start',
+        ...(overrides.value as any),
+    };
+});
+
+const removeEntryButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.project-entry-remove',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'error' as const,
+        variant: 'popover' as const,
+        size: 'sm' as const,
+        icon: useIcon('ui.trash').value,
+        class: 'w-full justify-start text-error-500',
+        ...(overrides.value as any),
+    };
+});
+
+const extraActionButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.project-extra-action',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'neutral' as const,
+        variant: 'popover' as const,
+        size: 'sm' as const,
+        class: 'w-full justify-start',
+        ...(overrides.value as any),
+    };
+});
+
 const treeItems = computed<TreeItem[]>(() =>
     props.projects.map<TreeItem>((p) => {
         const children: TreeItem[] = normalizeProjectData(p.data).map<TreeItem>(
@@ -243,8 +309,8 @@ const treeItems = computed<TreeItem[]>(() =>
                     value: entry.id,
                     icon:
                         kind === 'doc'
-                            ? 'pixelarticons:note'
-                            : 'pixelarticons:chat',
+                            ? useIcon('sidebar.note').value
+                            : useIcon('sidebar.chat').value,
                     kind,
                     parentId: p.id,
                     onSelect: (e: Event) => {
@@ -268,8 +334,10 @@ const treeItems = computed<TreeItem[]>(() =>
 const ui = {
     // Remove internal scrolling; let the parent sidebar container handle overflow
     root: 'pr-1',
-    link: 'group/addchat text-[13px] rounded-[4px] py-1',
-    item: 'cursor-pointer ',
+    link: 'group/addchat text-[13px] rounded-[var(--md-border-radius)] py-1 transition-colors',
+    item: 'cursor-pointer',
+    // Add smooth transitions for expand/collapse
+    children: 'transition-all duration-200 ease-out overflow-hidden',
 };
 
 // Plugin project tree actions
@@ -289,6 +357,15 @@ async function runExtraAction(action: any, data: { root?: any; child?: any }) {
         console.error('Project tree action error', action.id, e);
     }
 }
+
+function handlePopoverTriggerKey(event: KeyboardEvent) {
+    const key = event.key;
+    if (key !== 'Enter' && key !== ' ') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.currentTarget as HTMLElement | null;
+    target?.click();
+}
 </script>
 
 <style scoped>
@@ -296,5 +373,40 @@ async function runExtraAction(action: any, data: { root?: any; child?: any }) {
 :deep(ul[role='tree']) {
     max-height: none !important;
     overflow: visible !important;
+}
+
+/* Smooth expand/collapse animation for tree children using grid-template-rows */
+:deep(li[role='treeitem']) {
+    display: grid;
+    grid-template-rows: auto 1fr;
+}
+
+:deep(ul[role='group']) {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* When parent is collapsed, hide children */
+:deep(
+        li[role='treeitem']:not(:has(button[aria-expanded='true']))
+            > ul[role='group']
+    ) {
+    grid-template-rows: 0fr;
+}
+
+/* Inner wrapper for overflow */
+:deep(ul[role='group'] > li) {
+    overflow: hidden;
+}
+
+/* Enhanced chevron rotation */
+:deep([data-slot='link-trailing-icon']) {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Smooth hover transitions */
+:deep([data-slot='link']) {
+    transition: background-color 0.15s ease-out;
 }
 </style>

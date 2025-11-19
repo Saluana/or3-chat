@@ -1,19 +1,32 @@
 <template>
     <main
         ref="containerRoot"
-        class="flex w-full flex-1 h-full flex-col overflow-hidden relative"
+        v-bind="containerProps"
+        :class="[
+            'chat-container-root flex w-full flex-1 h-full flex-col overflow-hidden relative',
+            containerProps?.class ?? '',
+        ]"
     >
         <!-- Scroll viewport -->
         <div
             ref="scrollParent"
-            class="w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
+            v-bind="scrollContainerProps"
+            :class="[
+                'chat-scroll-container w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars',
+                scrollContainerProps?.class ?? '',
+            ]"
             :style="scrollParentStyle"
         >
             <div
-                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-8 sm:pb-10 pt-safe-offset-10 flex flex-col"
+                v-bind="messageListProps"
+                :class="[
+                    'chat-message-list mx-auto w-full px-1.5 sm:max-w-[768px] pb-8 sm:pb-10 pt-safe-offset-10 flex flex-col',
+                    messageListProps?.class ?? '',
+                ]"
             >
                 <!-- Virtualized stable messages (Req 3.1) -->
                 <VirtualMessageList
+                    class="virtual-message-list"
                     :messages="stableMessages"
                     :item-size-estimation="520"
                     :overscan="5"
@@ -21,12 +34,12 @@
                     :is-streaming="streamActive"
                     :editing-active="anyEditing"
                     @scroll-state="onScrollState"
-                    wrapper-class="flex flex-col"
+                    wrapper-class="virtual-message-list-wrapper flex flex-col"
                 >
                     <template #item="{ message, index }">
                         <div
                             :key="message.id || message.stream_id || index"
-                            class="group relative w-full max-w-full min-w-0 space-y-4 break-words"
+                            class="messages-container not-first:group relative w-full max-w-full min-w-0 space-y-4 break-words"
                             :data-msg-id="message.id"
                             :data-stream-id="message.stream_id"
                         >
@@ -46,7 +59,7 @@
                         <!-- Streaming tail appended (Req 3.2) -->
                         <div
                             v-if="streamingMessage"
-                            class=""
+                            class="streaming-tail"
                             style="overflow-anchor: none"
                             ref="tailWrapper"
                         >
@@ -66,10 +79,24 @@
             </div>
         </div>
         <!-- Input area overlay -->
-        <div :class="inputWrapperClass" :style="inputWrapperStyle">
-            <div :class="innerInputContainerClass">
+        <div
+            v-bind="inputWrapperProps"
+            :class="[
+                'chat-input-wrapper',
+                inputWrapperClass,
+                inputWrapperProps?.class ?? '',
+            ]"
+            :style="inputWrapperStyle"
+        >
+            <div
+                v-bind="innerInputContainerProps"
+                :class="[
+                    'chat-inner-input-container',
+                    innerInputContainerClass,
+                    innerInputContainerProps?.class ?? '',
+                ]"
+            >
                 <lazy-chat-input-dropper
-                    hydrate-on-idle
                     :loading="loading"
                     :streaming="loading"
                     :container-width="containerWidth"
@@ -80,7 +107,7 @@
                     @stop-stream="onStopStream"
                     @pending-prompt-selected="onPendingPromptSelected"
                     @resize="onInputResize"
-                    class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
+                    class="chat-input pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
                 />
             </div>
         </div>
@@ -109,6 +136,7 @@ import VirtualMessageList from './VirtualMessageList.vue';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 // Removed onMounted/watchEffect (unused)
 
 // Debug utilities removed per request.
@@ -121,8 +149,13 @@ const containerRoot: Ref<HTMLElement | null> = ref(null);
 const { width: containerWidth } = useElementSize(containerRoot);
 // Live height emitted directly from component for more precise padding (especially during dynamic editor growth)
 const emittedInputHeight = ref<number | null>(null);
-// Rely on emitted height; fallback to a conservative default when unavailable
-const effectiveInputHeight = computed(() => emittedInputHeight.value ?? 140);
+// CLS fix: use a stable default height that matches typical input to prevent shift during initial render
+// Conservative estimate for chat input (single line + padding + controls)
+const DEFAULT_INPUT_HEIGHT = 140;
+// Rely on emitted height; fallback to stable default when unavailable
+const effectiveInputHeight = computed(
+    () => emittedInputHeight.value ?? DEFAULT_INPUT_HEIGHT
+);
 // Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
 const bottomPad = computed(() => {
     const base = Math.round(effectiveInputHeight.value + 16); // Add 16px buffer
@@ -137,13 +170,18 @@ const scrollParentStyle = computed<CSSProperties>(() => ({
 
 // Mobile fixed wrapper classes/styles
 // Use fixed positioning on both mobile & desktop so top bars / multi-pane layout shifts don't push input off viewport.
+// CLS fix: Reserve stable height to prevent layout shift when lazy input hydrates
 const inputWrapperClass = computed(() =>
     isMobile.value
         ? 'pointer-events-none fixed inset-x-0 bottom-0 z-40'
         : // Desktop: keep input scoped to its pane container
           'pointer-events-none absolute inset-x-0 bottom-0 z-10'
 );
-const inputWrapperStyle = computed(() => ({}));
+const inputWrapperStyle = computed<CSSProperties>(() => ({
+    minHeight: `${DEFAULT_INPUT_HEIGHT}px`, // Reserve space to prevent CLS
+    // Prevent child content from changing wrapper height during hydration
+    contain: 'layout' as const,
+}));
 const innerInputContainerClass = computed(() =>
     isMobile.value
         ? 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-[calc(env(safe-area-inset-bottom)+6px)]'
@@ -411,6 +449,42 @@ function onStopStream() {
         (chat.value as any)?.abort?.();
     } catch {}
 }
+
+// Theme overrides
+const containerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.container',
+    isNuxtUI: false,
+});
+
+const scrollContainerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.scroll-container',
+    isNuxtUI: false,
+});
+
+const messageListProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.message-list',
+    isNuxtUI: false,
+});
+
+const inputWrapperProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.input-wrapper',
+    isNuxtUI: false,
+});
+
+const innerInputContainerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.inner-input-container',
+    isNuxtUI: false,
+});
 </script>
 
 <style>

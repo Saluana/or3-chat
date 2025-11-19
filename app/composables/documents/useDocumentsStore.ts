@@ -211,3 +211,15 @@ export async function releaseDocument(
         documentsMap.delete(id);
     }
 }
+
+// HMR cleanup: clear all pending timers on module disposal
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        for (const [_id, st] of documentsMap) {
+            if (st.timer) {
+                clearTimeout(st.timer);
+                st.timer = undefined;
+            }
+        }
+    });
+}

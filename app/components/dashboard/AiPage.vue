@@ -1,9 +1,10 @@
 <template>
-    <div class="px-4 py-4 space-y-12 text-sm">
+    <div id="dashboard-ai-page-container" class="px-4 py-4 space-y-12 text-sm">
         <p ref="liveStatus" class="sr-only" aria-live="polite"></p>
 
         <!-- Master System Prompt -->
         <section
+            id="dashboard-ai-master-prompt-section"
             class="section-card space-y-3"
             role="group"
             aria-labelledby="ai-section-master-prompt"
@@ -19,26 +20,26 @@
                 the threads system prompts. Keep it short and general.
             </p>
             <UTextarea
-                class="w-full leading-snug focus:ring-0 focus:outline-0"
+                id="dashboard-ai-master-textarea"
+                v-bind="masterPromptTextareaProps"
                 :value="local.masterPrompt"
                 @input="onPromptInput"
-                :ui="{
-                    base: 'min-h-40 my-3',
-                }"
-                :aria-describedby="'ai-master-help ai-master-count'"
+                :aria-describedby="'ai-master-prompt-input'"
                 spellcheck="false"
                 placeholder="e.g. You are a concise, helpful assistant who prefers structured, minimal answers."
             ></UTextarea>
-            <div class="flex items-center justify-between">
+            <div
+                id="dashboard-ai-master-actions"
+                class="flex items-center justify-between"
+            >
                 <span
                     id="ai-master-count"
                     class="text-xs opacity-70 tabular-nums"
                     >{{ local.masterPrompt.length }} chars</span
                 >
                 <UButton
-                    size="sm"
-                    variant="basic"
-                    class="retro-btn"
+                    id="dashboard-ai-save-master-btn"
+                    v-bind="savePromptButtonProps"
                     @click="saveMasterPrompt"
                     :disabled="savingPrompt"
                 >
@@ -49,6 +50,7 @@
 
         <!-- Model Defaults -->
         <section
+            id="dashboard-ai-model-defaults-section"
             class="section-card space-y-3"
             role="group"
             aria-labelledby="ai-section-model"
@@ -66,29 +68,23 @@
                     aria-label="Default model mode"
                 >
                     <UButton
-                        size="sm"
-                        variant="basic"
-                        class="retro-chip"
-                        :class="{
-                            'bg-primary/50 hover:bg-primary/50':
-                                settings.defaultModelMode === 'lastSelected',
-                        }"
+                        id="dashboard-ai-model-last-selected-btn"
+                        v-bind="modelModeButtonProps"
+                        class="model-mode-btn"
                         :aria-pressed="
                             settings.defaultModelMode === 'lastSelected'
                         "
+                        :active="settings.defaultModelMode === 'lastSelected'"
                         :disabled="settings.defaultModelMode === 'lastSelected'"
                         @click="set({ defaultModelMode: 'lastSelected' })"
                         >Use last selected</UButton
                     >
                     <UButton
-                        size="sm"
-                        variant="basic"
-                        class="retro-chip"
-                        :class="{
-                            'bg-primary/50 hover:bg-primary/50':
-                                settings.defaultModelMode === 'fixed',
-                        }"
+                        id="dashboard-ai-model-fixed-btn"
+                        v-bind="modelModeButtonProps"
+                        class="model-mode-btn"
                         :aria-pressed="settings.defaultModelMode === 'fixed'"
+                        :active="settings.defaultModelMode === 'fixed'"
                         :disabled="settings.defaultModelMode === 'fixed'"
                         @click="set({ defaultModelMode: 'fixed' })"
                         >Use fixed model</UButton
@@ -101,26 +97,30 @@
             </p>
 
             <div v-if="settings.defaultModelMode === 'fixed'" class="space-y-3">
-                <label class="text-xs" for="model-search">Search models</label>
+                <label class="text-xs" for="dashboard-model-search-input"
+                    >Search models</label
+                >
                 <UInput
-                    id="model-search"
+                    id="dashboard-model-search-input"
+                    v-bind="modelSearchInputProps"
                     class="w-full"
-                    type="text"
                     placeholder="Search by name, id, or description"
                     v-model="searchQuery"
                     :disabled="modelsBusy"
                 />
                 <div
-                    class="max-h-56 overflow-auto border-2 rounded-[3px] p-1 space-y-1"
+                    id="dashboard-ai-model-results"
+                    class="max-h-56 overflow-auto border-[var(--md-border-width)] rounded-[var(--md-border-radius)] p-1 space-y-1"
                     role="listbox"
                     aria-label="Model results"
                 >
-                    <button
+                    <UButton
                         v-for="m in limitedResults"
                         :key="m.id"
-                        type="button"
-                        class="retro-btn px-2 py-0.5 hover:bg-primary/5 cursor-pointer w-full flex items-center justify-between"
+                        :id="`dashboard-model-option-${m.id}`"
+                        v-bind="modelItemButtonProps"
                         :class="m.id === settings.fixedModelId ? 'active' : ''"
+                        :active="m.id === settings.fixedModelId"
                         @click="onPickModel(m.id)"
                         :aria-selected="m.id === settings.fixedModelId"
                         role="option"
@@ -131,7 +131,7 @@
                         <span class="opacity-60 text-xs ml-2 truncate">{{
                             m.canonical_slug || m.id
                         }}</span>
-                    </button>
+                    </UButton>
                     <div
                         v-if="!limitedResults.length && !modelsBusy"
                         class="text-xs opacity-70 px-1 py-2"
@@ -142,7 +142,10 @@
                         Loading…
                     </div>
                 </div>
-                <div class="flex items-center justify-between">
+                <div
+                    id="dashboard-ai-model-selection-row"
+                    class="flex items-center justify-between"
+                >
                     <div class="text-xs opacity-70">
                         Selected:
                         <span class="tabular-nums">{{
@@ -150,9 +153,8 @@
                         }}</span>
                     </div>
                     <UButton
-                        size="sm"
-                        variant="basic"
-                        class="retro-btn"
+                        id="dashboard-ai-clear-model-btn"
+                        v-bind="clearModelButtonProps"
                         @click="clearModel"
                         :disabled="!settings.fixedModelId"
                         >Clear</UButton
@@ -163,6 +165,7 @@
 
         <!-- Reset -->
         <section
+            id="dashboard-ai-reset-section"
             class="section-card space-y-2"
             role="group"
             aria-labelledby="ai-section-reset"
@@ -177,9 +180,8 @@
                 Reset all AI settings back to defaults.
             </p>
             <UButton
-                size="sm"
-                variant="basic"
-                class="retro-btn"
+                id="dashboard-ai-reset-btn"
+                v-bind="resetButtonProps"
                 @click="onReset"
                 >Reset to defaults</UButton
             >
@@ -192,6 +194,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useModelSearch } from '~/core/search/useModelSearch';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const liveStatus = ref<HTMLElement | null>(null);
 const { settings: settingsRef, set, reset } = useAiSettings();
@@ -245,26 +248,137 @@ function onReset() {
     if (liveStatus.value)
         liveStatus.value.textContent = 'AI settings reset to defaults';
 }
+
+// Theme overrides for buttons
+const savePromptButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.ai.save-prompt',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'solid' as const,
+        color: 'primary' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const modelModeButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.ai.model-mode',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'soft' as const,
+        color: 'primary' as const,
+        activeVariant: 'solid' as const,
+        activeColor: 'primary' as const,
+        activeClass: 'model-mode-btn--active',
+        inactiveClass: 'model-mode-btn--inactive',
+        ...(overrides.value as any),
+    };
+});
+
+const modelSearchInputProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'input',
+        context: 'dashboard',
+        identifier: 'dashboard.ai.model-search',
+        isNuxtUI: true,
+    });
+    return {
+        type: 'text' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const modelItemButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.ai.model-item',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'md' as const,
+        variant: 'ghost' as const,
+        class: 'model-result-item theme-btn px-2 py-0.5 hover:bg-primary/5 cursor-pointer w-full flex items-center justify-between',
+        block: true as const,
+        ...(overrides.value as any),
+    };
+});
+
+const clearModelButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.ai.clear-model',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'outline' as const,
+        color: 'primary' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const masterPromptTextareaProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'textarea',
+        context: 'dashboard',
+        identifier: 'dashboard.ai.master-prompt',
+        isNuxtUI: true,
+    });
+    const overridesValue = (overrides.value as Record<string, any>) || {};
+    const overrideUi = (overridesValue.ui as Record<string, any>) || {};
+    const textareaClasses = [
+        'theme-input',
+        'w-full',
+        'leading-snug',
+        'focus:ring-0',
+        'focus:outline-0',
+        'min-h-40',
+        'my-3',
+        overrideUi.textarea,
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+
+    return {
+        ...(overridesValue as any),
+        ui: {
+            root: 'w-full',
+            textarea: textareaClasses,
+            ...overrideUi,
+        },
+    };
+});
+
+const resetButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.ai.reset',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'outline' as const,
+        color: 'primary' as const,
+        ...(overrides.value as any),
+    };
+});
 </script>
 
 <style scoped>
-/* Match ThemePage.vue styling */
-.section-card {
-    position: relative;
-    padding: 1.25rem 1rem 1rem 1rem; /* MD3 dense card spacing */
-    border: 2px solid var(--md-inverse-surface);
-    background: linear-gradient(
-        0deg,
-        color-mix(
-            in oklab,
-            var(--md-surface) 95%,
-            var(--md-surface-variant) 5%
-        ),
-        color-mix(in oklab, var(--md-surface) 92%, var(--md-surface-variant) 8%)
-    );
-    border-radius: 6px;
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
+/* Component-specific layout and typography (non-decorative) */
 .group-heading {
     margin-top: -0.25rem; /* optical align */
     letter-spacing: 0.08em;
@@ -276,10 +390,17 @@ function onReset() {
     color: var(--md-on-surface-variant, var(--md-on-surface));
     opacity: 0.7;
 }
-
-@media (prefers-reduced-motion: reduce) {
-    .section-card {
-        transition: none;
-    }
+.model-mode-btn {
+    text-transform: none;
+    padding-inline: 0.75rem;
+    min-width: 8rem;
+}
+.model-mode-btn--active {
+    box-shadow: inset 0 0 0 1px var(--md-on-surface),
+        0 0 0 1px var(--md-primary);
+}
+.model-mode-btn--inactive {
+    opacity: 0.7;
+    border-color: var(--md-outline-variant);
 }
 </style>

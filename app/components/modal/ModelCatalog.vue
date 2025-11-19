@@ -1,28 +1,25 @@
 <template>
     <UModal
+        v-bind="modelCatalogModalProps"
         v-model:open="open"
-        :ui="{
-            footer: 'justify-end border-t-2',
-            body: 'p-0!',
-        }"
         title="Model settings"
         description="Browse and favorite models from the OpenRouter catalog."
-        class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
     >
         <template #body>
-            <div class="flex flex-col h-full">
+            <div class="model-catalog-shell flex flex-col h-full">
                 <div
-                    class="px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
+                    class="model-catalog-header px-6 h-[50px] bg-surface backdrop-blur-sm flex items-center"
                 >
-                    <div class="flex items-center gap-3 w-full">
-                        <div class="relative w-full max-w-md">
+                    <div
+                        class="model-catalog-search flex items-center justify-between gap-3 w-full"
+                    >
+                        <div
+                            class="model-catalog-search-input-wrapper relative w-full max-w-md"
+                        >
                             <UInput
                                 v-model="searchQuery"
-                                icon="pixelarticons:search"
-                                placeholder="Search models (id, name, description, modality)"
-                                size="sm"
-                                class="w-full pr-8"
-                                :ui="{ base: 'w-full' }"
+                                v-bind="searchInputProps"
+                                class="model-catalog-search-input w-full"
                                 autofocus
                             />
                             <button
@@ -33,17 +30,15 @@
                                 @click="searchQuery = ''"
                             >
                                 <UIcon
-                                    name="i-heroicons-x-mark"
+                                    :name="useIcon('ui.close').value"
                                     class="h-4 w-4"
                                 />
                             </button>
                         </div>
                         <UButton
+                            v-bind="refreshButtonProps"
                             :disabled="refreshing"
-                            size="sm"
-                            variant="ghost"
-                            :square="true"
-                            class="retro-btn border-2 dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
+                            class="model-catalog-refresh-btn theme-btn border-[var(--md-border-width)] dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
                             aria-label="Refresh model catalog"
                             :title="
                                 refreshing
@@ -54,55 +49,61 @@
                         >
                             <UIcon
                                 v-if="!refreshing"
-                                name="i-heroicons-arrow-path"
+                                :name="useIcon('ui.refresh').value"
                                 class="h-4 w-4"
                             />
                             <UIcon
                                 v-else
-                                name="i-heroicons-arrow-path"
+                                :name="useIcon('ui.refresh').value"
                                 class="h-4 w-4 animate-spin"
                             />
                         </UButton>
                     </div>
                 </div>
-                <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
+                <div
+                    v-if="!searchReady"
+                    class="model-catalog-loading p-6 text-sm text-neutral-500"
+                >
                     Indexing models…
                 </div>
-                <div v-else class="flex-1 min-h-0">
+                <div v-else class="model-catalog-list flex-1 min-h-0">
                     <VList
                         :data="chunkedModels as OpenRouterModel[][]"
                         style="height: 100%"
-                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
+                        class="model-catalog-list__rows [scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
                         :overscan="4"
                         #default="{ item: row }"
                     >
                         <div
-                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 pt-2 sm:pt-0 px-2 sm:px-6 w-full"
+                            class="model-catalog-row grid grid-cols-1 sm:grid-cols-2 sm:gap-5 pt-2 sm:pt-0 px-2 sm:px-6 w-full"
                             :class="gridColsClass"
                         >
                             <div
                                 v-for="m in row"
                                 :key="m.id"
-                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
+                                class="model-catalog-item group relative mb-5 flex flex-col justify-between px-4 py-5 bg-[var(--md-surface)] not-odd:bg-[var(--md-surface-hover)] sm:not-odd:bg-[var(--md-surface)] backdrop-blur-sm overflow-hidden h-[170px]"
+                                :data-model-id="m.id"
                             >
                                 <div
-                                    class="flex items-start justify-between gap-2"
+                                    class="model-catalog-item__header flex items-start justify-between gap-2"
                                 >
-                                    <div class="flex flex-col min-w-0">
+                                    <div
+                                        class="model-catalog-item__title-area flex flex-col min-w-0"
+                                    >
                                         <div
-                                            class="font-medium text-sm truncate"
+                                            class="model-catalog-item__title font-medium text-sm truncate"
                                             :title="m.canonical_slug"
                                         >
                                             {{ m.canonical_slug }}
                                         </div>
                                         <div
-                                            class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
+                                            class="model-catalog-item__context text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
                                         >
                                             CTX {{ m.context_length }}
                                         </div>
                                     </div>
                                     <button
-                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px] cursor-pointer"
+                                        class="model-catalog-item__favorite text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px] cursor-pointer"
                                         :aria-pressed="isFavorite(m)"
                                         @click.stop="toggleFavorite(m)"
                                         :title="
@@ -116,9 +117,11 @@
                                     </button>
                                 </div>
                                 <div
-                                    class="mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
+                                    class="model-catalog-item__pricing mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
                                 >
-                                    <div class="flex flex-col">
+                                    <div
+                                        class="model-catalog-item__pricing-vitals flex flex-col"
+                                    >
                                         <span
                                             class="text-neutral-500 dark:text-neutral-400"
                                             >Input</span
@@ -134,7 +137,7 @@
                                         >
                                     </div>
                                     <div
-                                        class="flex flex-col items-end text-right"
+                                        class="model-catalog-item__pricing-output flex flex-col items-end text-right"
                                     >
                                         <span
                                             class="text-neutral-500 dark:text-neutral-400"
@@ -152,7 +155,7 @@
                                     </div>
                                 </div>
                                 <div
-                                    class="mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
+                                    class="model-catalog-item__footer mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
                                 >
                                     <span>{{
                                         m.architecture?.modality || 'text'
@@ -160,14 +163,14 @@
                                     <span class="opacity-60">/1M tokens</span>
                                 </div>
                                 <div
-                                    class="absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
+                                    class="model-catalog-item__outline absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
                                 />
                             </div>
                         </div>
                     </VList>
                     <div
                         v-if="!chunkedModels.length && searchQuery"
-                        class="px-6 pb-6 text-xs text-neutral-500"
+                        class="model-catalog-empty px-6 pb-6 text-xs text-neutral-500"
                     >
                         No models match "{{ searchQuery }}".
                     </div>
@@ -178,10 +181,12 @@
     </UModal>
 </template>
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { VList } from 'virtua/vue';
 import { useModelSearch } from '~/core/search/useModelSearch';
 import type { OpenRouterModel } from '~/core/auth/models-service';
+import { useModelStore } from '~/composables/chat/useModelStore';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
     showModal: boolean;
@@ -194,6 +199,49 @@ const open = computed({
     set: (value: boolean) => emit('update:showModal', value),
 });
 
+const modelCatalogModalOverrides = useThemeOverrides({
+    component: 'modal',
+    context: 'modal',
+    identifier: 'modal.model-catalog',
+    isNuxtUI: true,
+});
+
+const modelCatalogModalProps = computed(() => {
+    const baseClass =
+        'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden';
+    const baseUi = {
+        footer: 'justify-end border-t-[var(--md-border-width)] border-[color:var(--md-border-color)]',
+        body: 'p-0!',
+    } as Record<string, unknown>;
+
+    const overrideValue =
+        (modelCatalogModalOverrides.value as Record<string, unknown>) || {};
+    const overrideClass =
+        typeof overrideValue.class === 'string'
+            ? (overrideValue.class as string)
+            : '';
+    const overrideUi =
+        (overrideValue.ui as Record<string, unknown> | undefined) || {};
+    const mergedUi = { ...baseUi, ...overrideUi };
+    const rest = Object.fromEntries(
+        Object.entries(overrideValue).filter(
+            ([key]) => key !== 'class' && key !== 'ui'
+        )
+    ) as Record<string, unknown>;
+
+    const result: Record<string, unknown> = {
+        ...rest,
+        ui: mergedUi,
+    };
+
+    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
+    if (mergedClass) {
+        result.class = mergedClass;
+    }
+
+    return result;
+});
+
 const modelCatalog = ref<OpenRouterModel[]>([]);
 // Search state (Orama index built client-side)
 const {
@@ -201,6 +249,57 @@ const {
     results: searchResults,
     ready: searchReady,
 } = useModelSearch(modelCatalog);
+
+const searchInputProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'input',
+        context: 'modal',
+        identifier: 'model-catalog.search-input',
+        isNuxtUI: true,
+    });
+    const overridesValue = (overrides.value as Record<string, any>) || {};
+    const {
+        class: overrideClass = '',
+        ui: overrideUi = {},
+        ...restOverrides
+    } = overridesValue;
+    const uiOverrides = (overrideUi as Record<string, any>) || {};
+    const baseUi = ['w-full', uiOverrides.base]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+    return {
+        icon: useIcon('ui.search').value,
+        placeholder: 'Search models (id, name, description, modality)',
+        size: 'sm' as const,
+        ...restOverrides,
+        ui: {
+            ...uiOverrides,
+            base: baseUi,
+        },
+        class: [overrideClass].filter(Boolean).join(' '),
+    };
+});
+
+const refreshButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'modal',
+        identifier: 'model-catalog.refresh',
+        isNuxtUI: true,
+    });
+    const overridesValue = (overrides.value as Record<string, any>) || {};
+    const { class: overrideClass = '', ...restOverrides } = overridesValue;
+    return {
+        size: 'sm' as const,
+        variant: 'ghost' as const,
+        square: true as const,
+        ...restOverrides,
+        class: ['model-catalog-refresh-button', overrideClass]
+            .filter(Boolean)
+            .join(' '),
+    };
+});
 
 // Fixed 3-column layout for consistent rows
 const COLS = 2;

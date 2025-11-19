@@ -1,6 +1,6 @@
 <template>
     <div
-        v-if="isDesktop && !collapsed"
+        v-show="isDesktop && !collapsed"
         class="resize-handle-layer hidden md:block absolute top-0 bottom-0 w-3 cursor-col-resize select-none group z-20"
         :class="side === 'right' ? 'left-0' : 'right-0'"
         @pointerdown="onPointerDown"
@@ -14,7 +14,7 @@
         @keydown="onHandleKeydown"
     >
         <div
-            class="absolute inset-y-0 my-auto h-24 w-1.5 rounded-full bg-[var(--md-outline-variant)]/70 group-hover:bg-[var(--md-primary)]/70 transition-colors"
+            class="resize-handle absolute inset-y-0 my-auto h-24 w-1.5 rounded-full bg-(--md-outline-variant)/70 group-hover:bg-(--md-primary)/70 transition-colors"
             :class="side === 'right' ? 'left-0' : 'right-0'"
         ></div>
     </div>

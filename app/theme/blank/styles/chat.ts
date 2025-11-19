@@ -1,0 +1,123 @@
+// Shared button config for attach and settings buttons
+const chatInputButtonConfig = {
+    variant: 'soft' as const,
+    size: 'sm' as const,
+    class: 'min-h-[32px] w-[32px] text-primary flex items-center justify-center p-0 rounded-[var(--md-border-radius)] hover:bg-[var(--md-info-hover)] active:bg-[var(--md-surface-active)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
+};
+
+export const chatOverrides = {
+    /* --- Chat Content --- */
+    'button#shell.pane-close': {
+        class: 'backdrop-blur! flex items-center justify-center',
+    },
+    // All ChatMessage action buttons (copy/retry/branch/edit/etc.)
+    'button.message': {
+        class: 'flex items-center justify-center bg-info text-[var(--md-on-info)] hover:bg-[var(--md-info-hover)] active:bg-[var(--md-info)]/80',
+    },
+    'button#message.reasoning-toggle': {
+        class: 'flex items-center justify-center bg-info/20 text-[var(--md-on-surface)]/90 hover:bg-[var(--md-info-hover)]/30 active:bg-[var(--md-info)]/80',
+    },
+    /* --- Chat Input --- */
+    'div#chat.editor': {
+        class: 'font-[IBM_Plex_Sans] text-[16px]',
+    },
+    'div#chat.input-main-container': {
+        class: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus-within:border-[color:var(--md-primary)] focus-within:ring-1 focus-within:ring-[color:var(--md-primary)] shadow-lg',
+    },
+    'button#chat.attach': chatInputButtonConfig,
+    'button#chat.settings': chatInputButtonConfig,
+    'selectmenu#chat.model-select': {
+        class: 'h-[32px] rounded-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px] ring-0! hover:ring-1! focus-visible:ring-1! cursor-pointer focus-visible:ring-[color:var(--md-primary)]! text-[14px]!',
+        ui: {
+            base: 'text-[14px]!',
+            value: 'text-[14px]!',
+            placeholder: 'text-[14px]!',
+            item: 'text-[14px]!',
+            itemLabel: 'text-[14px]!',
+            content:
+                'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[14px]!',
+        },
+        searchInput: {
+            ui: {
+                base: 'text-[14px]! rounded-none shadow-none! rounded-t-[var(--md-border-radius)]!',
+            },
+        },
+    },
+    'button.settings': {
+        class: 'rounded-none text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] not-last:border-b-[length:var(--md-border-width)] not-last:border-b-[color:var(--md-border-color)] last:rounded-b-[var(--md-border-radius)]',
+        ui: {
+            label: 'text-[14px]!',
+        },
+    },
+    'modal#dashboard.shell': {
+        ui: {
+            body: 'p-0!',
+        },
+    },
+};
+
+export const chatCssSelectors = {
+    '#btn-reasoning-toggle': {
+        style: {
+            backgroundColor: 'var(--md-surface) !important',
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius)',
+        },
+    },
+    '#btn-reasoning-toggle:hover': {
+        style: {
+            backgroundColor: 'var(--md-surface-hover) !important',
+        },
+    },
+    '.reasoning-box': {
+        style: {
+            background: 'var(--md-surface)',
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius)',
+        },
+    },
+    '.cm-text-user': {
+        style: {
+            fontFamily:
+                '"IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important',
+            fontSize: '16px',
+        },
+    },
+    '.cm-action-group': {
+        style: {
+            backgroundColor: 'var(--md-surface-container-high)',
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+        },
+    },
+    // Chat container vertical dividers: apply a right border to every chat container except the last one
+    '.chat-container-root:not(:last-child)': {
+        style: {
+            borderRight: 'var(--md-border-width) solid var(--md-border-color)',
+        },
+    },
+    // Only add a top border when there are multiple panes: apply to any pane that is not the first child
+    '.chat-container-root:not(:first-child)': {
+        style: {
+            borderTop:
+                'var(--md-border-width) solid var(--md-border-color) !important',
+        },
+    },
+    '.cm-assistant': {
+        style: {
+            backgroundColor: 'transparent',
+        },
+    },
+    '.chat-settings-switch': {
+        style: {
+            height: '32px',
+        },
+    },
+    '#btn-collapse-attachments': {
+        style: {
+            backgroundColor: 'transparent !important',
+            color: 'var(--md-on-primary) !important',
+            cursor: 'pointer',
+        },
+    },
+};

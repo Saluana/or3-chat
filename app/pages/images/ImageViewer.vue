@@ -1,10 +1,19 @@
 <script setup lang="ts">
-import { onBeforeUnmount, reactive, watch, ref, nextTick } from 'vue';
+import { onBeforeUnmount, reactive, watch, ref, nextTick, computed } from 'vue';
 import type { FileMeta } from '~/db/schema';
 import { getFileBlob } from '~/db/files';
 import { onKeyStroke } from '@vueuse/core';
 import { reportError } from '~/utils/errors';
 import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '#imports';
+
+const iconDownload = useIcon('image.download');
+const iconCopy = useIcon('image.copy');
+const iconDelete = useIcon('image.delete');
+const iconRepeat = useIcon('image.repeat');
+const iconTrash = useIcon('ui.trash');
+const iconClose = useIcon('ui.close');
 
 const props = defineProps<{
     modelValue: boolean;
@@ -24,6 +33,221 @@ const state = reactive<{ url?: string }>({ url: undefined });
 const overlayEl = ref<HTMLElement | null>(null);
 const cache = useSharedPreviewCache();
 const currentHash = ref<string | null>(null);
+
+const imageViewerModalOverrides = useThemeOverrides({
+    component: 'modal',
+    context: 'modal',
+    identifier: 'modal.image-viewer',
+    isNuxtUI: true,
+});
+
+const imageViewerModalProps = computed(() => {
+    const baseUi = {
+        footer: 'justify-end border-t-[var(--md-border-width)]',
+        body: 'overflow-hidden flex-1 p-0! h-[100dvh] w-[100dvw]',
+    } as Record<string, unknown>;
+
+    const overrideValue =
+        (imageViewerModalOverrides.value as Record<string, unknown>) || {};
+    const overrideClass =
+        typeof overrideValue.class === 'string'
+            ? (overrideValue.class as string)
+            : '';
+    const overrideUi =
+        (overrideValue.ui as Record<string, unknown> | undefined) || {};
+
+    const mergedUi = { ...baseUi, ...overrideUi };
+    const rest = Object.fromEntries(
+        Object.entries(overrideValue).filter(
+            ([key]) => key !== 'class' && key !== 'ui'
+        )
+    ) as Record<string, unknown>;
+
+    const result: Record<string, unknown> = {
+        ...rest,
+        ui: mergedUi,
+    };
+
+    const mergedClass = [overrideClass].filter(Boolean).join(' ');
+    if (mergedClass) {
+        result.class = mergedClass;
+    }
+
+    return result;
+});
+
+const downloadButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'image-viewer',
+        identifier: 'image-viewer.download',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'md' as const,
+        ...overrides.value,
+    };
+});
+
+const copyButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'image-viewer',
+        identifier: 'image-viewer.copy',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'md' as const,
+        ...overrides.value,
+    };
+});
+
+const deleteButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'image-viewer',
+        identifier: 'image-viewer.delete',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'md' as const,
+        class: 'text-(--md-error)',
+        ...overrides.value,
+    };
+});
+
+const restoreButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'image-viewer',
+        identifier: 'image-viewer.restore',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'md' as const,
+        ...overrides.value,
+    };
+});
+
+const permanentDeleteButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'image-viewer',
+        identifier: 'image-viewer.permanent-delete',
+        isNuxtUI: true,
+    });
+    return {
+        variant: 'light' as const,
+        size: 'sm' as const,
+        class: 'text-(--md-error)',
+        ...overrides.value,
+    };
+});
+
+const closeButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'image-viewer',
+        identifier: 'image-viewer.close',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'md' as const,
+        class: 'flex items-center justify-center',
+        ...overrides.value,
+    };
+});
+
+const backdropProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'image-viewer',
+        identifier: 'image-viewer.backdrop',
+        isNuxtUI: false,
+    });
+    return {
+        class: 'bg-black/75 dark:bg-white/5 backdrop-blur-xs w-dvw h-dvh z-99 overflow-hidden absolute top-0 left-0',
+        ...overrides.value,
+    };
+});
+
+const topBarProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'image-viewer',
+        identifier: 'image-viewer.top-bar',
+        isNuxtUI: false,
+    });
+    return {
+        class: 'fixed inset-x-0 top-0 z-1200 px-2 pt-2',
+        ...overrides.value,
+    };
+});
+
+const innerTopBarProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'image-viewer',
+        identifier: 'image-viewer.inner-top-bar',
+        isNuxtUI: false,
+    });
+    return {
+        class: 'mx-auto flex max-w-[min(728px,90vw)] flex-wrap items-center justify-between gap-2 p-1',
+        ...overrides.value,
+    };
+});
+
+const imageContainerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'image-viewer',
+        identifier: 'image-viewer.image-container',
+        isNuxtUI: false,
+    });
+    return {
+        class: 'inset-0 grid h-full w-full place-items-center px-4 pb-4 pt-24 sm:pt-6',
+        ...overrides.value,
+    };
+});
+
+const imageProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'img',
+        context: 'image-viewer',
+        identifier: 'image-viewer.image',
+        isNuxtUI: false,
+    });
+    return {
+        class: 'max-w-[90dvw] sm:max-w-[min(96dvw,1400px)] h-[70dvh] object-contain',
+        ...overrides.value,
+    };
+});
+
+const buttonGroupWrapperProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'image-viewer',
+        identifier: 'image-viewer.button-group-wrapper',
+        isNuxtUI: false,
+    });
+    return {
+        class: 'flex items-center',
+        ...overrides.value,
+    };
+});
+
+const loadingTextProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'image-viewer',
+        identifier: 'image-viewer.loading-text',
+        isNuxtUI: false,
+    });
+    return {
+        class: 'text-white/80 text-sm',
+        ...overrides.value,
+    };
+});
 
 async function load() {
     if (!cache) return;
@@ -104,22 +328,15 @@ watch(
             v-if="modelValue"
             role="dialog"
             fullscreen
-            :ui="{
-                footer: 'justify-end border-t-2',
-                body: 'overflow-hidden flex-1 p-0! h-[100dvh] w-[100dvw]',
-            }"
+            v-bind="imageViewerModalProps"
         >
-            <div class="fixed inset-x-0 top-0 z-[1200] px-2 pt-2">
-                <div
-                    @click.stop.prevent
-                    class="mx-auto flex max-w-[min(540px,90vw)] flex-wrap items-center justify-between gap-2 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-highest)]/95 p-1 backdrop-blur"
-                >
-                    <div class="flex items-center">
+            <div v-bind="topBarProps">
+                <div v-bind="innerTopBarProps">
+                    <div v-bind="buttonGroupWrapperProps">
                         <UButtonGroup v-if="!props.trashMode">
                             <UButton
-                                variant="light"
-                                size="sm"
-                                icon="pixelarticons:download"
+                                v-bind="downloadButtonProps"
+                                :icon="iconDownload"
                                 @click.stop.self="
                                     meta && emit('download', meta)
                                 "
@@ -127,18 +344,15 @@ watch(
                                 Download
                             </UButton>
                             <UButton
-                                variant="light"
-                                icon="pixelarticons:copy"
-                                size="sm"
+                                v-bind="copyButtonProps"
+                                :icon="iconCopy"
                                 @click.stop.self="meta && emit('copy', meta)"
                             >
                                 Copy
                             </UButton>
                             <UButton
-                                variant="light"
-                                class="text-[var(--md-error)]"
-                                size="sm"
-                                icon="pixelarticons:image-delete"
+                                :icon="iconDelete"
+                                v-bind="deleteButtonProps"
                                 @click.stop.self="meta && emit('delete', meta)"
                             >
                                 Delete
@@ -146,18 +360,15 @@ watch(
                         </UButtonGroup>
                         <UButtonGroup v-else>
                             <UButton
-                                variant="light"
-                                size="sm"
-                                icon="pixelarticons:repeat"
+                                v-bind="restoreButtonProps"
+                                :icon="iconRepeat"
                                 @click.stop.self="meta && emit('restore', meta)"
                             >
                                 Restore
                             </UButton>
                             <UButton
-                                variant="light"
-                                class="text-[var(--md-error)]"
-                                size="sm"
-                                icon="pixelarticons:trash"
+                                v-bind="permanentDeleteButtonProps"
+                                :icon="iconTrash"
                                 @click.stop.self="meta && emit('delete', meta)"
                             >
                                 Delete permanently
@@ -165,21 +376,17 @@ watch(
                         </UButtonGroup>
                     </div>
                     <UButton
-                        icon="pixelarticons:close"
-                        variant="light"
-                        size="sm"
+                        v-bind="closeButtonProps"
+                        :icon="iconClose"
                         @click="close"
                     >
                     </UButton>
                 </div>
             </div>
-            <div
-                class="bg-black/75 dark:bg-white/5 backdrop-blur-xs w-[100dvw] h-[100dvh] z-[99] overflow-hidden absolute top-0 left-0"
-                @click.self="close"
-            >
+            <div v-bind="backdropProps" @click.self="close">
                 <div
                     ref="overlayEl"
-                    class="inset-0 grid h-full w-full place-items-center px-4 pb-4 pt-24 sm:pt-6"
+                    v-bind="imageContainerProps"
                     tabindex="-1"
                     @click.self="close"
                 >
@@ -187,9 +394,9 @@ watch(
                         v-if="state.url"
                         :src="state.url"
                         :alt="meta?.name"
-                        class="max-w-[90dvw] sm:max-w-[min(96dvw,1400px)] h-[70dvh] object-contain"
+                        v-bind="imageProps"
                     />
-                    <div v-else class="text-white/80 text-sm">Loading…</div>
+                    <div v-else v-bind="loadingTextProps">Loading…</div>
                 </div>
             </div>
         </UModal>

@@ -1,4 +1,5 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
 
 export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
@@ -31,19 +32,106 @@ export default defineNuxtConfig({
     // Load Tailwind + theme variables globally
     css: ['~/assets/css/main.css'],
     fonts: {
+        defaults: {
+            // Only emit the latin subset + normal style to keep the global font CSS lightweight
+            subsets: ['latin'],
+            styles: ['normal'],
+            weights: ['400'],
+        },
         families: [
-            { name: 'Press Start 2P', provider: 'google' },
-            { name: 'VT323', provider: 'google' },
+            {
+                name: 'Press Start 2P',
+                provider: 'google',
+                styles: ['normal'],
+                weights: ['400'],
+                subsets: ['latin'],
+            },
+            {
+                name: 'VT323',
+                provider: 'google',
+                styles: ['normal'],
+                weights: ['400'],
+                subsets: ['latin'],
+            },
             {
                 name: 'IBM Plex Sans',
                 provider: 'google',
+                styles: ['normal'],
                 weights: ['400', '500', '600', '700'],
+                subsets: ['latin'],
             },
         ],
+        experimental: {
+            // Skip generating local metric fallback @font-face blocks (saves ~20% of the CSS payload)
+            disableLocalFallbacks: true,
+        },
     },
     nitro: {
         prerender: {
             routes: ['/openrouter-callback', '/documentation'],
+        },
+        routeRules: {
+            // Hashed Nuxt chunks - immutable forever
+            '/_nuxt/**': {
+                headers: {
+                    'cache-control': 'public,max-age=31536000,immutable',
+                },
+            },
+            // Font files - immutable forever
+            '/_fonts/**': {
+                headers: {
+                    'cache-control': 'public,max-age=31536000,immutable',
+                },
+            },
+            // Static images with versioning - cache for 1 week
+            '/**/*.webp': {
+                headers: {
+                    'cache-control':
+                        'public,max-age=604800,stale-while-revalidate=86400',
+                },
+            },
+            '/**/*.png': {
+                headers: {
+                    'cache-control':
+                        'public,max-age=604800,stale-while-revalidate=86400',
+                },
+            },
+            '/**/*.svg': {
+                headers: {
+                    'cache-control':
+                        'public,max-age=604800,stale-while-revalidate=86400',
+                },
+            },
+            '/**/*.jpg': {
+                headers: {
+                    'cache-control':
+                        'public,max-age=604800,stale-while-revalidate=86400',
+                },
+            },
+            '/**/*.jpeg': {
+                headers: {
+                    'cache-control':
+                        'public,max-age=604800,stale-while-revalidate=86400',
+                },
+            },
+            // Font files (both woff and woff2)
+            '/**/*.woff': {
+                headers: {
+                    'cache-control': 'public,max-age=31536000,immutable',
+                },
+            },
+            '/**/*.woff2': {
+                headers: {
+                    'cache-control':
+                        'public,max-age=604800,stale-while-revalidate=86400',
+                },
+            },
+            // CSS files from Nuxt build
+            '/**/*.css': {
+                headers: {
+                    'cache-control': 'public,max-age=31536000,immutable',
+                },
+            },
         },
     },
     // PWA configuration
@@ -211,6 +299,13 @@ export default defineNuxtConfig({
         ],
     },
     vite: {
+        plugins: [
+            themeCompilerPlugin({
+                failOnError: true,
+                showWarnings: true,
+                generateTypes: true,
+            }),
+        ],
         worker: {
             format: 'es',
         },

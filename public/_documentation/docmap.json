@@ -554,6 +554,60 @@
                     "summary": "Canonical reference for every exported TypeScript type and interface defined under `app/composables`. Covers shared registry contracts, workspace state shapes, streaming accumulators, and plugin extension point signatures."
                 }
             ]
+        },
+        {
+            "title": "Themes",
+            "path": "/themes",
+            "files": [
+                {
+                    "name": "architecture.md",
+                    "path": "/themes/architecture",
+                    "category": "Reference",
+                    "summary": "Deep dive into the internal architecture of the OR3 theme system. Explains the compilation process (validation, CSS generation, selector parsing), runtime resolution (matching, merging, prop mapping), hybrid CSS selector approach, and integration points (v-theme directive, composables). Includes architecture diagrams and directory structure overview."
+                },
+                {
+                    "name": "quick-start.md",
+                    "path": "/themes/quick-start",
+                    "category": "Tutorial",
+                    "summary": "Quick start guide for creating custom themes in OR3. Learn how to use the refined theme system to create a custom theme in under 30 minutes. Covers theme scaffolding with CLI tools, defining Material Design 3 color palettes, component overrides with CSS-like selectors, testing and validation, and applying themes with the v-theme directive."
+                },
+                {
+                    "name": "api-reference.md",
+                    "path": "/themes/api-reference",
+                    "category": "Reference",
+                    "summary": "Complete API reference for OR3's refined theme system. Documents all public APIs including defineTheme() factory function, v-theme directive usage patterns, RuntimeResolver class for theme resolution, CLI commands for theme management, TypeScript types (ThemeName, ThemeContext, ThemeIdentifier), composables (useTheme, useRuntimeResolver), and advanced utilities for selector parsing and specificity calculation."
+                },
+                {
+                    "name": "migration-guide.md",
+                    "path": "/themes/migration-guide",
+                    "category": "Guide",
+                    "summary": "Step-by-step migration guide from OR3's old theme system to the refined system. Covers auditing existing themes and extracting colors, creating refined theme definitions with Material Design 3 tokens, updating components to use v-theme directive, migrating CSS variables to MD3 tokens, testing and validation workflows, cleanup procedures, and common migration patterns with before/after examples."
+                },
+                {
+                    "name": "best-practices.md",
+                    "path": "/themes/best-practices",
+                    "category": "Guide",
+                    "summary": "Performance, maintainability, and scalability best practices for OR3 themes. Covers naming conventions (kebab-case, semantic identifiers), selector strategy and specificity rules, color design with Material Design 3 guidelines and WCAG AA contrast requirements, performance optimization (<100 overrides, resolver reuse), component design patterns, testing strategies (unit, integration, visual regression), versioning and maintenance, security considerations, and common pitfalls to avoid."
+                },
+                {
+                    "name": "troubleshooting.md",
+                    "path": "/themes/troubleshooting",
+                    "category": "Guide",
+                    "summary": "Comprehensive troubleshooting guide for OR3's refined theme system. Covers solutions for theme not applying, colors looking wrong, overrides not working, performance issues, TypeScript errors, CLI command failures, build errors, runtime errors, visual issues, browser compatibility problems, debugging techniques (enable debug logs, inspect resolver state, check CSS variables, test specificity), FAQ section, and bug reporting template."
+                },
+                {
+                    "name": "css-selectors.md",
+                    "path": "/themes/css-selectors",
+                    "category": "Reference",
+                    "summary": "In-depth reference for OR3's CSS-like selector syntax used in theming. Documents selector types (type, class, attribute, pseudo-class), combinators (descendant, child, adjacent sibling, general sibling), specificity calculation rules, examples of common patterns, limitations (no pseudo-elements, no complex selectors), and best practices for writing effective selectors."
+                },
+                {
+                    "name": "theme-icons.md",
+                    "path": "/themes/theme-icons",
+                    "category": "Reference",
+                    "summary": "Documentation for the semantic icon system. Covers core concepts (Tokens, Registry, Composable), usage in components and configuration, adding new icons, and overriding icons in themes."
+                }
+            ]
         }
     ]
 }
