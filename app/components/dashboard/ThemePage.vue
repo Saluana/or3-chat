@@ -1694,14 +1694,6 @@ function onHexInput(key: keyof typeof localHex) {
     if (!raw) return; // allow clearing without committing
     const candidate = ensureHash(raw.trim());
     if (isValidHex(candidate)) {
-<<<<<<< HEAD
-        set({ [key]: candidate.toLowerCase() } as Partial<ThemeSettings>);
-    }
-}
-async function copyColor(key: keyof typeof localHex) {
-    const val = settings.value[key as keyof ThemeSettings];
-    if (!val || typeof val !== 'string' || !val.startsWith('#')) return;
-=======
         // Map background color keys
         if (key === 'contentBg1Color') {
             set({
@@ -1742,7 +1734,6 @@ async function copyColor(key: keyof typeof localHex) {
     }
 
     if (!val || !val.startsWith('#')) return;
->>>>>>> origin/master
     try {
         await navigator.clipboard.writeText(val);
         notify('Copied color', val);
@@ -1753,64 +1744,6 @@ async function copyColor(key: keyof typeof localHex) {
 
 // Keep local reactive sliders synced if external reset or future import occurs
 watch(
-<<<<<<< HEAD
-    settings,
-    (s) => {
-        if (!s) return;
-        local.baseFontPx = s.baseFontPx;
-        local.contentBg1Opacity = s.contentBg1Opacity;
-        local.contentBg2Opacity = s.contentBg2Opacity;
-        local.sidebarBgOpacity = s.sidebarBgOpacity;
-        local.contentBg1SizePx = s.contentBg1SizePx;
-        local.contentBg2SizePx = s.contentBg2SizePx;
-        local.sidebarBgSizePx = s.sidebarBgSizePx || 240;
-        // sync hex boxes (only show hex values)
-        localHex.contentBg1Color = s.contentBg1Color.startsWith('#')
-            ? s.contentBg1Color
-            : '';
-        localHex.contentBg2Color = s.contentBg2Color.startsWith('#')
-            ? s.contentBg2Color
-            : '';
-        localHex.sidebarBgColor = s.sidebarBgColor.startsWith('#')
-            ? s.sidebarBgColor
-            : '';
-        localHex.headerBgColor = s.headerBgColor.startsWith('#')
-            ? s.headerBgColor
-            : '';
-        localHex.bottomBarBgColor = s.bottomBarBgColor.startsWith('#')
-            ? s.bottomBarBgColor
-            : '';
-        // palette hex boxes
-        localHex.palettePrimary = String(
-            s.palettePrimary || ''
-        ).startsWith('#')
-            ? String(s.palettePrimary)
-            : '';
-        localHex.paletteSecondary = String(
-            s.paletteSecondary || ''
-        ).startsWith('#')
-            ? String(s.paletteSecondary)
-            : '';
-        localHex.paletteError = String(
-            s.paletteError || ''
-        ).startsWith('#')
-            ? String(s.paletteError)
-            : '';
-        localHex.paletteSurfaceVariant = String(
-            s.paletteSurfaceVariant || ''
-        ).startsWith('#')
-            ? String(s.paletteSurfaceVariant)
-            : '';
-        localHex.paletteBorder = String(
-            s.paletteBorder || ''
-        ).startsWith('#')
-            ? String(s.paletteBorder)
-            : '';
-        localHex.paletteSurface = String(
-            s.paletteSurface || ''
-        ).startsWith('#')
-            ? String(s.paletteSurface)
-=======
     overrides,
     (o) => {
         if (!o) return;
@@ -1943,7 +1876,7 @@ watch(
             : '';
         localHex.warning = String(o.colors?.warning || '').startsWith('#')
             ? String(o.colors?.warning)
->>>>>>> origin/master
+
             : '';
     },
     { deep: true }
