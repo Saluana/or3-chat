@@ -1250,12 +1250,14 @@ const localHex = reactive({
         : '',
 });
 
-// Simple debounce helper
+// Simple debounce helper with cleanup tracking
+const activeTimers: number[] = [];
 function debounce<T extends (...args: any[]) => void>(fn: T, wait: number) {
     let t: any;
     return (...args: any[]) => {
         clearTimeout(t);
         t = setTimeout(() => fn(...args), wait);
+        if (!activeTimers.includes(t)) activeTimers.push(t);
     };
 }
 
@@ -1289,7 +1291,7 @@ function onOpacityRange(
     key: 'contentBg1Opacity' | 'contentBg2Opacity' | 'sidebarBgOpacity'
 ) {
     const v = Number((e.target as HTMLInputElement).value);
-    (local as any)[key] = v;
+    local[key] = v;
     commitOpacity(key, v);
 }
 
@@ -1340,7 +1342,7 @@ function onSizeRange(
     key: 'contentBg1SizePx' | 'contentBg2SizePx' | 'sidebarBgSizePx'
 ) {
     const v = Number((e.target as HTMLInputElement).value);
-    (local as any)[key] = v;
+    local[key] = v;
     commitSize(key, v);
 }
 
@@ -1449,6 +1451,13 @@ watch(
     { immediate: true }
 );
 
+// Revoke ObjectURLs when switching modes to prevent leak
+watch(activeMode, () => {
+    revokeAll();
+    internalUrlCache.clear();
+    refreshResolved();
+});
+
 const contentBg1PreviewStyle = computed(() => {
     const fit = !!overrides.value.backgrounds?.content?.base?.fit;
     const repeatEnabled =
@@ -1513,6 +1522,11 @@ function registerObjectUrl(u: string) {
 function revokeAll() {
     objectUrls.forEach((u) => URL.revokeObjectURL(u));
     objectUrls.clear();
+    activeTimers.forEach(clearTimeout);
+    activeTimers.length = 0;
+    fileInputs.contentBg1 = null;
+    fileInputs.contentBg2 = null;
+    fileInputs.sidebarBg = null;
 }
 onBeforeUnmount(revokeAll);
 
@@ -1676,7 +1690,7 @@ function ensureHash(v: string) {
     return v.startsWith('#') ? v : `#${v}`;
 }
 function onHexInput(key: keyof typeof localHex) {
-    const raw = (localHex as any)[key];
+    const raw = localHex[key];
     if (!raw) return; // allow clearing without committing
     const candidate = ensureHash(raw.trim());
     if (isValidHex(candidate)) {
@@ -1862,6 +1876,7 @@ watch(
             : '';
         localHex.warning = String(o.colors?.warning || '').startsWith('#')
             ? String(o.colors?.warning)
+
             : '';
     },
     { deep: true }
