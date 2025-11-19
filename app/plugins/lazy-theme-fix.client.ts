@@ -2,27 +2,26 @@ import { defineNuxtPlugin, useNuxtApp } from '#app';
 import { watch } from 'vue';
 
 export default defineNuxtPlugin((nuxtApp) => {
-    const unwatchers = new WeakMap<any, () => void>();
     const theme = (nuxtApp as any).$theme;
     
     // Only setup if theme plugin is available
     if (!theme || !theme.activeTheme) return;
 
-    // Use a single global watcher instead of per-component watchers
-    // This dramatically reduces memory usage
-    let pendingUpdate = false;
-    const lazyComponents = new WeakSet();
+    // Use a Set to track lazy components (regular Set, not WeakSet)
+    // This allows us to iterate and force update when theme changes
+    const lazyComponents = new Set<any>();
 
     const globalUnwatch = watch(
         () => theme.activeTheme.value,
         () => {
-            // Debounce updates to avoid excessive re-renders
-            if (pendingUpdate) return;
-            pendingUpdate = true;
-            
+            // Force update all tracked lazy components when theme changes
             requestAnimationFrame(() => {
-                pendingUpdate = false;
-                // Force update will be triggered by next mount/update cycle
+                lazyComponents.forEach((component) => {
+                    // Check if component is still mounted
+                    if (component && component.$forceUpdate) {
+                        component.$forceUpdate();
+                    }
+                });
             });
         }
     );
@@ -37,15 +36,11 @@ export default defineNuxtPlugin((nuxtApp) => {
                 return;
             }
 
-            // Mark as lazy component
+            // Track lazy component for theme updates
             lazyComponents.add(this);
-            
-            // Only force update if theme recently changed
-            if (pendingUpdate) {
-                this.$forceUpdate();
-            }
         },
         beforeUnmount() {
+            // Clean up when component unmounts
             lazyComponents.delete(this);
         },
     });
@@ -54,6 +49,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
             globalUnwatch();
+            lazyComponents.clear();
         });
     }
 });

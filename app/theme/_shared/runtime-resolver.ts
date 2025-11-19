@@ -50,8 +50,13 @@ export interface ResolvedOverride {
 }
 
 /**
- * Simple LRU Cache implementation for override resolution
- * Limits memory usage by evicting least recently used entries
+ * Simple LRU Cache implementation for override resolution.
+ * Limits memory usage by evicting least recently used entries.
+ * 
+ * Note: This LRU implementation treats Map insertion order as access order.
+ * When a key is accessed or set, it is deleted and re-inserted to move it to the end of the Map,
+ * representing the most recently used position. This is a non-standard LRU approach; typical LRU caches
+ * maintain a separate order-tracking structure.
  */
 class LRUCache<K, V> {
     private cache: Map<K, V>;
@@ -76,15 +81,13 @@ class LRUCache<K, V> {
         // Delete if exists to re-insert at end
         if (this.cache.has(key)) {
             this.cache.delete(key);
-        }
-        
-        this.cache.set(key, value);
-        
-        // Evict oldest if over size limit
-        if (this.cache.size > this.maxSize) {
+        } else if (this.cache.size >= this.maxSize) {
+            // Evict oldest only for new keys
             const firstKey = this.cache.keys().next().value;
             this.cache.delete(firstKey);
         }
+        
+        this.cache.set(key, value);
     }
 
     clear(): void {

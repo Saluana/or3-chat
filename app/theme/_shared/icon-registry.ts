@@ -35,6 +35,8 @@ export class IconRegistry {
     unregisterTheme(themeName: string) {
         this.themes.delete(themeName);
         if (themeName === this.activeTheme) {
+            // Reset to default if unregistering active theme
+            this.activeTheme = 'default';
             this.rebuildCache();
         }
         this.version.value++;

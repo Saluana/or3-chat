@@ -24,6 +24,9 @@ import {
 import { generateThemeCssVariables } from '~/theme/_shared/generate-css-variables';
 import { iconRegistry } from '~/theme/_shared/icon-registry';
 
+// Module-level variable for page:finish debouncing
+let pageFinishTimeout: ReturnType<typeof setTimeout> | null = null;
+
 export interface ThemePlugin {
     set: (name: string) => void;
     toggle: () => void;
@@ -77,8 +80,8 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     }
 
     const appConfig = useAppConfig() as any;
-    // Cache the original appConfig reference instead of deep cloning
-    // This saves significant memory as appConfig can be large
+    // Create a JSON snapshot of the original appConfig for restoration
+    // This saves significant memory compared to deep cloning
     const baseAppConfigSnapshot = JSON.stringify(appConfig);
 
     const initialPatch = (nuxtApp.payload as any)?.data
@@ -458,14 +461,20 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const cleanupInactiveThemes = (activeThemeName: string) => {
         const themesToKeep = new Set([activeThemeName, DEFAULT_THEME]);
         
-        // Clean up theme registry - keep only active and default
+        // Collect themes to delete first, then delete them
+        const themesToDelete: string[] = [];
         for (const [themeName] of themeRegistry) {
             if (!themesToKeep.has(themeName)) {
-                themeRegistry.delete(themeName);
-                resolverRegistry.delete(themeName);
-                iconRegistry.unregisterTheme(themeName);
-                themeAppConfigOverrides.delete(themeName);
+                themesToDelete.push(themeName);
             }
+        }
+        
+        // Delete collected themes
+        for (const themeName of themesToDelete) {
+            themeRegistry.delete(themeName);
+            resolverRegistry.delete(themeName);
+            iconRegistry.unregisterTheme(themeName);
+            themeAppConfigOverrides.delete(themeName);
         }
     };
 
@@ -672,7 +681,6 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         (globalThis as any)[HOOK_REGISTERED_KEY] = true;
 
         // Debounce the page:finish handler to avoid excessive class applications
-        let pageFinishTimeout: ReturnType<typeof setTimeout> | null = null;
         nuxtApp.hook('page:finish', () => {
             if (import.meta.client) {
                 // Clear any pending timeout

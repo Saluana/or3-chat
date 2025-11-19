@@ -375,9 +375,8 @@ export default defineNuxtPlugin((nuxtApp) => {
             // Apply to component or element (use target element)
             applyOverrides(targetEl, vnode, resolved.props, identifier);
 
-            // Store watcher cleanup function on element for proper cleanup
-            // Note: We don't watch theme changes anymore - the lazy-theme-fix.client.ts
-            // handles re-rendering components when theme changes via $forceUpdate.
+            // Theme changes are now handled globally by lazy-theme-fix.client.ts,
+            // which uses $forceUpdate to re-render components when themes change.
             // This eliminates thousands of individual watchers and saves significant memory.
         } catch (error) {
             // Graceful degradation
