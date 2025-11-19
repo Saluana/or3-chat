@@ -6,6 +6,8 @@ import {
     __createThemeOverrideCacheKey,
 } from '../useThemeResolver';
 
+vi.unmock('../useThemeResolver');
+
 const natureResolver = {
     resolve: vi.fn(() => ({ props: { theme: 'nature', tone: 'forest' } })),
 };

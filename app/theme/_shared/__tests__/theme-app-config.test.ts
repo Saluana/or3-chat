@@ -17,20 +17,36 @@ describe('theme manifest app config integration', () => {
         const config = await loadThemeAppConfig(blankEntry);
         expect(config).toBeTruthy();
         expect(
-            config?.ui?.button?.variants?.size?.sbSquare?.base
+            config?.ui?.button?.variants?.size?.['sb-square']?.base
         ).toContain('h-[40px]');
     });
 
-    it('returns null when a theme has no app.config.ts', async () => {
+    it('loads app.config.ts for retro theme', async () => {
         const manifest = await loadThemeManifest();
         const retroEntry = manifest.find((entry) => entry.dirName === 'retro');
 
         expect(retroEntry).toBeTruthy();
-        expect(retroEntry?.appConfigLoader).toBeUndefined();
+        expect(retroEntry?.appConfigLoader).toBeTypeOf('function');
 
         if (!retroEntry) return;
 
         const config = await loadThemeAppConfig(retroEntry);
+        expect(config).toBeTruthy();
+    });
+
+    it('returns null when a theme entry has no appConfigLoader', async () => {
+        const mockEntry = {
+            name: 'mock-theme',
+            dirName: 'mock',
+            definition: {} as any,
+            loader: async () => ({ default: {} as any }),
+            stylesheets: [],
+            isDefault: false,
+            hasCssSelectorStyles: false,
+            appConfigLoader: undefined,
+        };
+
+        const config = await loadThemeAppConfig(mockEntry);
         expect(config).toBeNull();
     });
 });

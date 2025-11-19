@@ -63,6 +63,7 @@ describe('SideNavContentCollapsed', () => {
                     UButton: { template: '<button><slot /></button>' },
                     UTooltip: { template: '<div><slot /></div>' },
                     SideBottomNav: true,
+                    ClientOnly: { template: '<div><slot /></div>' },
                 },
             },
         });
@@ -70,7 +71,7 @@ describe('SideNavContentCollapsed', () => {
         // Should render built-in buttons - check by their click handlers
         const buttons = wrapper.findAll('button');
         expect(buttons.length).toBeGreaterThan(5); // Should have at least the built-in controls
-        
+
         // Check that new-chat button exists by looking for the tooltip text
         expect(wrapper.html()).toContain('New chat');
         expect(wrapper.html()).toContain('Search');
@@ -86,6 +87,7 @@ describe('SideNavContentCollapsed', () => {
                     UButton: { template: '<button><slot /></button>' },
                     UTooltip: { template: '<div><slot /></div>' },
                     SideBottomNav: true,
+                    ClientOnly: { template: '<div><slot /></div>' },
                 },
             },
         });
@@ -97,7 +99,7 @@ describe('SideNavContentCollapsed', () => {
 
     it('highlights active page', () => {
         mockActivePageId.value = 'test-page-1';
-        
+
         const wrapper = mount(SideNavContentCollapsed, {
             global: {
                 stubs: {
@@ -105,6 +107,7 @@ describe('SideNavContentCollapsed', () => {
                     UButton: { template: '<button><slot /></button>' },
                     UTooltip: { template: '<div><slot /></div>' },
                     SideBottomNav: true,
+                    ClientOnly: { template: '<div><slot /></div>' },
                 },
             },
         });
@@ -118,20 +121,24 @@ describe('SideNavContentCollapsed', () => {
             global: {
                 stubs: {
                     UIcon: true,
-                    UButton: { 
-                        template: '<button @click="$emit(\'click\')"><slot /></button>',
-                        emits: ['click']
+                    UButton: {
+                        template:
+                            '<button @click="$emit(\'click\')"><slot /></button>',
+                        emits: ['click'],
                     },
                     UTooltip: { template: '<div><slot /></div>' },
                     SideBottomNav: true,
+                    ClientOnly: { template: '<div><slot /></div>' },
                 },
             },
         });
 
         // Find the test page button by its icon attribute
-        const testPageButton = wrapper.find('button[icon="pixelarticons:test"]');
+        const testPageButton = wrapper.find(
+            'button[icon="pixelarticons:test"]'
+        );
         expect(testPageButton.exists()).toBe(true);
-        
+
         await testPageButton.trigger('click');
         expect(mockSetActivePage).toHaveBeenCalledWith('test-page-1');
     });
@@ -143,18 +150,22 @@ describe('SideNavContentCollapsed', () => {
             global: {
                 stubs: {
                     UIcon: true,
-                    UButton: { 
-                        template: '<button @click="$emit(\'click\')"><slot /></button>',
-                        emits: ['click']
+                    UButton: {
+                        template:
+                            '<button @click="$emit(\'click\')"><slot /></button>',
+                        emits: ['click'],
                     },
                     UTooltip: { template: '<div><slot /></div>' },
                     SideBottomNav: true,
+                    ClientOnly: { template: '<div><slot /></div>' },
                 },
             },
         });
 
-        const testPageButton = wrapper.find('button[icon="pixelarticons:test"]');
-        
+        const testPageButton = wrapper.find(
+            'button[icon="pixelarticons:test"]'
+        );
+
         await testPageButton.trigger('click');
 
         expect(mockSetActivePage).toHaveBeenCalledWith('test-page-1');
@@ -173,12 +184,15 @@ describe('SideNavContentCollapsed', () => {
                     UButton: { template: '<button><slot /></button>' },
                     UTooltip: { template: '<div><slot /></div>' },
                     SideBottomNav: true,
+                    ClientOnly: { template: '<div><slot /></div>' },
                 },
             },
         });
 
         // Should render page buttons with accessibility attributes
-        const testPageButton = wrapper.find('button[icon="pixelarticons:test"]');
+        const testPageButton = wrapper.find(
+            'button[icon="pixelarticons:test"]'
+        );
         expect(testPageButton.exists()).toBe(true);
         expect(testPageButton.attributes('aria-label')).toBe('Test Page 1');
         expect(testPageButton.attributes('aria-pressed')).toBe('false');
@@ -210,13 +224,16 @@ describe('SideNavContentCollapsed', () => {
                     UButton: { template: '<button><slot /></button>' },
                     UTooltip: { template: '<div><slot /></div>' },
                     SideBottomNav: true,
+                    ClientOnly: { template: '<div><slot /></div>' },
                 },
             },
         });
 
         // Should render the hardcoded Home button (once) and test page
         // The home page should be filtered from the dynamic list to avoid duplication
-        const homeButtons = wrapper.findAll('button[icon="pixelarticons:home"]');
+        const homeButtons = wrapper.findAll(
+            'button[icon="pixelarticons:home"]'
+        );
         expect(homeButtons.length).toBe(1); // Only the hardcoded Home button
         expect(wrapper.html()).toContain('Test Page');
     });
@@ -247,12 +264,15 @@ describe('SideNavContentCollapsed', () => {
                     UButton: { template: '<button><slot /></button>' },
                     UTooltip: { template: '<div><slot /></div>' },
                     SideBottomNav: true,
+                    ClientOnly: { template: '<div><slot /></div>' },
                 },
             },
         });
 
         // Should render the hardcoded Home button and the test pages
-        const homeButtons = wrapper.findAll('button[icon="pixelarticons:home"]');
+        const homeButtons = wrapper.findAll(
+            'button[icon="pixelarticons:home"]'
+        );
         expect(homeButtons.length).toBe(1); // Only the hardcoded Home button
         expect(wrapper.html()).toContain('Test Page 1');
         expect(wrapper.html()).toContain('Test Page 2');

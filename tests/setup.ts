@@ -40,6 +40,60 @@ vi.mock('~/composables/chat/useAi', () => {
     clear: vi.fn(),
 });
 
+// Mock useNuxtApp globally
+vi.mock('#app', () => {
+    const { ref } = require('vue');
+    return {
+        useNuxtApp: () => ({
+            $iconRegistry: {
+                resolve: (token: string) => {
+                    if (token === 'sidebar.page.home')
+                        return 'pixelarticons:home';
+                    return token;
+                },
+            },
+            $theme: {
+                activeTheme: ref('light'),
+                getResolver: () => ({ resolve: () => ({ props: {} }) }),
+                setActiveTheme: vi.fn(),
+            },
+        }),
+    };
+});
+
+// Mock useThemeOverrides globally
+vi.mock('~/composables/useThemeResolver', () => ({
+    useThemeOverrides: () => ({ value: {} }),
+    useThemeResolver: () => ({
+        activeTheme: { value: 'light' },
+        resolveOverrides: () => ({}),
+        setActiveTheme: vi.fn(),
+    }),
+}));
+
+// Mock #imports
+vi.mock('#imports', () => ({
+    useNuxtApp: () => ({
+        $iconRegistry: {
+            resolve: (token: string) => {
+                if (token === 'sidebar.page.home') return 'pixelarticons:home';
+                return token;
+            },
+        },
+        $theme: {
+            activeTheme: { value: 'light' },
+            getResolver: () => ({ resolve: () => ({ props: {} }) }),
+            setActiveTheme: vi.fn(),
+        },
+    }),
+    useRuntimeConfig: () => ({
+        public: {},
+    }),
+    useHead: vi.fn(),
+    useColorMode: () => ({ value: 'light' }),
+    useIcon: (token: string) => ({ value: token }),
+}));
+
 vi.mock('virtua/vue', () => {
     const Base = defineComponent({
         name: 'MockVirtualListBase',

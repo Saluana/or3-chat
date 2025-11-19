@@ -108,9 +108,9 @@ describe('PaneResizeHandle', () => {
         const handle = wrapper.find('.pane-resize-handle');
         const indicator = wrapper.find('div[class*="rounded-full"]');
 
-        // Initially invisible
-        expect(indicator.classes()).toContain('w-0');
-        expect(indicator.classes()).toContain('opacity-0');
+        // Initially invisible (transparent background)
+        expect(indicator.classes()).toContain('w-1.5');
+        expect(indicator.classes()).toContain('bg-[var(--md-primary)]/0');
 
         // Hover
         await handle.trigger('mouseenter');
@@ -118,15 +118,15 @@ describe('PaneResizeHandle', () => {
 
         // Should become visible
         expect(indicator.classes()).toContain('w-1.5');
-        expect(indicator.classes()).toContain('opacity-100');
+        expect(indicator.classes()).toContain('bg-[var(--md-primary)]');
+        expect(indicator.classes()).not.toContain('bg-[var(--md-primary)]/0');
 
         // Unhover
         await handle.trigger('mouseleave');
         await wrapper.vm.$nextTick();
 
         // Should become invisible again
-        expect(indicator.classes()).toContain('w-0');
-        expect(indicator.classes()).toContain('opacity-0');
+        expect(indicator.classes()).toContain('bg-[var(--md-primary)]/0');
     });
 
     it('shows indicator on focus', async () => {
@@ -142,7 +142,8 @@ describe('PaneResizeHandle', () => {
         const indicator = wrapper.find('div[class*="rounded-full"]');
 
         // Initially invisible
-        expect(indicator.classes()).toContain('w-0');
+        expect(indicator.classes()).toContain('w-1.5');
+        expect(indicator.classes()).toContain('bg-[var(--md-primary)]/0');
 
         // Focus
         await handle.trigger('focus');
@@ -150,15 +151,15 @@ describe('PaneResizeHandle', () => {
 
         // Should become visible
         expect(indicator.classes()).toContain('w-1.5');
-        expect(indicator.classes()).toContain('opacity-100');
+        expect(indicator.classes()).toContain('bg-[var(--md-primary)]');
+        expect(indicator.classes()).not.toContain('bg-[var(--md-primary)]/0');
 
         // Blur
         await handle.trigger('blur');
         await wrapper.vm.$nextTick();
 
         // Should become invisible again
-        expect(indicator.classes()).toContain('w-0');
-        expect(indicator.classes()).toContain('opacity-0');
+        expect(indicator.classes()).toContain('bg-[var(--md-primary)]/0');
     });
 
     it('has correct cursor style', () => {
@@ -184,7 +185,7 @@ describe('PaneResizeHandle', () => {
         });
 
         // Check for the invisible hit area div
-        const hitArea = wrapper.find('div.-left-\\[2px\\].-right-\\[2px\\]');
+        const hitArea = wrapper.find('.pane-resize-handle__hit-area');
         expect(hitArea.exists()).toBe(true);
         expect(hitArea.classes()).toContain('pointer-events-auto');
     });
