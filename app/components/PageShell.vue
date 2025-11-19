@@ -247,7 +247,7 @@ import ChatContainer from '~/components/chat/ChatContainer.vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
 import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
-import type { ThemePlugin } from '~/plugins/01.theme.client';
+import type { ThemePlugin } from '~/plugins/90.theme.client';
 import { useIcon } from '~/composables/useIcon';
 
 const legacyCompatClasses = {
@@ -774,7 +774,9 @@ watch(
     () => {
         const active = panes.value[activePaneIndex.value];
         if (!active) return '';
-        return `${active.mode}:${active.threadId || ''}:${active.documentId || ''}`;
+        return `${active.mode}:${active.threadId || ''}:${
+            active.documentId || ''
+        }`;
     },
     () => updateUrl()
 );

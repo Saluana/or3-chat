@@ -1,7 +1,7 @@
 // Minimal Nuxt app stub for Vitest
 import { ref } from 'vue';
 import { createHookEngine } from '../../app/core/hooks/hooks';
-import type { ThemePlugin } from '~/plugins/01.theme.client';
+import type { ThemePlugin } from '~/plugins/90.theme.client';
 
 const engine = createHookEngine();
 // Expose globally for optional introspection

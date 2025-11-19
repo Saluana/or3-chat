@@ -44,7 +44,7 @@ import type {
 } from 'vue';
 import { watch, onScopeDispose } from 'vue';
 import type { ResolveParams } from '~/theme/_shared/runtime-resolver';
-import type { ThemePlugin } from './01.theme.client';
+import type { ThemePlugin } from './90.theme.client';
 
 /**
  * Directive binding value types

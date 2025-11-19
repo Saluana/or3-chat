@@ -1,10 +1,10 @@
 import { ref, type Ref } from 'vue';
 import type { NuxtApp } from '#app';
-import { useAppConfig } from '#imports';
+import { useAppConfig, useHead } from '#imports';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
 import type { CompiledTheme } from '~/theme/_shared/types';
-import type { ThemePlugin } from './01.theme.client';
+import type { ThemePlugin } from './90.theme.client';
 import { generateThemeCssVariables } from '~/theme/_shared/generate-css-variables';
 import { iconRegistry } from '~/theme/_shared/icon-registry';
 import {
@@ -12,6 +12,7 @@ import {
     loadThemeStylesheets,
     updateManifestEntry,
     loadThemeAppConfig,
+    resolveThemeStylesheetHref,
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
 
@@ -31,9 +32,18 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         Record<string, any> | null
     >();
 
+    const recordInitialAppConfigPatch = (
+        patch?: Record<string, any> | null
+    ) => {
+        if (!patch) return;
+        const payload = (nuxtApp.payload ||= { data: {} } as any);
+        payload.data = payload.data || {};
+        payload.data.__or3ThemeAppConfigPatch = cloneDeep(patch);
+    };
+
     const applyThemeAppConfigPatch = (patch?: Record<string, any> | null) => {
         const merged = deepMerge(cloneDeep(baseAppConfig), patch || undefined);
-        replaceObject(appConfig, merged);
+        recursiveUpdate(appConfig, merged);
     };
 
     const applyThemeUiConfig = (theme?: CompiledTheme | null) => {
@@ -322,7 +332,66 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         iconRegistry.setActiveTheme(target);
         const patch = themeAppConfigOverrides.get(target) ?? null;
         applyThemeAppConfigPatch(patch);
-        applyThemeUiConfig(themeRegistry.get(target) || null);
+        recordInitialAppConfigPatch(patch);
+        const compiledTheme = themeRegistry.get(target);
+        applyThemeUiConfig(compiledTheme || null);
+
+        // Inject CSS variables and stylesheets into the head for SSR/Static builds
+        if (compiledTheme) {
+            const headConfig: any = {
+                htmlAttrs: {
+                    'data-theme': target,
+                },
+                style: [],
+                link: [],
+            };
+
+            if (compiledTheme.cssVariables) {
+                headConfig.style.push({
+                    id: `or3-theme-vars-${target}`,
+                    innerHTML: compiledTheme.cssVariables,
+                    tagPriority: 'critical',
+                    'data-theme-style': target,
+                });
+            }
+
+            // Inject generated CSS file if present
+            if (compiledTheme.hasStyleSelectors) {
+                headConfig.link.push({
+                    key: `or3-theme-css-${target}`,
+                    rel: 'stylesheet',
+                    href: `/themes/${target}.css`,
+                    tagPriority: 'critical',
+                    'data-theme-css': target,
+                });
+            }
+
+            // Inject theme stylesheets
+            if (
+                compiledTheme.stylesheets &&
+                compiledTheme.stylesheets.length > 0
+            ) {
+                const manifestEntry = themeManifest.get(target);
+                if (manifestEntry) {
+                    for (const stylesheet of compiledTheme.stylesheets) {
+                        const href = await resolveThemeStylesheetHref(
+                            stylesheet,
+                            manifestEntry
+                        );
+                        if (href) {
+                            headConfig.link.push({
+                                key: `or3-theme-extra-${target}-${stylesheet}`,
+                                rel: 'stylesheet',
+                                href: href,
+                                'data-theme-stylesheet': target,
+                            });
+                        }
+                    }
+                }
+            }
+
+            useHead(headConfig);
+        }
     };
 
     await setActiveTheme(activeTheme.value);
@@ -398,14 +467,12 @@ function deepMerge(
     }
 
     for (const [key, value] of Object.entries(patch)) {
-        if (
-            value &&
-            typeof value === 'object' &&
-            !Array.isArray(value)
-        ) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
             const current = base[key];
             base[key] = deepMerge(
-                current && typeof current === 'object' && !Array.isArray(current)
+                current &&
+                    typeof current === 'object' &&
+                    !Array.isArray(current)
                     ? current
                     : {},
                 value as Record<string, any>
@@ -418,17 +485,24 @@ function deepMerge(
     return base;
 }
 
-function replaceObject(
+function recursiveUpdate(
     target: Record<string, any>,
     source: Record<string, any>
 ) {
-    for (const key of Object.keys(target)) {
-        if (!(key in source)) {
-            delete target[key];
-        }
-    }
-
     for (const [key, value] of Object.entries(source)) {
-        target[key] = value;
+        if (value !== undefined) {
+            if (
+                value &&
+                typeof value === 'object' &&
+                !Array.isArray(value) &&
+                target[key] &&
+                typeof target[key] === 'object' &&
+                !Array.isArray(target[key])
+            ) {
+                recursiveUpdate(target[key], value);
+            } else {
+                target[key] = value;
+            }
+        }
     }
 }

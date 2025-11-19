@@ -44,10 +44,7 @@ const stylesheetModules = import.meta.glob('../**/*.css', {
     import: 'default',
 }) as Record<string, StylesheetModuleLoader>;
 
-const configModules = import.meta.glob('../*/app.config.ts') as Record<
-    string,
-    ThemeAppConfigLoader
->;
+const configModules = import.meta.glob('../*/app.config.ts', { eager: true });
 
 const rawThemeEntries: RawThemeEntry[] = Object.entries(themeModules).map(
     ([path, loader]) => {
@@ -112,8 +109,16 @@ export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
                     stylesheets: definition.stylesheets ?? [],
                     isDefault: Boolean(definition.isDefault),
                     hasCssSelectorStyles: containsStyleSelectors(definition),
-                    appConfigLoader:
-                        configModules[`../${entry.dirName}/app.config.ts`],
+                    appConfigLoader: configModules[
+                        `../${entry.dirName}/app.config.ts`
+                    ]
+                        ? () =>
+                              Promise.resolve(
+                                  configModules[
+                                      `../${entry.dirName}/app.config.ts`
+                                  ] as any
+                              )
+                        : undefined,
                     iconsLoader:
                         iconModules[`../${entry.dirName}/icons.config.ts`],
                 };
@@ -261,7 +266,7 @@ function containsStyleSelectors(definition: ThemeDefinition): boolean {
     });
 }
 
-async function resolveThemeStylesheetHref(
+export async function resolveThemeStylesheetHref(
     stylesheet: string,
     entry: ThemeManifestEntry
 ): Promise<string | null> {

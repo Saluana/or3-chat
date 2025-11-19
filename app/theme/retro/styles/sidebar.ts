@@ -60,7 +60,7 @@ export const sidebarOverrides = {
         variant: 'solid',
         color: 'primary',
         ui: {
-            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
+            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)]',
         },
     },
 

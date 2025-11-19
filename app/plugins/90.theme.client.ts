@@ -78,8 +78,19 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     const appConfig = useAppConfig() as any;
     const baseAppConfig = cloneDeep(appConfig);
+
+    const initialPatch = (nuxtApp.payload as any)?.data
+        ?.__or3ThemeAppConfigPatch;
+    if (initialPatch && typeof initialPatch === 'object') {
+        const mergedAppConfig = deepMerge(
+            cloneDeep(appConfig),
+            cloneDeep(initialPatch)
+        );
+        recursiveUpdate(appConfig, mergedAppConfig);
+    }
+
     registerCleanup(() => {
-        replaceObject(appConfig, cloneDeep(baseAppConfig));
+        recursiveUpdate(appConfig, cloneDeep(baseAppConfig));
     });
     const themeAppConfigOverrides = new Map<
         string,
@@ -97,7 +108,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     const applyThemeAppConfigPatch = (patch?: Record<string, any> | null) => {
         const merged = deepMerge(cloneDeep(baseAppConfig), patch || undefined);
-        replaceObject(appConfig, merged);
+        recursiveUpdate(appConfig, merged);
     };
 
     // Determine current default theme from manifest
@@ -531,6 +542,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         if (previousTheme?.cssSelectors) {
             removeThemeClasses(previousTheme.cssSelectors);
         }
+
         if (previousTheme?.hasStyleSelectors) {
             unloadThemeCSS(previousTheme.name);
         }
@@ -657,11 +669,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     // Ensure the determined active theme is applied on first load
     try {
         const currentAttr = document.documentElement.getAttribute('data-theme');
-        if (activeTheme.value && currentAttr !== activeTheme.value) {
-            await themeApi.setActiveTheme(activeTheme.value);
-        } else if (!currentAttr) {
-            await themeApi.setActiveTheme(activeTheme.value || DEFAULT_THEME);
-        }
+        // Always re-apply the theme on hydration to keep UI/app config in sync
+        const initialTheme = activeTheme.value || currentAttr || DEFAULT_THEME;
+        await themeApi.setActiveTheme(initialTheme);
     } catch (e) {
         if (import.meta.dev) {
             console.warn(
@@ -759,16 +769,24 @@ function deepMerge(
     return base;
 }
 
-function replaceObject(
+function recursiveUpdate(
     target: Record<string, any>,
     source: Record<string, any>
 ) {
-    for (const key of Object.keys(target)) {
-        if (!(key in source)) {
-            delete target[key];
-        }
-    }
     for (const [key, value] of Object.entries(source)) {
-        target[key] = value;
+        if (value !== undefined) {
+            if (
+                value &&
+                typeof value === 'object' &&
+                !Array.isArray(value) &&
+                target[key] &&
+                typeof target[key] === 'object' &&
+                !Array.isArray(target[key])
+            ) {
+                recursiveUpdate(target[key], value);
+            } else {
+                target[key] = value;
+            }
+        }
     }
 }

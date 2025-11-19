@@ -55,7 +55,7 @@ import {
     type ComputedRef,
 } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
-import type { ThemePlugin } from '~/plugins/01.theme.client';
+import type { ThemePlugin } from '~/plugins/90.theme.client';
 
 const props = defineProps({
     collapsed: { type: Boolean, required: true },
