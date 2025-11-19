@@ -92,7 +92,7 @@ const emit = defineEmits<{ error: [error: Error] }>();
 
 const showErrorMessage = ref(false);
 let timeoutId: ReturnType<typeof setTimeout> | null = null;
-let isMounted = true;
+let isMounted = false;
 const renderKey = ref(0);
 
 // Theme integration for retry button
