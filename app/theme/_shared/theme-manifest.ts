@@ -87,39 +87,51 @@ export interface ThemeManifestEntry {
 export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
     const manifest: ThemeManifestEntry[] = [];
 
-    for (const entry of rawThemeEntries) {
-        try {
-            const module = await entry.loader();
-            const definition = module?.default as ThemeDefinition | undefined;
+    const results = await Promise.all(
+        rawThemeEntries.map(async (entry) => {
+            try {
+                const module = await entry.loader();
+                const definition = module?.default as
+                    | ThemeDefinition
+                    | undefined;
 
-            if (!definition?.name) {
+                if (!definition?.name) {
+                    if (import.meta.dev) {
+                        console.warn(
+                            `[theme] Skipping ${entry.path}: missing theme name.`
+                        );
+                    }
+                    return null;
+                }
+
+                return {
+                    name: definition.name,
+                    dirName: entry.dirName,
+                    definition,
+                    loader: entry.loader,
+                    stylesheets: definition.stylesheets ?? [],
+                    isDefault: Boolean(definition.isDefault),
+                    hasCssSelectorStyles: containsStyleSelectors(definition),
+                    appConfigLoader:
+                        configModules[`../${entry.dirName}/app.config.ts`],
+                    iconsLoader:
+                        iconModules[`../${entry.dirName}/icons.config.ts`],
+                };
+            } catch (error) {
                 if (import.meta.dev) {
                     console.warn(
-                        `[theme] Skipping ${entry.path}: missing theme name.`
+                        `[theme] Failed to load theme module at ${entry.path}:`,
+                        error
                     );
                 }
-                continue;
+                return null;
             }
+        })
+    );
 
-            manifest.push({
-                name: definition.name,
-                dirName: entry.dirName,
-                definition,
-                loader: entry.loader,
-                stylesheets: definition.stylesheets ?? [],
-                isDefault: Boolean(definition.isDefault),
-                hasCssSelectorStyles: containsStyleSelectors(definition),
-                appConfigLoader:
-                    configModules[`../${entry.dirName}/app.config.ts`],
-                iconsLoader: iconModules[`../${entry.dirName}/icons.config.ts`],
-            });
-        } catch (error) {
-            if (import.meta.dev) {
-                console.warn(
-                    `[theme] Failed to load theme module at ${entry.path}:`,
-                    error
-                );
-            }
+    for (const result of results) {
+        if (result) {
+            manifest.push(result);
         }
     }
 

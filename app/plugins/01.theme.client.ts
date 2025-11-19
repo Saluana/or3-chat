@@ -299,26 +299,34 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 const definition = themeModule.default;
                 updateManifestEntry(manifestEntry, definition);
 
-                await loadThemeStylesheets(
+                // Parallelize asset loading
+                const stylesheetPromise = loadThemeStylesheets(
                     manifestEntry,
                     definition.stylesheets
                 );
 
-                // Load icons if available
-                let themeIcons = definition.icons;
-                if (!themeIcons && manifestEntry.iconsLoader) {
-                    try {
-                        const iconsModule = await manifestEntry.iconsLoader();
-                        themeIcons = iconsModule?.default || iconsModule;
-                    } catch (e) {
-                        if (import.meta.dev) {
-                            console.warn(
-                                `[theme] Failed to load icons for theme "${themeName}":`,
-                                e
-                            );
-                        }
-                    }
+                let iconsPromise: Promise<any> = Promise.resolve(
+                    definition.icons
+                );
+                if (!definition.icons && manifestEntry.iconsLoader) {
+                    iconsPromise = manifestEntry
+                        .iconsLoader()
+                        .then((m) => m?.default || m)
+                        .catch((e) => {
+                            if (import.meta.dev) {
+                                console.warn(
+                                    `[theme] Failed to load icons for theme "${themeName}":`,
+                                    e
+                                );
+                            }
+                            return null;
+                        });
                 }
+
+                const [_, themeIcons] = await Promise.all([
+                    stylesheetPromise,
+                    iconsPromise,
+                ]);
 
                 const hasStyleSelectors = manifestEntry.hasCssSelectorStyles;
 

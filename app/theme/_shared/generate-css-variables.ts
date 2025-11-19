@@ -1,8 +1,4 @@
-import type {
-    ThemeDefinition,
-    ColorPalette,
-    ThemeFontSet,
-} from './types';
+import type { ThemeDefinition, ColorPalette, ThemeFontSet } from './types';
 
 /**
  * Generate CSS variable declarations from theme color palette.
@@ -41,13 +37,24 @@ export function generateThemeCssVariables(def: ThemeDefinition): string {
     return lightBlock + (darkBlock ? '\n' + darkBlock : '');
 }
 
+const kebabCache = new Map<string, string>();
+
+function kebab(str: string): string {
+    let cached = kebabCache.get(str);
+    if (cached) return cached;
+    cached = str.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
+    kebabCache.set(str, cached);
+    return cached;
+}
+
 function buildPalette(
     colors: ColorPalette,
     isDark = false
 ): Record<string, string> {
     const entries: Record<string, string> = {};
-    for (const [key, value] of Object.entries(colors)) {
+    for (const key in colors) {
         if (key === 'dark') continue;
+        const value = colors[key as keyof ColorPalette];
         if (typeof value !== 'string') continue;
         // prefix variables with md for material design tokens
         const varName = `--md-${kebab(key)}`;
@@ -86,12 +93,12 @@ function toCssBlock(
     const selector = dark
         ? `html[data-theme="${themeName}"].dark, .dark html[data-theme="${themeName}"]`
         : `html[data-theme="${themeName}"]`;
-    const lines = Object.entries(vars).map(
-        ([name, val]) => `  ${name}: ${val};`
-    );
-    return `${selector} {\n${lines.join('\n')}\n}`;
-}
 
-function kebab(str: string): string {
-    return str.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
+    // Optimize string concatenation
+    let css = `${selector} {\n`;
+    for (const key in vars) {
+        css += `  ${key}: ${vars[key]};\n`;
+    }
+    css += '}';
+    return css;
 }
