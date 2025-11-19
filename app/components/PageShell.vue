@@ -614,9 +614,10 @@ function buildPaneProps(
 }
 
 // Active thread convenience (first pane for sidebar highlight)
-const activeChatThreadId = computed(() =>
-    panes.value[0]?.mode === 'chat' ? panes.value[0].threadId || '' : ''
-);
+const activeChatThreadId = computed(() => {
+    const activePane = panes.value[activePaneIndex.value];
+    return activePane?.mode === 'chat' ? activePane.threadId || '' : '';
+});
 
 // --------------- Initializers ---------------
 type ValidationStatus = 'found' | 'missing' | 'deleted';
@@ -668,15 +669,19 @@ async function initInitial() {
         if (props.validateInitial) {
             pane.validating = true;
             const token = ++validateToken;
-            const result = await validateThread(props.initialThreadId);
-            if (token !== validateToken) {
-                pane.validating = false;
-                return;
-            }
-            if (result === 'deleted') {
-                pane.validating = false;
-                redirectNotFound('chat');
-                return;
+            try {
+                const result = await validateThread(props.initialThreadId);
+                if (token !== validateToken) {
+                    return; // Newer validation in flight
+                }
+                if (result === 'deleted') {
+                    redirectNotFound('chat');
+                    return;
+                }
+            } finally {
+                if (token === validateToken) {
+                    pane.validating = false;
+                }
             }
         }
         try {
@@ -693,15 +698,19 @@ async function initInitial() {
         if (props.validateInitial) {
             pane.validating = true;
             const token = ++validateToken;
-            const result = await validateDocument(props.initialDocumentId);
-            if (token !== validateToken) {
-                pane.validating = false;
-                return;
-            }
-            if (result === 'deleted') {
-                pane.validating = false;
-                redirectNotFound('doc');
-                return;
+            try {
+                const result = await validateDocument(props.initialDocumentId);
+                if (token !== validateToken) {
+                    return; // Newer validation in flight
+                }
+                if (result === 'deleted') {
+                    redirectNotFound('doc');
+                    return;
+                }
+            } finally {
+                if (token === validateToken) {
+                    pane.validating = false;
+                }
             }
         }
         pane.mode = 'doc';
@@ -762,15 +771,11 @@ function updateUrl(force = false) {
 }
 
 watch(
-    () =>
-        panes.value
-            .map(
-                (p) =>
-                    `${p.id}:${p.mode}:${p.threadId || ''}:${
-                        p.documentId || ''
-                    }`
-            )
-            .join(','),
+    () => {
+        const active = panes.value[activePaneIndex.value];
+        if (!active) return '';
+        return `${active.mode}:${active.threadId || ''}:${active.documentId || ''}`;
+    },
     () => updateUrl()
 );
 
