@@ -1,10 +1,10 @@
 <template>
-    <div class="space-y-4">
+    <div class="space-y-4 p-6">
         <!-- Header -->
         <div class="flex items-center justify-between">
             <div>
                 <h2 class="text-lg font-semibold flex items-center gap-2">
-                    <UIcon name="pixelarticons:sync" class="w-5 h-5" />
+                    <UIcon :name="useIcon('ui.sync').value" class="w-5 h-5" />
                     Hook Inspector
                 </h2>
                 <p class="text-sm opacity-70 mt-1">
@@ -15,7 +15,7 @@
                 <UButton
                     size="sm"
                     variant="outline"
-                    icon="pixelarticons:reload"
+                    :icon="useIcon('ui.refresh').value"
                     :disabled="autoRefresh"
                     @click="refresh"
                 >
@@ -26,8 +26,8 @@
                     :variant="autoRefresh ? 'solid' : 'outline'"
                     :icon="
                         autoRefresh
-                            ? 'pixelarticons:checkbox-on'
-                            : 'pixelarticons:checkbox'
+                            ? useIcon('ui.checkbox.on').value
+                            : useIcon('ui.checkbox.off').value
                     "
                     @click="toggleAutoRefresh"
                 >
@@ -36,7 +36,7 @@
                 <UButton
                     size="sm"
                     variant="outline"
-                    icon="pixelarticons:trash"
+                    :icon="useIcon('ui.trash').value"
                     color="error"
                     @click="clearTimings"
                 >
@@ -51,7 +51,7 @@
         >
             <div class="flex items-start gap-2">
                 <UIcon
-                    name="pixelarticons:book"
+                    :name="useIcon('ui.book').value"
                     class="w-4 h-4 mt-0.5 opacity-60"
                 />
                 <div class="text-sm flex-1">
@@ -74,7 +74,7 @@
         <!-- Summary Cards -->
         <div class="grid sm:grid-cols-3 gap-4">
             <div
-                class="p-4 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+                class="p-4 rounded-md border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
             >
                 <div class="text-xs opacity-60 mb-1">Total Actions</div>
                 <div class="text-2xl font-bold tracking-tight">
@@ -82,7 +82,7 @@
                 </div>
             </div>
             <div
-                class="p-4 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+                class="p-4 rounded-md border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
             >
                 <div class="text-xs opacity-60 mb-1">Total Filters</div>
                 <div class="text-2xl font-bold tracking-tight">
@@ -90,7 +90,7 @@
                 </div>
             </div>
             <div
-                class="p-4 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+                class="p-4 rounded-md border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
             >
                 <div class="text-xs opacity-60 mb-1">Total Errors</div>
                 <div
@@ -195,6 +195,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, reactive } from 'vue';
+import { useIcon } from '~/composables/useIcon';
 
 const hooks = useHooks();
 const toast = useToast();

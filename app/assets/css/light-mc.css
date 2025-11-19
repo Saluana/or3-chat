@@ -56,4 +56,8 @@
   --md-extended-color-warning-on-color: rgb(255 255 255);
   --md-extended-color-warning-color-container: rgb(158 93 54);
   --md-extended-color-warning-on-color-container: rgb(255 255 255);
+  
+  /* Default border styling - can be overridden by themes */
+  --md-border-width: 1px;
+  --md-border-radius: 8px;
 }

@@ -21,7 +21,10 @@ function createErrorsMock() {
     return { reportError: mocks.reportError };
 }
 
-vi.mock('#imports', () => ({ useToast: () => ({ add: getMocks().toastAdd }) }));
+vi.mock('#imports', () => ({
+    useToast: () => ({ add: getMocks().toastAdd }),
+    useIcon: (name: string) => name,
+}));
 
 vi.mock('../../db/files', createFilesMock);
 vi.mock('~/db/files', createFilesMock);

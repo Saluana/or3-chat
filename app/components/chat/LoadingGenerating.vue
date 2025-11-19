@@ -1,5 +1,12 @@
 <template>
-    <div class="retro-loader animate-in" aria-hidden="true">
+    <div
+        v-bind="containerProps"
+        :class="[
+            'loading-generating animate-in theme-loader retro-loader',
+            containerProps?.class ?? '',
+        ]"
+        aria-hidden="true"
+    >
         <span class="rl-glow"></span>
         <span class="rl-scan"></span>
         <span class="rl-stripes"></span>
@@ -13,11 +20,18 @@
 </template>
 
 <script setup lang="ts">
-// Presentational loader component (shared)
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+
+const containerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.loading-generating',
+    isNuxtUI: false,
+});
 </script>
 
 <style scoped>
-.retro-loader {
+.theme-loader {
     --rl-bg-a: var(--md-surface-container-low);
     --rl-bg-b: var(--md-surface-container-high);
     --rl-border: var(--md-inverse-surface);
@@ -29,11 +43,7 @@
     width: 100%;
     min-height: 58px;
     margin: 2px 0 6px;
-    border: 2px solid var(--rl-border);
-    border-radius: 6px;
     background: linear-gradient(180deg, var(--rl-bg-b) 0%, var(--rl-bg-a) 100%);
-    box-shadow: 0 0 0 1px #000 inset, 0 0 6px -1px var(--rl-accent-soft),
-        0 0 22px -8px var(--rl-accent);
     overflow: hidden;
     font-family: 'VT323', 'IBM Plex Mono', monospace;
     display: flex;
@@ -41,19 +51,19 @@
     justify-content: center;
     isolation: isolate;
 }
-.retro-loader::before,
-.retro-loader::after {
+.theme-loader::before,
+.theme-loader::after {
     content: '';
     position: absolute;
     inset: 0;
     pointer-events: none;
 }
-.retro-loader::before {
+.theme-loader::before {
     border: 1px solid var(--rl-border);
     border-radius: 4px;
     mix-blend-mode: overlay;
 }
-.retro-loader::after {
+.theme-loader::after {
     background: radial-gradient(
         circle at 50% 55%,
         rgba(255, 255, 255, 0.12),

@@ -1,0 +1,263 @@
+.or3-prose {
+    font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+        Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue',
+        sans-serif !important;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 1.7;
+    color: var(--md-on-surface);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.or3-prose :deep(p) {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    line-height: 1.5;
+    font-family: inherit !important;
+    font-weight: 400;
+}
+
+.or3-prose :deep(span),
+.or3-prose :deep(strong),
+.or3-prose :deep(em),
+.or3-prose :deep(b),
+.or3-prose :deep(i) {
+    font-family: inherit;
+}
+
+
+
+.or3-prose :deep(h1),
+.or3-prose :deep(h2),
+.or3-prose :deep(h3),
+.or3-prose :deep(h4) {
+    font-family: "IBM Plex Sans", system-ui !important;
+    color: var(--md-primary);
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+    line-height: 1.3;
+    font-weight: 600;
+}
+
+.or3-prose :deep(h1) {
+    font-size: 1.875rem;
+    border-bottom: var(--md-border-width) solid var(--md-border-color);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.or3-prose :deep(h2) {
+    font-size: 1.5rem;
+}
+
+.or3-prose :deep(h3) {
+    font-size: 1.25rem;
+}
+
+.or3-prose :deep(a) {
+    color: var(--md-primary);
+    text-decoration: underline;
+}
+
+.or3-prose :deep(a:hover) {
+    color: var(--md-primary-variant);
+}
+
+.or3-prose :deep(code) {
+    background: var(--md-surface-container);
+    padding: 0.1rem 0.1rem;
+    color: var(--md-on-surface);
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+@media (prefers-color-scheme: dark) {
+    .or3-prose :deep(code) {
+        color: white !important;
+    }
+}
+
+.or3-prose :deep(pre) {
+    padding: 1rem;
+    border-radius: var(--md-border-radius);
+    border: var(--md-border-width) solid var(--md-border-color);
+    overflow-x: auto;
+    margin: 1rem 0;
+    font-weight: 505;
+}
+
+.or3-prose :deep(pre code) {
+    background: transparent;
+    padding: 0;
+    border: none;
+    font-size: 16px;
+}
+
+/* Streamdown code blocks */
+.or3-prose :deep([data-streamdown='code-block']) {
+    margin: 1rem 0;
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
+    overflow: hidden;
+}
+
+/* Streamdown code blocks */
+.or3-prose :deep([data-streamdown='code-body']) {
+    padding-bottom: 0 !important;
+}
+
+/* Streamdown code blocks */
+.or3-prose :deep([data-streamdown='pre']) {
+    padding-bottom: 20px !important;
+}
+
+.or3-prose :deep([data-streamdown='code-block-header']) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 1rem;
+    background: var(--md-primary);
+    border-bottom: var(--md-border-width) solid var(--md-border-color);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 16px;
+}
+
+.or3-prose :deep([data-streamdown='code-lang']) {
+    text-transform: uppercase;
+    color: var(--md-on-primary);
+    letter-spacing: 0.5px;
+    font-size: 10px !important;
+}
+
+.or3-prose :deep([data-streamdown='code']) {
+font-family: "VT323", monospace !important;
+    font-size: 18px !important;
+}
+
+.or3-prose :deep([data-streamdown='code-body']) {
+    padding: 1rem;
+    overflow-x: auto;
+}
+
+.or3-prose :deep([data-streamdown='code-body'] pre) {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
+.or3-prose :deep([data-streamdown='copy-button']) {
+    padding: 0.25rem 0.5rem;
+    background: var(--md-primary);
+    color: white;
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: background 0.2s;
+}
+
+.or3-prose :deep([data-streamdown='copy-button']:hover) {
+    background: var(--md-primary-variant);
+}
+
+.or3-prose :deep(blockquote) {
+    border-left: 4px solid var(--md-primary);
+    padding-left: 1rem;
+    margin: 1rem 0;
+    font-style: italic;
+}
+
+.or3-prose :deep(ul),
+.or3-prose :deep(ol) {
+    margin: 1rem 0;
+    padding-left: 2rem;
+}
+
+.or3-prose :deep(li) {
+    margin: 0.5rem 0;
+}
+
+
+
+.or3-prose :deep(th) {
+    border-right: var(--md-border-width) solid var(--md-border-color);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    color: var(--md-on-primary);
+    font-size: 16px;
+    white-space: nowrap;
+    background: var(--md-primary);
+    font-weight: bold;
+}
+
+.or3-prose :deep(td) {
+    border: var(--md-border-width) solid var(--md-border-color);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-size: 16px;
+}
+
+
+/* Safety net for table layout */
+[data-streamdown='table-wrapper'] {
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
+    margin-top: 32px !important;
+    margin-bottom: 32px;
+    margin-right: 4px; /* Space for shadow */
+    overflow-x: auto;
+    width: fit-content;
+    max-width: calc(100% - 4px); /* Account for shadow space */
+}
+
+
+
+[data-streamdown='table'] {
+    margin-bottom: 0px;
+    margin-top: 0px;
+    border-bottom: var(--md-border-width) solid var(--md-border-color);
+    border-left: none;
+    border-right: none;
+    width: auto;
+    min-width: min-content;
+}
+
+[data-streamdown='th'] {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-bottom: var(--md-border-width) solid var(--md-border-color);
+    font-weight: 600;
+    border-top: none;
+    white-space: nowrap;
+}
+
+[data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='th']:first-child,
+[data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='td']:first-child {
+    border-left: 0;
+}
+[data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='th']:last-child,
+[data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='td']:last-child {
+    border-right: 0;
+}
+
+/* Zebra striping for table body rows (every 2nd data row) */
+[data-streamdown='tbody'] [data-streamdown='tr']:nth-child(even) {
+    background: var(--md-surface-container-low);
+}
+[data-streamdown='tbody'] [data-streamdown='tr']:nth-child(odd) {
+    background: var(--md-surface-container-lowest);
+}
+/* Optional hover highlight */
+[data-streamdown='tbody'] [data-streamdown='tr']:hover {
+    background: var(--md-surface-container-high);
+}
+
+.or3-prose :deep([data-streamdown='code-line-number']) {
+    margin-right: 12px;
+    padding: 20px;
+}
+.or3-prose :deep(pre) {
+    padding-left: 0;
+}

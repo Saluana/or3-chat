@@ -1,20 +1,25 @@
 <template>
     <div
-        :class="{
-            'px-0 justify-center': collapsed,
-            'px-3 justify-between': !collapsed,
-        }"
+        :class="[
+            collapsed
+                ? 'px-0 justify-center w-[63.5px]'
+                : 'px-3 justify-between w-full',
+            'flex items-center min-h-12 max-h-12 header-pattern py-2 border-b-(--md-border-width) border-(--md-border-color)',
+            sidebarHeaderProps.class || '',
+        ]"
         id="top-header"
-        class="flex items-center min-h-[48px] max-h-[48px] header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)]"
+        :style="sidebarHeaderStyle"
+        :data-theme-target="sidebarHeaderProps['data-theme-target']"
+        :data-theme-matches="sidebarHeaderProps['data-theme-matches']"
     >
         <div v-show="!collapsed">
             <slot name="sidebar-header">
-                <div class="flex items-center space-x-2">
+                <div id="header-content" class="flex items-center space-x-2">
                     <div
                         class="text-[14px] pb-1 flex items-end justify-center tracking-wide"
                     >
                         <div
-                            class="text-[20px] flex items-end font-bold font-ps2 header-title"
+                            class="text-[20px] flex items-end font-bold font-ps2 header-title retro-header-title"
                         >
                             <div>Or</div>
                             <div class="text-[17px]">3</div>
@@ -30,24 +35,27 @@
 
         <slot name="sidebar-toggle" :collapsed="collapsed" :toggle="onToggle">
             <UButton
-                size="xs"
+                v-bind="sidebarToggleButtonProps"
                 :square="true"
-                color="neutral"
-                variant="ghost"
-                :class="'retro-btn'"
+                :icon="toggleIcon"
                 @click="onToggle"
-                :ui="{ base: 'retro-btn' }"
                 :aria-label="toggleAria"
                 :title="toggleAria"
-            >
-                <UIcon :name="toggleIcon" class="w-5 h-5" />
-            </UButton>
+            />
         </slot>
     </div>
 </template>
 
 <script setup lang="ts">
-import { defineProps, defineEmits } from 'vue';
+import {
+    defineProps,
+    defineEmits,
+    computed,
+    type StyleValue,
+    type ComputedRef,
+} from 'vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+import type { ThemePlugin } from '~/plugins/01.theme.client';
 
 const props = defineProps({
     collapsed: { type: Boolean, required: true },
@@ -55,6 +63,118 @@ const props = defineProps({
     toggleAria: { type: String, required: true },
 });
 const emit = defineEmits(['toggle']);
+
+const theme = useNuxtApp().$theme as ThemePlugin | undefined;
+
+const sidebarToggleOverrides = theme
+    ? useThemeOverrides({
+          component: 'button',
+          identifier: 'sidebar.toggle',
+          isNuxtUI: true,
+      })
+    : computed(() => ({} as Record<string, unknown>));
+
+const sidebarToggleFallback = {
+    class: 'theme-btn',
+    variant: 'ghost',
+    size: 'sm',
+    color: 'neutral',
+    ui: { base: 'theme-btn' },
+} as const;
+
+const sidebarToggleButtonProps = computed(() => ({
+    ...sidebarToggleFallback,
+    ...sidebarToggleOverrides.value,
+}));
+
+type HeaderOverrideProps = {
+    class?: string;
+    style?: StyleValue;
+    'data-theme-target'?: string;
+    'data-theme-matches'?: string;
+    [key: string]: unknown;
+};
+
+const createEmptyOverride = () =>
+    computed<HeaderOverrideProps>(() => ({} as HeaderOverrideProps));
+
+const sidebarHeaderBaseOverrides = theme
+    ? (useThemeOverrides({
+          component: 'div',
+          context: 'sidebar',
+          identifier: 'sidebar.header',
+          isNuxtUI: false,
+      }) as ComputedRef<HeaderOverrideProps>)
+    : createEmptyOverride();
+
+const sidebarHeaderCollapsedOverrides = theme
+    ? (useThemeOverrides({
+          component: 'div',
+          context: 'sidebar',
+          identifier: 'sidebar.header',
+          state: 'collapsed',
+          isNuxtUI: false,
+      }) as ComputedRef<HeaderOverrideProps>)
+    : createEmptyOverride();
+
+const sidebarHeaderExpandedOverrides = theme
+    ? (useThemeOverrides({
+          component: 'div',
+          context: 'sidebar',
+          identifier: 'sidebar.header',
+          state: 'expanded',
+          isNuxtUI: false,
+      }) as ComputedRef<HeaderOverrideProps>)
+    : createEmptyOverride();
+
+const flattenStyle = (style: StyleValue | undefined): StyleValue[] => {
+    if (style === undefined) return [];
+    return Array.isArray(style) ? style : [style];
+};
+
+const sidebarHeaderProps = computed<HeaderOverrideProps>(() => {
+    const base = sidebarHeaderBaseOverrides.value || {};
+    const stateOverrides = props.collapsed
+        ? sidebarHeaderCollapsedOverrides.value || {}
+        : sidebarHeaderExpandedOverrides.value || {};
+
+    const mergedClass = [base.class, stateOverrides.class]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+
+    const mergedStyle = [
+        ...flattenStyle(base.style as StyleValue | undefined),
+        ...flattenStyle(stateOverrides.style as StyleValue | undefined),
+    ];
+
+    return {
+        ...base,
+        ...stateOverrides,
+        class: mergedClass,
+        style:
+            mergedStyle.length > 1 ? mergedStyle : mergedStyle[0] ?? undefined,
+    };
+});
+
+const sidebarHeaderStyle = computed<StyleValue>(() => {
+    const baseStyle: StyleValue = props.collapsed
+        ? { width: '63.5px' }
+        : undefined;
+    const overrides = sidebarHeaderProps.value.style;
+
+    if (!baseStyle) {
+        return overrides || undefined;
+    }
+
+    if (!overrides) {
+        return baseStyle;
+    }
+
+    return Array.isArray(overrides)
+        ? [baseStyle, ...overrides]
+        : [baseStyle, overrides];
+});
 
 function onToggle() {
     emit('toggle');
@@ -64,44 +184,25 @@ function onToggle() {
 <style scoped>
 /* Gradient already supplied by global pattern image; we just ensure better dark base */
 .header-pattern {
-    background-image: var(
-        --app-header-gradient,
-        url('/gradient-x.webp')
-    ) !important;
+    background-image: var(--app-header-gradient, none) !important;
     background-repeat: repeat-x;
     background-position: left center;
     background-size: auto 100%;
-    /* Use user-selected color (falls back by theme). Important to override legacy utility classes */
-    background-color: var(
-        --app-header-bg-color,
-        var(--md-surface-variant)
-    ) !important;
-}
-/* Dark mode still honors custom color */
-.dark .header-pattern {
-    background-color: var(
-        --app-header-bg-color,
-        var(--md-surface-container-low)
-    ) !important;
 }
 
 /* Retro logo title: pixel shadow + underline accent (no stroke) */
 .header-title {
     font-family: 'Press Start 2P', monospace;
-
     letter-spacing: 1px;
     color: var(--md-primary);
-    text-shadow: 2px 2px 0 var(--md-inverse-surface); /* hard offset retro shadow */
     padding: 2px 4px 3px 4px; /* subtle padding for readability */
 }
 
 .dark .header-title {
     color: var(--md-on-primary-container);
-    text-shadow: 2px 2px 0 var(--md-primary);
 }
 .dark .header-title::after {
     background: var(--md-on-primary-container);
-    box-shadow: 2px 2px 0 var(--md-primary);
 }
 
 /* Logo rendering tweaks */

@@ -1,8 +1,9 @@
 <template>
     <div
-        class="relative w-full h-[100dvh] border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
+        id="page-container"
+        class="resizable-sidebar-layout relative w-full h-dvh border border-(--md-outline-variant) overflow-hidden bg-(--md-surface) text-(--md-on-surface) flex overflow-x-hidden"
     >
-        <!-- Backdrop on mobile when open -->
+        <!-- Backdrop (mobile) -->
         <Transition
             enter-active-class="transition-opacity duration-150"
             leave-active-class="transition-opacity duration-150"
@@ -10,7 +11,8 @@
             leave-to-class="opacity-0"
         >
             <div
-                v-if="!isDesktop && open"
+                v-show="!isDesktop && open"
+                id="mobile-close"
                 class="absolute inset-0 bg-black/40 z-30 md:hidden"
                 @click="close()"
             />
@@ -18,42 +20,38 @@
 
         <!-- Sidebar -->
         <aside
+            id="sidebar"
             :class="[
-                'z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex flex-col',
-                // width transition on desktop
+                'resizable-sidebar flex z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex-col',
+                'md:relative md:h-full md:shrink-0 md:border-r-[var(--md-border-width)]',
+                side === 'right' ? 'md:border-l md:border-r-0' : '',
+                // Mobile overlay responsive classes (static for SSR parity)
+                'max-md:absolute max-md:inset-0 max-md:w-full max-md:shadow-xl',
+                'max-md:transition-transform max-md:duration-200 max-md:ease-out',
+                side === 'right' ? 'max-md:right-0' : 'max-md:left-0',
+                // Only apply slide-away transforms AFTER hydration to avoid SSR mismatch
+                hydrated
+                    ? !open
+                        ? side === 'right'
+                            ? 'max-md:translate-x-full'
+                            : 'max-md:-translate-x-full'
+                        : ''
+                    : '',
                 initialized
                     ? 'md:transition-[width] md:duration-200 md:ease-out'
-                    : 'hidden',
-                'md:relative md:h-full md:shrink-0 md:border-r-2',
-                side === 'right' ? 'md:border-l md:border-r-0' : '',
-                // mobile overlay behavior
-                !isDesktop
-                    ? [
-                          'absolute inset-0 w-full shadow-xl',
-                          // animated slide
-                          'transition-transform duration-200 ease-out',
-                          side === 'right'
-                              ? 'right-0 translate-x-full'
-                              : 'left-0 -translate-x-full',
-                          open ? 'translate-x-0' : '',
-                      ]
                     : '',
             ]"
-            :style="
-                Object.assign(
-                    isDesktop ? { width: computedWidth + 'px' } : {},
-                    {
-                        '--sidebar-rep-size': props.sidebarPatternSize + 'px',
-                        '--sidebar-rep-opacity': String(
-                            props.sidebarPatternOpacity
-                        ),
-                    }
-                )
-            "
+            :style="{
+                width: computedWidth + 'px',
+                '--sidebar-rep-size': props.sidebarPatternSize + 'px',
+                '--sidebar-rep-opacity': String(props.sidebarPatternOpacity),
+            }"
             @keydown.esc.stop.prevent="close()"
         >
-            <div class="h-full flex flex-col">
-                <!-- Sidebar header -->
+            <div
+                id="sidebar-container-outer"
+                class="resizable-sidebar-container h-full flex flex-col"
+            >
                 <SidebarHeader
                     :collapsed="collapsed"
                     :toggle-icon="toggleIcon"
@@ -68,8 +66,10 @@
                     </template>
                 </SidebarHeader>
 
-                <!-- Sidebar content -->
-                <div class="flex-1 overflow-auto overscroll-contain min-w-fit">
+                <div
+                    id="sidebar-container-expanded"
+                    class="flex-1 overflow-auto overscroll-contain min-w-fit"
+                >
                     <div v-show="!collapsed" class="flex-1 h-full">
                         <slot name="sidebar-expanded">
                             <div class="p-3 space-y-2 text-sm opacity-80">
@@ -78,7 +78,7 @@
                                     <li
                                         v-for="i in 10"
                                         :key="i"
-                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
+                                        class="px-2 py-1 rounded hover:bg-(--md-secondary-container) hover:text-(--md-on-secondary-container) cursor-pointer"
                                     >
                                         Item {{ i }}
                                     </li>
@@ -86,7 +86,11 @@
                             </div>
                         </slot>
                     </div>
-                    <div v-if="collapsed" class="flex-1 h-full">
+                    <div
+                        v-if="collapsed"
+                        id="sidebar-container-collapsed"
+                        class="flex-1 h-full"
+                    >
                         <slot name="sidebar-collapsed">
                             <div class="p-3 space-y-2 text-sm opacity-80">
                                 <p>Add your nav here…</p>
@@ -94,7 +98,7 @@
                                     <li
                                         v-for="i in 10"
                                         :key="i"
-                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
+                                        class="px-2 py-1 rounded hover:bg-(--md-secondary-container) hover:text-(--md-on-secondary-container) cursor-pointer"
                                     >
                                         Item {{ i }}
                                     </li>
@@ -105,8 +109,9 @@
                 </div>
             </div>
 
-            <!-- Resize handle (desktop only) -->
+            <!-- Resize handle -->
             <ResizeHandle
+                v-show="isDesktop && !collapsed"
                 :is-desktop="isDesktop"
                 :collapsed="collapsed"
                 :side="side"
@@ -119,8 +124,12 @@
         </aside>
 
         <!-- Main content -->
-        <div class="relative z-10 flex-1 h-full min-w-0 flex flex-col">
+        <div
+            id="main-content"
+            class="resizable-main-content relative z-10 flex-1 h-full min-w-0 flex flex-col"
+        >
             <div
+                id="main-content-container"
                 class="flex-1 overflow-hidden content-bg"
                 :style="{
                     '--content-bg-size': props.patternSize + 'px',
@@ -145,9 +154,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import {
+    ref,
+    computed,
+    onMounted,
+    onBeforeUnmount,
+    watch,
+    nextTick,
+} from 'vue';
 import SidebarHeader from './sidebar/SidebarHeader.vue';
 import ResizeHandle from './sidebar/ResizeHandle.vue';
+import { useIcon } from '~/composables/useIcon';
 
 type Side = 'left' | 'right';
 
@@ -179,19 +196,8 @@ const emit = defineEmits<{
 const clamp = (w: number) =>
     Math.min(props.maxWidth, Math.max(props.minWidth, w));
 
-// open state (controlled or uncontrolled)
-// Hydration note:
-// We intentionally start CLOSED for both SSR and initial client render to avoid
-// class / node mismatches between server HTML (which cannot know viewport width)
-// and the hydrated client (which previously opened immediately on desktop).
-// After mount we detect desktop and apply defaultOpen. This removes the
-// hydration warnings about missing backdrop / translate-x-0 classes.
-const openState = ref<boolean>(
-    (() => {
-        if (props.modelValue !== undefined) return props.modelValue;
-        return false; // unified deterministic initial state
-    })()
-);
+// open state: force closed initially for SSR/client parity, then open after mount if rules say so
+const openState = ref<boolean>(false);
 const open = computed({
     get: () =>
         props.modelValue === undefined ? openState.value : props.modelValue,
@@ -205,21 +211,17 @@ const open = computed({
 const collapsed = ref(false);
 const lastExpandedWidth = ref(props.defaultWidth);
 
-// width state with persistence
-const width = ref<number>(props.defaultWidth);
+// width state with persistence (clamp to avoid SSR/client mismatch if default < minWidth)
+const width = ref<number>(
+    Math.min(props.maxWidth, Math.max(props.minWidth, props.defaultWidth))
+);
 const computedWidth = computed(() =>
     collapsed.value ? props.collapsedWidth : width.value
 );
 
-// Attempt early (pre-mount) restoration to avoid post-mount jank
-if (import.meta.client) {
-    try {
-        const saved = localStorage.getItem(props.storageKey);
-        if (saved) width.value = clamp(parseInt(saved, 10));
-    } catch {}
-}
+// Do NOT restore from localStorage before hydration to keep SSR/client markup identical
 
-// responsive
+// responsive: assume mobile on SSR; determine real value on client
 const isDesktop = ref(false);
 let mq: MediaQueryList | undefined;
 const updateMq = () => {
@@ -228,23 +230,31 @@ const updateMq = () => {
     isDesktop.value = mq.matches;
 };
 
-// Defer enabling transitions until after first paint so restored width doesn't animate
+// CLS fix: Start with transitions DISABLED to prevent animated width changes during initial render
+// After first paint, enable transitions for smooth user interactions
 const initialized = ref(false);
+const hydrated = ref(false);
 
 onMounted(() => {
+    hydrated.value = true;
     updateMq();
     mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
-    // Apply defaultOpen only AFTER we know if we're on desktop so SSR & first client
-    // render remain consistent.
-    if (
-        props.modelValue === undefined &&
-        isDesktop.value &&
-        props.defaultOpen &&
-        !openState.value
-    ) {
+    // Open if defaultOpen & desktop
+    if (props.defaultOpen && isDesktop.value) {
         openState.value = true;
     }
-    requestAnimationFrame(() => (initialized.value = true));
+    // Restore persisted width (after hydration for parity)
+    try {
+        const saved = localStorage.getItem(props.storageKey);
+        if (saved) width.value = clamp(parseInt(saved, 10));
+    } catch {}
+    // Enable transitions after a delay to allow initial layout to settle
+    // Use double rAF to ensure layout is fully painted before transitions activate
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            initialized.value = true;
+        });
+    });
 });
 
 onBeforeUnmount(() => {
@@ -282,8 +292,38 @@ function toggleCollapse() {
 // Resize logic (desktop only)
 let startX = 0;
 let startWidth = 0;
+let pendingWidthUpdate: number | null = null;
+let widthRafId: number | null = null;
+
+function applyPendingWidth() {
+    if (pendingWidthUpdate === null) return;
+    width.value = pendingWidthUpdate;
+    pendingWidthUpdate = null;
+}
+
+function cancelWidthRaf() {
+    if (widthRafId === null) return;
+    cancelAnimationFrame(widthRafId);
+    widthRafId = null;
+}
+
+function scheduleWidthUpdate(value: number) {
+    pendingWidthUpdate = value;
+    if (widthRafId !== null) return;
+    widthRafId = requestAnimationFrame(() => {
+        widthRafId = null;
+        applyPendingWidth();
+    });
+}
+
+function flushWidthUpdates() {
+    cancelWidthRaf();
+    applyPendingWidth();
+}
+
 function onPointerDown(e: PointerEvent) {
     if (!isDesktop.value || collapsed.value) return;
+    flushWidthUpdates();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     startX = e.clientX;
     startWidth = width.value;
@@ -293,10 +333,11 @@ function onPointerDown(e: PointerEvent) {
 function onPointerMove(e: PointerEvent) {
     const dx = e.clientX - startX;
     const delta = props.side === 'right' ? -dx : dx;
-    width.value = clamp(startWidth + delta);
+    scheduleWidthUpdate(clamp(startWidth + delta));
 }
 function onPointerUp() {
     window.removeEventListener('pointermove', onPointerMove);
+    flushWidthUpdates();
 }
 
 // Keyboard a11y for the resize handle
@@ -343,18 +384,23 @@ function expand() {
 defineExpose({ toggle, close, openSidebar, expand, isCollapsed: collapsed });
 
 const side = computed<Side>(() => (props.side === 'right' ? 'right' : 'left'));
+
+// Pre-resolve icons to ensure reactivity tracks the registry updates correctly
+const iconToggleLeft = useIcon('shell.sidebar.toggle.left');
+const iconToggleRight = useIcon('shell.sidebar.toggle.right');
+
 // Icon and aria label for collapse/expand button
 const toggleIcon = computed(() => {
     // When collapsed, show the icon that suggests expanding back toward content area
     if (collapsed.value) {
         return side.value === 'right'
-            ? 'pixelarticons:arrow-bar-left'
-            : 'pixelarticons:arrow-bar-right';
+            ? iconToggleLeft.value
+            : iconToggleRight.value;
     }
     // When expanded, show icon pointing into the sidebar to collapse it
     return side.value === 'right'
-        ? 'pixelarticons:arrow-bar-right'
-        : 'pixelarticons:arrow-bar-left';
+        ? iconToggleRight.value
+        : iconToggleLeft.value;
 });
 const toggleAria = computed(() =>
     collapsed.value ? 'Expand sidebar' : 'Collapse sidebar'
@@ -388,7 +434,7 @@ const toggleAria = computed(() =>
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: var(--app-content-bg-1, url('/bg-repeat.webp'));
+    background-image: var(--app-content-bg-1, none);
     background-repeat: var(
         --app-content-bg-1-repeat,
         var(--app-content-bg-repeat, repeat)
@@ -416,7 +462,7 @@ const toggleAria = computed(() =>
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: var(--app-content-bg-2, url('/bg-repeat-2.webp'));
+    background-image: var(--app-content-bg-2, none);
     background-repeat: var(
         --app-content-bg-2-repeat,
         var(--app-content-bg-repeat, repeat)
@@ -433,7 +479,7 @@ const toggleAria = computed(() =>
 /* Hardcoded header pattern repeating horizontally */
 .header-pattern {
     background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x.webp');
+    background-image: var(--app-header-gradient, none);
     background-repeat: repeat-x;
     background-position: left center;
     background-size: auto 100%;
@@ -445,7 +491,7 @@ aside::before {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: var(--app-sidebar-bg-1, url('/sidebar-repeater.webp'));
+    background-image: var(--app-sidebar-bg-1, none);
     background-repeat: var(--app-sidebar-bg-repeat, repeat);
     background-position: top left;
     background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);

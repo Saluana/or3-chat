@@ -1,8 +1,10 @@
+import { useIcon } from '#imports';
+
 export default defineNuxtPlugin(() => {
     try {
         registerDashboardPlugin({
             id: 'example:hello',
-            icon: 'pixelarticons:star',
+            icon: useIcon('ui.star').value,
             label: 'Hello',
             description: 'Example dashboard plugin',
             order: 250,
