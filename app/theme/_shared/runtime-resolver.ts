@@ -60,6 +60,8 @@ export class RuntimeResolver {
     private overrideIndex: Map<string, CompiledOverride[]>;
     private propMaps: PropClassMaps;
     private themeName: string;
+    private cache: Map<string, ResolvedOverride>;
+    private componentsWithAttributes: Set<string>;
 
     /**
      * Create a new runtime resolver
@@ -74,12 +76,18 @@ export class RuntimeResolver {
 
         // Build index by component type for fast lookup
         this.overrideIndex = new Map();
+        this.componentsWithAttributes = new Set();
+
         for (const override of this.overrides) {
             const key = override.component;
             if (!this.overrideIndex.has(key)) {
                 this.overrideIndex.set(key, []);
             }
             this.overrideIndex.get(key)!.push(override);
+
+            if (override.attributes && override.attributes.length > 0) {
+                this.componentsWithAttributes.add(key);
+            }
         }
 
         // Store prop-to-class mappings (merge with defaults)
@@ -88,6 +96,7 @@ export class RuntimeResolver {
             ...(compiledTheme.propMaps || {}),
         };
         this.themeName = compiledTheme.name;
+        this.cache = new Map();
     }
 
     /**
@@ -100,13 +109,30 @@ export class RuntimeResolver {
      * @returns Resolved override props
      */
     resolve(params: ResolveParams): ResolvedOverride {
+        // Check cache first
+        // We can cache if:
+        // 1. No element is provided OR
+        // 2. Element is provided but this component type has no attribute-dependent overrides
+        const canCache =
+            !params.element ||
+            !this.componentsWithAttributes.has(params.component);
+        let cacheKey: string | undefined;
+
+        if (canCache) {
+            cacheKey = this.getCacheKey(params);
+            const cached = this.cache.get(cacheKey);
+            if (cached) {
+                return cached;
+            }
+        }
+
         try {
             // Find all matching overrides using the index
             const matching: CompiledOverride[] = [];
-            
+
             // Only check overrides for this component type
             const candidates = this.overrideIndex.get(params.component) || [];
-            
+
             for (const override of candidates) {
                 if (this.matches(override, params)) {
                     matching.push(override);
@@ -162,11 +188,19 @@ export class RuntimeResolver {
             }
 
             // Convert semantic props to classes if component is not Nuxt UI
+            let result: ResolvedOverride;
             if (!params.isNuxtUI) {
-                return this.mapPropsToClasses(merged);
+                result = this.mapPropsToClasses(merged);
+            } else {
+                result = merged;
             }
 
-            return merged;
+            // Cache the result
+            if (canCache && cacheKey) {
+                this.cache.set(cacheKey, result);
+            }
+
+            return result;
         } catch (error) {
             // Graceful degradation - log in dev, return empty in production
             if (import.meta.dev) {
@@ -183,6 +217,17 @@ export class RuntimeResolver {
             // Return empty props - component uses defaults
             return { props: {} };
         }
+    }
+
+    /**
+     * Generate a cache key for resolution parameters
+     */
+    private getCacheKey(params: ResolveParams): string {
+        // Format: component|context|identifier|state|isNuxtUI
+        // Use empty string for undefined values to keep key consistent
+        return `${params.component}|${params.context || ''}|${
+            params.identifier || ''
+        }|${params.state || ''}|${params.isNuxtUI ? '1' : '0'}`;
     }
 
     /**
@@ -203,10 +248,7 @@ export class RuntimeResolver {
         override: CompiledOverride,
         params: ResolveParams
     ): boolean {
-        // Component type must match
-        if (override.component !== params.component) {
-            return false;
-        }
+        // Component type is guaranteed to match by the index lookup
 
         // Context must match (if specified in override)
         // If override has a context, params MUST have the same context

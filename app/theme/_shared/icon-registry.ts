@@ -1,4 +1,4 @@
-import { reactive, ref } from 'vue';
+import { reactive, ref, shallowRef, toRaw } from 'vue';
 import { DEFAULT_ICONS, type IconToken } from '~/config/icon-tokens';
 
 export type IconMap = Partial<Record<IconToken, string>>;
@@ -9,8 +9,13 @@ export class IconRegistry {
     private activeTheme: string = 'default';
     private version = ref(0);
 
+    // Flattened cache for the active theme to speed up lookups
+    // Using shallowRef avoids deep reactivity overhead on the cache object
+    private activeCache = shallowRef<Record<string, string>>({});
+
     constructor(defaults: typeof DEFAULT_ICONS = DEFAULT_ICONS) {
         this.defaults = defaults;
+        this.rebuildCache();
     }
 
     /**
@@ -18,6 +23,9 @@ export class IconRegistry {
      */
     registerTheme(themeName: string, icons: IconMap) {
         this.themes[themeName] = icons;
+        if (themeName === this.activeTheme) {
+            this.rebuildCache();
+        }
         this.version.value++;
     }
 
@@ -25,19 +33,42 @@ export class IconRegistry {
      * Set the currently active theme for resolution
      */
     setActiveTheme(themeName: string) {
-        this.activeTheme = themeName;
+        if (this.activeTheme !== themeName) {
+            this.activeTheme = themeName;
+            this.rebuildCache();
+        }
+    }
+
+    /**
+     * Rebuild the flattened cache for the active theme
+     */
+    private rebuildCache() {
+        const overrides = this.themes[this.activeTheme];
+        // Merge defaults with overrides into a single flat object
+        // Using toRaw to avoid proxy overhead when reading from themes
+        this.activeCache.value = {
+            ...this.defaults,
+            ...(overrides ? toRaw(overrides) : {}),
+        };
     }
 
     /**
      * Resolve a semantic token to a concrete icon string
      */
     resolve(token: IconToken, themeName?: string): string {
+        // Fast path: resolving for active theme
+        if (!themeName || themeName === this.activeTheme) {
+            // Accessing .value tracks dependency on the cache (which updates on theme change)
+            const cache = this.activeCache.value;
+            return cache[token] || 'pixelarticons:alert';
+        }
+
+        // Slow path: resolving for a specific non-active theme
         // Track version to ensure reactivity when new themes are registered
         const _ = this.version.value;
-        const targetTheme = themeName || this.activeTheme;
 
-        // 1. Try active theme override
-        const themeMap = this.themes[targetTheme];
+        // 1. Try theme override
+        const themeMap = this.themes[themeName];
         if (themeMap && themeMap[token]) {
             return themeMap[token]!;
         }
@@ -48,7 +79,7 @@ export class IconRegistry {
             return defaultIcon;
         }
 
-        // 3. Ultimate fallback (should never happen if types are correct)
+        // 3. Ultimate fallback
         console.warn(`[IconRegistry] Missing icon for token: ${token}`);
         return 'pixelarticons:alert';
     }
@@ -76,6 +107,7 @@ export class IconRegistry {
     hydrate(state: { themes: Record<string, IconMap>; activeTheme: string }) {
         Object.assign(this.themes, state.themes);
         this.activeTheme = state.activeTheme;
+        this.rebuildCache();
         this.version.value++;
     }
 }
