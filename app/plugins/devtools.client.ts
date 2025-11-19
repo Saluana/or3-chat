@@ -6,7 +6,7 @@ export default defineNuxtPlugin(() => {
 
     registerDashboardPlugin({
         id: 'devtools',
-        icon: 'pixelarticons:debug',
+        icon: 'tabler:bug',
         label: 'Dev Tools',
         description: 'Developer tools for debugging hooks and extension points',
         order: 300, // Show near the end

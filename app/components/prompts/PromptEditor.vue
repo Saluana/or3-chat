@@ -6,7 +6,7 @@
             <UButton
                 v-bind="backButtonProps"
                 @click="emit('back')"
-                icon="pixelarticons:arrow-left"
+                :icon="useIcon('shell.back').value"
                 aria-label="Back to list"
             />
             <UInput

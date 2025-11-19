@@ -10,12 +10,13 @@ export default defineNuxtPlugin(() => {
 
     // Use the composable to get the register function
     const { registerSidebarPage } = useSidebarPages();
+    const icon = useIcon('sidebar.page.messages');
 
     // Register the home page with the sidebar pages registry
     const unregister = registerSidebarPage({
         id: 'sidebar-home',
         label: 'Home',
-        icon: 'pixelarticons:messages-square',
+        icon: icon.value,
         order: 0,
         keepAlive: true, // Keep home page alive for better UX
         usesDefaultHeader: true,

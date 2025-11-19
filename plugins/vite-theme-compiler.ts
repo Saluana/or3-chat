@@ -1,6 +1,6 @@
 /**
  * Vite Plugin for Refined Theme System
- * 
+ *
  * This plugin integrates the theme compiler into the Vite/Nuxt build process.
  * It compiles themes at build time and provides HMR support in development.
  */
@@ -11,10 +11,10 @@ import { ThemeCompiler } from '../scripts/theme-compiler';
 export interface ThemePluginOptions {
     /** Whether to fail the build on compilation errors (default: true) */
     failOnError?: boolean;
-    
+
     /** Whether to show warnings (default: true) */
     showWarnings?: boolean;
-    
+
     /** Whether to generate type definitions (default: true) */
     generateTypes?: boolean;
 }
@@ -28,41 +28,47 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
         showWarnings = true,
         generateTypes = true,
     } = options;
-    
+
     let compiler: ThemeCompiler;
     let compiled = false;
-    
+
     /**
      * Compile themes
      */
     async function compileThemes(context: any) {
         if (compiled) return; // Only compile once per build
         compiled = true;
-        
+
         compiler = new ThemeCompiler();
-        
+
         console.log('\n[theme-compiler] Compiling themes...');
-        
+
         try {
             const result = await compiler.compileAll();
-            
+
             // Log summary
-            console.log(`[theme-compiler] Compiled ${result.themes.length} themes`);
-            console.log(`  - Successful: ${result.themes.filter(t => t.success).length}`);
+            console.log(
+                `[theme-compiler] Compiled ${result.themes.length} themes`
+            );
+            console.log(
+                `  - Successful: ${
+                    result.themes.filter((t) => t.success).length
+                }`
+            );
             console.log(`  - Errors: ${result.totalErrors}`);
             console.log(`  - Warnings: ${result.totalWarnings}`);
-            
+
             // Handle errors
             if (result.totalErrors > 0) {
                 const errorMessage = formatErrors(result);
-                
+
                 if (failOnError && context) {
                     context.error(errorMessage);
                 } else {
                     console.error(errorMessage);
                 }
             }
-            
+
             // Handle warnings
             if (showWarnings && result.totalWarnings > 0) {
                 const warningMessage = formatWarnings(result);
@@ -72,13 +78,15 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
                     console.warn(warningMessage);
                 }
             }
-            
+
             if (result.success) {
-                console.log('[theme-compiler] ✅ All themes compiled successfully!\n');
+                console.log(
+                    '[theme-compiler] ✅ All themes compiled successfully!\n'
+                );
             }
         } catch (error) {
             const message = `[theme-compiler] Fatal compilation error: ${error}`;
-            
+
             if (failOnError && context) {
                 context.error(message);
             } else {
@@ -86,47 +94,54 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
             }
         }
     }
-    
+
     return {
         name: 'vite-theme-compiler',
-        
+
         // Run early in the build process
         enforce: 'pre',
-        
+
         /**
          * Initialize the compiler when the build starts
          */
         async buildStart() {
             await compileThemes(this);
         },
-        
+
         /**
          * Also compile on config resolution for dev mode
          */
         async configResolved() {
             await compileThemes(null);
         },
-        
+
         /**
          * Handle HMR updates for theme files
          */
         async handleHotUpdate({ file, server }) {
-            // Check if the changed file is a theme file
-            if (file.includes('/theme/') && file.endsWith('theme.ts')) {
-                console.log('[theme-compiler] Theme file changed, recompiling...');
-                
+            // Check if the changed file is a theme file or icon config
+            if (
+                file.includes('/theme/') &&
+                (file.endsWith('theme.ts') || file.endsWith('icons.config.ts'))
+            ) {
+                console.log(
+                    '[theme-compiler] Theme file changed, recompiling...'
+                );
+
                 // Reset compilation flag to allow recompilation
                 compiled = false;
-                
+
                 try {
                     const result = await compiler.compileAll();
-                    
+
                     if (result.totalErrors > 0) {
                         console.error('[theme-compiler] Recompilation failed');
                         console.error(formatErrors(result));
                     } else {
-                        console.log('[theme-compiler] ✅ Theme recompiled successfully');
-                        
+                        console.log(
+                            '[theme-compiler] ✅ Theme recompiled successfully'
+                        );
+
                         // Trigger full page reload for theme changes
                         server.ws.send({
                             type: 'full-reload',
@@ -134,9 +149,12 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
                         });
                     }
                 } catch (error) {
-                    console.error('[theme-compiler] HMR recompilation failed:', error);
+                    console.error(
+                        '[theme-compiler] HMR recompilation failed:',
+                        error
+                    );
                 }
-                
+
                 // Return empty array to prevent default HMR
                 return [];
             }
@@ -149,14 +167,14 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
  */
 function formatErrors(result: any): string {
     let message = '\n[theme-compiler] ❌ Compilation Errors:\n';
-    
+
     for (const theme of result.themes) {
         if (theme.errors.length > 0) {
             message += `\n  Theme: ${theme.name}\n`;
-            
+
             for (const error of theme.errors) {
                 message += `    ${error.code}: ${error.message}\n`;
-                
+
                 if (error.file) {
                     message += `      File: ${error.file}`;
                     if (error.line) {
@@ -167,18 +185,18 @@ function formatErrors(result: any): string {
                     }
                     message += '\n';
                 }
-                
+
                 if (error.suggestion) {
                     message += `      💡 ${error.suggestion}\n`;
                 }
-                
+
                 if (error.docsUrl) {
                     message += `      📖 ${error.docsUrl}\n`;
                 }
             }
         }
     }
-    
+
     return message;
 }
 
@@ -187,21 +205,21 @@ function formatErrors(result: any): string {
  */
 function formatWarnings(result: any): string {
     let message = '\n[theme-compiler] ⚠️  Warnings:\n';
-    
+
     for (const theme of result.themes) {
         if (theme.warnings.length > 0) {
             message += `\n  Theme: ${theme.name}\n`;
-            
+
             for (const warning of theme.warnings) {
                 message += `    ${warning.code}: ${warning.message}\n`;
-                
+
                 if (warning.suggestion) {
                     message += `      💡 ${warning.suggestion}\n`;
                 }
             }
         }
     }
-    
+
     return message;
 }
 

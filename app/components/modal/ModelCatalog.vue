@@ -30,7 +30,7 @@
                                 @click="searchQuery = ''"
                             >
                                 <UIcon
-                                    name="i-heroicons-x-mark"
+                                    :name="useIcon('ui.close').value"
                                     class="h-4 w-4"
                                 />
                             </button>
@@ -49,12 +49,12 @@
                         >
                             <UIcon
                                 v-if="!refreshing"
-                                name="i-heroicons-arrow-path"
+                                :name="useIcon('ui.refresh').value"
                                 class="h-4 w-4"
                             />
                             <UIcon
                                 v-else
-                                name="i-heroicons-arrow-path"
+                                :name="useIcon('ui.refresh').value"
                                 class="h-4 w-4 animate-spin"
                             />
                         </UButton>
@@ -269,7 +269,7 @@ const searchInputProps = computed(() => {
         .join(' ')
         .trim();
     return {
-        icon: 'pixelarticons:search',
+        icon: useIcon('ui.search').value,
         placeholder: 'Search models (id, name, description, modality)',
         size: 'sm' as const,
         ...restOverrides,

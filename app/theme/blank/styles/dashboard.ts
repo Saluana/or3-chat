@@ -1,4 +1,8 @@
 export const dashboardOverrides = {
+    'button.image-viewer': {
+        color: 'on-surface' as const,
+        variant: 'solid',
+    },
     'button#dashboard.back': {
         variant: 'basic' as const,
         ui: {

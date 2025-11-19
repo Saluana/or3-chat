@@ -22,6 +22,7 @@ import {
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
 import { generateThemeCssVariables } from '~/theme/_shared/generate-css-variables';
+import { iconRegistry } from '~/theme/_shared/icon-registry';
 
 export interface ThemePlugin {
     set: (name: string) => void;
@@ -303,6 +304,22 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     definition.stylesheets
                 );
 
+                // Load icons if available
+                let themeIcons = definition.icons;
+                if (!themeIcons && manifestEntry.iconsLoader) {
+                    try {
+                        const iconsModule = await manifestEntry.iconsLoader();
+                        themeIcons = iconsModule?.default || iconsModule;
+                    } catch (e) {
+                        if (import.meta.dev) {
+                            console.warn(
+                                `[theme] Failed to load icons for theme "${themeName}":`,
+                                e
+                            );
+                        }
+                    }
+                }
+
                 const hasStyleSelectors = manifestEntry.hasCssSelectorStyles;
 
                 const compiledTheme: CompiledTheme = {
@@ -320,9 +337,16 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     ui: definition.ui,
                     propMaps: definition.propMaps,
                     backgrounds: definition.backgrounds,
+                    icons: themeIcons,
                 };
 
                 themeRegistry.set(themeName, compiledTheme);
+
+                // Register icons with the registry
+                if (compiledTheme.icons) {
+                    iconRegistry.registerTheme(themeName, compiledTheme.icons);
+                }
+
                 const themeSpecificConfig =
                     (await loadThemeAppConfig(manifestEntry)) ?? null;
                 themeAppConfigOverrides.set(themeName, themeSpecificConfig);
@@ -443,8 +467,8 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             localStorage.setItem(activeThemeStorageKey, fallback);
             writeActiveThemeCookie(fallback);
             await ensureThemeLoaded(fallback);
-            const fallbackPatch =
-                themeAppConfigOverrides.get(fallback) ?? null;
+            iconRegistry.setActiveTheme(fallback);
+            const fallbackPatch = themeAppConfigOverrides.get(fallback) ?? null;
             applyThemeAppConfigPatch(fallbackPatch);
             applyThemeUiConfig(themeRegistry.get(fallback) || null);
             return;
@@ -467,6 +491,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         activeTheme.value = target;
         localStorage.setItem(activeThemeStorageKey, target);
         writeActiveThemeCookie(target);
+        iconRegistry.setActiveTheme(target);
 
         // Load CSS file and apply classes for new theme
         const theme = themeRegistry.get(target);
@@ -664,14 +689,12 @@ function deepMerge(
     }
 
     for (const [key, value] of Object.entries(patch)) {
-        if (
-            value &&
-            typeof value === 'object' &&
-            !Array.isArray(value)
-        ) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
             const current = base[key];
             base[key] = deepMerge(
-                current && typeof current === 'object' && !Array.isArray(current)
+                current &&
+                    typeof current === 'object' &&
+                    !Array.isArray(current)
                     ? current
                     : {},
                 value as Record<string, any>

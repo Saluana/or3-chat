@@ -164,6 +164,7 @@ import {
 } from 'vue';
 import SidebarHeader from './sidebar/SidebarHeader.vue';
 import ResizeHandle from './sidebar/ResizeHandle.vue';
+import { useIcon } from '~/composables/useIcon';
 
 type Side = 'left' | 'right';
 
@@ -383,18 +384,23 @@ function expand() {
 defineExpose({ toggle, close, openSidebar, expand, isCollapsed: collapsed });
 
 const side = computed<Side>(() => (props.side === 'right' ? 'right' : 'left'));
+
+// Pre-resolve icons to ensure reactivity tracks the registry updates correctly
+const iconToggleLeft = useIcon('shell.sidebar.toggle.left');
+const iconToggleRight = useIcon('shell.sidebar.toggle.right');
+
 // Icon and aria label for collapse/expand button
 const toggleIcon = computed(() => {
     // When collapsed, show the icon that suggests expanding back toward content area
     if (collapsed.value) {
         return side.value === 'right'
-            ? 'pixelarticons:arrow-bar-left'
-            : 'pixelarticons:arrow-bar-right';
+            ? iconToggleLeft.value
+            : iconToggleRight.value;
     }
     // When expanded, show icon pointing into the sidebar to collapse it
     return side.value === 'right'
-        ? 'pixelarticons:arrow-bar-right'
-        : 'pixelarticons:arrow-bar-left';
+        ? iconToggleRight.value
+        : iconToggleLeft.value;
 });
 const toggleAria = computed(() =>
     collapsed.value ? 'Expand sidebar' : 'Collapse sidebar'

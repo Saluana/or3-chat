@@ -12,6 +12,12 @@ import { getFileBlob } from '../../db/files';
 import { reportError } from '../../utils/errors';
 import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '#imports';
+
+const iconDownload = useIcon('image.download');
+const iconCopy = useIcon('image.copy');
+const iconCheck = useIcon('ui.check');
+const iconPlus = useIcon('ui.plus');
 
 const props = defineProps<{
     items: FileMeta[];
@@ -271,7 +277,7 @@ const downloadButtonProps = computed(() => {
         color: 'on-surface' as const,
         square: true as const,
         class: 'flex items-center justify-center',
-        icon: 'pixelarticons:download' as const,
+        icon: iconDownload.value,
         ...(overrides.value as any),
     };
 });
@@ -289,7 +295,7 @@ const copyButtonProps = computed(() => {
         color: 'on-surface' as const,
         square: true as const,
         class: 'flex items-center justify-center',
-        icon: 'pixelarticons:copy' as const,
+        icon: iconCopy.value,
         ...(overrides.value as any),
     };
 });
@@ -309,11 +315,11 @@ defineExpose({ ensureUrl });
             class="mb-4 break-inside-avoid"
         >
             <div
-                class="group relative w-full overflow-hidden rounded-md border-[length:var(--md-border-width)] transition duration-150"
+                class="group relative w-full overflow-hidden rounded-md border-(length:--md-border-width) transition duration-150"
                 :class="
                     props.selectionMode && isSelected(m.hash)
-                        ? 'border-[var(--md-primary)]'
-                        : 'border-[var(--md-border-color)]'
+                        ? 'border-(--md-primary)'
+                        : 'border-(--md-border-color)'
                 "
             >
                 <UButton
@@ -322,7 +328,7 @@ defineExpose({ ensureUrl });
                     size="sm"
                     color="primary"
                     square
-                    class="absolute! z-[11] top-2 left-2 flex items-center justify-center"
+                    class="absolute! z-11 top-2 left-2 flex items-center justify-center"
                     :aria-pressed="isSelected(m.hash)"
                     role="checkbox"
                     :aria-checked="isSelected(m.hash)"
@@ -334,18 +340,14 @@ defineExpose({ ensureUrl });
                     @click.stop="toggleSelect(m.hash)"
                 >
                     <UIcon
-                        :name="
-                            isSelected(m.hash)
-                                ? 'pixelarticons:check'
-                                : 'pixelarticons:plus'
-                        "
+                        :name="isSelected(m.hash) ? iconCheck : iconPlus"
                         class="h-5 w-5"
                     />
                 </UButton>
                 <button
                     v-if="state.urlByHash[m.hash] && !state.errorByHash[m.hash]"
                     type="button"
-                    class="block w-full cursor-pointer focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-[var(--md-primary)]"
+                    class="block w-full cursor-pointer focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-(--md-primary)"
                     :aria-label="`View ${m.name}`"
                     @click="view(m)"
                 >
@@ -359,7 +361,7 @@ defineExpose({ ensureUrl });
                 <button
                     v-else
                     type="button"
-                    class="flex min-h-[160px] w-full items-center justify-center bg-[var(--md-surface-container)] text-xs opacity-80 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-[var(--md-primary)]"
+                    class="flex min-h-40 w-full items-center justify-center bg-(--md-surface-container) text-xs opacity-80 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-(--md-primary)"
                     :aria-label="`View ${m.name}`"
                     @click="view(m)"
                 >

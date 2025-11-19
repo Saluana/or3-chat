@@ -75,17 +75,17 @@
                         >
                             <UIcon
                                 v-if="result.status === 'pass'"
-                                name="pixelarticons:check"
+                                :name="useIcon('ui.check').value"
                                 class="w-4 h-4"
                             />
                             <UIcon
                                 v-else-if="result.status === 'fail'"
-                                name="pixelarticons:close"
+                                :name="useIcon('ui.close').value"
                                 class="w-4 h-4"
                             />
                             <UIcon
                                 v-else
-                                name="pixelarticons:hourglass"
+                                :name="useIcon('ui.wait').value"
                                 class="w-4 h-4 animate-pulse"
                             />
                             <span>{{ result.status.toUpperCase() }}</span>
@@ -115,7 +115,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useHead } from '#imports';
+import { useHead, useIcon } from '#imports';
 import { useChat } from '~/composables/chat/useAi';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import type { ChatMessage } from '~/utils/chat/types';

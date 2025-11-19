@@ -45,7 +45,7 @@
                     >
                         <UIcon
                             class="h-6 w-6"
-                            :name="'pixelarticons:chevron-left'"
+                            :name="useIcon('ui.chevron.left').value"
                         />
                     </UButton>
                     <div
@@ -164,7 +164,7 @@ const open = computed({
 const coreItems: DashboardPlugin[] = [
     {
         id: 'core:settings',
-        icon: 'pixelarticons:sliders',
+        icon: useIcon('dashboard.settings').value,
         label: 'Settings',
         order: 1,
         pages: [
@@ -172,21 +172,21 @@ const coreItems: DashboardPlugin[] = [
                 id: 'theme-settings',
                 title: 'Theme Settings',
                 description: 'Configure application theme and appearance.',
-                icon: 'pixelarticons:visible',
+                icon: useIcon('ui.view').value,
                 component: () => import('./ThemePage.vue'),
             },
             {
                 id: 'ai-settings',
                 title: 'AI Settings',
                 description: 'Configure AI-related preferences and options.',
-                icon: 'pixelarticons:zap',
+                icon: useIcon('dashboard.plugins').value,
                 component: () => import('./AiPage.vue'),
             },
         ],
     },
     {
         id: 'core:images',
-        icon: 'pixelarticons:image',
+        icon: useIcon('dashboard.images').value,
         label: 'Images',
         order: 10,
         pages: [
@@ -194,14 +194,14 @@ const coreItems: DashboardPlugin[] = [
                 id: 'images-library',
                 title: 'Images',
                 description: 'Browse saved and generated images.',
-                icon: 'pixelarticons:image',
+                icon: useIcon('dashboard.images').value,
                 component: () => import('~/pages/images/index.vue'),
             },
         ],
     },
     {
         id: 'core:workspace-backup',
-        icon: 'pixelarticons:briefcase-upload',
+        icon: useIcon('dashboard.restore').value,
         label: 'Workspace Backup',
         order: 45,
         pages: [
@@ -209,7 +209,7 @@ const coreItems: DashboardPlugin[] = [
                 id: 'workspace-backup-home',
                 title: 'Workspace Backup',
                 description: 'Export and import full workspace backups.',
-                icon: 'pixelarticons:briefcase-upload',
+                icon: useIcon('dashboard.restore').value,
                 component: () => import('./workspace/WorkspaceBackupApp.vue'),
             },
         ],

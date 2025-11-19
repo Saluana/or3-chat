@@ -9,7 +9,7 @@
             <div class="flex w-full items-center gap-3 md:w-[250px]">
                 <UButton
                     v-bind="sidebarToggleButtonProps"
-                    icon="i-heroicons-bars-3"
+                    :icon="useIcon('ui.menu').value"
                     class="sm:hidden!"
                     :aria-controls="sidebarId"
                     :aria-expanded="sidebarOpen"
@@ -124,8 +124,13 @@
                                                     <span>{{
                                                         group.label
                                                     }}</span>
-                                                    <span
-                                                        class="i-heroicons-chevron-down-20-solid transition-transform duration-200"
+                                                    <UIcon
+                                                        :name="
+                                                            useIcon(
+                                                                'ui.chevron.down'
+                                                            ).value
+                                                        "
+                                                        class="transition-transform duration-200 w-5 h-5"
                                                         :class="{
                                                             'rotate-180':
                                                                 isGroupExpanded(
@@ -217,8 +222,11 @@
                                         "
                                     >
                                         <span>{{ group.label }}</span>
-                                        <span
-                                            class="i-heroicons-chevron-down-20-solid transition-transform duration-200"
+                                        <UIcon
+                                            :name="
+                                                useIcon('ui.chevron.down').value
+                                            "
+                                            class="transition-transform duration-200 w-5 h-5"
                                             :class="{
                                                 'rotate-180': isGroupExpanded(
                                                     category.label,
@@ -309,8 +317,9 @@
                                     :aria-expanded="mobileTocOpen"
                                 >
                                     <span>On this page</span>
-                                    <span
-                                        class="i-heroicons-chevron-down-20-solid transition-transform duration-200"
+                                    <UIcon
+                                        :name="useIcon('ui.chevron.down').value"
+                                        class="transition-transform duration-200 w-5 h-5"
                                         :class="{ 'rotate-180': mobileTocOpen }"
                                         aria-hidden="true"
                                     />
@@ -589,7 +598,7 @@ const searchInputProps = computed(() => {
     return {
         placeholder: 'Search docs...',
         size: 'md' as const,
-        leadingIcon: 'i-heroicons-magnifying-glass',
+        leadingIcon: useIcon('ui.search').value,
         ...rest,
         ui: {
             ...uiOverrides,

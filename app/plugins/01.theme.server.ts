@@ -6,6 +6,7 @@ import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
 import type { CompiledTheme } from '~/theme/_shared/types';
 import type { ThemePlugin } from './01.theme.client';
 import { generateThemeCssVariables } from '~/theme/_shared/generate-css-variables';
+import { iconRegistry } from '~/theme/_shared/icon-registry';
 import {
     loadThemeManifest,
     loadThemeStylesheets,
@@ -115,6 +116,22 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     definition.stylesheets
                 );
 
+                // Load icons if defined directly in the theme or via a companion module
+                let themeIcons = definition.icons;
+                if (!themeIcons && manifestEntry.iconsLoader) {
+                    try {
+                        const iconsModule = await manifestEntry.iconsLoader();
+                        themeIcons = iconsModule?.default || iconsModule;
+                    } catch (e) {
+                        if (import.meta.dev) {
+                            console.warn(
+                                `[theme] Failed to load icons for theme "${themeName}" during SSR:`,
+                                e
+                            );
+                        }
+                    }
+                }
+
                 const compiledTheme: CompiledTheme = {
                     name: definition.name,
                     isDefault: manifestEntry.isDefault,
@@ -129,9 +146,13 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     ui: definition.ui,
                     propMaps: definition.propMaps,
                     backgrounds: definition.backgrounds,
+                    icons: themeIcons,
                 };
 
                 themeRegistry.set(themeName, compiledTheme);
+                if (compiledTheme.icons) {
+                    iconRegistry.registerTheme(themeName, compiledTheme.icons);
+                }
                 const themeSpecificConfig =
                     (await loadThemeAppConfig(manifestEntry)) ?? null;
                 themeAppConfigOverrides.set(themeName, themeSpecificConfig);
@@ -293,10 +314,12 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             }
 
             activeTheme.value = fallback;
+            iconRegistry.setActiveTheme(fallback);
             return;
         }
 
         activeTheme.value = target;
+        iconRegistry.setActiveTheme(target);
         const patch = themeAppConfigOverrides.get(target) ?? null;
         applyThemeAppConfigPatch(patch);
         applyThemeUiConfig(themeRegistry.get(target) || null);

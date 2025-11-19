@@ -600,6 +600,12 @@
                     "path": "/themes/css-selectors",
                     "category": "Reference",
                     "summary": "In-depth reference for OR3's CSS-like selector syntax used in theming. Documents selector types (type, class, attribute, pseudo-class), combinators (descendant, child, adjacent sibling, general sibling), specificity calculation rules, examples of common patterns, limitations (no pseudo-elements, no complex selectors), and best practices for writing effective selectors."
+                },
+                {
+                    "name": "theme-icons.md",
+                    "path": "/themes/theme-icons",
+                    "category": "Reference",
+                    "summary": "Documentation for the semantic icon system. Covers core concepts (Tokens, Registry, Composable), usage in components and configuration, adding new icons, and overriding icons in themes."
                 }
             ]
         }

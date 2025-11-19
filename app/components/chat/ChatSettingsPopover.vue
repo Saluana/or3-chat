@@ -27,13 +27,13 @@
                 class="w-full"
                 v-model="webSearchEnabled"
             ></USwitch>
-            <UIcon name="pixelarticons:visible" class="w-5 h-5" />
+            <UIcon :name="useIcon('ui.view').value" class="w-5 h-5" />
         </div>
         <div
             class="chat-settings-switch flex justify-between w-full items-center py-1 px-3 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
         >
             <USwitch v-bind="thinkingSwitchProps" class="w-full"></USwitch>
-            <UIcon name="pixelarticons:lightbulb-on" class="w-5 h-5" />
+            <UIcon :name="useIcon('chat.reasoning').value" class="w-5 h-5" />
         </div>
 
         <!-- Tool Toggles Section -->
@@ -68,7 +68,11 @@
                         :name="tool.definition.ui.icon"
                         class="w-5 h-5"
                     />
-                    <UIcon v-else name="pixelarticons:wrench" class="w-5 h-5" />
+                    <UIcon
+                        v-else
+                        :name="useIcon('chat.tool.wrench').value"
+                        class="w-5 h-5"
+                    />
                 </div>
                 <p
                     v-if="
@@ -224,7 +228,7 @@ const systemPromptsButtonProps = computed(() => {
         size: 'sm',
         block: true,
         trailing: true,
-        trailingIcon: 'pixelarticons:script-text',
+        trailingIcon: useIcon('chat.system_prompt').value,
         ...overrideValue,
         class: mergedClass,
     };
@@ -249,7 +253,7 @@ const modelCatalogButtonProps = computed(() => {
         size: 'sm',
         block: true,
         trailing: true,
-        trailingIcon: 'pixelarticons:android',
+        trailingIcon: useIcon('chat.model.catalog').value,
         ...overrideValue,
         class: mergedClass,
     };

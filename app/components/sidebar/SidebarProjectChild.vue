@@ -9,11 +9,7 @@
             @click="emit('select')"
         >
             <UIcon
-                :name="
-                    child.kind === 'doc'
-                        ? 'pixelarticons:note'
-                        : 'pixelarticons:chat'
-                "
+                :name="child.kind === 'doc' ? iconNote : iconChat"
                 class="project-child-icon shrink-0 size-4"
             />
             <span
@@ -39,7 +35,7 @@
                         aria-label="Entry actions"
                     >
                         <UIcon
-                            name="pixelarticons:more-vertical"
+                            :name="iconMore"
                             class="project-child-menu-icon w-4 h-4 opacity-70"
                         />
                     </span>
@@ -71,6 +67,13 @@
 import { computed } from 'vue';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
+
+const iconNote = useIcon('sidebar.note');
+const iconChat = useIcon('sidebar.chat');
+const iconMore = useIcon('ui.more');
+const iconEdit = useIcon('ui.edit');
+const iconTrash = useIcon('ui.trash');
 
 defineProps<{
     child: ProjectEntry;
@@ -96,7 +99,7 @@ const renameButtonProps = computed(() => {
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:edit' as const,
+        icon: iconEdit.value,
         ...(overrides.value as any),
     };
 });
@@ -112,7 +115,7 @@ const removeButtonProps = computed(() => {
         color: 'error' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:trash' as const,
+        icon: iconTrash.value,
         ...(overrides.value as any),
     };
 });

@@ -8,7 +8,7 @@
             @click="emit('toggle-expand')"
         >
             <UIcon
-                :name="expanded ? 'i-lucide:folder-open' : 'i-lucide:folder'"
+                :name="expanded ? iconExpand : iconCollapse"
                 class="project-icon shrink-0 size-4 transition-transform duration-200"
             />
             <span class="project-label truncate text-start flex-1 min-w-0">{{
@@ -25,7 +25,7 @@
                         aria-label="Add chat to project"
                     >
                         <UIcon
-                            name="pixelarticons:message-plus"
+                            :name="iconNewChat"
                             class="project-add-icon w-4 h-4 opacity-70"
                         />
                     </button>
@@ -35,7 +35,7 @@
                         aria-label="Add document to project"
                     >
                         <UIcon
-                            name="pixelarticons:note-plus"
+                            :name="iconNewNote"
                             class="project-add-icon w-4 h-4 opacity-70"
                         />
                     </button>
@@ -52,7 +52,7 @@
                             aria-label="Project actions"
                         >
                             <UIcon
-                                name="pixelarticons:more-vertical"
+                                :name="iconMore"
                                 class="project-menu-icon w-4 h-4 opacity-70"
                             />
                         </button>
@@ -85,6 +85,15 @@
 import { computed } from 'vue';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
+
+const iconExpand = useIcon('shell.expand');
+const iconCollapse = useIcon('shell.collapse');
+const iconNewChat = useIcon('sidebar.new_chat');
+const iconNewNote = useIcon('sidebar.new_note');
+const iconMore = useIcon('ui.more');
+const iconEdit = useIcon('ui.edit');
+const iconTrash = useIcon('ui.trash');
 
 interface Project {
     id: string;
@@ -117,7 +126,7 @@ const renameButtonProps = computed(() => {
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:edit' as const,
+        icon: iconEdit.value,
         ...(overrides.value as any),
     };
 });
@@ -133,7 +142,7 @@ const deleteButtonProps = computed(() => {
         color: 'error' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:trash' as const,
+        icon: iconTrash.value,
         ...(overrides.value as any),
     };
 });

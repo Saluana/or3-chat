@@ -55,7 +55,6 @@ interface BaseColorPalette {
     success?: string;
     warning?: string;
     info?: string;
-
 }
 
 export interface ColorPalette extends BaseColorPalette {
@@ -354,6 +353,9 @@ export interface CompiledTheme {
 
     /** Theme background metadata (optional) */
     backgrounds?: ThemeBackgrounds;
+
+    /** Icon overrides for this theme */
+    icons?: Record<string, string>;
 }
 
 /**

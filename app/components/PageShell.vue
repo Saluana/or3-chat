@@ -50,7 +50,7 @@
                             :square="true"
                             aria-label="Open sidebar"
                             title="Open sidebar"
-                            icon="pixelarticons:arrow-bar-right"
+                            :icon="useIcon('shell.sidebar.toggle.right').value"
                             @click="openMobileSidebar"
                         />
                     </UTooltip>
@@ -71,7 +71,7 @@
                             ]"
                             aria-label="New window"
                             title="New window"
-                            icon="pixelarticons:card-plus"
+                            :icon="useIcon('shell.pane.add').value"
                             @click="addPane"
                         />
                     </UTooltip>
@@ -84,7 +84,13 @@
                             :class="'pointer-events-auto backdrop-blur'"
                             :aria-label="themeAriaLabel"
                             :title="themeAriaLabel"
-                            :icon="themeIcon"
+                            :icon="
+                                useIcon(
+                                    themeName === 'dark'
+                                        ? 'shell.theme.light'
+                                        : 'shell.theme.dark'
+                                ).value
+                            "
                             @click="toggleTheme"
                         />
                     </UTooltip>
@@ -174,7 +180,7 @@
                                 :square="true"
                                 aria-label="Close window"
                                 title="Close window"
-                                icon="pixelarticons:close"
+                                :icon="useIcon('shell.pane.close').value"
                                 @click.stop="closePane(i)"
                             />
                         </UTooltip>
@@ -242,6 +248,7 @@ import PaneUnknown from '~/components/PaneUnknown.vue';
 import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/01.theme.client';
+import { useIcon } from '~/composables/useIcon';
 
 const legacyCompatClasses = {
     height: `h-[${'100dvh'}]`,
@@ -871,9 +878,6 @@ if (process.client) {
         onUnmounted(() => observer.disconnect());
     }
 }
-const themeIcon = computed(() =>
-    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
-);
 const themeAriaLabel = computed(() =>
     themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
 );

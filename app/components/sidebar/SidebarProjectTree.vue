@@ -18,7 +18,7 @@
                             aria-label="Add chat to project"
                         >
                             <UIcon
-                                name="pixelarticons:message-plus"
+                                :name="useIcon('sidebar.new_chat').value"
                                 class="w-4 h-4 opacity-70"
                             />
                         </button>
@@ -28,7 +28,7 @@
                             aria-label="Add document to project"
                         >
                             <UIcon
-                                name="pixelarticons:note-plus"
+                                :name="useIcon('sidebar.new_note').value"
                                 class="w-4 h-4 opacity-70"
                             />
                         </button>
@@ -53,7 +53,7 @@
                             "
                         >
                             <UIcon
-                                name="pixelarticons:more-vertical"
+                                :name="useIcon('ui.more').value"
                                 class="w-4 h-4 opacity-70"
                             />
                         </span>
@@ -153,6 +153,7 @@ import {
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 
 interface ProjectRow {
     id: string;
@@ -224,7 +225,7 @@ const renameProjectButtonProps = computed(() => {
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:edit' as const,
+        icon: useIcon('ui.edit').value,
         class: 'w-full justify-start cursor-pointer',
         ...(overrides.value as any),
     };
@@ -241,7 +242,7 @@ const deleteProjectButtonProps = computed(() => {
         color: 'error' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:trash' as const,
+        icon: useIcon('ui.trash').value,
         class: 'w-full justify-start cursor-pointer text-error-500',
         ...(overrides.value as any),
     };
@@ -258,7 +259,7 @@ const renameEntryButtonProps = computed(() => {
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:edit' as const,
+        icon: useIcon('ui.edit').value,
         class: 'w-full justify-start',
         ...(overrides.value as any),
     };
@@ -275,7 +276,7 @@ const removeEntryButtonProps = computed(() => {
         color: 'error' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:trash' as const,
+        icon: useIcon('ui.trash').value,
         class: 'w-full justify-start text-error-500',
         ...(overrides.value as any),
     };
@@ -308,8 +309,8 @@ const treeItems = computed<TreeItem[]>(() =>
                     value: entry.id,
                     icon:
                         kind === 'doc'
-                            ? 'pixelarticons:note'
-                            : 'pixelarticons:chat',
+                            ? useIcon('sidebar.note').value
+                            : useIcon('sidebar.chat').value,
                     kind,
                     parentId: p.id,
                     onSelect: (e: Event) => {

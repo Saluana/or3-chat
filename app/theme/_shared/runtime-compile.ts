@@ -98,7 +98,7 @@ function normalizeSelector(selector: string): string {
     // Normalize identifiers first so dot-separated identifiers aren't treated as contexts
     result = result.replace(/(\w+)#([\w.-]+)(?=[:\[]|$)/g, '$1[data-id="$2"]');
 
-    const contextRegex = /(\w+)\.(\w+)(?=[:\[]|$)/g;
+    const contextRegex = /(\w+)\.([\w-]+)(?=[:\[]|$)/g;
     result = result.replace(contextRegex, (match, component, context) => {
         if (knownContexts.includes(context)) {
             return `${component}[data-context="${context}"]`;

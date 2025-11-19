@@ -23,7 +23,7 @@
                 aria-label="Document actions"
             >
                 <UIcon
-                    name="pixelarticons:more-vertical"
+                    :name="useIcon('ui.more').value"
                     class="w-4 h-4 opacity-70"
                 />
             </span>
@@ -68,6 +68,7 @@ import type { Post } from '~/db';
 import { db } from '~/db';
 import { useThrottleFn } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 
 const props = defineProps<{ doc: any; active?: boolean }>();
 const emit = defineEmits<{
@@ -89,7 +90,7 @@ const renameButtonProps = computed(() => {
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:edit' as const,
+        icon: useIcon('ui.edit').value,
         ...(overrides.value as any),
     };
 });
@@ -105,7 +106,7 @@ const addToProjectButtonProps = computed(() => {
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:folder-plus' as const,
+        icon: useIcon('sidebar.new_folder').value,
         ...(overrides.value as any),
     };
 });
@@ -120,7 +121,7 @@ const deleteButtonProps = computed(() => {
     return {
         variant: 'popover' as const,
         size: 'sm' as const,
-        icon: 'pixelarticons:trash' as const,
+        icon: useIcon('ui.trash').value,
         color: 'error' as const,
         ...(overrides.value as any),
     };

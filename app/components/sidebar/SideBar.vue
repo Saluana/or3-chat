@@ -70,7 +70,7 @@
                     :placeholder="
                         isRenamingDoc ? 'Document title' : 'Thread title'
                     "
-                    icon="pixelarticons:edit"
+                    :icon="iconEdit"
                     @keyup.enter="saveRename"
                 />
             </div>
@@ -95,7 +95,7 @@
                 <UInput
                     v-model="renameProjectName"
                     placeholder="Project name"
-                    icon="pixelarticons:folder"
+                    :icon="iconFolder"
                     @keyup.enter="saveRenameProject"
                 />
             </div>
@@ -194,7 +194,7 @@
                                 v-model="createProjectState.name"
                                 required
                                 placeholder="Project title"
-                                icon="pixelarticons:folder"
+                                :icon="iconFolder"
                                 class="w-full"
                                 @keyup.enter="submitCreateProject"
                             />
@@ -292,7 +292,7 @@
                         <UInput
                             v-model="newProjectName"
                             placeholder="Project name"
-                            icon="pixelarticons:folder"
+                            :icon="iconFolder"
                             class="w-full"
                         />
                     </UFormField>
@@ -358,7 +358,7 @@
                             v-model="newDocumentState.title"
                             required
                             placeholder="Document title"
-                            icon="pixelarticons:note"
+                            :icon="iconNote"
                             class="w-full"
                             @keyup.enter="submitCreateDocument"
                         />
@@ -405,12 +405,17 @@ import { updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/documents/useDocumentsStore';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 import {
     normalizeProjectData,
     type ProjectEntry,
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
+
+const iconEdit = useIcon('ui.edit');
+const iconFolder = useIcon('sidebar.folder');
+const iconNote = useIcon('sidebar.note');
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 // (Temporarily removed virtualization for chats — use simple list for now)

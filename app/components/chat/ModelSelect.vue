@@ -54,7 +54,7 @@ const selectMenuProps = computed(() => {
     const mergedClass = [baseClass, themeClass].filter(Boolean).join(' ');
 
     const defaultSearchInput = {
-        icon: 'pixelarticons:search',
+        icon: useIcon('ui.search').value,
         autofocus: !isMobile.value,
         ui: {},
     };

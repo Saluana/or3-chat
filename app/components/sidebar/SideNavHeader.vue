@@ -44,8 +44,8 @@
                                 v-bind="filterItemButtonProps"
                                 :leading-icon="
                                     activeSections[item.key]
-                                        ? 'pixelarticons:eye'
-                                        : 'pixelarticons:eye-closed'
+                                        ? iconView
+                                        : iconViewOff
                                 "
                                 @click="toggleSection(item.key)"
                             >
@@ -74,7 +74,7 @@
                         :placeholder="
                             isRenamingDoc ? 'Document title' : 'Thread title'
                         "
-                        icon="pixelarticons:edit"
+                        :icon="iconEdit"
                         @keyup.enter="saveRename"
                     />
                 </div>
@@ -98,7 +98,7 @@
                     <UInput
                         v-model="renameProjectName"
                         placeholder="Project name"
-                        icon="pixelarticons:folder"
+                        :icon="iconFolder"
                         @keyup.enter="saveRenameProject"
                     />
                 </div>
@@ -139,7 +139,7 @@
                                     v-model="createProjectState.name"
                                     required
                                     placeholder="Project title"
-                                    icon="pixelarticons:folder"
+                                    :icon="iconFolder"
                                     class="w-full"
                                     @keyup.enter="submitCreateProject"
                                 />
@@ -173,7 +173,7 @@
                 >
                     <span v-if="!creatingProject">Create</span>
                     <span v-else class="inline-flex items-center gap-1">
-                        <UIcon name="i-lucide-loader" class="animate-spin" />
+                        <UIcon :name="iconLoading" class="animate-spin" />
                         Creating
                     </span>
                 </UButton>
@@ -240,7 +240,7 @@
                             <UInput
                                 v-model="newProjectName"
                                 placeholder="Project name"
-                                icon="pixelarticons:folder"
+                                :icon="iconFolder"
                                 class="w-full"
                             />
                         </UFormField>
@@ -279,7 +279,7 @@
                     <span v-if="!addingToProject">Add</span>
                     <span v-else class="inline-flex items-center gap-1"
                         ><UIcon
-                            name="i-lucide-loader"
+                            :name="iconLoading"
                             class="animate-spin"
                         />Adding</span
                     >
@@ -309,7 +309,7 @@
                                 v-model="newDocumentState.title"
                                 required
                                 placeholder="Document title"
-                                icon="pixelarticons:note"
+                                :icon="iconNote"
                                 class="w-full"
                                 @keyup.enter="submitCreateDocument"
                             />
@@ -330,7 +330,7 @@
                 >
                     <span v-if="!creatingDocument">Create</span>
                     <span v-else class="inline-flex items-center gap-1">
-                        <UIcon name="i-lucide-loader" class="animate-spin" />
+                        <UIcon :name="iconLoading" class="animate-spin" />
                         Creating
                     </span>
                 </UButton>
@@ -343,6 +343,17 @@ import { ref, computed } from 'vue';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
+import { useIcon } from '~/composables/useIcon';
+
+const iconView = useIcon('ui.view');
+const iconViewOff = useIcon('ui.view_off');
+const iconEdit = useIcon('ui.edit');
+const iconFolder = useIcon('sidebar.folder');
+const iconLoading = useIcon('ui.loading');
+const iconNote = useIcon('sidebar.note');
+const iconSearch = useIcon('sidebar.search');
+const iconClose = useIcon('ui.close');
+const iconFilter = useIcon('ui.filter');
 
 const props = defineProps<{
     sidebarQuery: string;
@@ -383,7 +394,7 @@ const searchInputProps = computed(() => {
     const mergedUi = { ...themeUi, ...componentUi };
 
     return {
-        icon: 'pixelarticons:search' as const,
+        icon: iconSearch.value,
         size: 'md' as const,
         variant: 'outline' as const,
         placeholder: 'Search...',
@@ -403,7 +414,7 @@ const searchClearButtonProps = computed(() => {
         color: 'neutral' as const,
         variant: 'subtle' as const,
         size: 'xs' as const,
-        icon: 'pixelarticons:close-box' as const,
+        icon: iconClose.value,
         ...(overrides.value as any),
     };
 });
@@ -419,7 +430,7 @@ const filterButtonProps = computed(() => {
         size: 'md' as const,
         color: 'neutral' as const,
         variant: 'ghost' as const,
-        icon: 'material-symbols:filter-alt-sharp' as const,
+        icon: iconFilter.value,
         square: true,
         ...(overrides.value as any),
     };
