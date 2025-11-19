@@ -59,7 +59,7 @@ export default <IconMap>{
 
     // Common UI
     'ui.check': 'pixelarticons:check',
-    'ui.close': 'pixelarticons:close',
+    'ui.close': 'tabler:x',
     'ui.copy': 'tabler:copy',
     'ui.trash': 'tabler:trash',
     'ui.edit': 'tabler:pencil',

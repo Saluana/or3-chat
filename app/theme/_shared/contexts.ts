@@ -15,6 +15,7 @@ export const KNOWN_THEME_CONTEXTS = [
     'message',
     'modal',
     'document',
+    'image-viewer',
 ] as const;
 
 export type KnownThemeContext = (typeof KNOWN_THEME_CONTEXTS)[number];
