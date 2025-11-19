@@ -77,20 +77,20 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     }
 
     const appConfig = useAppConfig() as any;
-    const baseAppConfig = cloneDeep(appConfig);
+    // Cache the original appConfig reference instead of deep cloning
+    // This saves significant memory as appConfig can be large
+    const baseAppConfigSnapshot = JSON.stringify(appConfig);
 
     const initialPatch = (nuxtApp.payload as any)?.data
         ?.__or3ThemeAppConfigPatch;
     if (initialPatch && typeof initialPatch === 'object') {
-        const mergedAppConfig = deepMerge(
-            cloneDeep(appConfig),
-            cloneDeep(initialPatch)
-        );
-        recursiveUpdate(appConfig, mergedAppConfig);
+        recursiveUpdate(appConfig, initialPatch);
     }
 
     registerCleanup(() => {
-        recursiveUpdate(appConfig, cloneDeep(baseAppConfig));
+        // Restore from snapshot only on cleanup
+        const restored = JSON.parse(baseAppConfigSnapshot);
+        recursiveUpdate(appConfig, restored);
     });
     const themeAppConfigOverrides = new Map<
         string,
@@ -98,17 +98,19 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     >();
 
     const applyThemeUiConfig = (theme?: CompiledTheme | null) => {
-        const baseUi = cloneDeep(appConfig.ui || {});
-        const mergedUi = deepMerge(
-            baseUi,
-            (theme?.ui as Record<string, any> | undefined) || undefined
-        );
-        appConfig.ui = mergedUi;
+        // Directly merge into appConfig.ui without extra cloning
+        if (!appConfig.ui) {
+            appConfig.ui = {};
+        }
+        if (theme?.ui) {
+            recursiveUpdate(appConfig.ui, theme.ui as Record<string, any>);
+        }
     };
 
     const applyThemeAppConfigPatch = (patch?: Record<string, any> | null) => {
-        const merged = deepMerge(cloneDeep(baseAppConfig), patch || undefined);
-        recursiveUpdate(appConfig, merged);
+        if (patch) {
+            recursiveUpdate(appConfig, patch);
+        }
     };
 
     // Determine current default theme from manifest
@@ -292,38 +294,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const loadTheme = async (
         themeName: string
     ): Promise<CompiledTheme | null> => {
-        // Check localStorage cache first (Stale-While-Revalidate)
-        const cacheKey = `or3_theme_cache_${themeName}`;
-        let cachedTheme: CompiledTheme | null = null;
-        try {
-            const cached = localStorage.getItem(cacheKey);
-            if (cached) {
-                cachedTheme = JSON.parse(cached);
-                // If we have a cache, register it immediately to unblock render
-                if (cachedTheme) {
-                    themeRegistry.set(themeName, cachedTheme);
-                    if (cachedTheme.icons) {
-                        iconRegistry.registerTheme(
-                            themeName,
-                            cachedTheme.icons
-                        );
-                    }
-                    const resolver = new RuntimeResolver(cachedTheme);
-                    resolverRegistry.set(themeName, resolver);
-                }
-            }
-        } catch (e) {
-            // Ignore cache errors
-        }
-
-        // If we have a cached theme, we can return it immediately,
-        // but we should still trigger a background update if needed.
-        // For this challenge, speed is key, so we return cached immediately.
-        // In a real app, we might want to check versioning.
-        if (cachedTheme && !import.meta.dev) {
-            // In production, assume cache is good enough for speed.
-            // We can optionally re-validate in background.
-            return cachedTheme;
+        // Check if already loaded in memory
+        if (themeRegistry.has(themeName)) {
+            return themeRegistry.get(themeName)!;
         }
 
         try {
@@ -394,16 +367,6 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 };
 
                 themeRegistry.set(themeName, compiledTheme);
-
-                // Cache the compiled result
-                try {
-                    localStorage.setItem(
-                        cacheKey,
-                        JSON.stringify(compiledTheme)
-                    );
-                } catch (e) {
-                    // Quota exceeded or other error
-                }
 
                 // Register icons with the registry
                 if (compiledTheme.icons) {
@@ -489,6 +452,24 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     };
 
     /**
+     * Cleanup theme resources when switching away from it
+     * Keeps only the active theme and default theme loaded to save memory
+     */
+    const cleanupInactiveThemes = (activeThemeName: string) => {
+        const themesToKeep = new Set([activeThemeName, DEFAULT_THEME]);
+        
+        // Clean up theme registry - keep only active and default
+        for (const [themeName] of themeRegistry) {
+            if (!themesToKeep.has(themeName)) {
+                themeRegistry.delete(themeName);
+                resolverRegistry.delete(themeName);
+                iconRegistry.unregisterTheme(themeName);
+                themeAppConfigOverrides.delete(themeName);
+            }
+        }
+    };
+
+    /**
      * Set active theme (for refined theme system)
      *
      * This switches the active theme and persists the selection.
@@ -556,6 +537,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         localStorage.setItem(activeThemeStorageKey, target);
         writeActiveThemeCookie(target);
         iconRegistry.setActiveTheme(target);
+
+        // Clean up inactive themes to save memory
+        cleanupInactiveThemes(target);
 
         // Load CSS file and apply classes for new theme
         const theme = themeRegistry.get(target);
@@ -687,23 +671,32 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     if (!(globalThis as any)[HOOK_REGISTERED_KEY]) {
         (globalThis as any)[HOOK_REGISTERED_KEY] = true;
 
+        // Debounce the page:finish handler to avoid excessive class applications
+        let pageFinishTimeout: ReturnType<typeof setTimeout> | null = null;
         nuxtApp.hook('page:finish', () => {
             if (import.meta.client) {
-                const nuxtApp = (globalThis as any).useNuxtApp?.();
-                const themePlugin = nuxtApp?.$theme as ThemePlugin | undefined;
-                if (!themePlugin) return;
+                // Clear any pending timeout
+                if (pageFinishTimeout) {
+                    clearTimeout(pageFinishTimeout);
+                }
+                
+                // Debounce by 100ms to batch multiple rapid navigations
+                pageFinishTimeout = setTimeout(() => {
+                    pageFinishTimeout = null;
+                    const nuxtApp = (globalThis as any).useNuxtApp?.();
+                    const themePlugin = nuxtApp?.$theme as ThemePlugin | undefined;
+                    if (!themePlugin) return;
 
-                const theme = themePlugin.getTheme?.(
-                    themePlugin.activeTheme.value
-                );
-                if (theme?.cssSelectors) {
-                    nextTick(() => {
+                    const theme = themePlugin.getTheme?.(
+                        themePlugin.activeTheme.value
+                    );
+                    if (theme?.cssSelectors) {
                         applyThemeClasses(
                             themePlugin.activeTheme.value,
                             theme.cssSelectors!
                         );
-                    });
-                }
+                    }
+                }, 100);
             }
         });
     }
@@ -724,49 +717,6 @@ function injectThemeVariables(themeName: string, css: string) {
         document.head.appendChild(style);
     }
     style.textContent = css;
-}
-
-function cloneDeep<T>(value: T): T {
-    if (value === undefined || value === null) {
-        return value;
-    }
-
-    if (typeof globalThis.structuredClone === 'function') {
-        try {
-            return globalThis.structuredClone(value);
-        } catch {
-            // Fallback below
-        }
-    }
-
-    return JSON.parse(JSON.stringify(value));
-}
-
-function deepMerge(
-    base: Record<string, any>,
-    patch?: Record<string, any>
-): Record<string, any> {
-    if (!patch) {
-        return base;
-    }
-
-    for (const [key, value] of Object.entries(patch)) {
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
-            const current = base[key];
-            base[key] = deepMerge(
-                current &&
-                    typeof current === 'object' &&
-                    !Array.isArray(current)
-                    ? current
-                    : {},
-                value as Record<string, any>
-            );
-        } else if (value !== undefined) {
-            base[key] = value;
-        }
-    }
-
-    return base;
 }
 
 function recursiveUpdate(

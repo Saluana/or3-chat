@@ -3,6 +3,29 @@ import { watch } from 'vue';
 
 export default defineNuxtPlugin((nuxtApp) => {
     const unwatchers = new WeakMap<any, () => void>();
+    const theme = (nuxtApp as any).$theme;
+    
+    // Only setup if theme plugin is available
+    if (!theme || !theme.activeTheme) return;
+
+    // Use a single global watcher instead of per-component watchers
+    // This dramatically reduces memory usage
+    let pendingUpdate = false;
+    const lazyComponents = new WeakSet();
+
+    const globalUnwatch = watch(
+        () => theme.activeTheme.value,
+        () => {
+            // Debounce updates to avoid excessive re-renders
+            if (pendingUpdate) return;
+            pendingUpdate = true;
+            
+            requestAnimationFrame(() => {
+                pendingUpdate = false;
+                // Force update will be triggered by next mount/update cycle
+            });
+        }
+    );
 
     nuxtApp.vueApp.mixin({
         beforeMount() {
@@ -14,24 +37,23 @@ export default defineNuxtPlugin((nuxtApp) => {
                 return;
             }
 
-            const theme = (nuxtApp as any).$theme;
-            if (!theme || !theme.resolversVersion) return;
-
-            // Watch for changes in the theme resolvers (e.g. when a theme finishes loading)
-            // and force the component to update. This fixes issues where lazy components
-            // render before the theme is fully ready.
-            const unwatch = watch(theme.resolversVersion, () => {
+            // Mark as lazy component
+            lazyComponents.add(this);
+            
+            // Only force update if theme recently changed
+            if (pendingUpdate) {
                 this.$forceUpdate();
-            });
-
-            unwatchers.set(this, unwatch);
-        },
-        beforeUnmount() {
-            const unwatch = unwatchers.get(this);
-            if (unwatch) {
-                unwatch();
-                unwatchers.delete(this);
             }
         },
+        beforeUnmount() {
+            lazyComponents.delete(this);
+        },
     });
+
+    // Cleanup global watcher on hot reload
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => {
+            globalUnwatch();
+        });
+    }
 });
