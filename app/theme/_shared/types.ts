@@ -240,6 +240,9 @@ export interface ThemeDefinition {
 
     /** Font family tokens for this theme */
     fonts?: ThemeFonts;
+
+    /** Icon overrides for this theme */
+    icons?: Record<string, string>;
 }
 
 export interface ThemeFontSet {

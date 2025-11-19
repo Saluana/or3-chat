@@ -40,7 +40,13 @@ export function compileOverridesRuntime(
 /**
  * Parse a selector into its components.
  */
+const selectorCache = new Map<string, ParsedSelector>();
+
 function parseSelector(selector: string): ParsedSelector {
+    if (selectorCache.has(selector)) {
+        return selectorCache.get(selector)!;
+    }
+
     const normalized = normalizeSelector(selector);
 
     const component = normalized.match(/^(\w+)/)?.[1] || 'button';
@@ -79,13 +85,16 @@ function parseSelector(selector: string): ParsedSelector {
         });
     }
 
-    return {
+    const result = {
         component,
         context,
         identifier,
         state,
         attributes: attributes.length > 0 ? attributes : undefined,
     };
+
+    selectorCache.set(selector, result);
+    return result;
 }
 
 /**
