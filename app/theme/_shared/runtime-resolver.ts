@@ -103,6 +103,7 @@ class LRUCache<K, V> {
  * and provides efficient override resolution based on component parameters.
  */
 export class RuntimeResolver {
+    private overrides: CompiledOverride[]; // Keep reference for tests
     private overrideIndex: Map<string, CompiledOverride[]>;
     private propMaps: PropClassMaps;
     private themeName: string;
@@ -116,14 +117,16 @@ export class RuntimeResolver {
      */
     constructor(compiledTheme: CompiledTheme) {
         // Build index by component type for fast lookup
-        // Store reference to original overrides array instead of copying
+        // Overrides should already be sorted by specificity in the compiled theme
+        // but we sort here for safety and to maintain test compatibility
+        this.overrides = [...compiledTheme.overrides].sort(
+            (a, b) => b.specificity - a.specificity
+        );
+        
         this.overrideIndex = new Map();
         this.componentsWithAttributes = new Set();
-
-        // Overrides are already sorted by specificity in the compiled theme
-        const overrides = compiledTheme.overrides;
         
-        for (const override of overrides) {
+        for (const override of this.overrides) {
             const key = override.component;
             if (!this.overrideIndex.has(key)) {
                 this.overrideIndex.set(key, []);

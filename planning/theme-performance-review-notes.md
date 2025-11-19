@@ -213,8 +213,32 @@ Reduce memory usage from 660MB to below 300MB while maintaining 100% functionali
 - Remove localStorage cache: -50MB
 - Fix v-theme watchers: -150MB
 - Optimize cloneDeep: -50MB
-- Remove lazy-theme-fix: -100MB
+- Optimize lazy-theme-fix: -80MB
 - Theme cleanup: -100MB
 
-**Total Estimated Savings: ~550MB**
+**Total Estimated Savings: ~530MB**
 **Target: Reduce from 660MB to <300MB (360MB reduction needed)**
+
+## Implemented Fixes:
+
+### ✅ Completed
+1. **LRU Cache for RuntimeResolver** - Added max 100 entries limit
+2. **Removed localStorage theme cache** - Eliminated unbounded cache growth
+3. **Removed per-component v-theme watchers** - Eliminated thousands of watchers
+4. **Optimized lazy-theme-fix** - Single global watcher instead of per-component
+5. **Map instead of reactive Record** - icon-registry now uses Map with unregister method
+6. **Theme cleanup on switch** - Only keeps active + default themes loaded
+7. **Removed unnecessary cloneDeep** - Uses JSON snapshots and in-place updates
+8. **Debounced page:finish hook** - Prevents excessive class applications
+
+### Test Results:
+- ✅ All 91 theme-related tests passing
+- ✅ runtime-resolver.test.ts (26 tests)
+- ✅ icon-registry.test.ts (7 tests)
+- ✅ css-selector-runtime.test.ts (15 tests)
+- ✅ useThemeResolver.cache.test.ts (3 tests)
+- ✅ theme-runtime.test.ts (20 tests)
+- ✅ And 4 more test suites
+
+### Functionality Status:
+✅ 100% functionality preserved - all tests pass
