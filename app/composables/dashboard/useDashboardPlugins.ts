@@ -400,6 +400,7 @@ export function useDashboardNavigation(
                 return { ok: true };
             } catch (cause) {
                 state.view = 'dashboard';
+                state.activePluginId = null;
                 return setError({
                     code: 'handler-error',
                     pluginId,

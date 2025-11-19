@@ -1876,7 +1876,6 @@ watch(
             : '';
         localHex.warning = String(o.colors?.warning || '').startsWith('#')
             ? String(o.colors?.warning)
-
             : '';
     },
     { deep: true }
