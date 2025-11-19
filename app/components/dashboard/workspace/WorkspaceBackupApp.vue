@@ -1,8 +1,12 @@
 <template>
-    <div class="px-4 py-4 space-y-10 text-sm">
+    <div
+        id="dashboard-workspace-backup-container"
+        class="px-4 py-4 space-y-10 text-sm"
+    >
         <p ref="liveRegion" class="sr-only" aria-live="polite"></p>
 
         <section
+            id="dashboard-workspace-guidance-section"
             class="section-card space-y-3"
             role="group"
             aria-labelledby="workspace-backup-guidance"
@@ -25,15 +29,17 @@
                 <div></div>
             </div>
             <UAlert
+                v-bind="alertProps"
                 color="warning"
                 variant="subtle"
-                icon="pixelarticons:warning-box"
+                :icon="useIcon('ui.warning').value"
                 class="text-xs"
                 title="Always create a fresh export before importing a backup—replace mode wipes current data."
             />
         </section>
 
         <section
+            id="dashboard-workspace-export-section"
             class="section-card space-y-4"
             role="group"
             aria-labelledby="workspace-backup-export"
@@ -54,6 +60,7 @@
             </p>
             <div class="space-y-2">
                 <UProgress
+                    v-bind="progressProps"
                     v-if="exporting"
                     size="xs"
                     :value="state.progress"
@@ -62,14 +69,13 @@
             </div>
             <div class="flex items-center flex-wrap justify-between gap-3">
                 <UButton
-                    variant="light"
-                    class="retro-btn"
+                    v-bind="exportButtonProps"
                     :disabled="!canExport"
                     :loading="exporting"
                     @click="onExport"
                 >
                     <UIcon
-                        name="pixelarticons:briefcase-download"
+                        :name="useIcon('dashboard.backup').value"
                         class="h-4 w-4 mr-0.5"
                     />
                     Export workspace
@@ -79,6 +85,7 @@
         </section>
 
         <section
+            id="dashboard-workspace-import-section"
             class="section-card space-y-4"
             role="group"
             aria-labelledby="workspace-backup-import"
@@ -100,7 +107,7 @@
                 first.
             </p>
             <div class="space-y-4">
-                <div class="retro-upload-panel">
+                <div class="theme-upload-panel">
                     <input
                         ref="fileInput"
                         type="file"
@@ -111,10 +118,17 @@
                     <div
                         class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
                     >
-                        <div class="flex items-start gap-3 text-left">
+                        <div
+                            class="flex items-start gap-3 text-left cursor-pointer"
+                            role="button"
+                            tabindex="0"
+                            @click="handleUploadPanelClick"
+                            @keydown.enter.prevent="handleUploadPanelClick"
+                            @keydown.space.prevent="handleUploadPanelClick"
+                        >
                             <UIcon
-                                name="pixelarticons:cloud-upload"
-                                class="retro-upload-icon"
+                                :name="useIcon('ui.upload').value"
+                                class="theme-upload-icon"
                                 aria-hidden="true"
                             />
                             <div class="space-y-1">
@@ -130,9 +144,7 @@
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <UButton
-                                size="sm"
-                                variant="basic"
-                                class="retro-btn"
+                                v-bind="browseButtonProps"
                                 :disabled="importing || peeking"
                                 @click="onBrowse"
                             >
@@ -140,10 +152,7 @@
                             </UButton>
                             <UButton
                                 v-if="selectedFile"
-                                size="sm"
-                                color="error"
-                                variant="basic"
-                                class="retro-btn"
+                                v-bind="clearFileButtonProps"
                                 :disabled="importing || peeking"
                                 @click="clearSelection"
                             >
@@ -155,7 +164,7 @@
                     <Transition name="fade">
                         <div
                             v-if="selectedFile"
-                            class="retro-file-card"
+                            class="theme-file-card"
                             aria-live="polite"
                         >
                             <div class="space-y-1">
@@ -167,9 +176,10 @@
                                 </p>
                             </div>
                             <UBadge
+                                v-bind="badgeProps"
                                 icon="i-ph-file-duotone"
                                 :class="[
-                                    'retro-badge',
+                                    'theme-badge',
                                     badgeToneClass(fileBadgeColor),
                                 ]"
                             >
@@ -180,18 +190,20 @@
                 </div>
 
                 <UAlert
+                    v-bind="alertProps"
                     v-if="peeking"
                     color="primary"
                     variant="subtle"
-                    icon="pixelarticons:hourglass"
+                    :icon="useIcon('ui.wait').value"
                     class="text-xs"
                     title="Validating backup metadata…"
                 />
                 <UAlert
+                    v-bind="alertProps"
                     v-if="peekErrorMessage"
                     color="error"
                     variant="subtle"
-                    icon="pixelarticons:warning-box"
+                    :icon="useIcon('ui.warning').value"
                     class="text-xs"
                     :title="peekErrorMessage"
                 />
@@ -199,7 +211,7 @@
                 <Transition name="fade">
                     <div
                         v-if="backupMeta"
-                        class="retro-meta-panel"
+                        class="theme-meta-panel"
                         aria-live="polite"
                     >
                         <div class="flex items-center justify-between">
@@ -217,7 +229,7 @@
                             <UBadge
                                 icon="i-ph-database-duotone"
                                 :class="[
-                                    'retro-badge',
+                                    'theme-badge',
                                     badgeToneClass('primary'),
                                 ]"
                             >
@@ -226,14 +238,14 @@
                             </UBadge>
                         </div>
                         <div
-                            class="retro-meta-table"
+                            class="theme-meta-table"
                             role="list"
                             aria-label="Tables included in backup"
                         >
                             <div
                                 v-for="table in backupMeta.tables"
                                 :key="table.name"
-                                class="retro-meta-row"
+                                class="theme-meta-row"
                                 role="listitem"
                             >
                                 <span>{{ table.name }}</span>
@@ -256,8 +268,7 @@
                             <UButton
                                 v-for="option in importModeOptions"
                                 :key="option.value"
-                                variant="ghost"
-                                color="primary"
+                                v-bind="importModeButtonProps"
                                 class="h-fit"
                                 :class="{
                                     'bg-primary/20 hover:bg-primary/20':
@@ -270,7 +281,7 @@
                                 <div class="flex items-start gap-3 w-full">
                                     <UIcon
                                         :name="option.icon"
-                                        class="retro-choice-icon"
+                                        class="theme-choice-icon"
                                         aria-hidden="true"
                                     />
                                     <div class="space-y-1 text-left">
@@ -296,34 +307,38 @@
                     </div>
 
                     <UCheckbox
+                        v-bind="importCheckboxProps"
                         v-model="overwriteValuesModel"
                         size="sm"
                         :disabled="overwriteDisabled"
-                        class="retro-checkbox"
+                        class="theme-checkbox"
                         label="Overwrite records on key conflict"
                         description="When disabled, conflicting rows are skipped and reported."
                     />
                 </div>
 
                 <UAlert
+                    v-bind="alertProps"
                     v-if="importWarningMessage"
                     color="warning"
                     variant="subtle"
-                    icon="pixelarticons:warning-box"
+                    :icon="useIcon('ui.warning').value"
                     class="text-xs"
                     :title="importWarningMessage"
                 />
                 <UAlert
+                    v-bind="alertProps"
                     v-if="importErrorMessage"
                     color="error"
                     variant="subtle"
-                    icon="pixelarticons:warning-box"
+                    :icon="useIcon('ui.warning').value"
                     class="text-xs"
                     :title="importErrorMessage"
                 />
 
                 <div class="space-y-2">
                     <UProgress
+                        v-bind="progressProps"
                         v-if="importing"
                         size="xs"
                         :value="state.progress"
@@ -333,15 +348,13 @@
 
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <UButton
-                        color="primary"
-                        variant="light"
-                        class="retro-btn"
+                        v-bind="importButtonProps"
                         :disabled="!canImport"
                         :loading="importing"
                         @click="onImport"
                     >
                         <UIcon
-                            name="pixelarticons:briefcase-upload"
+                            :name="useIcon('dashboard.restore').value"
                             class="h-4 w-4 mr-0.5"
                         />
                         Import workspace
@@ -362,6 +375,7 @@ import {
     type WorkspaceImportMode,
 } from '~/composables/core/useWorkspaceBackup';
 import { err, reportError, type AppError } from '~/utils/errors';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const docsHref =
     'https://github.com/Saluana/or3-chat/blob/main/docs/UI/workspace-backup.md';
@@ -394,8 +408,124 @@ type BadgeTone =
     | 'warning';
 
 function badgeToneClass(tone?: BadgeTone | null) {
-    return tone ? `retro-badge--${tone}` : 'retro-badge--neutral';
+    return tone ? `theme-badge--${tone}` : 'theme-badge--neutral';
 }
+
+// Theme overrides for buttons
+const exportButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.export',
+        isNuxtUI: true,
+    });
+    return {
+        variant: 'outline' as const,
+        class: 'text-[var(--md-on-surface)]',
+        ...(overrides.value as any),
+    };
+});
+
+const browseButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.browse',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'outline' as const,
+
+        ...(overrides.value as any),
+    };
+});
+
+const clearFileButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.clear-file',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        color: 'error' as const,
+        variant: 'basic' as const,
+        type: 'button' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const importModeButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.import-mode',
+        isNuxtUI: true,
+    });
+    return {
+        variant: 'ghost' as const,
+        color: 'primary' as const,
+        type: 'button' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const importButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.import',
+        isNuxtUI: true,
+    });
+    return {
+        variant: 'outline' as const,
+        class: 'text-[var(--md-on-surface)]',
+        type: 'button' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const alertProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'alert',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.alert',
+        isNuxtUI: true,
+    });
+    return overrides.value || {};
+});
+
+const progressProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'progress',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.progress',
+        isNuxtUI: true,
+    });
+    return overrides.value || {};
+});
+
+const badgeProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'badge',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.badge',
+        isNuxtUI: true,
+    });
+    return overrides.value || {};
+});
+
+const importCheckboxProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'checkbox',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.checkbox',
+        isNuxtUI: true,
+    });
+    return overrides.value || {};
+});
 
 const importing = computed(() => state.isImporting.value);
 const exporting = computed(() => state.isExporting.value);
@@ -638,6 +768,12 @@ function clearSelection() {
     }
 }
 
+function handleUploadPanelClick(event: Event) {
+    const element = event.target as HTMLElement;
+    if (element.closest('button')) return;
+    onBrowse();
+}
+
 async function onFilePicked(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -830,27 +966,7 @@ defineExpose({
 </script>
 
 <style scoped>
-.section-card {
-    position: relative;
-    padding: 1.25rem 1rem 1rem 1rem;
-    border: 2px solid var(--md-inverse-surface);
-    background: linear-gradient(
-        0deg,
-        color-mix(
-            in oklab,
-            var(--md-surface) 94%,
-            var(--md-surface-variant) 6%
-        ),
-        color-mix(
-            in oklab,
-            var(--md-surface) 90%,
-            var(--md-surface-variant) 10%
-        )
-    );
-    border-radius: 6px;
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-
+/* Component-specific layout and typography (non-decorative) */
 .group-heading {
     margin-top: -0.25rem;
     letter-spacing: 0.08em;
@@ -864,222 +980,6 @@ defineExpose({
     opacity: 0.75;
 }
 
-.retro-upload-panel {
-    border: 2px dashed
-        color-mix(in oklab, var(--md-outline-variant) 85%, transparent 15%);
-    border-radius: 6px;
-    padding: 1rem;
-    background: color-mix(
-        in oklab,
-        var(--md-surface) 94%,
-        var(--md-surface-variant) 6%
-    );
-    box-shadow: inset 0 0 0 1px
-        color-mix(in oklab, var(--md-outline-variant) 55%, transparent 45%);
-    transition: border-color 150ms ease, background 150ms ease;
-}
-
-.retro-upload-panel:has(button:hover) {
-    border-color: color-mix(in oklab, var(--md-primary) 60%, transparent 40%);
-}
-
-.retro-upload-icon {
-    font-size: 1.5rem;
-    color: var(--md-primary);
-    flex-shrink: 0;
-}
-
-.retro-file-card {
-    margin-top: 0.75rem;
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.75rem 0.9rem;
-    border: 2px solid var(--md-inverse-surface);
-    border-radius: 5px;
-    background: color-mix(
-        in oklab,
-        var(--md-surface) 92%,
-        var(--md-surface-variant) 8%
-    );
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-
-.retro-meta-panel {
-    border: 2px solid var(--md-inverse-surface);
-    border-radius: 6px;
-    background: color-mix(
-        in oklab,
-        var(--md-surface) 95%,
-        var(--md-surface-variant) 5%
-    );
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-    padding: 1rem;
-    display: grid;
-    gap: 0.75rem;
-}
-
-.retro-meta-table {
-    max-height: 11rem;
-    overflow-y: auto;
-    border: 2px dashed
-        color-mix(in oklab, var(--md-outline-variant) 75%, transparent 25%);
-    border-radius: 4px;
-    padding: 0.5rem;
-    display: grid;
-    gap: 0.35rem;
-}
-
-.retro-meta-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 0.75rem;
-    padding: 0.2rem 0.35rem;
-    background: color-mix(in oklab, var(--md-surface) 92%, transparent 8%);
-    border-radius: 3px;
-}
-
-.retro-choice-btn {
-    border: 2px solid
-        color-mix(in oklab, var(--md-inverse-surface) 92%, transparent 8%);
-    background: color-mix(
-        in oklab,
-        var(--md-surface) 96%,
-        var(--md-surface-variant) 4%
-    );
-    border-radius: 6px;
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-    padding: 0.75rem;
-    transition: box-shadow 120ms ease, background 120ms ease, color 120ms ease,
-        border-color 120ms ease;
-}
-
-.retro-choice-btn:hover {
-    border-color: var(--md-primary);
-    background: color-mix(
-        in oklab,
-        var(--md-secondary-container) 70%,
-        var(--md-surface) 30%
-    );
-    box-shadow: 3px 3px 0 var(--md-inverse-surface);
-}
-
-.retro-choice-btn:focus-visible {
-    outline: 2px solid var(--md-primary);
-    outline-offset: 3px;
-}
-
-.retro-choice-btn--active {
-    background: color-mix(
-        in oklab,
-        var(--md-primary-container) 85%,
-        var(--md-surface) 15%
-    );
-    color: var(--md-on-primary-container);
-    border-color: var(--md-primary);
-    box-shadow: 3px 3px 0
-        color-mix(
-            in oklab,
-            var(--md-primary) 70%,
-            var(--md-inverse-surface) 30%
-        );
-}
-
-.retro-choice-icon {
-    font-size: 1.4rem;
-    color: currentColor;
-}
-
-.retro-checkbox {
-    --checkbox-border: color-mix(
-        in oklab,
-        var(--md-inverse-surface) 80%,
-        transparent 20%
-    );
-    padding: 0.5rem 0.25rem 0.5rem 0;
-}
-
-.retro-badge {
-    --retro-badge-bg: color-mix(
-        in oklab,
-        var(--md-surface) 96%,
-        var(--md-surface-variant) 4%
-    );
-    --retro-badge-fg: var(--md-on-surface);
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.6rem;
-    min-height: 1.5rem;
-    border: 2px solid var(--md-inverse-surface);
-    border-radius: 4px;
-    background: var(--retro-badge-bg);
-    color: var(--retro-badge-fg);
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-weight: 600;
-    line-height: 1;
-}
-
-.retro-badge--neutral {
-    --retro-badge-bg: color-mix(
-        in oklab,
-        var(--md-surface) 95%,
-        var(--md-surface-variant) 5%
-    );
-    --retro-badge-fg: var(--md-on-surface);
-}
-
-.retro-badge--primary,
-.retro-badge--info {
-    --retro-badge-bg: color-mix(
-        in oklab,
-        var(--md-primary-container) 85%,
-        var(--md-surface) 15%
-    );
-    --retro-badge-fg: var(--md-on-primary-container);
-}
-
-.retro-badge--success {
-    --retro-badge-bg: color-mix(
-        in oklab,
-        var(--md-extended-color-success-color-container) 80%,
-        var(--md-surface) 20%
-    );
-    --retro-badge-fg: var(--md-extended-color-success-on-color-container);
-}
-
-.retro-badge--error {
-    --retro-badge-bg: color-mix(
-        in oklab,
-        var(--md-error-container) 85%,
-        var(--md-surface) 15%
-    );
-    --retro-badge-fg: var(--md-on-error-container);
-}
-
-.retro-badge--warning {
-    --retro-badge-bg: color-mix(
-        in oklab,
-        var(--md-extended-color-warning-color-container) 80%,
-        var(--md-surface) 20%
-    );
-    --retro-badge-fg: var(--md-extended-color-warning-on-color-container);
-}
-
-.retro-badge :deep(.n-badge-icon) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-inline-end: 0.35rem;
-}
-
-.retro-badge :deep(.n-badge-icon > *) {
-    font-size: 1rem;
-}
-
 .fade-enter-active,
 .fade-leave-active {
     transition: opacity 150ms ease;
@@ -1088,14 +988,5 @@ defineExpose({
 .fade-enter-from,
 .fade-leave-to {
     opacity: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .retro-choice-btn,
-    .retro-upload-panel,
-    .retro-file-card,
-    .section-card {
-        transition: none;
-    }
 }
 </style>

@@ -15,7 +15,7 @@
             <div class="flex items-center justify-center gap-3">
                 <div
                     v-if="loading"
-                    class="w-5 h-5 rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-white animate-spin"
+                    class="w-5 h-5 rounded-full border-[var(--md-border-width)] border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-white animate-spin"
                 />
                 <button
                     v-if="ready"

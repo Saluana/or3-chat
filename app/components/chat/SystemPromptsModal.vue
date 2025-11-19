@@ -1,37 +1,29 @@
 <template>
     <UModal
+        v-bind="systemPromptsModalProps"
         v-model:open="open"
-        :ui="{
-            footer: 'justify-end border-none',
-            body: 'p-0! border-b-0! overflow-hidden',
-        }"
         title="System Prompts"
         description="Manage and select system prompts to customize AI behavior."
-        class="sp-modal border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
     >
         <template #body>
             <div class="flex flex-col h-full" @keydown="handleKeydown">
                 <div
                     v-show="!editingPrompt"
-                    class="px-4 border-b-2 border-black min-h-[50px] max-h-[100px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between flex-col-reverse sm:flex-row sticky top-0 z-10"
+                    class="flex sm:flex-row flex-col-reverse items-center justify-center py-4 px-6"
                 >
                     <div
-                        class="flex w-full justify-end sm:justify-start items-center gap-2 pb-2 sm:pb-0"
+                        class="flex flex-row-reverse sm:flex-row w-full sm:justify-start items-center gap-2 pt-3 sm:pt-0 sm:pb-0"
                     >
                         <UButton
+                            v-bind="newPromptButtonProps"
                             @click="createNewPrompt"
-                            size="sm"
-                            color="primary"
-                            class="retro-btn"
                         >
                             New Prompt
                         </UButton>
                         <UButton
                             v-if="currentActivePromptId"
+                            v-bind="clearActiveButtonProps"
                             @click="clearActivePrompt"
-                            size="sm"
-                            color="neutral"
-                            variant="outline"
                         >
                             Clear Active
                         </UButton>
@@ -39,9 +31,8 @@
                     <UInput
                         v-model="searchQuery"
                         placeholder="Search prompts..."
-                        :size="isMobile ? 'md' : 'sm'"
-                        class="w-full my-2 sm:my-0 sm:max-w-xs"
-                        icon="i-heroicons-magnifying-glass"
+                        :icon="useIcon('ui.search').value"
+                        v-bind="searchInputProps"
                     />
                 </div>
                 <div class="flex-1 overflow-hidden">
@@ -55,7 +46,7 @@
                             class="flex flex-col items-center justify-center h-full text-center p-8"
                         >
                             <UIcon
-                                name="pixelarticons:script-text"
+                                :name="useIcon('chat.system_prompt').value"
                                 class="w-16 h-16 text-gray-400 mb-4"
                             />
                             <h3
@@ -76,7 +67,7 @@
                             <div
                                 v-for="prompt in filteredPrompts"
                                 :key="prompt.id"
-                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 retro-shadow"
+                                class="group system-prompt-item flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 not-odd:bg-[var(--md-surface-hover)] rounded-[var(--md-border-radius)]"
                                 :data-active="
                                     prompt.id === currentActivePromptId
                                         ? 'true'
@@ -88,8 +79,12 @@
                                     <div
                                         class="flex flex-wrap items-center gap-2 mb-1"
                                     >
-                                        <h4
-                                            class="font-medium text-xs leading-tight text-gray-900 dark:text-white truncate max-w-full"
+                                        <a
+                                            @click.prevent="
+                                                startEditing(prompt.id)
+                                            "
+                                            tabindex="0"
+                                            class="prompt-header-btn font-medium text-sm py-0.5 leading-tight text-gray-900 dark:text-white truncate max-w-full cursor-pointer"
                                             :class="{
                                                 'italic opacity-60':
                                                     !prompt.title,
@@ -99,7 +94,7 @@
                                                 prompt.title ||
                                                 'Untitled Prompt'
                                             }}
-                                        </h4>
+                                        </a>
                                         <span
                                             v-if="prompt.id === defaultPromptId"
                                             class="text-[10px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
@@ -120,7 +115,9 @@
                                     >
                                         <span class="flex items-center gap-1">
                                             <UIcon
-                                                name="pixelarticons:clock"
+                                                :name="
+                                                    useIcon('ui.clock').value
+                                                "
                                                 class="w-3.5 h-3.5 opacity-70"
                                             />
                                             Updated
@@ -132,7 +129,9 @@
                                         >
                                         <span class="flex items-center gap-1">
                                             <UIcon
-                                                name="pixelarticons:chart-bar"
+                                                :name="
+                                                    useIcon('ui.chart').value
+                                                "
                                                 class="w-3.5 h-3.5 opacity-70"
                                             />
                                             {{ tokenCounts[prompt.id] || 0 }}
@@ -154,6 +153,7 @@
                                         "
                                     >
                                         <UButton
+                                            v-bind="toggleDefaultButtonProps"
                                             size="sm"
                                             :variant="
                                                 prompt.id === defaultPromptId
@@ -165,11 +165,6 @@
                                                     ? 'primary'
                                                     : 'neutral'
                                             "
-                                            :square="true"
-                                            :ui="{
-                                                base: 'retro-btn px-1! text-nowrap',
-                                            }"
-                                            class="retro-btn"
                                             aria-label="Toggle default prompt"
                                             @click.stop="
                                                 toggleDefault(prompt.id)
@@ -182,8 +177,8 @@
                                         >
                                     </UTooltip>
                                     <UButton
+                                        v-bind="selectButtonProps"
                                         @click="selectPrompt(prompt.id)"
-                                        size="sm"
                                         :color="
                                             prompt.id === currentActivePromptId
                                                 ? 'primary'
@@ -208,42 +203,33 @@
                                         :popper="{ placement: 'bottom-end' }"
                                     >
                                         <UButton
-                                            size="sm"
-                                            variant="outline"
-                                            color="neutral"
-                                            class="flex items-center justify-center"
-                                            :square="true"
-                                            icon="pixelarticons:more-vertical"
+                                            v-bind="moreActionsButtonProps"
                                             aria-label="More actions"
                                         />
                                         <template #content>
                                             <div
-                                                class="flex flex-col py-1 w-36 text-sm"
+                                                class="flex flex-col w-36 text-sm"
                                             >
-                                                <button
+                                                <UButton
+                                                    v-bind="
+                                                        editPromptButtonProps
+                                                    "
                                                     @click="
                                                         startEditing(prompt.id)
                                                     "
-                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
                                                 >
-                                                    <UIcon
-                                                        name="pixelarticons:edit"
-                                                        class="w-4 h-4"
-                                                    />
                                                     <span>Edit</span>
-                                                </button>
-                                                <button
+                                                </UButton>
+                                                <UButton
+                                                    v-bind="
+                                                        deletePromptButtonProps
+                                                    "
                                                     @click="
                                                         deletePrompt(prompt.id)
                                                     "
-                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
                                                 >
-                                                    <UIcon
-                                                        name="pixelarticons:trash"
-                                                        class="w-4 h-4"
-                                                    />
                                                     <span>Delete</span>
-                                                </button>
+                                                </UButton>
                                             </div>
                                         </template>
                                     </UPopover>
@@ -279,6 +265,7 @@ import {
 import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
 
 import { isMobile } from '~/state/global';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 // Props & modal open bridging (like SettingsModal pattern)
 const props = defineProps<{
@@ -317,6 +304,21 @@ const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
 const editingPrompt = ref<PromptRecord | null>(null);
 const showDeleteConfirm = ref<string | null>(null);
 
+let promptEditorLoadPromise: Promise<unknown> | null = null;
+
+const ensurePromptEditorLoaded = async () => {
+    if (!import.meta.client) return;
+    if (!promptEditorLoadPromise) {
+        promptEditorLoadPromise = import(
+            '~/components/prompts/PromptEditor.vue'
+        ).catch((error) => {
+            promptEditorLoadPromise = null;
+            throw error;
+        });
+    }
+    await promptEditorLoadPromise;
+};
+
 const searchQuery = ref('');
 const filteredPrompts = computed(() => {
     if (!searchQuery.value) return prompts.value;
@@ -334,6 +336,197 @@ const currentActivePromptId = computed(() => {
     if (props.threadId) return threadSystemPromptId.value;
     // If no thread yet use pane-scoped pending first, else fall back to global active
     return pendingPromptId.value || activePromptId.value;
+});
+
+const systemPromptsModalOverrides = useThemeOverrides({
+    component: 'modal',
+    context: 'modal',
+    identifier: 'modal.system-prompts',
+    isNuxtUI: true,
+});
+
+const systemPromptsModalProps = computed(() => {
+    const baseClass =
+        'sp-modal modal-container w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden';
+    const baseUi = {
+        footer: 'justify-end border-none',
+        body: 'p-0! border-b-0! overflow-hidden',
+    } as Record<string, unknown>;
+
+    const overrideValue =
+        (systemPromptsModalOverrides.value as Record<string, unknown>) || {};
+    const overrideClass =
+        typeof overrideValue.class === 'string'
+            ? (overrideValue.class as string)
+            : '';
+    const overrideUi =
+        (overrideValue.ui as Record<string, unknown> | undefined) || {};
+    const mergedUiEntries = { ...baseUi, ...overrideUi };
+    const rest = Object.fromEntries(
+        Object.entries(overrideValue).filter(
+            ([key]) => key !== 'class' && key !== 'ui'
+        )
+    ) as Record<string, unknown>;
+
+    const result: Record<string, unknown> = {
+        ...rest,
+        ui: mergedUiEntries,
+    };
+
+    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
+    if (mergedClass) {
+        result.class = mergedClass;
+    }
+
+    return result;
+});
+
+// Theme overrides for modal buttons
+const newPromptButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'modal',
+        identifier: 'modal.new-prompt',
+        isNuxtUI: true,
+    });
+
+    return {
+        size: 'sm' as const,
+        color: 'primary' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const clearActiveButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'modal',
+        identifier: 'modal.clear-active',
+        isNuxtUI: true,
+    });
+
+    return {
+        size: 'sm' as const,
+        color: 'neutral' as const,
+        variant: 'outline' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const selectButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'modal',
+        identifier: 'modal.select-prompt',
+        isNuxtUI: true,
+    });
+
+    return {
+        size: 'sm' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const toggleDefaultButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'modal',
+        identifier: 'modal.toggle-default',
+        isNuxtUI: true,
+    });
+    return (overrides.value as Record<string, unknown>) || {};
+});
+
+const searchInputProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'input',
+        context: 'modal',
+        identifier: 'modal.prompt-search',
+        isNuxtUI: true,
+    });
+    const overrideValue = (overrides.value as any) || {};
+    const baseClass = 'w-full';
+    const mergedClass = [baseClass, overrideValue.class]
+        .filter(Boolean)
+        .join(' ');
+
+    return {
+        size: 'sm' as const,
+        ...(overrides.value as any),
+        class: mergedClass,
+    };
+});
+
+const moreActionsButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'modal',
+        identifier: 'modal.prompt-more-actions',
+        isNuxtUI: true,
+    });
+    const overrideValue = (overrides.value as any) || {};
+    const baseClass = 'flex items-center justify-center';
+    const mergedClass = [baseClass, overrideValue.class]
+        .filter(Boolean)
+        .join(' ');
+    return {
+        size: 'sm' as const,
+        variant: 'outline' as const,
+        color: 'neutral' as const,
+        square: true as const,
+        icon: useIcon('ui.more').value,
+        ...overrideValue,
+        class: mergedClass,
+    };
+});
+
+const editPromptButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'modal',
+        identifier: 'modal.prompt-action-edit',
+        isNuxtUI: true,
+    });
+    const overrideValue = (overrides.value as any) || {};
+    const baseClass =
+        'text-left w-full justify-start px-3 py-1.5 hover:bg-primary/10 gap-2 text-[var(--md-on-surface)]';
+    const mergedClass = [baseClass, overrideValue.class]
+        .filter(Boolean)
+        .join(' ');
+    return {
+        variant: 'ghost' as const,
+        size: 'sm' as const,
+        block: true,
+        leading: true as const,
+        leadingIcon: useIcon('ui.edit').value,
+        ...overrideValue,
+        class: mergedClass,
+    };
+});
+
+const deletePromptButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'modal',
+        identifier: 'modal.prompt-action-delete',
+        isNuxtUI: true,
+    });
+    const overrideValue = (overrides.value as any) || {};
+    const baseClass =
+        'text-left w-full justify-start px-3 py-1.5 hover:bg-error/10 text-error gap-2';
+    const mergedClass = [baseClass, overrideValue.class]
+        .filter(Boolean)
+        .join(' ');
+    return {
+        variant: 'ghost' as const,
+        size: 'sm' as const,
+        block: true,
+        color: 'error' as const,
+        leading: true as const,
+        leadingIcon: useIcon('ui.trash').value,
+        ...overrideValue,
+        class: mergedClass,
+    };
 });
 
 // Extract plain text from TipTap JSON recursively
@@ -465,7 +658,7 @@ const createNewPrompt = async () => {
     try {
         const newPrompt = await createPrompt();
         prompts.value.unshift(newPrompt);
-        startEditing(newPrompt.id);
+        await startEditing(newPrompt.id);
     } catch (error) {
         console.error('Failed to create prompt:', error);
     }
@@ -505,7 +698,13 @@ const clearActivePrompt = async () => {
     }
 };
 
-const startEditing = (id: string) => {
+const startEditing = async (id: string) => {
+    try {
+        await ensurePromptEditorLoaded();
+    } catch (error) {
+        console.error('Failed to preload prompt editor:', error);
+        return;
+    }
     const prompt = prompts.value.find((p) => p.id === id);
     if (prompt) {
         editingPrompt.value = prompt;

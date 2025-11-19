@@ -38,27 +38,23 @@ export function usePaneDocuments(
         if (!pane) return;
         try {
             if (pane.mode === 'doc' && pane.documentId) {
-                // Detect pending changes before flush.
+                // Detect pending changes before flush
                 const prevState = useDocumentState(pane.documentId);
                 const hadPending = !!(
                     prevState &&
-                    ((prevState as any).pendingTitle !== undefined ||
-                        (prevState as any).pendingContent !== undefined)
+                    (prevState.pendingTitle !== undefined ||
+                        prevState.pendingContent !== undefined)
                 );
                 await flushDocument(pane.documentId);
-                // Central flush may emit saved; ensure at least one emission when tests simulate state outside real store.
-                if (hadPending) {
-                    // Avoid duplicate: only emit if pane still bound and pending flags cleared (meaning flush processed) and no recent status 'saved' dispatch already triggered pane emission.
-                    // Simple heuristic: do nothing if pane.documentId changed during flush.
-                    if (pane.documentId) {
-                        hooks.doAction('ui.pane.doc:action:saved', {
-                            pane,
-                            oldDocumentId: pane.documentId,
-                            newDocumentId: pane.documentId,
-                            paneIndex: activePaneIndex.value,
-                            meta: { reason: 'flushPending' },
-                        });
-                    }
+                // Emit saved hook if pending changes existed (defensive for test scenarios)
+                if (hadPending && pane.documentId) {
+                    hooks.doAction('ui.pane.doc:action:saved', {
+                        pane,
+                        oldDocumentId: pane.documentId,
+                        newDocumentId: pane.documentId,
+                        paneIndex: activePaneIndex.value,
+                        meta: { reason: 'flushPending' },
+                    });
                 }
                 await releaseDocument(pane.documentId, { flush: false });
             }
@@ -71,7 +67,7 @@ export function usePaneDocuments(
                     newId,
                     pane,
                     oldId
-                )) as any;
+                )) as string | '' | false;
             } catch {}
             if (newId === false) return undefined; // veto
             pane.mode = 'doc';
@@ -87,7 +83,8 @@ export function usePaneDocuments(
                     meta: { created: true },
                 });
             return doc;
-        } catch {
+        } catch (err) {
+            console.error('[usePaneDocuments] Failed to create document:', err);
             return undefined;
         }
     }
@@ -104,7 +101,7 @@ export function usePaneDocuments(
                 requested,
                 pane,
                 oldId
-            )) as any;
+            )) as string | '' | false;
         } catch {}
         if (requested === false) return; // veto
         if (pane.mode === 'doc' && pane.documentId && pane.documentId !== id) {
@@ -112,23 +109,24 @@ export function usePaneDocuments(
                 const prevState = useDocumentState(pane.documentId);
                 const hadPending = !!(
                     prevState &&
-                    ((prevState as any).pendingTitle !== undefined ||
-                        (prevState as any).pendingContent !== undefined)
+                    (prevState.pendingTitle !== undefined ||
+                        prevState.pendingContent !== undefined)
                 );
-                await flushDocument(pane.documentId); // central flush may emit
-                if (hadPending) {
-                    if (pane.documentId) {
-                        hooks.doAction('ui.pane.doc:action:saved', {
-                            pane,
-                            oldDocumentId: pane.documentId,
-                            newDocumentId: pane.documentId,
-                            paneIndex: activePaneIndex.value,
-                            meta: { reason: 'flushPending' },
-                        });
-                    }
+                await flushDocument(pane.documentId);
+                // Emit saved hook if pending changes existed (defensive for test scenarios)
+                if (hadPending && pane.documentId) {
+                    hooks.doAction('ui.pane.doc:action:saved', {
+                        pane,
+                        oldDocumentId: pane.documentId,
+                        newDocumentId: pane.documentId,
+                        paneIndex: activePaneIndex.value,
+                        meta: { reason: 'flushPending' },
+                    });
                 }
-            } catch {}
-            // Always release the previous doc state after switching.
+            } catch (err) {
+                console.error('[usePaneDocuments] Failed to flush document:', err);
+            }
+            // Always release the previous doc state after switching
             await releaseDocument(pane.documentId, { flush: false });
         }
         pane.mode = 'doc';

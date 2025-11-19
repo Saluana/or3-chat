@@ -1,31 +1,52 @@
 <template>
     <div
-        :class="outerClass"
+        :class="[
+            `cm-${roleVariant}`,
+            'chat-message-container',
+            outerClass,
+            messageContainerProps?.class || '',
+        ]"
+        :data-theme-target="messageContainerProps?.['data-theme-target']"
+        :data-theme-matches="messageContainerProps?.['data-theme-matches']"
         :style="{
             paddingRight:
                 props.message.role === 'user' && hashList.length && !expanded
                     ? '80px'
                     : '16px',
         }"
-        class="p-2 min-w-[140px] rounded-md first:mt-3 first:mb-6 not-first:my-6 relative"
+        class="p-2 min-w-[140px] rounded-[var(--md-border-radius)] first:mt-3 first:mb-6 not-first:my-6 relative"
     >
         <!-- Compact thumb (collapsed state) -->
         <button
             v-if="props.message.role === 'user' && hashList.length && !expanded"
-            class="absolute -top-2 -right-2 border-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
+            :class="[
+                'attachment-thumb-button absolute -top-2 -right-2 overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group',
+                attachmentThumbButtonProps?.class || '',
+            ]"
+            :data-theme-target="
+                attachmentThumbButtonProps?.['data-theme-target']
+            "
+            :data-theme-matches="
+                attachmentThumbButtonProps?.['data-theme-matches']
+            "
             @click="toggleExpanded"
             type="button"
             aria-label="Show attachments"
         >
             <template v-if="firstThumb && pdfMeta[firstThumb]">
-                <div class="pdf-thumb w-full h-full">
+                <div class="pdf-thumb retro-pdf-thumb w-full h-full">
                     <div
                         class="h-full line-clamp-2 flex items-center justify-center text-xs text-black dark:text-white"
                     >
                         {{ pdfDisplayName }}
                     </div>
 
-                    <div class="pdf-thumb__ext" aria-hidden="true">PDF</div>
+                    <div
+                        class="pdf-thumb__ext retro-pdf-thumb-ext"
+                        aria-hidden="true"
+                    >
+                        PDF
+                    </div>
                 </div>
             </template>
             <template
@@ -36,7 +57,7 @@
                 <img
                     :src="thumbnails[firstThumb!]?.url"
                     :alt="'attachment ' + firstThumb.slice(0, 6)"
-                    class="object-cover w-full h-full"
+                    class="attachment-thumb-image object-cover w-full h-full"
                     draggable="false"
                 />
             </template>
@@ -45,31 +66,46 @@
                     firstThumb && thumbnails[firstThumb]?.status === 'error'
                 "
             >
-                <span class="text-[10px] text-error">err</span>
+                <span class="attachment-thumb-error text-[10px] text-error"
+                    >err</span
+                >
             </template>
             <template v-else>
-                <span class="text-[10px] animate-pulse opacity-70">…</span>
+                <span
+                    class="attachment-thumb-loading text-[10px] animate-pulse opacity-70"
+                    >…</span
+                >
             </template>
             <span
                 v-if="hashList.length > 1"
-                class="absolute bottom-0 right-0 text-[14px] font-semibold bg-black/70 text-white px-1"
+                class="attachment-thumb-count absolute bottom-0 right-0 text-[14px] font-semibold bg-black/70 text-white px-1"
                 >+{{ hashList.length - 1 }}</span
             >
         </button>
 
-        <div v-if="!editing" :class="innerClass" ref="contentEl">
+        <div
+            v-if="!editing"
+            :class="[
+                'loading-wrapper',
+                `cm-content-${roleVariant}`,
+                innerClass,
+            ]"
+            ref="contentEl"
+        >
             <!-- Retro loader extracted to component -->
             <LoadingGenerating
                 v-if="props.message.role === 'assistant' && (props.message as any).pending && !hasContent && !message.reasoning_text"
-                class="animate-in"
+                class="loading-generating animate-in"
             />
             <div
+                class="reasoning-accordion-wrapper"
                 v-if="
                     props.message.role === 'assistant' &&
                     props.message.reasoning_text
                 "
             >
                 <LazyChatReasoningAccordion
+                    class="reasoning-accordion"
                     hydrate-on-visible
                     :content="props.message.reasoning_text"
                     :streaming="isStreamingReasoning as boolean"
@@ -89,11 +125,14 @@
 
             <div
                 v-if="hasContent"
-                class="message-body min-w-0 max-w-full overflow-x-hidden"
+                :class="[
+                    'message-body min-w-0 max-w-full overflow-x-hidden',
+                    `cm-body-${roleVariant}`,
+                ]"
             >
                 <div
                     v-if="props.message.role === 'user'"
-                    class="whitespace-pre-wrap relative"
+                    :class="['whitespace-pre-wrap relative', 'cm-text-user']"
                 >
                     <div
                         :class="{
@@ -116,7 +155,7 @@
                     v-else
                     :content="processedAssistantMarkdown"
                     :shiki-theme="currentShikiTheme"
-                    :class="streamMdClasses"
+                    :class="[streamMdClasses, 'cm-markdown-assistant']"
                     :allowed-image-prefixes="['data:image/']"
                     code-block-show-line-numbers
                     class="[&>p:first-child]:mt-0 [&>p:last-child]:mb-0 prose-headings:first:mt-5!"
@@ -125,26 +164,26 @@
             </div>
         </div>
         <!-- Editing surface -->
-        <div v-else class="w-full" ref="editorRoot">
+        <div
+            v-else
+            :class="['w-full', `cm-editor-${roleVariant}`]"
+            ref="editorRoot"
+        >
             <LazyChatMessageEditor
                 hydrate-on-interaction="focus"
                 v-model="draft"
                 :autofocus="true"
                 :focus-delay="120"
             />
-            <div class="flex w-full justify-end gap-2 mt-2">
+            <div class="cm-editor-actions flex w-full justify-end gap-2 mt-2">
                 <UButton
-                    size="sm"
-                    color="success"
-                    class="retro-btn"
+                    v-bind="saveEditButtonProps"
                     @click="saveEdit"
                     :loading="saving"
                     >Save</UButton
                 >
                 <UButton
-                    size="sm"
-                    color="error"
-                    class="retro-btn"
+                    v-bind="cancelEditButtonProps"
                     @click="wrappedCancelEdit"
                     >Cancel</UButton
                 >
@@ -161,22 +200,18 @@
         <!-- Action buttons: overlap bubble border half outside -->
         <div
             v-if="!editing"
-            class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
+            :class="[
+                'absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap',
+                `cm-actions-${roleVariant}`,
+            ]"
         >
             <UButtonGroup
-                :class="{
-                    'bg-primary': props.message.role === 'user',
-                    'bg-white': props.message.role === 'assistant',
-                }"
-                class="rounded-[3px]"
+                class="bg-[var(--md-surface)] rounded-[var(--md-border-radius)] cm-action-group"
             >
                 <UTooltip :delay-duration="0" text="Copy" :teleport="true">
                     <UButton
+                        v-bind="copyButtonProps"
                         @click="copyMessage"
-                        icon="pixelarticons:copy"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
                     ></UButton>
                 </UTooltip>
                 <UTooltip
@@ -186,28 +221,19 @@
                     :teleport="true"
                 >
                     <UButton
-                        icon="pixelarticons:reload"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
+                        v-bind="retryButtonProps"
                         @click="onRetry"
                     ></UButton>
                 </UTooltip>
                 <UTooltip :delay-duration="0" text="Branch" :teleport="true">
                     <UButton
+                        v-bind="branchButtonProps"
                         @click="onBranch"
-                        icon="pixelarticons:git-branch"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
                     ></UButton>
                 </UTooltip>
                 <UTooltip :delay-duration="0" text="Edit" :teleport="true">
                     <UButton
-                        icon="pixelarticons:edit-box"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
+                        v-bind="editButtonProps"
                         @click="wrappedBeginEdit"
                     ></UButton>
                 </UTooltip>
@@ -219,10 +245,8 @@
                         :teleport="true"
                     >
                         <UButton
+                            v-bind="pluginActionButtonProps"
                             :icon="action.icon"
-                            color="info"
-                            size="sm"
-                            class="text-black dark:text-white/95 flex items-center justify-center"
                             @click="() => runExtraAction(action)"
                         ></UButton>
                     </UTooltip>
@@ -252,6 +276,8 @@ import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import { useRafFn } from '@vueuse/core';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };
@@ -264,6 +290,152 @@ const emit = defineEmits<{
     (e: 'cancel-edit', id: string): void;
     (e: 'save-edit', id: string): void;
 }>();
+
+// Theme overrides for message buttons
+const copyButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.copy',
+        isNuxtUI: true,
+    });
+
+    return {
+        icon: useIcon('chat.message.copy').value,
+        color: 'info' as const,
+        size: 'sm' as const,
+        class: 'text-black dark:text-white/95 flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const retryButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.retry',
+        isNuxtUI: true,
+    });
+
+    return {
+        icon: useIcon('chat.message.retry').value,
+        color: 'info' as const,
+        size: 'sm' as const,
+        class: 'text-black dark:text-white/95 flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const branchButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.branch',
+        isNuxtUI: true,
+    });
+
+    return {
+        icon: useIcon('chat.message.branch').value,
+        color: 'info' as const,
+        size: 'sm' as const,
+        class: 'text-black dark:text-white/95 flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const editButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.edit',
+        isNuxtUI: true,
+    });
+
+    return {
+        icon: useIcon('chat.message.edit').value,
+        color: 'info' as const,
+        size: 'sm' as const,
+        class: 'text-black dark:text-white/95 flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const pluginActionButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.plugin-action',
+        isNuxtUI: true,
+    });
+
+    return {
+        color: 'info' as const,
+        size: 'sm' as const,
+        class: 'text-black dark:text-white/95 flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const saveEditButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.save-edit',
+        isNuxtUI: true,
+    });
+
+    return {
+        size: 'sm' as const,
+        color: 'success' as const,
+        class: 'theme-btn',
+        ...(overrides.value as any),
+    };
+});
+
+const cancelEditButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.cancel-edit',
+        isNuxtUI: true,
+    });
+
+    return {
+        size: 'sm' as const,
+        color: 'error' as const,
+        class: 'theme-btn',
+        ...(overrides.value as any),
+    };
+});
+
+const attachmentThumbButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.attachment-thumb',
+        isNuxtUI: false,
+    });
+
+    return overrides.value;
+});
+
+const messageContainerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'message',
+        identifier:
+            props.message.role === 'user'
+                ? 'message.user-container'
+                : 'message.assistant-container',
+        isNuxtUI: false,
+    });
+
+    return overrides.value;
+});
+
+const roleVariant = computed<'user' | 'assistant'>(() =>
+    props.message.role === 'user' ? 'user' : 'assistant'
+);
 
 const isStreamingReasoning = computed(() => {
     return props.message.reasoning_text && !hasContent.value;
@@ -282,15 +454,15 @@ function toggleUserMessage() {
 }
 
 const outerClass = computed(() => ({
-    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
+    'bg-primary text-white dark:text-white/95 retro-message-user px-4 backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
         props.message.role === 'user',
-    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm min-w-0':
+    'bg-white/5 retro-message-assistant w-full backdrop-blur-sm min-w-0':
         props.message.role === 'assistant',
 }));
 
 const innerClass = computed(() => ({
     // Added Tailwind Typography per-element utilities for tables (no custom CSS)
-    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-pre:bg-[var(--md-surface-container)]/80 prose-pre:border-2 prose-pre:border-[var(--md-inverse-surface)] prose-pre:text-[var(--md-on-surface)] prose-code:text-[var(--md-on-surface)] prose-code:font-[inherit] prose-pre:font-[inherit] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5 prose-':
+    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-pre:bg-[var(--md-surface-container)]/80 prose-pre:border-[var(--md-border-width)] prose-pre:border-[color:var(--md-border-color)] prose-pre:text-[var(--md-on-surface)] prose-code:text-[var(--md-on-surface)] prose-code:font-[inherit] prose-pre:font-[inherit] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5 prose-':
         props.message.role === 'assistant',
 }));
 
@@ -312,7 +484,7 @@ const processedAssistantMarkdown = computed(() => {
     return (assistantMarkdown.value || '').replace(
         FILE_HASH_IMG_RE,
         (_m, h) =>
-            `<span class=\"or3-img-ph inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)] border-2 border-[var(--md-inverse-surface)] retro-shadow opacity-60\" data-file-hash=\"${h}\" aria-label=\"generated image\"></span>`
+            `<span class=\"or3-img-ph retro-inline-image-placeholder inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)] opacity-60\" data-file-hash=\"${h}\" aria-label=\"generated image\"></span>`
     );
 });
 
@@ -768,17 +940,12 @@ async function runExtraAction(action: ChatMessageAction) {
 
 // Classes applied to <StreamMarkdown> (joined string for TS friendliness)
 const streamMdClasses = [
-    'w-full min-w-full prose prose-pre:font-mono prose-retro prose-pre:max-w-full prose-pre:overflow-x-auto',
-    'prose-table:!w-auto prose-table:table-auto',
+    'w-full min-w-full prose prose-pre:font-mono or3-prose prose-pre:max-w-full prose-pre:overflow-x-auto',
 ].join(' ');
 </script>
 
 <style scoped>
-@import '~/assets/css/prose-retro.css';
-
-.retro-shadow {
-    box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
-}
+@import '~/assets/css/or3-prose.css';
 
 .line-clamp-6 {
     display: -webkit-box;
@@ -802,8 +969,6 @@ const streamMdClasses = [
     width: 100%;
     height: 100%;
     padding: 2px 2px 3px;
-    box-shadow: 0 0 0 1px var(--md-inverse-surface) inset,
-        2px 2px 0 0 var(--md-inverse-surface);
     font-family: 'VT323', monospace;
 }
 .pdf-thumb__icon {
@@ -840,7 +1005,6 @@ const streamMdClasses = [
     font-weight: 700;
     padding: 1px 3px;
     letter-spacing: 0.5px;
-    box-shadow: 1px 1px 0 0 #000;
 }
 .pdf-thumb::after {
     content: '';
@@ -855,90 +1019,5 @@ const streamMdClasses = [
         var(--md-surface-container-high) 100%
     );
     clip-path: polygon(0 0, 100% 0, 100% 100%);
-    box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
-}
-/* Safety net for table layout */
-.message-body :deep([data-streamdown='table-wrapper']) {
-    border: 2px solid var(--md-inverse-surface);
-    border-radius: 3px;
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-    margin-top: 32px !important;
-    margin-bottom: 32px;
-    margin-right: 4px; /* Space for shadow */
-    overflow-x: auto;
-    width: fit-content;
-    max-width: calc(100% - 4px); /* Account for shadow space */
-}
-
-.message-body :deep([data-streamdown='table']) {
-    margin-bottom: 0px;
-    margin-top: 0px;
-    border-bottom: 2px solid var(--md-inverse-surface);
-    border-left: none;
-    border-right: none;
-    width: auto;
-    min-width: min-content;
-}
-
-.message-body :deep([data-streamdown='th']) {
-    padding-top: 8px;
-    padding-bottom: 8px;
-    border-bottom: 2px solid var(--md-inverse-surface);
-    font-weight: 600;
-    border-top: none;
-}
-
-.message-body
-    :deep(
-        [data-streamdown='table']
-            [data-streamdown='tr']
-            > [data-streamdown='th']:first-child
-    ),
-.message-body
-    :deep(
-        [data-streamdown='table']
-            [data-streamdown='tr']
-            > [data-streamdown='td']:first-child
-    ) {
-    border-left: 0;
-}
-.message-body
-    :deep(
-        [data-streamdown='table']
-            [data-streamdown='tr']
-            > [data-streamdown='th']:last-child
-    ),
-.message-body
-    :deep(
-        [data-streamdown='table']
-            [data-streamdown='tr']
-            > [data-streamdown='td']:last-child
-    ) {
-    border-right: 0;
-}
-
-.message-body :deep([data-streamdown='td']) {
-    max-width: 50ch;
-}
-/* Zebra striping for table body rows (every 2nd data row) */
-.message-body
-    :deep([data-streamdown='tbody'] [data-streamdown='tr']:nth-child(even)) {
-    background: var(--md-surface-container-low);
-}
-.message-body
-    :deep([data-streamdown='tbody'] [data-streamdown='tr']:nth-child(odd)) {
-    background: var(--md-surface-container-lowest);
-}
-/* Optional hover highlight */
-.message-body :deep([data-streamdown='tbody'] [data-streamdown='tr']:hover) {
-    background: var(--md-surface-container-high);
-}
-
-.message-body :deep([data-streamdown='code-line-number']) {
-    margin-right: 12px;
-    padding: 20px;
-}
-.message-body :deep(pre) {
-    padding-left: 0;
 }
 </style>

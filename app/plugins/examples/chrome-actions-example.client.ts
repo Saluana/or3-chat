@@ -1,3 +1,5 @@
+import { useIcon } from '#imports';
+
 export default defineNuxtPlugin(() => {
     const sidebarSectionId = 'example:sidebar:welcome-card';
     const sidebarFooterId = 'example:sidebar:footer-toast';
@@ -7,7 +9,7 @@ export default defineNuxtPlugin(() => {
     const ExampleSidebarSection = {
         name: 'ExampleSidebarSection',
         template: `
-            <div class="border-2 border-dashed border-[var(--md-outline-variant)] rounded-md px-3 py-2 text-xs leading-relaxed bg-[var(--md-surface-container-low)]/70">
+            <div class="border-(length:--md-border-width) border-dashed border-(--md-outline-variant) rounded-md px-3 py-2 text-xs leading-relaxed bg-(--md-surface-container-low)/70">
                 <p class="font-semibold mb-1">Plugin Extension Slot</p>
                 <p class="opacity-70">
                     This card is contributed via <code>useSidebarSections</code>.
@@ -27,7 +29,7 @@ export default defineNuxtPlugin(() => {
 
     registerSidebarFooterAction({
         id: sidebarFooterId,
-        icon: 'pixelarticons:downasaur',
+        icon: useIcon('ui.dino').value,
         tooltip: 'Show sample toast',
         order: 260,
         async handler(ctx: SidebarFooterActionContext) {
@@ -42,7 +44,7 @@ export default defineNuxtPlugin(() => {
 
     registerHeaderAction({
         id: headerActionId,
-        icon: 'pixelarticons:moon-stars',
+        icon: useIcon('ui.moon').value,
         tooltip: 'Example header action',
         order: 280,
         async handler() {
@@ -56,7 +58,7 @@ export default defineNuxtPlugin(() => {
 
     registerComposerAction({
         id: composerActionId,
-        icon: 'pixelarticons:edit',
+        icon: useIcon('ui.edit').value,
         label: 'Insert snippet',
         tooltip: 'Insert a canned response',
         order: 240,

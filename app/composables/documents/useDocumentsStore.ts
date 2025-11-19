@@ -11,10 +11,11 @@ import { useToast } from '#imports';
 interface DocState {
     record: Document | null;
     status: 'idle' | 'saving' | 'saved' | 'error' | 'loading';
-    lastError?: any;
+    lastError?: unknown;
     pendingTitle?: string; // staged changes
-    pendingContent?: any; // TipTap JSON
-    timer?: any;
+    pendingContent?: unknown; // TipTap JSON
+    timer?: ReturnType<typeof setTimeout>;
+    flushPromise?: Promise<void>; // Track active flush operation
 }
 
 const documentsMap = reactive(new Map<string, DocState>());
@@ -39,49 +40,67 @@ function scheduleSave(id: string, delay = 750) {
 export async function flush(id: string) {
     const st = documentsMap.get(id);
     if (!st || !st.record) return;
-    if (!st.pendingTitle && !st.pendingContent) return; // nothing to persist
-    const patch: any = {};
-    if (st.pendingTitle !== undefined) patch.title = st.pendingTitle;
-    if (st.pendingContent !== undefined) patch.content = st.pendingContent;
-    st.status = 'saving';
-    try {
-        const updated = await updateDocument(id, patch);
-        if (updated) {
-            st.record = updated;
-            st.status = 'saved';
-        } else {
-            st.status = 'error';
-        }
-    } catch (e) {
-        st.status = 'error';
-        st.lastError = e;
-        useToast().add({ color: 'error', title: 'Document: save failed' });
-    } finally {
-        st.pendingTitle = undefined;
-        st.pendingContent = undefined;
-        // Emit pane-scoped saved hook for any panes displaying this doc.
-        try {
-            if (typeof window !== 'undefined') {
-                const nuxt = useNuxtApp();
-                const hooks: any = (nuxt as any)?.$hooks;
-                const mpApi: any = (globalThis as any).__or3MultiPaneApi;
-                const panes = mpApi?.panes?.value || [];
-                if (hooks && panes.length) {
-                    panes.forEach((p: any, paneIndex: number) => {
-                        if (p?.mode === 'doc' && p?.documentId === id) {
-                            hooks.doAction('ui.pane.doc:action:saved', {
-                                pane: p,
-                                oldDocumentId: id,
-                                newDocumentId: id,
-                                paneIndex,
-                                meta: { reason: 'docStoreFlush' },
-                            });
-                        }
-                    });
-                }
-            }
-        } catch {}
+    
+    // If a flush is already in progress, wait for it
+    if (st.flushPromise) {
+        return st.flushPromise;
     }
+    
+    if (!st.pendingTitle && !st.pendingContent) return; // nothing to persist
+    
+    // Clear timer to prevent duplicate saves
+    if (st.timer) {
+        clearTimeout(st.timer);
+        st.timer = undefined;
+    }
+    
+    st.flushPromise = (async () => {
+        const patch: Partial<Pick<Document, 'title' | 'content'>> = {};
+        if (st.pendingTitle !== undefined) patch.title = st.pendingTitle;
+        if (st.pendingContent !== undefined) patch.content = st.pendingContent;
+        st.status = 'saving';
+        try {
+            const updated = await updateDocument(id, patch);
+            if (updated) {
+                st.record = updated;
+                st.status = 'saved';
+            } else {
+                st.status = 'error';
+            }
+        } catch (e) {
+            st.status = 'error';
+            st.lastError = e;
+            useToast().add({ color: 'error', title: 'Document: save failed' });
+        } finally {
+            st.pendingTitle = undefined;
+            st.pendingContent = undefined;
+            st.flushPromise = undefined;
+            // Emit pane-scoped saved hook for any panes displaying this doc.
+            try {
+                if (typeof window !== 'undefined') {
+                    const nuxt = useNuxtApp();
+                    const hooks: unknown = (nuxt as any)?.$hooks;
+                    const mpApi: unknown = (globalThis as any).__or3MultiPaneApi;
+                    const panes = (mpApi as any)?.panes?.value || [];
+                    if (hooks && panes.length) {
+                        panes.forEach((p: any, paneIndex: number) => {
+                            if (p?.mode === 'doc' && p?.documentId === id) {
+                                (hooks as any).doAction('ui.pane.doc:action:saved', {
+                                    pane: p,
+                                    oldDocumentId: id,
+                                    newDocumentId: id,
+                                    paneIndex,
+                                    meta: { reason: 'docStoreFlush' },
+                                });
+                            }
+                        });
+                    }
+                }
+            } catch {}
+        }
+    })();
+    
+    return st.flushPromise;
 }
 
 export async function loadDocument(id: string) {
@@ -123,7 +142,7 @@ export function setDocumentTitle(id: string, title: string) {
     }
 }
 
-export function setDocumentContent(id: string, content: any) {
+export function setDocumentContent(id: string, content: unknown) {
     const st = ensure(id);
     if (st.record) {
         st.pendingContent = content;
@@ -180,8 +199,9 @@ export async function releaseDocument(
     if (st.record) {
         try {
             // Remove large nested content tree reference if present.
-            if ((st.record as any).content)
-                (st.record as any).content = undefined;
+            if (st.record.content) {
+                (st.record as { content?: unknown }).content = undefined;
+            }
         } catch {}
         st.record = null;
     }
@@ -190,4 +210,16 @@ export async function releaseDocument(
     if (deleteEntry) {
         documentsMap.delete(id);
     }
+}
+
+// HMR cleanup: clear all pending timers on module disposal
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        for (const [_id, st] of documentsMap) {
+            if (st.timer) {
+                clearTimeout(st.timer);
+                st.timer = undefined;
+            }
+        }
+    });
 }

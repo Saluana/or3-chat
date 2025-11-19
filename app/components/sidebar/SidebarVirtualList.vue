@@ -16,7 +16,7 @@
                         <!-- Section Header -->
                         <h1
                             v-if="item.type === 'sectionHeader'"
-                            class="text-xs uppercase tracking-wide opacity-70 px-1 py-3 select-none"
+                            class="sidebar-section-heading px-1 py-3 select-none"
                         >
                             {{ item.label }}
                         </h1>
@@ -24,7 +24,20 @@
                         <!-- Project Group (Root + Children) -->
                         <div
                             v-else-if="item.type === 'projectGroup'"
-                            class="mb-2 mx-0.5 bg-[var(--md-inverse-surface)]/5 backdrop-blur border-2 border-[var(--md-inverse-surface)] rounded-[3px] retro-shadow"
+                            :class="[
+                                'project-group-container mb-2 mx-0.5 bg-(--md-inverse-surface)/5 backdrop-blur ',
+                                projectGroupContainerProps?.class || '',
+                            ]"
+                            :data-theme-target="
+                                projectGroupContainerProps?.[
+                                    'data-theme-target'
+                                ]
+                            "
+                            :data-theme-matches="
+                                projectGroupContainerProps?.[
+                                    'data-theme-matches'
+                                ]
+                            "
                         >
                             <!-- Project Root -->
                             <SidebarProjectRoot
@@ -37,40 +50,52 @@
                                 "
                                 @add-chat="emit('addChat', item.project.id)"
                                 @add-document="
-                                    emit('addDocument', item.project.id)
+                                    emit(
+                                        'addDocumentToProjectRoot',
+                                        item.project.id
+                                    )
                                 "
                                 @rename="emit('renameProject', item.project.id)"
                                 @delete="emit('deleteProject', item.project.id)"
                             />
 
                             <!-- Project Children Container -->
-                            <div
-                                v-if="item.children.length > 0"
-                                class="pl-2 mt-1 space-y-1"
+                            <Transition
+                                name="project-expand"
+                                @enter="onEnter"
+                                @leave="onLeave"
                             >
-                                <SidebarProjectChild
-                                    v-for="child in item.children"
-                                    :key="`${item.project.id}:${child.id}`"
-                                    :child="child"
-                                    :parent-id="item.project.id"
-                                    :active="isProjectChildActive(child)"
-                                    @select="onProjectChildSelect(child)"
-                                    @rename="
-                                        emit('renameEntry', {
-                                            projectId: item.project.id,
-                                            entryId: child.id,
-                                            kind: child.kind,
-                                        })
+                                <div
+                                    v-if="
+                                        item.children.length > 0 &&
+                                        expandedProjectsSet.has(item.project.id)
                                     "
-                                    @remove="
-                                        emit('removeFromProject', {
-                                            projectId: item.project.id,
-                                            entryId: child.id,
-                                            kind: child.kind,
-                                        })
-                                    "
-                                />
-                            </div>
+                                    class="pl-2 mt-1 space-y-1 overflow-hidden"
+                                >
+                                    <SidebarProjectChild
+                                        v-for="child in item.children"
+                                        :key="`${item.project.id}:${child.id}`"
+                                        :child="child"
+                                        :parent-id="item.project.id"
+                                        :active="isProjectChildActive(child)"
+                                        @select="onProjectChildSelect(child)"
+                                        @rename="
+                                            emit('renameEntry', {
+                                                projectId: item.project.id,
+                                                entryId: child.id,
+                                                kind: child.kind,
+                                            })
+                                        "
+                                        @remove="
+                                            emit('removeFromProject', {
+                                                projectId: item.project.id,
+                                                entryId: child.id,
+                                                kind: child.kind,
+                                            })
+                                        "
+                                    />
+                                </div>
+                            </Transition>
                         </div>
 
                         <!-- Thread Item -->
@@ -117,6 +142,7 @@ import {
     type ProjectEntry,
 } from '~/utils/projects/normalizeProjectData';
 import type { Thread } from '~/db';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 interface Project {
     id: string;
@@ -185,6 +211,17 @@ const emit = defineEmits<(e: string, ...args: any[]) => void>();
 
 // Scroll container ref for Virtualizer
 const scrollContainerRef = ref<HTMLElement | null>(null);
+
+// Theme overrides for project group container
+const projectGroupContainerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'sidebar',
+        identifier: 'sidebar.project-group-container',
+        isNuxtUI: false,
+    });
+    return overrides.value;
+});
 
 // Lightweight docs mapping (strip heavy fields like content)
 const lightweightDocs = computed<DocLite[]>(() =>
@@ -324,4 +361,42 @@ function onProjectChildSelect(child: ProjectEntry) {
         emit('documentSelected', child.id);
     }
 }
+
+// Transition handlers for smooth expand/collapse
+function onEnter(el: Element) {
+    const element = el as HTMLElement;
+    element.style.height = '0';
+    // Force reflow
+    void element.offsetHeight;
+    // Delay measurement to ensure margins are settled
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            const height = element.scrollHeight;
+            element.style.height = `${height}px`;
+        });
+    });
+}
+
+function onLeave(el: Element) {
+    const element = el as HTMLElement;
+    const height = element.scrollHeight;
+    element.style.height = `${height}px`;
+    // Force reflow
+    void element.offsetHeight;
+    requestAnimationFrame(() => {
+        element.style.height = '0';
+    });
+}
 </script>
+
+<style scoped>
+.project-expand-enter-active,
+.project-expand-leave-active {
+    transition: height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.project-expand-enter-from,
+.project-expand-leave-to {
+    height: 0;
+}
+</style>

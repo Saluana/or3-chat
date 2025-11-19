@@ -10,7 +10,10 @@ const factory = vi.hoisted(() => {
     return { toastAdd, getFileBlob, reportError };
 });
 
-vi.mock('#imports', () => ({ useToast: () => ({ add: factory.toastAdd }) }));
+vi.mock('#imports', () => ({
+    useToast: () => ({ add: factory.toastAdd }),
+    useIcon: (name: string) => name,
+}));
 vi.mock('~/db/files', () => ({ getFileBlob: factory.getFileBlob }));
 vi.mock('~/utils/errors', () => ({ reportError: factory.reportError }));
 vi.mock('@vueuse/core', () => ({ onKeyStroke: vi.fn() }));

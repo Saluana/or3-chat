@@ -1,11 +1,14 @@
 <template>
-    <div class="search-results">
+    <div class="search-results document-search-results">
         <!-- Search Results -->
-        <div v-if="searchQuery && searchResults.length > 0" class="space-y-2">
+        <div
+            v-if="searchQuery && searchResults.length > 0"
+            class="space-y-2 document-search-results-list"
+        >
             <UCard
                 v-for="result in searchResults"
                 :key="result.id"
-                class="cursor-pointer hover:border-[var(--md-primary)] transition-colors"
+                v-bind="searchResultCardProps"
                 @click="handleNavigate(result)"
             >
                 <h3 class="font-bold text-[14px] text-[var(--md-on-surface)]">
@@ -18,7 +21,7 @@
         </div>
         <div
             v-else-if="searchQuery && !isSearching"
-            class="text-sm text-[var(--md-on-surface-variant)] p-4 text-center"
+            class="text-sm text-[var(--md-on-surface-variant)] p-4 text-center document-search-empty-message"
         >
             No results found
         </div>
@@ -26,7 +29,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, onBeforeUnmount, computed } from 'vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 interface Props {
     docmap: any;
@@ -50,6 +54,29 @@ const searchQuery = ref(props.searchQuery || '');
 const isSearching = ref(false);
 const searchResults = ref<SearchResult[]>([]);
 const searchIndex = ref<any | null>(null);
+
+// Theme integration for search result cards
+const searchResultCardProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'card',
+        context: 'document',
+        identifier: 'document.search-result',
+        isNuxtUI: true,
+    });
+    const overridesValue = (overrides.value as Record<string, any>) || {};
+    const overrideClass = (overridesValue.class as string) || '';
+    const { class: _omit, ...restOverrides } = overridesValue;
+    return {
+        class: [
+            'document-search-result-card',
+            'cursor-pointer hover:border-[var(--md-primary)] transition-colors',
+            overrideClass,
+        ]
+            .filter(Boolean)
+            .join(' '),
+        ...restOverrides,
+    };
+});
 
 // Initialize search index on mount
 onMounted(async () => {
@@ -94,7 +121,10 @@ watch(
     async (query) => {
         searchQuery.value = query || '';
 
-        if (searchTimeout) clearTimeout(searchTimeout);
+        if (searchTimeout) {
+            clearTimeout(searchTimeout);
+            searchTimeout = null;
+        }
 
         if (!query || query.length < 2) {
             searchResults.value = [];
@@ -103,6 +133,7 @@ watch(
 
         searchTimeout = setTimeout(async () => {
             await performSearch(query);
+            searchTimeout = null;
         }, 120);
     }
 );
@@ -137,4 +168,12 @@ async function performSearch(query: string) {
 function handleNavigate(result: SearchResult) {
     emit('navigate', result.path);
 }
+
+// Cleanup timeout on unmount
+onBeforeUnmount(() => {
+    if (searchTimeout) {
+        clearTimeout(searchTimeout);
+        searchTimeout = null;
+    }
+});
 </script>

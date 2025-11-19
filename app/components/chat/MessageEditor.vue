@@ -1,9 +1,16 @@
 <template>
-    <div class="relative min-h-[40px]">
+    <div
+        v-bind="containerProps"
+        :class="[
+            'message-editor-container relative min-h-[40px]',
+            containerProps?.class ?? '',
+        ]"
+    >
         <EditorContent
             v-if="editor"
+            v-bind="editorProps"
+            :class="['tiptap-editor fade-in', editorProps?.class ?? '']"
             :editor="editor as Editor"
-            class="tiptap-editor fade-in"
         />
     </div>
 </template>
@@ -15,6 +22,7 @@ import { Editor, EditorContent } from '@tiptap/vue-3';
 // If you still want markdown extension keep it; otherwise remove these two lines:
 import { Markdown } from 'tiptap-markdown';
 import { useDebounceFn } from '@vueuse/core';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
     modelValue: string;
@@ -25,6 +33,20 @@ const emit = defineEmits<{
     (e: 'update:modelValue', v: string): void;
     (e: 'ready'): void;
 }>();
+
+const containerProps = useThemeOverrides({
+    component: 'div',
+    context: 'message',
+    identifier: 'message.editor-container',
+    isNuxtUI: false,
+});
+
+const editorProps = useThemeOverrides({
+    component: 'div',
+    context: 'message',
+    identifier: 'message.editor',
+    isNuxtUI: false,
+});
 
 const editor = ref<any>(null);
 let destroy: (() => void) | null = null;

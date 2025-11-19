@@ -1,7 +1,7 @@
 <template>
-    <div class="flex flex-row w-full h-full">
+    <div id="sidebar" class="flex flex-row w-full h-full">
         <SidebarSideNavContentCollapsed
-            class="border-r-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)]/5 backdrop-blur-xs"
+            id="sidebar-content-collapsed"
             :active-thread="props.activeThread"
             @new-chat="onNewChat"
             @new-document="openCreateDocumentModal"
@@ -12,6 +12,7 @@
         />
         <SidebarSideNavContent
             ref="sideNavContentRef"
+            id="sidebar-content-expanded"
             class="w-full"
             :active-thread="props.activeThread"
             :items="items"
@@ -37,6 +38,7 @@
             @add-to-project="openAddToProject"
             @add-document-to-project="openAddDocumentToProject"
             @add-chat-to-project="handleAddChatToProject"
+            @add-document-to-project-root="handleAddDocumentToProject"
             @rename-project="openRenameProject"
             @delete-project="confirmDeleteProject"
             @rename-entry="handleRenameEntry"
@@ -57,11 +59,9 @@
 
     <!-- Rename modal -->
     <UModal
+        v-bind="renameModalProps"
         v-model:open="showRenameModal"
         :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
-        :ui="{
-            footer: 'justify-end ',
-        }"
     >
         <template #body>
             <div class="space-y-4">
@@ -70,7 +70,7 @@
                     :placeholder="
                         isRenamingDoc ? 'Document title' : 'Thread title'
                     "
-                    icon="pixelarticons:edit"
+                    :icon="iconEdit"
                     @keyup.enter="saveRename"
                 />
             </div>
@@ -85,9 +85,9 @@
 
     <!-- Rename Project Modal -->
     <UModal
+        v-bind="renameProjectModalProps"
         v-model:open="showRenameProjectModal"
         title="Rename project"
-        :ui="{ footer: 'justify-end' }"
     >
         <template #header><h3>Rename project?</h3></template>
         <template #body>
@@ -95,7 +95,7 @@
                 <UInput
                     v-model="renameProjectName"
                     placeholder="Project name"
-                    icon="pixelarticons:folder"
+                    :icon="iconFolder"
                     @keyup.enter="saveRenameProject"
                 />
             </div>
@@ -115,10 +115,9 @@
 
     <!-- Delete confirm modal -->
     <UModal
+        v-bind="deleteThreadModalProps"
         v-model:open="showDeleteModal"
         title="Delete thread"
-        :ui="{ footer: 'justify-end' }"
-        class="border-2"
     >
         <template #body>
             <p class="text-sm opacity-70">
@@ -135,10 +134,9 @@
 
     <!-- Delete document confirm modal -->
     <UModal
+        v-bind="deleteDocumentModalProps"
         v-model:open="showDeleteDocumentModal"
         title="Delete document"
-        :ui="{ footer: 'justify-end' }"
-        class="border-2"
     >
         <template #body>
             <p class="text-sm opacity-70">
@@ -155,10 +153,9 @@
 
     <!-- Delete project confirm modal -->
     <UModal
+        v-bind="deleteProjectModalProps"
         v-model:open="showDeleteProjectModal"
         title="Delete project"
-        :ui="{ footer: 'justify-end' }"
-        class="border-2"
     >
         <template #body>
             <p class="text-sm opacity-70">
@@ -176,9 +173,9 @@
 
     <!-- Create Project Modal -->
     <UModal
+        v-bind="createProjectModalProps"
         v-model:open="showCreateProjectModal"
         title="New Project"
-        :ui="{ footer: 'justify-end' }"
     >
         <template #body>
             <div class="space-y-4">
@@ -188,6 +185,7 @@
                 >
                     <div class="flex flex-col space-y-3">
                         <UFormField
+                            v-bind="sidebarFormFieldProps"
                             label="Title"
                             name="name"
                             :error="createProjectErrors.name"
@@ -196,14 +194,18 @@
                                 v-model="createProjectState.name"
                                 required
                                 placeholder="Project title"
-                                icon="pixelarticons:folder"
+                                :icon="iconFolder"
                                 class="w-full"
                                 @keyup.enter="submitCreateProject"
                             />
                         </UFormField>
-                        <UFormField label="Description" name="description">
+                        <UFormField
+                            v-bind="sidebarFormFieldProps"
+                            label="Description"
+                            name="description"
+                        >
                             <UTextarea
-                                class="w-full border-2 rounded-[6px]"
+                                class="w-full border-[var(--md-border-width)] rounded-[6px]"
                                 v-model="createProjectState.description"
                                 :rows="3"
                                 placeholder="Optional description"
@@ -233,15 +235,15 @@
 
     <!-- Add To Project Modal -->
     <UModal
+        v-bind="addToProjectModalProps"
         v-model:open="showAddToProjectModal"
         title="Add to project"
-        :ui="{ footer: 'justify-end' }"
     >
         <template #body>
             <div class="space-y-4">
                 <div class="flex gap-2 text-xs font-mono">
                     <button
-                        class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                        class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
                         :class="
                             addMode === 'select'
                                 ? 'bg-primary/30'
@@ -252,7 +254,7 @@
                         Select Existing
                     </button>
                     <button
-                        class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                        class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
                         :class="
                             addMode === 'create'
                                 ? 'bg-primary/30'
@@ -264,13 +266,17 @@
                     </button>
                 </div>
                 <div v-if="addMode === 'select'" class="space-y-3">
-                    <UFormField label="Project" name="project">
+                    <UFormField
+                        v-bind="sidebarFormFieldProps"
+                        label="Project"
+                        name="project"
+                    >
                         <USelectMenu
                             v-model="selectedProjectId"
                             :items="projectSelectOptions"
                             :value-key="'value'"
                             placeholder="Select project"
-                            class="w-full"
+                            v-bind="sidebarProjectSelectProps"
                         />
                     </UFormField>
                     <p v-if="addToProjectError" class="text-error text-xs">
@@ -278,15 +284,20 @@
                     </p>
                 </div>
                 <div v-else class="space-y-3">
-                    <UFormField label="Project Title" name="newProjectName">
+                    <UFormField
+                        v-bind="sidebarFormFieldProps"
+                        label="Project Title"
+                        name="newProjectName"
+                    >
                         <UInput
                             v-model="newProjectName"
                             placeholder="Project name"
-                            icon="pixelarticons:folder"
+                            :icon="iconFolder"
                             class="w-full"
                         />
                     </UFormField>
                     <UFormField
+                        v-bind="sidebarFormFieldProps"
                         label="Description"
                         name="newProjectDescription"
                     >
@@ -294,7 +305,7 @@
                             v-model="newProjectDescription"
                             :rows="3"
                             placeholder="Optional description"
-                            class="w-full border-2 rounded-[6px]"
+                            class="w-full border-[var(--md-border-width)] rounded-[6px]"
                         />
                     </UFormField>
                     <p v-if="addToProjectError" class="text-error text-xs">
@@ -327,9 +338,9 @@
     </UModal>
     <!-- New Document Naming Modal -->
     <UModal
+        v-bind="createDocumentModalProps"
         v-model:open="showCreateDocumentModal"
         title="New Document"
-        :ui="{ footer: 'justify-end' }"
     >
         <template #body>
             <div class="space-y-4">
@@ -338,6 +349,7 @@
                     @submit.prevent="submitCreateDocument"
                 >
                     <UFormField
+                        v-bind="sidebarFormFieldProps"
                         label="Title"
                         name="title"
                         :error="newDocumentErrors.title"
@@ -346,7 +358,7 @@
                             v-model="newDocumentState.title"
                             required
                             placeholder="Document title"
-                            icon="pixelarticons:note"
+                            :icon="iconNote"
                             class="w-full"
                             @keyup.enter="submitCreateDocument"
                         />
@@ -392,11 +404,18 @@ import { nowSec } from '~/db/util';
 import { updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/documents/useDocumentsStore';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 import {
     normalizeProjectData,
     type ProjectEntry,
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
+import { createSidebarModalProps } from '~/components/sidebar/modalProps';
+
+const iconEdit = useIcon('ui.edit');
+const iconFolder = useIcon('sidebar.folder');
+const iconNote = useIcon('sidebar.note');
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 // (Temporarily removed virtualization for chats — use simple list for now)
@@ -520,6 +539,32 @@ const getSidebarFooterContext = () => ({
 
 const sidebarFooterActions = useSidebarFooterActions(getSidebarFooterContext);
 
+const sidebarProjectSelectOverrides = useThemeOverrides({
+    component: 'selectmenu',
+    context: 'sidebar',
+    identifier: 'sidebar.project-select',
+    isNuxtUI: true,
+});
+
+const sidebarProjectSelectProps = computed(() => {
+    const overrideValue =
+        (sidebarProjectSelectOverrides.value as Record<string, any>) || {};
+    const mergedClass = ['w-full', overrideValue.class || '']
+        .filter(Boolean)
+        .join(' ');
+
+    return {
+        ...overrideValue,
+        class: mergedClass,
+    };
+});
+
+const sidebarFormFieldProps = useThemeOverrides({
+    component: 'formField',
+    context: 'sidebar',
+    isNuxtUI: true,
+});
+
 async function handleSidebarFooterAction(entry: SidebarFooterActionEntry) {
     if (entry.disabled) return;
     try {
@@ -543,28 +588,24 @@ const displayThreads = computed(() =>
     sidebarQuery.value.trim() ? threadResults.value : items.value
 );
 // Filter projects + entries when query active
-// Remove references to deleted threads/docs from project data live
-const existingThreadIds = computed(
-    () => new Set(items.value.map((t: any) => t.id))
-);
-const existingDocIds = computed(
-    () => new Set(docs.value.map((d: any) => d.id))
-);
-const projectsFilteredByExistence = computed(() =>
-    projects.value.map((p) => {
+const projectsFilteredByExistence = computed(() => {
+    const threadSet = new Set(items.value.map((t: any) => t.id));
+    const docSet = new Set(docs.value.map((d: any) => d.id));
+    
+    return projects.value.map((p) => {
         const filteredEntries = p.data.filter((entry) => {
             const id = entry?.id;
             if (!id) return false;
             const kind = entry.kind ?? 'chat';
-            if (kind === 'chat') return existingThreadIds.value.has(id);
-            if (kind === 'doc') return existingDocIds.value.has(id);
-            return true;
+            return (kind === 'chat' && threadSet.has(id)) || 
+                   (kind === 'doc' && docSet.has(id)) ||
+                   (kind !== 'chat' && kind !== 'doc');
         });
         return filteredEntries.length === p.data.length
             ? p
             : { ...p, data: filteredEntries };
-    })
-);
+    });
+});
 
 const displayProjects = computed<SidebarProject[]>(() => {
     if (!sidebarQuery.value.trim()) return projectsFilteredByExistence.value;
@@ -597,6 +638,7 @@ let subProjects: { unsubscribe: () => void } | null = null;
 
 // Calculate list height using specific element IDs for accuracy
 let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+let resizeObserver: ResizeObserver | null = null;
 
 function recomputeListHeight() {
     // Get the viewport height
@@ -618,29 +660,36 @@ function recomputeListHeight() {
 
 // Setup resize observer on window
 if (process.client) {
-    const resizeObserver = new ResizeObserver(() => {
-        if (resizeTimeout) clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-            recomputeListHeight();
-        }, 50);
+    onMounted(() => {
+        resizeObserver = new ResizeObserver(() => {
+            if (resizeTimeout) clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                recomputeListHeight();
+            }, 50);
+        });
+
+        try {
+            // Observe the specific elements
+            const topHeader = document.getElementById('top-header');
+            const sideNavHeader = document.getElementById('side-nav-content-header');
+            if (topHeader) resizeObserver.observe(topHeader);
+            if (sideNavHeader) resizeObserver.observe(sideNavHeader);
+
+            // Also listen to window resize
+            window.addEventListener('resize', recomputeListHeight);
+        } catch (err) {
+            console.error('[SideBar] Failed to setup resize observers:', err);
+        }
     });
 
-    onMounted(() => {
-        // Observe the specific elements
-        const topHeader = document.getElementById('top-header');
-        const sideNavHeader = document.getElementById(
-            'side-nav-content-header'
-        );
-        if (topHeader) resizeObserver.observe(topHeader);
-        if (sideNavHeader) resizeObserver.observe(sideNavHeader);
-
-        // Also listen to window resize
-        window.addEventListener('resize', recomputeListHeight);
-
-        onUnmounted(() => {
-            resizeObserver.disconnect();
-            window.removeEventListener('resize', recomputeListHeight);
-        });
+    onUnmounted(() => {
+        resizeObserver?.disconnect();
+        resizeObserver = null;
+        window.removeEventListener('resize', recomputeListHeight);
+        if (resizeTimeout) {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = null;
+        }
     });
 }
 
@@ -721,15 +770,47 @@ const renameTitle = ref('');
 const renameMetaKind = ref<'chat' | 'doc' | null>(null);
 const isRenamingDoc = computed(() => renameMetaKind.value === 'doc');
 
+const renameModalProps = createSidebarModalProps('sidebar.rename', {
+    ui: { footer: 'justify-end' },
+});
+
+const renameProjectModalProps = createSidebarModalProps(
+    'sidebar.rename-project',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
+
 const showDeleteModal = ref(false);
 const deleteId = ref<string | null>(null);
+const deleteThreadModalProps = createSidebarModalProps(
+    'sidebar.delete-thread',
+    {
+        ui: { footer: 'justify-end' },
+        class: 'border-[var(--md-border-width)]',
+    }
+);
 // Document delete state
 const showDeleteDocumentModal = ref(false);
 const deleteDocumentId = ref<string | null>(null);
+const deleteDocumentModalProps = createSidebarModalProps(
+    'sidebar.delete-document',
+    {
+        ui: { footer: 'justify-end' },
+        class: 'border-[var(--md-border-width)]',
+    }
+);
 
 // Project delete state
 const showDeleteProjectModal = ref(false);
 const deleteProjectId = ref<string | null>(null);
+const deleteProjectModalProps = createSidebarModalProps(
+    'sidebar.delete-project',
+    {
+        ui: { footer: 'justify-end' },
+        class: 'border-[var(--md-border-width)]',
+    }
+);
 
 async function openRename(target: any) {
     // Case 1: payload from project tree: { projectId, entryId, kind }
@@ -1020,6 +1101,12 @@ const createProjectState = ref<{ name: string; description: string }>({
     description: '',
 });
 const createProjectErrors = ref<{ name?: string }>({});
+const createProjectModalProps = createSidebarModalProps(
+    'sidebar.create-project',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
 
 function openCreateProject() {
     showCreateProjectModal.value = true;
@@ -1068,6 +1155,12 @@ const newProjectName = ref('');
 const newProjectDescription = ref('');
 const addingToProject = ref(false);
 const addToProjectError = ref<string | null>(null);
+const addToProjectModalProps = createSidebarModalProps(
+    'sidebar.add-to-project',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
 
 const projectSelectOptions = computed(() =>
     projects.value.map((p) => ({ label: p.name, value: p.id }))
@@ -1171,6 +1264,12 @@ const showCreateDocumentModal = ref(false);
 const creatingDocument = ref(false);
 const newDocumentState = ref<{ title: string }>({ title: '' });
 const newDocumentErrors = ref<{ title?: string }>({});
+const createDocumentModalProps = createSidebarModalProps(
+    'sidebar.create-document',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
 
 function openCreateDocumentModal() {
     showCreateDocumentModal.value = true;

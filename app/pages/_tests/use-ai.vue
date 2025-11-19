@@ -20,7 +20,7 @@
                     <UButton
                         variant="basic"
                         size="md"
-                        class="retro-btn"
+                        class="theme-btn"
                         :loading="running"
                         :disabled="running"
                         @click="runTests"
@@ -28,7 +28,7 @@
                         Run all tests
                     </UButton>
                     <div
-                        class="border-2 border-[var(--md-inverse-surface)] rounded-[3px] retro-shadow bg-[var(--md-inverse-surface)]/5 px-4 py-3 flex items-center gap-4 text-[15px]"
+                        class="border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] theme-shadow bg-[var(--md-inverse-surface)]/5 px-4 py-3 flex items-center gap-4 text-[15px]"
                     >
                         <span class="uppercase tracking-[0.2em] text-[13px]">
                             Progress
@@ -56,7 +56,7 @@
                 <div
                     v-for="result in results"
                     :key="result.id"
-                    class="border-2 border-[var(--md-inverse-surface)] rounded-[3px] retro-shadow bg-[var(--md-inverse-surface)]/5 p-4 space-y-3"
+                    class="border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] theme-shadow bg-[var(--md-inverse-surface)]/5 p-4 space-y-3"
                 >
                     <header class="flex items-start justify-between gap-3">
                         <div class="space-y-1">
@@ -75,17 +75,17 @@
                         >
                             <UIcon
                                 v-if="result.status === 'pass'"
-                                name="pixelarticons:check"
+                                :name="useIcon('ui.check').value"
                                 class="w-4 h-4"
                             />
                             <UIcon
                                 v-else-if="result.status === 'fail'"
-                                name="pixelarticons:close"
+                                :name="useIcon('ui.close').value"
                                 class="w-4 h-4"
                             />
                             <UIcon
                                 v-else
-                                name="pixelarticons:hourglass"
+                                :name="useIcon('ui.wait').value"
                                 class="w-4 h-4 animate-pulse"
                             />
                             <span>{{ result.status.toUpperCase() }}</span>
@@ -103,7 +103,7 @@
 
                     <div
                         v-if="result.error"
-                        class="border border-red-500/60 bg-red-500/10 text-red-400 text-[14px] px-3 py-2 rounded-[3px] whitespace-pre-wrap"
+                        class="border border-red-500/60 bg-red-500/10 text-red-400 text-[14px] px-3 py-2 rounded-[var(--md-border-radius)] whitespace-pre-wrap"
                     >
                         {{ result.error }}
                     </div>
@@ -115,7 +115,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useHead } from '#imports';
+import { useHead, useIcon } from '#imports';
 import { useChat } from '~/composables/chat/useAi';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import type { ChatMessage } from '~/utils/chat/types';
