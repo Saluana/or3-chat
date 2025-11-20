@@ -120,4 +120,9 @@ export const chatCssSelectors = {
             cursor: 'pointer',
         },
     },
+    '.message-attachment-pdf-name': {
+        style: {
+            color: 'var(--md-on-surface)',
+        },
+    },
 };

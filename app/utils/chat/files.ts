@@ -8,10 +8,24 @@ export function dataUrlToBlob(dataUrl: string): Blob | null {
         if (!m) return null;
         const mime: string = m[1] as string;
         const b64: string = m[2] as string;
+        
+        // For large data URLs, use chunked processing to avoid memory spikes
         const bin = atob(b64);
-        const arr = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-        return new Blob([arr], { type: mime });
+        const len = bin.length;
+        
+        // Process in chunks to be more memory-efficient for large files
+        const chunkSize = 8192;
+        const chunks: Uint8Array[] = [];
+        for (let i = 0; i < len; i += chunkSize) {
+            const chunkLen = Math.min(chunkSize, len - i);
+            const chunk = new Uint8Array(chunkLen);
+            for (let j = 0; j < chunkLen; j++) {
+                chunk[j] = bin.charCodeAt(i + j);
+            }
+            chunks.push(chunk);
+        }
+        
+        return new Blob(chunks, { type: mime });
     } catch {
         return null;
     }

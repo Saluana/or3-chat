@@ -16,6 +16,21 @@ export function validateFile(
 ):
     | { ok: true; kind: 'image' | 'pdf' }
     | { ok: false; code: 'ERR_FILE_VALIDATION'; message: string } {
+    // Early validation: check size first (fastest check)
+    if (file.size === 0)
+        return {
+            ok: false,
+            code: 'ERR_FILE_VALIDATION',
+            message: 'File is empty',
+        };
+    if (file.size > MAX_FILE_BYTES)
+        return {
+            ok: false,
+            code: 'ERR_FILE_VALIDATION',
+            message: 'File too large (max 20MB)',
+        };
+    
+    // Then check type
     const mime = file.type || '';
     const kind = classifyKind(mime);
     if (!kind)
@@ -24,12 +39,7 @@ export function validateFile(
             code: 'ERR_FILE_VALIDATION',
             message: 'Unsupported file type',
         };
-    if (file.size > MAX_FILE_BYTES)
-        return {
-            ok: false,
-            code: 'ERR_FILE_VALIDATION',
-            message: 'File too large (max 20MB)',
-        };
+    
     return { ok: true, kind };
 }
 

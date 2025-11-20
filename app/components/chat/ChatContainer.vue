@@ -29,7 +29,7 @@
                     class="virtual-message-list"
                     :messages="stableMessages"
                     :item-size-estimation="520"
-                    :overscan="5"
+                    :overscan="8"
                     :scroll-parent="scrollParent"
                     :is-streaming="streamActive"
                     :editing-active="anyEditing"
@@ -409,8 +409,7 @@ function onSend(payload: any) {
         });
         return;
     }
-    const carryHashes =
-        readyImages.length === 0 ? collectRecentHashes() : [];
+    const carryHashes = readyImages.length === 0 ? collectRecentHashes() : [];
     const files = readyImages.map((img: any) => ({
         type: img.file?.type || img.mime || 'image/png',
         url: img.hash || img.url,
