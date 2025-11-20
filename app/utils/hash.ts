@@ -7,10 +7,15 @@ import { reportError, err } from '~/utils/errors';
 
 const CHUNK_SIZE = 256 * 1024; // 256KB
 
+// Cache the loaded SparkMD5 module to avoid repeated dynamic imports
+let sparkMD5Cache: any = null;
+
 // Lazy import spark-md5 only if needed (returns default export class)
 async function loadSpark() {
+    if (sparkMD5Cache) return sparkMD5Cache;
     const mod = await import('spark-md5');
-    return (mod as any).default; // SparkMD5 constructor with ArrayBuffer helper
+    sparkMD5Cache = (mod as any).default;
+    return sparkMD5Cache;
 }
 
 /** Compute MD5 hash (hex lowercase) for a Blob using chunked reads. */
@@ -51,12 +56,19 @@ export async function computeFileHash(blob: Blob): Promise<string> {
         const SparkMD5 = await loadSpark();
         const hash = new SparkMD5.ArrayBuffer();
         let offset = 0;
+        let chunkCount = 0;
         while (offset < blob.size) {
             const slice = blob.slice(offset, offset + CHUNK_SIZE);
             const buf = await slice.arrayBuffer();
             hash.append(buf as ArrayBuffer);
             offset += CHUNK_SIZE;
-            if (offset < blob.size) await microTask();
+            chunkCount++;
+            // Yield more frequently for large files to maintain UI responsiveness
+            // For files > 5MB, yield every chunk; for smaller files, yield every 2 chunks
+            if (offset < blob.size) {
+                const shouldYield = blob.size > 5 * 1024 * 1024 || chunkCount % 2 === 0;
+                if (shouldYield) await microTask();
+            }
         }
         const hex = hash.end();
         if (markId && hasPerf) finishMark(markId, blob.size, 'stream');
@@ -104,14 +116,28 @@ function finishMark(id: string, size: number, mode: 'subtle' | 'stream') {
     }
 }
 
+// Pre-allocate hex lookup table for faster conversion
+const hexLookup = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+
 function bufferToHex(buf: Uint8Array): string {
-    let hex = '';
-    for (const b of buf) {
-        hex += b.toString(16).padStart(2, '0');
+    // Use array join instead of string concatenation for better performance
+    const hexArray = new Array(buf.length);
+    for (let i = 0; i < buf.length; i++) {
+        hexArray[i] = hexLookup[buf[i]];
     }
-    return hex;
+    return hexArray.join('');
 }
 
-function microTask() {
+// Yield control back to browser more efficiently
+// Use scheduler.yield if available (Chrome 115+), fallback to requestIdleCallback, then setTimeout
+function microTask(): Promise<void> {
+    // @ts-ignore - scheduler.yield is new API
+    if (typeof scheduler !== 'undefined' && scheduler?.yield) {
+        // @ts-ignore
+        return scheduler.yield();
+    }
+    if (typeof requestIdleCallback !== 'undefined') {
+        return new Promise((resolve) => requestIdleCallback(() => resolve()));
+    }
     return new Promise((resolve) => setTimeout(resolve, 0));
 }

@@ -182,8 +182,11 @@ export async function createOrRefFile(
             FileMetaSchema,
             applyFileEntityToMeta(meta, actionPayload.entity)
         );
-        await db.file_meta.put(mergedMeta);
-        await db.file_blobs.put({ hash: mergedMeta.hash, blob: file });
+        // Batch both writes together to reduce transaction overhead
+        await Promise.all([
+            db.file_meta.put(mergedMeta),
+            db.file_blobs.put({ hash: mergedMeta.hash, blob: file })
+        ]);
         storedMeta = mergedMeta;
         actionPayload = {
             entity: toFileEntity(mergedMeta),
@@ -246,17 +249,32 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
     const hooks = useHooks();
     await db.transaction('rw', db.file_meta, async () => {
         const metas = await db.file_meta.bulkGet(unique);
+        const now = nowSec();
+        const toUpdate: FileMeta[] = [];
+        
+        // First, collect all valid updates and fire before hooks
         for (let i = 0; i < unique.length; i++) {
             const hash = unique[i]!;
             const meta = metas[i];
             if (!meta || meta.deleted) continue;
             const payload = createFileDeletePayload(meta, hash);
             await hooks.doAction('db.files.delete:action:soft:before', payload);
-            await db.file_meta.put({
+            toUpdate.push({
                 ...meta,
                 deleted: true,
-                updated_at: nowSec(),
+                updated_at: now,
             });
+        }
+        
+        // Batch all updates in one call for better performance
+        if (toUpdate.length > 0) {
+            await db.file_meta.bulkPut(toUpdate);
+        }
+        
+        // Fire after hooks
+        for (let i = 0; i < toUpdate.length; i++) {
+            const meta = toUpdate[i];
+            const payload = createFileDeletePayload(meta, meta.hash);
             await hooks.doAction('db.files.delete:action:soft:after', payload);
         }
     });
@@ -269,6 +287,10 @@ export async function restoreMany(hashes: string[]): Promise<void> {
     const hooks = useHooks();
     await db.transaction('rw', db.file_meta, async () => {
         const metas = await db.file_meta.bulkGet(unique);
+        const now = nowSec();
+        const toUpdate: FileMeta[] = [];
+        
+        // First, collect all valid updates and fire before hooks
         for (let i = 0; i < unique.length; i++) {
             const meta = metas[i];
             if (!meta || meta.deleted !== true) continue;
@@ -276,12 +298,21 @@ export async function restoreMany(hashes: string[]): Promise<void> {
                 'db.files.restore:action:before',
                 toFileEntity(meta)
             );
-            const updatedMeta = {
+            toUpdate.push({
                 ...meta,
                 deleted: false,
-                updated_at: nowSec(),
-            } as FileMeta;
-            await db.file_meta.put(updatedMeta);
+                updated_at: now,
+            } as FileMeta);
+        }
+        
+        // Batch all updates in one call for better performance
+        if (toUpdate.length > 0) {
+            await db.file_meta.bulkPut(toUpdate);
+        }
+        
+        // Fire after hooks
+        for (let i = 0; i < toUpdate.length; i++) {
+            const updatedMeta = toUpdate[i];
             await hooks.doAction(
                 'db.files.restore:action:after',
                 toFileEntity(updatedMeta)
@@ -297,13 +328,25 @@ export async function hardDeleteMany(hashes: string[]): Promise<void> {
     const hooks = useHooks();
     await db.transaction('rw', db.file_meta, db.file_blobs, async () => {
         const metas = await db.file_meta.bulkGet(unique);
+        
+        // Fire all before hooks first
+        const payloads: Array<{ hash: string; payload: DbDeletePayload<FileEntity> }> = [];
         for (let i = 0; i < unique.length; i++) {
             const hash = unique[i]!;
             const meta = metas[i];
             const payload = createFileDeletePayload(meta ?? undefined, hash);
             await hooks.doAction('db.files.delete:action:hard:before', payload);
-            await db.file_meta.delete(hash);
-            await db.file_blobs.delete(hash);
+            payloads.push({ hash, payload });
+        }
+        
+        // Batch all deletions for better performance
+        await Promise.all([
+            db.file_meta.bulkDelete(unique),
+            db.file_blobs.bulkDelete(unique)
+        ]);
+        
+        // Fire all after hooks
+        for (const { payload } of payloads) {
             await hooks.doAction('db.files.delete:action:hard:after', payload);
         }
     });
@@ -325,21 +368,34 @@ export function fileDeleteError(message: string, cause?: unknown) {
 export { changeRefCount };
 
 // Lightweight image dimension extraction without full decode (creates object URL)
+// Optimized with immediate revocation and timeout for robustness
 async function blobImageSize(
     blob: Blob
 ): Promise<{ width: number; height: number } | undefined> {
     return new Promise((resolve) => {
         const img = new Image();
+        let objectUrl = '';
+        
+        // Set a timeout to prevent hanging on malformed images
+        const timeoutId = setTimeout(() => {
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+            resolve(undefined);
+        }, 5000); // 5 second timeout
+        
         img.onload = () => {
+            clearTimeout(timeoutId);
             const res = { width: img.naturalWidth, height: img.naturalHeight };
-            URL.revokeObjectURL(img.src);
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
             resolve(res);
         };
         img.onerror = () => {
-            URL.revokeObjectURL(img.src);
+            clearTimeout(timeoutId);
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
             resolve(undefined);
         };
-        img.src = URL.createObjectURL(blob);
+        
+        objectUrl = URL.createObjectURL(blob);
+        img.src = objectUrl;
     });
 }
 
