@@ -89,6 +89,10 @@
   cursor: pointer;
 }
 
+[data-theme="blank"] .message-attachment-pdf-name {
+  color: var(--md-on-surface);
+}
+
 [data-theme="blank"] .dashboard-plugin-icon-label {
   font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   font-size: 12px;
