@@ -298,12 +298,15 @@ export function useActiveSidebarPage() {
             return;
         }
 
-        const stop = watch(
+        let stopWatch: (() => void) | null = null;
+
+        stopWatch = watch(
             () => listSidebarPages.value.map((page) => page.id),
             (ids) => {
                 if (ids.includes(initialRequestedPageId)) {
                     attemptActivation();
-                    stop();
+                    stopWatch?.();
+                    stopWatch = null;
                 }
             },
             { immediate: true }
@@ -311,7 +314,10 @@ export function useActiveSidebarPage() {
 
         // Add cleanup on unmount
         onUnmounted(() => {
-            stop();
+            if (stopWatch) {
+                stopWatch();
+                stopWatch = null;
+            }
         });
     });
 

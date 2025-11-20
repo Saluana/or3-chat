@@ -170,6 +170,7 @@ export function useSidebarSearch(
     const ready = ref(false);
     const busy = ref(false);
     const lastIndexedSignature = ref('');
+    const cleanupFns: Array<() => void> = [];
     const idMaps = {
         thread: ref<Record<string, Thread>>({}),
         project: ref<Record<string, Project>>({}),
@@ -306,7 +307,7 @@ export function useSidebarSearch(
 
     // Rebuild index & rerun search on data change with debounce
     let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
-    watch(
+    const stopDataWatch = watch(
         [threads, projects, documents],
         () => {
             if (rebuildTimer) clearTimeout(rebuildTimer);
@@ -317,13 +318,15 @@ export function useSidebarSearch(
         },
         { deep: false }
     );
+    cleanupFns.push(stopDataWatch);
 
     // Debounce query changes
     let queryTimer: ReturnType<typeof setTimeout> | null = null;
-    watch(query, () => {
+    const stopQueryWatch = watch(query, () => {
         if (queryTimer) clearTimeout(queryTimer);
         queryTimer = setTimeout(runSearch, QUERY_DEBOUNCE_MS);
     });
+    cleanupFns.push(stopQueryWatch);
 
     // Initial population (pass-through until first build completes)
     threadResults.value = threads.value;
@@ -334,6 +337,10 @@ export function useSidebarSearch(
     onBeforeUnmount(() => {
         if (rebuildTimer) clearTimeout(rebuildTimer);
         if (queryTimer) clearTimeout(queryTimer);
+        while (cleanupFns.length) {
+            const stop = cleanupFns.pop();
+            stop?.();
+        }
     });
 
     // HMR cleanup: clear timers on module disposal
@@ -341,6 +348,10 @@ export function useSidebarSearch(
         import.meta.hot.dispose(() => {
             if (rebuildTimer) clearTimeout(rebuildTimer);
             if (queryTimer) clearTimeout(queryTimer);
+            while (cleanupFns.length) {
+                const stop = cleanupFns.pop();
+                stop?.();
+            }
         });
     }
 
