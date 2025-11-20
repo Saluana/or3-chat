@@ -1,4 +1,4 @@
-import { ref, nextTick, type Ref } from 'vue';
+import { ref, type Ref } from 'vue';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import type { CompiledTheme } from '~/theme/_shared/types';
 import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
@@ -34,6 +34,7 @@ export interface ThemePlugin {
     system: () => string;
     current: Ref<string>;
     activeTheme: Ref<string>;
+    resolversVersion: Ref<number>;
     setActiveTheme: (themeName: string) => Promise<void>;
     getResolver: (themeName: string) => RuntimeResolver | null;
     loadTheme: (themeName: string) => Promise<CompiledTheme | null>;
@@ -271,6 +272,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         themeRegistry.clear();
         resolverRegistry.clear();
         themeAppConfigOverrides.clear();
+        resolversVersion.value = 0;
     });
 
     const sanitizeThemeName = (themeName: string | null) => {
@@ -285,6 +287,10 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     // Active theme name (for refined theme system)
     const activeTheme = ref<string>(DEFAULT_THEME);
+    const resolversVersion = ref(0);
+    const bumpResolversVersion = () => {
+        resolversVersion.value += 1;
+    };
 
     /**
      * Load a theme configuration
@@ -524,6 +530,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             const fallbackPatch = themeAppConfigOverrides.get(fallback) ?? null;
             applyThemeAppConfigPatch(fallbackPatch);
             applyThemeUiConfig(themeRegistry.get(fallback) || null);
+            bumpResolversVersion();
             return;
         }
 
@@ -585,6 +592,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 resolveToken: themeBackgroundTokenResolver,
             });
         }
+        bumpResolversVersion();
     };
 
     // Initialize: ensure default theme is available
@@ -651,6 +659,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
         // Refined theme system API (for theme variants)
         activeTheme, // Reactive ref to active theme name
+        resolversVersion, // Bumps whenever a theme finishes applying
         setActiveTheme, // Function to switch themes
         getResolver, // Function to get resolver for a theme
         loadTheme, // Function to dynamically load a theme

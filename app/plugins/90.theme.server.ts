@@ -233,6 +233,10 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     };
 
     const activeTheme = ref<string>(DEFAULT_THEME);
+    const resolversVersion = ref(0);
+    const bumpResolversVersion = () => {
+        resolversVersion.value += 1;
+    };
 
     // Ensure the default theme is available for initial SSR render
     try {
@@ -325,6 +329,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
             activeTheme.value = fallback;
             iconRegistry.setActiveTheme(fallback);
+            bumpResolversVersion();
             return;
         }
 
@@ -392,6 +397,8 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
             useHead(headConfig);
         }
+
+        bumpResolversVersion();
     };
 
     await setActiveTheme(activeTheme.value);
@@ -403,6 +410,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         system: () => current.value,
         current: current as Ref<string>,
         activeTheme,
+        resolversVersion,
         setActiveTheme,
         getResolver,
         loadTheme,

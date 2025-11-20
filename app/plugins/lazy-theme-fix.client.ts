@@ -1,4 +1,4 @@
-import { defineNuxtPlugin, useNuxtApp } from '#app';
+import { defineNuxtPlugin } from '#app';
 import { watch } from 'vue';
 
 export default defineNuxtPlugin((nuxtApp) => {
@@ -10,20 +10,36 @@ export default defineNuxtPlugin((nuxtApp) => {
     // Use a Set to track lazy components (regular Set, not WeakSet)
     // This allows us to iterate and force update when theme changes
     const lazyComponents = new Set<any>();
+    let scheduledFrame: number | null = null;
+
+    const getUpdateToken = () => {
+        const version = theme.resolversVersion?.value ?? 0;
+        return `${theme.activeTheme.value}:${version}`;
+    };
+
+    const scheduleForceUpdate = () => {
+        if (scheduledFrame !== null) {
+            return;
+        }
+
+        scheduledFrame = requestAnimationFrame(() => {
+            scheduledFrame = null;
+            lazyComponents.forEach((component) => {
+                // Check if component is still mounted
+                if (component && component.$forceUpdate) {
+                    component.$forceUpdate();
+                }
+            });
+        });
+    };
 
     const globalUnwatch = watch(
-        () => theme.activeTheme.value,
+        getUpdateToken,
         () => {
             // Force update all tracked lazy components when theme changes
-            requestAnimationFrame(() => {
-                lazyComponents.forEach((component) => {
-                    // Check if component is still mounted
-                    if (component && component.$forceUpdate) {
-                        component.$forceUpdate();
-                    }
-                });
-            });
-        }
+            scheduleForceUpdate();
+        },
+        { flush: 'post' }
     );
 
     nuxtApp.vueApp.mixin({
@@ -48,6 +64,9 @@ export default defineNuxtPlugin((nuxtApp) => {
     // Cleanup global watcher on hot reload
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
+            if (scheduledFrame !== null) {
+                cancelAnimationFrame(scheduledFrame);
+            }
             globalUnwatch();
             lazyComponents.clear();
         });
