@@ -234,7 +234,10 @@ watch(
             (chat.value as any)?.clear?.();
         } catch (e) {
             if (import.meta.dev) {
-                console.warn('[ChatContainer] clear failed during thread switch', e);
+                console.warn(
+                    '[ChatContainer] clear failed during thread switch',
+                    e
+                );
             }
         }
         chat.value = useChat(

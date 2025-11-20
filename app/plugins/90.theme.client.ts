@@ -1,4 +1,5 @@
 import { ref, type Ref } from 'vue';
+import { defu } from 'defu';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import type { CompiledTheme } from '~/theme/_shared/types';
 import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
@@ -88,13 +89,13 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const initialPatch = (nuxtApp.payload as any)?.data
         ?.__or3ThemeAppConfigPatch;
     if (initialPatch && typeof initialPatch === 'object') {
-        recursiveUpdate(appConfig, initialPatch);
+        Object.assign(appConfig, defu(initialPatch, appConfig));
     }
 
     registerCleanup(() => {
         // Restore from snapshot only on cleanup
         const restored = JSON.parse(baseAppConfigSnapshot);
-        recursiveUpdate(appConfig, restored);
+        Object.assign(appConfig, restored);
     });
     const themeAppConfigOverrides = new Map<
         string,
@@ -107,13 +108,13 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             appConfig.ui = {};
         }
         if (theme?.ui) {
-            recursiveUpdate(appConfig.ui, theme.ui as Record<string, any>);
+            appConfig.ui = defu(theme.ui, appConfig.ui);
         }
     };
 
     const applyThemeAppConfigPatch = (patch?: Record<string, any> | null) => {
         if (patch) {
-            recursiveUpdate(appConfig, patch);
+            Object.assign(appConfig, defu(patch, appConfig));
         }
     };
 
@@ -736,24 +737,4 @@ function injectThemeVariables(themeName: string, css: string) {
     style.textContent = css;
 }
 
-function recursiveUpdate(
-    target: Record<string, any>,
-    source: Record<string, any>
-) {
-    for (const [key, value] of Object.entries(source)) {
-        if (value !== undefined) {
-            if (
-                value &&
-                typeof value === 'object' &&
-                !Array.isArray(value) &&
-                target[key] &&
-                typeof target[key] === 'object' &&
-                !Array.isArray(target[key])
-            ) {
-                recursiveUpdate(target[key], value);
-            } else {
-                target[key] = value;
-            }
-        }
-    }
-}
+
