@@ -87,7 +87,7 @@ if (themeRegistry.has(themeName)) {
 - Removed `watch()` creation for every v-theme directive usage
 - Each component previously created its own watcher (~5KB each)
 - With 1000+ components, this was ~5MB+ just for watchers
-- Theme changes now handled by lazy-theme-fix global watcher
+- Theme changes now handled by 92.theme-lazy-sync global watcher
 
 **Impact:** -150MB (eliminated thousands of watchers)
 
@@ -110,11 +110,11 @@ const unwatchTheme = watch(
 ```typescript
 // Apply once, rely on global watcher for updates
 applyOverrides(targetEl, vnode, resolved.props, identifier);
-// Note: lazy-theme-fix handles re-rendering on theme change
+// Note: 92.theme-lazy-sync handles re-rendering on theme change
 ```
 
 ### 4. Optimized Lazy-Theme-Fix
-**File:** `app/plugins/lazy-theme-fix.client.ts`
+**File:** `app/plugins/92.theme-lazy-sync.client.ts`
 
 **Changes:**
 - Single global watcher instead of per-lazy-component watchers
@@ -341,7 +341,7 @@ All 91 theme-related tests pass:
 | LRU cache limit | -100MB |
 | Remove localStorage cache | -50MB |
 | Remove v-theme watchers | -150MB |
-| Optimize lazy-theme-fix | -80MB |
+| Optimize 92.theme-lazy-sync | -80MB |
 | Map-based icon registry | -30MB |
 | Theme cleanup | -100MB |
 | Remove cloneDeep | -50MB |
@@ -354,7 +354,7 @@ All 91 theme-related tests pass:
 
 1. `app/plugins/90.theme.client.ts` - Main theme plugin (172 lines changed)
 2. `app/plugins/91.auto-theme.client.ts` - v-theme directive (30 lines changed)
-3. `app/plugins/lazy-theme-fix.client.ts` - Lazy component handler (52 lines changed)
+3. `app/plugins/92.theme-lazy-sync.client.ts` - Lazy component handler (52 lines changed)
 4. `app/theme/_shared/icon-registry.ts` - Icon registry (33 lines changed)
 5. `app/theme/_shared/runtime-resolver.ts` - Override resolver (63 lines changed)
 

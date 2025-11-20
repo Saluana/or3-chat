@@ -58,7 +58,7 @@ Reduce memory usage from 660MB to below 300MB while maintaining 100% functionali
 - Line 84: NUXT_UI_COMPONENTS set never updated, hardcoded
 - Line 398-402: onScopeDispose may not work correctly with directives
 
-### 4. app/plugins/lazy-theme-fix.client.ts (37 lines)
+### 4. app/plugins/92.theme-lazy-sync.client.ts (37 lines)
 **Memory Issues:**
 - Line 5: unwatchers WeakMap is good for GC
 - Line 23: watch() on resolversVersion for EVERY lazy component - potential leak
@@ -172,8 +172,8 @@ Reduce memory usage from 660MB to below 300MB while maintaining 100% functionali
 5. **Excessive cloneDeep operations** (multiple files)
 
 ### Performance Bottlenecks:
-1. **$forceUpdate on every lazy component** (lazy-theme-fix.client.ts:24)
-2. **Global mixin on ALL components** (lazy-theme-fix.client.ts:7-36)
+1. **$forceUpdate on every lazy component** (92.theme-lazy-sync.client.ts:24)
+2. **Global mixin on ALL components** (92.theme-lazy-sync.client.ts:7-36)
 3. **page:finish hook re-applying classes** (90.theme.client.ts:690-708)
 4. **applyThemeDirective on mount AND update** (91.auto-theme.client.ts:422-434)
 
@@ -192,7 +192,7 @@ Reduce memory usage from 660MB to below 300MB while maintaining 100% functionali
 5. Implement theme cleanup when switching (unload previous theme properly)
 
 ### High Priority (Performance):
-1. Remove lazy-theme-fix.client.ts mixin, use better approach
+1. Remove 92.theme-lazy-sync.client.ts mixin, use better approach
 2. Batch v-theme directive processing
 3. Optimize page:finish hook to only run when needed
 4. Use Object.freeze on theme data to prevent mutations
@@ -213,7 +213,7 @@ Reduce memory usage from 660MB to below 300MB while maintaining 100% functionali
 - Remove localStorage cache: -50MB
 - Fix v-theme watchers: -150MB
 - Optimize cloneDeep: -50MB
-- Optimize lazy-theme-fix: -80MB
+- Optimize 92.theme-lazy-sync: -80MB
 - Theme cleanup: -100MB
 
 **Total Estimated Savings: ~530MB**
@@ -225,7 +225,7 @@ Reduce memory usage from 660MB to below 300MB while maintaining 100% functionali
 1. **LRU Cache for RuntimeResolver** - Added max 100 entries limit
 2. **Removed localStorage theme cache** - Eliminated unbounded cache growth
 3. **Removed per-component v-theme watchers** - Eliminated thousands of watchers
-4. **Optimized lazy-theme-fix** - Single global watcher instead of per-component
+4. **Optimized 92.theme-lazy-sync** - Single global watcher instead of per-component
 5. **Map instead of reactive Record** - icon-registry now uses Map with unregister method
 6. **Theme cleanup on switch** - Only keeps active + default themes loaded
 7. **Removed unnecessary cloneDeep** - Uses JSON snapshots and in-place updates

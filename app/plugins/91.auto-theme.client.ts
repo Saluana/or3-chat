@@ -375,7 +375,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             // Apply to component or element (use target element)
             applyOverrides(targetEl, vnode, resolved.props, identifier);
 
-            // Theme changes are now handled globally by lazy-theme-fix.client.ts,
+            // Theme changes are now handled globally by 92.theme-lazy-sync.client.ts,
             // which uses $forceUpdate to re-render components when themes change.
             // This eliminates thousands of individual watchers and saves significant memory.
         } catch (error) {
