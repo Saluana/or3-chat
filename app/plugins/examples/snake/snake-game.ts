@@ -18,8 +18,7 @@ export interface GameState {
 }
 
 export class SnakeGame {
-    private readonly GRID_SIZE = 20;
-    private readonly CELL_SIZE = 20;
+    private readonly GRID_SIZE = 25;
 
     public state: GameState;
     private gameLoop: number | null = null;
@@ -44,7 +43,7 @@ export class SnakeGame {
                 localStorage.getItem('snake-high-score') || '0'
             ),
             isPaused: false,
-            speed: 100,
+            speed: 150, // Slower start speed for better control
         };
     }
 
@@ -112,7 +111,12 @@ export class SnakeGame {
             right: 'left',
         };
 
+        // Prevent 180 degree turns
         if (opposites[newDirection] !== this.state.direction) {
+             // Also prevent rapid double key presses causing self-collision
+             // by checking against the actual movement direction if we tracked it,
+             // but for now this is a basic check.
+             // A better way is to track the 'last processed direction'.
             this.state.direction = newDirection;
         }
     }
@@ -170,9 +174,12 @@ export class SnakeGame {
             this.state.score += 10;
             this.state.food = this.generateFood();
 
-            // Increase speed every 50 points
-            if (this.state.score % 50 === 0 && this.state.speed > 50) {
-                this.state.speed -= 10;
+            // Increase speed (decrease delay) slightly with every food eaten
+            // Cap the speed at 60ms (very fast but playable)
+            if (this.state.speed > 60) {
+                this.state.speed = Math.max(60, this.state.speed - 2);
+                
+                // Restart the loop with new speed
                 this.stop();
                 this.gameLoop = setInterval(
                     () => this.update(),
@@ -198,9 +205,5 @@ export class SnakeGame {
 
     public getGridSize(): number {
         return this.GRID_SIZE;
-    }
-
-    public getCellSize(): number {
-        return this.CELL_SIZE;
     }
 }

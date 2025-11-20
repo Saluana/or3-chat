@@ -79,10 +79,6 @@
                 <UIcon name="pixelarticons:play" />
                 Play Game
             </button>
-            <button v-if="isDev" @click="debugScores" class="btn btn-secondary">
-                <UIcon name="pixelarticons:bug" />
-                Debug Scores
-            </button>
         </div>
     </div>
 </template>
@@ -205,11 +201,6 @@ function formatTime(timestamp: number) {
     return 'Just now';
 }
 
-function debugScores() {
-    // Debug scores function placeholder
-    alert('Debug scores function called');
-}
-
 onMounted(() => {
     // Initial load is handled by usePostsList
 });
@@ -241,11 +232,24 @@ onMounted(() => {
 
 .mini-game-board {
     position: relative;
-    width: 120px;
-    height: 120px;
-    background: var(--md-surface-container);
-    border: 2px solid var(--md-outline);
-    border-radius: 8px;
+    width: 140px;
+    height: 140px;
+    background: var(--md-surface);
+    border: 2px solid var(--md-surface-container-highest);
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.mini-game-board::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: 
+        linear-gradient(var(--md-surface-container-highest) 1px, transparent 1px),
+        linear-gradient(90deg, var(--md-surface-container-highest) 1px, transparent 1px);
+    background-size: 10px 10px;
+    opacity: 0.1;
 }
 
 .mini-snake {
@@ -258,38 +262,44 @@ onMounted(() => {
 }
 
 .snake-head {
-    width: 8px;
-    height: 8px;
-    background: var(--md-primary);
-    border-radius: 2px;
+    width: 10px;
+    height: 10px;
+    background: var(--md-primary-container);
+    border-radius: 3px;
+    z-index: 2;
+    box-shadow: 0 0 5px var(--md-primary);
 }
 
 .snake-body {
-    width: 8px;
-    height: 8px;
-    background: var(--md-primary-container);
+    width: 10px;
+    height: 10px;
+    background: var(--md-primary);
     border-radius: 2px;
-    margin-left: 2px;
+    margin-left: 1px;
+    opacity: 0.8;
 }
 
 .mini-food {
     position: absolute;
     top: 30%;
     right: 25%;
-    width: 8px;
-    height: 8px;
-    background: var(--md-error);
+    width: 10px;
+    height: 10px;
+    background: var(--md-tertiary);
     border-radius: 50%;
+    box-shadow: 0 0 8px var(--md-tertiary);
     animation: pulse 1.5s infinite;
 }
 
 @keyframes pulse {
     0%,
     100% {
-        transform: scale(1);
+        transform: scale(0.8);
+        opacity: 0.8;
     }
     50% {
-        transform: scale(1.2);
+        transform: scale(1.1);
+        opacity: 1;
     }
 }
 
@@ -355,6 +365,17 @@ onMounted(() => {
 .score-item.is-high-score {
     background: var(--md-primary-container);
     border: 2px solid var(--md-primary);
+}
+
+.score-item.is-high-score .rank,
+.score-item.is-high-score .score-value,
+.score-item.is-high-score .trophy-icon {
+    color: var(--md-on-primary);
+}
+
+.score-item.is-high-score .score-meta {
+    color: var(--md-on-primary);
+    opacity: 0.8;
 }
 
 .score-rank {
