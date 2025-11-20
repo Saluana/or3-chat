@@ -50,17 +50,67 @@ export interface ResolvedOverride {
 }
 
 /**
+ * Simple LRU Cache implementation for override resolution.
+ * Limits memory usage by evicting least recently used entries.
+ * 
+ * Note: This LRU implementation treats Map insertion order as access order.
+ * When a key is accessed or set, it is deleted and re-inserted to move it to the end of the Map,
+ * representing the most recently used position. This is a non-standard LRU approach; typical LRU caches
+ * maintain a separate order-tracking structure.
+ */
+class LRUCache<K, V> {
+    private cache: Map<K, V>;
+    private readonly maxSize: number;
+
+    constructor(maxSize: number = 100) {
+        this.cache = new Map();
+        this.maxSize = maxSize;
+    }
+
+    get(key: K): V | undefined {
+        const value = this.cache.get(key);
+        if (value !== undefined) {
+            // Move to end (most recently used)
+            this.cache.delete(key);
+            this.cache.set(key, value);
+        }
+        return value;
+    }
+
+    set(key: K, value: V): void {
+        // Delete if exists to re-insert at end
+        if (this.cache.has(key)) {
+            this.cache.delete(key);
+        } else if (this.cache.size >= this.maxSize) {
+            // Evict oldest only for new keys
+            const firstKey = this.cache.keys().next().value;
+            this.cache.delete(firstKey);
+        }
+        
+        this.cache.set(key, value);
+    }
+
+    clear(): void {
+        this.cache.clear();
+    }
+
+    get size(): number {
+        return this.cache.size;
+    }
+}
+
+/**
  * Runtime resolver for theme overrides
  *
  * The resolver is initialized with a compiled theme configuration
  * and provides efficient override resolution based on component parameters.
  */
 export class RuntimeResolver {
-    private overrides: CompiledOverride[];
+    private overrides: CompiledOverride[]; // Keep reference for tests
     private overrideIndex: Map<string, CompiledOverride[]>;
     private propMaps: PropClassMaps;
     private themeName: string;
-    private cache: Map<string, ResolvedOverride>;
+    private cache: LRUCache<string, ResolvedOverride>;
     private componentsWithAttributes: Set<string>;
 
     /**
@@ -69,15 +119,16 @@ export class RuntimeResolver {
      * @param compiledTheme - Compiled theme configuration from build time
      */
     constructor(compiledTheme: CompiledTheme) {
-        // Sort overrides by specificity (highest first) for efficient resolution
+        // Build index by component type for fast lookup
+        // Overrides should already be sorted by specificity in the compiled theme
+        // but we sort here for safety and to maintain test compatibility
         this.overrides = [...compiledTheme.overrides].sort(
             (a, b) => b.specificity - a.specificity
         );
-
-        // Build index by component type for fast lookup
+        
         this.overrideIndex = new Map();
         this.componentsWithAttributes = new Set();
-
+        
         for (const override of this.overrides) {
             const key = override.component;
             if (!this.overrideIndex.has(key)) {
@@ -96,7 +147,8 @@ export class RuntimeResolver {
             ...(compiledTheme.propMaps || {}),
         };
         this.themeName = compiledTheme.name;
-        this.cache = new Map();
+        // Use LRU cache with max 100 entries to limit memory usage
+        this.cache = new LRUCache(100);
     }
 
     /**

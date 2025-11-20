@@ -375,32 +375,9 @@ export default defineNuxtPlugin((nuxtApp) => {
             // Apply to component or element (use target element)
             applyOverrides(targetEl, vnode, resolved.props, identifier);
 
-            // Watch for theme changes and re-resolve
-            if (themePlugin.activeTheme) {
-                const unwatchTheme = watch(
-                    () => themePlugin.activeTheme!.value,
-                    (newTheme) => {
-                        const newResolver = themePlugin.getResolver?.(newTheme);
-                        if (newResolver) {
-                            const newResolved = newResolver.resolve(params);
-                            applyOverrides(
-                                targetEl,
-                                vnode,
-                                newResolved.props,
-                                identifier
-                            );
-                        }
-                    }
-                );
-
-                // Clean up watcher on unmount using onScopeDispose
-                // This is safer than directly manipulating Vue internals
-                if (vnode.component) {
-                    onScopeDispose(() => {
-                        unwatchTheme();
-                    });
-                }
-            }
+            // Theme changes are now handled globally by 92.theme-lazy-sync.client.ts,
+            // which uses $forceUpdate to re-render components when themes change.
+            // This eliminates thousands of individual watchers and saves significant memory.
         } catch (error) {
             // Graceful degradation
             if (import.meta.dev) {

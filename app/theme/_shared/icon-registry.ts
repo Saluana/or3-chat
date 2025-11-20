@@ -5,7 +5,7 @@ export type IconMap = Partial<Record<IconToken, string>>;
 
 export class IconRegistry {
     private defaults: typeof DEFAULT_ICONS;
-    private themes: Record<string, IconMap> = reactive({});
+    private themes: Map<string, IconMap> = new Map();
     private activeTheme: string = 'default';
     private version = ref(0);
 
@@ -22,8 +22,21 @@ export class IconRegistry {
      * Register a theme's icon overrides
      */
     registerTheme(themeName: string, icons: IconMap) {
-        this.themes[themeName] = icons;
+        this.themes.set(themeName, icons);
         if (themeName === this.activeTheme) {
+            this.rebuildCache();
+        }
+        this.version.value++;
+    }
+
+    /**
+     * Unregister a theme's icon overrides (for cleanup)
+     */
+    unregisterTheme(themeName: string) {
+        this.themes.delete(themeName);
+        if (themeName === this.activeTheme) {
+            // Reset to default if unregistering active theme
+            this.activeTheme = 'default';
             this.rebuildCache();
         }
         this.version.value++;
@@ -43,12 +56,11 @@ export class IconRegistry {
      * Rebuild the flattened cache for the active theme
      */
     private rebuildCache() {
-        const overrides = this.themes[this.activeTheme];
+        const overrides = this.themes.get(this.activeTheme);
         // Merge defaults with overrides into a single flat object
-        // Using toRaw to avoid proxy overhead when reading from themes
         this.activeCache.value = {
             ...this.defaults,
-            ...(overrides ? toRaw(overrides) : {}),
+            ...(overrides || {}),
         };
     }
 
@@ -68,7 +80,7 @@ export class IconRegistry {
         const _ = this.version.value;
 
         // 1. Try theme override
-        const themeMap = this.themes[themeName];
+        const themeMap = this.themes.get(themeName);
         if (themeMap && themeMap[token]) {
             return themeMap[token]!;
         }
@@ -88,7 +100,7 @@ export class IconRegistry {
      * Get the raw map for a specific theme (useful for debugging)
      */
     getThemeMap(themeName: string): IconMap | undefined {
-        return this.themes[themeName];
+        return this.themes.get(themeName);
     }
 
     /**
@@ -96,7 +108,7 @@ export class IconRegistry {
      */
     get state() {
         return {
-            themes: this.themes,
+            themes: Object.fromEntries(this.themes),
             activeTheme: this.activeTheme,
         };
     }
@@ -105,7 +117,12 @@ export class IconRegistry {
      * Hydrate registry state from SSR
      */
     hydrate(state: { themes: Record<string, IconMap>; activeTheme: string }) {
-        Object.assign(this.themes, state.themes);
+        // Clear existing themes first
+        this.themes.clear();
+        // Load from hydrated state
+        for (const [themeName, iconMap] of Object.entries(state.themes)) {
+            this.themes.set(themeName, iconMap);
+        }
         this.activeTheme = state.activeTheme;
         this.rebuildCache();
         this.version.value++;
