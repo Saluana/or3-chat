@@ -3,7 +3,7 @@ import { useToast, useAppConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
 import { create, db, tx, upsert } from '~/db';
 import { createOrRefFile } from '~/db/files';
-import { serializeFileHashes } from '~/db/files-util';
+import { serializeFileHashes, MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
 import {
     parseHashes,
     mergeAssistantFileHashes,
@@ -216,6 +216,7 @@ export function useChat(
             model: DEFAULT_AI_MODEL,
             file_hashes: [],
             online: false,
+            context_hashes: [],
         }
     ) {
         if (!apiKey.value) return;
@@ -345,8 +346,14 @@ export function useChat(
             : [];
 
         streamAcc.reset();
-        let { files, model, file_hashes, extraTextParts, online } =
-            sendMessagesParams as any;
+        let {
+            files,
+            model,
+            file_hashes,
+            extraTextParts,
+            online,
+            context_hashes,
+        } = sendMessagesParams as any;
         if (
             (!files || files.length === 0) &&
             Array.isArray((sendMessagesParams as any)?.images)
@@ -361,6 +368,97 @@ export function useChat(
         if (online === true) model = model + ':online';
 
         file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
+        const normalizeFileUrl = async (f: { type: string; url: string }) => {
+            if (typeof FileReader === 'undefined') return f; // SSR safeguard
+            const mime = f.type || '';
+            // Only hydrate images; leave other files (e.g., PDFs) untouched for now.
+            if (!mime.startsWith('image/')) return f;
+            let url = f.url || '';
+            if (url.startsWith('data:image/')) return { ...f, url };
+            try {
+                // Local hash -> load from Dexie
+                if (!/^https?:|^data:|^blob:/i.test(url)) {
+                    const { getFileBlob } = await import('~/db/files');
+                    const blob = await getFileBlob(url);
+                    if (blob) {
+                        url = await new Promise<string>((resolve, reject) => {
+                            const fr = new FileReader();
+                            fr.onerror = () => reject(fr.error);
+                            fr.onload = () => resolve(fr.result as string);
+                            fr.readAsDataURL(blob);
+                        });
+                        return { ...f, url };
+                    }
+                }
+                // blob: object URL -> fetch and encode
+                if (url.startsWith('blob:')) {
+                    const resp = await fetch(url);
+                    if (resp.ok) {
+                        const blob = await resp.blob();
+                        url = await new Promise<string>((resolve, reject) => {
+                            const fr = new FileReader();
+                            fr.onerror = () => reject(fr.error);
+                            fr.onload = () => resolve(fr.result as string);
+                            fr.readAsDataURL(blob);
+                        });
+                        return { ...f, url };
+                    }
+                }
+            } catch {
+                // fall through to original url
+            }
+            return { ...f, url };
+        };
+
+        const hydratedFiles = await Promise.all(
+            Array.isArray(files) ? files.map(normalizeFileUrl) : []
+        );
+
+        const hashToContentPart = async (
+            hash: string
+        ): Promise<ContentPart | null> => {
+            try {
+                const { getFileMeta, getFileBlob } = await import('~/db/files');
+                const meta = await getFileMeta(hash).catch(() => null);
+                const blob = await getFileBlob(hash);
+                if (!blob) return null;
+                // Only include images/PDFs to avoid bloating text-only contexts
+                const mime = meta?.mime || meta?.mime_type || blob.type || '';
+                if (mime === 'application/pdf') {
+                    const dataUrl = await new Promise<string>(
+                        (resolve, reject) => {
+                            const fr = new FileReader();
+                            fr.onerror = () => reject(fr.error);
+                            fr.onload = () => resolve(fr.result as string);
+                            fr.readAsDataURL(blob);
+                        }
+                    );
+                    return {
+                        type: 'file',
+                        data: dataUrl,
+                        mediaType: mime,
+                        name: meta?.name || 'document.pdf',
+                    };
+                }
+                if (!mime.startsWith('image/')) return null;
+                const dataUrl = await new Promise<string>(
+                    (resolve, reject) => {
+                        const fr = new FileReader();
+                        fr.onerror = () => reject(fr.error);
+                        fr.onload = () => resolve(fr.result as string);
+                        fr.readAsDataURL(blob);
+                    }
+                );
+                return {
+                    type: 'image',
+                    image: dataUrl,
+                    mediaType: mime,
+                };
+            } catch {
+                return null;
+            }
+        };
+
         const userDbMsg = await tx.appendMessage({
             thread_id: threadIdRef.value!,
             role: 'user',
@@ -372,7 +470,7 @@ export function useChat(
         });
         const parts: ContentPart[] = buildParts(
             outgoing,
-            files,
+            hydratedFiles,
             extraTextParts
         );
         const rawUser: ChatMessage = {
@@ -464,6 +562,45 @@ export function useChat(
                     (m) => m.id === prevAssistant.id
                 );
                 if (target) target.file_hashes = null;
+            }
+            const contextHashesList = Array.isArray(context_hashes)
+                ? context_hashes.slice(0, MAX_MESSAGE_FILE_HASHES)
+                : [];
+            if (contextHashesList.length) {
+                const seenContext = new Set<string>(
+                    Array.isArray(file_hashes) ? file_hashes : []
+                );
+                const contextParts: ContentPart[] = [];
+                for (const h of contextHashesList) {
+                    if (!h || seenContext.has(h)) continue;
+                    if (contextParts.length >= MAX_MESSAGE_FILE_HASHES) break;
+                    const part = await hashToContentPart(h);
+                    if (part) {
+                        contextParts.push(part);
+                        seenContext.add(h);
+                    }
+                }
+                if (contextParts.length) {
+                    const lastUserIdx = [...modelInputMessages]
+                        .map((m: any, idx: number) =>
+                            m?.role === 'user' ? idx : -1
+                        )
+                        .filter((idx) => idx >= 0)
+                        .pop();
+                    if (lastUserIdx != null && lastUserIdx >= 0) {
+                        const target = modelInputMessages[lastUserIdx];
+                        if (!Array.isArray(target.content)) {
+                            if (typeof target.content === 'string') {
+                                target.content = [
+                                    { type: 'text', text: target.content },
+                                ];
+                            } else {
+                                target.content = [];
+                            }
+                        }
+                        target.content.push(...contextParts);
+                    }
+                }
             }
             let orMessages = await buildOpenRouterMessages(
                 modelInputMessages as any,
@@ -1152,6 +1289,35 @@ export function useChat(
         streamAcc.reset();
     }
 
+    // Keep in-memory history in sync when a message is edited elsewhere (e.g., inline edit UI)
+    function applyLocalEdit(id: string, text: string) {
+        let updated = false;
+        const rawIdx = rawMessages.value.findIndex((m) => m.id === id);
+        if (rawIdx !== -1) {
+            const raw = rawMessages.value[rawIdx];
+            if (Array.isArray(raw.content)) {
+                raw.content = raw.content.map((p: any) =>
+                    p?.type === 'text' ? { ...p, text } : p
+                );
+            } else {
+                raw.content = text;
+            }
+            rawMessages.value = [...rawMessages.value];
+            updated = true;
+        }
+        const uiIdx = messages.value.findIndex((m) => m.id === id);
+        if (uiIdx !== -1) {
+            messages.value[uiIdx].text = text;
+            messages.value = [...messages.value];
+            updated = true;
+        }
+        if (tailAssistant.value?.id === id) {
+            tailAssistant.value.text = text;
+            updated = true;
+        }
+        return updated;
+    }
+
     return {
         messages,
         sendMessage,
@@ -1163,6 +1329,7 @@ export function useChat(
         streamState,
         tailAssistant,
         flushTailAssistant,
+        applyLocalEdit,
         abort: () => {
             if (!loading.value || !abortController.value) return;
             aborted.value = true;

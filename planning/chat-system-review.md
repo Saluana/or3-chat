@@ -17,3 +17,11 @@ Performance / memory
 - app/core/auth/openrouter-build.ts: global dataUrlCache/__or3ImageDataUrlCache and inflight maps never evict; long sessions with many images/PDFs accumulate base64 strings indefinitely. Add an LRU/TTL or prune on thread unload.
 - app/components/chat/ChatContainer.vue + useChat.ts: send payload includes data-URL files even when file_hashes are present; openrouter-build rehydrates from hashes anyway, so we’re duplicating large base64 blobs in memory/request. Prefer sending hashes once persistence finishes and skip data URLs.
 - app/components/chat/ChatInputDropper.vue: attachment processing is sequential and always reads full files into data URLs (even PDFs up to 20MB) before hashing, which can block the UI and spike memory on multi-file drops; consider parallel hashing with object URLs for previews.
+
+Status updates (fixed)
+- Removed stray quote in ChatInputDropper modal markup.
+- Synced inline edits into useChat’s in-memory history (rawMessages/messages/tail) so retries build from edited text.
+- Block sending while attachments are still hashing and prefer hashes over data URLs when sending.
+- Cleaned up hidden file input + blob preview URLs on unmount/remove; previews now use object URLs.
+- VirtualMessageList now computes visible range from scroll position instead of always 0..N.
+- Added LRU pruning to OR image data URL cache to cap growth.

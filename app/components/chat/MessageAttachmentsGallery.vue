@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from 'vue';
+import { reactive, watch, onBeforeUnmount } from 'vue';
 import { getFileBlob, getFileMeta } from '~/db/files';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
@@ -114,9 +114,35 @@ const inflight = ((globalThis as any).__or3ThumbInflight ||= new Map<
     string,
     Promise<void>
 >());
+const thumbRefCounts = ((globalThis as any).__or3ThumbRefCounts ||= new Map<
+    string,
+    number
+>());
 const thumbs = reactive<Record<string, ThumbState>>({});
 const meta = reactive<Record<string, any>>({});
 const fileNames = reactive<Record<string, string>>({});
+
+function retainThumb(hash: string) {
+    const prev = thumbRefCounts.get(hash) || 0;
+    thumbRefCounts.set(hash, prev + 1);
+}
+function releaseThumb(hash: string) {
+    const prev = thumbRefCounts.get(hash) || 0;
+    if (prev <= 1) {
+        thumbRefCounts.delete(hash);
+        const state = cache.get(hash);
+        if (state?.url) {
+            try {
+                URL.revokeObjectURL(state.url);
+            } catch {}
+        }
+        cache.delete(hash);
+        inflight.delete(hash);
+        delete thumbs[hash];
+    } else {
+        thumbRefCounts.set(hash, prev - 1);
+    }
+}
 
 async function ensure(h: string) {
     if (thumbs[h] && thumbs[h].status === 'ready') return;
@@ -159,13 +185,36 @@ async function ensure(h: string) {
     await p;
 }
 
+// Track current hashes and manage ref counting/object URL cleanup
+const currentHashes = new Set<string>();
 watch(
     () => props.hashes,
-    (list) => {
-        list.forEach(ensure);
+    async (list) => {
+        const next = new Set(list);
+        for (const h of next) {
+            if (!currentHashes.has(h)) {
+                await ensure(h);
+                const state = cache.get(h);
+                if (state?.status === 'ready' && state.url) {
+                    retainThumb(h);
+                }
+                currentHashes.add(h);
+            }
+        }
+        for (const h of Array.from(currentHashes)) {
+            if (!next.has(h)) {
+                currentHashes.delete(h);
+                releaseThumb(h);
+            }
+        }
     },
     { immediate: true }
 );
+
+onBeforeUnmount(() => {
+    for (const h of currentHashes) releaseThumb(h);
+    currentHashes.clear();
+});
 defineExpose({ thumbs });
 </script>
 

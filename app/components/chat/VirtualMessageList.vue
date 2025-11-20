@@ -288,12 +288,6 @@ watch(
     { immediate: true }
 );
 
-function computeRange(): { start: number; end: number } {
-    const total = props.messages.length;
-    if (!root.value) return { start: 0, end: Math.max(0, total - 1) };
-    return { start: 0, end: total - 1 };
-}
-
 function onInternalUpdate() {
     const range = computeRange();
     emit('visible-range-change', range);
@@ -356,6 +350,24 @@ const effectiveItemSize = computed(() => {
         ? Math.round(averageItemSize.value)
         : props.itemSizeEstimation;
 });
+
+function computeRange(): { start: number; end: number } {
+    const total = props.messages.length;
+    const el = scrollParentRef.value || root.value;
+    if (!el || total === 0) return { start: 0, end: Math.max(0, total - 1) };
+    const itemSize =
+        effectiveItemSize.value || props.itemSizeEstimation || 1;
+    const viewport = el.clientHeight || 0;
+    const start = Math.max(
+        0,
+        Math.floor(el.scrollTop / itemSize) - 1
+    );
+    const end = Math.min(
+        total - 1,
+        Math.ceil((el.scrollTop + viewport) / itemSize) + 1
+    );
+    return { start, end };
+}
 
 watchEffect(() => {
     if (!props.isStreaming) return;

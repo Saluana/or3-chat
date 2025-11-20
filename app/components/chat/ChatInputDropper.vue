@@ -308,10 +308,14 @@
             </div>
         </div>
         <lazy-modal-model-catalog v-model:showModal="showModelCatalog" />
-        <LazyChatSystemPromptsModal hydrate-on-visible
-        v-model:showModal="showSystemPrompts" :thread-id="props.threadId" "
-        :pane-id="props.paneId" @selected="handlePromptSelected"
-        @closed="handlePromptModalClosed" />
+        <LazyChatSystemPromptsModal
+            hydrate-on-visible
+            v-model:showModal="showSystemPrompts"
+            :thread-id="props.threadId"
+            :pane-id="props.paneId"
+            @selected="handlePromptSelected"
+            @closed="handlePromptModalClosed"
+        />
     </div>
 </template>
 
@@ -480,6 +484,18 @@ onBeforeUnmount(() => {
     } catch (err) {
         // Silently handle TipTap destroy error
     }
+    // Cleanup hidden file input and any blob URLs
+    if (hiddenFileInput.value) {
+        try {
+            if (hiddenFileInputListener.value)
+                hiddenFileInput.value.removeEventListener(
+                    'change',
+                    hiddenFileInputListener.value
+                );
+            hiddenFileInput.value.remove();
+        } catch {}
+    }
+    attachments.value.forEach(releaseAttachment);
 });
 
 // When starting a brand-new chat (threadId becomes falsy), honor fixed default from settings
@@ -719,7 +735,7 @@ const attachmentRemoveBtnProps = computed(() => {
         size: 'xs' as const,
         square: true as const,
         icon: iconClose.value,
-        class: 'chat-input-attachment-remove-btn absolute top-1 right-1 h-[22px] w-[22px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 border border-black text-white bg-[var(--md-error)]/85 hover:bg-[var(--md-error)]',
+        class: 'chat-input-attachment-remove-btn flex items-center justify-center absolute top-1 right-1 h-[22px] w-[22px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white bg-[var(--md-error)]/85 hover:bg-[var(--md-error)]',
     };
     const overrideValue = (overrides.value as Record<string, any>) || {};
     const mergedClass = [fallback.class, overrideValue.class]
@@ -761,6 +777,7 @@ function makeId() {
 const isDragging = ref(false);
 const selectedModel = ref<string>('openai/gpt-oss-120b');
 const hiddenFileInput = ref<HTMLInputElement | null>(null);
+const hiddenFileInputListener = ref<((e: Event) => void) | null>(null);
 const imageSettings = ref<ImageSettings>({
     quality: 'medium',
     numResults: 2,
@@ -867,9 +884,9 @@ const triggerFileInput = () => {
         input.multiple = true;
         input.accept = 'image/*,application/pdf';
         input.style.display = 'none';
-        input.addEventListener('change', (e) => {
-            handleFileChange(e);
-        });
+        const handler = (e: Event) => handleFileChange(e);
+        input.addEventListener('change', handler);
+        hiddenFileInputListener.value = handler;
         document.body.appendChild(input);
         hiddenFileInput.value = input;
     }
@@ -877,6 +894,23 @@ const triggerFileInput = () => {
 };
 
 const MAX_IMAGES = MAX_FILES_PER_MESSAGE;
+
+function makePreviewUrl(file: File): string {
+    try {
+        return URL.createObjectURL(file);
+    } catch {
+        return '';
+    }
+}
+function releaseAttachment(attachment: UploadedImage) {
+    try {
+        if (attachment.url && attachment.url.startsWith('blob:')) {
+            URL.revokeObjectURL(attachment.url);
+        }
+    } catch {
+        /* noop */
+    }
+}
 
 async function processAttachment(file: File, name?: string) {
     const mime = file.type || '';
@@ -889,22 +923,11 @@ async function processAttachment(file: File, name?: string) {
         return;
     }
     const kind = validation.kind;
-    // Fast preview first
-    const dataUrl: string = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) =>
-            resolve(
-                typeof e.target?.result === 'string'
-                    ? (e.target?.result as string)
-                    : ''
-            );
-        reader.onerror = () => reject(new Error('read failed'));
-        reader.readAsDataURL(file);
-    });
     if (attachments.value.length >= MAX_IMAGES) return;
+    const previewUrl = makePreviewUrl(file);
     const attachment: UploadedImage = {
         file,
-        url: dataUrl,
+        url: previewUrl,
         name: name || file.name,
         status: 'pending',
         mime,
@@ -960,7 +983,8 @@ const onDragLeave = (event: DragEvent) => {
 };
 
 const removeImage = (index: number) => {
-    attachments.value.splice(index, 1);
+    const [removed] = attachments.value.splice(index, 1);
+    if (removed) releaseAttachment(removed);
     emit('image-remove', index);
 };
 
@@ -970,6 +994,20 @@ const removeTextBlock = (index: number) => {
 
 const handleSend = async () => {
     if (props.loading) return;
+    // Block send while attachments are still hashing to avoid silent loss.
+    const pendingAttachments = attachments.value.some(
+        (att) => att.status === 'pending'
+    );
+    if (pendingAttachments) {
+        useToast().add({
+            title: 'Files are still uploading',
+            description:
+                'Please wait for attachments to finish before sending.',
+            color: 'primary',
+            duration: 2600,
+        });
+        return;
+    }
     // Require OpenRouter connection (api key) before sending
     const { apiKey } = useUserApiKey();
     if (!apiKey.value) {
@@ -1038,6 +1076,8 @@ const handleSend = async () => {
         } catch (e) {
             // noop
         }
+        // Release any blob URLs to avoid leaking when clearing attachments
+        attachments.value.forEach(releaseAttachment);
         attachments.value = [];
         largeTextBlocks.value = [];
         autoResize();

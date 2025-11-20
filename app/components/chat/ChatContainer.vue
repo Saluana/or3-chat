@@ -124,6 +124,7 @@ import {
     ref,
     type Ref,
     type CSSProperties,
+    onBeforeUnmount,
 } from 'vue';
 
 import {
@@ -137,6 +138,8 @@ import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useToast } from '#imports';
+import { MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
 // Removed onMounted/watchEffect (unused)
 
 // Debug utilities removed per request.
@@ -368,6 +371,24 @@ function onScrollState(s: { atBottom: boolean; stick: boolean }) {
 
 // (8.4) Auto-scroll already consolidated; tail growth handled via version watcher
 // Chat send abstraction (Req 3.5)
+const toast = useToast();
+
+function collectRecentHashes(limit = MAX_MESSAGE_FILE_HASHES): string[] {
+    const msgs = chat.value?.messages?.value || [];
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (let i = msgs.length - 1; i >= 0 && out.length < limit; i--) {
+        const m: any = msgs[i];
+        if (!m || !Array.isArray(m.file_hashes)) continue;
+        for (const h of m.file_hashes) {
+            if (!h || seen.has(h)) continue;
+            seen.add(h);
+            out.push(h);
+            if (out.length >= limit) break;
+        }
+    }
+    return out;
+}
 
 function onSend(payload: any) {
     if (loading.value) return;
@@ -378,20 +399,28 @@ function onSend(payload: any) {
         ? payload.images.filter((img: any) => img && img.status === 'pending')
               .length
         : 0;
-    if (pendingCount > 0 && readyImages.length === 0) {
-        // Defer sending until at least one image hashed (user can click again shortly)
-        console.warn(
-            '[ChatContainer.onSend] images still hashing; delaying send'
-        );
+    if (pendingCount > 0) {
+        // Defer sending until attachments finish hashing to avoid losing them
+        toast?.add?.({
+            title: 'Files are still uploading',
+            description: 'Please wait for attachments to finish.',
+            color: 'primary',
+            duration: 2400,
+        });
         return;
     }
+    const carryHashes =
+        readyImages.length === 0 ? collectRecentHashes() : [];
     const files = readyImages.map((img: any) => ({
         type: img.file?.type || img.mime || 'image/png',
-        url: img.url,
+        url: img.hash || img.url,
     }));
     const file_hashes = readyImages
         .map((img: any) => img.hash)
         .filter((h: any) => typeof h === 'string');
+    const context_hashes = carryHashes.filter(
+        (h) => typeof h === 'string'
+    ) as string[];
     const extraTextParts = Array.isArray(payload.largeTexts)
         ? payload.largeTexts.map((t: any) => t.text).filter(Boolean)
         : [];
@@ -404,6 +433,7 @@ function onSend(payload: any) {
             file_hashes,
             extraTextParts,
             online: !!payload.webSearchEnabled,
+            context_hashes,
         })
         ?.catch(() => {});
 }
@@ -420,21 +450,11 @@ function onBranch(newThreadId: string) {
 
 function onEdited(payload: { id: string; content: string }) {
     if (!chat.value) return;
-    const arr = chat.value?.messages?.value;
-    if (arr) {
-        const idx = arr.findIndex((m: any) => m.id === payload.id);
-        if (idx !== -1) {
-            const msg = arr[idx];
-            if (msg) msg.text = payload.content;
-            chat.value.messages.value = [...arr];
-            return;
-        }
-    }
-    // Tail assistant edit (not yet flushed)
-    const ta = (chat.value as any).tailAssistant?.value;
-    if (ta && ta.id === payload.id) {
-        ta.text = payload.content;
-    }
+    const applied =
+        typeof (chat.value as any).applyLocalEdit === 'function'
+            ? (chat.value as any).applyLocalEdit(payload.id, payload.content)
+            : false;
+    if (applied) return;
 }
 
 function onPendingPromptSelected(promptId: string | null) {
@@ -495,6 +515,12 @@ const innerInputContainerProps = useThemeOverrides({
     context: 'chat',
     identifier: 'chat.inner-input-container',
     isNuxtUI: false,
+});
+
+onBeforeUnmount(() => {
+    try {
+        chat.value?.clear?.();
+    } catch {}
 });
 </script>
 

@@ -39,6 +39,15 @@ const dataUrlCache: Map<string, string> = ((
 const inflight: Map<string, Promise<string | null>> = ((
     globalThis as any
 ).__or3ImageHydrateInflight ||= new Map());
+// Simple LRU pruning to prevent unbounded growth
+const MAX_DATA_URL_CACHE = 64;
+function pruneCache(map: Map<string, string>, limit = MAX_DATA_URL_CACHE) {
+    while (map.size > limit) {
+        const oldestKey = map.keys().next().value;
+        if (oldestKey === undefined) break;
+        map.delete(oldestKey);
+    }
+}
 
 // Remote / blob URL hydration cache shares same map (keyed by original ref string)
 // We intentionally do not distinguish hash vs URL; collisions are unlikely and harmless
@@ -60,6 +69,7 @@ async function remoteRefToDataUrl(ref: string): Promise<string | null> {
             if (blob.size > 5 * 1024 * 1024) return null;
             const dataUrl = await blobToDataUrl(blob);
             dataUrlCache.set(ref, dataUrl);
+            pruneCache(dataUrlCache);
             return dataUrl;
         } catch {
             return null;
@@ -90,6 +100,7 @@ async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
             if (!blob) throw new Error('blob-missing');
             const dataUrl = await blobToDataUrl(blob);
             dataUrlCache.set(hash, dataUrl);
+            pruneCache(dataUrlCache);
             return dataUrl;
         } catch {
             return null;
