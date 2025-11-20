@@ -41,11 +41,7 @@
                     ? 'md:transition-[width] md:duration-200 md:ease-out'
                     : '',
             ]"
-            :style="{
-                width: computedWidth + 'px',
-                '--sidebar-rep-size': props.sidebarPatternSize + 'px',
-                '--sidebar-rep-opacity': String(props.sidebarPatternOpacity),
-            }"
+            :style="sidebarStyle"
             @keydown.esc.stop.prevent="close()"
         >
             <div
@@ -68,7 +64,12 @@
 
                 <div
                     id="sidebar-container-expanded"
-                    class="flex-1 overflow-auto overscroll-contain min-w-fit"
+                    :class="[
+                        'flex-1 min-w-0',
+                        collapsed
+                            ? 'overflow-hidden'
+                            : 'overflow-auto overscroll-contain',
+                    ]"
                 >
                     <div v-show="!collapsed" class="flex-1 h-full">
                         <slot name="sidebar-expanded">
@@ -218,6 +219,13 @@ const width = ref<number>(
 const computedWidth = computed(() =>
     collapsed.value ? props.collapsedWidth : width.value
 );
+
+const sidebarStyle = computed(() => ({
+    width: isDesktop.value ? `${computedWidth.value}px` : '100%',
+    maxWidth: isDesktop.value ? 'none' : '100dvw',
+    '--sidebar-rep-size': `${props.sidebarPatternSize}px`,
+    '--sidebar-rep-opacity': String(props.sidebarPatternOpacity),
+}));
 
 // Do NOT restore from localStorage before hydration to keep SSR/client markup identical
 

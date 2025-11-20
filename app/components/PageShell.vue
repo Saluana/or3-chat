@@ -46,7 +46,6 @@
                     <UTooltip :delay-duration="0" text="Open sidebar">
                         <UButton
                             v-bind="sidebarToggleButtonProps"
-                            label="Open"
                             :square="true"
                             aria-label="Open sidebar"
                             title="Open sidebar"

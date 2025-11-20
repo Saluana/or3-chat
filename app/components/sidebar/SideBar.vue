@@ -13,7 +13,7 @@
         <SidebarSideNavContent
             ref="sideNavContentRef"
             id="sidebar-content-expanded"
-            class="w-full"
+            class="flex-1 min-w-0"
             :active-thread="props.activeThread"
             :items="items"
             :projects="projects"
