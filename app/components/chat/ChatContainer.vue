@@ -15,7 +15,7 @@
             <Or3Scroll
                 ref="scroller"
                 :items="allMessages"
-                :item-key="(m: any) => m.id || m.stream_id || ''"
+                :item-key="(m) => m.id || m.stream_id || ''"
                 :estimate-height="80"
                 :overscan="6500"
                 :maintain-bottom="!anyEditing"
@@ -127,6 +127,7 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useToast } from '#imports';
 import { MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
+import type { ChatInstance, SendPayload, ImageAttachment, LargeTextAttachment } from '~/types/chat-internal';
 // Removed onMounted/watchEffect (unused)
 
 // Debug utilities removed per request.
@@ -206,7 +207,7 @@ if (props.paneId) {
     const pre = getPanePendingPrompt(props.paneId);
     if (pre) pendingPromptId.value = pre;
 }
-const chat = shallowRef<any>(
+const chat = shallowRef<ChatInstance>(
     useChat(
         props.messageHistory,
         props.threadId,
@@ -224,7 +225,7 @@ watch(
         }
         // Free previous thread messages & abort any active stream before switching
         try {
-            (chat.value as any)?.clear?.();
+            chat.value?.clear?.();
         } catch (e) {
             if (import.meta.dev) {
                 console.warn(
@@ -253,8 +254,8 @@ watch(
         // Prefer to update the internal messages array directly to avoid remount flicker
         // Filter out tool messages before updating
         chat.value!.messages.value = (mh || [])
-            .filter((m: any) => m.role !== 'tool')
-            .map((m: any) => ensureUiMessage(m));
+            .filter((m) => m.role !== 'tool')
+            .map((m) => ensureUiMessage(m));
     }
 );
 
@@ -275,27 +276,24 @@ watch(
 // messages already normalized to UiChatMessage with .text in useChat composable
 // Filter out tool messages (internal implementation details shown inline in assistant messages)
 const messages = computed(() =>
-    (chat.value?.messages?.value || []).filter((m: any) => m.role !== 'tool')
+    (chat.value?.messages?.value || []).filter((m) => m.role !== 'tool')
 );
 
 const loading = computed(() => chat.value?.loading?.value || false);
 
 // Tail streaming now provided directly by useChat composable
 // `useChat` returns many refs; unwrap common ones so computed values expose plain objects/primitives
-const streamId = computed(() => {
-    const s = chat.value?.streamId;
-    return s && 'value' in s ? (s as any).value : s;
-});
-const streamState: any = computed(() => {
-    const s = chat.value?.streamState;
-    return s && 'value' in s ? (s as any).value : s;
-});
+function unwrapRef<T>(refOrValue: T | Ref<T>): T {
+    return refOrValue && typeof refOrValue === 'object' && 'value' in refOrValue
+        ? (refOrValue as Ref<T>).value
+        : (refOrValue as T);
+}
+
+const streamId = computed(() => unwrapRef(chat.value?.streamId));
+const streamState = computed(() => unwrapRef(chat.value?.streamState ?? {}));
 // Stream text + reasoning (from unified stream accumulator)
 // Tail assistant from composable (kept out of history until next user send)
-const tailAssistant = computed<any | null>(() => {
-    const t = chat.value?.tailAssistant;
-    return t && 'value' in t ? (t as any).value : t;
-});
+const tailAssistant = computed(() => unwrapRef(chat.value?.tailAssistant ?? null));
 // Live streaming deltas (while active) to overlay into tailAssistant
 const streamReasoning = computed(
     () => streamState?.value?.reasoningText || streamState?.reasoningText || ''
@@ -385,7 +383,7 @@ const scrollToBottomButtonProps = computed(() => {
         variant: 'solid' as const,
         ui: { rounded: 'rounded-full' },
         class: 'shadow-lg',
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -434,7 +432,7 @@ function collectRecentHashes(limit = MAX_MESSAGE_FILE_HASHES): string[] {
     const out: string[] = [];
     const seen = new Set<string>();
     for (let i = msgs.length - 1; i >= 0 && out.length < limit; i--) {
-        const m: any = msgs[i];
+        const m = msgs[i];
         if (!m || !Array.isArray(m.file_hashes)) continue;
         for (const h of m.file_hashes) {
             if (!h || seen.has(h)) continue;
@@ -446,15 +444,11 @@ function collectRecentHashes(limit = MAX_MESSAGE_FILE_HASHES): string[] {
     return out;
 }
 
-function onSend(payload: any) {
+function onSend(payload: SendPayload) {
     if (loading.value) return;
-    const readyImages = Array.isArray(payload.images)
-        ? payload.images.filter((img: any) => img && img.status === 'ready')
-        : [];
-    const pendingCount = Array.isArray(payload.images)
-        ? payload.images.filter((img: any) => img && img.status === 'pending')
-              .length
-        : 0;
+    const readyImages = payload.images?.filter((img) => img && img.status === 'ready') ?? [];
+    const pendingCount = payload.images?.filter((img) => img && img.status === 'pending').length ?? 0;
+    
     if (pendingCount > 0) {
         // Defer sending until attachments finish hashing to avoid losing them
         toast?.add?.({
@@ -466,23 +460,22 @@ function onSend(payload: any) {
         return;
     }
     const carryHashes = readyImages.length === 0 ? collectRecentHashes() : [];
-    const files = readyImages.map((img: any) => ({
+    const files = readyImages.map((img) => ({
         type: img.file?.type || img.mime || 'image/png',
         url: img.hash || img.url,
     }));
     const file_hashes = readyImages
-        .map((img: any) => img.hash)
-        .filter((h: any) => typeof h === 'string');
+        .map((img) => img.hash)
+        .filter((h): h is string => typeof h === 'string');
     const context_hashes = carryHashes.filter(
-        (h) => typeof h === 'string'
-    ) as string[];
-    const extraTextParts = Array.isArray(payload.largeTexts)
-        ? payload.largeTexts.map((t: any) => t.text).filter(Boolean)
-        : [];
+        (h): h is string => typeof h === 'string'
+    );
+    const extraTextParts = payload.largeTexts?.map((t) => t.text).filter(Boolean) ?? [];
 
     // Send message via useChat composable
     chat.value
-        ?.sendMessage(payload.text, {
+        ?.send({
+            content: payload.content,
             model: model.value,
             files,
             file_hashes,
@@ -500,7 +493,7 @@ function onSend(payload: any) {
 function onRetry(messageId: string) {
     if (!chat.value || chat.value?.loading?.value) return;
     // Provide current model so retry uses same selection
-    (chat.value as any).retryMessage(messageId, model.value);
+    chat.value.retryMessage(messageId, model.value);
     // Retry changes message state, force measure
     nextTick(() => scroller.value?.refreshMeasurements());
 }
@@ -512,8 +505,8 @@ function onBranch(newThreadId: string) {
 function onEdited(payload: { id: string; content: string }) {
     if (!chat.value) return;
     const applied =
-        typeof (chat.value as any).applyLocalEdit === 'function'
-            ? (chat.value as any).applyLocalEdit(payload.id, payload.content)
+        typeof chat.value.applyLocalEdit === 'function'
+            ? chat.value.applyLocalEdit(payload.id, payload.content)
             : false;
     if (applied) {
         // Content changed size, force measure
@@ -538,7 +531,7 @@ function onPendingPromptSelected(promptId: string | null) {
 
 function onStopStream() {
     try {
-        (chat.value as any)?.abort?.();
+        chat.value?.abort?.();
     } catch (e) {
         if (import.meta.dev) {
             console.warn('[ChatContainer] abort failed', e);

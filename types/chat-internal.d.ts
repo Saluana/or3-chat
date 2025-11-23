@@ -108,6 +108,8 @@ export interface ImageAttachment {
     hash: string;
     url?: string;
     status: 'ready' | 'pending' | 'error';
+    file?: { type?: string };
+    mime?: string;
 }
 
 export interface LargeTextAttachment {
@@ -119,6 +121,7 @@ export interface SendPayload {
     content: string;
     images?: ImageAttachment[];
     largeTexts?: LargeTextAttachment[];
+    webSearchEnabled?: boolean;
 }
 
 /**
