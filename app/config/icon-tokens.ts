@@ -21,6 +21,7 @@ export const DEFAULT_ICONS = {
     'chat.model.settings': 'pixelarticons:sliders',
     'chat.model.catalog': 'pixelarticons:android',
     'chat.system_prompt': 'pixelarticons:script-text',
+    'chat.scrollToBottom': 'pixelarticons:arrow-bar-down',
 
     // Chat Messages
     'chat.message.copy': 'pixelarticons:copy',

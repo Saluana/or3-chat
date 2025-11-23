@@ -10,6 +10,10 @@ export const chatOverrides = {
     'button#shell.pane-close': {
         class: 'backdrop-blur! flex items-center justify-center',
     },
+    'button#chat.scroll-to-bottom': {
+        class: 'text-xs bg-primary/20 text-[var(--md-on-surface)] backdrop-blur-xl hover:bg-primary/30 active:bg-primary/40 shadow rounded-full border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] p-2 flex items-center justify-center',
+        label: 'Scroll to bottom',
+    },
     // All ChatMessage action buttons (copy/retry/branch/edit/etc.)
     'button.message': {
         class: 'flex items-center justify-center bg-info text-[var(--md-on-info)] hover:bg-[var(--md-info-hover)] active:bg-[var(--md-info)]/80',

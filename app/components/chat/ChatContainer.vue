@@ -66,8 +66,20 @@
                     'chat-inner-input-container',
                     innerInputContainerClass,
                     innerInputContainerProps?.class ?? '',
+                    'relative',
                 ]"
             >
+                <div
+                    class="absolute bottom-full left-0 right-0 mb-2 flex justify-center pointer-events-none transition-opacity duration-200"
+                    :style="{ opacity: scrollToBottomOpacity }"
+                    v-show="distanceFromBottom > 1"
+                >
+                    <UButton
+                        v-bind="scrollToBottomButtonProps"
+                        @click="scrollToBottom"
+                        class="pointer-events-auto"
+                    />
+                </div>
                 <lazy-chat-input-dropper
                     :loading="loading"
                     :streaming="loading"
@@ -112,6 +124,7 @@ import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 import { useToast } from '#imports';
 import { MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
 // Removed onMounted/watchEffect (unused)
@@ -353,6 +366,37 @@ function onEndEdit(id: string) {
 // Scroll state from VirtualMessageList (Task 5.1.2)
 const atBottom = ref(true);
 const stick = ref(true);
+const distanceFromBottom = ref(0);
+const iconScrollToBottom = useIcon('chat.scrollToBottom');
+
+const scrollToBottomButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.scroll-to-bottom',
+        isNuxtUI: true,
+    });
+
+    return {
+        icon: iconScrollToBottom.value || 'heroicons:arrow-down-20-solid',
+        size: 'sm' as const,
+        color: 'primary' as const,
+        variant: 'solid' as const,
+        ui: { rounded: 'rounded-full' },
+        class: 'shadow-lg',
+        ...(overrides.value as any),
+    };
+});
+
+const scrollToBottomOpacity = computed(() => {
+    // Transition into view as we scroll up
+    return Math.min(1, distanceFromBottom.value / 150);
+});
+
+function scrollToBottom() {
+    scroller.value?.scrollToBottom();
+}
+
 function onScrollState(s: { atBottom: boolean; stick: boolean }) {
     atBottom.value = s.atBottom;
     stick.value = s.stick;
@@ -365,6 +409,8 @@ function onScroll(payload: {
     isAtBottom: boolean;
 }) {
     atBottom.value = payload.isAtBottom;
+    distanceFromBottom.value =
+        payload.scrollHeight - payload.scrollTop - payload.clientHeight;
 
     // Simple stick logic: if we are at bottom, we stick. If user scrolls up, we unstick.
     if (payload.isAtBottom) {
