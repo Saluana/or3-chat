@@ -95,7 +95,12 @@
         >
             <!-- Retro loader extracted to component -->
             <LoadingGenerating
-                v-if="props.message.role === 'assistant' && props.message.pending && !hasContent && !props.message.reasoning_text"
+                v-if="
+                    props.message.role === 'assistant' &&
+                    props.message.pending &&
+                    !hasContent &&
+                    !props.message.reasoning_text
+                "
                 class="loading-generating animate-in"
             />
             <div
@@ -475,7 +480,9 @@ const innerClass = computed(() => ({
 const hasContent = computed(() => (props.message.text || '').trim().length > 0);
 
 // Extract hash list (serialized JSON string or array already?)
-const hashList = computed<string[]>(() => parseHashes(props.message.file_hashes));
+const hashList = computed<string[]>(() =>
+    parseHashes(props.message.file_hashes)
+);
 
 // Unified markdown already provided via UiChatMessage.text -> transform file-hash placeholders to inert spans
 const assistantMarkdown = computed(() =>
@@ -504,7 +511,9 @@ const themePlugin = computed<ThemePlugin>(() => nuxtApp.$theme);
 const currentShikiTheme = computed(() => {
     const themeObj = themePlugin.value;
     const themeName = themeObj.current?.value ?? themeObj.get();
-    return String(themeName).startsWith('dark') ? 'github-dark' : 'github-light';
+    return String(themeName).startsWith('dark')
+        ? 'github-dark'
+        : 'github-light';
 });
 // Debug watchers removed (can reintroduce with import.meta.dev guards if needed)
 // Patch ensureThumb with logs if not already
@@ -621,33 +630,12 @@ const pdfDisplayName = computed(() => {
     const tail = Math.floor(keep / 2);
     return base.slice(0, head) + '…' + base.slice(base.length - tail) + ext;
 });
-interface ThumbCacheGlobals {
-    __or3ThumbCache?: Map<string, ThumbState>;
-    __or3ThumbInflight?: Map<string, Promise<void>>;
-    __or3ThumbRefCounts?: Map<string, number>;
-    __or3ThumbCleanupTimers?: Map<
-        string,
-        ReturnType<typeof setTimeout>
-    >;
-}
-const thumbGlobals = globalThis as ThumbCacheGlobals;
-const thumbCache =
-    thumbGlobals.__or3ThumbCache ??
-    (thumbGlobals.__or3ThumbCache = new Map<string, ThumbState>());
-const thumbLoadPromises =
-    thumbGlobals.__or3ThumbInflight ??
-    (thumbGlobals.__or3ThumbInflight = new Map<string, Promise<void>>());
-// Reference counts per file hash so we can safely revoke object URLs when unused.
-const thumbRefCounts =
-    thumbGlobals.__or3ThumbRefCounts ??
-    (thumbGlobals.__or3ThumbRefCounts = new Map<string, number>());
-// Delayed cleanup map to prevent thrashing during rapid scroll
-const thumbCleanupTimers =
-    thumbGlobals.__or3ThumbCleanupTimers ??
-    (thumbGlobals.__or3ThumbCleanupTimers = new Map<
-        string,
-        ReturnType<typeof setTimeout>
-    >());
+
+// Module-level caches for thumbnails
+const thumbCache = new Map<string, ThumbState>();
+const thumbLoadPromises = new Map<string, Promise<void>>();
+const thumbRefCounts = new Map<string, number>();
+const thumbCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function retainThumb(hash: string) {
     // Cancel any pending cleanup for this hash
@@ -937,7 +925,7 @@ import { forkThread } from '~/db/branching';
 // Branch popover state
 const branchMode = ref<'reference' | 'copy'>('copy');
 
-    const branchTitle = ref('');
+const branchTitle = ref('');
 const branching = ref(false);
 
 async function onBranch() {

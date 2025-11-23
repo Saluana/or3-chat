@@ -1,5 +1,5 @@
 import { ref, isRef, type Ref } from 'vue';
-import { upsert } from '~/db';
+import { upsert, db } from '~/db';
 import { nowSec } from '~/db/util';
 import type { Message } from '~/db/schema';
 
@@ -56,9 +56,7 @@ export function useMessageEditing(message: EditableMessageSource) {
         }
         try {
             saving.value = true;
-            const existing: Message | undefined = await (
-                await import('~/db/client')
-            ).db.messages.get(id);
+            const existing: Message | undefined = await db.messages.get(id);
             if (!existing) throw new Error('Message not found');
             const existingData =
                 existing.data && typeof existing.data === 'object'

@@ -8,8 +8,6 @@ export function getGlobalMultiPaneApi(): UseMultiPaneApi | undefined {
     return (globalThis as GlobalMultiPane).__or3MultiPaneApi;
 }
 
-export function setGlobalMultiPaneApi(
-    api: UseMultiPaneApi | undefined
-): void {
+export function setGlobalMultiPaneApi(api: UseMultiPaneApi | undefined): void {
     (globalThis as GlobalMultiPane).__or3MultiPaneApi = api;
 }

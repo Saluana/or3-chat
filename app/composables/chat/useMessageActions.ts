@@ -24,11 +24,8 @@ interface MessageActionsRegistryGlobal {
     __or3MessageActionsRegistry?: Map<string, ChatMessageAction>;
 }
 
-// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
-const registryHost = globalThis as MessageActionsRegistryGlobal;
-const registry: Map<string, ChatMessageAction> =
-    registryHost.__or3MessageActionsRegistry ||
-    (registryHost.__or3MessageActionsRegistry = new Map());
+// Module-level singleton registry (survives HMR within the same module instance)
+const registry = new Map<string, ChatMessageAction>();
 
 // Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
 const reactiveList = reactive<{ items: ChatMessageAction[] }>({ items: [] });

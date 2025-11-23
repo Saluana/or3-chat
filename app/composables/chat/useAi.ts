@@ -634,8 +634,8 @@ export function useChat(
                         content: m.content,
                         id: m.id,
                         file_hashes: m.file_hashes,
-                        name: (m as any).name,
-                        tool_call_id: (m as any).tool_call_id,
+                        name: m.name,
+                        tool_call_id: m.tool_call_id,
                     })
                 );
             if (assistantHashes.length && prevAssistant?.id) {
