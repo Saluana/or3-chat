@@ -423,7 +423,7 @@ export function useChat(
                 const blob = await getFileBlob(hash);
                 if (!blob) return null;
                 // Only include images/PDFs to avoid bloating text-only contexts
-                const mime = meta?.mime || meta?.mime_type || blob.type || '';
+                const mime = meta?.mime_type || blob.type || '';
                 if (mime === 'application/pdf') {
                     const dataUrl = await new Promise<string>(
                         (resolve, reject) => {
@@ -441,14 +441,12 @@ export function useChat(
                     };
                 }
                 if (!mime.startsWith('image/')) return null;
-                const dataUrl = await new Promise<string>(
-                    (resolve, reject) => {
-                        const fr = new FileReader();
-                        fr.onerror = () => reject(fr.error);
-                        fr.onload = () => resolve(fr.result as string);
-                        fr.readAsDataURL(blob);
-                    }
-                );
+                const dataUrl = await new Promise<string>((resolve, reject) => {
+                    const fr = new FileReader();
+                    fr.onerror = () => reject(fr.error);
+                    fr.onload = () => resolve(fr.result as string);
+                    fr.readAsDataURL(blob);
+                });
                 return {
                     type: 'image',
                     image: dataUrl,
@@ -820,7 +818,9 @@ export function useChat(
                         // Batch writes: persist every 500ms OR every 50 chunks (whichever comes first)
                         // to reduce DB pressure while maintaining progress safety
                         const now = Date.now();
-                        const shouldPersist = now - lastPersistAt >= WRITE_INTERVAL_MS || chunkIndex % 50 === 0;
+                        const shouldPersist =
+                            now - lastPersistAt >= WRITE_INTERVAL_MS ||
+                            chunkIndex % 50 === 0;
                         if (shouldPersist) {
                             await persistAssistant({
                                 content: current.text,
@@ -1033,7 +1033,10 @@ export function useChat(
                         if (idx >= 0) rawMessages.value.splice(idx, 1);
                     } catch (e) {
                         if (import.meta.dev) {
-                            console.warn('[useChat] failed to delete empty assistant', e);
+                            console.warn(
+                                '[useChat] failed to delete empty assistant',
+                                e
+                            );
                         }
                     }
                 }
@@ -1277,13 +1280,16 @@ export function useChat(
                 abortController.value.abort();
             } catch (e) {
                 if (import.meta.dev) {
-                    console.warn('[useChat] abort controller cleanup failed', e);
+                    console.warn(
+                        '[useChat] abort controller cleanup failed',
+                        e
+                    );
                 }
             }
             streamAcc.finalize({ aborted: true });
             abortController.value = null;
         }
-        
+
         rawMessages.value = [];
         messages.value = [];
         streamAcc.reset();
@@ -1295,21 +1301,26 @@ export function useChat(
         const rawIdx = rawMessages.value.findIndex((m) => m.id === id);
         if (rawIdx !== -1) {
             const raw = rawMessages.value[rawIdx];
-            if (Array.isArray(raw.content)) {
-                raw.content = raw.content.map((p: any) =>
-                    p?.type === 'text' ? { ...p, text } : p
-                );
-            } else {
-                raw.content = text;
+            if (raw) {
+                if (Array.isArray(raw.content)) {
+                    raw.content = raw.content.map((p: any) =>
+                        p?.type === 'text' ? { ...p, text } : p
+                    );
+                } else {
+                    raw.content = text;
+                }
+                rawMessages.value = [...rawMessages.value];
+                updated = true;
             }
-            rawMessages.value = [...rawMessages.value];
-            updated = true;
         }
         const uiIdx = messages.value.findIndex((m) => m.id === id);
         if (uiIdx !== -1) {
-            messages.value[uiIdx].text = text;
-            messages.value = [...messages.value];
-            updated = true;
+            const uiMsg = messages.value[uiIdx];
+            if (uiMsg) {
+                uiMsg.text = text;
+                messages.value = [...messages.value];
+                updated = true;
+            }
         }
         if (tailAssistant.value?.id === id) {
             tailAssistant.value.text = text;
