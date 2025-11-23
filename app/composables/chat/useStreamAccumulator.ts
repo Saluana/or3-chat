@@ -36,18 +36,21 @@ function nowTs() {
         return Date.now();
     }
 }
+interface GlobalWithAnimationFrame {
+    requestAnimationFrame?: (cb: FrameRequestCallback) => number;
+    cancelAnimationFrame?: (id: number) => void;
+}
+
 function getRAF(): (cb: FrameRequestCallback) => number {
-    const raf = (globalThis as any).requestAnimationFrame as
-        | undefined
-        | ((cb: FrameRequestCallback) => number);
+    const g = globalThis as GlobalWithAnimationFrame;
+    const raf = g.requestAnimationFrame;
     if (typeof raf === 'function') return raf;
     return (cb: FrameRequestCallback) =>
-        setTimeout(() => cb(nowTs()), 0) as any;
+        setTimeout(() => cb(nowTs()), 0) as unknown as number;
 }
 function getCAF(): (id: number) => void {
-    const caf = (globalThis as any).cancelAnimationFrame as
-        | undefined
-        | ((id: number) => void);
+    const g = globalThis as GlobalWithAnimationFrame;
+    const caf = g.cancelAnimationFrame;
     if (typeof caf === 'function') return caf;
     return (id: number) => clearTimeout(id);
 }
@@ -106,7 +109,8 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
     function schedule() {
         if (frame != null || microtaskToken != null || _finalized) return;
         // Prefer real rAF if available; otherwise, queue a microtask (cancelable via token)
-        if (typeof (globalThis as any).requestAnimationFrame === 'function') {
+        const g = globalThis as GlobalWithAnimationFrame;
+        if (typeof g.requestAnimationFrame === 'function') {
             const raf = getRAF();
             frame = raf(flush);
             return;

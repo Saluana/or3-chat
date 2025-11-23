@@ -60,9 +60,19 @@ export function hasPane(paneId: string) {
     return !!find(paneId);
 }
 
+interface ChatInputBridgeDebug {
+    registry: typeof registry;
+    programmaticSend: typeof programmaticSend;
+    hasPane: typeof hasPane;
+}
+
+interface GlobalWithChatInputBridge {
+    __or3ChatInputBridge?: ChatInputBridgeDebug;
+}
+
 // Expose globally (optional) for debugging / external inspection
 if (import.meta.dev) {
-    (globalThis as any).__or3ChatInputBridge = {
+    (globalThis as GlobalWithChatInputBridge).__or3ChatInputBridge = {
         registry,
         programmaticSend,
         hasPane,

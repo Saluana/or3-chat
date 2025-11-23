@@ -51,7 +51,7 @@ export function useModelStore() {
     ): Promise<OpenRouterModel[] | null> {
         if (!canUseDexie()) return null;
         try {
-            const rec: any = await kv.get(MODELS_CACHE_KEY);
+            const rec = await kv.get(MODELS_CACHE_KEY);
             if (!rec) return null;
             // rec.updated_at is seconds in Kv schema; convert to ms
             const updatedAtMs = rec.updated_at
@@ -185,7 +185,7 @@ export function useModelStore() {
                 const MAX_STALE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
                 if (canUseDexie()) {
                     try {
-                        const rec: any = await kv.get(MODELS_CACHE_KEY);
+                        const rec = await kv.get(MODELS_CACHE_KEY);
                         const raw = rec?.value;
                         const updatedAtMs = rec?.updated_at ? rec.updated_at * 1000 : 0;
                         const staleness = Date.now() - updatedAtMs;
@@ -266,7 +266,7 @@ export function useModelStore() {
 
     async function getFavoriteModels() {
         try {
-            const record: any = await kv.get('favorite_models');
+            const record = await kv.get('favorite_models');
             const raw = record?.value;
             if (raw && typeof raw === 'string') {
                 const parsed = JSON.parse(raw);

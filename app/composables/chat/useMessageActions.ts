@@ -1,4 +1,19 @@
 import { computed, reactive } from 'vue';
+import type { GlobalSingletonStorage } from './types';
+
+/**
+ * Message context for action handlers
+ */
+export interface MessageActionContext {
+    message: {
+        id?: string;
+        role: 'user' | 'assistant' | 'system';
+        text?: string;
+        content?: string;
+        [key: string]: unknown;
+    };
+    threadId?: string;
+}
 
 /** Definition for an extendable chat message action button. */
 export interface ChatMessageAction {
@@ -13,14 +28,18 @@ export interface ChatMessageAction {
     /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
     order?: number;
     /** Handler invoked on click. */
-    handler: (ctx: { message: any; threadId?: string }) => void | Promise<void>;
+    handler: (ctx: MessageActionContext) => void | Promise<void>;
+}
+
+interface GlobalWithRegistry extends GlobalSingletonStorage {
+    __or3MessageActionsRegistry?: Map<string, ChatMessageAction>;
 }
 
 // Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
-const g: any = globalThis as any;
+const g = globalThis as GlobalWithRegistry;
 const registry: Map<string, ChatMessageAction> =
     g.__or3MessageActionsRegistry ||
-    (g.__or3MessageActionsRegistry = new Map());
+    (g.__or3MessageActionsRegistry = new Map<string, ChatMessageAction>());
 
 // Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
 const reactiveList = reactive<{ items: ChatMessageAction[] }>({ items: [] });
