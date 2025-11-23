@@ -1,17 +1,13 @@
 import { computed, reactive } from 'vue';
 import type { GlobalSingletonStorage } from './types';
 
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
+
 /**
  * Message context for action handlers
  */
 export interface MessageActionContext {
-    message: {
-        id?: string;
-        role: 'user' | 'assistant' | 'system';
-        text?: string;
-        content?: string;
-        [key: string]: unknown;
-    };
+    message: UiChatMessage;
     threadId?: string;
 }
 

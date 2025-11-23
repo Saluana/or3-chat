@@ -15,10 +15,10 @@ export default defineNuxtPlugin(() => {
                         console.debug('message id:', message?.id);
                         console.debug('message role:', message?.role);
                         console.debug(
-                            'message content (preview):',
-                            typeof message?.content === 'string'
-                                ? message.content.slice(0, 300)
-                                : message?.content
+                            'message text (preview):',
+                            typeof message?.text === 'string'
+                                ? message.text.slice(0, 300)
+                                : message?.text
                         );
                         console.debug('full message object:', message);
                     }

@@ -35,6 +35,7 @@ import { useUserApiKey } from '#imports';
 import { useActivePrompt } from '#imports';
 import { getDefaultPromptId } from '#imports';
 import { useHooks } from '#imports';
+import type { Message } from '~/db/schema';
 import type {
     MultiPaneApi,
     DbMessage,
@@ -47,7 +48,6 @@ import type {
     ORToolMessage,
     ORAssistantWithToolsMessage,
 } from './types';
-import type { Message } from '~/db/schema';
 // settings/model store are provided elsewhere at runtime; keep dynamic access guards
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
@@ -1204,8 +1204,8 @@ export function useChat(
             // CRITICAL: Before deleting, ensure in-memory state matches DB state
             // This handles edge cases where messages exist in DB but not in memory
             const { messagesByThread } = await import('~/db/messages');
-            const dbMessages =
-                (await messagesByThread(threadIdRef.value!)) || [];
+            const dbMessages: Message[] =
+                ((await messagesByThread(threadIdRef.value!)) as Message[] | undefined) || [];
 
             // If DB has more messages than our in-memory arrays, we need to sync first
             if (dbMessages.length > rawMessages.value.length) {
@@ -1220,8 +1220,8 @@ export function useChat(
                             ? m.data.content
                             : '',
                     id: m.id,
-                    stream_id: m.stream_id,
-                    file_hashes: m.file_hashes,
+                    stream_id: m.stream_id ?? undefined,
+                    file_hashes: m.file_hashes ?? undefined,
                     reasoning_text:
                         (typeof m.data === 'object' && m.data !== null && 'reasoning_text' in m.data && typeof (m.data as any).reasoning_text === 'string')
                             ? (m.data as any).reasoning_text

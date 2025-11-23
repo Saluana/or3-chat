@@ -213,6 +213,7 @@ export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
         'db.files.get:filter:output',
         toFileEntity(meta)
     );
+    if (!entity) return undefined;
     return parseOrThrow(FileMetaSchema, applyFileEntityToMeta(meta, entity));
 }
 
