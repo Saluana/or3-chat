@@ -17,8 +17,9 @@
                 :items="allMessages"
                 :item-key="(m: any) => m.id || m.stream_id || ''"
                 :estimate-height="80"
-                :overscan="dynamicOverscan"
+                :overscan="6500"
                 :maintain-bottom="!anyEditing"
+                :bottom-threshold="5"
                 :padding-bottom="bottomPad"
                 :padding-top="16"
                 class="chat-message-list"
@@ -325,24 +326,7 @@ const allMessages = computed(() => {
 });
 
 // Detect images in assistant messages to boost overscan (Req: User Request)
-const hasImages = computed(() => {
-    return allMessages.value.some((m: any) => {
-        if (m.role !== 'assistant') return false;
-        // Check structured content
-        if (Array.isArray(m.content)) {
-            return m.content.some((p: any) => p.type === 'image');
-        }
-        // Check markdown text for image patterns
-        if (typeof m.content === 'string') {
-            return (
-                /!\[.*?\]\(.*?\)/.test(m.content) || /<img\s/.test(m.content)
-            );
-        }
-        return false;
-    });
-});
-
-const dynamicOverscan = computed(() => (hasImages.value ? 5000 : 1000));
+// Removed dynamic overscan in favor of static high overscan (6500px) for performance stability.
 
 // Scroll handling centralized in VirtualMessageList
 // Ref is now the VirtualMessageList component instance, not a raw element
