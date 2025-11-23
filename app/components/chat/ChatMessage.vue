@@ -759,6 +759,8 @@ async function ensureThumb(h: string) {
 
 // Track current hashes used by this message for ref counting.
 const currentHashes = new Set<string>();
+let isComponentActive = true;
+
 // Load new hashes when list changes with diffing for retain/release.
 watch(
     hashList,
@@ -768,10 +770,16 @@ watch(
         for (const h of nextSet) {
             if (!currentHashes.has(h)) {
                 await ensureThumb(h);
-                // Only retain if loaded and ready
                 const state = thumbCache.get(h);
-                if (state?.status === 'ready') retainThumb(h);
-                currentHashes.add(h);
+                if (state?.status === 'ready') {
+                    if (!isComponentActive) {
+                        retainThumb(h);
+                        releaseThumb(h);
+                        return;
+                    }
+                    retainThumb(h);
+                    currentHashes.add(h);
+                }
             }
         }
         // Removals
@@ -787,6 +795,7 @@ watch(
 
 // Cleanup: release all thumbs used by this message.
 onBeforeUnmount(() => {
+    isComponentActive = false;
     for (const h of currentHashes) releaseThumb(h);
     currentHashes.clear();
 });
