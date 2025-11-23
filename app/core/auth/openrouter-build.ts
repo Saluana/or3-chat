@@ -30,6 +30,7 @@ export type ORContentPart =
 export interface ORMessage {
     role: 'user' | 'assistant' | 'system';
     content: ORContentPart[];
+    tool_calls?: any[];
 }
 
 // Caches on global scope to avoid repeated blob -> base64 conversions.

@@ -157,7 +157,7 @@ const switchProps = computed(() => {
         isNuxtUI: true,
     });
     return {
-        color: 'primary',
+        color: 'primary' as const,
         ...overrides.value,
     };
 });
@@ -171,8 +171,8 @@ const webSearchSwitchProps = computed(() => {
         isNuxtUI: true,
     });
     return {
-        color: 'primary',
-        size: 'sm',
+        color: 'primary' as const,
+        size: 'sm' as const,
         label: 'Enable web search',
         ...overrides.value,
     };
@@ -187,8 +187,8 @@ const thinkingSwitchProps = computed(() => {
         isNuxtUI: true,
     });
     return {
-        color: 'primary',
-        size: 'sm',
+        color: 'primary' as const,
+        size: 'sm' as const,
         label: 'Enable thinking',
         ...overrides.value,
     };
@@ -203,8 +203,8 @@ const getToolSwitchProps = (toolName: string) => {
         isNuxtUI: true,
     });
     return {
-        color: 'primary',
-        size: 'sm',
+        color: 'primary' as const,
+        size: 'sm' as const,
         ...overrides.value,
     };
 };
@@ -217,15 +217,18 @@ const systemPromptsButtonProps = computed(() => {
         identifier: 'settings.system-prompts',
         isNuxtUI: true,
     });
-    const overrideValue = overrides.value || {};
+    const overrideValue: Record<string, unknown> = overrides.value || {};
     const baseClass =
         'flex justify-between w-full items-center py-1 px-2 font-medium';
-    const mergedClass = [baseClass, (overrideValue as Record<string, any>).class]
+    const mergedClass = [
+        baseClass,
+        typeof overrideValue.class === 'string' ? overrideValue.class : '',
+    ]
         .filter(Boolean)
         .join(' ');
     return {
-        variant: 'ghost',
-        size: 'sm',
+        variant: 'ghost' as const,
+        size: 'sm' as const,
         block: true,
         trailing: true,
         trailingIcon: useIcon('chat.system_prompt').value,
@@ -242,15 +245,18 @@ const modelCatalogButtonProps = computed(() => {
         identifier: 'settings.model-catalog',
         isNuxtUI: true,
     });
-    const overrideValue = overrides.value || {};
+    const overrideValue: Record<string, unknown> = overrides.value || {};
     const baseClass =
         'flex justify-between w-full items-center py-1 px-2 font-medium';
-    const mergedClass = [baseClass, (overrideValue as Record<string, any>).class]
+    const mergedClass = [
+        baseClass,
+        typeof overrideValue.class === 'string' ? overrideValue.class : '',
+    ]
         .filter(Boolean)
         .join(' ');
     return {
-        variant: 'ghost',
-        size: 'sm',
+        variant: 'ghost' as const,
+        size: 'sm' as const,
         block: true,
         trailing: true,
         trailingIcon: useIcon('chat.model.catalog').value,

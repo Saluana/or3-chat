@@ -1,6 +1,6 @@
 import type { RegisteredPaneApp } from '~/composables/core/usePaneApps';
 import type { RegisteredSidebarPage } from '~/composables/sidebar/useSidebarPages';
-import type { MultiPaneApi, ThumbCache } from '~/types/chat-internal';
+import type { MultiPaneApi, ThumbCache } from './chat-internal';
 
 declare global {
     interface Window {

@@ -4,23 +4,21 @@
  */
 
 import type { Ref } from 'vue';
-import type { ChatMessage, ToolCall, SendMessageParams } from '~/utils/chat/types';
+import type { UseMultiPaneApi, PaneState } from '~/composables/core/useMultiPane';
+import type {
+    ChatMessage,
+    ToolCall,
+    SendMessageParams,
+    ContentPart,
+} from '~/utils/chat/types';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 
 /**
  * Multi-pane API types
  */
-export interface MultiPanePane {
-    mode: string;
-    threadId?: string;
-    [key: string]: unknown;
-}
+export type MultiPanePane = PaneState;
 
-export interface MultiPaneApi {
-    panes: { value: MultiPanePane[] };
-    activePaneIndex?: { value: number | null };
-    setPaneThread?: (index: number, threadId: string) => Promise<void>;
-}
+export type MultiPaneApi = UseMultiPaneApi;
 
 /**
  * Database message types
@@ -41,8 +39,9 @@ export interface DbMessage {
     created_at: number;
     updated_at?: number;
     thread_id?: string;
-    content?: string | any[];
+    content?: ChatMessage['content'];
     index?: number | string;
+    clock?: number;
     stream_id?: string;
 }
 
@@ -79,8 +78,10 @@ export interface ChatInstance {
     messages: Ref<UiChatMessage[]>;
     rawMessages: Ref<ChatMessage[]>;
     loading: Ref<boolean>;
-    streamState: Ref<StreamState>;
+    streamState: StreamState;
     streamId: Ref<string | undefined>;
+    threadId: Ref<string | undefined>;
+    tailAssistant?: Ref<UiChatMessage | null>;
     send: (params: SendMessageParams & { content: string }) => Promise<void>;
     retryMessage: (messageId: string, model?: string) => Promise<void>;
     abort: () => void;
@@ -94,10 +95,13 @@ export interface ChatInstance {
  * Stream state types
  */
 export interface StreamState {
-    text?: string;
-    reasoning?: string;
+    text: string;
+    reasoningText: string;
+    isActive: boolean;
+    finalized: boolean;
+    error: Error | null;
+    version: number;
     toolCalls?: ToolCall[];
-    [key: string]: unknown;
 }
 
 /**
@@ -165,6 +169,8 @@ export interface FileMeta {
     height?: number;
     size?: number;
     type?: string;
+    kind?: string;
+    name?: string;
 }
 
 /**
@@ -190,7 +196,7 @@ export interface PaneContext {
 export interface ModelInputMessage {
     id?: string;
     role: 'user' | 'assistant' | 'system';
-    content: string | any[];
+    content: string | ContentPart[];
     name?: string;
     tool_call_id?: string;
     file_hashes?: string | null;

@@ -83,7 +83,7 @@
 import { reactive, watch, onBeforeUnmount } from 'vue';
 import { getFileBlob, getFileMeta } from '~/db/files';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
-import type { FileMeta } from '~/types/chat-internal';
+import type { FileMeta } from '../../../types/chat-internal';
 
 interface ThumbState {
     status: 'loading' | 'ready' | 'error';
@@ -114,11 +114,17 @@ const attachmentItemProps = useThemeOverrides({
 });
 
 // Reuse global caches so virtualization doesn't thrash
-const globalCache: GlobalThumbCache = (globalThis.__or3ThumbCache ??= {
-    cache: new Map<string, ThumbState>(),
-    inflight: new Map<string, Promise<void>>(),
-    refCounts: new Map<string, number>()
-});
+type GlobalWithThumbCache = typeof globalThis & {
+    __or3ThumbCache?: GlobalThumbCache;
+};
+
+const globalCache: GlobalThumbCache = (
+    (globalThis as GlobalWithThumbCache).__or3ThumbCache ??= {
+        cache: new Map<string, ThumbState>(),
+        inflight: new Map<string, Promise<void>>(),
+        refCounts: new Map<string, number>(),
+    }
+);
 
 const cache = globalCache.cache;
 const inflight = globalCache.inflight;
