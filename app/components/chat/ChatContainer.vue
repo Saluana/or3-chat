@@ -17,7 +17,7 @@
                 :items="allMessages"
                 :item-key="(m: any) => m.id || m.stream_id || ''"
                 :estimate-height="80"
-                :overscan="1000"
+                :overscan="dynamicOverscan"
                 :maintain-bottom="!anyEditing"
                 :padding-bottom="bottomPad"
                 :padding-top="16"
@@ -323,6 +323,26 @@ const allMessages = computed(() => {
     }
     return list;
 });
+
+// Detect images in assistant messages to boost overscan (Req: User Request)
+const hasImages = computed(() => {
+    return allMessages.value.some((m: any) => {
+        if (m.role !== 'assistant') return false;
+        // Check structured content
+        if (Array.isArray(m.content)) {
+            return m.content.some((p: any) => p.type === 'image');
+        }
+        // Check markdown text for image patterns
+        if (typeof m.content === 'string') {
+            return (
+                /!\[.*?\]\(.*?\)/.test(m.content) || /<img\s/.test(m.content)
+            );
+        }
+        return false;
+    });
+});
+
+const dynamicOverscan = computed(() => (hasImages.value ? 5000 : 1000));
 
 // Scroll handling centralized in VirtualMessageList
 // Ref is now the VirtualMessageList component instance, not a raw element
