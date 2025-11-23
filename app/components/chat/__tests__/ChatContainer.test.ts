@@ -96,6 +96,16 @@ describe('ChatContainer', () => {
         let buttonContainer = wrapper.find('.absolute.bottom-full');
         expect(buttonContainer.isVisible()).toBe(false);
 
+        // Case: Not scrollable (scrollHeight <= clientHeight)
+        scroller.vm.$emit('scroll', {
+            scrollTop: 0,
+            scrollHeight: 800,
+            clientHeight: 800,
+            isAtBottom: true,
+        });
+        await nextTick();
+        expect(buttonContainer.isVisible()).toBe(false);
+
         // Scroll up
         scroller.vm.$emit('scroll', {
             scrollTop: 500,
@@ -167,6 +177,6 @@ describe('ChatContainer', () => {
         const button = wrapper.findComponent({ name: 'UButton' });
         await button.trigger('click');
 
-        expect(scroller.vm.scrollToBottom).toHaveBeenCalled();
+        expect(scroller.vm.scrollToBottom).toHaveBeenCalledWith({ smooth: true });
     });
 });

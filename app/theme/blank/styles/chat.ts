@@ -11,6 +11,7 @@ export const chatOverrides = {
         class: 'backdrop-blur! flex items-center justify-center',
     },
     'button#chat.scroll-to-bottom': {
+        trailing: true,
         class: 'text-xs bg-primary/20 text-[var(--md-on-surface)] backdrop-blur-xl hover:bg-primary/30 active:bg-primary/40 shadow rounded-full border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] p-2 flex items-center justify-center',
         label: 'Scroll to bottom',
     },

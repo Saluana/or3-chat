@@ -72,7 +72,7 @@
                 <div
                     class="absolute bottom-full left-0 right-0 mb-2 flex justify-center pointer-events-none transition-opacity duration-200"
                     :style="{ opacity: scrollToBottomOpacity }"
-                    v-show="distanceFromBottom > 1"
+                    v-show="isScrollable && distanceFromBottom > 1"
                 >
                     <UButton
                         v-bind="scrollToBottomButtonProps"
@@ -367,6 +367,7 @@ function onEndEdit(id: string) {
 const atBottom = ref(true);
 const stick = ref(true);
 const distanceFromBottom = ref(0);
+const isScrollable = ref(false);
 const iconScrollToBottom = useIcon('chat.scrollToBottom');
 
 const scrollToBottomButtonProps = computed(() => {
@@ -394,7 +395,7 @@ const scrollToBottomOpacity = computed(() => {
 });
 
 function scrollToBottom() {
-    scroller.value?.scrollToBottom();
+    scroller.value?.scrollToBottom({ smooth: true });
 }
 
 function onScrollState(s: { atBottom: boolean; stick: boolean }) {
@@ -411,6 +412,7 @@ function onScroll(payload: {
     atBottom.value = payload.isAtBottom;
     distanceFromBottom.value =
         payload.scrollHeight - payload.scrollTop - payload.clientHeight;
+    isScrollable.value = payload.scrollHeight > payload.clientHeight;
 
     // Simple stick logic: if we are at bottom, we stick. If user scrolls up, we unstick.
     if (payload.isAtBottom) {
