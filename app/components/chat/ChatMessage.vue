@@ -156,7 +156,7 @@
                     :content="processedAssistantMarkdown"
                     :shiki-theme="currentShikiTheme"
                     :class="[streamMdClasses, 'cm-markdown-assistant']"
-                    :allowed-image-prefixes="['data:image/']"
+                    :allowed-image-prefixes="['data:image/', 'blob:']"
                     code-block-show-line-numbers
                     class="[&>p:first-child]:mt-0 [&>p:last-child]:mb-0 prose-headings:first:mt-5!"
                 />
@@ -483,8 +483,15 @@ const processedAssistantMarkdown = computed(() => {
     if (props.message.role !== 'assistant') return '';
     return (assistantMarkdown.value || '').replace(
         FILE_HASH_IMG_RE,
-        (_m, h) =>
-            `<span class=\"or3-img-ph retro-inline-image-placeholder inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)] opacity-60\" data-file-hash=\"${h}\" aria-label=\"generated image\"></span>`
+        (_m, h) => {
+            // If we have the image ready in cache, render it immediately to prevent flash on remount
+            const state = thumbnails[h];
+            if (state?.status === 'ready' && state.url) {
+                return `<img src="${state.url}" alt="generated image" class="retro-inline-image-placeholder inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)]" data-file-hash="${h}" loading="eager" />`;
+            }
+            // Otherwise render placeholder for hydration
+            return `<span class=\"or3-img-ph retro-inline-image-placeholder inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)] opacity-60\" data-file-hash=\"${h}\" aria-label=\"generated image\"></span>`;
+        }
     );
 });
 
@@ -634,28 +641,52 @@ const thumbRefCounts = ((globalThis as any).__or3ThumbRefCounts ||= new Map<
     string,
     number
 >());
+// Delayed cleanup map to prevent thrashing during rapid scroll
+const thumbCleanupTimers = ((globalThis as any).__or3ThumbCleanupTimers ||=
+    new Map<string, ReturnType<typeof setTimeout>>());
 
 function retainThumb(hash: string) {
+    // Cancel any pending cleanup for this hash
+    if (thumbCleanupTimers.has(hash)) {
+        clearTimeout(thumbCleanupTimers.get(hash)!);
+        thumbCleanupTimers.delete(hash);
+    }
     const prev = thumbRefCounts.get(hash) || 0;
     thumbRefCounts.set(hash, prev + 1);
 }
+
 function releaseThumb(hash: string) {
     const prev = thumbRefCounts.get(hash) || 0;
     if (prev <= 1) {
-        thumbRefCounts.delete(hash);
-        const state = thumbCache.get(hash);
-        if (state?.url) {
-            try {
-                URL.revokeObjectURL(state.url);
-            } catch (e) {
-                if (import.meta.dev) {
-                    console.warn('[ChatMessage] Failed to revoke object URL', e);
+        thumbRefCounts.set(hash, 0); // Mark as 0 but don't delete yet
+
+        // Schedule cleanup with a grace period (e.g. 30 seconds)
+        // This allows scrolling back up without re-fetching from DB
+        if (!thumbCleanupTimers.has(hash)) {
+            const timer = setTimeout(() => {
+                thumbCleanupTimers.delete(hash);
+                // Double check ref count is still 0
+                if ((thumbRefCounts.get(hash) || 0) > 0) return;
+
+                thumbRefCounts.delete(hash);
+                const state = thumbCache.get(hash);
+                if (state?.url) {
+                    try {
+                        URL.revokeObjectURL(state.url);
+                    } catch (e) {
+                        if (import.meta.dev) {
+                            console.warn(
+                                '[ChatMessage] Failed to revoke object URL',
+                                e
+                            );
+                        }
+                    }
                 }
-            }
+                thumbCache.delete(hash);
+                thumbLoadPromises.delete(hash);
+            }, 30000); // 30s grace period
+            thumbCleanupTimers.set(hash, timer);
         }
-        thumbCache.delete(hash);
-        // Also remove from thumbLoadPromises if present to prevent memory leak
-        thumbLoadPromises.delete(hash);
     } else {
         thumbRefCounts.set(hash, prev - 1);
     }
@@ -800,7 +831,7 @@ const HYDRATE_THROTTLE_MS = 200; // Only check every 200ms during streaming
 
 watchEffect(() => {
     if (props.message.role !== 'assistant') return; // only assistants hydrate
-    
+
     // Throttle during streaming to reduce CPU load
     const now = Date.now();
     const isPending = (props.message as any).pending;
@@ -808,7 +839,7 @@ watchEffect(() => {
         return;
     }
     lastHydrateCheck = now;
-    
+
     // reactive deps: markdown text, hash list, thumb states
     void assistantMarkdown.value;
     void hashList.value.length;
