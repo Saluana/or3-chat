@@ -61,8 +61,18 @@ export function hasPane(paneId: string) {
 }
 
 // Expose globally (optional) for debugging / external inspection
+type ChatInputBridgeGlobal = typeof globalThis & {
+    __or3ChatInputBridge?: ChatInputBridge;
+};
+type ChatInputBridge = {
+    registry: typeof registry;
+    programmaticSend: typeof programmaticSend;
+    hasPane: typeof hasPane;
+};
+
 if (import.meta.dev) {
-    (globalThis as any).__or3ChatInputBridge = {
+    const g = globalThis as ChatInputBridgeGlobal;
+    g.__or3ChatInputBridge = {
         registry,
         programmaticSend,
         hasPane,

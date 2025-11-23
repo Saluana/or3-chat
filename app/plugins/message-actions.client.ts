@@ -1,3 +1,8 @@
+import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
+import { useToast } from '#imports';
+import { createDocument } from '~/db/documents';
+import { registerMessageAction } from '~/composables/chat/useMessageActions';
+
 export default defineNuxtPlugin(() => {
     registerMessageAction({
         id: 'Create document', // unique id
@@ -44,7 +49,7 @@ export default defineNuxtPlugin(() => {
 
             const tiptapDoc = await markdownToTipTapDoc(markdownSource);
 
-            const doc = await newDocument({
+            const doc = await createDocument({
                 title: (message as any).title || 'Untitled',
                 content: tiptapDoc,
             });
@@ -52,7 +57,7 @@ export default defineNuxtPlugin(() => {
             if (import.meta.dev) console.debug('Created document record', doc);
 
             // Attempt to open in a new pane (if capacity) else reuse active pane
-            const mp: any = (globalThis as any).__or3MultiPaneApi;
+            const mp = getGlobalMultiPaneApi();
             try {
                 if (mp) {
                     const couldAdd = mp.canAddPane?.value === true; // snapshot before add

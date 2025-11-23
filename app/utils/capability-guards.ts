@@ -19,7 +19,9 @@ export function guardCapability(
     operation: string
 ): boolean {
     // Check for active plugin context (set by pane plugin API or dashboard handlers)
-    const g: any = globalThis as any;
+    const g = globalThis as typeof globalThis & {
+        __or3ActivePluginContext?: { pluginId: string | null };
+    };
     const activePluginId = g.__or3ActivePluginContext?.pluginId;
 
     // If no plugin context, allow operation (native app code)
@@ -64,7 +66,9 @@ export function guardAllCapabilities(
     capabilities: string[],
     operation: string
 ): boolean {
-    const g: any = globalThis as any;
+    const g = globalThis as typeof globalThis & {
+        __or3ActivePluginContext?: { pluginId: string | null };
+    };
     const activePluginId = g.__or3ActivePluginContext?.pluginId;
 
     if (!activePluginId) return true;
@@ -83,7 +87,9 @@ export function guardAnyCapability(
     capabilities: string[],
     operation: string
 ): boolean {
-    const g: any = globalThis as any;
+    const g = globalThis as typeof globalThis & {
+        __or3ActivePluginContext?: { pluginId: string | null };
+    };
     const activePluginId = g.__or3ActivePluginContext?.pluginId;
 
     if (!activePluginId) return true;
@@ -126,9 +132,11 @@ export function guardAnyCapability(
  * This should be called when entering plugin code execution.
  */
 export function setPluginContext(pluginId: string | null) {
-    const g: any = globalThis as any;
+    const g = globalThis as typeof globalThis & {
+        __or3ActivePluginContext?: { pluginId: string | null };
+    };
     if (!g.__or3ActivePluginContext) {
-        g.__or3ActivePluginContext = {};
+        g.__or3ActivePluginContext = { pluginId: null };
     }
     g.__or3ActivePluginContext.pluginId = pluginId;
 }
@@ -137,7 +145,9 @@ export function setPluginContext(pluginId: string | null) {
  * Clear the active plugin context.
  */
 export function clearPluginContext() {
-    const g: any = globalThis as any;
+    const g = globalThis as typeof globalThis & {
+        __or3ActivePluginContext?: { pluginId: string | null };
+    };
     if (g.__or3ActivePluginContext) {
         g.__or3ActivePluginContext.pluginId = null;
     }
@@ -147,6 +157,8 @@ export function clearPluginContext() {
  * Get the current active plugin ID if any.
  */
 export function getActivePluginId(): string | null {
-    const g: any = globalThis as any;
+    const g = globalThis as typeof globalThis & {
+        __or3ActivePluginContext?: { pluginId: string | null };
+    };
     return g.__or3ActivePluginContext?.pluginId || null;
 }

@@ -1,4 +1,5 @@
 import { ref, type Ref } from 'vue';
+import { defineNuxtPlugin, useAppConfig } from '#imports';
 import { defu } from 'defu';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import type { CompiledTheme } from '~/theme/_shared/types';

@@ -16,9 +16,9 @@ export default defineNuxtPlugin(() => {
                         console.debug('message role:', message?.role);
                         console.debug(
                             'message content (preview):',
-                            typeof message?.content === 'string'
-                                ? message.content.slice(0, 300)
-                                : message?.content
+                            typeof (message as any)?.content === 'string'
+                                ? (message as any).content.slice(0, 300)
+                                : (message as any)?.content
                         );
                         console.debug('full message object:', message);
                     }

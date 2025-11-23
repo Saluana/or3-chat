@@ -20,7 +20,10 @@ export interface EditorToolbarButton {
 }
 
 // Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
-const g: any = globalThis as any;
+type EditorToolbarGlobals = typeof globalThis & {
+    __or3EditorToolbarRegistry?: Map<string, EditorToolbarButton>;
+};
+const g = globalThis as EditorToolbarGlobals;
 const registry: Map<string, EditorToolbarButton> =
     g.__or3EditorToolbarRegistry || (g.__or3EditorToolbarRegistry = new Map());
 

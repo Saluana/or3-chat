@@ -55,12 +55,14 @@ useHead({
 
 // Fire app.init:action:after once after the root app mounts (client-only)
 onMounted(() => {
-    const g: any = globalThis as any;
+    const g = globalThis as typeof globalThis & {
+        __OR3_APP_INIT_FIRED__?: boolean;
+    };
     if (g.__OR3_APP_INIT_FIRED__) return;
     g.__OR3_APP_INIT_FIRED__ = true;
-    const hooks: any = nuxtApp.$hooks;
+    const hooks = nuxtApp.$hooks;
     if (hooks && typeof hooks.doAction === 'function') {
-        hooks.doAction('app.init:action:after', nuxtApp);
+        hooks.doAction('app.init:action:after', { nuxtApp });
     }
 });
 </script>

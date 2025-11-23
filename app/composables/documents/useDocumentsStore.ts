@@ -7,6 +7,7 @@ import {
     type Document,
 } from '~/db/documents';
 import { useToast } from '#imports';
+import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 
 interface DocState {
     record: Document | null;
@@ -40,20 +41,20 @@ function scheduleSave(id: string, delay = 750) {
 export async function flush(id: string) {
     const st = documentsMap.get(id);
     if (!st || !st.record) return;
-    
+
     // If a flush is already in progress, wait for it
     if (st.flushPromise) {
         return st.flushPromise;
     }
-    
+
     if (!st.pendingTitle && !st.pendingContent) return; // nothing to persist
-    
+
     // Clear timer to prevent duplicate saves
     if (st.timer) {
         clearTimeout(st.timer);
         st.timer = undefined;
     }
-    
+
     st.flushPromise = (async () => {
         const patch: Partial<Pick<Document, 'title' | 'content'>> = {};
         if (st.pendingTitle !== undefined) patch.title = st.pendingTitle;
@@ -80,18 +81,21 @@ export async function flush(id: string) {
                 if (typeof window !== 'undefined') {
                     const nuxt = useNuxtApp();
                     const hooks: unknown = (nuxt as any)?.$hooks;
-                    const mpApi: unknown = (globalThis as any).__or3MultiPaneApi;
-                    const panes = (mpApi as any)?.panes?.value || [];
+                    const mpApi = getGlobalMultiPaneApi();
+                    const panes = mpApi?.panes?.value || [];
                     if (hooks && panes.length) {
-                        panes.forEach((p: any, paneIndex: number) => {
+                        panes.forEach((p, paneIndex: number) => {
                             if (p?.mode === 'doc' && p?.documentId === id) {
-                                (hooks as any).doAction('ui.pane.doc:action:saved', {
-                                    pane: p,
-                                    oldDocumentId: id,
-                                    newDocumentId: id,
-                                    paneIndex,
-                                    meta: { reason: 'docStoreFlush' },
-                                });
+                                (hooks as any).doAction(
+                                    'ui.pane.doc:action:saved',
+                                    {
+                                        pane: p,
+                                        oldDocumentId: id,
+                                        newDocumentId: id,
+                                        paneIndex,
+                                        meta: { reason: 'docStoreFlush' },
+                                    }
+                                );
                             }
                         });
                     }
@@ -99,7 +103,7 @@ export async function flush(id: string) {
             } catch {}
         }
     })();
-    
+
     return st.flushPromise;
 }
 

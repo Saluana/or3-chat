@@ -28,6 +28,9 @@ import {
     promptJsonToString,
     composeSystemPrompt,
 } from '~/utils/chat/prompt-utils';
+import { createStreamAccumulator } from '~/composables/chat/useStreamAccumulator';
+import { useAiSettings } from '~/composables/chat/useAiSettings';
+import { useModelStore } from '~/composables/chat/useModelStore';
 import { resolveDefaultModel } from '~/core/auth/models-service';
 import { state } from '~/state/global';
 // Import paths aligned with tests' vi.mock targets
@@ -37,19 +40,13 @@ import { getDefaultPromptId } from '#imports';
 import { useHooks } from '#imports';
 // settings/model store are provided elsewhere at runtime; keep dynamic access guards
 import type {
-    MultiPaneApi,
     ChatSettings,
     ModelInfo,
     PaneContext,
-    ImageInput,
-    FileReference,
     ExtendedSendMessageParams,
     ModelInputMessage,
 } from '../../../types/chat-internal';
-import type {
-    UseMultiPaneApi,
-    PaneState,
-} from '~/composables/core/useMultiPane';
+import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 import type { ORMessage } from '~/core/auth/openrouter-build';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
 

@@ -19,5 +19,8 @@ export function clearPanePendingPrompt(paneId: string) {
 
 // Debug helper
 if (import.meta.dev) {
-    (globalThis as any).__or3PanePendingPrompts = pendingByPane;
+    const g = globalThis as typeof globalThis & {
+        __or3PanePendingPrompts?: Record<string, string | null>;
+    };
+    g.__or3PanePendingPrompts = pendingByPane;
 }

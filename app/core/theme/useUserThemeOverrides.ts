@@ -11,8 +11,20 @@ import { revokeBackgroundBlobs } from './backgrounds';
 const STORAGE_KEY_LIGHT = 'or3:user-theme-overrides:light';
 const STORAGE_KEY_DARK = 'or3:user-theme-overrides:dark';
 
+type UserThemeOverrideGlobals = typeof globalThis & {
+    __or3UserThemeOverrides?: {
+        light: ReturnType<typeof ref<UserThemeOverrides>>;
+        dark: ReturnType<typeof ref<UserThemeOverrides>>;
+        activeMode: ReturnType<typeof ref<'light' | 'dark'>>;
+        loaded: boolean;
+    };
+    useNuxtApp?: () => {
+        $toast?: { add?: (payload: any) => void };
+    };
+};
+
 // HMR-safe singleton
-const g: any = globalThis;
+const g = globalThis as UserThemeOverrideGlobals;
 if (!g.__or3UserThemeOverrides) {
     g.__or3UserThemeOverrides = {
         light: ref<UserThemeOverrides>({ ...EMPTY_USER_OVERRIDES }),
@@ -22,12 +34,7 @@ if (!g.__or3UserThemeOverrides) {
     };
 }
 
-const store = g.__or3UserThemeOverrides as {
-    light: ReturnType<typeof ref<UserThemeOverrides>>;
-    dark: ReturnType<typeof ref<UserThemeOverrides>>;
-    activeMode: ReturnType<typeof ref<'light' | 'dark'>>;
-    loaded: boolean;
-};
+const store = g.__or3UserThemeOverrides;
 
 const isBrowser = () => typeof window !== 'undefined';
 
@@ -61,7 +68,7 @@ function saveToStorage(mode: 'light' | 'dark', overrides: UserThemeOverrides) {
                 '[user-theme-overrides] Storage quota exceeded. Customizations not saved.'
             );
             // Notify user via toast if available
-            const nuxtApp: any = (globalThis as any).useNuxtApp?.();
+            const nuxtApp = g.useNuxtApp?.();
             nuxtApp?.$toast?.add?.({
                 title: 'Storage Full',
                 description:
