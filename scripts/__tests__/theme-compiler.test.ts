@@ -6,6 +6,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ThemeCompiler } from '../theme-compiler';
 import { validThemeFixtures } from '../../tests/utils/theme-test-utils';
+import {
+    parseSelector,
+    normalizeSelector,
+    calculateSpecificity,
+} from '../../app/theme/_shared/compiler-core';
 
 describe('ThemeCompiler', () => {
     let compiler: ThemeCompiler;
@@ -16,7 +21,7 @@ describe('ThemeCompiler', () => {
 
     describe('selector parsing', () => {
         it('should parse simple component selector', () => {
-            const parsed = (compiler as any).parseSelector('button');
+            const parsed = parseSelector('button');
 
             expect(parsed.component).toBe('button');
             expect(parsed.context).toBeUndefined();
@@ -25,28 +30,28 @@ describe('ThemeCompiler', () => {
         });
 
         it('should parse simple context syntax', () => {
-            const parsed = (compiler as any).parseSelector('button.chat');
+            const parsed = parseSelector('button.chat');
 
             expect(parsed.component).toBe('button');
             expect(parsed.context).toBe('chat');
         });
 
         it('should parse simple identifier syntax', () => {
-            const parsed = (compiler as any).parseSelector('button#chat.send');
+            const parsed = parseSelector('button#chat.send');
 
             expect(parsed.component).toBe('button');
             expect(parsed.identifier).toBe('chat.send');
         });
 
         it('should parse state pseudo-class', () => {
-            const parsed = (compiler as any).parseSelector('button:hover');
+            const parsed = parseSelector('button:hover');
 
             expect(parsed.component).toBe('button');
             expect(parsed.state).toBe('hover');
         });
 
         it('should parse combined context and state', () => {
-            const parsed = (compiler as any).parseSelector('button.chat:hover');
+            const parsed = parseSelector('button.chat:hover');
 
             expect(parsed.component).toBe('button');
             expect(parsed.context).toBe('chat');
@@ -54,16 +59,14 @@ describe('ThemeCompiler', () => {
         });
 
         it('should parse attribute selector syntax', () => {
-            const parsed = (compiler as any).parseSelector(
-                'button[data-context="chat"]'
-            );
+            const parsed = parseSelector('button[data-context="chat"]');
 
             expect(parsed.component).toBe('button');
             expect(parsed.context).toBe('chat');
         });
 
         it('should parse HTML attribute selectors', () => {
-            const parsed = (compiler as any).parseSelector('button[type="submit"]');
+            const parsed = parseSelector('button[type="submit"]');
 
             expect(parsed.component).toBe('button');
             expect(parsed.attributes).toBeDefined();
@@ -73,7 +76,7 @@ describe('ThemeCompiler', () => {
         });
 
         it('should parse multiple attribute selectors', () => {
-            const parsed = (compiler as any).parseSelector(
+            const parsed = parseSelector(
                 'button[type="submit"][class*="primary"]'
             );
 
@@ -84,7 +87,7 @@ describe('ThemeCompiler', () => {
         });
 
         it('should parse attribute exists selector', () => {
-            const parsed = (compiler as any).parseSelector('button[disabled]');
+            const parsed = parseSelector('button[disabled]');
 
             expect(parsed.component).toBe('button');
             expect(parsed.attributes?.[0].attribute).toBe('disabled');
@@ -92,7 +95,7 @@ describe('ThemeCompiler', () => {
         });
 
         it('should parse attribute starts-with selector', () => {
-            const parsed = (compiler as any).parseSelector('button[id^="action-"]');
+            const parsed = parseSelector('button[id^="action-"]');
 
             expect(parsed.component).toBe('button');
             expect(parsed.attributes?.[0].operator).toBe('^=');
@@ -100,9 +103,7 @@ describe('ThemeCompiler', () => {
         });
 
         it('should parse attribute ends-with selector', () => {
-            const parsed = (compiler as any).parseSelector(
-                'button[data-action$="-confirm"]'
-            );
+            const parsed = parseSelector('button[data-action$="-confirm"]');
 
             expect(parsed.component).toBe('button');
             expect(parsed.attributes?.[0].operator).toBe('$=');
@@ -110,7 +111,7 @@ describe('ThemeCompiler', () => {
         });
 
         it('should parse attribute contains selector', () => {
-            const parsed = (compiler as any).parseSelector('button[class*="btn"]');
+            const parsed = parseSelector('button[class*="btn"]');
 
             expect(parsed.component).toBe('button');
             expect(parsed.attributes?.[0].operator).toBe('*=');
@@ -118,9 +119,7 @@ describe('ThemeCompiler', () => {
         });
 
         it('should parse complex combined selector', () => {
-            const parsed = (compiler as any).parseSelector(
-                'button.chat[type="submit"]:hover'
-            );
+            const parsed = parseSelector('button.chat[type="submit"]:hover');
 
             expect(parsed.component).toBe('button');
             expect(parsed.context).toBe('chat');
@@ -131,52 +130,50 @@ describe('ThemeCompiler', () => {
 
     describe('selector normalization', () => {
         it('should normalize simple context syntax', () => {
-            const normalized = (compiler as any).normalizeSelector('button.chat');
+            const normalized = normalizeSelector('button.chat');
 
             expect(normalized).toBe('button[data-context="chat"]');
         });
 
         it('should normalize simple identifier syntax', () => {
-            const normalized = (compiler as any).normalizeSelector('button#chat.send');
+            const normalized = normalizeSelector('button#chat.send');
 
             expect(normalized).toBe('button[data-id="chat.send"]');
         });
 
         it('should not normalize unknown contexts', () => {
-            const normalized = (compiler as any).normalizeSelector('button.unknown');
+            const normalized = normalizeSelector('button.unknown');
 
             // Should keep as-is if not a known context
             expect(normalized).toBe('button.unknown');
         });
 
         it('should preserve existing attribute selectors', () => {
-            const normalized = (compiler as any).normalizeSelector(
-                'button[data-context="chat"]'
-            );
+            const normalized = normalizeSelector('button[data-context="chat"]');
 
             expect(normalized).toBe('button[data-context="chat"]');
         });
 
         it('should normalize mixed syntax', () => {
-            const normalized = (compiler as any).normalizeSelector(
-                'button.chat[type="submit"]'
-            );
+            const normalized = normalizeSelector('button.chat[type="submit"]');
 
-            expect(normalized).toBe('button[data-context="chat"][type="submit"]');
+            expect(normalized).toBe(
+                'button[data-context="chat"][type="submit"]'
+            );
         });
     });
 
     describe('specificity calculation', () => {
         it('should calculate element-only specificity', () => {
-            const parsed = (compiler as any).parseSelector('button');
-            const specificity = (compiler as any).calculateSpecificity('button', parsed);
+            const parsed = parseSelector('button');
+            const specificity = calculateSpecificity('button', parsed);
 
             expect(specificity).toBe(1);
         });
 
         it('should calculate attribute specificity', () => {
-            const parsed = (compiler as any).parseSelector('button[type="submit"]');
-            const specificity = (compiler as any).calculateSpecificity(
+            const parsed = parseSelector('button[type="submit"]');
+            const specificity = calculateSpecificity(
                 'button[type="submit"]',
                 parsed
             );
@@ -186,10 +183,10 @@ describe('ThemeCompiler', () => {
         });
 
         it('should calculate multiple attribute specificity', () => {
-            const parsed = (compiler as any).parseSelector(
+            const parsed = parseSelector(
                 'button[type="submit"][class*="primary"]'
             );
-            const specificity = (compiler as any).calculateSpecificity(
+            const specificity = calculateSpecificity(
                 'button[type="submit"][class*="primary"]',
                 parsed
             );
@@ -199,18 +196,18 @@ describe('ThemeCompiler', () => {
         });
 
         it('should calculate pseudo-class specificity', () => {
-            const parsed = (compiler as any).parseSelector('button:hover');
-            const specificity = (compiler as any).calculateSpecificity('button:hover', parsed);
+            const parsed = parseSelector('button:hover');
+            const specificity = calculateSpecificity('button:hover', parsed);
 
             // 1 (element) + 10 (pseudo-class) = 11
             expect(specificity).toBe(11);
         });
 
         it('should calculate combined specificity', () => {
-            const parsed = (compiler as any).parseSelector(
+            const parsed = parseSelector(
                 'button[data-context="chat"][type="submit"]:hover'
             );
-            const specificity = (compiler as any).calculateSpecificity(
+            const specificity = calculateSpecificity(
                 'button[data-context="chat"][type="submit"]:hover',
                 parsed
             );
@@ -220,10 +217,10 @@ describe('ThemeCompiler', () => {
         });
 
         it('should handle complex selectors', () => {
-            const parsed = (compiler as any).parseSelector(
+            const parsed = parseSelector(
                 'button[data-id="chat.send"][data-context="chat"]:hover:focus'
             );
-            const specificity = (compiler as any).calculateSpecificity(
+            const specificity = calculateSpecificity(
                 'button[data-id="chat.send"][data-context="chat"]:hover:focus',
                 parsed
             );
@@ -317,8 +314,12 @@ describe('ThemeCompiler', () => {
             );
 
             expect(css).toContain('--font-sans: "Inter", sans-serif');
-            expect(css).toContain('--font-heading: "Space Grotesk", sans-serif');
-            expect(css).toMatch(/\.dark[\s\S]*--font-heading: "Space Grotesk", sans-serif/);
+            expect(css).toContain(
+                '--font-heading: "Space Grotesk", sans-serif'
+            );
+            expect(css).toMatch(
+                /\.dark[\s\S]*--font-heading: "Space Grotesk", sans-serif/
+            );
         });
     });
 
@@ -371,8 +372,12 @@ describe('ThemeCompiler', () => {
             const compiled = (compiler as any).compileOverrides(overrides);
 
             expect(compiled).toHaveLength(3);
-            expect(compiled.some((o: any) => o.component === 'button')).toBe(true);
-            expect(compiled.some((o: any) => o.component === 'input')).toBe(true);
+            expect(compiled.some((o: any) => o.component === 'button')).toBe(
+                true
+            );
+            expect(compiled.some((o: any) => o.component === 'input')).toBe(
+                true
+            );
         });
 
         it('should preserve original selector', () => {
@@ -382,7 +387,9 @@ describe('ThemeCompiler', () => {
 
             const compiled = (compiler as any).compileOverrides(overrides);
 
-            expect(compiled[0].selector).toBe('button.chat[type="submit"]:hover');
+            expect(compiled[0].selector).toBe(
+                'button.chat[type="submit"]:hover'
+            );
         });
     });
 
@@ -406,7 +413,9 @@ describe('ThemeCompiler', () => {
             ];
 
             // Should not throw
-            await expect((compiler as any).generateTypes(results)).resolves.not.toThrow();
+            await expect(
+                (compiler as any).generateTypes(results)
+            ).resolves.not.toThrow();
         });
 
         it('should not throw when generating types with identifiers', async () => {
@@ -427,7 +436,9 @@ describe('ThemeCompiler', () => {
             ];
 
             // Should not throw
-            await expect((compiler as any).generateTypes(results)).resolves.not.toThrow();
+            await expect(
+                (compiler as any).generateTypes(results)
+            ).resolves.not.toThrow();
         });
 
         it('should not throw with empty themes', async () => {
@@ -442,7 +453,9 @@ describe('ThemeCompiler', () => {
             ];
 
             // Should not throw
-            await expect((compiler as any).generateTypes(results)).resolves.not.toThrow();
+            await expect(
+                (compiler as any).generateTypes(results)
+            ).resolves.not.toThrow();
         });
     });
 
