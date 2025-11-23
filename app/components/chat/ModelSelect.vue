@@ -100,7 +100,7 @@ const show = computed(
 );
 
 const items = computed(() =>
-    favoriteModels.value.map((m: any) => ({
+    favoriteModels.value.map((m: { canonical_slug: string }) => ({
         label: m.canonical_slug,
         value: m.canonical_slug,
     }))

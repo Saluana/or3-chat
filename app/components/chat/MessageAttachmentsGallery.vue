@@ -83,11 +83,19 @@
 import { reactive, watch, onBeforeUnmount } from 'vue';
 import { getFileBlob, getFileMeta } from '~/db/files';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import type { FileMeta } from '~/types/chat-internal';
 
 interface ThumbState {
     status: 'loading' | 'ready' | 'error';
     url?: string;
 }
+
+interface GlobalThumbCache {
+    cache: Map<string, ThumbState>;
+    inflight: Map<string, Promise<void>>;
+    refCounts: Map<string, number>;
+}
+
 const props = defineProps<{ hashes: string[] }>();
 defineEmits<{ (e: 'collapse'): void }>();
 
@@ -106,20 +114,18 @@ const attachmentItemProps = useThemeOverrides({
 });
 
 // Reuse global caches so virtualization doesn't thrash
-const cache = ((globalThis as any).__or3ThumbCache ||= new Map<
-    string,
-    ThumbState
->());
-const inflight = ((globalThis as any).__or3ThumbInflight ||= new Map<
-    string,
-    Promise<void>
->());
-const thumbRefCounts = ((globalThis as any).__or3ThumbRefCounts ||= new Map<
-    string,
-    number
->());
+const globalCache: GlobalThumbCache = (globalThis.__or3ThumbCache ??= {
+    cache: new Map<string, ThumbState>(),
+    inflight: new Map<string, Promise<void>>(),
+    refCounts: new Map<string, number>()
+});
+
+const cache = globalCache.cache;
+const inflight = globalCache.inflight;
+const thumbRefCounts = globalCache.refCounts;
+
 const thumbs = reactive<Record<string, ThumbState>>({});
-const meta = reactive<Record<string, any>>({});
+const meta = reactive<Record<string, FileMeta>>({});
 const fileNames = reactive<Record<string, string>>({});
 
 function retainThumb(hash: string) {

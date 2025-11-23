@@ -155,8 +155,8 @@ export interface ChatSettingsOverrides {
  * Thumbnail cache types for MessageAttachmentsGallery
  */
 export interface ThumbCache {
-    cache: Map<string, string>;
-    inflight: Map<string, Promise<string>>;
+    cache: Map<string, { status: 'loading' | 'ready' | 'error'; url?: string }>;
+    inflight: Map<string, Promise<void>>;
     refCounts: Map<string, number>;
 }
 

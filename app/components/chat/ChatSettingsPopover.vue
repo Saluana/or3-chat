@@ -158,7 +158,7 @@ const switchProps = computed(() => {
     });
     return {
         color: 'primary',
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -174,7 +174,7 @@ const webSearchSwitchProps = computed(() => {
         color: 'primary',
         size: 'sm',
         label: 'Enable web search',
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -190,7 +190,7 @@ const thinkingSwitchProps = computed(() => {
         color: 'primary',
         size: 'sm',
         label: 'Enable thinking',
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -205,7 +205,7 @@ const getToolSwitchProps = (toolName: string) => {
     return {
         color: 'primary',
         size: 'sm',
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 };
 
@@ -217,10 +217,10 @@ const systemPromptsButtonProps = computed(() => {
         identifier: 'settings.system-prompts',
         isNuxtUI: true,
     });
-    const overrideValue = (overrides.value as any) || {};
+    const overrideValue = overrides.value || {};
     const baseClass =
         'flex justify-between w-full items-center py-1 px-2 font-medium';
-    const mergedClass = [baseClass, overrideValue.class]
+    const mergedClass = [baseClass, (overrideValue as Record<string, any>).class]
         .filter(Boolean)
         .join(' ');
     return {
@@ -242,10 +242,10 @@ const modelCatalogButtonProps = computed(() => {
         identifier: 'settings.model-catalog',
         isNuxtUI: true,
     });
-    const overrideValue = (overrides.value as any) || {};
+    const overrideValue = overrides.value || {};
     const baseClass =
         'flex justify-between w-full items-center py-1 px-2 font-medium';
-    const mergedClass = [baseClass, overrideValue.class]
+    const mergedClass = [baseClass, (overrideValue as Record<string, any>).class]
         .filter(Boolean)
         .join(' ');
     return {
