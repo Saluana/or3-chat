@@ -95,7 +95,7 @@
         >
             <!-- Retro loader extracted to component -->
             <LoadingGenerating
-                v-if="props.message.role === 'assistant' && (props.message as any).pending && !hasContent && !message.reasoning_text"
+                v-if="props.message.role === 'assistant' && props.message.pending && !hasContent && !props.message.reasoning_text"
                 class="loading-generating animate-in"
             />
             <div
@@ -110,7 +110,7 @@
                     hydrate-on-visible
                     :content="props.message.reasoning_text"
                     :streaming="isStreamingReasoning as boolean"
-                    :pending="(props.message as any).pending"
+                    :pending="props.message.pending === true"
                 />
             </div>
 
@@ -273,7 +273,10 @@ import { parseHashes } from '~/utils/files/attachments';
 import { getFileMeta } from '~/db/files';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { shallowRef } from 'vue';
+import { useToast } from '#imports';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
+import type { ThemePlugin } from '~/plugins/90.theme.client';
+import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import { useRafFn } from '@vueuse/core';
@@ -282,7 +285,8 @@ import { useIcon } from '~/composables/useIcon';
 
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };
-const props = defineProps<{ message: UIMessage; threadId?: string }>();
+type MessageWithUiState = UIMessage & { _expanded?: boolean };
+const props = defineProps<{ message: MessageWithUiState; threadId?: string }>();
 const emit = defineEmits<{
     (e: 'retry', id: string): void;
     (e: 'branch', id: string): void;
@@ -306,7 +310,7 @@ const copyButtonProps = computed(() => {
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -323,7 +327,7 @@ const retryButtonProps = computed(() => {
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -340,7 +344,7 @@ const branchButtonProps = computed(() => {
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -357,7 +361,7 @@ const editButtonProps = computed(() => {
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -373,7 +377,7 @@ const pluginActionButtonProps = computed(() => {
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -389,7 +393,7 @@ const saveEditButtonProps = computed(() => {
         size: 'sm' as const,
         color: 'success' as const,
         class: 'theme-btn',
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -405,7 +409,7 @@ const cancelEditButtonProps = computed(() => {
         size: 'sm' as const,
         color: 'error' as const,
         class: 'theme-btn',
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -439,7 +443,7 @@ const roleVariant = computed<'user' | 'assistant'>(() =>
 );
 
 const isStreamingReasoning = computed(() => {
-    return props.message.reasoning_text && !hasContent.value;
+    return Boolean(props.message.reasoning_text) && !hasContent.value;
 });
 
 // User message collapse/expand
@@ -471,9 +475,7 @@ const innerClass = computed(() => ({
 const hasContent = computed(() => (props.message.text || '').trim().length > 0);
 
 // Extract hash list (serialized JSON string or array already?)
-const hashList = computed<string[]>(() =>
-    parseHashes((props.message as any).file_hashes)
-);
+const hashList = computed<string[]>(() => parseHashes(props.message.file_hashes));
 
 // Unified markdown already provided via UiChatMessage.text -> transform file-hash placeholders to inert spans
 const assistantMarkdown = computed(() =>
@@ -497,16 +499,12 @@ const processedAssistantMarkdown = computed(() => {
 });
 
 // Dynamic Shiki theme: map current theme (light/dark*/light*) to github-light / github-dark
-const nuxtApp = useNuxtApp() as any;
+const nuxtApp = useNuxtApp();
+const themePlugin = computed<ThemePlugin>(() => nuxtApp.$theme);
 const currentShikiTheme = computed(() => {
-    const themeObj = nuxtApp?.$theme;
-    let t: any = 'light';
-    if (themeObj) {
-        if (themeObj.current && 'value' in themeObj.current)
-            t = themeObj.current.value;
-        else if (typeof themeObj.get === 'function') t = themeObj.get();
-    }
-    return String(t).startsWith('dark') ? 'github-dark' : 'github-light';
+    const themeObj = themePlugin.value;
+    const themeName = themeObj.current?.value ?? themeObj.get();
+    return String(themeName).startsWith('dark') ? 'github-dark' : 'github-light';
 });
 // Debug watchers removed (can reintroduce with import.meta.dev guards if needed)
 // Patch ensureThumb with logs if not already
@@ -517,11 +515,11 @@ const currentShikiTheme = computed(() => {
 // Editing (extracted)
 // Wrap message in a shallowRef so if parent swaps the object (stream tail -> finalized),
 // editing composable always sees latest.
-const messageRef = shallowRef(props.message as any);
+const messageRef = shallowRef<MessageWithUiState>(props.message);
 watch(
     () => props.message,
     (m) => {
-        messageRef.value = m as any;
+        messageRef.value = m;
     }
 );
 const {
@@ -541,14 +539,8 @@ function focusEditorAtEnd() {
     let tries = 0;
     const maxTries = 25; // allow up to ~1.5s (25 * 60ms) for lazy editor mount on iOS
     const attempt = () => {
-        const rootEl: any = editorRoot.value || null;
-        let textarea: HTMLTextAreaElement | null = null;
-        if (rootEl) {
-            textarea = rootEl.querySelector('textarea');
-            if (!textarea && rootEl.$el) {
-                textarea = rootEl.$el.querySelector?.('textarea') || null;
-            }
-        }
+        const rootEl = editorRoot.value;
+        const textarea = rootEl?.querySelector('textarea') || null;
         if (textarea) {
             try {
                 // iOS sometimes needs scroll into view before focus sticks
@@ -581,19 +573,19 @@ watch(
 );
 // Wrap begin/cancel/save to emit lifecycle events for container scroll suppression
 function wrappedBeginEdit() {
-    const id = (props.message as any).id;
+    const id = props.message.id;
     beginEdit();
     if (editing.value && id) emit('begin-edit', id);
 }
 function wrappedCancelEdit() {
-    const id = (props.message as any).id;
+    const id = props.message.id;
     cancelEdit();
     if (id) emit('cancel-edit', id);
 }
 async function saveEdit() {
     await internalSaveEdit();
     if (!editing.value) {
-        const id = (props.message as any).id;
+        const id = props.message.id;
         if (id) emit('edited', { id, content: draft.value });
         if (id) emit('save-edit', id);
     }
@@ -629,22 +621,33 @@ const pdfDisplayName = computed(() => {
     const tail = Math.floor(keep / 2);
     return base.slice(0, head) + '…' + base.slice(base.length - tail) + ext;
 });
-const thumbCache = ((globalThis as any).__or3ThumbCache ||= new Map<
-    string,
-    ThumbState
->());
-const thumbLoadPromises = ((globalThis as any).__or3ThumbInflight ||= new Map<
-    string,
-    Promise<void>
->());
+interface ThumbCacheGlobals {
+    __or3ThumbCache?: Map<string, ThumbState>;
+    __or3ThumbInflight?: Map<string, Promise<void>>;
+    __or3ThumbRefCounts?: Map<string, number>;
+    __or3ThumbCleanupTimers?: Map<
+        string,
+        ReturnType<typeof setTimeout>
+    >;
+}
+const thumbGlobals = globalThis as ThumbCacheGlobals;
+const thumbCache =
+    thumbGlobals.__or3ThumbCache ??
+    (thumbGlobals.__or3ThumbCache = new Map<string, ThumbState>());
+const thumbLoadPromises =
+    thumbGlobals.__or3ThumbInflight ??
+    (thumbGlobals.__or3ThumbInflight = new Map<string, Promise<void>>());
 // Reference counts per file hash so we can safely revoke object URLs when unused.
-const thumbRefCounts = ((globalThis as any).__or3ThumbRefCounts ||= new Map<
-    string,
-    number
->());
+const thumbRefCounts =
+    thumbGlobals.__or3ThumbRefCounts ??
+    (thumbGlobals.__or3ThumbRefCounts = new Map<string, number>());
 // Delayed cleanup map to prevent thrashing during rapid scroll
-const thumbCleanupTimers = ((globalThis as any).__or3ThumbCleanupTimers ||=
-    new Map<string, ReturnType<typeof setTimeout>>());
+const thumbCleanupTimers =
+    thumbGlobals.__or3ThumbCleanupTimers ??
+    (thumbGlobals.__or3ThumbCleanupTimers = new Map<
+        string,
+        ReturnType<typeof setTimeout>
+    >());
 
 function retainThumb(hash: string) {
     // Cancel any pending cleanup for this hash
@@ -674,7 +677,7 @@ function releaseThumb(hash: string) {
                 if (state?.url) {
                     try {
                         URL.revokeObjectURL(state.url);
-                    } catch (e) {
+                    } catch (e: unknown) {
                         if (import.meta.dev) {
                             console.warn(
                                 '[ChatMessage] Failed to revoke object URL',
@@ -695,10 +698,10 @@ function releaseThumb(hash: string) {
 
 // Per-message persistent UI state stored directly on the message object to
 // survive virtualization recycling without external maps.
-const expanded = ref<boolean>(
-    (props.message as any)._expanded === true || false
-);
-watch(expanded, (v) => ((props.message as any)._expanded = v));
+const expanded = ref<boolean>(props.message._expanded === true);
+watch(expanded, (v) => {
+    props.message._expanded = v;
+});
 const firstThumb = computed(() => hashList.value[0]);
 function toggleExpanded() {
     if (!hashList.value.length) return;
@@ -844,7 +847,7 @@ watchEffect(() => {
 
     // Throttle during streaming to reduce CPU load
     const now = Date.now();
-    const isPending = (props.message as any).pending;
+    const isPending = props.message.pending === true;
     if (isPending && now - lastHydrateCheck < HYDRATE_THROTTLE_MS) {
         return;
     }
@@ -900,7 +903,7 @@ const loadShikiOnIdle = () => {
     idleLoader(() => {
         try {
             useShikiHighlighter();
-        } catch (e) {
+        } catch (e: unknown) {
             if (import.meta.dev)
                 console.warn('[ChatMessage] Shiki load error:', e);
         }
@@ -913,8 +916,6 @@ onMounted(() => {
     loadShikiOnIdle();
 });
 
-// Thumbnail status watcher removed (covered by consolidated watchEffect)
-import { useToast } from '#imports';
 function copyMessage() {
     navigator.clipboard.writeText(props.message.text || '');
 
@@ -926,7 +927,7 @@ function copyMessage() {
 }
 
 function onRetry() {
-    const id = (props.message as any).id;
+    const id = props.message.id;
     if (!id) return;
     emit('retry', id);
 }
@@ -936,19 +937,18 @@ import { forkThread } from '~/db/branching';
 // Branch popover state
 const branchMode = ref<'reference' | 'copy'>('copy');
 
-const branchTitle = ref('');
+    const branchTitle = ref('');
 const branching = ref(false);
 
 async function onBranch() {
     if (branching.value) return;
     branching.value = true;
-    const messageId = (props.message as any).id;
+    const messageId = props.message.id;
     if (!messageId) return;
     try {
-        let res: any;
         // For assistant messages we now allow direct anchoring (captures assistant content in branch).
         // If "retry" semantics desired, a separate Retry action still uses retryBranch.
-        res = await forkThread({
+        const res = await forkThread({
             sourceThreadId: props.threadId || '',
             anchorMessageId: messageId,
             mode: branchMode.value,
@@ -961,10 +961,12 @@ async function onBranch() {
             color: 'primary',
             duration: 2200,
         });
-    } catch (e: any) {
+    } catch (e: unknown) {
+        const message =
+            e instanceof Error ? e.message : 'Error creating branch';
         useToast().add({
             title: 'Branch failed',
-            description: e?.message || 'Error creating branch',
+            description: message,
             color: 'error',
             duration: 3000,
         });
@@ -975,8 +977,10 @@ async function onBranch() {
 
 // Extensible message actions (plugin registered)
 // Narrow to expected role subset (exclude potential 'system' etc.)
+const actionRole: 'user' | 'assistant' =
+    props.message.role === 'assistant' ? 'assistant' : 'user';
 const extraActions = useMessageActions({
-    role: props.message.role as 'user' | 'assistant',
+    role: actionRole,
 });
 
 async function runExtraAction(action: ChatMessageAction) {
@@ -985,11 +989,13 @@ async function runExtraAction(action: ChatMessageAction) {
             message: props.message,
             threadId: props.threadId,
         });
-    } catch (e: any) {
+    } catch (e: unknown) {
+        const description =
+            e instanceof Error ? e.message : 'Error running action';
         try {
             useToast().add({
                 title: 'Action failed',
-                description: e?.message || 'Error running action',
+                description,
                 color: 'error',
                 duration: 3000,
             });

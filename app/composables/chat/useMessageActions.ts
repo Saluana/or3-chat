@@ -1,4 +1,5 @@
 import { computed, reactive } from 'vue';
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
 
 /** Definition for an extendable chat message action button. */
 export interface ChatMessageAction {
@@ -13,14 +14,21 @@ export interface ChatMessageAction {
     /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
     order?: number;
     /** Handler invoked on click. */
-    handler: (ctx: { message: any; threadId?: string }) => void | Promise<void>;
+    handler: (ctx: {
+        message: UiChatMessage;
+        threadId?: string;
+    }) => void | Promise<void>;
+}
+
+interface MessageActionsRegistryGlobal {
+    __or3MessageActionsRegistry?: Map<string, ChatMessageAction>;
 }
 
 // Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
-const g: any = globalThis as any;
+const registryHost = globalThis as MessageActionsRegistryGlobal;
 const registry: Map<string, ChatMessageAction> =
-    g.__or3MessageActionsRegistry ||
-    (g.__or3MessageActionsRegistry = new Map());
+    registryHost.__or3MessageActionsRegistry ||
+    (registryHost.__or3MessageActionsRegistry = new Map());
 
 // Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
 const reactiveList = reactive<{ items: ChatMessageAction[] }>({ items: [] });
