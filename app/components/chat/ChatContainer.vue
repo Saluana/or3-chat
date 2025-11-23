@@ -96,6 +96,7 @@ import {
     type Ref,
     type CSSProperties,
     onBeforeUnmount,
+    nextTick,
 } from 'vue';
 
 import {
@@ -325,7 +326,7 @@ const allMessages = computed(() => {
 
 // Scroll handling centralized in VirtualMessageList
 // Ref is now the VirtualMessageList component instance, not a raw element
-const scrollParent = ref<any>(null);
+const scroller = ref<any>(null);
 
 // Track editing state across child messages for scroll suppression (Task 5.2.2)
 const editingIds = ref<Set<string>>(new Set());
@@ -436,6 +437,10 @@ function onSend(payload: any) {
             online: !!payload.webSearchEnabled,
             context_hashes,
         })
+        ?.then(() => {
+            // Ensure layout is stable after sending (input shrink + new message)
+            nextTick(() => scroller.value?.refreshMeasurements());
+        })
         ?.catch(() => {});
 }
 
@@ -443,6 +448,8 @@ function onRetry(messageId: string) {
     if (!chat.value || chat.value?.loading?.value) return;
     // Provide current model so retry uses same selection
     (chat.value as any).retryMessage(messageId, model.value);
+    // Retry changes message state, force measure
+    nextTick(() => scroller.value?.refreshMeasurements());
 }
 
 function onBranch(newThreadId: string) {
@@ -455,7 +462,11 @@ function onEdited(payload: { id: string; content: string }) {
         typeof (chat.value as any).applyLocalEdit === 'function'
             ? (chat.value as any).applyLocalEdit(payload.id, payload.content)
             : false;
-    if (applied) return;
+    if (applied) {
+        // Content changed size, force measure
+        nextTick(() => scroller.value?.refreshMeasurements());
+        return;
+    }
 }
 
 function onPendingPromptSelected(promptId: string | null) {
