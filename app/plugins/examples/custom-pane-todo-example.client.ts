@@ -22,6 +22,7 @@ import {
 } from '~/composables/sidebar/useSidebarEnvironment';
 import { useSidebarPageControls } from '~/composables/sidebar/useSidebarPageControls';
 import { usePostsList } from '~/composables/posts/usePostsList';
+import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 
 export default defineNuxtPlugin(async () => {
     if (!process.client) return;
@@ -309,8 +310,8 @@ export default defineNuxtPlugin(async () => {
                     try {
                         // Get the active pane index
                         const activeIndex =
-                            (globalThis as any).__or3MultiPaneApi
-                                ?.activePaneIndex?.value ?? 0;
+                            getGlobalMultiPaneApi()?.activePaneIndex?.value ??
+                            0;
                         const activePane = multiPane.panes.value[activeIndex];
 
                         // Replace the active pane if it's empty (no thread, no document, or another todo)

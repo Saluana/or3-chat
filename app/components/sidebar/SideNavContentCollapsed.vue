@@ -204,6 +204,7 @@ import {
 } from '~/composables/sidebar/useSidebarSections';
 import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
+import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import SideBottomNav from './SideBottomNav.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
@@ -362,21 +363,21 @@ const orderedPages = computed(() => {
 });
 
 const activeDocumentIds = computed<string[]>(() => {
-    const api: any = (globalThis as any).__or3MultiPaneApi;
+    const api = getGlobalMultiPaneApi();
     if (api && api.panes && Array.isArray(api.panes.value)) {
         return api.panes.value
-            .filter((p: any) => p.mode === 'doc' && p.documentId)
-            .map((p: any) => p.documentId as string);
+            .filter((p) => p.mode === 'doc' && p.documentId)
+            .map((p) => p.documentId as string);
     }
     return [];
 });
 
 const activeThreadIds = computed<string[]>(() => {
-    const api: any = (globalThis as any).__or3MultiPaneApi;
+    const api = getGlobalMultiPaneApi();
     if (api && api.panes && Array.isArray(api.panes.value)) {
         const ids = api.panes.value
-            .filter((p: any) => p.mode === 'chat' && p.threadId)
-            .map((p: any) => p.threadId as string)
+            .filter((p) => p.mode === 'chat' && p.threadId)
+            .map((p) => p.threadId as string)
             .filter(Boolean);
         if (ids.length) return ids;
     }

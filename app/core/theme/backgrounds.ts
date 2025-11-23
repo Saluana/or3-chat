@@ -12,11 +12,13 @@ const isBrowser = () =>
     typeof window !== 'undefined' && typeof document !== 'undefined';
 
 function getCache(): Map<string, string> {
-    const g: any = globalThis as any;
+    const g = globalThis as typeof globalThis & {
+        [CACHE_KEY]?: Map<string, string>;
+    };
     if (!g[CACHE_KEY]) {
         g[CACHE_KEY] = new Map<string, string>();
     }
-    return g[CACHE_KEY];
+    return g[CACHE_KEY]!;
 }
 
 export function revokeBackgroundBlobs() {

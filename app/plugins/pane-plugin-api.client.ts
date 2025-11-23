@@ -1,4 +1,5 @@
 import { nowSec } from '~/db/util';
+import { defineNuxtPlugin } from '#imports';
 import { create, tx } from '~/db';
 import { reportError, err as coreErr } from '~/utils/errors';
 import { useNuxtApp } from '#app';

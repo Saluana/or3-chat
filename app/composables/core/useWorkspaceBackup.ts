@@ -1,6 +1,6 @@
 import { ref, type Ref } from 'vue';
 import { db } from '~/db/client';
-import { reportError, err, asAppError } from '~/utils/errors';
+import { reportError, err, asAppError, type AppError } from '~/utils/errors';
 import { useHooks } from '~/core/hooks/useHooks';
 import { useLazyBoundaries } from '~/composables/core/useLazyBoundaries';
 import {

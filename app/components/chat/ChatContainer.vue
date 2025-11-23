@@ -15,7 +15,7 @@
             <Or3Scroll
                 ref="scroller"
                 :items="allMessages"
-                :item-key="(m: any) => m.id || m.stream_id || ''"
+                :item-key="(m) => m.id || m.stream_id || ''"
                 :estimate-height="80"
                 :overscan="6500"
                 :maintain-bottom="!anyEditing"
@@ -127,6 +127,13 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useToast } from '#imports';
 import { MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
+import type {
+    ChatInstance,
+    ImageAttachment,
+    LargeTextAttachment,
+    StreamState,
+} from '../../../types/chat-internal';
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
 // Removed onMounted/watchEffect (unused)
 
 // Debug utilities removed per request.
@@ -206,12 +213,12 @@ if (props.paneId) {
     const pre = getPanePendingPrompt(props.paneId);
     if (pre) pendingPromptId.value = pre;
 }
-const chat = shallowRef<any>(
+const chat = shallowRef<ChatInstance>(
     useChat(
         props.messageHistory,
         props.threadId,
         pendingPromptId.value || undefined
-    )
+    ) as ChatInstance
 );
 
 watch(
@@ -224,7 +231,7 @@ watch(
         }
         // Free previous thread messages & abort any active stream before switching
         try {
-            (chat.value as any)?.clear?.();
+            chat.value?.clear?.();
         } catch (e) {
             if (import.meta.dev) {
                 console.warn(
@@ -237,7 +244,7 @@ watch(
             props.messageHistory,
             newId,
             pendingPromptId.value || undefined
-        );
+        ) as ChatInstance;
     }
 );
 
@@ -253,8 +260,8 @@ watch(
         // Prefer to update the internal messages array directly to avoid remount flicker
         // Filter out tool messages before updating
         chat.value!.messages.value = (mh || [])
-            .filter((m: any) => m.role !== 'tool')
-            .map((m: any) => ensureUiMessage(m));
+            .filter((m) => m.role !== 'tool')
+            .map((m) => ensureUiMessage(m));
     }
 );
 
@@ -274,61 +281,62 @@ watch(
 // Render messages with content narrowed to string for ChatMessage.vue
 // messages already normalized to UiChatMessage with .text in useChat composable
 // Filter out tool messages (internal implementation details shown inline in assistant messages)
-const messages = computed(() =>
-    (chat.value?.messages?.value || []).filter((m: any) => m.role !== 'tool')
+const messages = computed<UiChatMessage[]>(
+    () => chat.value?.messages?.value || []
 );
 
 const loading = computed(() => chat.value?.loading?.value || false);
 
 // Tail streaming now provided directly by useChat composable
 // `useChat` returns many refs; unwrap common ones so computed values expose plain objects/primitives
-const streamId = computed(() => {
-    const s = chat.value?.streamId;
-    return s && 'value' in s ? (s as any).value : s;
-});
-const streamState: any = computed(() => {
-    const s = chat.value?.streamState;
-    return s && 'value' in s ? (s as any).value : s;
-});
+function unwrapRef<T>(refOrValue: T | Ref<T>): T {
+    return refOrValue && typeof refOrValue === 'object' && 'value' in refOrValue
+        ? (refOrValue as Ref<T>).value
+        : (refOrValue as T);
+}
+
+const streamId = computed(() => unwrapRef(chat.value?.streamId));
+const streamState = computed<StreamState | null>(
+    () => chat.value?.streamState ?? null
+);
 // Stream text + reasoning (from unified stream accumulator)
 // Tail assistant from composable (kept out of history until next user send)
-const tailAssistant = computed<any | null>(() => {
-    const t = chat.value?.tailAssistant;
-    return t && 'value' in t ? (t as any).value : t;
+const tailAssistant = computed<UiChatMessage | null>(() => {
+    const t = chat.value?.tailAssistant as
+        | Ref<UiChatMessage | null>
+        | UiChatMessage
+        | null
+        | undefined;
+    return unwrapRef<UiChatMessage | null>(t ?? null);
 });
 // Live streaming deltas (while active) to overlay into tailAssistant
-const streamReasoning = computed(
-    () => streamState?.value?.reasoningText || streamState?.reasoningText || ''
-);
-const tailDisplay = computed(
-    () => streamState?.value?.text || streamState?.text || ''
-);
+const streamReasoning = computed(() => streamState.value?.reasoningText || '');
+const tailDisplay = computed(() => streamState.value?.text || '');
 // Removed tail char delta logging.
 // Current thread id for this container (reactive)
 const currentThreadId = computed(() => chat.value?.threadId?.value);
 // Tail active means stream not finalized
-const streamActive = computed(
-    () => !(streamState?.value?.finalized ?? streamState?.finalized ?? false)
-);
+const streamActive = computed(() => !(streamState.value?.finalized ?? false));
 // Display logic: if tailAssistant exists, use it; merge live accumulator text while active.
-const streamingMessage = computed<any | null>(() => {
+const streamingMessage = computed<UiChatMessage | null>(() => {
     const base = tailAssistant.value;
     if (!base) return null;
     const active = streamActive.value && streamId.value;
     if (!active) return base; // finalized: use original object so edits persist
     const text = tailDisplay.value || base.text;
-    const reasoning = streamReasoning.value || base.reasoning_text;
-    return Object.assign({}, base, {
+    const reasoning = streamReasoning.value || base.reasoning_text || null;
+    return {
+        ...base,
         text,
         reasoning_text: reasoning,
         pending: base.pending && !(text || reasoning),
         stream_id: streamId.value, // Ensure stream_id is present for keying
-    });
+    };
 });
 
 // All stable messages (excluding the in-flight streaming tail) are virtualized to avoid boundary jumps
 // messages[] already excludes tail assistant; no filtering required
-const stableMessages = computed<any[]>(() => messages.value);
+const stableMessages = computed<UiChatMessage[]>(() => messages.value);
 
 // Combine stable messages and streaming message for Or3Scroll
 const allMessages = computed(() => {
@@ -344,7 +352,11 @@ const allMessages = computed(() => {
 
 // Scroll handling centralized in VirtualMessageList
 // Ref is now the VirtualMessageList component instance, not a raw element
-const scroller = ref<any>(null);
+type ScrollApi = {
+    scrollToBottom?: (opts?: { smooth?: boolean }) => void;
+    refreshMeasurements?: () => void;
+};
+const scroller = ref<ScrollApi | null>(null);
 
 // Track editing state across child messages for scroll suppression (Task 5.2.2)
 const editingIds = ref<Set<string>>(new Set());
@@ -383,9 +395,9 @@ const scrollToBottomButtonProps = computed(() => {
         size: 'sm' as const,
         color: 'primary' as const,
         variant: 'solid' as const,
-        ui: { rounded: 'rounded-full' },
+        ui: { base: 'rounded-full' },
         class: 'shadow-lg',
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -395,7 +407,7 @@ const scrollToBottomOpacity = computed(() => {
 });
 
 function scrollToBottom() {
-    scroller.value?.scrollToBottom({ smooth: true });
+    scroller.value?.scrollToBottom?.({ smooth: true });
 }
 
 function onScrollState(s: { atBottom: boolean; stick: boolean }) {
@@ -434,7 +446,7 @@ function collectRecentHashes(limit = MAX_MESSAGE_FILE_HASHES): string[] {
     const out: string[] = [];
     const seen = new Set<string>();
     for (let i = msgs.length - 1; i >= 0 && out.length < limit; i--) {
-        const m: any = msgs[i];
+        const m = msgs[i];
         if (!m || !Array.isArray(m.file_hashes)) continue;
         for (const h of m.file_hashes) {
             if (!h || seen.has(h)) continue;
@@ -446,15 +458,48 @@ function collectRecentHashes(limit = MAX_MESSAGE_FILE_HASHES): string[] {
     return out;
 }
 
-function onSend(payload: any) {
+type UploadedImage = {
+    file: File;
+    url: string;
+    name: string;
+    hash?: string;
+    status: 'pending' | 'ready' | 'error';
+    error?: string;
+    mime: string;
+    kind: 'image' | 'pdf';
+};
+
+type ChatInputSendPayload = {
+    text: string;
+    images: UploadedImage[];
+    attachments: UploadedImage[];
+    largeTexts: LargeTextAttachment[];
+    model: string;
+    settings: {
+        quality: 'low' | 'medium' | 'high';
+        numResults: number;
+        size: '1024x1024' | '1024x1536' | '1536x1024';
+    };
+    webSearchEnabled: boolean;
+};
+
+function onSend(payload: ChatInputSendPayload) {
     if (loading.value) return;
-    const readyImages = Array.isArray(payload.images)
-        ? payload.images.filter((img: any) => img && img.status === 'ready')
-        : [];
-    const pendingCount = Array.isArray(payload.images)
-        ? payload.images.filter((img: any) => img && img.status === 'pending')
-              .length
-        : 0;
+    model.value = payload.model || model.value;
+    const attachments = payload.attachments?.length
+        ? payload.attachments
+        : payload.images;
+    const readyImages =
+        attachments?.filter(
+            (img): img is UploadedImage =>
+                Boolean(img) && img.status === 'ready'
+        ) ?? [];
+    const pendingCount =
+        attachments?.filter(
+            (img): img is UploadedImage =>
+                Boolean(img) && img.status === 'pending'
+        ).length ?? 0;
+
     if (pendingCount > 0) {
         // Defer sending until attachments finish hashing to avoid losing them
         toast?.add?.({
@@ -466,24 +511,39 @@ function onSend(payload: any) {
         return;
     }
     const carryHashes = readyImages.length === 0 ? collectRecentHashes() : [];
-    const files = readyImages.map((img: any) => ({
-        type: img.file?.type || img.mime || 'image/png',
-        url: img.hash || img.url,
-    }));
+    const files = readyImages
+        .map((img) => {
+            const url = img.hash || img.url;
+            if (!url) return null;
+            return {
+                type: img.file?.type || img.mime || 'image/png',
+                url,
+            };
+        })
+        .filter(
+            (
+                f
+            ): f is {
+                type: string;
+                url: string;
+            } => Boolean(f)
+        );
     const file_hashes = readyImages
-        .map((img: any) => img.hash)
-        .filter((h: any) => typeof h === 'string');
+        .map((img) => img.hash)
+        .filter((h): h is string => typeof h === 'string');
     const context_hashes = carryHashes.filter(
-        (h) => typeof h === 'string'
-    ) as string[];
-    const extraTextParts = Array.isArray(payload.largeTexts)
-        ? payload.largeTexts.map((t: any) => t.text).filter(Boolean)
-        : [];
+        (h): h is string => typeof h === 'string'
+    );
+    const extraTextParts =
+        payload.largeTexts
+            ?.map((t: LargeTextAttachment) => t.text)
+            .filter(Boolean) ?? [];
 
     // Send message via useChat composable
     chat.value
-        ?.sendMessage(payload.text, {
-            model: model.value,
+        ?.send({
+            content: payload.text,
+            model: payload.model || model.value,
             files,
             file_hashes,
             extraTextParts,
@@ -492,7 +552,7 @@ function onSend(payload: any) {
         })
         ?.then(() => {
             // Ensure layout is stable after sending (input shrink + new message)
-            nextTick(() => scroller.value?.refreshMeasurements());
+            nextTick(() => scroller.value?.refreshMeasurements?.());
         })
         ?.catch(() => {});
 }
@@ -500,9 +560,9 @@ function onSend(payload: any) {
 function onRetry(messageId: string) {
     if (!chat.value || chat.value?.loading?.value) return;
     // Provide current model so retry uses same selection
-    (chat.value as any).retryMessage(messageId, model.value);
+    chat.value.retryMessage(messageId, model.value);
     // Retry changes message state, force measure
-    nextTick(() => scroller.value?.refreshMeasurements());
+    nextTick(() => scroller.value?.refreshMeasurements?.());
 }
 
 function onBranch(newThreadId: string) {
@@ -512,12 +572,12 @@ function onBranch(newThreadId: string) {
 function onEdited(payload: { id: string; content: string }) {
     if (!chat.value) return;
     const applied =
-        typeof (chat.value as any).applyLocalEdit === 'function'
-            ? (chat.value as any).applyLocalEdit(payload.id, payload.content)
+        typeof chat.value.applyLocalEdit === 'function'
+            ? chat.value.applyLocalEdit(payload.id, payload.content)
             : false;
     if (applied) {
         // Content changed size, force measure
-        nextTick(() => scroller.value?.refreshMeasurements());
+        nextTick(() => scroller.value?.refreshMeasurements?.());
         return;
     }
 }
@@ -538,7 +598,7 @@ function onPendingPromptSelected(promptId: string | null) {
 
 function onStopStream() {
     try {
-        (chat.value as any)?.abort?.();
+        chat.value?.abort?.();
     } catch (e) {
         if (import.meta.dev) {
             console.warn('[ChatContainer] abort failed', e);

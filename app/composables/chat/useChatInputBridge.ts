@@ -59,12 +59,3 @@ export function programmaticSend(paneId: string, text: string): boolean {
 export function hasPane(paneId: string) {
     return !!find(paneId);
 }
-
-// Expose globally (optional) for debugging / external inspection
-if (import.meta.dev) {
-    (globalThis as any).__or3ChatInputBridge = {
-        registry,
-        programmaticSend,
-        hasPane,
-    };
-}

@@ -132,6 +132,7 @@ import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import SidebarHomePage from '~/components/sidebar/SidebarHomePage.vue';
 import type { Post, Project } from '~/db';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
+import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 
@@ -246,7 +247,12 @@ const environment: SidebarEnvironment = {
         }
         return sidebarMultiPaneApi;
     },
-    getPanePluginApi: () => (globalThis as any).__or3PanePluginApi || null,
+    getPanePluginApi: () =>
+        (
+            globalThis as typeof globalThis & {
+                __or3PanePluginApi?: PanePluginApi | null;
+            }
+        ).__or3PanePluginApi || null,
     getProjects: () => projectsRef,
     getThreads: () => threadsRef,
     getDocuments: () => documentsRef,

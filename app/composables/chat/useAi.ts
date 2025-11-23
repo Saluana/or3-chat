@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { useToast, useAppConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
-import { create, db, tx, upsert } from '~/db';
+import { create, db, tx, upsert, type Message } from '~/db';
 import { createOrRefFile } from '~/db/files';
 import { serializeFileHashes, MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
 import {
@@ -28,6 +28,9 @@ import {
     promptJsonToString,
     composeSystemPrompt,
 } from '~/utils/chat/prompt-utils';
+import { createStreamAccumulator } from '~/composables/chat/useStreamAccumulator';
+import { useAiSettings } from '~/composables/chat/useAiSettings';
+import { useModelStore } from '~/composables/chat/useModelStore';
 import { resolveDefaultModel } from '~/core/auth/models-service';
 import { state } from '~/state/global';
 // Import paths aligned with tests' vi.mock targets
@@ -36,8 +39,42 @@ import { useActivePrompt } from '#imports';
 import { getDefaultPromptId } from '#imports';
 import { useHooks } from '#imports';
 // settings/model store are provided elsewhere at runtime; keep dynamic access guards
+import type {
+    ChatSettings,
+    ModelInfo,
+    PaneContext,
+    ExtendedSendMessageParams,
+    ModelInputMessage,
+} from '../../../types/chat-internal';
+import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
+import type { ORMessage } from '~/core/auth/openrouter-build';
+import type { ToolCallInfo } from '~/utils/chat/uiMessages';
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
+
+type GlobalWithPaneApi = typeof globalThis & {
+    __or3MultiPaneApi?: UseMultiPaneApi;
+};
+
+type StoredMessage = Message & {
+    data?: {
+        content?: string;
+        reasoning_text?: string | null;
+        tool_calls?: ToolCallInfo[] | null;
+        [key: string]: unknown;
+    } | null;
+    content?: string | ContentPart[];
+    file_hashes?: string | null;
+    reasoning_text?: string | null;
+    stream_id?: string | null;
+};
+
+type OpenRouterMessage =
+    | ORMessage
+    | {
+          role: 'tool';
+          [key: string]: unknown;
+      };
 
 // Per-instance streaming tail state
 
@@ -89,13 +126,12 @@ export function useChat(
     }
 
     // Helpers to reduce duplication and improve clarity/perf
-    function getActivePaneContext() {
+    function getActivePaneContext(): PaneContext | null {
         try {
-            const mpApi: any = (globalThis as any).__or3MultiPaneApi;
+            const mpApi = (globalThis as GlobalWithPaneApi).__or3MultiPaneApi;
             if (!mpApi?.panes?.value) return null;
             const pane = mpApi.panes.value.find(
-                (p: any) =>
-                    p.mode === 'chat' && p.threadId === threadIdRef.value
+                (p) => p.mode === 'chat' && p.threadId === threadIdRef.value
             );
             if (!pane) return null;
             const paneIndex = mpApi.panes.value.indexOf(pane);
@@ -106,12 +142,11 @@ export function useChat(
     }
 
     function makeAssistantPersister(
-        assistantDbMsg: any,
+        assistantDbMsg: StoredMessage,
         assistantFileHashes: string[]
     ) {
         // Cache last serialized file hashes to avoid recomputing on each write
-        let lastSerialized: string | null =
-            (assistantDbMsg as any).file_hashes || null;
+        let lastSerialized: string | null = assistantDbMsg.file_hashes || null;
         return async function persist({
             content,
             reasoning,
@@ -119,8 +154,12 @@ export function useChat(
         }: {
             content?: string;
             reasoning?: string | null;
-            toolCalls?: any[] | null;
+            toolCalls?: ToolCallInfo[] | null;
         }) {
+            const baseData =
+                assistantDbMsg.data && typeof assistantDbMsg.data === 'object'
+                    ? (assistantDbMsg.data as Record<string, unknown>)
+                    : {};
             const serialized = assistantFileHashes.length
                 ? serializeFileHashes(assistantFileHashes)
                 : lastSerialized;
@@ -130,29 +169,29 @@ export function useChat(
                 reasoning != null ||
                 toolCalls != null
             ) {
-                const payload = {
+                const payload: StoredMessage = {
                     ...assistantDbMsg,
                     data: {
-                        ...((assistantDbMsg as any).data || {}),
+                        ...baseData,
                         content:
                             content ??
-                            (assistantDbMsg as any).data?.content ??
-                            '',
+                            (typeof baseData.content === 'string'
+                                ? baseData.content
+                                : ''),
                         reasoning_text:
                             reasoning ??
-                            (assistantDbMsg as any).data?.reasoning_text ??
-                            null,
+                            (typeof baseData.reasoning_text === 'string'
+                                ? baseData.reasoning_text
+                                : null),
                         ...(toolCalls
                             ? {
-                                  tool_calls: JSON.parse(
-                                      JSON.stringify(toolCalls)
-                                  ),
+                                  tool_calls: toolCalls.map((t) => ({ ...t })),
                               }
                             : {}),
                     },
                     file_hashes: serialized,
                     updated_at: nowSec(),
-                } as any;
+                };
                 await upsert.message(payload);
                 lastSerialized = serialized ?? null;
             }
@@ -160,7 +199,7 @@ export function useChat(
         };
     }
 
-    function shouldKeepAssistantMessage(m: any) {
+    function shouldKeepAssistantMessage(m: ChatMessage): boolean {
         if (m.role !== 'assistant') return true;
         const c = m.content;
         if (c == null) return false;
@@ -168,15 +207,8 @@ export function useChat(
         if (Array.isArray(c)) {
             return c.some((p) => {
                 if (!p) return false;
-                if (typeof p === 'string') return p.trim().length > 0;
-                if (p.type === 'text' && typeof p.text === 'string')
-                    return p.text.trim().length > 0;
-                if (
-                    p.type === 'image' ||
-                    p.type === 'image_url' ||
-                    (p.mediaType && /image\//.test(p.mediaType))
-                )
-                    return true;
+                if (p.type === 'text') return p.text.trim().length > 0;
+                if (p.type === 'image' || p.type === 'file') return true;
                 return false;
             });
         }
@@ -210,15 +242,26 @@ export function useChat(
     }
 
     async function sendMessage(
-        content: string,
-        sendMessagesParams: SendMessageParams = {
-            files: [],
-            model: DEFAULT_AI_MODEL,
-            file_hashes: [],
-            online: false,
-            context_hashes: [],
-        }
+        contentOrParams: string | (SendMessageParams & { content: string }),
+        maybeParams?: SendMessageParams
     ) {
+        let content: string;
+        let sendMessagesParams: SendMessageParams;
+
+        if (typeof contentOrParams === 'string') {
+            content = contentOrParams;
+            sendMessagesParams = maybeParams || {
+                files: [],
+                model: DEFAULT_AI_MODEL,
+                file_hashes: [],
+                online: false,
+                context_hashes: [],
+            };
+        } else {
+            content = contentOrParams.content;
+            sendMessagesParams = contentOrParams;
+        }
+
         if (!apiKey.value) return;
 
         const outgoing = await hooks.applyFilters(
@@ -234,8 +277,8 @@ export function useChat(
             useToast().add({
                 title: 'Message blocked',
                 description: 'Your message was filtered out.',
-                timeout: 3000,
-            } as any);
+                duration: 3000,
+            });
             return;
         }
 
@@ -248,9 +291,15 @@ export function useChat(
             }
             try {
                 const { settings } = useAiSettings();
-                const set = (settings && (settings as any).value) || null;
+                const settingsValue = settings?.value as
+                    | ChatSettings
+                    | undefined;
                 const { catalog } = useModelStore();
                 let lastSelected: string | null = null;
+                const defaultModelMode: 'lastSelected' | 'fixed' =
+                    settingsValue?.defaultModelMode === 'fixed'
+                        ? 'fixed'
+                        : 'lastSelected';
                 try {
                     if (typeof window !== 'undefined')
                         lastSelected = localStorage.getItem(
@@ -259,24 +308,23 @@ export function useChat(
                 } catch {}
                 const chosen = resolveDefaultModel(
                     {
-                        defaultModelMode:
-                            (set?.defaultModelMode as any) || 'lastSelected',
-                        fixedModelId: (set?.fixedModelId as any) || null,
+                        defaultModelMode,
+                        fixedModelId: settingsValue?.fixedModelId ?? null,
                     },
                     {
                         isAvailable: (id: string) =>
                             !!(catalog?.value || []).some(
-                                (m: any) => m?.id === id
+                                (m: ModelInfo) => m?.id === id
                             ),
                         lastSelectedModelId: () => lastSelected,
                         recommendedDefault: () => DEFAULT_AI_MODEL,
                     }
                 );
                 if (!sendMessagesParams.model) {
-                    (sendMessagesParams as any).model = chosen.id;
+                    sendMessagesParams.model = chosen.id;
                 }
                 if (
-                    set?.defaultModelMode === 'fixed' &&
+                    settingsValue?.defaultModelMode === 'fixed' &&
                     chosen.reason !== 'fixed'
                 ) {
                     try {
@@ -284,8 +332,8 @@ export function useChat(
                             title: 'Model fallback in effect',
                             description:
                                 'Your fixed model was not used. Falling back to last selected or default.',
-                            timeout: 3500,
-                        } as any);
+                            duration: 3500,
+                        });
                     } catch {}
                 }
             } catch {}
@@ -298,7 +346,8 @@ export function useChat(
             threadIdRef.value = newThread.id;
             // Bind thread to active pane immediately (before first user message hook) if multi-pane present.
             try {
-                const mpApi: any = (globalThis as any).__or3MultiPaneApi;
+                const mpApi = (globalThis as GlobalWithPaneApi)
+                    .__or3MultiPaneApi;
                 if (
                     mpApi?.panes?.value &&
                     mpApi.activePaneIndex?.value != null &&
@@ -353,16 +402,32 @@ export function useChat(
             extraTextParts,
             online,
             context_hashes,
-        } = sendMessagesParams as any;
+        } = sendMessagesParams;
+        const extendedParams = sendMessagesParams as ExtendedSendMessageParams;
         if (
             (!files || files.length === 0) &&
-            Array.isArray((sendMessagesParams as any)?.images)
+            Array.isArray(extendedParams.images)
         ) {
-            files = (sendMessagesParams as any).images.map((img: any) => {
-                const url = typeof img === 'string' ? img : img.url;
-                const provided = typeof img === 'object' ? img.type : undefined;
-                return { type: inferMimeFromUrl(url, provided), url } as any;
-            });
+            files = extendedParams.images
+                .map((img) => {
+                    const url = typeof img === 'string' ? img : img.url;
+                    if (!url) return null;
+                    const provided =
+                        typeof img === 'object' ? img.type : undefined;
+                    const type =
+                        inferMimeFromUrl(url, provided) ||
+                        provided ||
+                        'application/octet-stream';
+                    return { type, url };
+                })
+                .filter(
+                    (
+                        f
+                    ): f is {
+                        type: string;
+                        url: string;
+                    } => Boolean(f && f.url && f.type)
+                );
         }
         if (!model) model = DEFAULT_AI_MODEL;
         if (online === true) model = model + ':online';
@@ -463,7 +528,7 @@ export function useChat(
             data: { content: outgoing, attachments: files ?? [] },
             file_hashes:
                 file_hashes && file_hashes.length
-                    ? (file_hashes as any)
+                    ? file_hashes.join(',')
                     : undefined,
         });
         const parts: ContentPart[] = buildParts(
@@ -474,7 +539,7 @@ export function useChat(
         const rawUser: ChatMessage = {
             role: 'user',
             content: parts,
-            id: (userDbMsg as any).id,
+            id: userDbMsg.id,
             file_hashes: userDbMsg.file_hashes,
         };
         recordRawMessage(rawUser);
@@ -518,7 +583,10 @@ export function useChat(
             let finalSystem: string | null = null;
             try {
                 const { settings } = useAiSettings();
-                const master = ((settings as any)?.value?.masterSystemPrompt ??
+                const settingsValue = settings?.value as
+                    | ChatSettings
+                    | undefined;
+                const master = (settingsValue?.masterSystemPrompt ??
                     '') as string;
                 finalSystem = composeSystemPrompt(
                     master,
@@ -542,8 +610,15 @@ export function useChat(
 
             // Remove prior empty assistant placeholder messages
             const sanitizedEffectiveMessages = (
-                effectiveMessages as any[]
+                Array.isArray(effectiveMessages)
+                    ? (effectiveMessages as ChatMessage[])
+                    : []
             ).filter(shouldKeepAssistantMessage);
+
+            const isModelMessage = (
+                m: ChatMessage
+            ): m is ChatMessage & { role: 'user' | 'assistant' | 'system' } =>
+                m.role !== 'tool';
 
             const { buildOpenRouterMessages } = await import(
                 '~/core/auth/openrouter-build'
@@ -552,9 +627,17 @@ export function useChat(
             // Load thread history if not already loaded
             await ensureHistorySynced();
 
-            const modelInputMessages: any[] = (
-                sanitizedEffectiveMessages as any[]
-            ).map((m: any) => ({ ...m }));
+            const modelInputMessages: ModelInputMessage[] =
+                sanitizedEffectiveMessages.filter(isModelMessage).map(
+                    (m): ModelInputMessage => ({
+                        role: m.role,
+                        content: m.content,
+                        id: m.id,
+                        file_hashes: m.file_hashes,
+                        name: m.name,
+                        tool_call_id: m.tool_call_id,
+                    })
+                );
             if (assistantHashes.length && prevAssistant?.id) {
                 const target = modelInputMessages.find(
                     (m) => m.id === prevAssistant.id
@@ -580,28 +663,30 @@ export function useChat(
                 }
                 if (contextParts.length) {
                     const lastUserIdx = [...modelInputMessages]
-                        .map((m: any, idx: number) =>
+                        .map((m, idx: number) =>
                             m?.role === 'user' ? idx : -1
                         )
                         .filter((idx) => idx >= 0)
                         .pop();
                     if (lastUserIdx != null && lastUserIdx >= 0) {
                         const target = modelInputMessages[lastUserIdx];
-                        if (!Array.isArray(target.content)) {
-                            if (typeof target.content === 'string') {
-                                target.content = [
-                                    { type: 'text', text: target.content },
-                                ];
-                            } else {
-                                target.content = [];
+                        if (target) {
+                            if (!Array.isArray(target.content)) {
+                                if (typeof target.content === 'string') {
+                                    target.content = [
+                                        { type: 'text', text: target.content },
+                                    ];
+                                } else {
+                                    target.content = [];
+                                }
                             }
+                            target.content.push(...contextParts);
                         }
-                        target.content.push(...contextParts);
                     }
                 }
             }
-            let orMessages = await buildOpenRouterMessages(
-                modelInputMessages as any,
+            let orMessages: OpenRouterMessage[] = await buildOpenRouterMessages(
+                modelInputMessages,
                 {
                     maxImageInputs: 16,
                     imageInclusionPolicy: 'all',
@@ -610,14 +695,22 @@ export function useChat(
             );
             trimOrMessagesImages(orMessages, 5);
 
-            const hasImageInput = (modelInputMessages as any[]).some((m) =>
+            const hasImageInput = modelInputMessages.some((m) =>
                 Array.isArray(m.content)
-                    ? (m.content as any[]).some(
-                          (p) =>
-                              p?.type === 'image_url' ||
-                              p?.type === 'image' ||
-                              p?.mediaType?.startsWith('image/')
-                      )
+                    ? m.content.some((p) => {
+                          const part = p as {
+                              type?: string;
+                              mediaType?: string;
+                          };
+                          if (
+                              part.type === 'image' ||
+                              part.type === 'image_url'
+                          )
+                              return true;
+                          if (part.mediaType)
+                              return /image\//.test(part.mediaType);
+                          return false;
+                      })
                     : false
             );
             const modelImageHint = /image|vision|flash/i.test(modelId);
@@ -626,12 +719,12 @@ export function useChat(
 
             const newStreamId = newId();
             streamId.value = newStreamId;
-            const assistantDbMsg = await tx.appendMessage({
+            const assistantDbMsg = (await tx.appendMessage({
                 thread_id: threadIdRef.value!,
                 role: 'assistant',
                 stream_id: newStreamId,
                 data: { content: '', attachments: [], reasoning_text: null },
-            });
+            })) as StoredMessage;
             // Track file hashes across loop iterations
             const assistantFileHashes: string[] = [];
             const persistAssistant = makeAssistantPersister(
@@ -645,7 +738,7 @@ export function useChat(
                 user: { id: userDbMsg.id, length: outgoing.length },
                 assistant: { id: assistantDbMsg.id, streamId: newStreamId },
                 messagesCount: Array.isArray(effectiveMessages)
-                    ? (effectiveMessages as any[]).length
+                    ? effectiveMessages.length
                     : undefined,
             });
 
@@ -653,7 +746,7 @@ export function useChat(
             const enabledToolDefs = toolRegistry.getEnabledDefinitions();
 
             // Track tool calls across all loop iterations (persists state)
-            const activeToolCalls = new Map<string, any>();
+            const activeToolCalls = new Map<string, ToolCallInfo>();
 
             aborted.value = false;
             abortController.value = new AbortController();
@@ -667,8 +760,19 @@ export function useChat(
                 { messages: orMessages }
             );
 
-            if (filteredMessages && (filteredMessages as any).messages) {
-                orMessages = (filteredMessages as any).messages;
+            if (
+                filteredMessages &&
+                typeof filteredMessages === 'object' &&
+                'messages' in filteredMessages
+            ) {
+                const candidate = (
+                    filteredMessages as {
+                        messages?: OpenRouterMessage[];
+                    }
+                ).messages;
+                if (Array.isArray(candidate)) {
+                    orMessages = candidate;
+                }
             }
 
             while (continueLoop && loopIteration < MAX_TOOL_ITERATIONS) {
@@ -690,10 +794,10 @@ export function useChat(
                 const rawAssistant: ChatMessage = {
                     role: 'assistant',
                     content: '',
-                    id: (assistantDbMsg as any).id,
+                    id: assistantDbMsg.id,
                     stream_id: newStreamId,
                     reasoning_text: null,
-                } as any;
+                };
 
                 if (loopIteration === 1) {
                     recordRawMessage(rawAssistant);
@@ -808,8 +912,8 @@ export function useChat(
                                                     current.reasoning_text ??
                                                     null,
                                             });
-                                        (current as any).file_hashes =
-                                            serialized;
+                                        current.file_hashes =
+                                            serialized?.split(',') ?? [];
                                     } catch {}
                                 }
                             }
@@ -827,8 +931,7 @@ export function useChat(
                                 reasoning: current.reasoning_text ?? null,
                             });
                             if (assistantFileHashes.length) {
-                                (current as any).file_hashes =
-                                    serializeFileHashes(assistantFileHashes);
+                                current.file_hashes = assistantFileHashes;
                             }
                             lastPersistAt = now;
                         }
@@ -891,7 +994,7 @@ export function useChat(
 
                             await tx.appendMessage({
                                 thread_id: threadIdRef.value!,
-                                role: 'tool' as any,
+                                role: 'tool',
                                 data: {
                                     content: uiSummary,
                                     tool_call_id: toolCall.id,
@@ -907,24 +1010,28 @@ export function useChat(
 
                         orMessages.push({
                             role: 'assistant',
-                            content: current.text || null,
+                            content: [
+                                { type: 'text', text: current.text || '' },
+                            ],
                             tool_calls: pendingToolCalls.map((toolCall) => ({
                                 id: toolCall.id,
-                                type: 'function',
+                                type: 'function' as const,
                                 function: {
                                     name: toolCall.function.name,
                                     arguments: toolCall.function.arguments,
                                 },
                             })),
-                        } as any);
+                        });
 
                         for (const payload of toolResultsForNextLoop) {
                             orMessages.push({
                                 role: 'tool',
                                 tool_call_id: payload.call.id,
                                 name: payload.call.function.name,
-                                content: payload.result,
-                            } as any);
+                                content: [
+                                    { type: 'text', text: payload.result },
+                                ],
+                            });
                         }
 
                         pendingToolCalls.length = 0;
@@ -963,12 +1070,12 @@ export function useChat(
                 reasoning: current.reasoning_text ?? null,
                 toolCalls: current.toolCalls ?? null,
             });
-            const finalized = {
+            const finalized: StoredMessage = {
                 ...assistantDbMsg,
                 file_hashes: assistantFileHashes.length
                     ? serializeFileHashes(assistantFileHashes)
-                    : (assistantDbMsg as any).file_hashes,
-            } as any;
+                    : assistantDbMsg.file_hashes,
+            };
             await hooks.doAction('ai.chat.stream:action:complete', {
                 threadId: threadIdRef.value,
                 assistantId: assistantDbMsg.id,
@@ -1013,7 +1120,7 @@ export function useChat(
         } catch (err) {
             if (aborted.value) {
                 if (tailAssistant.value?.pending)
-                    (tailAssistant.value as any).pending = false;
+                    tailAssistant.value.pending = false;
                 try {
                     await hooks.doAction('ai.chat.send:action:after', {
                         threadId: threadIdRef.value,
@@ -1046,7 +1153,7 @@ export function useChat(
                     .reverse()
                     .find((m) => m.role === 'user');
                 const retryFn = lastUser
-                    ? () => retryMessage(lastUser.id as any)
+                    ? () => retryMessage(lastUser.id)
                     : undefined;
                 // Inline tag object (Req 18.1) for clarity & tree-shaking
                 reportError(err, {
@@ -1080,7 +1187,7 @@ export function useChat(
                     } catch {}
                     tailAssistant.value = null;
                 } else if (tailAssistant.value?.pending) {
-                    (tailAssistant.value as any).pending = false;
+                    tailAssistant.value.pending = false;
                 }
             }
         } finally {
@@ -1100,9 +1207,9 @@ export function useChat(
     async function retryMessage(messageId: string, modelOverride?: string) {
         if (loading.value || !threadIdRef.value) return;
         try {
-            const target: any = await db.messages.get(messageId);
+            const target = await db.messages.get(messageId);
             if (!target || target.thread_id !== threadIdRef.value) return;
-            let userMsg: any = target.role === 'user' ? target : null;
+            let userMsg = target.role === 'user' ? target : undefined;
             if (!userMsg && target.role === 'assistant') {
                 const DexieMod = (await import('dexie')).default;
                 userMsg = await db.messages
@@ -1112,7 +1219,7 @@ export function useChat(
                         [target.thread_id, target.index]
                     )
                     .filter(
-                        (m: any) =>
+                        (m: Message) =>
                             m.role === 'user' &&
                             !m.deleted &&
                             m.index < target.index
@@ -1124,10 +1231,15 @@ export function useChat(
             const assistant = await db.messages
                 .where('[thread_id+index]')
                 .between(
-                    [userMsg.thread_id, userMsg.index + 1],
+                    [
+                        userMsg.thread_id,
+                        (typeof userMsg.index === 'number'
+                            ? userMsg.index
+                            : 0) + 1,
+                    ],
                     [userMsg.thread_id, DexieMod2.maxKey]
                 )
-                .filter((m: any) => m.role === 'assistant' && !m.deleted)
+                .filter((m: Message) => m.role === 'assistant' && !m.deleted)
                 .first();
 
             // Suppress flushing of the previous tail assistant if it corresponds to the
@@ -1149,11 +1261,20 @@ export function useChat(
                 threadId: threadIdRef.value,
                 originalUserId: userMsg.id,
                 originalAssistantId: assistant?.id,
-                triggeredBy: target.role,
+                triggeredBy: target.role as 'user' | 'assistant',
             });
 
             // Store original text and hashes before deletion
-            const originalText = (userMsg.data as any)?.content || '';
+            const originalText =
+                typeof (userMsg as StoredMessage).content === 'string'
+                    ? (userMsg as StoredMessage).content
+                    : userMsg.data &&
+                      typeof userMsg.data === 'object' &&
+                      'content' in userMsg.data &&
+                      typeof (userMsg.data as { content?: unknown }).content ===
+                          'string'
+                    ? ((userMsg.data as { content?: string }).content as string)
+                    : '';
             let hashes: string[] = [];
             if (userMsg.file_hashes) {
                 const { parseFileHashes } = await import('~/db/files-util');
@@ -1164,7 +1285,9 @@ export function useChat(
             // This handles edge cases where messages exist in DB but not in memory
             const { messagesByThread } = await import('~/db/messages');
             const dbMessages =
-                (await messagesByThread(threadIdRef.value!)) || [];
+                ((await messagesByThread(threadIdRef.value!)) as
+                    | StoredMessage[]
+                    | undefined) || [];
 
             // If DB has more messages than our in-memory arrays, we need to sync first
             if (dbMessages.length > rawMessages.value.length) {
@@ -1172,46 +1295,63 @@ export function useChat(
                     dbCount: dbMessages.length,
                     memoryCount: rawMessages.value.length,
                 });
-                rawMessages.value = dbMessages.map((m: any) => ({
-                    role: m.role,
-                    content:
-                        typeof m.data?.content === 'string'
-                            ? m.data.content
-                            : (m as any).content || '',
-                    id: m.id,
-                    stream_id: m.stream_id,
-                    file_hashes: m.file_hashes,
-                    reasoning_text:
-                        typeof m.data?.reasoning_text === 'string'
-                            ? m.data.reasoning_text
-                            : null,
-                    data: m.data || null,
-                    index:
-                        typeof m.index === 'number'
-                            ? m.index
-                            : typeof m.index === 'string'
-                            ? Number(m.index) || null
-                            : null,
-                    created_at:
-                        typeof m.created_at === 'number' ? m.created_at : null,
-                }));
-                const uiMessages = dbMessages.filter(
-                    (m: any) => m.role !== 'tool'
+                const toContent = (m: StoredMessage) => {
+                    if (
+                        m.data &&
+                        typeof m.data === 'object' &&
+                        'content' in m.data &&
+                        typeof (m.data as { content?: unknown }).content ===
+                            'string'
+                    ) {
+                        return (m.data as { content: string }).content;
+                    }
+                    return typeof m.content === 'string' ? m.content : '';
+                };
+                const toReasoning = (m: StoredMessage) => {
+                    if (
+                        m.data &&
+                        typeof m.data === 'object' &&
+                        'reasoning_text' in m.data &&
+                        typeof (m.data as { reasoning_text?: unknown })
+                            .reasoning_text === 'string'
+                    ) {
+                        return (m.data as { reasoning_text: string })
+                            .reasoning_text;
+                    }
+                    return typeof m.reasoning_text === 'string'
+                        ? m.reasoning_text
+                        : null;
+                };
+                rawMessages.value = dbMessages.map(
+                    (m): ChatMessage => ({
+                        role: m.role as ChatMessage['role'],
+                        content: toContent(m),
+                        id: m.id,
+                        stream_id: m.stream_id ?? undefined,
+                        file_hashes: m.file_hashes ?? undefined,
+                        reasoning_text: toReasoning(m),
+                        data: m.data || null,
+                        index:
+                            typeof m.index === 'number'
+                                ? m.index
+                                : typeof m.index === 'string'
+                                ? Number(m.index) || null
+                                : null,
+                        created_at:
+                            typeof m.created_at === 'number'
+                                ? m.created_at
+                                : null,
+                    })
                 );
-                messages.value = uiMessages.map((m: any) =>
+                const uiMessages = dbMessages.filter((m) => m.role !== 'tool');
+                messages.value = uiMessages.map((m) =>
                     ensureUiMessage({
                         role: m.role,
-                        content:
-                            typeof m.data?.content === 'string'
-                                ? m.data.content
-                                : (m as any).content || '',
+                        content: toContent(m),
                         id: m.id,
-                        stream_id: m.stream_id,
-                        file_hashes: m.file_hashes,
-                        reasoning_text:
-                            typeof m.data?.reasoning_text === 'string'
-                                ? m.data.reasoning_text
-                                : null,
+                        stream_id: m.stream_id ?? undefined,
+                        file_hashes: m.file_hashes ?? undefined,
+                        reasoning_text: toReasoning(m),
                         data: m.data,
                         index:
                             typeof m.index === 'number'
@@ -1235,21 +1375,31 @@ export function useChat(
 
             // Remove deleted messages from in-memory arrays
             rawMessages.value = rawMessages.value.filter(
-                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+                (m) => m.id !== userMsg.id && m.id !== assistant?.id
             );
             messages.value = messages.value.filter(
-                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+                (m) => m.id !== userMsg.id && m.id !== assistant?.id
             );
 
-            await sendMessage(originalText, {
+            let textToSend = '';
+            if (typeof originalText === 'string') {
+                textToSend = originalText;
+            } else if (Array.isArray(originalText)) {
+                textToSend = originalText
+                    .filter((p) => p.type === 'text')
+                    .map((p) => (p as { text: string }).text)
+                    .join('');
+            }
+
+            await sendMessage(textToSend, {
                 model: modelOverride || DEFAULT_AI_MODEL,
                 file_hashes: hashes,
                 files: [],
                 online: false,
             });
             const tail = messages.value.slice(-2);
-            const newUser = tail.find((m: any) => m.role === 'user');
-            const newAssistant = tail.find((m: any) => m.role === 'assistant');
+            const newUser = tail.find((m) => m.role === 'user');
+            const newAssistant = tail.find((m) => m.role === 'assistant');
             await hooks.doAction('ai.chat.retry:action:after', {
                 threadId: threadIdRef.value,
                 originalUserId: userMsg.id,
@@ -1303,8 +1453,10 @@ export function useChat(
             const raw = rawMessages.value[rawIdx];
             if (raw) {
                 if (Array.isArray(raw.content)) {
-                    raw.content = raw.content.map((p: any) =>
-                        p?.type === 'text' ? { ...p, text } : p
+                    raw.content = raw.content.map((p) =>
+                        p && typeof p === 'object' && p.type === 'text'
+                            ? { ...p, text }
+                            : p
                     );
                 } else {
                     raw.content = text;
@@ -1331,7 +1483,9 @@ export function useChat(
 
     return {
         messages,
+        rawMessages,
         sendMessage,
+        send: sendMessage,
         retryMessage,
         loading,
         threadId: threadIdRef,
@@ -1341,6 +1495,7 @@ export function useChat(
         tailAssistant,
         flushTailAssistant,
         applyLocalEdit,
+        ensureHistorySynced,
         abort: () => {
             if (!loading.value || !abortController.value) return;
             aborted.value = true;
@@ -1349,10 +1504,18 @@ export function useChat(
             } catch {}
             streamAcc.finalize({ aborted: true });
             if (tailAssistant.value?.pending)
-                (tailAssistant.value as any).pending = false;
+                tailAssistant.value.pending = false;
             try {
-                const appConfig = useAppConfig?.() as any;
-                const showAbort = appConfig?.errors?.showAbortInfo === true;
+                const appConfig = useAppConfig?.();
+                const showAbort =
+                    appConfig &&
+                    typeof appConfig === 'object' &&
+                    'errors' in appConfig &&
+                    typeof (
+                        appConfig as { errors?: { showAbortInfo?: boolean } }
+                    ).errors === 'object' &&
+                    (appConfig as { errors: { showAbortInfo?: boolean } })
+                        .errors?.showAbortInfo === true;
                 reportError(
                     err('ERR_STREAM_ABORTED', 'Generation aborted', {
                         severity: 'info',

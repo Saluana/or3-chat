@@ -42,22 +42,39 @@ const selectMenuProps = computed(() => {
         isNuxtUI: true,
     });
 
-    const overrideValue = (overrides.value as Record<string, any>) || {};
+    const overrideValue: Record<string, unknown> = overrides.value || {};
     const {
-        searchInput: themeSearchInput,
+        searchInput,
         class: themeClass,
         ...restOverrides
     } = overrideValue;
 
     const baseClass =
         'h-[32px] text-[14px] px-2 w-full min-w-[100px] max-w-full truncate whitespace-nowrap';
-    const mergedClass = [baseClass, themeClass].filter(Boolean).join(' ');
+    const mergedClass = [
+        baseClass,
+        typeof themeClass === 'string' ? themeClass : '',
+    ]
+        .filter(Boolean)
+        .join(' ');
+
+    interface SelectSearchInput {
+        icon?: string;
+        autofocus?: boolean;
+        ui?: Record<string, unknown>;
+        [key: string]: unknown;
+    }
 
     const defaultSearchInput = {
         icon: useIcon('ui.search').value,
         autofocus: !isMobile.value,
         ui: {},
     };
+
+    const themeSearchInput =
+        searchInput && typeof searchInput === 'object'
+            ? (searchInput as SelectSearchInput)
+            : undefined;
 
     const mergedSearchInput = themeSearchInput
         ? {
@@ -100,10 +117,23 @@ const show = computed(
 );
 
 const items = computed(() =>
-    favoriteModels.value.map((m: any) => ({
-        label: m.canonical_slug,
-        value: m.canonical_slug,
-    }))
+    (favoriteModels.value || [])
+        .map((m) => {
+            const value = m.canonical_slug ?? m.id;
+            if (!value) return null;
+            return {
+                label: value,
+                value,
+            };
+        })
+        .filter(
+            (
+                m
+            ): m is {
+                label: string;
+                value: string;
+            } => Boolean(m)
+        )
 );
 </script>
 

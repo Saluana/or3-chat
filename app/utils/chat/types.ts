@@ -25,6 +25,8 @@ export interface ChatMessage {
     data?: Record<string, any> | null;
     index?: number | null;
     created_at?: number | null;
+    name?: string;
+    tool_call_id?: string;
 }
 
 export interface SendMessageParams {

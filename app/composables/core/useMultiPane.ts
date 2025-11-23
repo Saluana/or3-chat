@@ -2,9 +2,17 @@
 // Keeps pane logic outside of UI components for easier testing & extension.
 
 import Dexie from 'dexie';
-import { ref, computed, nextTick, onScopeDispose, type Ref, type ComputedRef } from 'vue';
+import {
+    ref,
+    computed,
+    nextTick,
+    onScopeDispose,
+    type Ref,
+    type ComputedRef,
+} from 'vue';
 import { db } from '~/db';
 import { useHooks } from '../../core/hooks/useHooks';
+import { getGlobalMultiPaneApi, setGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 
 type PaneAppsModule = typeof import('./usePaneApps');
 type PaneAppGetter = ReturnType<PaneAppsModule['usePaneApps']>['getPaneApp'];
@@ -772,13 +780,13 @@ export function useMultiPane(
     // Expose globally so plugins (message action handlers etc.) can interact.
     // This is intentionally lightweight; if multiple instances are created the latest wins.
     try {
-        (globalThis as any).__or3MultiPaneApi = api;
+        setGlobalMultiPaneApi(api);
     } catch {}
 
     // Clean up global reference on scope disposal to prevent memory leaks
     onScopeDispose(() => {
-        if ((globalThis as any).__or3MultiPaneApi === api) {
-            (globalThis as any).__or3MultiPaneApi = undefined;
+        if (getGlobalMultiPaneApi() === api) {
+            setGlobalMultiPaneApi(undefined);
         }
     });
 

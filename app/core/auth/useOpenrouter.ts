@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import { useRuntimeConfig } from '#imports';
 import { kv } from '~/db';
 
 function base64urlencode(str: ArrayBuffer) {

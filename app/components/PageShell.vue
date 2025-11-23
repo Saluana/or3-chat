@@ -247,6 +247,7 @@ import PaneUnknown from '~/components/PaneUnknown.vue';
 import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
+import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { useIcon } from '~/composables/useIcon';
 
 const legacyCompatClasses = {
@@ -595,7 +596,11 @@ function buildPaneProps(
 
     // Custom pane app - provide generic contract
     const app = getPaneApp(pane.mode);
-    const panePluginApi = (globalThis as any).__or3PanePluginApi ?? null;
+    const panePluginApi = (
+        globalThis as typeof globalThis & {
+            __or3PanePluginApi?: PanePluginApi;
+        }
+    ).__or3PanePluginApi ?? null;
     if (import.meta.dev) {
         console.debug('[PageShell] build props for custom pane', {
             paneId: pane.id,

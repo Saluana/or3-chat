@@ -49,14 +49,16 @@ const DEFAULT_TIMEOUT_MS = 10000;
 /**
  * Global registry state singleton.
  */
-interface ToolRegistryState {
+export interface ToolRegistryState {
     tools: Map<string, RegisteredTool>;
     storageHydrated: boolean;
     persistDebounceTimer: NodeJS.Timeout | null;
 }
 
 // HMR-safe singleton
-const g = globalThis as any;
+const g = globalThis as typeof globalThis & {
+    __or3ToolRegistry?: ToolRegistryState;
+};
 if (!g.__or3ToolRegistry) {
     g.__or3ToolRegistry = {
         tools: shallowReactive(new Map<string, RegisteredTool>()),
@@ -65,11 +67,7 @@ if (!g.__or3ToolRegistry) {
     };
 }
 
-const registryState = g.__or3ToolRegistry as {
-    tools: Map<string, RegisteredTool>;
-    storageHydrated: boolean;
-    persistDebounceTimer: NodeJS.Timeout | null;
-};
+const registryState = g.__or3ToolRegistry;
 
 // HMR cleanup: clear the debounce timer on module disposal
 if (import.meta.hot) {

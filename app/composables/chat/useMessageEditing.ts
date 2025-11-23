@@ -1,11 +1,24 @@
-import { ref, isRef } from 'vue';
-import { upsert } from '~/db';
+import { ref, isRef, type Ref } from 'vue';
+import { upsert, db } from '~/db';
 import { nowSec } from '~/db/util';
+import type { Message } from '~/db/schema';
+
+export interface EditableMessage {
+    id?: string;
+    text?: string;
+    content?: string;
+}
+
+type EditableMessageSource =
+    | EditableMessage
+    | Ref<EditableMessage | undefined>
+    | undefined;
 
 // Lightweight composable for editing a chat message (assistant/user)
-export function useMessageEditing(message: any) {
+export function useMessageEditing(message: EditableMessageSource) {
     // Support passing a Ref so caller can swap underlying message object (e.g., streaming tail -> finalized)
-    const getMessage = () => (isRef(message) ? message.value : message);
+    const getMessage = (): EditableMessage | undefined =>
+        isRef(message) ? message.value : message;
     const editing = ref(false);
     const draft = ref('');
     const original = ref('');
@@ -43,19 +56,21 @@ export function useMessageEditing(message: any) {
         }
         try {
             saving.value = true;
-            const existing: any = await (
-                await import('~/db/client')
-            ).db.messages.get(id);
+            const existing: Message | undefined = await db.messages.get(id);
             if (!existing) throw new Error('Message not found');
+            const existingData =
+                existing.data && typeof existing.data === 'object'
+                    ? (existing.data as Record<string, unknown>)
+                    : {};
             await upsert.message({
                 ...existing,
-                data: { ...(existing.data || {}), content: trimmed },
+                data: { ...existingData, content: trimmed },
                 updated_at: nowSec(),
             });
             // Persist to both fields so renderers using either stay in sync
             if (m) {
-                (m as any).content = trimmed;
-                if ('text' in m) (m as any).text = trimmed;
+                m.content = trimmed;
+                m.text = trimmed;
             }
             editing.value = false;
         } finally {

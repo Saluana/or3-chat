@@ -129,6 +129,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed, watch } from 'vue';
 import { SnakeGame } from './snake-game';
+import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 
 const props = defineProps<{
     paneId: string;
@@ -261,10 +262,10 @@ function restartGame() {
 
 function closePane() {
     game.stop();
-    const multiPaneApi = (globalThis as any).__or3MultiPaneApi;
+    const multiPaneApi = getGlobalMultiPaneApi();
     if (multiPaneApi) {
         const index = multiPaneApi.panes.value.findIndex(
-            (pane: any) => pane.id === props.paneId
+            (pane) => pane.id === props.paneId
         );
         if (index !== -1) {
             multiPaneApi.closePane(index);

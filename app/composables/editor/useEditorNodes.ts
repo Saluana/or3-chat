@@ -35,7 +35,12 @@ export interface EditorExtension {
 }
 
 // Global singleton registries (survive HMR) stored on globalThis to avoid duplication.
-const g: any = globalThis as any;
+type EditorRegistryGlobals = typeof globalThis & {
+    __or3EditorNodesRegistry?: Map<string, EditorNode>;
+    __or3EditorMarksRegistry?: Map<string, EditorMark>;
+    __or3EditorExtensionsRegistry?: Map<string, EditorExtension>;
+};
+const g = globalThis as EditorRegistryGlobals;
 
 const nodesRegistry: Map<string, EditorNode> =
     g.__or3EditorNodesRegistry || (g.__or3EditorNodesRegistry = new Map());

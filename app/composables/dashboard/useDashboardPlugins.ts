@@ -54,8 +54,17 @@ export interface DashboardPluginPage {
     component: Component | (() => Promise<any>);
 }
 
+type DashboardGlobals = typeof globalThis & {
+    __or3DashboardPluginsRegistry?: Map<string, DashboardPlugin>;
+    __or3DashboardPluginPagesRegistry?: Map<
+        string,
+        Map<string, DashboardPluginPage>
+    >;
+    __or3DashboardNavigationRuntime?: DashboardNavigationRuntime;
+};
+
 // Global singleton (survives HMR)
-const g: any = globalThis as any;
+const g = globalThis as DashboardGlobals;
 const registry: Map<string, DashboardPlugin> =
     g.__or3DashboardPluginsRegistry ||
     (g.__or3DashboardPluginsRegistry = new Map());
