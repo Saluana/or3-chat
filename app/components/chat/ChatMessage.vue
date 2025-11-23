@@ -3,6 +3,7 @@
         :class="[
             `cm-${roleVariant}`,
             'chat-message-container',
+            'group',
             outerClass,
             messageContainerProps?.class || '',
         ]"
@@ -208,14 +209,14 @@
             <UButtonGroup
                 class="bg-[var(--md-surface)] rounded-[var(--md-border-radius)] cm-action-group"
             >
-                <UTooltip :delay-duration="0" text="Copy" :teleport="true">
+                <UTooltip :delay-duration="500" text="Copy" :teleport="true">
                     <UButton
                         v-bind="copyButtonProps"
                         @click="copyMessage"
                     ></UButton>
                 </UTooltip>
                 <UTooltip
-                    :delay-duration="0"
+                    :delay-duration="500"
                     text="Retry"
                     :popper="{ strategy: 'fixed' }"
                     :teleport="true"
@@ -225,13 +226,13 @@
                         @click="onRetry"
                     ></UButton>
                 </UTooltip>
-                <UTooltip :delay-duration="0" text="Branch" :teleport="true">
+                <UTooltip :delay-duration="500" text="Branch" :teleport="true">
                     <UButton
                         v-bind="branchButtonProps"
                         @click="onBranch"
                     ></UButton>
                 </UTooltip>
-                <UTooltip :delay-duration="0" text="Edit" :teleport="true">
+                <UTooltip :delay-duration="500" text="Edit" :teleport="true">
                     <UButton
                         v-bind="editButtonProps"
                         @click="wrappedBeginEdit"
@@ -240,7 +241,7 @@
                 <!-- Dynamically registered plugin actions -->
                 <template v-for="action in extraActions" :key="action.id">
                     <UTooltip
-                        :delay-duration="0"
+                        :delay-duration="500"
                         :text="action.tooltip"
                         :teleport="true"
                     >

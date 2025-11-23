@@ -65,6 +65,16 @@
   background-color: var(--md-surface-container-high);
   border: var(--md-border-width) solid var(--md-border-color);
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+[data-theme="blank"] .group:hover .cm-action-group {
+  opacity: 1;
+}
+
+[data-theme="blank"] .group:focus-within .cm-action-group {
+  opacity: 1;
 }
 
 [data-theme="blank"] .chat-container-root:not(:last-child) {
@@ -161,6 +171,10 @@
 
 [data-theme="blank"] .tool-call-indicator-summary-icon .iconify {
   color: var(--md-primary) !important;
+}
+
+[data-theme="blank"] .cm-actions-user {
+  bottom: -24px !important;
 }
 
 [data-theme="blank"] .dashboard-plugin-icon-label {

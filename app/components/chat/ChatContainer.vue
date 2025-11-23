@@ -21,7 +21,7 @@
                 :maintain-bottom="!anyEditing"
                 :bottom-threshold="5"
                 :padding-bottom="bottomPad"
-                :padding-top="16"
+                :padding-top="28"
                 class="chat-message-list"
                 :style="scrollParentStyle"
                 @scroll="onScroll"
@@ -31,7 +31,7 @@
                 <template #default="{ item, index }">
                     <div
                         :key="item.id || item.stream_id || index"
-                        class="messages-container mx-auto sm:max-w-[768px] px-1.5 py-3 not-first:group relative w-full min-w-0 break-words"
+                        class="messages-container mx-auto sm:max-w-[768px] px-1.5 pb-6 not-first:group relative w-full min-w-0 break-words"
                         :data-msg-id="item.id"
                         :data-stream-id="item.stream_id"
                     >
@@ -135,8 +135,9 @@ const effectiveInputHeight = computed(
 );
 
 // Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
+// Account for action buttons that extend below message containers (translate-y-1/2)
 const bottomPad = computed(() => {
-    const base = Math.round(effectiveInputHeight.value + 60); // Add 32px buffer
+    const base = Math.round(effectiveInputHeight.value + 84); // Increased buffer for action buttons
     return isMobile.value ? base + 24 : base; // 24px approximates safe-area + gap
 });
 

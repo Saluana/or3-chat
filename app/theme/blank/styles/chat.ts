@@ -54,6 +54,9 @@ export const chatOverrides = {
             body: 'p-0!',
         },
     },
+    'div#message.user-container': {
+        class: 'px-4! py-3! bg-[var(--md-primary-border)] rounded-[var(--md-border-radius)]',
+    },
 };
 
 export const chatCssSelectors = {
@@ -88,6 +91,18 @@ export const chatCssSelectors = {
             backgroundColor: 'var(--md-surface-container-high)',
             border: 'var(--md-border-width) solid var(--md-border-color)',
             boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+            opacity: '0',
+            transition: 'opacity 0.2s ease-in-out',
+        },
+    },
+    '.group:hover .cm-action-group': {
+        style: {
+            opacity: '1',
+        },
+    },
+    '.group:focus-within .cm-action-group': {
+        style: {
+            opacity: '1',
         },
     },
     // Chat container vertical dividers: apply a right border to every chat container except the last one
@@ -203,6 +218,11 @@ export const chatCssSelectors = {
     '.tool-call-indicator-summary-icon .iconify': {
         style: {
             color: 'var(--md-primary) !important',
+        },
+    },
+    '.cm-actions-user': {
+        style: {
+            bottom: '-24px !important',
         },
     },
 };
