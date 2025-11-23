@@ -2,6 +2,7 @@
 // This file provides compile-time types and utilities for amazing DX.
 // Runtime behavior is unchanged: wrappers will delegate to the existing HookEngine.
 import type { PaneState as MultiPaneState } from '../../composables/core/useMultiPane';
+import type { ChatMessage } from '~/utils/chat/types';
 /**
  * Overview
  * - Strongly-typed hook names (actions and filters)
@@ -177,7 +178,7 @@ export interface UiChatNewPayload {
 }
 
 export interface AppInitPayload {
-    nuxtApp: any; // kept opaque to avoid heavy imports; intentionally any
+    nuxtApp: unknown; // kept opaque to avoid heavy imports
 }
 
 export interface FilesAttachPayload extends FilesAttachInputPayload {
@@ -227,7 +228,7 @@ export interface BranchContextAfterPayload {
 /** Optional helper for KV upsert-by-name payloads. */
 export interface KvUpsertByNameInput {
     name: string;
-    value: any;
+    value: unknown;
 }
 
 // ============================================================================
@@ -239,7 +240,7 @@ export interface MessageEntity {
     id: string;
     thread_id: string;
     role: 'user' | 'assistant' | 'system';
-    data: any;
+    data: Record<string, unknown>;
     index: number;
     created_at: number;
     updated_at?: number;
@@ -288,7 +289,7 @@ export interface ProjectEntity {
     id: string;
     name: string;
     description?: string | null;
-    data: any;
+    data: Record<string, unknown>;
     created_at: number;
     updated_at: number;
     deleted: boolean;
@@ -329,17 +330,17 @@ export interface KvEntry {
 }
 
 // Generic DB op payloads
-export interface DbCreatePayload<T = any> {
+export interface DbCreatePayload<T = unknown> {
     entity: T;
     tableName: string;
 }
-export interface DbUpdatePayload<T = any> {
+export interface DbUpdatePayload<T = unknown> {
     existing: T;
     updated: T;
     patch: Partial<T>;
     tableName: string;
 }
-export interface DbDeletePayload<T = any> {
+export interface DbDeletePayload<T = unknown> {
     entity: T;
     id: string;
     tableName: string;
@@ -485,7 +486,7 @@ export type CoreHookPayloadMap = {
     'ui.chat.message:filter:outgoing': [string];
     'ui.chat.message:filter:incoming': [string, string | undefined];
     'ai.chat.model:filter:select': [string];
-    'ai.chat.messages:filter:input': [any[]];
+    'ai.chat.messages:filter:input': [ChatMessage[]];
 
     // Pane Filters
     'ui.pane.thread:filter:select': [string, PaneState, string];
@@ -536,14 +537,14 @@ type DbActionPayloadFor<K extends DbActionHookName> =
             ? [DbUpdatePayload<InferDbEntity<K>>]
             : Op extends 'get'
             ? [{ id: string }]
-            : Op extends 'search' | 'byProject' | 'children'
-            ? [{ query?: any }]
+            : Op extends 'search' | 'byProject' | 'children' | 'byThread'
+            ? [{ query?: unknown }]
             : Op extends 'delete'
             ? K extends `db.${string}.delete:action:${infer DeleteType}:${string}`
                 ? [DbDeletePayload<InferDbEntity<K>>]
                 : [DbDeletePayload<InferDbEntity<K>>]
-            : [any]
-        : [any];
+            : [unknown]
+        : [unknown];
 
 // Derived payloads for DB filter hooks
 type DbFilterPayloadFor<K extends DbFilterHookName> =
@@ -556,20 +557,20 @@ type DbFilterPayloadFor<K extends DbFilterHookName> =
                 : Op extends 'get'
                 ? [string]
                 : Op extends 'search' | 'byProject' | 'children'
-                ? [{ query?: any }]
+                ? [{ query?: unknown }]
                 : Op extends 'upsertByName'
                 ? [KvUpsertByNameInput | InferDbEntity<K>]
-                : [any]
+                : [never]
             : Phase extends 'output'
-            ? Op extends 'search' | 'byProject' | 'children'
+            ? Op extends 'search' | 'byProject' | 'children' | 'byThread'
                 ? [InferDbEntity<K>[]]
                 : Op extends 'list' | 'searchByTitle' | 'all'
                 ? [InferDbEntity<K>[]]
-                : Op extends 'getByName'
+                : Op extends 'getByName' | 'get' | 'byStream'
                 ? [InferDbEntity<K> | undefined]
                 : [InferDbEntity<K>]
-            : [any]
-        : [any];
+            : [unknown]
+        : [unknown];
 
 // Map all DB action/filter hook names to inferred payload tuples.
 type DbActionMap = { [K in DbActionHookName]: DbActionPayloadFor<K> };
@@ -590,7 +591,7 @@ export type HookPayloadMap = CoreHookPayloadMap &
 /** Extract callback parameters for a hook name. */
 export type InferHookParams<K extends HookName> = K extends keyof HookPayloadMap
     ? HookPayloadMap[K]
-    : any[];
+    : unknown[];
 
 // Extract callback return type
 /** Return type for a hook callback based on kind (action vs filter). */
@@ -598,7 +599,7 @@ export type InferHookReturn<K extends HookName> =
     K extends `${string}:filter${string}`
         ? K extends keyof HookPayloadMap
             ? HookPayloadMap[K][0]
-            : any
+            : unknown
         : void;
 
 // Full callback signature
@@ -620,7 +621,7 @@ export type IsFilter<K extends HookName> = K extends FilterHookName
 // Extract just the payload (first arg for filters; first tuple entry otherwise)
 /** First parameter payload for a hook name (handy for actions). */
 export type ExtractHookPayload<K extends HookName> =
-    K extends keyof HookPayloadMap ? HookPayloadMap[K][0] : any;
+    K extends keyof HookPayloadMap ? HookPayloadMap[K][0] : unknown;
 
 // Wildcard support — basic pattern passthrough (kept simple for perf)
 export type MatchingHooks<Pattern extends string> = Extract<
@@ -647,10 +648,10 @@ export type InferDbEntity<K extends string> = K extends `db.messages.${string}`
     ? AttachmentEntity
     : K extends `db.kv.${string}`
     ? KvEntry
-    : any;
+    : unknown;
 
 // Utility: Tail of a tuple
-export type Tail<T extends any[]> = T extends [any, ...infer Rest] ? Rest : [];
+export type Tail<T extends unknown[]> = T extends [unknown, ...infer Rest] ? Rest : [];
 
 // ==========================================================================
 // ERROR UTILITIES — clearer TypeScript diagnostics for common mistakes
@@ -691,7 +692,7 @@ export type TypeName<T> = T extends string
     ? 'undefined'
     : T extends null
     ? 'null'
-    : T extends (...args: any[]) => any
+    : T extends (...args: unknown[]) => unknown
     ? 'function'
     : T extends object
     ? 'object'

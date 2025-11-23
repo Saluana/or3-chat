@@ -185,6 +185,7 @@ export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
         'db.prompts.get:filter:output',
         toPromptEntity(baseRow)
     );
+    if (!filteredEntity) return undefined;
     const mergedRow = promptEntityToRow(filteredEntity, baseRow);
     return rowToRecord(mergedRow);
 }
@@ -202,10 +203,10 @@ export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
     rows.sort((a, b) => b.updated_at - a.updated_at);
     const sliced = rows.slice(0, limit) as unknown as PromptRow[];
     const baseMap = new Map(sliced.map((row) => [row.id, row]));
-    const filteredEntities = await hooks.applyFilters(
+    const filteredEntities = (await hooks.applyFilters(
         'db.prompts.list:filter:output',
         sliced.map(toPromptEntity)
-    );
+    )) as PromptEntity[];
     return mergePromptEntities(filteredEntities, baseMap).map(rowToRecord);
 }
 

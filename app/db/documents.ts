@@ -223,6 +223,7 @@ export async function getDocument(
         'db.documents.get:filter:output',
         toDocumentEntity(baseRow)
     );
+    if (!filteredEntity) return undefined;
     const mergedRow = documentEntityToRow(filteredEntity, baseRow);
     return rowToRecord(mergedRow);
 }

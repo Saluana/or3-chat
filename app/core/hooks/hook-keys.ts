@@ -21,6 +21,7 @@ import type {
     UiPaneDocChangedPayload,
     FilesAttachInputPayload,
 } from './hook-types';
+import type { ChatMessage } from '~/utils/chat/types';
 
 // ---- Key unions ----
 
@@ -99,7 +100,7 @@ export interface HookPayloads {
     'ui.chat.message:filter:outgoing': [string];
     'ui.chat.message:filter:incoming': [string, string | undefined];
     'ai.chat.model:filter:select': [string];
-    'ai.chat.messages:filter:input': [any[]];
+    'ai.chat.messages:filter:input': [ChatMessage[]];
     'files.attach:filter:input': [FilesAttachInputPayload | false];
     'ai.chat.retry:action:before': [AiRetryBeforePayload];
     'ai.chat.retry:action:after': [AiRetryAfterPayload];
@@ -111,10 +112,10 @@ export function typedOn(hooks: HookEngine) {
     return {
         on<K extends KnownKey>(
             key: K,
-            fn: (...args: HookPayloads[K]) => any,
+            fn: (...args: HookPayloads[K]) => unknown,
             opts?: OnOptions
         ) {
-            return hooks.on(key, fn as any, opts);
+            return hooks.on(key, fn as (...args: unknown[]) => unknown, opts);
         },
     } as const;
 }

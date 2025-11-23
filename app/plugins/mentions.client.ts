@@ -3,6 +3,7 @@
  */
 
 import { defineNuxtPlugin } from '#app';
+import type { Extension } from '@tiptap/core';
 
 export default defineNuxtPlugin(async () => {
     const appConfig = useAppConfig();
@@ -128,10 +129,10 @@ export default defineNuxtPlugin(async () => {
             });
 
             // Provide the Mention extension via extensions filter
-            hooks.on('ui.chat.editor:filter:extensions', (existing: any[]) => {
+            hooks.on('ui.chat.editor:filter:extensions', ((existing: Extension[]) => {
                 const list = Array.isArray(existing) ? existing : [];
                 return [...list, MentionExtension];
-            });
+            }) as any);
         },
         { kind: 'action' }
     );

@@ -21,20 +21,20 @@ function isBrowser() {
     return typeof window !== 'undefined' && typeof document !== 'undefined';
 }
 
-function coerceStringOrNull(v: any) {
+function coerceStringOrNull(v: unknown): string | null {
     if (v === null || v === undefined) return null;
     return typeof v === 'string' ? v : String(v);
 }
 
-function isObj(v: any): v is Record<string, any> {
-    return v && typeof v === 'object' && !Array.isArray(v);
+function isObj(v: unknown): v is Record<string, unknown> {
+    return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
 export function sanitizeAiSettings(
-    input: any,
+    input: unknown,
     defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS
 ): AiSettingsV1 {
-    const inObj: any = isObj(input) ? input : {};
+    const inObj: Record<string, unknown> = isObj(input) ? input : {};
     const masterSystemPrompt =
         typeof inObj.masterSystemPrompt === 'string'
             ? inObj.masterSystemPrompt
@@ -80,8 +80,17 @@ function loadFromStorage(): AiSettingsV1 | null {
     }
 }
 
+interface AiSettingsStore {
+    settings: ReturnType<typeof ref<AiSettingsV1>>;
+    loaded: boolean;
+}
+
+interface GlobalWithAiSettings {
+    __or3AiSettingsStoreV1?: AiSettingsStore;
+}
+
 // HMR-safe singleton store
-const g: any = globalThis as any;
+const g = globalThis as GlobalWithAiSettings;
 if (!g.__or3AiSettingsStoreV1) {
     g.__or3AiSettingsStoreV1 = {
         settings: ref<AiSettingsV1>({ ...DEFAULT_AI_SETTINGS }),
@@ -89,10 +98,7 @@ if (!g.__or3AiSettingsStoreV1) {
     };
 }
 
-const store = g.__or3AiSettingsStoreV1 as {
-    settings: ReturnType<typeof ref<AiSettingsV1>>;
-    loaded: boolean;
-};
+const store = g.__or3AiSettingsStoreV1;
 
 /** Public composable API */
 export function useAiSettings() {

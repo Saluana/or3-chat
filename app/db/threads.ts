@@ -284,8 +284,8 @@ export async function getThreadSystemPrompt(
         action: 'get',
     });
     const result = thread?.system_prompt_id ?? null;
-    return hooks.applyFilters(
+    return (await hooks.applyFilters(
         'db.threads.getSystemPrompt:filter:output',
         result
-    );
+    )) as string | null;
 }

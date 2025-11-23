@@ -1,16 +1,18 @@
 import { ref, readonly } from 'vue';
 import { getPrompt } from '~/db/prompts';
 import { useHooks } from '#imports';
+import type { PromptContent } from './types';
+
 export interface ActivePromptState {
     activePromptId: string | null;
-    activePromptContent: any | null;
+    activePromptContent: PromptContent | null;
 }
 
 // NOTE: Must be module-singleton so different composables/components share state.
 // Previously each invocation created new refs, so selection in modal was not
 // visible to chat sending logic. We lift refs to module scope.
 const _activePromptId = ref<string | null>(null);
-const _activePromptContent = ref<any | null>(null);
+const _activePromptContent = ref<PromptContent | null>(null);
 
 export function useActivePrompt() {
     const hooks = useHooks();
@@ -40,7 +42,7 @@ export function useActivePrompt() {
         setActivePrompt(null);
     }
 
-    function getActivePromptContent(): any | null {
+    function getActivePromptContent(): PromptContent | null {
         return _activePromptContent.value;
     }
 

@@ -35,7 +35,7 @@ function toMessageEntity(message: Message): MessageEntity {
         id: message.id,
         thread_id: message.thread_id,
         role: normalizeMessageRole(message.role),
-        data: message.data,
+        data: (message.data && typeof message.data === 'object' ? message.data : {}) as Record<string, unknown>,
         index: message.index,
         created_at: message.created_at,
         updated_at: message.updated_at,
@@ -205,11 +205,11 @@ export async function retryBranch({
     titleOverride,
 }: RetryBranchParams) {
     const hooks = useHooks();
-    const filtered = await hooks.applyFilters('branch.retry:filter:options', {
+    const filtered = (await hooks.applyFilters('branch.retry:filter:options', {
         assistantMessageId,
         mode,
         titleOverride,
-    } as RetryBranchParams);
+    } as RetryBranchParams)) as RetryBranchParams;
     assistantMessageId = filtered.assistantMessageId;
     mode = filtered.mode ?? mode;
     titleOverride = filtered.titleOverride;
