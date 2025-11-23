@@ -12,7 +12,7 @@ import type {
 } from '~/core/hooks/hook-types';
 
 // Utility: Tail of a tuple
-type Tail<T extends any[]> = T extends [any, ...infer Rest] ? Rest : [];
+type Tail<T extends unknown[]> = T extends [unknown, ...infer Rest] ? Rest : [];
 
 /**
  * Typed wrapper around HookEngine providing full type inference for
