@@ -120,4 +120,89 @@ export const chatCssSelectors = {
             cursor: 'pointer',
         },
     },
+    '.tool-call-indicator': {
+        style: {
+            backgroundColor: 'var(--md-surface)',
+            borderRadius: 'var(--md-border-radius)',
+            border: '1px solid var(--md-border-color)',
+            overflow: 'hidden',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+            marginTop: '8px',
+            marginBottom: '8px',
+        },
+    },
+    '.tool-call-indicator-details': {
+        style: {
+            background: 'transparent !important',
+            border: 'none !important',
+        },
+    },
+    '.tool-call-indicator-summary': {
+        style: {
+            background: 'transparent !important',
+            padding: '10px 12px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+        },
+    },
+    '.tool-call-indicator-summary:hover': {
+        style: {
+            backgroundColor: 'var(--md-surface-hover) !important',
+        },
+    },
+    '.tool-call-expanded-content': {
+        style: {
+            borderTop: '1px solid var(--md-border-color)',
+            padding: '12px',
+            backgroundColor: 'var(--md-surface-container-lowest)',
+        },
+    },
+    '.retro-tool-call-content': {
+        style: {
+            backgroundColor: 'var(--md-surface-container) !important',
+            border: 'none !important',
+            borderRadius: '6px !important',
+            fontFamily: '"IBM Plex Mono", monospace !important',
+            fontSize: '12px !important',
+            padding: '12px !important',
+            margin: '8px 0 !important',
+            overflowX: 'auto',
+            color: 'var(--md-on-surface)',
+        },
+    },
+    '.tool-call-header-text': {
+        style: {
+            color: 'var(--md-on-surface)',
+            fontSize: '14px',
+            fontWeight: '500',
+        },
+    },
+    // Status text (second span)
+    '.tool-call-header-text:nth-of-type(2)': {
+        style: {
+            fontSize: '10px !important',
+            fontWeight: '600',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            backgroundColor: 'var(--md-surface-container-high)',
+            color: 'var(--md-on-surface) !important',
+            padding: '2px 8px',
+            borderRadius: '999px',
+            border: '1px solid var(--md-outline-variant)',
+        },
+    },
+    '.tool-call-indicator-summary-icon': {
+        style: {
+            color: 'var(--md-primary) !important',
+            display: 'flex',
+            alignItems: 'center',
+        },
+    },
+    '.tool-call-indicator-summary-icon .iconify': {
+        style: {
+            color: 'var(--md-primary) !important',
+        },
+    },
 };
