@@ -7,77 +7,49 @@
             containerProps?.class ?? '',
         ]"
     >
-        <!-- Scroll viewport -->
-        <div
-            ref="scrollParent"
-            v-bind="scrollContainerProps"
-            :class="[
-                'chat-scroll-container w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars',
-                scrollContainerProps?.class ?? '',
-            ]"
-            :style="scrollParentStyle"
-        >
-            <div
-                v-bind="messageListProps"
-                :class="[
-                    'chat-message-list mx-auto w-full px-1.5 sm:max-w-[768px] pb-8 sm:pb-10 pt-safe-offset-10 flex flex-col',
-                    messageListProps?.class ?? '',
-                ]"
+        <!-- Virtualized messages (Req 3.1) -->
+        <!-- Or3Scroll is now the scroll container -->
+        <!-- Virtualized messages (Req 3.1) -->
+        <!-- Or3Scroll is now the scroll container -->
+        <ClientOnly>
+            <Or3Scroll
+                ref="scroller"
+                :items="allMessages"
+                :item-key="(m: any) => m.id || m.stream_id || ''"
+                :estimate-height="80"
+                :overscan="6500"
+                :maintain-bottom="!anyEditing"
+                :bottom-threshold="5"
+                :padding-bottom="bottomPad"
+                :padding-top="28"
+                class="chat-message-list"
+                :style="scrollParentStyle"
+                @scroll="onScroll"
+                @reachTop="emit('reached-top')"
+                @reachBottom="emit('reached-bottom')"
             >
-                <!-- Virtualized stable messages (Req 3.1) -->
-                <VirtualMessageList
-                    class="virtual-message-list"
-                    :messages="stableMessages"
-                    :item-size-estimation="520"
-                    :overscan="5"
-                    :scroll-parent="scrollParent"
-                    :is-streaming="streamActive"
-                    :editing-active="anyEditing"
-                    @scroll-state="onScrollState"
-                    wrapper-class="virtual-message-list-wrapper flex flex-col"
-                >
-                    <template #item="{ message, index }">
-                        <div
-                            :key="message.id || message.stream_id || index"
-                            class="messages-container not-first:group relative w-full max-w-full min-w-0 space-y-4 break-words"
-                            :data-msg-id="message.id"
-                            :data-stream-id="message.stream_id"
-                        >
-                            <LazyChatMessage
-                                :message="message"
-                                :thread-id="props.threadId"
-                                @retry="onRetry"
-                                @branch="onBranch"
-                                @edited="onEdited"
-                                @begin-edit="onBeginEdit(message.id)"
-                                @cancel-edit="onEndEdit(message.id)"
-                                @save-edit="onEndEdit(message.id)"
-                            />
-                        </div>
-                    </template>
-                    <template #tail>
-                        <!-- Streaming tail appended (Req 3.2) -->
-                        <div
-                            v-if="streamingMessage"
-                            class="streaming-tail"
-                            style="overflow-anchor: none"
-                            ref="tailWrapper"
-                        >
-                            <LazyChatMessage
-                                :message="streamingMessage as any"
-                                :thread-id="props.threadId"
-                                @retry="onRetry"
-                                @branch="onBranch"
-                                @edited="onEdited"
-                                @begin-edit="onBeginEdit(streamingMessage.id)"
-                                @cancel-edit="onEndEdit(streamingMessage.id)"
-                                @save-edit="onEndEdit(streamingMessage.id)"
-                            />
-                        </div>
-                    </template>
-                </VirtualMessageList>
-            </div>
-        </div>
+                <template #default="{ item, index }">
+                    <div
+                        :key="item.id || item.stream_id || index"
+                        class="messages-container mx-auto sm:max-w-[768px] px-1.5 pb-6 not-first:group relative w-full min-w-0 break-words"
+                        :data-msg-id="item.id"
+                        :data-stream-id="item.stream_id"
+                    >
+                        <LazyChatMessage
+                            :message="item"
+                            :thread-id="props.threadId"
+                            @retry="onRetry"
+                            @branch="onBranch"
+                            @edited="onEdited"
+                            @begin-edit="onBeginEdit(item.id)"
+                            @cancel-edit="onEndEdit(item.id)"
+                            @save-edit="onEndEdit(item.id)"
+                        />
+                    </div>
+                </template>
+            </Or3Scroll>
+        </ClientOnly>
+
         <!-- Input area overlay -->
         <div
             v-bind="inputWrapperProps"
@@ -94,8 +66,20 @@
                     'chat-inner-input-container',
                     innerInputContainerClass,
                     innerInputContainerProps?.class ?? '',
+                    'relative',
                 ]"
             >
+                <div
+                    class="absolute bottom-full left-0 right-0 mb-2 flex justify-center pointer-events-none transition-opacity duration-200"
+                    :style="{ opacity: scrollToBottomOpacity }"
+                    v-show="isScrollable && distanceFromBottom > 1"
+                >
+                    <UButton
+                        v-bind="scrollToBottomButtonProps"
+                        @click="scrollToBottom"
+                        class="pointer-events-auto"
+                    />
+                </div>
                 <lazy-chat-input-dropper
                     :loading="loading"
                     :streaming="loading"
@@ -125,6 +109,7 @@ import {
     type Ref,
     type CSSProperties,
     onBeforeUnmount,
+    nextTick,
 } from 'vue';
 
 import {
@@ -133,11 +118,13 @@ import {
     setPanePendingPrompt,
 } from '~/composables/core/usePanePrompt';
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
-import VirtualMessageList from './VirtualMessageList.vue';
+import { Or3Scroll } from 'or3-scroll';
+import 'or3-scroll/style.css';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 import { useToast } from '#imports';
 import { MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
 // Removed onMounted/watchEffect (unused)
@@ -159,16 +146,17 @@ const DEFAULT_INPUT_HEIGHT = 140;
 const effectiveInputHeight = computed(
     () => emittedInputHeight.value ?? DEFAULT_INPUT_HEIGHT
 );
+
 // Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
+// Account for action buttons that extend below message containers (translate-y-1/2)
 const bottomPad = computed(() => {
-    const base = Math.round(effectiveInputHeight.value + 16); // Add 16px buffer
+    const base = Math.round(effectiveInputHeight.value + 84); // Increased buffer for action buttons
     return isMobile.value ? base + 24 : base; // 24px approximates safe-area + gap
 });
 
-// Use typed CSSProperties for template binding; overflowAnchor uses the proper union type
+// Use typed CSSProperties for template binding
 const scrollParentStyle = computed<CSSProperties>(() => ({
-    paddingBottom: bottomPad.value + 'px',
-    overflowAnchor: 'auto' as CSSProperties['overflowAnchor'],
+    scrollbarGutter: 'stable', // Prevent layout shift when scrollbar appears
 }));
 
 // Mobile fixed wrapper classes/styles
@@ -207,6 +195,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'thread-selected', id: string): void;
+    (e: 'reached-top'): void;
+    (e: 'reached-bottom'): void;
 }>();
 
 // Initialize chat composable and make it refresh when threadId changes
@@ -332,18 +322,30 @@ const streamingMessage = computed<any | null>(() => {
         text,
         reasoning_text: reasoning,
         pending: base.pending && !(text || reasoning),
+        stream_id: streamId.value, // Ensure stream_id is present for keying
     });
 });
 
 // All stable messages (excluding the in-flight streaming tail) are virtualized to avoid boundary jumps
 // messages[] already excludes tail assistant; no filtering required
 const stableMessages = computed<any[]>(() => messages.value);
-// Removed size change logging for virtual/recent message groups.
 
-// Removed assistantVisible tracking (no handoff overlap needed)
+// Combine stable messages and streaming message for Or3Scroll
+const allMessages = computed(() => {
+    const list = [...stableMessages.value];
+    if (streamingMessage.value) {
+        list.push(streamingMessage.value);
+    }
+    return list;
+});
+
+// Detect images in assistant messages to boost overscan (Req: User Request)
+// Removed dynamic overscan in favor of static high overscan (6500px) for performance stability.
 
 // Scroll handling centralized in VirtualMessageList
-const scrollParent: Ref<HTMLElement | null> = ref(null);
+// Ref is now the VirtualMessageList component instance, not a raw element
+const scroller = ref<any>(null);
+
 // Track editing state across child messages for scroll suppression (Task 5.2.2)
 const editingIds = ref<Set<string>>(new Set());
 const anyEditing = computed(() => editingIds.value.size > 0);
@@ -364,9 +366,63 @@ function onEndEdit(id: string) {
 // Scroll state from VirtualMessageList (Task 5.1.2)
 const atBottom = ref(true);
 const stick = ref(true);
+const distanceFromBottom = ref(0);
+const isScrollable = ref(false);
+const iconScrollToBottom = useIcon('chat.scrollToBottom');
+
+const scrollToBottomButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.scroll-to-bottom',
+        isNuxtUI: true,
+    });
+
+    return {
+        icon: iconScrollToBottom.value || 'heroicons:arrow-down-20-solid',
+        size: 'sm' as const,
+        color: 'primary' as const,
+        variant: 'solid' as const,
+        ui: { rounded: 'rounded-full' },
+        class: 'shadow-lg',
+        ...(overrides.value as any),
+    };
+});
+
+const scrollToBottomOpacity = computed(() => {
+    // Transition into view as we scroll up
+    return Math.min(1, distanceFromBottom.value / 150);
+});
+
+function scrollToBottom() {
+    scroller.value?.scrollToBottom({ smooth: true });
+}
+
 function onScrollState(s: { atBottom: boolean; stick: boolean }) {
     atBottom.value = s.atBottom;
     stick.value = s.stick;
+}
+
+function onScroll(payload: {
+    scrollTop: number;
+    scrollHeight: number;
+    clientHeight: number;
+    isAtBottom: boolean;
+}) {
+    atBottom.value = payload.isAtBottom;
+    distanceFromBottom.value =
+        payload.scrollHeight - payload.scrollTop - payload.clientHeight;
+    isScrollable.value = payload.scrollHeight > payload.clientHeight;
+
+    // Simple stick logic: if we are at bottom, we stick. If user scrolls up, we unstick.
+    if (payload.isAtBottom) {
+        stick.value = true;
+    } else {
+        stick.value = false;
+    }
+
+    // We can emit scroll state if parent needs it, but here we ARE the parent.
+    // Logic that depended on 'scroll-state' event can now use local refs directly.
 }
 
 // (8.4) Auto-scroll already consolidated; tail growth handled via version watcher
@@ -409,8 +465,7 @@ function onSend(payload: any) {
         });
         return;
     }
-    const carryHashes =
-        readyImages.length === 0 ? collectRecentHashes() : [];
+    const carryHashes = readyImages.length === 0 ? collectRecentHashes() : [];
     const files = readyImages.map((img: any) => ({
         type: img.file?.type || img.mime || 'image/png',
         url: img.hash || img.url,
@@ -435,6 +490,10 @@ function onSend(payload: any) {
             online: !!payload.webSearchEnabled,
             context_hashes,
         })
+        ?.then(() => {
+            // Ensure layout is stable after sending (input shrink + new message)
+            nextTick(() => scroller.value?.refreshMeasurements());
+        })
         ?.catch(() => {});
 }
 
@@ -442,6 +501,8 @@ function onRetry(messageId: string) {
     if (!chat.value || chat.value?.loading?.value) return;
     // Provide current model so retry uses same selection
     (chat.value as any).retryMessage(messageId, model.value);
+    // Retry changes message state, force measure
+    nextTick(() => scroller.value?.refreshMeasurements());
 }
 
 function onBranch(newThreadId: string) {
@@ -454,7 +515,11 @@ function onEdited(payload: { id: string; content: string }) {
         typeof (chat.value as any).applyLocalEdit === 'function'
             ? (chat.value as any).applyLocalEdit(payload.id, payload.content)
             : false;
-    if (applied) return;
+    if (applied) {
+        // Content changed size, force measure
+        nextTick(() => scroller.value?.refreshMeasurements());
+        return;
+    }
 }
 
 function onPendingPromptSelected(promptId: string | null) {

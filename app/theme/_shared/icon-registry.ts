@@ -3,6 +3,11 @@ import { DEFAULT_ICONS, type IconToken } from '~/config/icon-tokens';
 
 export type IconMap = Partial<Record<IconToken, string>>;
 
+export interface IconRegistryState {
+    themes: Record<string, IconMap>;
+    activeTheme: string;
+}
+
 export class IconRegistry {
     private defaults: typeof DEFAULT_ICONS;
     private themes: Map<string, IconMap> = new Map();
@@ -116,7 +121,7 @@ export class IconRegistry {
     /**
      * Hydrate registry state from SSR
      */
-    hydrate(state: { themes: Record<string, IconMap>; activeTheme: string }) {
+    hydrate(state: IconRegistryState) {
         // Clear existing themes first
         this.themes.clear();
         // Load from hydrated state

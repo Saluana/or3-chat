@@ -187,6 +187,8 @@ async function ensure(h: string) {
 
 // Track current hashes and manage ref counting/object URL cleanup
 const currentHashes = new Set<string>();
+let isComponentActive = true;
+
 watch(
     () => props.hashes,
     async (list) => {
@@ -196,9 +198,14 @@ watch(
                 await ensure(h);
                 const state = cache.get(h);
                 if (state?.status === 'ready' && state.url) {
+                    if (!isComponentActive) {
+                        retainThumb(h);
+                        releaseThumb(h);
+                        return;
+                    }
                     retainThumb(h);
+                    currentHashes.add(h);
                 }
-                currentHashes.add(h);
             }
         }
         for (const h of Array.from(currentHashes)) {
@@ -212,6 +219,7 @@ watch(
 );
 
 onBeforeUnmount(() => {
+    isComponentActive = false;
     for (const h of currentHashes) releaseThumb(h);
     currentHashes.clear();
 });

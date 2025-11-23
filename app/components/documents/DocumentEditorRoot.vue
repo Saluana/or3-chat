@@ -51,7 +51,7 @@
             >
                 <div
                     ref="editorMountEl"
-                    class="document-editor-mount prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                    class="document-editor-mount prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-normal prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
                     role="textbox"
                     aria-label="Document body"
                     aria-multiline="true"
@@ -78,7 +78,7 @@ import {
     setDocumentTitle,
     loadDocument,
 } from '~/composables/documents/useDocumentsStore';
-import { Editor } from '@tiptap/vue-3';
+import { Editor, EditorContent } from '@tiptap/vue-3';
 import type { JSONContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
@@ -273,21 +273,36 @@ async function makeEditor() {
             throw new Error('Editor mount element missing');
         }
         mountTarget.innerHTML = '';
+
+        // Ensure we have at least one paragraph so the placeholder can attach
+        let initialContent = state.value.record?.content;
+        const isContentEmpty =
+            !initialContent ||
+            (initialContent.type === 'doc' &&
+                Array.isArray(initialContent.content) &&
+                initialContent.content.length === 0);
+
+        if (isContentEmpty) {
+            initialContent = {
+                type: 'doc',
+                content: [{ type: 'paragraph' }],
+            };
+        }
+
         editor.value = new Editor({
             element: mountTarget,
             extensions: [
                 StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
                 Placeholder.configure({
                     placeholder: 'Type your text here...',
+                    showOnlyCurrent: false,
+                    emptyNodeClass: 'is-editor-empty',
                 }),
                 ...pluginExtensions,
                 ...pluginNodes,
                 ...pluginMarks,
             ],
-            content: state.value.record?.content || {
-                type: 'doc',
-                content: [],
-            },
+            content: initialContent,
             autofocus: false,
             onUpdate: () => emitContent(),
         });
@@ -450,10 +465,12 @@ const statusText = computed(() => {
 }
 
 /* Placeholder (needs :deep due to scoped styles) */
-.prosemirror-host :deep(p.is-editor-empty:first-child) {
+.prosemirror-host :deep(p.is-editor-empty:first-child),
+.prosemirror-host :deep(p.is-empty:first-child) {
     position: relative;
 }
-.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
+.prosemirror-host :deep(p.is-editor-empty:first-child::before),
+.prosemirror-host :deep(p.is-empty:first-child::before) {
     /* Use design tokens; ensure sufficient contrast in dark mode */
     color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
     content: attr(data-placeholder);

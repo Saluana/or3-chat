@@ -299,6 +299,11 @@ export default defineNuxtConfig({
         ],
     },
     vite: {
+        server: {
+            fs: {
+                allow: ['..'],
+            },
+        },
         plugins: [
             themeCompilerPlugin({
                 failOnError: true,
