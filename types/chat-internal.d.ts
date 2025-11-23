@@ -189,7 +189,7 @@ export interface PaneContext {
  */
 export interface ModelInputMessage {
     id?: string;
-    role: 'user' | 'assistant' | 'system' | 'tool';
+    role: 'user' | 'assistant' | 'system';
     content: string | any[];
     name?: string;
     tool_call_id?: string;

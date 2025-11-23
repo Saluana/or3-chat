@@ -497,7 +497,7 @@ export function useChat(
             const ctx = getActivePaneContext();
             if (ctx) {
                 hooks.doAction('ui.pane.msg:action:sent', {
-                    pane: ctx.pane,
+                    pane: ctx.pane as any,
                     paneIndex: ctx.paneIndex,
                     message: {
                         id: userDbMsg.id,
@@ -597,16 +597,18 @@ export function useChat(
                         .pop();
                     if (lastUserIdx != null && lastUserIdx >= 0) {
                         const target = modelInputMessages[lastUserIdx];
-                        if (!Array.isArray(target.content)) {
-                            if (typeof target.content === 'string') {
-                                target.content = [
-                                    { type: 'text', text: target.content },
-                                ];
-                            } else {
-                                target.content = [];
+                        if (target) {
+                            if (!Array.isArray(target.content)) {
+                                if (typeof target.content === 'string') {
+                                    target.content = [
+                                        { type: 'text', text: target.content },
+                                    ];
+                                } else {
+                                    target.content = [];
+                                }
                             }
+                            target.content.push(...contextParts);
                         }
-                        target.content.push(...contextParts);
                     }
                 }
             }
@@ -641,7 +643,7 @@ export function useChat(
                 role: 'assistant',
                 stream_id: newStreamId,
                 data: { content: '', attachments: [], reasoning_text: null },
-            });
+            }) as DbAssistantMessage;
             // Track file hashes across loop iterations
             const assistantFileHashes: string[] = [];
             const persistAssistant = makeAssistantPersister(
@@ -990,7 +992,7 @@ export function useChat(
                 const ctx = getActivePaneContext();
                 if (ctx) {
                     hooks.doAction('ui.pane.msg:action:received', {
-                        pane: ctx.pane,
+                        pane: ctx.pane as any,
                         paneIndex: ctx.paneIndex,
                         message: {
                             id: finalized.id,
@@ -1109,9 +1111,9 @@ export function useChat(
     async function retryMessage(messageId: string, modelOverride?: string) {
         if (loading.value || !threadIdRef.value) return;
         try {
-            const target = await db.messages.get(messageId) as DbMessage | undefined;
+            const target = await db.messages.get(messageId);
             if (!target || target.thread_id !== threadIdRef.value) return;
-            let userMsg: DbMessage | undefined = target.role === 'user' ? target : undefined;
+            let userMsg = target.role === 'user' ? target : undefined;
             if (!userMsg && target.role === 'assistant') {
                 const DexieMod = (await import('dexie')).default;
                 userMsg = await db.messages
@@ -1121,7 +1123,7 @@ export function useChat(
                         [target.thread_id, target.index]
                     )
                     .filter(
-                        (m: DbMessage) =>
+                        (m: any) =>
                             m.role === 'user' &&
                             !m.deleted &&
                             m.index < target.index
@@ -1133,10 +1135,10 @@ export function useChat(
             const assistant = await db.messages
                 .where('[thread_id+index]')
                 .between(
-                    [userMsg.thread_id, userMsg.index + 1],
+                    [userMsg.thread_id, (typeof userMsg.index === 'number' ? userMsg.index : 0) + 1],
                     [userMsg.thread_id, DexieMod2.maxKey]
                 )
-                .filter((m: DbMessage) => m.role === 'assistant' && !m.deleted)
+                .filter((m: any) => m.role === 'assistant' && !m.deleted)
                 .first();
 
             // Suppress flushing of the previous tail assistant if it corresponds to the
@@ -1158,7 +1160,7 @@ export function useChat(
                 threadId: threadIdRef.value,
                 originalUserId: userMsg.id,
                 originalAssistantId: assistant?.id,
-                triggeredBy: target.role,
+                triggeredBy: target.role as 'user' | 'assistant',
             });
 
             // Store original text and hashes before deletion
@@ -1181,7 +1183,7 @@ export function useChat(
                     dbCount: dbMessages.length,
                     memoryCount: rawMessages.value.length,
                 });
-                rawMessages.value = dbMessages.map((m: DbMessage): ChatMessage => ({
+                rawMessages.value = dbMessages.map((m: any): ChatMessage => ({
                     role: m.role,
                     content:
                         typeof m.data?.content === 'string'
@@ -1205,9 +1207,9 @@ export function useChat(
                         typeof m.created_at === 'number' ? m.created_at : null,
                 }));
                 const uiMessages = dbMessages.filter(
-                    (m: DbMessage) => m.role !== 'tool'
+                    (m: any) => m.role !== 'tool'
                 );
-                messages.value = uiMessages.map((m: DbMessage) =>
+                messages.value = uiMessages.map((m: any) =>
                     ensureUiMessage({
                         role: m.role,
                         content:
