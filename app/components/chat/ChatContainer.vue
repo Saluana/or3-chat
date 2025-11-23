@@ -17,7 +17,7 @@
                 :items="allMessages"
                 :item-key="(m: any) => m.id || m.stream_id || ''"
                 :estimate-height="80"
-                :overscan="800"
+                :overscan="1000"
                 :maintain-bottom="!anyEditing"
                 :padding-bottom="bottomPad"
                 :padding-top="16"
