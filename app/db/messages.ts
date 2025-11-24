@@ -18,7 +18,7 @@ function toMessageEntity(msg: Message): MessageEntity {
         id: msg.id,
         thread_id: msg.thread_id,
         role: msg.role as 'user' | 'assistant' | 'system',
-        data: msg.data,
+        data: msg.data as Record<string, unknown>,
         index: msg.index,
         created_at: msg.created_at,
         updated_at: msg.updated_at,

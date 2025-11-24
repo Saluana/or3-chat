@@ -39,6 +39,17 @@ function globToRegExp(glob: string): RegExp {
     return new RegExp(`^${escaped}$`);
 }
 
+const regexCache = new Map<string, RegExp>();
+
+function getRegex(glob: string): RegExp {
+    let regex = regexCache.get(glob);
+    if (!regex) {
+        regex = globToRegExp(glob);
+        regexCache.set(glob, regex);
+    }
+    return regex;
+}
+
 function sortCallbacks<T extends CallbackEntry>(arr: T[]): T[] {
     return arr.sort((a, b) => a.priority - b.priority || a.id - b.id);
 }
@@ -56,8 +67,8 @@ export interface HookEngine {
         fn: F,
         priority?: number
     ) => void;
-    applyFilters: <T>(name: string, value: T, ...args: any[]) => Promise<T>;
-    applyFiltersSync: <T>(name: string, value: T, ...args: any[]) => T;
+    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;
+    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;
 
     // actions
     addAction: <F extends AnyFn>(
@@ -71,8 +82,8 @@ export interface HookEngine {
         fn: F,
         priority?: number
     ) => void;
-    doAction: (name: string, ...args: any[]) => Promise<void>;
-    doActionSync: (name: string, ...args: any[]) => void;
+    doAction: (name: string, ...args: unknown[]) => Promise<void>;
+    doActionSync: (name: string, ...args: unknown[]) => void;
 
     // utils
     hasFilter: (name?: string, fn?: AnyFn) => boolean | number;
@@ -140,7 +151,7 @@ export function createHookEngine(): HookEngine {
         const entry: CallbackEntry = { fn, priority: p, id: ++counter, name };
         if (name.includes('*')) {
             wildcards.push({
-                pattern: { pattern: name, regex: globToRegExp(name) },
+                pattern: { pattern: name, regex: getRegex(name) },
                 entry,
             });
         } else {
@@ -239,9 +250,9 @@ export function createHookEngine(): HookEngine {
     async function callAsync(
         cbs: CallbackEntry[],
         name: string,
-        args: any[],
+        args: unknown[],
         isFilter: boolean,
-        initialValue?: any
+        initialValue?: unknown
     ) {
         {
             const firstPriority =
@@ -291,9 +302,9 @@ export function createHookEngine(): HookEngine {
     function callSync(
         cbs: CallbackEntry[],
         name: string,
-        args: any[],
+        args: unknown[],
         isFilter: boolean,
-        initialValue?: any
+        initialValue?: unknown
     ) {
         {
             const firstPriority =
@@ -371,12 +382,18 @@ export function createHookEngine(): HookEngine {
         async applyFilters(name, value, ...args) {
             const cbs = getMatching(filters, filterWildcards, name);
             if (cbs.length === 0) return value;
-            return await callAsync(cbs, name, args, true, value);
+            return (await callAsync(
+                cbs,
+                name,
+                args,
+                true,
+                value
+            )) as typeof value;
         },
         applyFiltersSync(name, value, ...args) {
             const cbs = getMatching(filters, filterWildcards, name);
             if (cbs.length === 0) return value;
-            return callSync(cbs, name, args, true, value);
+            return callSync(cbs, name, args, true, value) as typeof value;
         },
 
         // actions
@@ -416,7 +433,7 @@ export function createHookEngine(): HookEngine {
 
         // ergonomics
         onceAction(name: string, fn: AnyFn, priority?: number) {
-            const wrapper = (...args: any[]) => {
+            const wrapper = (...args: unknown[]) => {
                 try {
                     fn(...args);
                 } finally {
@@ -461,7 +478,7 @@ if (import.meta.hot) {
         // but we should prevent diagnostic arrays from growing unbounded.
         // The global singleton is stored in plugins/hooks.client.ts as g.__NUXT_HOOKS__.
         // We'll access and clear the diagnostics if it exists.
-        const g = globalThis as any;
+        const g = globalThis as { __NUXT_HOOKS__?: HookEngine };
         if (g.__NUXT_HOOKS__?._diagnostics) {
             g.__NUXT_HOOKS__._diagnostics.timings = {};
             g.__NUXT_HOOKS__._diagnostics.errors = {};

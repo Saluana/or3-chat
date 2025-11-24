@@ -185,6 +185,7 @@ export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
         'db.prompts.get:filter:output',
         toPromptEntity(baseRow)
     );
+    if (!filteredEntity) return undefined;
     const mergedRow = promptEntityToRow(filteredEntity, baseRow);
     return rowToRecord(mergedRow);
 }

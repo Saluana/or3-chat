@@ -3,24 +3,7 @@
 // without constraining advanced usage. Keep additive and backwards compatible.
 
 import type { HookEngine, OnOptions } from './hooks';
-import type {
-    AiSendBeforePayload,
-    AiSendAfterPayload,
-    AiStreamDeltaPayload,
-    AiStreamReasoningPayload,
-    AiStreamCompletePayload,
-    AiStreamErrorPayload,
-    AiRetryBeforePayload,
-    AiRetryAfterPayload,
-    UiPaneMsgSentPayload,
-    UiPaneMsgReceivedPayload,
-    UiPaneActivePayload,
-    UiPaneBlurPayload,
-    UiPaneSwitchPayload,
-    UiPaneThreadChangedPayload,
-    UiPaneDocChangedPayload,
-    FilesAttachInputPayload,
-} from './hook-types';
+import type { HookPayloadMap, FilesAttachInputPayload } from './hook-types';
 
 // ---- Key unions ----
 
@@ -69,52 +52,16 @@ export type HookKey = KnownHookKey | DbHookKey | (string & {});
 
 // ---- Typed ON helper ----
 
-// Map known keys to their argument tuple for `on()` convenience.
-// Note: filters vs actions are not distinguished here; the engine decides based on opts.kind.
-export interface HookPayloads {
-    'ai.chat.send:action:before': [AiSendBeforePayload];
-    'ai.chat.send:action:after': [AiSendAfterPayload];
-    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];
-    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];
-    'ai.chat.stream:action:complete': [AiStreamCompletePayload];
-    'ai.chat.stream:action:error': [AiStreamErrorPayload];
-    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];
-    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];
-    'ui.pane.active:action': [UiPaneActivePayload];
-    'ui.pane.blur:action': [UiPaneBlurPayload];
-    'ui.pane.switch:action': [UiPaneSwitchPayload];
-    'ui.pane.thread:filter:select': [
-        string,
-        UiPaneThreadChangedPayload['pane'],
-        string
-    ];
-    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];
-    'ui.pane.doc:filter:select': [
-        string,
-        UiPaneDocChangedPayload['pane'],
-        string
-    ];
-    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];
-    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];
-    'ui.chat.message:filter:outgoing': [string];
-    'ui.chat.message:filter:incoming': [string, string | undefined];
-    'ai.chat.model:filter:select': [string];
-    'ai.chat.messages:filter:input': [any[]];
-    'files.attach:filter:input': [FilesAttachInputPayload | false];
-    'ai.chat.retry:action:before': [AiRetryBeforePayload];
-    'ai.chat.retry:action:after': [AiRetryAfterPayload];
-}
-
-type KnownKey = keyof HookPayloads & KnownHookKey;
+type KnownKey = Extract<keyof HookPayloadMap, KnownHookKey>;
 
 export function typedOn(hooks: HookEngine) {
     return {
         on<K extends KnownKey>(
             key: K,
-            fn: (...args: HookPayloads[K]) => any,
+            fn: (...args: HookPayloadMap[K]) => unknown,
             opts?: OnOptions
         ) {
-            return hooks.on(key, fn as any, opts);
+            return hooks.on(key, fn as (...args: unknown[]) => unknown, opts);
         },
     } as const;
 }

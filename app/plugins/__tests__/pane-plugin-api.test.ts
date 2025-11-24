@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-beforeAll(() => {
-    (globalThis as any).defineNuxtPlugin = (fn: any) => fn;
-});
+vi.mock('#imports', () => ({
+    defineNuxtPlugin: (fn: any) => fn,
+}));
 
 vi.mock('#app', () => ({
     useNuxtApp: () => ({ $hooks: {} }),

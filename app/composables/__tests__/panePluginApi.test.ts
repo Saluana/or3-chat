@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ref } from 'vue';
 
-// Provide minimal defineNuxtPlugin global for plugin default export
-(globalThis as any).defineNuxtPlugin = (fn: any) => fn;
-
 // Hook engine mock
 import { createHookEngine } from '../../core/hooks/hooks';
 const hookEngine = createHookEngine();
 vi.mock('#app', () => ({ useNuxtApp: () => ({ $hooks: hookEngine }) }));
+vi.mock('#imports', () => ({
+    defineNuxtPlugin: (fn: any) => fn,
+}));
 
 // DB mocks
 let threadCounter = 0;

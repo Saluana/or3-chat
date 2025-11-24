@@ -9,6 +9,7 @@ import type {
     BranchForkBeforePayload,
     MessageEntity,
     ThreadEntity,
+    RetryBranchParams,
 } from '../core/hooks/hook-types';
 
 export type ForkMode = BranchMode;
@@ -35,7 +36,7 @@ function toMessageEntity(message: Message): MessageEntity {
         id: message.id,
         thread_id: message.thread_id,
         role: normalizeMessageRole(message.role),
-        data: message.data,
+        data: message.data as Record<string, unknown>,
         index: message.index,
         created_at: message.created_at,
         updated_at: message.updated_at,
@@ -190,12 +191,6 @@ export async function forkThread({
     });
 }
 
-interface RetryBranchParams {
-    assistantMessageId: string;
-    mode?: ForkMode;
-    titleOverride?: string;
-}
-
 /**
  * Given an assistant message, locate the preceding user message and fork the thread there.
  */
@@ -209,7 +204,7 @@ export async function retryBranch({
         assistantMessageId,
         mode,
         titleOverride,
-    } as RetryBranchParams);
+    });
     assistantMessageId = filtered.assistantMessageId;
     mode = filtered.mode ?? mode;
     titleOverride = filtered.titleOverride;
