@@ -13,7 +13,9 @@ import type { Post } from './schema';
 /**
  * Type guard to check if a post is a prompt
  */
-function isPromptPost(post: Post | undefined | null): post is Post & { postType: 'prompt' } {
+function isPromptPost(
+    post: Post | undefined | null
+): post is Post & { postType: 'prompt' } {
     return post !== undefined && post !== null && post.postType === 'prompt';
 }
 

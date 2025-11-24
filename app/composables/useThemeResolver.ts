@@ -105,9 +105,7 @@ export function useThemeResolver(): UseThemeResolverReturn {
 
     const activeTheme = computed(() => theme.activeTheme.value);
 
-    const resolveOverrides = (
-        params: ResolveParams
-    ): Record<string, any> => {
+    const resolveOverrides = (params: ResolveParams): Record<string, any> => {
         const currentTheme = theme.activeTheme.value;
         const resolver = theme.getResolver(currentTheme);
 

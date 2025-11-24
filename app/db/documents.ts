@@ -15,7 +15,9 @@ import type { Post } from './schema';
 /**
  * Type guard to check if a post is a document
  */
-function isDocumentPost(post: Post | undefined | null): post is Post & { postType: 'doc' } {
+function isDocumentPost(
+    post: Post | undefined | null
+): post is Post & { postType: 'doc' } {
     return post !== undefined && post !== null && post.postType === 'doc';
 }
 

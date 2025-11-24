@@ -738,11 +738,12 @@ if (process.client) {
         try {
             // Observe the specific elements
             const sideNavHeaderElement = sideNavContentRef.value?.headerElement;
-            if (sideNavHeaderElement) resizeObserver.observe(sideNavHeaderElement);
+            if (sideNavHeaderElement)
+                resizeObserver.observe(sideNavHeaderElement);
 
             // Also listen to window resize
             window.addEventListener('resize', recomputeListHeight);
-            
+
             // Watch injected height changes
             if (topHeaderHeightInjected) {
                 watch(topHeaderHeightInjected, recomputeListHeight);

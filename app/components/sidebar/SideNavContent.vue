@@ -376,6 +376,8 @@ defineExpose({
     focusSearchInput,
     setActivePage,
     resetToDefault,
-    headerElement: computed(() => sideNavHeaderRef.value?.$el as HTMLElement | null),
+    headerElement: computed(
+        () => sideNavHeaderRef.value?.$el as HTMLElement | null
+    ),
 });
 </script>
