@@ -32,7 +32,7 @@ import type { ResolveParams } from '../theme/_shared/runtime-resolver';
 
 interface ComponentOverrideCache {
     theme: string;
-    entries: Map<string, Record<string, unknown>>;
+    entries: Map<string, Record<string, any>>;
 }
 
 // Resolution cache using WeakMap to prevent memory leaks
@@ -72,7 +72,7 @@ export interface UseThemeResolverReturn {
      * @param params - Resolution parameters
      * @returns Resolved override props
      */
-    resolveOverrides: (params: ResolveParams) => Record<string, unknown>;
+    resolveOverrides: (params: ResolveParams) => Record<string, any>;
 
     /**
      * Current active theme name
@@ -107,7 +107,7 @@ export function useThemeResolver(): UseThemeResolverReturn {
 
     const resolveOverrides = (
         params: ResolveParams
-    ): Record<string, unknown> => {
+    ): Record<string, any> => {
         const currentTheme = theme.activeTheme.value;
         const resolver = theme.getResolver(currentTheme);
 
@@ -163,7 +163,7 @@ export function useThemeResolver(): UseThemeResolverReturn {
  */
 export function useThemeOverrides(
     params: ResolveParams | ComputedRef<ResolveParams>
-): ComputedRef<Record<string, unknown>> {
+): ComputedRef<Record<string, any>> {
     const { resolveOverrides, activeTheme } = useThemeResolver();
     const instance = getCurrentInstance();
 

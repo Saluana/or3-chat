@@ -3,16 +3,19 @@
 // Runtime behavior is unchanged: wrappers will delegate to the existing HookEngine.
 import type { PaneState as MultiPaneState } from '../../composables/core/useMultiPane';
 import type { ChatMessage } from '~/utils/chat/types';
+import type { ORMessage } from '~/core/auth/openrouter-build';
 
 export interface EditorInstance {
     commands: Record<string, unknown>;
     getJSON: () => Record<string, unknown>;
 }
 
-export interface EditorInstance {
-    commands: Record<string, unknown>;
-    getJSON: () => Record<string, unknown>;
-}
+export type OpenRouterMessage =
+    | ORMessage
+    | {
+          role: 'tool';
+          [key: string]: unknown;
+      };
 
 /**
  * Overview
@@ -446,7 +449,6 @@ export type DbFilterHookName =
     // extra specialized filters seen in docs
     | `db.messages.files.validate:filter:hashes`
     | `db.documents.list:filter:output`
-    | `db.documents.title:filter`
     | `db.kv.getByName:filter:output`
     | `db.kv.upsertByName:filter:input`
     | `db.threads.searchByTitle:filter:output`
@@ -555,7 +557,7 @@ export type CoreHookPayloadMap = {
     'ui.chat.editor:filter:extensions': [unknown[]];
     'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON
     'ai.chat.messages:filter:before_send': [
-        { messages: any[] } | { messages: any[] }[]
+        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]
     ];
 
     // Branching lifecycle

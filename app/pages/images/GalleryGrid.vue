@@ -274,11 +274,11 @@ const downloadButtonProps = computed(() => {
     return {
         size: 'sm' as const,
         variant: 'solid' as const,
-        color: 'on-surface' as const,
+        color: 'neutral' as const,
         square: true as const,
         class: 'flex items-center justify-center',
         icon: iconDownload.value,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -292,11 +292,11 @@ const copyButtonProps = computed(() => {
     return {
         size: 'sm' as const,
         variant: 'solid' as const,
-        color: 'on-surface' as const,
+        color: 'neutral' as const,
         square: true as const,
         class: 'flex items-center justify-center',
         icon: iconCopy.value,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 

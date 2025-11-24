@@ -140,11 +140,11 @@ async function resolveTitle(
     context: TitleFilterContext
 ): Promise<string> {
     const base = normalizeTitle(rawTitle);
-    return (hooks.applyFilters as any)(
+    return (await hooks.applyFilters(
         'db.documents.title:filter',
         base,
         context
-    ) as Promise<string>;
+    )) as string;
 }
 
 function parseContent(raw: string | null | undefined): TipTapDocument {
@@ -274,7 +274,7 @@ export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
     if (!rows) return [];
     // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
     rows.sort((a, b) => b.updated_at - a.updated_at);
-    const sliced = rows.slice(0, limit) as unknown as DocumentRow[];
+    const sliced = rows.slice(0, limit) as DocumentRow[];
     const baseMap = new Map(sliced.map((row) => [row.id, row]));
     const filteredEntities = await hooks.applyFilters(
         'db.documents.list:filter:output',

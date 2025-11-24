@@ -134,6 +134,7 @@ import type { Post, Project } from '~/db';
 import type { Document } from '~/db/documents';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
+import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarSections';
 
 import type { Thread } from '~/db';
 
@@ -157,7 +158,7 @@ const props = defineProps<{
     sidebarQuery: string;
     activeDocumentIds: string[];
     activeThreadIds: string[];
-    sidebarFooterActions: any[];
+    sidebarFooterActions: SidebarFooterActionEntry[];
     resolvedSidebarSections: {
         top: { id: string; component: Component }[];
         main: { id: string; component: Component }[];

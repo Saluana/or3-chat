@@ -798,7 +798,7 @@ onMounted(async () => {
         db.posts
             .where('postType')
             .equals('doc')
-            .and((r) => !(r as any).deleted)
+            .and((r) => !r.deleted)
             .toArray()
     ).subscribe({
         next: (res) => {
@@ -1276,11 +1276,11 @@ async function submitAddToProject() {
             };
         } else if (addToProjectDocumentId.value) {
             const doc = await db.posts.get(addToProjectDocumentId.value);
-            if (!doc || (doc as any).postType !== 'doc')
+            if (!doc || doc.postType !== 'doc')
                 throw new Error('Document not found');
             entry = {
                 id: doc.id,
-                name: (doc as any).title || 'Untitled',
+                name: doc.title || 'Untitled',
                 kind: 'doc',
             };
         }

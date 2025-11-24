@@ -231,7 +231,7 @@ export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
         .toArray();
     // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
     rows.sort((a, b) => b.updated_at - a.updated_at);
-    const sliced = rows.slice(0, limit) as unknown as PromptRow[];
+    const sliced = rows.slice(0, limit) as PromptRow[];
     const baseMap = new Map(sliced.map((row) => [row.id, row]));
     const filteredEntities = await hooks.applyFilters(
         'db.prompts.list:filter:output',

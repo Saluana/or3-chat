@@ -128,7 +128,10 @@ export async function loadDocument(id: string) {
     return st.record;
 }
 
-export async function newDocument(initial?: { title?: string; content?: any }) {
+export async function newDocument(initial?: {
+    title?: string;
+    content?: TipTapDocument | null;
+}) {
     try {
         const rec = await createDocument(initial);
         const st = ensure(rec.id);

@@ -576,7 +576,7 @@ const trashToggleButtonProps = computed(() => {
         variant: 'outline' as const,
         class: 'flex items-center gap-1',
         type: 'button' as const,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -592,7 +592,7 @@ const selectionToggleButtonProps = computed(() => {
         variant: 'outline' as const,
         class: 'px-3 py-1 text-sm',
         type: 'button' as const,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -608,7 +608,7 @@ const selectAllButtonProps = computed(() => {
         variant: 'outline' as const,
         class: 'px-3 py-1 text-sm',
         type: 'button' as const,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -625,7 +625,7 @@ const restoreSelectedButtonProps = computed(() => {
         color: 'success' as const,
         class: 'px-3 py-1 text-sm',
         type: 'button' as const,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -642,7 +642,7 @@ const deletePermanentlyButtonProps = computed(() => {
         color: 'error' as const,
         class: 'px-3 py-1 text-sm',
         type: 'button' as const,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -658,7 +658,7 @@ const clearSelectionButtonProps = computed(() => {
         variant: 'outline' as const,
         class: 'px-3 py-1 text-sm',
         type: 'button' as const,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -675,7 +675,7 @@ const deleteSelectionButtonProps = computed(() => {
         color: 'error' as const,
         class: 'px-3 py-1 text-sm',
         type: 'button' as const,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -691,7 +691,7 @@ const loadMoreButtonProps = computed(() => {
         variant: 'outline' as const,
         class: 'px-3 py-1',
         type: 'button' as const,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 </script>
