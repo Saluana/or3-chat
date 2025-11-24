@@ -6,6 +6,7 @@ import type {
 import { EMPTY_USER_OVERRIDES } from './user-overrides-types';
 import { applyMergedTheme } from './apply-merged-theme';
 import { revokeBackgroundBlobs } from './backgrounds';
+import { isBrowser } from '~/utils/env';
 
 // Storage keys
 const STORAGE_KEY_LIGHT = 'or3:user-theme-overrides:light';
@@ -35,8 +36,6 @@ if (!g.__or3UserThemeOverrides) {
 }
 
 const store = g.__or3UserThemeOverrides;
-
-const isBrowser = () => typeof window !== 'undefined';
 
 function detectModeFromHtml(): 'light' | 'dark' {
     if (!isBrowser()) return 'light';
