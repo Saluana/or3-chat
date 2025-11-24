@@ -20,16 +20,8 @@ export interface EditorToolbarButton {
     visible?: (editor: Editor) => boolean;
 }
 
-// Custom sort function for stable sort with id tie-breaking
-function sortButtons(a: EditorToolbarButton, b: EditorToolbarButton): number {
-    const orderDiff = (a.order ?? 200) - (b.order ?? 200);
-    // Stable sort: tie-break by id
-    return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
-}
-
 const registry = createRegistry<EditorToolbarButton>(
-    '__or3EditorToolbarRegistry',
-    sortButtons
+    '__or3EditorToolbarRegistry'
 );
 
 /** Register (or replace) an editor toolbar button. */
