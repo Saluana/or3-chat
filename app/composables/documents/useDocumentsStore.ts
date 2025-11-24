@@ -9,12 +9,14 @@ import {
 import { useToast } from '#imports';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 
+import type { TipTapDocument } from '~/types/database';
+
 interface DocState {
     record: Document | null;
     status: 'idle' | 'saving' | 'saved' | 'error' | 'loading';
     lastError?: unknown;
     pendingTitle?: string; // staged changes
-    pendingContent?: unknown; // TipTap JSON
+    pendingContent?: TipTapDocument | null; // TipTap JSON
     timer?: ReturnType<typeof setTimeout>;
     flushPromise?: Promise<void>; // Track active flush operation
 }
@@ -59,7 +61,7 @@ export async function flush(id: string) {
         const patch: Partial<Pick<Document, 'title' | 'content'>> = {};
         if (st.pendingTitle !== undefined) patch.title = st.pendingTitle;
         if (st.pendingContent !== undefined)
-            patch.content = st.pendingContent as any;
+            patch.content = st.pendingContent;
         st.status = 'saving';
         try {
             const updated = await updateDocument(id, patch);
@@ -147,7 +149,7 @@ export function setDocumentTitle(id: string, title: string) {
     }
 }
 
-export function setDocumentContent(id: string, content: unknown) {
+export function setDocumentContent(id: string, content: TipTapDocument | null) {
     const st = ensure(id);
     if (st.record) {
         st.pendingContent = content;

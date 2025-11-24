@@ -97,7 +97,7 @@ export interface UseThemeResolverReturn {
  */
 export function useThemeResolver(): UseThemeResolverReturn {
     const nuxtApp = useNuxtApp();
-    const theme = (nuxtApp as any).$theme;
+    const theme = nuxtApp.$theme;
 
     if (!theme) {
         throw new Error('[useThemeResolver] Theme plugin not found');

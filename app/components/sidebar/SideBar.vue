@@ -472,6 +472,7 @@ const props = defineProps<{
  */
 interface SideNavContentInstance extends ComponentPublicInstance {
     focusSearchInput?: () => boolean;
+    headerElement?: HTMLElement | null;
 }
 
 const sideNavContentRef = ref<SideNavContentInstance | null>(null);
@@ -700,16 +701,22 @@ let subProjects: { unsubscribe: () => void } | null = null;
 let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
 let resizeObserver: ResizeObserver | null = null;
 
+import { inject, type Ref } from 'vue';
+
+// ...
+
+// Inject header height at setup level
+const topHeaderHeightInjected = inject<Ref<number>>('topHeaderHeight');
+
 function recomputeListHeight() {
     // Get the viewport height
     const viewportHeight = window.innerHeight;
 
-    // Get specific element heights by ID
-    const topHeader = document.getElementById('top-header');
-    const sideNavHeader = document.getElementById('side-nav-content-header');
+    // Get specific element heights
+    const topHeaderHeight = topHeaderHeightInjected?.value || 48;
 
-    const topHeaderHeight = topHeader?.offsetHeight || 48; // fallback to known value
-    const sideNavHeaderHeight = sideNavHeader?.offsetHeight || 67.3; // fallback to known value
+    const sideNavHeaderElement = sideNavContentRef.value?.headerElement;
+    const sideNavHeaderHeight = sideNavHeaderElement?.offsetHeight || 67.3;
 
     // Calculate available space for the list
     // Add extra padding to account for borders, margins, and visual gaps (20px total)
@@ -730,15 +737,16 @@ if (process.client) {
 
         try {
             // Observe the specific elements
-            const topHeader = document.getElementById('top-header');
-            const sideNavHeader = document.getElementById(
-                'side-nav-content-header'
-            );
-            if (topHeader) resizeObserver.observe(topHeader);
-            if (sideNavHeader) resizeObserver.observe(sideNavHeader);
+            const sideNavHeaderElement = sideNavContentRef.value?.headerElement;
+            if (sideNavHeaderElement) resizeObserver.observe(sideNavHeaderElement);
 
             // Also listen to window resize
             window.addEventListener('resize', recomputeListHeight);
+            
+            // Watch injected height changes
+            if (topHeaderHeightInjected) {
+                watch(topHeaderHeightInjected, recomputeListHeight);
+            }
         } catch (err) {
             console.error('[SideBar] Failed to setup resize observers:', err);
         }

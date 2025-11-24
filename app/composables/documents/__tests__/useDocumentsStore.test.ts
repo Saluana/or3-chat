@@ -166,10 +166,10 @@ describe('useDocumentsStore - type safety', () => {
         // Set content with various types
         setDocumentContent('doc5', { custom: 'data' } as any);
         setDocumentContent('doc5', null);
-        setDocumentContent('doc5', undefined);
+        setDocumentContent('doc5', null);
 
         const state = useDocumentState('doc5');
-        expect(state.pendingContent).toBeUndefined();
+        expect(state.pendingContent).toBeNull();
     });
 
     it('handles errors gracefully without throwing', async () => {

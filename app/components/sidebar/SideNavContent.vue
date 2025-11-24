@@ -135,11 +135,13 @@ import type { Document } from '~/db/documents';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 
+import type { Thread } from '~/db';
+
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 
 const props = defineProps<{
     activeThread?: string;
-    items: any[];
+    items: Thread[];
     projects: SidebarProject[];
     expandedProjects: string[];
     docs: Post[];
@@ -149,7 +151,7 @@ const props = defineProps<{
         chats: boolean;
         docs: boolean;
     };
-    displayThreads: any[];
+    displayThreads: Thread[];
     displayProjects: SidebarProject[];
     displayDocuments?: Post[];
     sidebarQuery: string;
@@ -373,5 +375,6 @@ defineExpose({
     focusSearchInput,
     setActivePage,
     resetToDefault,
+    headerElement: computed(() => sideNavHeaderRef.value?.$el as HTMLElement | null),
 });
 </script>

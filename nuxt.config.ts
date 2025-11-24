@@ -1,11 +1,11 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
-import { fileURLToPath } from 'url';
+import { resolve } from 'path';
 
 export default defineNuxtConfig({
     alias: {
-        types: fileURLToPath(new URL('./types', import.meta.url)),
-        '~/types': fileURLToPath(new URL('./types', import.meta.url)),
+        types: resolve(__dirname, './types'),
+        '~/types': resolve(__dirname, './types'),
     },
     compatibilityDate: '2025-07-15',
     runtimeConfig: {

@@ -5,15 +5,18 @@ export default defineNuxtPlugin(() => {
     // Hook into editor creation
     hooks.addAction('editor.created:action:after', ({ editor }) => {
         if (import.meta.dev) {
-            console.log('[editor-lifecycle-example] Editor created:', editor);
-            console.log('[editor-lifecycle-example] Available commands:', Object.keys(editor.commands));
+            const ed = editor as any;
+            console.log('[editor-lifecycle-example] Editor created:', ed);
+            if (ed && ed.commands) {
+                console.log('[editor-lifecycle-example] Available commands:', Object.keys(ed.commands));
+            }
         }
     });
 
     // Hook into editor updates
     hooks.addAction('editor.updated:action:after', ({ editor }) => {
         if (import.meta.dev) {
-            const wordCount = editor.getText().split(/\s+/).filter(Boolean).length;
+            const wordCount = (editor as any).getText().split(/\s+/).filter(Boolean).length;
             console.log('[editor-lifecycle-example] Editor updated. Word count:', wordCount);
         }
     });

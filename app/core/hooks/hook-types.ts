@@ -3,6 +3,17 @@
 // Runtime behavior is unchanged: wrappers will delegate to the existing HookEngine.
 import type { PaneState as MultiPaneState } from '../../composables/core/useMultiPane';
 import type { ChatMessage } from '~/utils/chat/types';
+
+export interface EditorInstance {
+    commands: Record<string, unknown>;
+    getJSON: () => Record<string, unknown>;
+}
+
+export interface EditorInstance {
+    commands: Record<string, unknown>;
+    getJSON: () => Record<string, unknown>;
+}
+
 /**
  * Overview
  * - Strongly-typed hook names (actions and filters)
@@ -10,9 +21,6 @@ import type { ChatMessage } from '~/utils/chat/types';
  * - Utility types to infer callback signatures and returns
  * - Helpful error helper types for clearer TS diagnostics
  */
-
-// ============================================================================
-// PAYLOAD INTERFACES
 // ============================================================================
 
 // Chat & AI Hooks
@@ -539,13 +547,13 @@ export type CoreHookPayloadMap = {
     'db.threads.getSystemPrompt:filter:output': [string | null];
 
     // Editor Lifecycle (Examples/Plugins)
-    'editor.created:action:after': [{ editor: any }];
-    'editor.updated:action:after': [{ editor: any }];
+    'editor.created:action:after': [{ editor: EditorInstance | unknown }];
+    'editor.updated:action:after': [{ editor: EditorInstance | unknown }];
     'editor:request-extensions': [void];
 
     // UI/Chat Extensions
-    'ui.chat.editor:filter:extensions': [any[]];
-    'ui.chat.editor:action:before_send': [any]; // editor JSON
+    'ui.chat.editor:filter:extensions': [unknown[]];
+    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON
     'ai.chat.messages:filter:before_send': [
         { messages: any[] } | { messages: any[] }[]
     ];

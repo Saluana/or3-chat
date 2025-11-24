@@ -36,7 +36,8 @@ export default defineNuxtPlugin(() => {
                     editor.commands.setContent(markdown);
                     return editor.getJSON();
                 } catch (e) {
-                    alert('error!!!');
+                    useToast().add({ title: 'Error converting markdown', color: 'error' });
+                    return { type: 'doc', content: [] };
                 }
             }
 
