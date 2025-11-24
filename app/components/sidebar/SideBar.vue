@@ -412,6 +412,24 @@ import {
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
+import type { ThreadItem, DocumentItem } from '~/types/sidebar';
+import { getOpenDocumentIds, getOpenThreadIds } from '~/utils/multiPaneHelpers';
+
+/**
+ * Helper to check if a post is a document
+ */
+function isDocumentPost(post: Post | undefined): post is Post & { postType: 'doc' } {
+    return post !== undefined && post.postType === 'doc';
+}
+
+/**
+ * Rename target types - can be from project tree or direct selection
+ */
+type RenamePayload = 
+    | { projectId: string; entryId: string; kind: 'chat' | 'doc' }
+    | { docId: string }
+    | ThreadItem
+    | DocumentItem;
 
 const iconEdit = useIcon('ui.edit');
 const iconFolder = useIcon('sidebar.folder');
@@ -441,8 +459,8 @@ const props = defineProps<{
     activeThread?: string;
 }>();
 
-const sideNavContentRef = ref<any | null>(null);
-const items = ref<any[]>([]);
+const sideNavContentRef = ref<ComponentPublicInstance | null>(null);
+const items = ref<ThreadItem[]>([]);
 const projects = ref<SidebarProject[]>([]);
 const expandedProjects = ref<string[]>([]);
 const listHeight = ref(400);
@@ -453,8 +471,9 @@ import {
 } from '~/composables/sidebar/useSidebarSections';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
+import type { ComponentPublicInstance } from 'vue';
 // Documents live query (docs only) to feed search
-const docs = ref<Post[]>([]);
+const docs = ref<DocumentItem[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;
 
 const DEFAULT_PAGE_ID = 'sidebar-home';
@@ -463,53 +482,73 @@ const { activePageId, resetToDefault } = useActiveSidebarPage();
 
 // Active item tracking (multi-pane aware). Uses global multi-pane API if present.
 const activeDocumentIds = computed<string[]>(() => {
-    const api = getGlobalMultiPaneApi();
-    if (api && api.panes && Array.isArray(api.panes.value)) {
-        return api.panes.value
-            .filter((p) => p.mode === 'doc' && p.documentId)
-            .map((p) => p.documentId as string);
-    }
-    return [];
+    return getOpenDocumentIds();
 });
 const activeThreadIds = computed<string[]>(() => {
-    const api = getGlobalMultiPaneApi();
-    if (api && api.panes && Array.isArray(api.panes.value)) {
-        const ids = api.panes.value
-            .filter((p) => p.mode === 'chat' && p.threadId)
-            .map((p) => p.threadId as string)
-            .filter(Boolean);
-        if (ids.length) return ids;
-    }
+    const ids = getOpenThreadIds();
+    if (ids.length) return ids;
     return props.activeThread ? [props.activeThread] : [];
 });
 
 const sectionComponentCache = new Map<string, Component>();
 
+/**
+ * Type guard to check if source is a Vue component (not an async loader)
+ */
+function isVueComponent(source: unknown): source is Component {
+    return (
+        typeof source === 'object' &&
+        source !== null &&
+        ('render' in source || 'setup' in source)
+    );
+}
+
+/**
+ * Module type for async component loading
+ */
+interface ComponentModule {
+    default?: Component;
+    component?: Component;
+}
+
 function resolveSidebarSectionComponent(
     id: string,
     source: SidebarSection['component']
 ): Component {
-    if (
-        typeof source === 'function' &&
-        !(source as any).render &&
-        !(source as any).setup
-    ) {
+    // If it's already a component, return it directly
+    if (isVueComponent(source)) {
+        return source;
+    }
+    
+    // Otherwise it's an async loader function
+    if (typeof source === 'function') {
         const cached = sectionComponentCache.get(id);
         if (cached) return cached;
+        
         const asyncComp = defineAsyncComponent(async () => {
-            const mod = await (source as () => Promise<any>)();
-            const comp = mod?.default || mod;
-            if (process.dev && (typeof comp !== 'object' || !comp)) {
-                console.warn(
-                    `[useSidebarSections] Async section loader for ${id} returned invalid component`,
-                    comp
-                );
+            const mod = await (source as () => Promise<ComponentModule | Component>)();
+            
+            // Handle module with default export
+            if (mod && typeof mod === 'object' && 'default' in mod) {
+                const moduleWithDefault = mod as ComponentModule;
+                const comp = moduleWithDefault.default ?? moduleWithDefault.component;
+                if (process.dev && !comp) {
+                    console.warn(
+                        `[useSidebarSections] Async section loader for ${id} returned invalid component`,
+                        mod
+                    );
+                }
+                return comp!;
             }
-            return comp;
+            
+            // Module is the component itself
+            return mod as Component;
         });
         sectionComponentCache.set(id, asyncComp);
         return asyncComp;
     }
+    
+    // Fallback - should not happen with proper types
     return source as Component;
 }
 
@@ -583,15 +622,15 @@ const {
     threadResults,
     projectResults,
     documentResults,
-} = useSidebarSearch(items as any, projects as any, docs as any);
+} = useSidebarSearch(items, projects, docs);
 
 const displayThreads = computed(() =>
     sidebarQuery.value.trim() ? threadResults.value : items.value
 );
 // Filter projects + entries when query active
 const projectsFilteredByExistence = computed(() => {
-    const threadSet = new Set(items.value.map((t: any) => t.id));
-    const docSet = new Set(docs.value.map((d: any) => d.id));
+    const threadSet = new Set(items.value.map((t) => t.id));
+    const docSet = new Set(docs.value.map((d) => d.id));
     
     return projects.value.map((p) => {
         const filteredEntries = p.data.filter((entry) => {
@@ -813,14 +852,10 @@ const deleteProjectModalProps = createSidebarModalProps(
     }
 );
 
-async function openRename(target: any) {
+async function openRename(target: RenamePayload) {
     // Case 1: payload from project tree: { projectId, entryId, kind }
-    if (target && typeof target === 'object' && 'entryId' in target) {
-        const { entryId, kind } = target as {
-            projectId: string;
-            entryId: string;
-            kind?: string;
-        };
+    if ('entryId' in target) {
+        const { entryId, kind } = target;
         if (kind === 'chat') {
             const t = await db.threads.get(entryId);
             renameId.value = entryId;
@@ -829,9 +864,9 @@ async function openRename(target: any) {
             renameMetaKind.value = 'chat';
         } else if (kind === 'doc') {
             const doc = await db.posts.get(entryId);
-            if (doc && (doc as any).postType === 'doc') {
+            if (isDocumentPost(doc)) {
                 renameId.value = entryId;
-                renameTitle.value = (doc as any).title || 'Untitled';
+                renameTitle.value = doc.title || 'Untitled';
                 showRenameModal.value = true;
                 renameMetaKind.value = 'doc';
             }
@@ -839,22 +874,22 @@ async function openRename(target: any) {
         return;
     }
     // Case 1b: direct doc rename trigger { docId }
-    if (target && typeof target === 'object' && 'docId' in target) {
-        const doc = await db.posts.get(target.docId as string);
-        if (doc && (doc as any).postType === 'doc') {
-            renameId.value = target.docId as string;
-            renameTitle.value = (doc as any).title || 'Untitled';
+    if ('docId' in target) {
+        const doc = await db.posts.get(target.docId);
+        if (isDocumentPost(doc)) {
+            renameId.value = target.docId;
+            renameTitle.value = doc.title || 'Untitled';
             showRenameModal.value = true;
             renameMetaKind.value = 'doc';
             return;
         }
     }
-    // Case 2: direct thread object from thread list
-    if (target && typeof target === 'object' && 'id' in target) {
-        renameId.value = (target as any).id;
-        renameTitle.value = (target as any).title ?? '';
+    // Case 2: direct thread or document object
+    if ('id' in target) {
+        renameId.value = target.id;
+        renameTitle.value = 'title' in target ? target.title ?? '' : '';
         showRenameModal.value = true;
-        renameMetaKind.value = 'chat';
+        renameMetaKind.value = 'postType' in target && target.postType === 'doc' ? 'doc' : 'chat';
     }
 }
 
@@ -863,7 +898,7 @@ async function saveRename() {
     // Determine if it's a thread or document by checking posts table first
     const maybeDoc = await db.posts.get(renameId.value);
     const now = nowSec();
-    if (maybeDoc && (maybeDoc as any).postType === 'doc') {
+    if (isDocumentPost(maybeDoc)) {
         // Update doc title via documents API (fires hooks for sidebar refresh)
         await updateDocument(renameId.value, { title: renameTitle.value });
         // Refresh open document state if loaded in editor
@@ -905,13 +940,13 @@ async function saveRename() {
     renameMetaKind.value = null;
 }
 
-function confirmDelete(thread: any) {
-    deleteId.value = thread.id as string;
+function confirmDelete(thread: ThreadItem) {
+    deleteId.value = thread.id;
     showDeleteModal.value = true;
 }
 
 // Confirm deletion of a project (opens modal)
-function confirmDeleteProject(projectOrId: any) {
+function confirmDeleteProject(projectOrId: string | Project) {
     // SidebarProjectTree may emit either the project id (string) or
     // a project object; handle both safely.
     const id =
@@ -946,8 +981,8 @@ async function deleteProject() {
 }
 
 // Document delete handling
-function confirmDeleteDocument(doc: any) {
-    deleteDocumentId.value = doc.id as string;
+function confirmDeleteDocument(doc: DocumentItem) {
+    deleteDocumentId.value = doc.id;
     showDeleteDocumentModal.value = true;
 }
 async function deleteDocument() {
