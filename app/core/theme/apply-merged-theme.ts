@@ -5,8 +5,7 @@ import {
     applyThemeBackgrounds,
     createThemeBackgroundTokenResolver,
 } from './backgrounds';
-
-const isBrowser = () => typeof window !== 'undefined';
+import { isBrowser } from '../../utils/environment';
 const backgroundTokenResolver = createThemeBackgroundTokenResolver();
 
 export async function applyMergedTheme(

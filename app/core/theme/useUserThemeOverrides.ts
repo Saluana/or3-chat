@@ -36,7 +36,7 @@ if (!g.__or3UserThemeOverrides) {
 
 const store = g.__or3UserThemeOverrides;
 
-const isBrowser = () => typeof window !== 'undefined';
+import { isBrowser } from '../../utils/environment';
 
 function detectModeFromHtml(): 'light' | 'dark' {
     if (!isBrowser()) return 'light';

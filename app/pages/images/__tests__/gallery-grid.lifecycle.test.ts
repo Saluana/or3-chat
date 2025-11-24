@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
+import { makeMeta } from './test-utils';
 import type { FileMeta } from '~/db/schema';
 
 const { getMocks } = vi.hoisted(() => {
@@ -42,22 +43,6 @@ vi.mock(
 );
 
 const mocks = getMocks();
-
-const makeMeta = (hash: string): FileMeta => ({
-    hash,
-    name: `Image ${hash}`,
-    mime_type: 'image/png',
-    kind: 'image',
-    size_bytes: 128,
-    width: 16,
-    height: 16,
-    page_count: undefined,
-    ref_count: 0,
-    created_at: 1,
-    updated_at: 2,
-    deleted: false,
-    clock: 0,
-});
 
 async function mountGrid(items: FileMeta[]) {
     const GalleryGrid = (await import('../GalleryGrid.vue')).default;

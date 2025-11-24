@@ -69,6 +69,9 @@ import { db } from '~/db';
 import { useThrottleFn } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
+
+const { handlePopoverTriggerKey } = usePopoverKeyboard();
 
 const props = defineProps<{ doc: any; active?: boolean }>();
 const emit = defineEmits<{
@@ -196,14 +199,5 @@ async function runExtraAction(action: any) {
         } catch {}
         console.error('Doc action error', action.id, e);
     }
-}
-
-function handlePopoverTriggerKey(event: KeyboardEvent) {
-    const key = event.key;
-    if (key !== 'Enter' && key !== ' ') return;
-    event.preventDefault();
-    event.stopPropagation();
-    const target = event.currentTarget as HTMLElement | null;
-    target?.click();
 }
 </script>

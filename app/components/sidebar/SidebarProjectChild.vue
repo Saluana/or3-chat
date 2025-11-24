@@ -68,6 +68,9 @@ import { computed } from 'vue';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
+
+const { handlePopoverTriggerKey } = usePopoverKeyboard();
 
 const iconNote = useIcon('sidebar.note');
 const iconChat = useIcon('sidebar.chat');
@@ -119,13 +122,4 @@ const removeButtonProps = computed(() => {
         ...(overrides.value as any),
     };
 });
-
-function handlePopoverTriggerKey(event: KeyboardEvent) {
-    const key = event.key;
-    if (key !== 'Enter' && key !== ' ') return;
-    event.preventDefault();
-    event.stopPropagation();
-    const target = event.currentTarget as HTMLElement | null;
-    target?.click();
-}
 </script>
