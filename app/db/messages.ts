@@ -14,11 +14,17 @@ import { serializeFileHashes } from './files-util';
 
 // Convert Message schema type to MessageEntity for hooks
 function toMessageEntity(msg: Message): MessageEntity {
+    // Validate role is one of the expected types
+    const role = msg.role;
+    if (role !== 'user' && role !== 'assistant' && role !== 'system') {
+        throw new Error(`Invalid message role: ${role}`);
+    }
+    
     return {
         id: msg.id,
         thread_id: msg.thread_id,
-        role: msg.role as 'user' | 'assistant' | 'system',
-        data: msg.data as Record<string, unknown>,
+        role: role,
+        data: (msg.data as Record<string, unknown>) ?? {},
         index: msg.index,
         created_at: msg.created_at,
         updated_at: msg.updated_at,

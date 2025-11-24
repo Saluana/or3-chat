@@ -459,7 +459,14 @@ const props = defineProps<{
     activeThread?: string;
 }>();
 
-const sideNavContentRef = ref<ComponentPublicInstance | null>(null);
+/**
+ * Type for SideNavContent component instance with exposed methods
+ */
+interface SideNavContentInstance extends ComponentPublicInstance {
+    focusSearchInput?: () => boolean;
+}
+
+const sideNavContentRef = ref<SideNavContentInstance | null>(null);
 const items = ref<ThreadItem[]>([]);
 const projects = ref<SidebarProject[]>([]);
 const expandedProjects = ref<string[]>([]);
@@ -628,9 +635,9 @@ const displayThreads = computed(() =>
     sidebarQuery.value.trim() ? threadResults.value : items.value
 );
 // Filter projects + entries when query active
-const projectsFilteredByExistence = computed(() => {
-    const threadSet = new Set(items.value.map((t) => t.id));
-    const docSet = new Set(docs.value.map((d) => d.id));
+const projectsFilteredByExistence = computed<SidebarProject[]>(() => {
+    const threadSet = new Set(items.value.map((t: ThreadItem) => t.id));
+    const docSet = new Set(docs.value.map((d: DocumentItem) => d.id));
     
     return projects.value.map((p) => {
         const filteredEntries = p.data.filter((entry) => {
