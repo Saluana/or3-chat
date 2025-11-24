@@ -1,5 +1,5 @@
-import type { ORStreamEvent, ToolDefinition } from './types';
-import { parseOpenRouterSSE } from '../openrouter/parseOpenRouterSSE';
+import type { ToolDefinition } from './types';
+import { parseOpenRouterSSE, type ORStreamEvent } from '../../../shared/openrouter/parseOpenRouterSSE';
 
 // Cache key for detecting static build (no server routes)
 const SERVER_ROUTE_AVAILABLE_CACHE_KEY = 'or3:server-route-available';

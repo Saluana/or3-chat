@@ -78,9 +78,5 @@ export type ToolChoice =
           };
       };
 
-export type ORStreamEvent =
-    | { type: 'text'; text: string }
-    | { type: 'image'; url: string; final?: boolean; index?: number }
-    | { type: 'reasoning'; text: string }
-    | { type: 'tool_call'; tool_call: ToolCall }
-    | { type: 'done' };
+// Re-export from shared location (single source of truth)
+export type { ORStreamEvent } from '../../../shared/openrouter/parseOpenRouterSSE';
