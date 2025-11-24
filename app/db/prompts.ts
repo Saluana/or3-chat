@@ -378,9 +378,4 @@ export async function hardDeletePrompt(id: string): Promise<void> {
     await hooks.doAction('db.prompts.delete:action:hard:after', payload);
 }
 
-// Convenience for ensuring DB open (mirrors pattern in other modules)
-export async function ensureDbOpen() {
-    if (!db.isOpen()) await db.open();
-}
-
 export type { PromptRecord as Prompt };
