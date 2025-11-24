@@ -9,6 +9,15 @@ import type {
     DocumentEntity,
 } from '../core/hooks/hook-types';
 import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
+import type { TipTapDocument } from '~/types/database';
+import type { Post } from './schema';
+
+/**
+ * Type guard to check if a post is a document
+ */
+function isDocumentPost(post: Post | undefined | null): post is Post & { postType: 'doc' } {
+    return post !== undefined && post !== null && post.postType === 'doc';
+}
 
 /**
  * Internal stored row shape (reuses posts table with postType = 'doc').
@@ -29,7 +38,7 @@ export interface DocumentRow {
 export interface DocumentRecord {
     id: string;
     title: string;
-    content: any; // TipTap JSON object
+    content: TipTapDocument | null; // TipTap JSON object
     created_at: number;
     updated_at: number;
     deleted: boolean;
@@ -104,7 +113,7 @@ function buildDocumentUpdatePayload(
     };
 }
 
-function emptyDocJSON() {
+function emptyDocJSON(): TipTapDocument {
     return { type: 'doc', content: [] };
 }
 
@@ -138,12 +147,14 @@ async function resolveTitle(
     ) as Promise<string>;
 }
 
-function parseContent(raw: string | null | undefined): any {
+function parseContent(raw: string | null | undefined): TipTapDocument {
     if (!raw) return emptyDocJSON();
     try {
         const parsed = JSON.parse(raw);
-        // Basic structural guard
-        if (parsed && typeof parsed === 'object' && parsed.type) return parsed;
+        // Basic structural guard - ensure it's a valid TipTap document
+        if (parsed && typeof parsed === 'object' && parsed.type === 'doc') {
+            return parsed as TipTapDocument;
+        }
         return emptyDocJSON();
     } catch {
         return emptyDocJSON();
@@ -163,7 +174,7 @@ function rowToRecord(row: DocumentRow): DocumentRecord {
 
 export interface CreateDocumentInput {
     title?: string | null;
-    content?: any; // TipTap JSON object
+    content?: TipTapDocument | null; // TipTap JSON object
 }
 
 export async function createDocument(
@@ -195,8 +206,19 @@ export async function createDocument(
     };
     await hooks.doAction('db.documents.create:action:before', actionPayload);
     const persistedRow = documentEntityToRow(actionPayload.entity, filteredRow);
+    // Convert DocumentRow to Post type for db.posts.put
+    const postRow: Post = {
+        id: persistedRow.id,
+        title: persistedRow.title,
+        content: persistedRow.content,
+        postType: persistedRow.postType,
+        created_at: persistedRow.created_at,
+        updated_at: persistedRow.updated_at,
+        deleted: persistedRow.deleted,
+        meta: '',
+    };
     await dbTry(
-        () => db.posts.put(persistedRow as any),
+        () => db.posts.put(postRow),
         { op: 'write', entity: 'posts', action: 'createDocument' },
         { rethrow: true }
     );
@@ -217,8 +239,16 @@ export async function getDocument(
         entity: 'posts',
         action: 'getDocument',
     });
-    if (!row || (row as any).postType !== 'doc') return undefined;
-    const baseRow = row as DocumentRow;
+    if (!isDocumentPost(row)) return undefined;
+    const baseRow: DocumentRow = {
+        id: row.id,
+        title: row.title,
+        content: row.content,
+        postType: row.postType,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        deleted: row.deleted ?? false,
+    };
     const filteredEntity = await hooks.applyFilters(
         'db.documents.get:filter:output',
         toDocumentEntity(baseRow)
@@ -236,7 +266,7 @@ export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
             db.posts
                 .where('postType')
                 .equals('doc')
-                .and((r) => !(r as any).deleted)
+                .and((r) => !r.deleted)
                 .reverse()
                 .toArray(),
         { op: 'read', entity: 'posts', action: 'listDocuments' }
@@ -255,7 +285,7 @@ export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
 
 export interface UpdateDocumentPatch {
     title?: string;
-    content?: any; // TipTap JSON object
+    content?: TipTapDocument | null; // TipTap JSON object
 }
 
 export async function updateDocument(
@@ -268,8 +298,16 @@ export async function updateDocument(
         entity: 'posts',
         action: 'getDocument',
     });
-    if (!existing || (existing as any).postType !== 'doc') return undefined;
-    const existingRow = existing as DocumentRow;
+    if (!isDocumentPost(existing)) return undefined;
+    const existingRow: DocumentRow = {
+        id: existing.id,
+        title: existing.title,
+        content: existing.content,
+        postType: existing.postType,
+        created_at: existing.created_at,
+        updated_at: existing.updated_at,
+        deleted: existing.deleted ?? false,
+    };
     const updatedRow: DocumentRow = {
         id: existingRow.id,
         title: patch.title
@@ -308,8 +346,19 @@ export async function updateDocument(
     await hooks.doAction('db.documents.update:action:before', actionPayload);
 
     const persistedRow = documentEntityToRow(actionPayload.updated, mergedRow);
+    // Convert DocumentRow to Post type for db.posts.put
+    const postRow: Post = {
+        id: persistedRow.id,
+        title: persistedRow.title,
+        content: persistedRow.content,
+        postType: persistedRow.postType,
+        created_at: persistedRow.created_at,
+        updated_at: persistedRow.updated_at,
+        deleted: persistedRow.deleted,
+        meta: '',
+    };
     await dbTry(
-        () => db.posts.put(persistedRow as any),
+        () => db.posts.put(postRow),
         { op: 'write', entity: 'posts', action: 'updateDocument' },
         { rethrow: true }
     );
@@ -329,21 +378,40 @@ export async function softDeleteDocument(id: string): Promise<void> {
         entity: 'posts',
         action: 'getDocument',
     });
-    if (!existing || (existing as any).postType !== 'doc') return;
-    const existingRow = existing as DocumentRow;
+    if (!isDocumentPost(existing)) return;
+    const existingRow: DocumentRow = {
+        id: existing.id,
+        title: existing.title,
+        content: existing.content,
+        postType: existing.postType,
+        created_at: existing.created_at,
+        updated_at: existing.updated_at,
+        deleted: existing.deleted ?? false,
+    };
     const payload: DbDeletePayload<DocumentEntity> = {
         entity: toDocumentEntity(existingRow),
         id: existingRow.id,
         tableName: DOCUMENT_TABLE,
     };
     await hooks.doAction('db.documents.delete:action:soft:before', payload);
-    const row = {
+    const updatedRow = {
         ...existingRow,
         deleted: true,
         updated_at: nowSec(),
     };
+    // Convert to Post type for db.posts.put
+    const postRow: Post = {
+        id: updatedRow.id,
+        title: updatedRow.title,
+        content: updatedRow.content,
+        postType: updatedRow.postType,
+        created_at: updatedRow.created_at,
+        updated_at: updatedRow.updated_at,
+        deleted: updatedRow.deleted,
+        meta: '',
+    };
     await dbTry(
-        () => db.posts.put(row),
+        () => db.posts.put(postRow),
         { op: 'write', entity: 'posts', action: 'softDeleteDocument' },
         { rethrow: true }
     );
@@ -357,8 +425,16 @@ export async function hardDeleteDocument(id: string): Promise<void> {
         entity: 'posts',
         action: 'getDocument',
     });
-    if (!existing || (existing as any).postType !== 'doc') return;
-    const existingRow = existing as DocumentRow;
+    if (!isDocumentPost(existing)) return;
+    const existingRow: DocumentRow = {
+        id: existing.id,
+        title: existing.title,
+        content: existing.content,
+        postType: existing.postType,
+        created_at: existing.created_at,
+        updated_at: existing.updated_at,
+        deleted: existing.deleted ?? false,
+    };
     const payload: DbDeletePayload<DocumentEntity> = {
         entity: toDocumentEntity(existingRow),
         id: existingRow.id,
