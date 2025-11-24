@@ -31,7 +31,7 @@ export function useDocumentsList(limit = 200) {
                     updated_at: d.updated_at,
                     deleted: d.deleted,
                     // Drop large content string; empty string placeholder keeps type happy
-                    content: '',
+                    content: null,
                 }));
             } catch (e) {
                 error.value = e;

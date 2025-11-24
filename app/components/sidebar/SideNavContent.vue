@@ -131,6 +131,7 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import SidebarHomePage from '~/components/sidebar/SidebarHomePage.vue';
 import type { Post, Project } from '~/db';
+import type { Document } from '~/db/documents';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 

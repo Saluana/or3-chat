@@ -36,15 +36,15 @@ describe('useDocumentsStore - memory leaks', () => {
         const mockDoc = {
             id: 'doc1',
             title: 'Test Doc',
-            content: { type: 'doc', content: [] },
+            content: { type: 'doc' as const, content: [] },
             postType: 'document',
             created_at: Date.now(),
             updated_at: Date.now(),
             deleted: false,
         };
 
-        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc);
-        vi.mocked(documentsDb.updateDocument).mockResolvedValue(mockDoc);
+        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.updateDocument).mockResolvedValue(mockDoc as any);
 
         await loadDocument('doc1');
         
@@ -64,15 +64,15 @@ describe('useDocumentsStore - memory leaks', () => {
         const mockDoc = {
             id: 'doc2',
             title: 'Test Doc 2',
-            content: { type: 'doc', content: [] },
+            content: { type: 'doc' as const, content: [] },
             postType: 'document',
             created_at: Date.now(),
             updated_at: Date.now(),
             deleted: false,
         };
 
-        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc);
-        vi.mocked(documentsDb.updateDocument).mockResolvedValue(mockDoc);
+        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.updateDocument).mockResolvedValue(mockDoc as any);
 
         await loadDocument('doc2');
         setDocumentTitle('doc2', 'New Title');
@@ -87,7 +87,7 @@ describe('useDocumentsStore - memory leaks', () => {
 
     it('nullifies content field when releasing document', async () => {
         const largeContent = {
-            type: 'doc',
+            type: 'doc' as const,
             content: Array(1000).fill({ type: 'paragraph', content: [{ type: 'text', text: 'Large content' }] }),
         };
         
@@ -101,7 +101,7 @@ describe('useDocumentsStore - memory leaks', () => {
             deleted: false,
         };
 
-        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc);
+        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
 
         await loadDocument('doc3');
         
@@ -118,15 +118,15 @@ describe('useDocumentsStore - memory leaks', () => {
         const mockDoc = {
             id: 'doc4',
             title: 'Test Doc 4',
-            content: { type: 'doc', content: [] },
+            content: { type: 'doc' as const, content: [] },
             postType: 'document',
             created_at: Date.now(),
             updated_at: Date.now(),
             deleted: false,
         };
 
-        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc);
-        vi.mocked(documentsDb.updateDocument).mockResolvedValue(mockDoc);
+        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.updateDocument).mockResolvedValue(mockDoc as any);
 
         await loadDocument('doc4');
         setDocumentTitle('doc4', 'New Title');
@@ -148,20 +148,20 @@ describe('useDocumentsStore - type safety', () => {
         const mockDoc = {
             id: 'doc5',
             title: 'Test Doc 5',
-            content: { type: 'doc', content: [] },
+            content: { type: 'doc' as const, content: [] },
             postType: 'document',
             created_at: Date.now(),
             updated_at: Date.now(),
             deleted: false,
         };
 
-        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc);
-        vi.mocked(documentsDb.updateDocument).mockResolvedValue(mockDoc);
+        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.updateDocument).mockResolvedValue(mockDoc as any);
 
         await loadDocument('doc5');
         
         // Set content with various types
-        setDocumentContent('doc5', { custom: 'data' });
+        setDocumentContent('doc5', { custom: 'data' } as any);
         setDocumentContent('doc5', null);
         setDocumentContent('doc5', undefined);
         

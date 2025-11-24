@@ -397,9 +397,15 @@ import {
 } from 'vue';
 import type { Component } from 'vue';
 import { useHooks } from '~/core/hooks/useHooks';
-import SidebarVirtualList from '~/components/sidebar/SidebarVirtualList.vue';
 import { liveQuery } from 'dexie';
-import { db, upsert, del as dbDel, type Post, type Project } from '~/db'; // Dexie + barrel helpers
+import {
+    db,
+    upsert,
+    del as dbDel,
+    type Post,
+    type Project,
+    type Thread,
+} from '~/db'; // Dexie + barrel helpers
 import { nowSec } from '~/db/util';
 import { updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/documents/useDocumentsStore';
@@ -418,14 +424,16 @@ import { getOpenDocumentIds, getOpenThreadIds } from '~/utils/multiPaneHelpers';
 /**
  * Helper to check if a post is a document
  */
-function isDocumentPost(post: Post | undefined): post is Post & { postType: 'doc' } {
+function isDocumentPost(
+    post: Post | undefined
+): post is Post & { postType: 'doc' } {
     return post !== undefined && post.postType === 'doc';
 }
 
 /**
  * Rename target types - can be from project tree or direct selection
  */
-type RenamePayload = 
+type RenamePayload =
     | { projectId: string; entryId: string; kind: 'chat' | 'doc' }
     | { docId: string }
     | ThreadItem
@@ -467,7 +475,7 @@ interface SideNavContentInstance extends ComponentPublicInstance {
 }
 
 const sideNavContentRef = ref<SideNavContentInstance | null>(null);
-const items = ref<ThreadItem[]>([]);
+const items = ref<Thread[]>([]);
 const projects = ref<SidebarProject[]>([]);
 const expandedProjects = ref<string[]>([]);
 const listHeight = ref(400);
@@ -480,7 +488,7 @@ import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import type { ComponentPublicInstance } from 'vue';
 // Documents live query (docs only) to feed search
-const docs = ref<DocumentItem[]>([]);
+const docs = ref<Post[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;
 
 const DEFAULT_PAGE_ID = 'sidebar-home';
@@ -526,19 +534,22 @@ function resolveSidebarSectionComponent(
     if (isVueComponent(source)) {
         return source;
     }
-    
+
     // Otherwise it's an async loader function
     if (typeof source === 'function') {
         const cached = sectionComponentCache.get(id);
         if (cached) return cached;
-        
+
         const asyncComp = defineAsyncComponent(async () => {
-            const mod = await (source as () => Promise<ComponentModule | Component>)();
-            
+            const mod = await (
+                source as () => Promise<ComponentModule | Component>
+            )();
+
             // Handle module with default export
             if (mod && typeof mod === 'object' && 'default' in mod) {
                 const moduleWithDefault = mod as ComponentModule;
-                const comp = moduleWithDefault.default ?? moduleWithDefault.component;
+                const comp =
+                    moduleWithDefault.default ?? moduleWithDefault.component;
                 if (process.dev && !comp) {
                     console.warn(
                         `[useSidebarSections] Async section loader for ${id} returned invalid component`,
@@ -547,14 +558,14 @@ function resolveSidebarSectionComponent(
                 }
                 return comp!;
             }
-            
+
             // Module is the component itself
             return mod as Component;
         });
         sectionComponentCache.set(id, asyncComp);
         return asyncComp;
     }
-    
+
     // Fallback - should not happen with proper types
     return source as Component;
 }
@@ -636,17 +647,19 @@ const displayThreads = computed(() =>
 );
 // Filter projects + entries when query active
 const projectsFilteredByExistence = computed<SidebarProject[]>(() => {
-    const threadSet = new Set(items.value.map((t: ThreadItem) => t.id));
-    const docSet = new Set(docs.value.map((d: DocumentItem) => d.id));
-    
+    const threadSet = new Set(items.value.map((t) => t.id));
+    const docSet = new Set(docs.value.map((d) => d.id));
+
     return projects.value.map((p) => {
         const filteredEntries = p.data.filter((entry) => {
             const id = entry?.id;
             if (!id) return false;
             const kind = entry.kind ?? 'chat';
-            return (kind === 'chat' && threadSet.has(id)) || 
-                   (kind === 'doc' && docSet.has(id)) ||
-                   (kind !== 'chat' && kind !== 'doc');
+            return (
+                (kind === 'chat' && threadSet.has(id)) ||
+                (kind === 'doc' && docSet.has(id)) ||
+                (kind !== 'chat' && kind !== 'doc')
+            );
         });
         return filteredEntries.length === p.data.length
             ? p
@@ -718,7 +731,9 @@ if (process.client) {
         try {
             // Observe the specific elements
             const topHeader = document.getElementById('top-header');
-            const sideNavHeader = document.getElementById('side-nav-content-header');
+            const sideNavHeader = document.getElementById(
+                'side-nav-content-header'
+            );
             if (topHeader) resizeObserver.observe(topHeader);
             if (sideNavHeader) resizeObserver.observe(sideNavHeader);
 
@@ -896,7 +911,8 @@ async function openRename(target: RenamePayload) {
         renameId.value = target.id;
         renameTitle.value = 'title' in target ? target.title ?? '' : '';
         showRenameModal.value = true;
-        renameMetaKind.value = 'postType' in target && target.postType === 'doc' ? 'doc' : 'chat';
+        renameMetaKind.value =
+            'postType' in target && target.postType === 'doc' ? 'doc' : 'chat';
     }
 }
 

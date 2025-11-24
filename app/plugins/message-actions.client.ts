@@ -51,7 +51,7 @@ export default defineNuxtPlugin(() => {
 
             const doc = await createDocument({
                 title: (message as any).title || 'Untitled',
-                content: tiptapDoc,
+                content: tiptapDoc as any,
             });
 
             if (import.meta.dev) console.debug('Created document record', doc);

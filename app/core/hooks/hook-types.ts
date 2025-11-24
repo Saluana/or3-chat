@@ -245,11 +245,27 @@ export interface KvUpsertByNameInput {
 export interface MessageEntity {
     id: string;
     thread_id: string;
-    role: 'user' | 'assistant' | 'system';
-    data: Record<string, unknown>;
+    role: string;
+    data?: unknown;
     index: number;
     created_at: number;
     updated_at?: number;
+}
+
+/** DB entity: message create input */
+export interface MessageCreateEntity {
+    id?: string;
+    thread_id: string;
+    role: string;
+    data?: unknown;
+    index?: number;
+    created_at?: number;
+    updated_at?: number;
+    file_hashes?: string | string[] | null;
+    error?: string | null;
+    deleted?: boolean;
+    stream_id?: string | null;
+    clock?: number;
 }
 
 /** DB entity: thread */
@@ -309,6 +325,19 @@ export interface PostEntity {
     body?: string;
     created_at?: number;
     updated_at?: number;
+}
+
+/** DB entity: post create input */
+export interface PostCreateEntity {
+    id?: string;
+    title: string;
+    content?: string;
+    postType?: string;
+    created_at?: number;
+    updated_at?: number;
+    deleted?: boolean;
+    meta?: unknown;
+    file_hashes?: string | null;
 }
 
 /** DB entity: prompt */
@@ -586,7 +615,9 @@ type DbActionPayloadFor<K extends DbActionHookName> =
 type DbFilterPayloadFor<K extends DbFilterHookName> =
     K extends `db.${string}.${infer Op}:filter:${infer Phase}`
         ? Phase extends 'input'
-            ? Op extends 'create' | 'upsert'
+            ? Op extends 'create'
+                ? [InferDbCreateEntity<K>]
+            : Op extends 'upsert'
                 ? [InferDbEntity<K>]
                 : Op extends 'update'
                 ? [DbUpdatePayload<InferDbEntity<K>>]
@@ -685,6 +716,13 @@ export type InferDbEntity<K extends string> = K extends `db.messages.${string}`
     : K extends `db.kv.${string}`
     ? KvEntry
     : unknown;
+
+// For DB create hooks, infer input entity type
+export type InferDbCreateEntity<K extends string> = K extends `db.messages.${string}`
+    ? MessageCreateEntity
+    : K extends `db.posts.${string}`
+    ? PostCreateEntity
+    : InferDbEntity<K>;
 
 // Utility: Tail of a tuple
 export type Tail<T extends unknown[]> = T extends [unknown, ...infer Rest]

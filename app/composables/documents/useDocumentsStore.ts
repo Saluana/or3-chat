@@ -58,7 +58,7 @@ export async function flush(id: string) {
     st.flushPromise = (async () => {
         const patch: Partial<Pick<Document, 'title' | 'content'>> = {};
         if (st.pendingTitle !== undefined) patch.title = st.pendingTitle;
-        if (st.pendingContent !== undefined) patch.content = st.pendingContent;
+        if (st.pendingContent !== undefined) patch.content = st.pendingContent as any;
         st.status = 'saving';
         try {
             const updated = await updateDocument(id, patch);
