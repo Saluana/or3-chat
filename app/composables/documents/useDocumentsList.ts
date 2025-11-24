@@ -15,10 +15,10 @@ export function useDocumentsList(limit = 200) {
         if (activeRefresh) {
             return activeRefresh;
         }
-        
+
         loading.value = true;
         error.value = null;
-        
+
         activeRefresh = (async () => {
             try {
                 // Fetch full documents then strip heavy fields (content) for sidebar memory efficiency.
@@ -35,13 +35,16 @@ export function useDocumentsList(limit = 200) {
                 }));
             } catch (e) {
                 error.value = e;
-                useToast().add({ color: 'error', title: 'Document: list failed' });
+                useToast().add({
+                    color: 'error',
+                    title: 'Document: list failed',
+                });
             } finally {
                 loading.value = false;
                 activeRefresh = null;
             }
         })();
-        
+
         return activeRefresh;
     }
 

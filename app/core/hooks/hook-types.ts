@@ -617,7 +617,7 @@ type DbFilterPayloadFor<K extends DbFilterHookName> =
         ? Phase extends 'input'
             ? Op extends 'create'
                 ? [InferDbCreateEntity<K>]
-            : Op extends 'upsert'
+                : Op extends 'upsert'
                 ? [InferDbEntity<K>]
                 : Op extends 'update'
                 ? [DbUpdatePayload<InferDbEntity<K>>]
@@ -718,11 +718,12 @@ export type InferDbEntity<K extends string> = K extends `db.messages.${string}`
     : unknown;
 
 // For DB create hooks, infer input entity type
-export type InferDbCreateEntity<K extends string> = K extends `db.messages.${string}`
-    ? MessageCreateEntity
-    : K extends `db.posts.${string}`
-    ? PostCreateEntity
-    : InferDbEntity<K>;
+export type InferDbCreateEntity<K extends string> =
+    K extends `db.messages.${string}`
+        ? MessageCreateEntity
+        : K extends `db.posts.${string}`
+        ? PostCreateEntity
+        : InferDbEntity<K>;
 
 // Utility: Tail of a tuple
 export type Tail<T extends unknown[]> = T extends [unknown, ...infer Rest]

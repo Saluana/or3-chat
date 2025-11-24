@@ -79,7 +79,9 @@ describe('useDocumentsList - race conditions', () => {
     });
 
     it('handles errors without crashing', async () => {
-        vi.mocked(documentsDb.listDocuments).mockRejectedValue(new Error('Network error'));
+        vi.mocked(documentsDb.listDocuments).mockRejectedValue(
+            new Error('Network error')
+        );
 
         const { error, loading, refresh } = useDocumentsList();
 
