@@ -14,27 +14,45 @@ import { serializeFileHashes } from './files-util';
 
 // Convert Message schema type to MessageEntity for hooks
 function toMessageEntity(msg: Message): MessageEntity {
+    // Validate role is one of the expected types
+    const role = msg.role;
+    if (role !== 'user' && role !== 'assistant' && role !== 'system') {
+        throw new Error(`Invalid message role: ${role}`);
+    }
+    
     return {
         id: msg.id,
         thread_id: msg.thread_id,
-        role: msg.role as 'user' | 'assistant' | 'system',
-        data: msg.data as Record<string, unknown>,
+        role: role,
+        data: (msg.data as Record<string, unknown>) ?? {},
         index: msg.index,
         created_at: msg.created_at,
         updated_at: msg.updated_at,
     };
 }
 
+/**
+ * Type guard to check if an object has file_hashes property
+ */
+function hasFileHashesArray(obj: unknown): obj is { file_hashes: string[] } {
+    return (
+        typeof obj === 'object' &&
+        obj !== null &&
+        'file_hashes' in obj &&
+        Array.isArray((obj as { file_hashes: unknown }).file_hashes)
+    );
+}
+
 export async function createMessage(input: MessageCreate): Promise<Message> {
     const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
+    const filtered: unknown = await hooks.applyFilters(
         'db.messages.create:filter:input',
-        input as any
+        input
     );
     // Support passing file_hashes as string[] for convenience
-    if (Array.isArray((filtered as any).file_hashes)) {
-        (filtered as any).file_hashes = serializeFileHashes(
-            (filtered as any).file_hashes
+    if (hasFileHashesArray(filtered)) {
+        (filtered as { file_hashes: string | string[] }).file_hashes = serializeFileHashes(
+            filtered.file_hashes
         );
     }
     // Apply defaults (id/clock/timestamps) then validate fully
@@ -58,9 +76,9 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
 
 export async function upsertMessage(value: Message): Promise<void> {
     const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
+    const filtered: unknown = await hooks.applyFilters(
         'db.messages.upsert:filter:input',
-        value as any
+        value
     );
     const validated = parseOrThrow(MessageSchema, filtered);
     await hooks.doAction('db.messages.upsert:action:before', {
@@ -96,7 +114,7 @@ export function getMessage(id: string) {
         action: 'get',
     })?.then((res) =>
         res
-            ? hooks.applyFilters('db.messages.get:filter:output', res as any)
+            ? hooks.applyFilters('db.messages.get:filter:output', res)
             : undefined
     );
 }
@@ -166,12 +184,14 @@ export async function hardDeleteMessage(id: string): Promise<void> {
 export async function appendMessage(input: MessageCreate): Promise<Message> {
     const hooks = useHooks();
     return db.transaction('rw', db.messages, db.threads, async () => {
-        if (Array.isArray((input as any).file_hashes)) {
-            (input as any).file_hashes = serializeFileHashes(
-                (input as any).file_hashes
+        // Handle file_hashes array serialization
+        const processedInput = { ...input };
+        if (hasFileHashesArray(processedInput)) {
+            (processedInput as { file_hashes: string | string[] }).file_hashes = serializeFileHashes(
+                processedInput.file_hashes
             );
         }
-        const value = parseOrThrow(MessageCreateSchema, input);
+        const value = parseOrThrow(MessageCreateSchema, processedInput);
         await hooks.doAction('db.messages.append:action:before', value);
         // If index not set, compute next sparse index in thread
         if (value.index === undefined || value.index === null) {
@@ -306,13 +326,15 @@ export async function insertMessageAfter(
             await normalizeThreadIndexes(after.thread_id);
             newIndex = after.index + 1000;
         }
-        if (Array.isArray((input as any).file_hashes)) {
-            (input as any).file_hashes = serializeFileHashes(
-                (input as any).file_hashes
+        // Handle file_hashes array serialization
+        const processedInput = { ...input };
+        if (hasFileHashesArray(processedInput)) {
+            (processedInput as { file_hashes: string | string[] }).file_hashes = serializeFileHashes(
+                processedInput.file_hashes
             );
         }
         const value = parseOrThrow(MessageCreateSchema, {
-            ...input,
+            ...processedInput,
             index: newIndex,
             thread_id: after.thread_id,
         });

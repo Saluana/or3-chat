@@ -36,22 +36,22 @@ export default defineNuxtPlugin(() => {
                     editor.commands.setContent(markdown);
                     return editor.getJSON();
                 } catch (e) {
-                    alert('error!!!');
+                    useToast().add({
+                        title: 'Error converting markdown',
+                        color: 'error',
+                    });
+                    return { type: 'doc', content: [] };
                 }
             }
 
-            const markdownSource =
-                typeof (message as any)?.text === 'string'
-                    ? (message as any).text
-                    : typeof (message as any)?.content === 'string'
-                    ? (message as any).content
-                    : '';
+            // UiChatMessage usually has 'text' property for text content
+            const markdownSource = message.text || '';
 
             const tiptapDoc = await markdownToTipTapDoc(markdownSource);
 
             const doc = await createDocument({
-                title: (message as any).title || 'Untitled',
-                content: tiptapDoc,
+                title: 'Untitled', // UiChatMessage doesn't have a title
+                content: tiptapDoc as any, // createDocument expects TipTapDocument, getJSON returns Record<string, any>
             });
 
             if (import.meta.dev) console.debug('Created document record', doc);

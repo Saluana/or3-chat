@@ -1055,7 +1055,9 @@ const handleSend = async () => {
             const hooks = useHooks();
             const json = editor.value?.getJSON?.();
             // Fire as an action to avoid transforming data; listeners can stash it
+        if (json) {
             await hooks.doAction('ui.chat.editor:action:before_send', json);
+        }
         } catch (e) {
             // Silently handle editor JSON dispatch failure
         }

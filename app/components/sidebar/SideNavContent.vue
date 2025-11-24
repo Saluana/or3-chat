@@ -131,14 +131,18 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import SidebarHomePage from '~/components/sidebar/SidebarHomePage.vue';
 import type { Post, Project } from '~/db';
+import type { Document } from '~/db/documents';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
+import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarSections';
+
+import type { Thread } from '~/db';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 
 const props = defineProps<{
     activeThread?: string;
-    items: any[];
+    items: Thread[];
     projects: SidebarProject[];
     expandedProjects: string[];
     docs: Post[];
@@ -148,13 +152,13 @@ const props = defineProps<{
         chats: boolean;
         docs: boolean;
     };
-    displayThreads: any[];
+    displayThreads: Thread[];
     displayProjects: SidebarProject[];
     displayDocuments?: Post[];
     sidebarQuery: string;
     activeDocumentIds: string[];
     activeThreadIds: string[];
-    sidebarFooterActions: any[];
+    sidebarFooterActions: SidebarFooterActionEntry[];
     resolvedSidebarSections: {
         top: { id: string; component: Component }[];
         main: { id: string; component: Component }[];
@@ -372,5 +376,8 @@ defineExpose({
     focusSearchInput,
     setActivePage,
     resetToDefault,
+    headerElement: computed(
+        () => sideNavHeaderRef.value?.$el as HTMLElement | null
+    ),
 });
 </script>

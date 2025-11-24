@@ -26,7 +26,7 @@ describe('useDocumentsList - race conditions', () => {
             {
                 id: 'doc1',
                 title: 'Doc 1',
-                content: 'Large content here...',
+                content: { type: 'doc', content: [] },
                 postType: 'document',
                 created_at: Date.now(),
                 updated_at: Date.now(),
@@ -38,7 +38,7 @@ describe('useDocumentsList - race conditions', () => {
         vi.mocked(documentsDb.listDocuments).mockImplementation(async () => {
             resolveCount++;
             await new Promise((resolve) => setTimeout(resolve, 100));
-            return mockDocs;
+            return mockDocs as any;
         });
 
         const { refresh } = useDocumentsList();
@@ -59,7 +59,7 @@ describe('useDocumentsList - race conditions', () => {
             {
                 id: 'doc1',
                 title: 'Doc 1',
-                content: 'A'.repeat(10000), // Large content
+                content: { type: 'doc', content: [] }, // Large content
                 postType: 'document',
                 created_at: Date.now(),
                 updated_at: Date.now(),
@@ -68,18 +68,20 @@ describe('useDocumentsList - race conditions', () => {
             },
         ];
 
-        vi.mocked(documentsDb.listDocuments).mockResolvedValue(mockDocs);
+        vi.mocked(documentsDb.listDocuments).mockResolvedValue(mockDocs as any);
 
         const { docs, refresh } = useDocumentsList();
         await refresh();
 
         expect(docs.value).toHaveLength(1);
-        expect(docs.value[0]?.content).toBe('');
+        expect(docs.value[0]?.content).toBe(null);
         expect(docs.value[0]?.title).toBe('Doc 1');
     });
 
     it('handles errors without crashing', async () => {
-        vi.mocked(documentsDb.listDocuments).mockRejectedValue(new Error('Network error'));
+        vi.mocked(documentsDb.listDocuments).mockRejectedValue(
+            new Error('Network error')
+        );
 
         const { error, loading, refresh } = useDocumentsList();
 

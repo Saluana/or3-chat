@@ -15,7 +15,7 @@ onMounted(async () => {
     try {
         if (!db.isOpen()) await db.open();
         const d = await getDocument(routeId.value);
-        const exists = !!(d && !(d as any).deleted);
+        const exists = !!(d && !d.deleted);
         if (!exists) await navigateTo('/chat', { replace: true });
         else ready.value = true;
     } catch {

@@ -13,6 +13,7 @@ import type { PaneState } from '~/composables/core/useMultiPane';
 import { createPost, upsertPost, getPost, softDeletePost } from '~/db/posts';
 import { db } from '~/db/client';
 import type { Post, PostCreate } from '~/db/schema';
+import type { TipTapDocument } from '~/types/database';
 
 /** All error codes emitted by the Pane Plugin API */
 export type PaneApiErrorCode =
@@ -372,7 +373,8 @@ async function makeApi(): Promise<PanePluginApi> {
             const p = entry.pane;
             if (p.mode !== 'doc') return err('pane_not_doc', 'pane not doc');
             if (!p.documentId) return err('no_document', 'no document');
-            setDocumentContent(p.documentId, content);
+            // Runtime validation could be added here, for now we cast to satisfy the store API
+            setDocumentContent(p.documentId, content as TipTapDocument);
             log('updateDocumentContent', { source, paneId });
             return { ok: true };
         },
@@ -387,7 +389,7 @@ async function makeApi(): Promise<PanePluginApi> {
                 record?: { content?: unknown };
             };
             const merged = patchDoc(st?.record?.content, patch);
-            setDocumentContent(p.documentId, merged);
+            setDocumentContent(p.documentId, merged as unknown as TipTapDocument);
             log('patchDocumentContent', { source, paneId });
             return { ok: true };
         },

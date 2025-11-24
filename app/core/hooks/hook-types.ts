@@ -3,6 +3,20 @@
 // Runtime behavior is unchanged: wrappers will delegate to the existing HookEngine.
 import type { PaneState as MultiPaneState } from '../../composables/core/useMultiPane';
 import type { ChatMessage } from '~/utils/chat/types';
+import type { ORMessage } from '~/core/auth/openrouter-build';
+
+export interface EditorInstance {
+    commands: Record<string, unknown>;
+    getJSON: () => Record<string, unknown>;
+}
+
+export type OpenRouterMessage =
+    | ORMessage
+    | {
+          role: 'tool';
+          [key: string]: unknown;
+      };
+
 /**
  * Overview
  * - Strongly-typed hook names (actions and filters)
@@ -10,9 +24,6 @@ import type { ChatMessage } from '~/utils/chat/types';
  * - Utility types to infer callback signatures and returns
  * - Helpful error helper types for clearer TS diagnostics
  */
-
-// ============================================================================
-// PAYLOAD INTERFACES
 // ============================================================================
 
 // Chat & AI Hooks
@@ -245,11 +256,27 @@ export interface KvUpsertByNameInput {
 export interface MessageEntity {
     id: string;
     thread_id: string;
-    role: 'user' | 'assistant' | 'system';
-    data: Record<string, unknown>;
+    role: string;
+    data?: unknown;
     index: number;
     created_at: number;
     updated_at?: number;
+}
+
+/** DB entity: message create input */
+export interface MessageCreateEntity {
+    id?: string;
+    thread_id: string;
+    role: string;
+    data?: unknown;
+    index?: number;
+    created_at?: number;
+    updated_at?: number;
+    file_hashes?: string | string[] | null;
+    error?: string | null;
+    deleted?: boolean;
+    stream_id?: string | null;
+    clock?: number;
 }
 
 /** DB entity: thread */
@@ -309,6 +336,19 @@ export interface PostEntity {
     body?: string;
     created_at?: number;
     updated_at?: number;
+}
+
+/** DB entity: post create input */
+export interface PostCreateEntity {
+    id?: string;
+    title: string;
+    content?: string;
+    postType?: string;
+    created_at?: number;
+    updated_at?: number;
+    deleted?: boolean;
+    meta?: unknown;
+    file_hashes?: string | null;
 }
 
 /** DB entity: prompt */
@@ -409,7 +449,6 @@ export type DbFilterHookName =
     // extra specialized filters seen in docs
     | `db.messages.files.validate:filter:hashes`
     | `db.documents.list:filter:output`
-    | `db.documents.title:filter`
     | `db.kv.getByName:filter:output`
     | `db.kv.upsertByName:filter:input`
     | `db.threads.searchByTitle:filter:output`
@@ -510,15 +549,15 @@ export type CoreHookPayloadMap = {
     'db.threads.getSystemPrompt:filter:output': [string | null];
 
     // Editor Lifecycle (Examples/Plugins)
-    'editor.created:action:after': [{ editor: any }];
-    'editor.updated:action:after': [{ editor: any }];
+    'editor.created:action:after': [{ editor: EditorInstance | unknown }];
+    'editor.updated:action:after': [{ editor: EditorInstance | unknown }];
     'editor:request-extensions': [void];
 
     // UI/Chat Extensions
-    'ui.chat.editor:filter:extensions': [any[]];
-    'ui.chat.editor:action:before_send': [any]; // editor JSON
+    'ui.chat.editor:filter:extensions': [unknown[]];
+    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON
     'ai.chat.messages:filter:before_send': [
-        { messages: any[] } | { messages: any[] }[]
+        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]
     ];
 
     // Branching lifecycle
@@ -586,7 +625,9 @@ type DbActionPayloadFor<K extends DbActionHookName> =
 type DbFilterPayloadFor<K extends DbFilterHookName> =
     K extends `db.${string}.${infer Op}:filter:${infer Phase}`
         ? Phase extends 'input'
-            ? Op extends 'create' | 'upsert'
+            ? Op extends 'create'
+                ? [InferDbCreateEntity<K>]
+                : Op extends 'upsert'
                 ? [InferDbEntity<K>]
                 : Op extends 'update'
                 ? [DbUpdatePayload<InferDbEntity<K>>]
@@ -685,6 +726,14 @@ export type InferDbEntity<K extends string> = K extends `db.messages.${string}`
     : K extends `db.kv.${string}`
     ? KvEntry
     : unknown;
+
+// For DB create hooks, infer input entity type
+export type InferDbCreateEntity<K extends string> =
+    K extends `db.messages.${string}`
+        ? MessageCreateEntity
+        : K extends `db.posts.${string}`
+        ? PostCreateEntity
+        : InferDbEntity<K>;
 
 // Utility: Tail of a tuple
 export type Tail<T extends unknown[]> = T extends [unknown, ...infer Rest]

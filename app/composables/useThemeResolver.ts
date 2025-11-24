@@ -32,7 +32,7 @@ import type { ResolveParams } from '../theme/_shared/runtime-resolver';
 
 interface ComponentOverrideCache {
     theme: string;
-    entries: Map<string, Record<string, unknown>>;
+    entries: Map<string, Record<string, any>>;
 }
 
 // Resolution cache using WeakMap to prevent memory leaks
@@ -72,7 +72,7 @@ export interface UseThemeResolverReturn {
      * @param params - Resolution parameters
      * @returns Resolved override props
      */
-    resolveOverrides: (params: ResolveParams) => Record<string, unknown>;
+    resolveOverrides: (params: ResolveParams) => Record<string, any>;
 
     /**
      * Current active theme name
@@ -97,7 +97,7 @@ export interface UseThemeResolverReturn {
  */
 export function useThemeResolver(): UseThemeResolverReturn {
     const nuxtApp = useNuxtApp();
-    const theme = (nuxtApp as any).$theme;
+    const theme = nuxtApp.$theme;
 
     if (!theme) {
         throw new Error('[useThemeResolver] Theme plugin not found');
@@ -105,9 +105,7 @@ export function useThemeResolver(): UseThemeResolverReturn {
 
     const activeTheme = computed(() => theme.activeTheme.value);
 
-    const resolveOverrides = (
-        params: ResolveParams
-    ): Record<string, unknown> => {
+    const resolveOverrides = (params: ResolveParams): Record<string, any> => {
         const currentTheme = theme.activeTheme.value;
         const resolver = theme.getResolver(currentTheme);
 
@@ -163,7 +161,7 @@ export function useThemeResolver(): UseThemeResolverReturn {
  */
 export function useThemeOverrides(
     params: ResolveParams | ComputedRef<ResolveParams>
-): ComputedRef<Record<string, unknown>> {
+): ComputedRef<Record<string, any>> {
     const { resolveOverrides, activeTheme } = useThemeResolver();
     const instance = getCurrentInstance();
 

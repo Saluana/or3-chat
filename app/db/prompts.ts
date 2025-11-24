@@ -7,6 +7,17 @@ import type {
     DbUpdatePayload,
     PromptEntity,
 } from '../core/hooks/hook-types';
+import type { TipTapDocument } from '~/types/database';
+import type { Post } from './schema';
+
+/**
+ * Type guard to check if a post is a prompt
+ */
+function isPromptPost(
+    post: Post | undefined | null
+): post is Post & { postType: 'prompt' } {
+    return post !== undefined && post !== null && post.postType === 'prompt';
+}
 
 /**
  * Internal stored row shape (reuses posts table with postType = 'prompt').
@@ -27,7 +38,7 @@ export interface PromptRow {
 export interface PromptRecord {
     id: string;
     title: string;
-    content: any; // TipTap JSON object
+    content: TipTapDocument | null; // TipTap JSON object
     created_at: number;
     updated_at: number;
     deleted: boolean;
@@ -98,7 +109,7 @@ function buildPromptUpdatePayload(
     };
 }
 
-function emptyPromptJSON() {
+function emptyPromptJSON(): TipTapDocument {
     return { type: 'doc', content: [] };
 }
 
@@ -115,12 +126,14 @@ function normalizeTitle(
     return trimmed; // may be '' when allowEmpty true
 }
 
-function parseContent(raw: string | null | undefined): any {
+function parseContent(raw: string | null | undefined): TipTapDocument {
     if (!raw) return emptyPromptJSON();
     try {
         const parsed = JSON.parse(raw);
-        // Basic structural guard
-        if (parsed && typeof parsed === 'object' && parsed.type) return parsed;
+        // Basic structural guard - ensure it's a valid TipTap document
+        if (parsed && typeof parsed === 'object' && parsed.type === 'doc') {
+            return parsed as TipTapDocument;
+        }
         return emptyPromptJSON();
     } catch {
         return emptyPromptJSON();
@@ -140,7 +153,7 @@ function rowToRecord(row: PromptRow): PromptRecord {
 
 export interface CreatePromptInput {
     title?: string | null;
-    content?: any; // TipTap JSON object
+    content?: TipTapDocument | null; // TipTap JSON object
 }
 
 export async function createPrompt(
@@ -167,7 +180,18 @@ export async function createPrompt(
     };
     await hooks.doAction('db.prompts.create:action:before', actionPayload);
     const persistedRow = promptEntityToRow(actionPayload.entity, filteredRow);
-    await db.posts.put(persistedRow as any); // reuse posts table
+    // Convert PromptRow to Post type for db.posts.put
+    const postRow: Post = {
+        id: persistedRow.id,
+        title: persistedRow.title,
+        content: persistedRow.content,
+        postType: persistedRow.postType,
+        created_at: persistedRow.created_at,
+        updated_at: persistedRow.updated_at,
+        deleted: persistedRow.deleted,
+        meta: '',
+    };
+    await db.posts.put(postRow); // reuse posts table
     actionPayload = {
         ...actionPayload,
         entity: toPromptEntity(persistedRow),
@@ -179,8 +203,16 @@ export async function createPrompt(
 export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
     const hooks = useHooks();
     const row = await db.posts.get(id);
-    if (!row || (row as any).postType !== 'prompt') return undefined;
-    const baseRow = row as PromptRow;
+    if (!isPromptPost(row)) return undefined;
+    const baseRow: PromptRow = {
+        id: row.id,
+        title: row.title,
+        content: row.content,
+        postType: row.postType,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        deleted: row.deleted ?? false,
+    };
     const filteredEntity = await hooks.applyFilters(
         'db.prompts.get:filter:output',
         toPromptEntity(baseRow)
@@ -196,12 +228,12 @@ export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
     const rows = await db.posts
         .where('postType')
         .equals('prompt')
-        .and((r) => !(r as any).deleted)
+        .and((r) => !r.deleted)
         .reverse() // by primary key order soon? we'll sort manually after fetch
         .toArray();
     // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
     rows.sort((a, b) => b.updated_at - a.updated_at);
-    const sliced = rows.slice(0, limit) as unknown as PromptRow[];
+    const sliced = rows.slice(0, limit) as PromptRow[];
     const baseMap = new Map(sliced.map((row) => [row.id, row]));
     const filteredEntities = await hooks.applyFilters(
         'db.prompts.list:filter:output',
@@ -212,7 +244,7 @@ export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
 
 export interface UpdatePromptPatch {
     title?: string;
-    content?: any; // TipTap JSON object
+    content?: TipTapDocument | null; // TipTap JSON object
 }
 
 export async function updatePrompt(
@@ -221,8 +253,16 @@ export async function updatePrompt(
 ): Promise<PromptRecord | undefined> {
     const hooks = useHooks();
     const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'prompt') return undefined;
-    const existingRow = existing as PromptRow;
+    if (!isPromptPost(existing)) return undefined;
+    const existingRow: PromptRow = {
+        id: existing.id,
+        title: existing.title,
+        content: existing.content,
+        postType: existing.postType,
+        created_at: existing.created_at,
+        updated_at: existing.updated_at,
+        deleted: existing.deleted ?? false,
+    };
     const updatedRow: PromptRow = {
         id: existingRow.id,
         title:
@@ -256,7 +296,18 @@ export async function updatePrompt(
 
     await hooks.doAction('db.prompts.update:action:before', actionPayload);
     const persistedRow = promptEntityToRow(actionPayload.updated, mergedRow);
-    await db.posts.put(persistedRow as any);
+    // Convert PromptRow to Post type for db.posts.put
+    const postRow: Post = {
+        id: persistedRow.id,
+        title: persistedRow.title,
+        content: persistedRow.content,
+        postType: persistedRow.postType,
+        created_at: persistedRow.created_at,
+        updated_at: persistedRow.updated_at,
+        deleted: persistedRow.deleted,
+        meta: '',
+    };
+    await db.posts.put(postRow);
     actionPayload = {
         ...actionPayload,
         updated: toPromptEntity(persistedRow),
@@ -268,27 +319,55 @@ export async function updatePrompt(
 export async function softDeletePrompt(id: string): Promise<void> {
     const hooks = useHooks();
     const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'prompt') return;
-    const existingRow = existing as PromptRow;
+    if (!isPromptPost(existing)) return;
+    const existingRow: PromptRow = {
+        id: existing.id,
+        title: existing.title,
+        content: existing.content,
+        postType: existing.postType,
+        created_at: existing.created_at,
+        updated_at: existing.updated_at,
+        deleted: existing.deleted ?? false,
+    };
     const payload: DbDeletePayload<PromptEntity> = {
         entity: toPromptEntity(existingRow),
         id: existingRow.id,
         tableName: PROMPT_TABLE,
     };
     await hooks.doAction('db.prompts.delete:action:soft:before', payload);
-    await db.posts.put({
+    const updatedRow = {
         ...existingRow,
         deleted: true,
         updated_at: nowSec(),
-    });
+    };
+    // Convert to Post type for db.posts.put
+    const postRow: Post = {
+        id: updatedRow.id,
+        title: updatedRow.title,
+        content: updatedRow.content,
+        postType: updatedRow.postType,
+        created_at: updatedRow.created_at,
+        updated_at: updatedRow.updated_at,
+        deleted: updatedRow.deleted,
+        meta: '',
+    };
+    await db.posts.put(postRow);
     await hooks.doAction('db.prompts.delete:action:soft:after', payload);
 }
 
 export async function hardDeletePrompt(id: string): Promise<void> {
     const hooks = useHooks();
     const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'prompt') return;
-    const existingRow = existing as PromptRow;
+    if (!isPromptPost(existing)) return;
+    const existingRow: PromptRow = {
+        id: existing.id,
+        title: existing.title,
+        content: existing.content,
+        postType: existing.postType,
+        created_at: existing.created_at,
+        updated_at: existing.updated_at,
+        deleted: existing.deleted ?? false,
+    };
     const payload: DbDeletePayload<PromptEntity> = {
         entity: toPromptEntity(existingRow),
         id: existingRow.id,

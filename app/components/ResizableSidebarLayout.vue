@@ -49,6 +49,7 @@
                 class="resizable-sidebar-container h-full flex flex-col"
             >
                 <SidebarHeader
+                    ref="sidebarHeaderRef"
                     :collapsed="collapsed"
                     :toggle-icon="toggleIcon"
                     :toggle-aria="toggleAria"
@@ -162,12 +163,36 @@ import {
     onBeforeUnmount,
     watch,
     nextTick,
+    provide,
 } from 'vue';
 import SidebarHeader from './sidebar/SidebarHeader.vue';
 import ResizeHandle from './sidebar/ResizeHandle.vue';
 import { useIcon } from '~/composables/useIcon';
 
 type Side = 'left' | 'right';
+
+const sidebarHeaderRef = ref<ComponentPublicInstance | null>(null);
+const topHeaderHeight = ref(48);
+provide('topHeaderHeight', topHeaderHeight);
+
+let headerObserver: ResizeObserver | null = null;
+
+onMounted(() => {
+    if (sidebarHeaderRef.value?.$el) {
+        headerObserver = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                // Use offsetHeight if available on target, otherwise fallback
+                const target = entry.target as HTMLElement;
+                topHeaderHeight.value = target.offsetHeight || entry.contentRect.height;
+            }
+        });
+        headerObserver.observe(sidebarHeaderRef.value.$el);
+    }
+});
+
+onBeforeUnmount(() => {
+    headerObserver?.disconnect();
+});
 
 const props = defineProps({
     modelValue: { type: Boolean, default: undefined },

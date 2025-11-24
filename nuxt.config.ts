@@ -1,7 +1,12 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
+import { resolve } from 'path';
 
 export default defineNuxtConfig({
+    alias: {
+        types: resolve(__dirname, './types'),
+        '~/types': resolve(__dirname, './types'),
+    },
     compatibilityDate: '2025-07-15',
     runtimeConfig: {
         // Server-only env variables

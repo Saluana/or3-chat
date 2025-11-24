@@ -51,7 +51,7 @@ export async function createPost(input: PostCreate): Promise<Post> {
     const hooks = useHooks();
     const filtered: unknown = await hooks.applyFilters(
         'db.posts.create:filter:input',
-        input as any
+        input
     );
     // Ensure title present & trimmed early (schema will enforce non-empty)
     const mutable = filtered as Record<string, unknown>;
