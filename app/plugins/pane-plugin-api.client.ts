@@ -584,7 +584,7 @@ function makeApi(): PanePluginApi {
                         .and((p) => !p.deleted)
                         .sortBy('updated_at');
 
-                    const sorted = results.slice().reverse();
+                    const sorted = [...results].reverse();
                     const sliced = limit ? sorted.slice(0, limit) : sorted;
 
                     // Parse meta for each post

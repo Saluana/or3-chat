@@ -1,6 +1,6 @@
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import { useToast } from '#imports';
-import { createDocument } from '~/db/documents';
+import { createDocument, type CreateDocumentInput } from '~/db/documents';
 import { registerMessageAction } from '~/composables/chat/useMessageActions';
 
 export default defineNuxtPlugin(() => {
@@ -28,14 +28,13 @@ export default defineNuxtPlugin(() => {
                     const { Markdown } = await import('tiptap-markdown');
 
                     const editor = new Editor({
-                        // @ts-ignore
                         extensions: [StarterKit, Markdown],
                         content: '',
                     });
 
                     editor.commands.setContent(markdown);
                     return editor.getJSON();
-                } catch (e) {
+                } catch {
                     useToast().add({
                         title: 'Error converting markdown',
                         color: 'error',
@@ -49,10 +48,20 @@ export default defineNuxtPlugin(() => {
 
             const tiptapDoc = await markdownToTipTapDoc(markdownSource);
 
-            const doc = await createDocument({
-                title: 'Untitled', // UiChatMessage doesn't have a title
-                content: tiptapDoc as any, // createDocument expects TipTapDocument, getJSON returns Record<string, any>
-            });
+            let doc: Awaited<ReturnType<typeof createDocument>>;
+            try {
+                doc = await createDocument({
+                    title: 'Untitled', // UiChatMessage doesn't have a title
+                    content: tiptapDoc as CreateDocumentInput['content'],
+                });
+            } catch (createErr) {
+                console.error('Failed to create document:', createErr);
+                useToast().add({
+                    title: 'Error creating document',
+                    color: 'error',
+                });
+                return;
+            }
 
             if (import.meta.dev) console.debug('Created document record', doc);
 

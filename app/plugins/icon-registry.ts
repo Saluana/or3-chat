@@ -1,7 +1,6 @@
 import { defineNuxtPlugin } from '#app';
 import {
     iconRegistry,
-    IconRegistry,
     type IconRegistryState,
 } from '~/theme/_shared/icon-registry';
 

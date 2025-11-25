@@ -13,7 +13,6 @@ import type {
     ThreadEntity,
 } from '~/core/hooks/hook-types';
 import type * as MentionIndexApi from './ChatMentions/useChatMentions';
-import type { MentionItem } from './ChatMentions/useChatMentions';
 import type { createMentionSuggestion } from './ChatMentions/suggestions';
 import type MentionExtension from '@tiptap/extension-mention';
 
@@ -285,41 +284,51 @@ export default defineNuxtPlugin(() => {
     });
 
     // 4) Wire DB hooks for incremental index updates (registered once at plugin init)
+    // These are intentionally fire-and-forget async operations
+    /* eslint-disable @typescript-eslint/no-floating-promises */
     // Documents
     hooks.on(
         'db.documents.create:action:after',
-        async (payload: DbCreatePayload<DocumentEntity>) => {
-            const module = mentionsModule || (await loadMentionsModule());
-            const id = safeId(payload);
-            if (module && id && payload.entity) {
-                module.upsertDocument(payload.entity);
-            }
+        (payload: DbCreatePayload<DocumentEntity>) => {
+            void (async () => {
+                const module = mentionsModule || (await loadMentionsModule());
+                const id = safeId(payload);
+                if (module && id && payload.entity) {
+                    module.upsertDocument(payload.entity);
+                }
+            })();
         },
         { kind: 'action' }
     );
 
     hooks.on(
         'db.documents.update:action:after',
-        async (payload: DbUpdatePayload<DocumentEntity>) => {
-            const module = mentionsModule || (await loadMentionsModule());
-            if (module && payload.updated) module.upsertDocument(payload.updated);
+        (payload: DbUpdatePayload<DocumentEntity>) => {
+            void (async () => {
+                const module = mentionsModule || (await loadMentionsModule());
+                if (module && payload.updated) module.upsertDocument(payload.updated);
+            })();
         },
         { kind: 'action' }
     );
     hooks.on(
         'db.documents.delete:action:soft:after',
-        async (payload: DbDeletePayload<DocumentEntity>) => {
-            const module = mentionsModule || (await loadMentionsModule());
-            if (module) module.removeDocument(payload);
+        (payload: DbDeletePayload<DocumentEntity>) => {
+            void (async () => {
+                const module = mentionsModule || (await loadMentionsModule());
+                if (module) module.removeDocument(payload);
+            })();
         },
         { kind: 'action' }
     );
 
     hooks.on(
         'db.documents.delete:action:hard:after',
-        async (payload: DbDeletePayload<DocumentEntity>) => {
-            const module = mentionsModule || (await loadMentionsModule());
-            if (module) module.removeDocument(payload);
+        (payload: DbDeletePayload<DocumentEntity>) => {
+            void (async () => {
+                const module = mentionsModule || (await loadMentionsModule());
+                if (module) module.removeDocument(payload);
+            })();
         },
         { kind: 'action' }
     );
@@ -327,39 +336,48 @@ export default defineNuxtPlugin(() => {
     // Threads
     hooks.on(
         'db.threads.create:action:after',
-        async (payload: DbCreatePayload<ThreadEntity>) => {
-            const module = mentionsModule || (await loadMentionsModule());
-            if (module && payload.entity) module.upsertThread(payload.entity);
+        (payload: DbCreatePayload<ThreadEntity>) => {
+            void (async () => {
+                const module = mentionsModule || (await loadMentionsModule());
+                if (module && payload.entity) module.upsertThread(payload.entity);
+            })();
         },
         { kind: 'action' }
     );
 
     hooks.on(
         'db.threads.upsert:action:after',
-        async (payload: DbCreatePayload<ThreadEntity>) => {
-            const module = mentionsModule || (await loadMentionsModule());
-            if (module && payload.entity) module.upsertThread(payload.entity);
+        (payload: DbCreatePayload<ThreadEntity>) => {
+            void (async () => {
+                const module = mentionsModule || (await loadMentionsModule());
+                if (module && payload.entity) module.upsertThread(payload.entity);
+            })();
         },
         { kind: 'action' }
     );
 
     hooks.on(
         'db.threads.delete:action:soft:after',
-        async (payload: DbDeletePayload<ThreadEntity>) => {
-            const module = mentionsModule || (await loadMentionsModule());
-            if (module) module.removeThread(payload);
+        (payload: DbDeletePayload<ThreadEntity>) => {
+            void (async () => {
+                const module = mentionsModule || (await loadMentionsModule());
+                if (module) module.removeThread(payload);
+            })();
         },
         { kind: 'action' }
     );
 
     hooks.on(
         'db.threads.delete:action:hard:after',
-        async (payload: DbDeletePayload<ThreadEntity>) => {
-            const module = mentionsModule || (await loadMentionsModule());
-            if (module) module.removeThread(payload);
+        (payload: DbDeletePayload<ThreadEntity>) => {
+            void (async () => {
+                const module = mentionsModule || (await loadMentionsModule());
+                if (module) module.removeThread(payload);
+            })();
         },
         { kind: 'action' }
     );
+    /* eslint-enable @typescript-eslint/no-floating-promises */
 
     // HMR cleanup
     if (import.meta.hot) {

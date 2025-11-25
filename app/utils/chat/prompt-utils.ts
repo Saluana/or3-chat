@@ -10,14 +10,14 @@ interface TipTapTextNode {
 
 interface TipTapBlockNode {
     type: string;
-    content?: TipTapNode[] | readonly TipTapNode[];
+    content?: readonly TipTapNode[];
 }
 
 type TipTapNode = TipTapTextNode | TipTapBlockNode;
 
 interface TipTapDocument {
     type?: string;
-    content?: TipTapNode[] | readonly TipTapNode[];
+    content?: readonly TipTapNode[];
 }
 
 /**
@@ -30,7 +30,7 @@ export function promptJsonToString(
     if (!json) return '';
     const lines: string[] = [];
 
-    function walk(node: TipTapNode | TipTapNode[] | readonly TipTapNode[] | undefined): void {
+    function walk(node: TipTapNode | readonly TipTapNode[] | undefined): void {
         if (!node) return;
         // Gather plain text from leaf text nodes
         if (Array.isArray(node)) {
@@ -67,7 +67,7 @@ export function promptJsonToString(
     }
 
     // Handle both array and document formats
-    let content: TipTapNode[] | readonly TipTapNode[] | TipTapNode | undefined;
+    let content: readonly TipTapNode[] | TipTapNode | undefined;
     if (Array.isArray(json)) {
         content = json;
     } else if ('content' in json && json.content) {
