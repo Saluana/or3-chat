@@ -1,8 +1,5 @@
 import { ref, watch, computed } from 'vue';
-import type {
-    UserThemeOverrides,
-    UserBackgroundLayer,
-} from './user-overrides-types';
+import type { UserThemeOverrides } from './user-overrides-types';
 import { EMPTY_USER_OVERRIDES } from './user-overrides-types';
 import { applyMergedTheme } from './apply-merged-theme';
 import { revokeBackgroundBlobs } from './backgrounds';
