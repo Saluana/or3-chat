@@ -1,7 +1,6 @@
 import { db } from './client';
 import type { FileMeta } from './schema';
 import { parseFileHashes, serializeFileHashes } from './files-util';
-import { computeFileHash } from '../utils/hash';
 import { createOrRefFile, derefFile, getFileMeta } from './files';
 import { useHooks } from '../core/hooks/useHooks';
 import { nowSec } from './util';

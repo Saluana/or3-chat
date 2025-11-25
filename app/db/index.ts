@@ -1,4 +1,3 @@
-import { db } from './client';
 import type {
     Attachment,
     AttachmentCreate,

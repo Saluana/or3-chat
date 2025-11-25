@@ -15,7 +15,21 @@ export const DB_QUOTA_GUIDANCE =
 export interface DbTryTags {
     readonly op: 'read' | 'write';
     readonly entity?: string; // table/entity name for context
-    readonly [k: string]: any;
+    readonly [k: string]: unknown;
+}
+
+function getErrorInfo(e: unknown): { name: string; message: string } {
+    if (e instanceof Error) {
+        return { name: e.name, message: e.message };
+    }
+    if (typeof e === 'object' && e !== null) {
+        const obj = e as Record<string, unknown>;
+        return {
+            name: typeof obj.name === 'string' ? obj.name : '',
+            message: typeof obj.message === 'string' ? obj.message : '',
+        };
+    }
+    return { name: '', message: '' };
 }
 
 export async function dbTry<T>(
@@ -25,10 +39,9 @@ export async function dbTry<T>(
 ): Promise<T | undefined> {
     try {
         return await fn();
-    } catch (e: any) {
+    } catch (e: unknown) {
         // Quota detection: DOMException name or message heuristic
-        const name = e?.name || '';
-        const msg: string = e?.message || '';
+        const { name, message: msg } = getErrorInfo(e);
         const isQuota = /quota/i.test(name) || /quota/i.test(msg);
         if (isQuota) {
             reportError(

@@ -23,7 +23,7 @@ interface ForkThreadParams {
 
 const DEFAULT_BRANCH_MODE: BranchMode = 'reference';
 
-function normalizeBranchMode(mode?: ForkMode   | null): BranchMode {
+function normalizeBranchMode(mode?: ForkMode | null): BranchMode {
     return mode === 'copy' ? 'copy' : DEFAULT_BRANCH_MODE;
 }
 
@@ -69,8 +69,7 @@ function mergeMessageEntity(entity: MessageEntity, base?: Message): Message {
         data: entity.data,
         index: entity.index,
         created_at: entity.created_at,
-        updated_at:
-            entity.updated_at ?? fallback.updated_at ?? entity.created_at,
+        updated_at: entity.updated_at,
     };
 }
 

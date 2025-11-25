@@ -59,10 +59,10 @@ function promptEntityToRow(entity: PromptEntity, base?: PromptRow): PromptRow {
         base ??
         ({
             id: entity.id,
-            title: normalizeTitle(entity.name ?? null, {
+            title: normalizeTitle(entity.name, {
                 allowEmpty: false,
             }),
-            content: entity.text ?? JSON.stringify(emptyPromptJSON()),
+            content: entity.text,
             postType: 'prompt',
             created_at: nowSec(),
             updated_at: nowSec(),
@@ -71,9 +71,9 @@ function promptEntityToRow(entity: PromptEntity, base?: PromptRow): PromptRow {
 
     return {
         ...fallback,
-        id: entity.id ?? fallback.id,
-        title: entity.name ?? fallback.title,
-        content: entity.text ?? fallback.content,
+        id: entity.id,
+        title: entity.name,
+        content: entity.text,
         created_at: fallback.created_at,
         updated_at: fallback.updated_at,
         postType: 'prompt',
@@ -129,9 +129,14 @@ function normalizeTitle(
 function parseContent(raw: string | null | undefined): TipTapDocument {
     if (!raw) return emptyPromptJSON();
     try {
-        const parsed = JSON.parse(raw);
+        const parsed: unknown = JSON.parse(raw);
         // Basic structural guard - ensure it's a valid TipTap document
-        if (parsed && typeof parsed === 'object' && parsed.type === 'doc') {
+        if (
+            parsed &&
+            typeof parsed === 'object' &&
+            'type' in parsed &&
+            (parsed as { type: unknown }).type === 'doc'
+        ) {
             return parsed as TipTapDocument;
         }
         return emptyPromptJSON();
@@ -211,7 +216,7 @@ export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
         postType: row.postType,
         created_at: row.created_at,
         updated_at: row.updated_at,
-        deleted: row.deleted ?? false,
+        deleted: row.deleted,
     };
     const filteredEntity = await hooks.applyFilters(
         'db.prompts.get:filter:output',
@@ -261,7 +266,7 @@ export async function updatePrompt(
         postType: existing.postType,
         created_at: existing.created_at,
         updated_at: existing.updated_at,
-        deleted: existing.deleted ?? false,
+        deleted: existing.deleted,
     };
     const updatedRow: PromptRow = {
         id: existingRow.id,
@@ -275,7 +280,7 @@ export async function updatePrompt(
         postType: 'prompt',
         created_at: existingRow.created_at,
         updated_at: nowSec(),
-        deleted: existingRow.deleted ?? false,
+        deleted: existingRow.deleted,
     };
 
     const basePayload = buildPromptUpdatePayload(
@@ -327,7 +332,7 @@ export async function softDeletePrompt(id: string): Promise<void> {
         postType: existing.postType,
         created_at: existing.created_at,
         updated_at: existing.updated_at,
-        deleted: existing.deleted ?? false,
+        deleted: existing.deleted,
     };
     const payload: DbDeletePayload<PromptEntity> = {
         entity: toPromptEntity(existingRow),
@@ -366,7 +371,7 @@ export async function hardDeletePrompt(id: string): Promise<void> {
         postType: existing.postType,
         created_at: existing.created_at,
         updated_at: existing.updated_at,
-        deleted: existing.deleted ?? false,
+        deleted: existing.deleted,
     };
     const payload: DbDeletePayload<PromptEntity> = {
         entity: toPromptEntity(existingRow),

@@ -76,13 +76,13 @@ function documentEntityToRow(
 
     return {
         ...fallback,
-        id: entity.id ?? fallback.id,
+        id: entity.id,
         title: entity.title ?? fallback.title,
         content: entity.content ?? fallback.content,
         created_at: entity.created_at ?? fallback.created_at,
         updated_at: entity.updated_at ?? fallback.updated_at,
         postType: 'doc',
-        deleted: fallback.deleted ?? false,
+        deleted: fallback.deleted,
     };
 }
 
@@ -142,19 +142,20 @@ async function resolveTitle(
     context: TitleFilterContext
 ): Promise<string> {
     const base = normalizeTitle(rawTitle);
-    return (await hooks.applyFilters(
-        'db.documents.title:filter',
-        base,
-        context
-    ));
+    return await hooks.applyFilters('db.documents.title:filter', base, context);
 }
 
 function parseContent(raw: string | null | undefined): TipTapDocument {
     if (!raw) return emptyDocJSON();
     try {
-        const parsed = JSON.parse(raw);
+        const parsed: unknown = JSON.parse(raw);
         // Basic structural guard - ensure it's a valid TipTap document
-        if (parsed && typeof parsed === 'object' && parsed.type === 'doc') {
+        if (
+            parsed &&
+            typeof parsed === 'object' &&
+            'type' in parsed &&
+            (parsed as { type: unknown }).type === 'doc'
+        ) {
             return parsed as TipTapDocument;
         }
         return emptyDocJSON();
@@ -249,7 +250,7 @@ export async function getDocument(
         postType: row.postType,
         created_at: row.created_at,
         updated_at: row.updated_at,
-        deleted: row.deleted ?? false,
+        deleted: row.deleted,
     };
     const filteredEntity = await hooks.applyFilters(
         'db.documents.get:filter:output',
@@ -308,7 +309,7 @@ export async function updateDocument(
         postType: existing.postType,
         created_at: existing.created_at,
         updated_at: existing.updated_at,
-        deleted: existing.deleted ?? false,
+        deleted: existing.deleted,
     };
     const updatedRow: DocumentRow = {
         id: existingRow.id,
@@ -326,7 +327,7 @@ export async function updateDocument(
         postType: 'doc',
         created_at: existingRow.created_at,
         updated_at: nowSec(),
-        deleted: existingRow.deleted ?? false,
+        deleted: existingRow.deleted,
     };
 
     const basePayload = buildDocumentUpdatePayload(
@@ -388,7 +389,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         postType: existing.postType,
         created_at: existing.created_at,
         updated_at: existing.updated_at,
-        deleted: existing.deleted ?? false,
+        deleted: existing.deleted,
     };
     const payload: DbDeletePayload<DocumentEntity> = {
         entity: toDocumentEntity(existingRow),
@@ -435,7 +436,7 @@ export async function hardDeleteDocument(id: string): Promise<void> {
         postType: existing.postType,
         created_at: existing.created_at,
         updated_at: existing.updated_at,
-        deleted: existing.deleted ?? false,
+        deleted: existing.deleted,
     };
     const payload: DbDeletePayload<DocumentEntity> = {
         entity: toDocumentEntity(existingRow),

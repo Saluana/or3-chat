@@ -68,7 +68,7 @@ export function useModelStore() {
                     );
                 return null;
             }
-            const raw = rec?.value;
+            const raw = rec.value;
             if (!raw || typeof raw !== 'string') return null;
             try {
                 const parsed: unknown = JSON.parse(raw);
@@ -204,7 +204,7 @@ export function useModelStore() {
                                 // corrupted; best-effort delete
                                 try {
                                     await kv.delete(MODELS_CACHE_KEY);
-                                } catch (deleteErr: any) {
+                                } catch (deleteErr: unknown) {
                                     if (import.meta.dev) {
                                         console.warn('[models-cache] failed to delete corrupt record', deleteErr);
                                     }

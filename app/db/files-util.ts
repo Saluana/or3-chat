@@ -1,10 +1,9 @@
-import { nowSec } from './util';
-
 /** Default maximum number of files (hashes) per message */
 const DEFAULT_MAX_MESSAGE_FILE_HASHES = 6;
 
 /** Allow runtime override via public env (bounded 1..12 to avoid abuse) */
-const envLimitRaw = (import.meta as any).env?.NUXT_PUBLIC_MAX_MESSAGE_FILES;
+const envLimitRaw: string | undefined = import.meta.env
+    .NUXT_PUBLIC_MAX_MESSAGE_FILES;
 let resolvedLimit = DEFAULT_MAX_MESSAGE_FILE_HASHES;
 if (envLimitRaw) {
     const n = parseInt(envLimitRaw, 10);
@@ -26,7 +25,7 @@ export function parseFileHashes(
 ): string[] {
     if (!serialized) return [];
     try {
-        const arr = JSON.parse(serialized);
+        const arr: unknown = JSON.parse(serialized);
         if (!Array.isArray(arr)) return [];
         const filtered: string[] = [];
         for (const v of arr) {

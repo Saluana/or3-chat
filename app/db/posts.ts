@@ -87,7 +87,7 @@ export async function upsertPost(value: Post): Promise<void> {
     );
     const mutable = filtered as Record<string, unknown>;
     if (typeof mutable.title === 'string') {
-        mutable.title = (mutable.title).trim();
+        mutable.title = mutable.title.trim();
     }
     if (mutable.meta !== undefined) {
         mutable.meta = normalizeMeta(mutable.meta);
@@ -114,7 +114,7 @@ export function getPost(id: string) {
         op: 'read',
         entity: 'posts',
         action: 'get',
-    })?.then((res) =>
+    }).then((res) =>
         res ? hooks.applyFilters('db.posts.get:filter:output', res) : undefined
     );
 }
@@ -125,7 +125,7 @@ export function allPosts() {
         op: 'read',
         entity: 'posts',
         action: 'all',
-    })?.then((res) =>
+    }).then((res) =>
         res ? hooks.applyFilters('db.posts.all:filter:output', res) : []
     );
 }
@@ -137,7 +137,7 @@ export function searchPosts(term: string) {
         () =>
             db.posts.filter((p) => p.title.toLowerCase().includes(q)).toArray(),
         { op: 'read', entity: 'posts', action: 'search' }
-    )?.then((res) =>
+    ).then((res) =>
         res ? hooks.applyFilters('db.posts.search:filter:output', res) : []
     );
 }

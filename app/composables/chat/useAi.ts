@@ -96,7 +96,7 @@ export function useChat(
     const historyLoadedFor = ref<string | null>(null);
 
     if (import.meta.dev) {
-        if (state.value.openrouterKey && apiKey) {
+        if (state.value.openrouterKey && apiKey.value) {
             setKey(state.value.openrouterKey);
         }
     }
@@ -129,7 +129,7 @@ export function useChat(
     function getActivePaneContext(): PaneContext | null {
         try {
             const mpApi = (globalThis as GlobalWithPaneApi).__or3MultiPaneApi;
-            if (!mpApi?.panes?.value) return null;
+            if (!mpApi?.panes.value) return null;
             const pane = mpApi.panes.value.find(
                 (p) => p.mode === 'chat' && p.threadId === threadIdRef.value
             );
@@ -202,14 +202,12 @@ export function useChat(
     function shouldKeepAssistantMessage(m: ChatMessage): boolean {
         if (m.role !== 'assistant') return true;
         const c = m.content;
-        if (c == null) return false;
         if (typeof c === 'string') return c.trim().length > 0;
         if (Array.isArray(c)) {
             return c.some((p) => {
-                if (!p) return false;
                 if (p.type === 'text') return p.text.trim().length > 0;
-                if (p.type === 'image' || p.type === 'file') return true;
-                return false;
+                // image and file parts are always considered non-empty
+                return true;
             });
         }
         return true;
@@ -291,7 +289,7 @@ export function useChat(
             }
             try {
                 const { settings } = useAiSettings();
-                const settingsValue = settings?.value as
+                const settingsValue = settings.value as
                     | ChatSettings
                     | undefined;
                 const { catalog } = useModelStore();
@@ -313,8 +311,8 @@ export function useChat(
                     },
                     {
                         isAvailable: (id: string) =>
-                            !!(catalog?.value || []).some(
-                                (m: ModelInfo) => m?.id === id
+                            catalog.value.some(
+                                (m: ModelInfo) => m.id === id
                             ),
                         lastSelectedModelId: () => lastSelected,
                         recommendedDefault: () => DEFAULT_AI_MODEL,
@@ -328,7 +326,7 @@ export function useChat(
                     chosen.reason !== 'fixed'
                 ) {
                     try {
-                        useToast()?.add?.({
+                        useToast().add({
                             title: 'Model fallback in effect',
                             description:
                                 'Your fixed model was not used. Falling back to last selected or default.',
@@ -349,8 +347,7 @@ export function useChat(
                 const mpApi = (globalThis as GlobalWithPaneApi)
                     .__or3MultiPaneApi;
                 if (
-                    mpApi?.panes?.value &&
-                    mpApi.activePaneIndex?.value != null &&
+                    mpApi?.panes.value &&
                     mpApi.activePaneIndex.value >= 0
                 ) {
                     const pane = mpApi.panes.value[mpApi.activePaneIndex.value];
@@ -521,7 +518,7 @@ export function useChat(
             role: 'user',
             data: { content: outgoing, attachments: files ?? [] },
             file_hashes:
-                file_hashes && file_hashes.length
+                file_hashes.length
                     ? file_hashes.join(',')
                     : undefined,
         });
@@ -577,11 +574,10 @@ export function useChat(
             let finalSystem: string | null = null;
             try {
                 const { settings } = useAiSettings();
-                const settingsValue = settings?.value as
+                const settingsValue = settings.value as
                     | ChatSettings
                     | undefined;
-                const master = (settingsValue?.masterSystemPrompt ??
-                    '');
+                const master = settingsValue?.masterSystemPrompt ?? '';
                 finalSystem = composeSystemPrompt(
                     master,
                     threadSystemText || null
@@ -658,7 +654,7 @@ export function useChat(
                 if (contextParts.length) {
                     const lastUserIdx = [...modelInputMessages]
                         .map((m, idx: number) =>
-                            m?.role === 'user' ? idx : -1
+                            m.role === 'user' ? idx : -1
                         )
                         .filter((idx) => idx >= 0)
                         .pop();
@@ -755,7 +751,6 @@ export function useChat(
             );
 
             if (
-                filteredMessages &&
                 typeof filteredMessages === 'object' &&
                 'messages' in filteredMessages
             ) {
@@ -867,10 +862,10 @@ export function useChat(
                                     threadId: threadIdRef.value,
                                     assistantId: assistantDbMsg.id,
                                     streamId: newStreamId,
-                                    deltaLength: String(delta ?? '').length,
+                                    deltaLength: delta.length,
                                     totalLength:
                                         current.text.length +
-                                        String(delta ?? '').length,
+                                        delta.length,
                                     chunkIndex: chunkIndex++,
                                 }
                             );
@@ -1047,13 +1042,13 @@ export function useChat(
             const current = tailAssistant.value!;
             const fullText = current.text;
             const hookName = 'ui.chat.message:filter:incoming';
-            const errorsBefore = hooks._diagnostics?.errors?.[hookName] ?? 0;
+            const errorsBefore = hooks._diagnostics.errors[hookName] ?? 0;
             const incoming = (await hooks.applyFilters(
                 hookName,
                 fullText,
                 threadIdRef.value
             ));
-            const errorsAfter = hooks._diagnostics?.errors?.[hookName] ?? 0;
+            const errorsAfter = hooks._diagnostics.errors[hookName] ?? 0;
             if (errorsAfter > errorsBefore) {
                 throw new Error('Incoming filter threw an exception');
             }
@@ -1125,7 +1120,7 @@ export function useChat(
                         console.warn('[useChat] abort hook failed', e);
                     }
                 }
-                if (tailAssistant.value?.id && !tailAssistant.value?.text) {
+                if (tailAssistant.value?.id && !tailAssistant.value.text) {
                     try {
                         await db.messages.delete(tailAssistant.value.id);
                         const idx = rawMessages.value.findIndex(
@@ -1443,21 +1438,19 @@ export function useChat(
     function applyLocalEdit(id: string, text: string) {
         let updated = false;
         const rawIdx = rawMessages.value.findIndex((m) => m.id === id);
-        if (rawIdx !== -1) {
-            const raw = rawMessages.value[rawIdx];
-            if (raw) {
-                if (Array.isArray(raw.content)) {
-                    raw.content = raw.content.map((p) =>
-                        p && typeof p === 'object' && p.type === 'text'
-                            ? { ...p, text }
-                            : p
-                    );
-                } else {
-                    raw.content = text;
-                }
-                rawMessages.value = [...rawMessages.value];
-                updated = true;
+        const raw = rawIdx !== -1 ? rawMessages.value[rawIdx] : undefined;
+        if (raw) {
+            if (Array.isArray(raw.content)) {
+                raw.content = raw.content.map((p) =>
+                    p.type === 'text'
+                        ? { ...p, text }
+                        : p
+                );
+            } else {
+                raw.content = text;
             }
+            rawMessages.value = [...rawMessages.value];
+            updated = true;
         }
         const uiIdx = messages.value.findIndex((m) => m.id === id);
         if (uiIdx !== -1) {
@@ -1500,16 +1493,10 @@ export function useChat(
             if (tailAssistant.value?.pending)
                 tailAssistant.value.pending = false;
             try {
-                const appConfig = useAppConfig?.();
+                const appConfig = useAppConfig() as { errors?: { showAbortInfo?: boolean } };
                 const showAbort =
-                    appConfig &&
-                    typeof appConfig === 'object' &&
-                    'errors' in appConfig &&
-                    typeof (
-                        appConfig as { errors?: { showAbortInfo?: boolean } }
-                    ).errors === 'object' &&
-                    (appConfig as { errors: { showAbortInfo?: boolean } })
-                        .errors?.showAbortInfo === true;
+                    typeof appConfig.errors === 'object' &&
+                    appConfig.errors.showAbortInfo === true;
                 reportError(
                     err('ERR_STREAM_ABORTED', 'Generation aborted', {
                         severity: 'info',
