@@ -59,7 +59,7 @@ export async function persistAttachment(att: AttachmentLike) {
         const filtered = (await hooks.applyFilters(
             'files.attach:filter:input',
             payload
-        )) as FilesAttachInputPayload | false;
+        ));
 
         // If filter returns false or null, reject the attachment
         if (filtered === false || !filtered) {

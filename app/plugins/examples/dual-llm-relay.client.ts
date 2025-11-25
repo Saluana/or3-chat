@@ -30,7 +30,7 @@ let relayInitialized = false;
 
 // Ensure TypeScript knows about the global (should already be in types, but this is a narrow safety net for isolated module context)
 declare global {
-    // eslint-disable-next-line no-var
+     
     var __or3PanePluginApi: PanePluginApi | undefined;
 }
 

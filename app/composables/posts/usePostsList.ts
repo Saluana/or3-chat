@@ -62,7 +62,7 @@ export function usePostsList(
             const sortField = sort === 'created_at' ? 'created_at' : 'updated_at';
             
             // Query posts by postType, filter soft-deleted
-            let query = db.posts
+            const query = db.posts
                 .where('postType')
                 .equals(postType)
                 .and((p) => !p.deleted);

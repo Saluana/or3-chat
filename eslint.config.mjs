@@ -42,6 +42,7 @@ export default tseslint.config(
       '.output/**',
       'node_modules/**',
       'dist/**',
+      '**/*.test.ts'
     ],
   }
 );

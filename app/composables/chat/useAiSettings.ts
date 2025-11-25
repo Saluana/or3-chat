@@ -61,7 +61,7 @@ function persist(settings: AiSettingsV1) {
     try {
         localStorage.setItem(AI_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     } catch (e) {
-        // eslint-disable-next-line no-console
+         
         console.warn('[ai-settings] failed to persist settings', e);
     }
 }
@@ -74,7 +74,7 @@ function loadFromStorage(): AiSettingsV1 | null {
         const parsed = JSON.parse(raw);
         return sanitizeAiSettings(parsed);
     } catch (e) {
-        // eslint-disable-next-line no-console
+         
         console.warn('[ai-settings] failed to parse stored settings', e);
         return null;
     }
@@ -122,7 +122,7 @@ export function useAiSettings() {
         const fresh = loadFromStorage();
         if (fresh) store.settings.value = fresh;
         // Ensure a defined return even in edge cases
-        return (store.settings.value || DEFAULT_AI_SETTINGS) as AiSettingsV1;
+        return (store.settings.value || DEFAULT_AI_SETTINGS);
     }
 
     // Persist on deep changes (for direct mutations outside set())

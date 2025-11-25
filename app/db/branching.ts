@@ -23,7 +23,7 @@ interface ForkThreadParams {
 
 const DEFAULT_BRANCH_MODE: BranchMode = 'reference';
 
-function normalizeBranchMode(mode?: ForkMode | BranchMode | null): BranchMode {
+function normalizeBranchMode(mode?: ForkMode   | null): BranchMode {
     return mode === 'copy' ? 'copy' : DEFAULT_BRANCH_MODE;
 }
 

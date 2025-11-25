@@ -146,7 +146,7 @@ async function resolveTitle(
         'db.documents.title:filter',
         base,
         context
-    )) as string;
+    ));
 }
 
 function parseContent(raw: string | null | undefined): TipTapDocument {

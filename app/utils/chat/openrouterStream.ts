@@ -5,13 +5,21 @@ import {
 } from '../../../shared/openrouter/parseOpenRouterSSE';
 
 type ORMessagePart = { type: string; [key: string]: unknown };
+
+// Permissive message type that accepts both strict ORMessage from openrouter-build
+// and tool messages. Content is optional for tool role messages.
 type ORMessage = {
     role: string;
-    content: string | ORMessagePart[];
+    content?: string | ORMessagePart[];
     name?: string;
     tool_call_id?: string;
     [key: string]: unknown;
 };
+
+interface ServerRouteCacheEntry {
+    available: boolean;
+    timestamp: number;
+}
 
 type OpenRouterRequestBody = {
     model: string;
@@ -42,16 +50,28 @@ function isServerRouteAvailable(): boolean {
     }
 
     try {
-        const { available, timestamp } = JSON.parse(cached);
-        const now = Date.now();
-        const isExpired = now - timestamp > SERVER_ROUTE_AVAILABLE_TTL_MS;
+        const parsed: unknown = JSON.parse(cached);
+        if (
+            typeof parsed === 'object' &&
+            parsed !== null &&
+            'available' in parsed &&
+            'timestamp' in parsed &&
+            typeof (parsed as ServerRouteCacheEntry).available === 'boolean' &&
+            typeof (parsed as ServerRouteCacheEntry).timestamp === 'number'
+        ) {
+            const { available, timestamp } = parsed as ServerRouteCacheEntry;
+            const now = Date.now();
+            const isExpired = now - timestamp > SERVER_ROUTE_AVAILABLE_TTL_MS;
 
-        if (isExpired) {
-            // TTL expired; retry the server route
-            return true;
+            if (isExpired) {
+                // TTL expired; retry the server route
+                return true;
+            }
+
+            return available;
         }
-
-        return available;
+        // Invalid shape; assume available
+        return true;
     } catch {
         // Invalid cache; assume available
         return true;
@@ -73,7 +93,8 @@ function setServerRouteAvailable(available: boolean): void {
 }
 
 function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
-    const { ui: _ignored, ...rest } = tool as ToolDefinition & {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { ui: _ui, ...rest } = tool as ToolDefinition & {
         ui?: Record<string, unknown>;
     };
     return {
@@ -174,7 +195,7 @@ export async function* openRouterStream(params: {
         try {
             bodyPreview = JSON.stringify(
                 body,
-                (_key, value) => {
+                (_key: string, value: unknown): unknown => {
                     if (typeof value === 'string' && value.length > 300) {
                         return `${value.slice(0, 300)}...(${value.length})`;
                     }

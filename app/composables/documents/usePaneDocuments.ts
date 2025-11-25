@@ -78,7 +78,7 @@ export function usePaneDocuments(
                 hooks.doAction('ui.pane.doc:action:changed', {
                     pane,
                     oldDocumentId: oldId,
-                    newDocumentId: (newId || '') as string,
+                    newDocumentId: (newId || ''),
                     paneIndex: activePaneIndex.value,
                     meta: { created: true },
                 });
@@ -130,14 +130,14 @@ export function usePaneDocuments(
             await releaseDocument(pane.documentId, { flush: false });
         }
         pane.mode = 'doc';
-        pane.documentId = (requested as string) || undefined;
+        pane.documentId = (requested) || undefined;
         pane.threadId = '';
         pane.messages = [];
         if (oldId !== requested)
             hooks.doAction('ui.pane.doc:action:changed', {
                 pane,
                 oldDocumentId: oldId,
-                newDocumentId: (requested || '') as string,
+                newDocumentId: (requested || ''),
                 paneIndex: activePaneIndex.value,
                 meta: { reason: 'select' },
             });

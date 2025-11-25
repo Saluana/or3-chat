@@ -174,7 +174,7 @@ export function useThemeOverrides(
 
         // Use cache if available
         if (instance?.proxy) {
-            const proxy = instance.proxy as ComponentPublicInstance;
+            const proxy = instance.proxy;
             const cacheKey = __createThemeOverrideCacheKey(resolveParams);
 
             if (cacheKey) {

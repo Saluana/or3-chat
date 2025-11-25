@@ -199,9 +199,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         root.classList.add(name);
     };
 
-    const read = () => localStorage.getItem(storageKey) as string | null;
+    const read = () => localStorage.getItem(storageKey);
     const readActiveTheme = () =>
-        localStorage.getItem(activeThemeStorageKey) as string | null;
+        localStorage.getItem(activeThemeStorageKey);
     const readActiveThemeCookie = () => {
         const match = document.cookie.match(
             new RegExp(`(?:^|; )${activeThemeCookieKey}=([^;]*)`)
@@ -712,7 +712,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     if (theme?.cssSelectors) {
                         applyThemeClasses(
                             themePlugin.activeTheme.value,
-                            theme.cssSelectors!
+                            theme.cssSelectors
                         );
                     }
                 }, 100);

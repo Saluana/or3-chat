@@ -85,9 +85,9 @@ export async function upsertPost(value: Post): Promise<void> {
         'db.posts.upsert:filter:input',
         value
     );
-    const mutable = filtered as unknown as Record<string, unknown>;
+    const mutable = filtered as Record<string, unknown>;
     if (typeof mutable.title === 'string') {
-        mutable.title = (mutable.title as string).trim();
+        mutable.title = (mutable.title).trim();
     }
     if (mutable.meta !== undefined) {
         mutable.meta = normalizeMeta(mutable.meta);

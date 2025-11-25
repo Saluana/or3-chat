@@ -98,7 +98,7 @@ export function useOpenRouterAuth() {
 
         // Debug (dev only): final URL for parameter inspection
         if (import.meta.dev) {
-            // eslint-disable-next-line no-console
+             
             console.debug('OpenRouter PKCE redirect URL:', url);
         }
 

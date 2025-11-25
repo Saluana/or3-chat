@@ -89,7 +89,7 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
             results.value = threads.value.filter((t) =>
                 (t.title || '').toLowerCase().includes(ql)
             );
-            // eslint-disable-next-line no-console
+             
             console.warn('[useThreadSearch] fallback substring search used', e);
         }
     }

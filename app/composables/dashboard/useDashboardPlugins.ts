@@ -161,7 +161,7 @@ function sync() {
 
 export function registerDashboardPlugin(plugin: DashboardPlugin) {
     if (process.dev && registry.has(plugin.id)) {
-        // eslint-disable-next-line no-console
+         
         console.warn(
             `[dashboard] Overwriting existing plugin id "${plugin.id}"`
         );
@@ -212,9 +212,9 @@ export function registerDashboardPluginPage(
     }
     // Invalidate any cached component for this page id prior to replacement
     deletePageCache(pluginId, page.id);
-    let component = page.component as DashboardPluginPage['component'];
+    let component = page.component;
     if (isReactive(component)) {
-        component = toRaw(component) as typeof component;
+        component = toRaw(component);
     }
     if (component && typeof component === 'object') {
         component = markRaw(component) as typeof component;
@@ -290,13 +290,13 @@ export async function resolveDashboardPluginPageComponent(
     }
     if (
         typeof comp === 'function' &&
-        !(comp as any).render &&
-        !(comp as any).setup
+        !(comp).render &&
+        !(comp).setup
     ) {
         const loaded = await (comp as () => Promise<any>)();
         comp = loaded?.default || loaded;
         if (process.dev && (typeof comp !== 'object' || !comp)) {
-            // eslint-disable-next-line no-console
+             
             console.warn(
                 `[dashboard] Async page loader for ${pluginId}:${pageId} returned non-component`,
                 comp

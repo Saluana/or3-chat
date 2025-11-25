@@ -119,7 +119,7 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
             const content =
                 typeof data === 'object' && data !== null && 'content' in data
                     ? String((data as any).content ?? '')
-                    : String((msg.content as any) ?? '');
+                    : String((msg.content) ?? '');
             return {
                 role: msg.role as 'user' | 'assistant' | 'system' | 'tool',
                 content,
@@ -577,7 +577,7 @@ export function useMultiPane(
         if (!getPaneApp) return;
 
         // Resolve pane app definition
-        const appDef = getPaneApp(appId) as RegisteredPaneApp | undefined;
+        const appDef = getPaneApp(appId);
         if (!appDef) {
             if (import.meta.dev) {
                 console.warn(
@@ -670,7 +670,7 @@ export function useMultiPane(
         if (!getPaneApp) return;
 
         // Resolve pane app definition
-        const appDef = getPaneApp(appId) as RegisteredPaneApp | undefined;
+        const appDef = getPaneApp(appId);
         if (!appDef) {
             if (import.meta.dev) {
                 console.warn(

@@ -123,7 +123,7 @@ export async function createOrRefFile(
     if (existing) {
         await changeRefCount(hash, 1);
         if ((import.meta as any).dev) {
-            // eslint-disable-next-line no-console
+             
             console.debug('[files] ref existing', {
                 hash: hash.slice(0, 8),
                 size: existing.size_bytes,
@@ -193,7 +193,7 @@ export async function createOrRefFile(
     });
     const finalMeta = storedMeta ?? meta;
     if ((import.meta as any).dev) {
-        // eslint-disable-next-line no-console
+         
         console.debug('[files] created', {
             hash: finalMeta.hash.slice(0, 8),
             size: file.size,

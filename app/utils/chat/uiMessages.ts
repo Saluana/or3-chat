@@ -11,16 +11,17 @@ interface ContentPartLike {
 interface RawMessageLike {
     id?: string;
     stream_id?: string;
-    role?: 'user' | 'assistant' | 'system';
+    role?: 'user' | 'assistant' | 'system' | 'tool';
     text?: string;
     content?: string | ContentPartLike[];
     file_hashes?: string[] | string;
-    reasoning_text?: string;
+    reasoning_text?: string | null;
     pending?: boolean;
     data?: {
-        reasoning_text?: string;
+        reasoning_text?: string | null;
         tool_calls?: ToolCallInfo[];
-    };
+        [key: string]: unknown;
+    } | null;
 }
 
 export interface ToolCallInfo {
@@ -35,7 +36,7 @@ export interface ToolCallInfo {
 
 export interface UiChatMessage {
     id: string;
-    role: 'user' | 'assistant' | 'system';
+    role: 'user' | 'assistant' | 'system' | 'tool';
     text: string; // flattened text + markdown image placeholders
     file_hashes?: string[];
     reasoning_text?: string | null;

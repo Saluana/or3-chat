@@ -65,7 +65,7 @@ export function normalizeSelector(selector: string): string {
     // Convert .context to [data-context="context"] (after identifiers are normalized)
     for (const context of KNOWN_THEME_CONTEXTS) {
         const escapedContext = escapeRegex(context);
-        // eslint-disable-next-line no-useless-escape
+         
         const regex = new RegExp(
             '(\\w+)\\.' + escapedContext + '(?=[:\\[]|$)',
             'g'

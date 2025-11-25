@@ -31,7 +31,7 @@ export interface StreamAccumulatorApi {
 // Resolve rAF/CAF dynamically to honor test-time stubs and late availability
 function nowTs() {
     try {
-        return (globalThis.performance?.now?.() as number) ?? Date.now();
+        return (globalThis.performance?.now?.()) ?? Date.now();
     } catch {
         return Date.now();
     }

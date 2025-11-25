@@ -53,7 +53,7 @@ export async function addFilesToMessage(
                     if (meta) newHashes.push(meta.hash);
                 }
             }
-            let combined = existing.concat(newHashes);
+            const combined = existing.concat(newHashes);
             // Provide hook for validation & pruning
             const filtered = await hooks.applyFilters(
                 'db.messages.files.validate:filter:hashes',

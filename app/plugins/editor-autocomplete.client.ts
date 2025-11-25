@@ -22,7 +22,7 @@ export default defineNuxtPlugin(() => {
                     const mod = await import(
                         /* @vite-ignore */ './EditorAutocomplete/TiptapExtension'
                     );
-                    return (mod as any).AutocompleteExtension as any;
+                    return (mod as any).AutocompleteExtension;
                 },
             } as EditorExtension);
 

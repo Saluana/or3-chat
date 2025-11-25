@@ -238,7 +238,7 @@ export function useSidebarSearch(
         projectResults.value = projectHits;
         documentResults.value = docHits;
         if (!warnedFallback) {
-            // eslint-disable-next-line no-console
+             
             console.warn('[useSidebarSearch] fallback substring search used');
             warnedFallback = true;
         }
@@ -275,9 +275,9 @@ export function useSidebarSearch(
                 if (
                     doc?.kind &&
                     doc?.id &&
-                    byKind[doc.kind as keyof typeof byKind]
+                    byKind[doc.kind]
                 ) {
-                    byKind[doc.kind as keyof typeof byKind].add(doc.id);
+                    byKind[doc.kind].add(doc.id);
                 }
             }
             // Apply sets

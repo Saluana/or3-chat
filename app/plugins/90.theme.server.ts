@@ -81,9 +81,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     );
 
     const set = (name: string) => {
-        current.value = (name.startsWith('dark') ? 'dark' : 'light') as
-            | 'light'
-            | 'dark';
+        current.value = (name.startsWith('dark') ? 'dark' : 'light');
     };
 
     const toggle = () => {

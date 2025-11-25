@@ -115,7 +115,7 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
                 }\n${m.description || ''}`.toLowerCase();
                 return hay.includes(ql);
             });
-            // eslint-disable-next-line no-console
+             
             console.warn(
                 '[useModelSearch] Fallback substring search used:',
                 err

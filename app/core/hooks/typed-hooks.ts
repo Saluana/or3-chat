@@ -173,7 +173,7 @@ export function createTypedHookEngine(engine: HookEngine): TypedHookEngine {
                 name as any,
                 value as any,
                 ...(args as any)
-            ) as any,
+            ),
 
         // Unified
         on: (name, callback, opts) => {

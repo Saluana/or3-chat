@@ -277,7 +277,7 @@ export function createHookEngine(): HookEngine {
                         await fn(...args);
                     }
                 } catch (err) {
-                    // eslint-disable-next-line no-console
+                     
                     console.error(
                         `[hooks] Error in ${
                             isFilter ? 'filter' : 'action'
@@ -328,7 +328,7 @@ export function createHookEngine(): HookEngine {
                         fn(...args);
                     }
                 } catch (err) {
-                    // eslint-disable-next-line no-console
+                     
                     console.error(
                         `[hooks] Error in ${
                             isFilter ? 'filter' : 'action'

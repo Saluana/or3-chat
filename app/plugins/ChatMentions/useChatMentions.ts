@@ -112,7 +112,7 @@ export async function searchMentions(query: string): Promise<MentionItem[]> {
                         const stored = await getByID(mentionsDb, hit?.id ?? id);
                         if (stored) {
                             id = id ?? stored.id ?? hit?.id ?? null;
-                            source = (source ?? stored.source ?? null) as any;
+                            source = (source ?? stored.source ?? null);
                             title = title || stored.title || '';
                             subtitle =
                                 subtitle ?? (stored.snippet || undefined);
