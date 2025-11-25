@@ -13,9 +13,14 @@ const LOW_MEMORY_LIMITS: PreviewCacheOptions = {
     maxBytes: 48 * 1024 * 1024,
 };
 
+interface NavigatorDeviceMemory extends Navigator {
+    deviceMemory?: number;
+}
+
 function detectDeviceMemory(): number | undefined {
     if (typeof navigator === 'undefined') return undefined;
-    const value = (navigator as any).deviceMemory;
+    const nav = navigator as NavigatorDeviceMemory;
+    const value = nav.deviceMemory;
     return typeof value === 'number' && Number.isFinite(value)
         ? value
         : undefined;

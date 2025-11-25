@@ -74,8 +74,7 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
         try {
             const r = await searchWithIndex(dbInstance, raw, 200);
             if (token !== lastQueryToken) return;
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            const hits: unknown[] = Array.isArray(r?.hits) ? r.hits as unknown[] : [];
+            const hits = Array.isArray(r?.hits) ? r.hits : [];
             const mapped = hits
                 .map((h) => {
                     const hit = h as { document?: ThreadDoc } | ThreadDoc;
