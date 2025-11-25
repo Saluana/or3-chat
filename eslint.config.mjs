@@ -1,6 +1,18 @@
 // eslint.config.mjs
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import { existsSync } from 'node:fs';
+
+const nuxtProjects = [
+  './.nuxt/tsconfig.app.json',
+  './.nuxt/tsconfig.server.json',
+  './.nuxt/tsconfig.shared.json',
+  './.nuxt/tsconfig.node.json',
+];
+
+const existingProjects = nuxtProjects.filter((path) =>
+  existsSync(new URL(path, import.meta.url))
+);
 
 export default tseslint.config(
   eslint.configs.recommended,
@@ -8,13 +20,8 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        // Use Nuxt's generated tsconfigs
-        project: [
-          './.nuxt/tsconfig.app.json',
-          './.nuxt/tsconfig.server.json',
-          './.nuxt/tsconfig.shared.json',
-          './.nuxt/tsconfig.node.json',
-        ],
+        // Use Nuxt's generated tsconfigs when present; fall back to root tsconfig otherwise
+        project: existingProjects.length ? existingProjects : ['./tsconfig.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },

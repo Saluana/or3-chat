@@ -12,7 +12,8 @@ import { getGlobalMultiPaneApi } from './multiPaneApi';
  */
 export function getActivePanes(): PaneState[] {
     const api = getGlobalMultiPaneApi();
-    return api?.panes?.value ?? [];
+    if (!api) return [];
+    return api.panes.value;
 }
 
 /**

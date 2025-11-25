@@ -1,6 +1,6 @@
-/// <reference path="./types/theme-plugin.d.ts" />
-/// <reference path="./types/global.d.ts" />
-/// <reference path="./types/database.d.ts" />
-/// <reference path="./types/sidebar.d.ts" />
+import './types/theme-plugin.d.ts';
+import './types/global.d.ts';
+import './types/database.d.ts';
+import './types/sidebar.d.ts';
 
 export {};

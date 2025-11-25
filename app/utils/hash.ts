@@ -23,9 +23,8 @@ async function loadSpark(): Promise<SparkMd5Module> {
 }
 
 function isDev(): boolean {
-    return Boolean(
-        (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV
-    );
+    const meta = import.meta as ImportMeta & { env: { DEV?: boolean } };
+    return Boolean(meta.env.DEV);
 }
 
 /** Compute MD5 hash (hex lowercase) for a Blob using chunked reads. */
@@ -40,10 +39,13 @@ export async function computeFileHash(blob: Blob): Promise<string> {
     try {
         // Try Web Crypto subtle.digest if md5 supported (some browsers may block MD5; if so, fallback)
         try {
+            const canUseSubtle =
+                typeof crypto !== 'undefined' &&
+                typeof crypto.subtle !== 'undefined' &&
+                typeof crypto.subtle.digest === 'function';
             if (
                 blob.size <= 4 * 1024 * 1024 &&
-                typeof crypto !== 'undefined' &&
-                crypto.subtle
+                canUseSubtle
             ) {
                 const buf = await blob.arrayBuffer();
                 // @ts-expect-error MD5 not in lib types; supported in some browsers
@@ -102,7 +104,6 @@ function finishMark(
             .slice(-1)[0];
         if (entry && entry.duration && entry.duration > 0) {
             if (dev) {
-                // eslint-disable-next-line no-console
                 console.debug(
                     '[perf] computeFileHash',
                     mode,

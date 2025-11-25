@@ -10,17 +10,15 @@ import type {
     ThemeDefinition,
     CompiledTheme,
     CompiledOverride,
-    ParsedSelector,
     ThemeCompilationResult,
     CompilationResult,
     ValidationError,
-    AttributeMatcher,
-    AttributeOperator,
     ThemeFontSet,
+    OverrideProps,
 } from '../app/theme/_shared/types';
 import { validateThemeDefinition } from '../app/theme/_shared/validate-theme';
 import { KNOWN_THEME_CONTEXTS } from '../app/theme/_shared/contexts';
-import { DEFAULT_ICONS, type IconToken } from '../app/config/icon-tokens';
+import { DEFAULT_ICONS } from '../app/config/icon-tokens';
 import {
     parseSelector,
     calculateSpecificity,
@@ -107,7 +105,7 @@ export class ThemeCompiler {
                 try {
                     await access(themePath, constants.F_OK);
                     themes.push(themePath);
-                } catch (error) {
+                } catch {
                     if (process.env.NODE_ENV !== 'test') {
                         console.warn(
                             `[theme-compiler] Skipping directory "${entry.name}" (no theme.ts)`
@@ -173,7 +171,7 @@ export class ThemeCompiler {
 
                 const flattenedIcons: Record<string, string> = {};
 
-                const flatten = (obj: any, prefix = '') => {
+                const flatten = (obj: Record<string, unknown>, prefix = '') => {
                     for (const key in obj) {
                         const value = obj[key];
                         const newKey = prefix ? `${prefix}.${key}` : key;
@@ -183,7 +181,7 @@ export class ThemeCompiler {
                             typeof value === 'object' &&
                             value !== null
                         ) {
-                            flatten(value, newKey);
+                            flatten(value as Record<string, unknown>, newKey);
                         }
                     }
                 };
@@ -308,7 +306,7 @@ export class ThemeCompiler {
     /**
      * Generate CSS variable declarations for a color palette
      */
-    private generateColorVars(colors: Record<string, any>): string {
+    private generateColorVars(colors: Record<string, unknown>): string {
         let css = '';
 
         const colorMap: Record<string, string> = {
@@ -394,7 +392,7 @@ export class ThemeCompiler {
      * Compile overrides from CSS selectors to runtime rules
      */
     private compileOverrides(
-        overrides: Record<string, any>
+        overrides: Record<string, OverrideProps>
     ): CompiledOverride[] {
         const compiled: CompiledOverride[] = [];
 
@@ -416,8 +414,6 @@ export class ThemeCompiler {
 
         return compiled;
     }
-
-
 
     /**
      * Validate compiled selectors

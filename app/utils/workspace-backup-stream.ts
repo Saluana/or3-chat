@@ -343,7 +343,8 @@ async function streamWorkspaceExportCore({
                         pk.keyPath ?? pk.name
                     ) as IndexableType;
                 } else {
-                    const keyList: IndexableType[] = keys ?? await collection.primaryKeys();
+                    const keyList: IndexableType[] =
+                        keys ?? (await collection.primaryKeys());
                     lastKey = keyList[keyList.length - 1] ?? null;
                 }
                 hasMore = rows.length === tableChunkSize;
@@ -381,11 +382,15 @@ export interface StreamImportOptions {
     onProgress?: (progress: WorkspaceBackupProgress) => void;
 }
 
-function isValidBackupFormat(format: string): format is typeof WORKSPACE_BACKUP_FORMAT {
+function isValidBackupFormat(
+    format: string
+): format is typeof WORKSPACE_BACKUP_FORMAT {
     return format === WORKSPACE_BACKUP_FORMAT;
 }
 
-function isValidBackupVersion(version: number): version is typeof WORKSPACE_BACKUP_VERSION {
+function isValidBackupVersion(
+    version: number
+): version is typeof WORKSPACE_BACKUP_VERSION {
     return version === WORKSPACE_BACKUP_VERSION;
 }
 
@@ -467,13 +472,17 @@ export async function importWorkspaceStream({
                 const firstFailure = error.failures[0];
                 const detail = firstFailure
                     ? ` Example: ${String(
-                          firstFailure instanceof Error ? firstFailure.message : firstFailure
+                          firstFailure instanceof Error
+                              ? firstFailure.message
+                              : firstFailure
                       )}`
                     : '';
                 const message = `Import hit ${
                     failureCount || 'one or more'
                 } key conflicts in table "${tableName}". Enable "Overwrite records on key conflict" or use Replace mode.`;
-                const conflictError = new Error(`${message}${detail}`, { cause: error });
+                const conflictError = new Error(`${message}${detail}`, {
+                    cause: error,
+                });
                 throw conflictError;
             }
             throw error;
@@ -636,7 +645,9 @@ async function* iterateLinesFromBlob(blob: Blob): AsyncGenerator<string> {
                 buffer += result.value;
                 let newlineIndex = buffer.indexOf('\n');
                 while (newlineIndex !== -1) {
-                    const line = buffer.slice(0, newlineIndex).replace(/\r$/, '');
+                    const line = buffer
+                        .slice(0, newlineIndex)
+                        .replace(/\r$/, '');
                     buffer = buffer.slice(newlineIndex + 1);
                     yield line;
                     newlineIndex = buffer.indexOf('\n');

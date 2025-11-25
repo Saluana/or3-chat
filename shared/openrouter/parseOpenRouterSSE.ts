@@ -109,11 +109,12 @@ export async function* parseOpenRouterSSE(
      * Handles OpenAI, Gemini, and other provider variations.
      */
     function extractImageUrl(part: ContentPart): string | null {
-        if (!part || typeof part !== 'object') return null;
-        
+        if (typeof part !== 'object') return null;
+
         const imageUrl = part.image_url;
-        const imageUrlStr = typeof imageUrl === 'string' ? imageUrl : imageUrl?.url;
-        
+        const imageUrlStr =
+            typeof imageUrl === 'string' ? imageUrl : imageUrl?.url;
+
         return (
             imageUrlStr ||
             part.url ||
@@ -130,7 +131,7 @@ export async function* parseOpenRouterSSE(
         indexRef: { v: number },
         final = false
     ): ORStreamEvent | null {
-        if (!url) return null;
+        if (url == null) return null;
         if (emittedImages.has(url)) return null;
         emittedImages.add(url);
         const idx = indexRef.v++;
@@ -138,7 +139,7 @@ export async function* parseOpenRouterSSE(
     }
 
     try {
-        while (true) {
+        for (;;) {
             const { done, value } = await reader.read();
             if (done) break;
 
@@ -164,24 +165,25 @@ export async function* parseOpenRouterSSE(
                         // Handle model reasoning
                         let reasoningYielded = false;
 
-                        if (choice?.delta?.reasoning_details) {
+                        const reasoningDetails =
+                            choice.delta?.reasoning_details;
+                        const firstReasoningDetail = reasoningDetails?.[0];
+                        if (firstReasoningDetail) {
                             if (
-                                choice?.delta?.reasoning_details[0]?.type ===
-                                'reasoning.text'
+                                firstReasoningDetail.type === 'reasoning.text'
                             ) {
-                                if (choice?.delta?.reasoning_details[0]?.text) {
+                                if (firstReasoningDetail.text) {
                                     yield {
                                         type: 'reasoning',
-                                        text: choice.delta.reasoning_details[0]
-                                            .text,
+                                        text: firstReasoningDetail.text,
                                     };
                                     reasoningYielded = true;
                                 }
                             } else if (
-                                choice?.delta?.reasoning_details[0]?.type ===
+                                firstReasoningDetail.type ===
                                 'reasoning.summary'
                             ) {
-                                const summary = choice.delta.reasoning_details[0].summary;
+                                const summary = firstReasoningDetail.summary;
                                 if (summary) {
                                     yield {
                                         type: 'reasoning',
@@ -207,7 +209,7 @@ export async function* parseOpenRouterSSE(
                         // Text variants
                         if (Array.isArray(delta.content)) {
                             for (const part of delta.content) {
-                                if (part?.type === 'text' && part.text) {
+                                if (part.type === 'text' && part.text) {
                                     yield { type: 'text', text: part.text };
                                 }
                             }
@@ -297,7 +299,7 @@ export async function* parseOpenRouterSSE(
                         if (Array.isArray(delta.images)) {
                             const ixRef = { v: 0 };
                             for (const img of delta.images) {
-                                const url = img?.image_url?.url || img?.url;
+                                const url = img.image_url?.url || img.url;
                                 const evt = emitImageCandidate(
                                     url,
                                     ixRef,
@@ -312,7 +314,11 @@ export async function* parseOpenRouterSSE(
                             const ixRef = { v: 0 };
                             for (const part of delta.content) {
                                 const url = extractImageUrl(part);
-                                const evt = emitImageCandidate(url, ixRef, false);
+                                const evt = emitImageCandidate(
+                                    url,
+                                    ixRef,
+                                    false
+                                );
                                 if (evt) yield evt;
                             }
                         }
@@ -322,7 +328,7 @@ export async function* parseOpenRouterSSE(
                         if (Array.isArray(finalImages)) {
                             const fIxRef = { v: 0 };
                             for (const img of finalImages) {
-                                const url = img?.image_url?.url || img?.url;
+                                const url = img.image_url?.url || img.url;
                                 const evt = emitImageCandidate(
                                     url,
                                     fIxRef,
@@ -338,7 +344,11 @@ export async function* parseOpenRouterSSE(
                             const fIxRef2 = { v: 0 };
                             for (const part of finalContent) {
                                 const url = extractImageUrl(part);
-                                const evt = emitImageCandidate(url, fIxRef2, true);
+                                const evt = emitImageCandidate(
+                                    url,
+                                    fIxRef2,
+                                    true
+                                );
                                 if (evt) yield evt;
                             }
                         }

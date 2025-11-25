@@ -6,7 +6,9 @@
  */
 
 import type { Plugin } from 'vite';
+import type { PluginContext } from 'rollup';
 import { ThemeCompiler } from '../scripts/theme-compiler';
+import type { CompilationResult } from '../app/theme/_shared/types';
 
 export interface ThemePluginOptions {
     /** Whether to fail the build on compilation errors (default: true) */
@@ -14,9 +16,6 @@ export interface ThemePluginOptions {
 
     /** Whether to show warnings (default: true) */
     showWarnings?: boolean;
-
-    /** Whether to generate type definitions (default: true) */
-    generateTypes?: boolean;
 }
 
 /**
@@ -26,20 +25,23 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
     const {
         failOnError = true,
         showWarnings = true,
-        generateTypes = true,
     } = options;
 
-    let compiler: ThemeCompiler;
+    let compiler: ThemeCompiler | null = null;
     let compiled = false;
 
     /**
      * Compile themes
      */
-    async function compileThemes(context: any) {
+    async function compileThemes(
+        context: (PluginContext & { warn?: (msg: string) => void }) | null
+    ) {
         if (compiled) return; // Only compile once per build
         compiled = true;
 
-        compiler = new ThemeCompiler();
+        if (!compiler) {
+            compiler = new ThemeCompiler();
+        }
 
         console.log('\n[theme-compiler] Compiling themes...');
 
@@ -132,6 +134,9 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
                 compiled = false;
 
                 try {
+                    if (!compiler) {
+                        compiler = new ThemeCompiler();
+                    }
                     const result = await compiler.compileAll();
 
                     if (result.totalErrors > 0) {
@@ -165,7 +170,7 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
 /**
  * Format compilation errors for display
  */
-function formatErrors(result: any): string {
+function formatErrors(result: CompilationResult): string {
     let message = '\n[theme-compiler] ❌ Compilation Errors:\n';
 
     for (const theme of result.themes) {
@@ -203,7 +208,7 @@ function formatErrors(result: any): string {
 /**
  * Format compilation warnings for display
  */
-function formatWarnings(result: any): string {
+function formatWarnings(result: CompilationResult): string {
     let message = '\n[theme-compiler] ⚠️  Warnings:\n';
 
     for (const theme of result.themes) {

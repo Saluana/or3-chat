@@ -1,6 +1,28 @@
 // Canonical UI message utilities (content part type no longer needed directly)
 import { parseHashes } from '~/utils/files/attachments';
 
+interface ContentPartLike {
+    type?: string;
+    text?: string;
+    image?: string;
+    image_url?: { url?: string };
+}
+
+interface RawMessageLike {
+    id?: string;
+    stream_id?: string;
+    role?: 'user' | 'assistant' | 'system';
+    text?: string;
+    content?: string | ContentPartLike[];
+    file_hashes?: string[] | string;
+    reasoning_text?: string;
+    pending?: boolean;
+    data?: {
+        reasoning_text?: string;
+        tool_calls?: ToolCallInfo[];
+    };
+}
+
 export interface ToolCallInfo {
     id?: string;
     name: string;
@@ -22,7 +44,7 @@ export interface UiChatMessage {
     toolCalls?: ToolCallInfo[];
 }
 
-export function partsToText(parts: any, role?: string): string {
+export function partsToText(parts: string | ContentPartLike[] | null | undefined, role?: string): string {
     if (!parts) return '';
     if (typeof parts === 'string') return parts;
     if (!Array.isArray(parts)) return '';
@@ -39,7 +61,7 @@ export function partsToText(parts: any, role?: string): string {
                 // Skip embedding images for user messages (they're shown via attachments gallery)
                 // Only convert assistant-generated images to markdown
                 if (role === 'assistant') {
-                    const src = (p as any).image || (p as any).image_url?.url;
+                    const src = p.image || p.image_url?.url;
                     if (typeof src === 'string') {
                         out +=
                             (out ? '\n\n' : '') + `![generated image](${src})`;
@@ -51,7 +73,7 @@ export function partsToText(parts: any, role?: string): string {
     return out;
 }
 
-export function ensureUiMessage(raw: any): UiChatMessage {
+export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
     const id = raw.id || raw.stream_id || crypto.randomUUID();
     const role = raw.role || 'user';
     let file_hashes: string[] | undefined;
@@ -83,7 +105,7 @@ export function ensureUiMessage(raw: any): UiChatMessage {
     } else if (typeof raw.content === 'string') {
         text = raw.content;
     } else {
-        text = partsToText(raw.content, role);
+        text = partsToText(raw.content as ContentPartLike[] | undefined, role);
     }
     // Inject markdown placeholders for assistant file_hashes with de-duplication logic.
     // Goal: avoid showing the same logical image twice when the model already emitted
@@ -124,8 +146,7 @@ export function ensureUiMessage(raw: any): UiChatMessage {
                 );
             }
         } else if (import.meta.dev) {
-            if (import.meta.dev)
-                console.debug(
+            console.debug(
                     '[uiMessages.ensureUiMessage] existing images >= hashes; skipping placeholder injection',
                     { id, totalHashes: file_hashes.length, existingCount }
                 );
@@ -138,16 +159,16 @@ export function ensureUiMessage(raw: any): UiChatMessage {
         file_hashes,
         reasoning_text,
         stream_id: raw.stream_id,
-        pending: !!raw.pending,
+        pending: Boolean(raw.pending),
         toolCalls,
     };
 }
 
 // Legacy raw storage (non reactive). We expose accessor for plugins.
-const _rawMessages: any[] = [];
-export function recordRawMessage(m: any) {
+const _rawMessages: RawMessageLike[] = [];
+export function recordRawMessage(m: RawMessageLike): void {
     _rawMessages.push(m);
 }
-export function getRawMessages(): readonly any[] {
+export function getRawMessages(): readonly RawMessageLike[] {
     return _rawMessages.slice();
 }
