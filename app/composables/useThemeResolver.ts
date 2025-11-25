@@ -166,8 +166,8 @@ export function useThemeOverrides(
     const instance = getCurrentInstance();
 
     return computed(() => {
-        // Trigger recomputation when theme changes
-        const _ = activeTheme.value;
+        // Trigger recomputation when theme changes by reading the value
+        void activeTheme.value;
 
         // Get params (unwrap if computed)
         const resolveParams = unref(params);

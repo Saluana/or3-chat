@@ -86,7 +86,7 @@ export interface UseMultiPaneApi {
 }
 
 function genId(): string {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID();
     }
     return 'pane-' + Math.random().toString(36).slice(2);
@@ -122,7 +122,7 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
             .between([id, Dexie.minKey], [id, Dexie.maxKey])
             .filter((m) => !m.deleted)
             .toArray();
-        return (msgs || []).map((msg) => {
+        return msgs.map((msg) => {
             const row = msg as unknown as DbMessageRow;
             const data = row.data;
             const content =
@@ -276,7 +276,6 @@ export function useMultiPane(
         }
 
         // Mismatch or no stored widths - fall back to equal distribution
-        if (paneCount <= 0) return '100%';
         return `${100 / paneCount}%`;
     }
 
@@ -286,9 +285,7 @@ export function useMultiPane(
     function initializeWidths() {
         if (typeof document === 'undefined') return;
 
-        const container = document.querySelector(
-            '.pane-container'
-        ) as HTMLElement;
+        const container = document.querySelector('.pane-container');
         if (!container) return;
 
         const totalWidth = container.clientWidth;
@@ -500,7 +497,7 @@ export function useMultiPane(
             previousIndex: activePaneIndex.value,
         });
         if (
-            closing?.mode === 'doc' &&
+            closing.mode === 'doc' &&
             closing.documentId &&
             options.onFlushDocument
         ) {

@@ -50,7 +50,7 @@ export function useDocumentsList(limit = 200) {
 
     // initial load + subscribe to document DB hook events (client only)
     if (process.client) {
-        refresh();
+        void refresh();
         // Auto-refresh on create/update/delete after actions complete
         useHookEffect('db.documents.create:action:after', () => refresh(), {
             kind: 'action',

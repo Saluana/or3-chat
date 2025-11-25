@@ -294,7 +294,7 @@ export function useActiveSidebarPage() {
         };
 
         if (getSidebarPage(initialRequestedPageId)) {
-            attemptActivation();
+            void attemptActivation();
             return;
         }
 
@@ -304,7 +304,7 @@ export function useActiveSidebarPage() {
             () => listSidebarPages.value.map((page) => page.id),
             (ids) => {
                 if (ids.includes(initialRequestedPageId)) {
-                    attemptActivation();
+                    void attemptActivation();
                     stopWatch?.();
                     stopWatch = null;
                 }

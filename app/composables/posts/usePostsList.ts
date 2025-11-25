@@ -108,7 +108,7 @@ export function usePostsList(
     });
 
     // Manual refresh (subscription will auto-update)
-    const refresh = async () => {
+    const refresh = () => {
         loading.value = true;
         error.value = null;
         // Subscription will trigger next update automatically

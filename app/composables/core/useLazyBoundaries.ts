@@ -24,7 +24,7 @@ let lazyBoundariesInstance: LazyBoundaryController | null = null;
  * Module-level cache for resolved boundaries.
  * Keyed by LazyBoundaryKey; stores the resolved module promise.
  */
-const moduleCache = new Map<LazyBoundaryKey, Promise<any> | undefined>();
+const moduleCache = new Map<LazyBoundaryKey, Promise<unknown> | undefined>();
 
 /**
  * Telemetry listeners registered by consumers.
@@ -78,8 +78,8 @@ function createLazyBoundaryController(): LazyBoundaryController {
                     moduleCache.set(key, promise);
                 }
 
-                // Await the cached promise
-                const result = await promise;
+                // Await the cached promise - result is unknown from cache, but we trust loader type
+                const result = (await promise) as T;
 
                 // Mark as ready
                 boundaryStates[key] = 'ready';

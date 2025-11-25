@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { isMobile as globalIsMobile } from '~/state/global';
 
 // Cache the shared state so all consumers get the same reactive refs.

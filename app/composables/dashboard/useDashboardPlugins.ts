@@ -51,7 +51,7 @@ export interface DashboardPluginPage {
     /** Optional description used in landing list. */
     description?: string;
     /** Component or async factory returning component (lazy loaded). */
-    component: Component | (() => Promise<any>);
+    component: Component | (() => Promise<{ default?: Component } | Component>);
 }
 
 type DashboardGlobals = typeof globalThis & {
@@ -66,18 +66,16 @@ type DashboardGlobals = typeof globalThis & {
 // Global singleton (survives HMR)
 const g = globalThis as DashboardGlobals;
 const registry: Map<string, DashboardPlugin> =
-    g.__or3DashboardPluginsRegistry ||
-    (g.__or3DashboardPluginsRegistry = new Map());
+    g.__or3DashboardPluginsRegistry ??
+    (g.__or3DashboardPluginsRegistry = new Map<string, DashboardPlugin>());
 
 // Reactive projection for consumers
 const reactiveList = reactive<{ items: DashboardPlugin[] }>({ items: [] });
 
 // Pages registry (per plugin -> page map)
-const pageRegistry: Map<
-    string,
-    Map<string, DashboardPluginPage>
-> = g.__or3DashboardPluginPagesRegistry ||
-(g.__or3DashboardPluginPagesRegistry = new Map());
+const pageRegistry: Map<string, Map<string, DashboardPluginPage>> =
+    g.__or3DashboardPluginPagesRegistry ??
+    (g.__or3DashboardPluginPagesRegistry = new Map<string, Map<string, DashboardPluginPage>>());
 
 const reactivePages = reactive<{ [pluginId: string]: DashboardPluginPage[] }>(
     {}
@@ -184,7 +182,8 @@ export function unregisterDashboardPlugin(id: string) {
     if (registry.delete(id)) sync();
     unregisterDashboardPluginPage(id); // also clears pages + cache + reactivePages entry
     deleteAllPluginPageCache(id);
-    delete (reactivePages as any)[id];
+    // Using computed property access to safely delete from reactive object
+    delete reactivePages[id];
 }
 
 export function useDashboardPlugins() {
@@ -216,7 +215,7 @@ export function registerDashboardPluginPage(
     if (isReactive(component)) {
         component = toRaw(component);
     }
-    if (component && typeof component === 'object') {
+    if (typeof component === 'object') {
         component = markRaw(component) as typeof component;
     }
 
@@ -244,7 +243,7 @@ export function unregisterDashboardPluginPage(
         deleteAllPluginPageCache(pluginId);
     }
     if (!pageId) {
-        delete (reactivePages as any)[pluginId];
+        delete reactivePages[pluginId];
     }
     syncPages(pluginId);
 }
@@ -276,6 +275,15 @@ export function getDashboardPluginPage(
     return pageRegistry.get(pluginId)?.get(pageId);
 }
 
+type AsyncComponentLoader = () => Promise<{ default?: Component } | Component>;
+
+function isAsyncLoader(comp: unknown): comp is AsyncComponentLoader {
+    if (typeof comp !== 'function') return false;
+    // Check if it's a Vue component with render or setup
+    const fn = comp as { render?: unknown; setup?: unknown };
+    return !fn.render && !fn.setup;
+}
+
 export async function resolveDashboardPluginPageComponent(
     pluginId: string,
     pageId: string
@@ -284,18 +292,15 @@ export async function resolveDashboardPluginPageComponent(
     if (pageComponentCache.has(key)) return pageComponentCache.get(key);
     const page = getDashboardPluginPage(pluginId, pageId);
     if (!page) return;
-    let comp: any = page.component;
+    let comp: Component | AsyncComponentLoader = page.component;
     if (isReactive(comp)) {
         comp = toRaw(comp);
     }
-    if (
-        typeof comp === 'function' &&
-        !(comp).render &&
-        !(comp).setup
-    ) {
-        const loaded = await (comp as () => Promise<any>)();
-        comp = loaded?.default || loaded;
-        if (process.dev && (typeof comp !== 'object' || !comp)) {
+    if (isAsyncLoader(comp)) {
+        const loaded = await comp();
+        // Handle both { default: Component } and direct Component returns
+        comp = (loaded && typeof loaded === 'object' && 'default' in loaded ? loaded.default : loaded) as Component;
+        if (process.dev && typeof comp !== 'object') {
              
             console.warn(
                 `[dashboard] Async page loader for ${pluginId}:${pageId} returned non-component`,
@@ -306,7 +311,7 @@ export async function resolveDashboardPluginPageComponent(
     if (isReactive(comp)) {
         comp = toRaw(comp);
     }
-    if (comp && typeof comp === 'object') {
+    if (typeof comp === 'object') {
         comp = markRaw(comp);
     }
     pageComponentCache.set(key, comp);
@@ -321,9 +326,8 @@ export function useDashboardNavigation(
 ) {
     if (options.baseItems !== undefined) {
         navigationRuntime.baseItems.value = [...options.baseItems];
-    } else if (!navigationRuntime.baseItems.value) {
-        navigationRuntime.baseItems.value = [];
     }
+    // navigationRuntime.baseItems.value is always initialized, no else needed
 
     const state = navigationRuntime.state;
     const resolved = navigationRuntime.resolvedComponent;

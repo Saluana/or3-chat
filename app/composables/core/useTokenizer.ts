@@ -9,7 +9,7 @@ import { onMounted, ref } from 'vue';
 type EncodeFn = (text: string) => number[];
 
 interface PendingRequest {
-    resolve: (value: any) => void;
+    resolve: (value: number | Record<string, number>) => void;
     reject: (error: Error) => void;
 }
 
@@ -74,9 +74,8 @@ const setupWorker = (worker: Worker) => {
             return;
         }
 
-        if (type === 'batch-result') {
-            pending.resolve(counts ?? {});
-        }
+        // After narrowing from 'error' and 'result', type must be 'batch-result'
+        pending.resolve(counts ?? {});
     };
 
     worker.onerror = handleWorkerError;
@@ -88,7 +87,7 @@ const ensureWorker = async (): Promise<Worker | null> => {
     if (workerInstance) return workerInstance;
     if (workerPromise) return workerPromise;
 
-    workerPromise = (async () => {
+    workerPromise = new Promise<Worker | null>((resolve) => {
         try {
             const worker = new Worker(
                 new URL('../../workers/tokenizer.worker.ts', import.meta.url),
@@ -96,13 +95,13 @@ const ensureWorker = async (): Promise<Worker | null> => {
             );
             setupWorker(worker);
             workerInstance = worker;
-            return workerInstance;
+            resolve(workerInstance);
         } catch (error) {
             console.warn('[useTokenizer] Failed to initialize worker:', error);
             disposeWorker();
-            return null;
+            resolve(null);
         }
-    })();
+    });
 
     return workerPromise;
 };
@@ -181,7 +180,7 @@ export function useTokenizer() {
         return runWorkerRequest<Record<string, number>>(
             {
                 type: 'batch',
-                texts: items.map((item) => item.text ?? ''),
+                texts: items.map((item) => item.text),
                 keys: items.map((item) => item.key),
             },
             () => fallbackCountBatch(items)
