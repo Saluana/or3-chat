@@ -117,7 +117,6 @@ export async function detectWorkspaceBackupFormat(
     try {
         const parsed = JSON.parse(firstLine) as Partial<WorkspaceBackupLine>;
         if (
-            parsed &&
             parsed.type === 'meta' &&
             parsed.format === WORKSPACE_BACKUP_FORMAT &&
             parsed.version === WORKSPACE_BACKUP_VERSION
@@ -143,7 +142,7 @@ export async function streamWorkspaceExport({
 }): Promise<void> {
     const writable = await fileHandle.createWritable();
     const writer: WorkspaceBackupWriter = {
-        write: (chunk) => writable.write(chunk as any),
+        write: (chunk) => writable.write(chunk),
         close: () => writable.close().catch(() => undefined),
     };
 
@@ -171,12 +170,8 @@ export async function streamWorkspaceExportToWritable({
         close: async () => {
             try {
                 await writable.close();
-            } catch (error) {
-                try {
-                    await (writable as any).abort?.();
-                } catch {
-                    // ignore secondary abort failures
-                }
+            } catch {
+                // close failed, just release the lock
             } finally {
                 try {
                     writable.releaseLock();
@@ -246,7 +241,7 @@ async function streamWorkspaceExportCore({
                 table: summary.name,
             });
 
-            let lastKey: unknown | null = null;
+            let lastKey: IndexableType | null = null;
             let hasMore = true;
 
             const tableChunkSize =
@@ -269,7 +264,7 @@ async function streamWorkspaceExportCore({
                               .above(lastKey)
                               .limit(tableChunkSize);
 
-                const rows = await collection.toArray();
+                const rows: unknown[] = await collection.toArray();
                 if (rows.length === 0) {
                     hasMore = false;
                     break;
@@ -328,7 +323,7 @@ async function streamWorkspaceExportCore({
                     progress.completedRows += rows.length;
                     emitProgress(progress, onProgress);
                 } else {
-                    keys = (await collection.primaryKeys()) as IndexableType[];
+                    keys = await collection.primaryKeys();
                     await writeLine(writer, {
                         type: 'rows',
                         table: summary.name,
@@ -344,13 +339,11 @@ async function streamWorkspaceExportCore({
                 if (summary.inbound) {
                     const pk = table.schema.primKey;
                     lastKey = Dexie.getByKeyPath(
-                        rows[rows.length - 1],
+                        rows[rows.length - 1] as Record<string, unknown>,
                         pk.keyPath ?? pk.name
-                    );
+                    ) as IndexableType;
                 } else {
-                    const keyList =
-                        keys ??
-                        ((await collection.primaryKeys()) as IndexableType[]);
+                    const keyList: IndexableType[] = keys ?? await collection.primaryKeys();
                     lastKey = keyList[keyList.length - 1] ?? null;
                 }
                 hasMore = rows.length === tableChunkSize;
@@ -388,6 +381,14 @@ export interface StreamImportOptions {
     onProgress?: (progress: WorkspaceBackupProgress) => void;
 }
 
+function isValidBackupFormat(format: string): format is typeof WORKSPACE_BACKUP_FORMAT {
+    return format === WORKSPACE_BACKUP_FORMAT;
+}
+
+function isValidBackupVersion(version: number): version is typeof WORKSPACE_BACKUP_VERSION {
+    return version === WORKSPACE_BACKUP_VERSION;
+}
+
 export async function peekWorkspaceBackupMetadata(
     file: Blob
 ): Promise<WorkspaceBackupHeaderLine> {
@@ -396,8 +397,8 @@ export async function peekWorkspaceBackupMetadata(
         const parsed = JSON.parse(line) as WorkspaceBackupLine;
         if (parsed.type === 'meta') {
             if (
-                parsed.format !== WORKSPACE_BACKUP_FORMAT ||
-                parsed.version !== WORKSPACE_BACKUP_VERSION
+                !isValidBackupFormat(parsed.format) ||
+                !isValidBackupVersion(parsed.version)
             ) {
                 throw new Error('Unsupported backup format version.');
             }
@@ -427,9 +428,9 @@ export async function importWorkspaceStream({
     }
     const header = JSON.parse(firstEntry.value) as WorkspaceBackupHeaderLine;
     if (
-        header.type !== 'meta' ||
-        header.format !== WORKSPACE_BACKUP_FORMAT ||
-        header.version !== WORKSPACE_BACKUP_VERSION
+        (header.type as string) !== 'meta' ||
+        !isValidBackupFormat(header.format) ||
+        !isValidBackupVersion(header.version)
     ) {
         throw new Error('Unsupported backup format header.');
     }
@@ -462,18 +463,17 @@ export async function importWorkspaceStream({
             return await operation();
         } catch (error) {
             if (error instanceof Dexie.BulkError) {
-                const failureCount = error.failures?.length ?? 0;
-                const firstFailure = error.failures?.[0];
+                const failureCount = error.failures.length;
+                const firstFailure = error.failures[0];
                 const detail = firstFailure
                     ? ` Example: ${String(
-                          (firstFailure as any)?.message ?? firstFailure
+                          firstFailure instanceof Error ? firstFailure.message : firstFailure
                       )}`
                     : '';
                 const message = `Import hit ${
                     failureCount || 'one or more'
                 } key conflicts in table "${tableName}". Enable "Overwrite records on key conflict" or use Replace mode.`;
-                const conflictError = new Error(`${message}${detail}`);
-                (conflictError as any).cause = error;
+                const conflictError = new Error(`${message}${detail}`, { cause: error });
                 throw conflictError;
             }
             throw error;
@@ -490,7 +490,7 @@ export async function importWorkspaceStream({
         let currentTable: string | null = null;
 
         try {
-            while (true) {
+            for (;;) {
                 const next = await Dexie.waitFor(lineIterator.next());
                 if (next.done) break;
                 const raw = next.value.trim();
@@ -546,10 +546,10 @@ export async function importWorkspaceStream({
                             Record<string, unknown>
                         >;
                         if (overwriteValues) {
-                            await table.bulkPut(payload as any[]);
+                            await table.bulkPut(payload);
                         } else {
                             await handleConflict(currentTable, () =>
-                                table.bulkAdd(payload as any[])
+                                table.bulkAdd(payload)
                             );
                         }
                         progress.completedRows += payload.length;
@@ -557,18 +557,18 @@ export async function importWorkspaceStream({
                     } else {
                         const tuples = entry.rows as Array<{
                             key: IndexableType;
-                            value: unknown;
+                            value: Record<string, unknown>;
                         }>;
                         if (overwriteValues) {
                             await table.bulkPut(
-                                tuples.map((tuple) => tuple.value as any),
-                                tuples.map((tuple) => tuple.key) as any
+                                tuples.map((tuple) => tuple.value),
+                                tuples.map((tuple) => tuple.key)
                             );
                         } else {
                             await handleConflict(currentTable, () =>
                                 table.bulkAdd(
-                                    tuples.map((tuple) => tuple.value as any),
-                                    tuples.map((tuple) => tuple.key) as any
+                                    tuples.map((tuple) => tuple.value),
+                                    tuples.map((tuple) => tuple.key)
                                 )
                             );
                         }
@@ -583,12 +583,10 @@ export async function importWorkspaceStream({
                 }
             }
         } finally {
-            if (typeof lineIterator.return === 'function') {
-                try {
-                    await Dexie.waitFor(lineIterator.return(undefined));
-                } catch {
-                    // ignore iterator cleanup errors
-                }
+            try {
+                await Dexie.waitFor(lineIterator.return(undefined));
+            } catch {
+                // ignore iterator cleanup errors
             }
         }
     });
@@ -604,21 +602,23 @@ async function readFirstLine(file: Blob): Promise<string> {
         .pipeThrough(new TextDecoderStream())
         .getReader();
     let buffer = '';
+    let done = false;
     try {
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buffer += value;
-            const newlineIndex = buffer.indexOf('\n');
-            if (newlineIndex !== -1) {
-                const line = buffer.slice(0, newlineIndex).replace(/\r$/, '');
-                return line;
+        do {
+            const result = await reader.read();
+            done = result.done;
+            if (!done && result.value) {
+                buffer += result.value;
+                const newlineIndex = buffer.indexOf('\n');
+                if (newlineIndex !== -1) {
+                    return buffer.slice(0, newlineIndex).replace(/\r$/, '');
+                }
             }
-        }
+        } while (!done);
+        return buffer.replace(/\r$/, '');
     } finally {
         reader.releaseLock();
     }
-    return buffer.replace(/\r$/, '');
 }
 
 async function* iterateLinesFromBlob(blob: Blob): AsyncGenerator<string> {
@@ -627,19 +627,22 @@ async function* iterateLinesFromBlob(blob: Blob): AsyncGenerator<string> {
         .pipeThrough(new TextDecoderStream())
         .getReader();
     let buffer = '';
+    let done = false;
     try {
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buffer += value;
-            let newlineIndex = buffer.indexOf('\n');
-            while (newlineIndex !== -1) {
-                const line = buffer.slice(0, newlineIndex).replace(/\r$/, '');
-                buffer = buffer.slice(newlineIndex + 1);
-                yield line;
-                newlineIndex = buffer.indexOf('\n');
+        do {
+            const result = await reader.read();
+            done = result.done;
+            if (!done && result.value) {
+                buffer += result.value;
+                let newlineIndex = buffer.indexOf('\n');
+                while (newlineIndex !== -1) {
+                    const line = buffer.slice(0, newlineIndex).replace(/\r$/, '');
+                    buffer = buffer.slice(newlineIndex + 1);
+                    yield line;
+                    newlineIndex = buffer.indexOf('\n');
+                }
             }
-        }
+        } while (!done);
         if (buffer.length > 0) {
             yield buffer.replace(/\r$/, '');
         }

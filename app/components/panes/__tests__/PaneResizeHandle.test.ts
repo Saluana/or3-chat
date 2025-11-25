@@ -184,8 +184,8 @@ describe('PaneResizeHandle', () => {
             },
         });
 
-        // Check for the invisible hit area div
-        const hitArea = wrapper.find('.pane-resize-handle__hit-area');
+        // Check for the invisible hit area div (now in BaseResizeHandle)
+        const hitArea = wrapper.find('.resize-handle-base__hit-area');
         expect(hitArea.exists()).toBe(true);
         expect(hitArea.classes()).toContain('pointer-events-auto');
     });

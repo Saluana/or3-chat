@@ -21,6 +21,74 @@ export type ORStreamEvent =
       }
     | { type: 'done' };
 
+// Internal types for OpenRouter SSE parsing
+interface ImageUrlObject {
+    url?: string;
+}
+
+interface ContentPart {
+    type?: string;
+    text?: string;
+    url?: string;
+    image_url?: string | ImageUrlObject;
+    media?: { url?: string };
+    inline_data?: { url?: string };
+}
+
+interface ImagePart {
+    url?: string;
+    image_url?: ImageUrlObject;
+}
+
+interface ToolCallDelta {
+    index?: number;
+    id?: string;
+    function?: {
+        name?: string;
+        arguments?: string;
+    };
+}
+
+interface ReasoningDetail {
+    type?: string;
+    text?: string;
+    summary?: string;
+}
+
+interface Delta {
+    reasoning?: string;
+    reasoning_details?: ReasoningDetail[];
+    content?: string | ContentPart[];
+    text?: string;
+    tool_calls?: ToolCallDelta[];
+    images?: ImagePart[];
+}
+
+interface Message {
+    images?: ImagePart[];
+    content?: ContentPart[];
+}
+
+interface Choice {
+    delta?: Delta;
+    message?: Message;
+    finish_reason?: string;
+}
+
+interface ParsedChunk {
+    choices?: Choice[];
+}
+
+interface AccumulatedToolCall {
+    id: string | undefined;
+    type: 'function';
+    function: {
+        name: string;
+        arguments: string;
+    };
+    _yielded: boolean;
+}
+
 /**
  * Parse upstream OpenRouter SSE stream and yield normalized ORStreamEvent.
  * Handles reasoning, text, images, and tool calls across streaming chunks.
@@ -34,23 +102,23 @@ export async function* parseOpenRouterSSE(
     const emittedImages = new Set<string>();
 
     // Track tool calls being streamed across chunks
-    const toolCallMap = new Map<string, any>();
+    const toolCallMap = new Map<string, AccumulatedToolCall>();
 
     /**
      * Extract image URL from various provider-specific part formats.
      * Handles OpenAI, Gemini, and other provider variations.
      */
-    function extractImageUrl(part: any): string | null {
+    function extractImageUrl(part: ContentPart): string | null {
         if (!part || typeof part !== 'object') return null;
         
+        const imageUrl = part.image_url;
+        const imageUrlStr = typeof imageUrl === 'string' ? imageUrl : imageUrl?.url;
+        
         return (
-            part.image_url?.url ||
+            imageUrlStr ||
             part.url ||
             (part.type === 'image' && part.url) ||
-            (part.type === 'image_url' &&
-                (typeof part.image_url === 'string'
-                    ? part.image_url
-                    : part.image_url?.url)) ||
+            (part.type === 'image_url' && imageUrlStr) ||
             (part.type === 'media' && part.media?.url) ||
             (part.type === 'image' && part.inline_data?.url) ||
             null
@@ -88,10 +156,10 @@ export async function* parseOpenRouterSSE(
                     continue;
                 }
                 try {
-                    const parsed = JSON.parse(data);
-                    const choices = parsed.choices || [];
+                    const parsed = JSON.parse(data) as ParsedChunk;
+                    const choices: Choice[] = parsed.choices || [];
                     for (const choice of choices) {
-                        const delta = choice.delta || {};
+                        const delta: Delta = choice.delta || {};
 
                         // Handle model reasoning
                         let reasoningYielded = false;
@@ -113,12 +181,14 @@ export async function* parseOpenRouterSSE(
                                 choice?.delta?.reasoning_details[0]?.type ===
                                 'reasoning.summary'
                             ) {
-                                yield {
-                                    type: 'reasoning',
-                                    text: choice.delta.reasoning_details[0]
-                                        .summary,
-                                };
-                                reasoningYielded = true;
+                                const summary = choice.delta.reasoning_details[0].summary;
+                                if (summary) {
+                                    yield {
+                                        type: 'reasoning',
+                                        text: summary,
+                                    };
+                                    reasoningYielded = true;
+                                }
                             }
                         }
 
@@ -225,7 +295,7 @@ export async function* parseOpenRouterSSE(
 
                         // Streaming images (legacy / OpenAI style delta.images array)
                         if (Array.isArray(delta.images)) {
-                            let ixRef = { v: 0 };
+                            const ixRef = { v: 0 };
                             for (const img of delta.images) {
                                 const url = img?.image_url?.url || img?.url;
                                 const evt = emitImageCandidate(
@@ -239,7 +309,7 @@ export async function* parseOpenRouterSSE(
 
                         // Provider-specific: images may appear inside delta.content array parts
                         if (Array.isArray(delta.content)) {
-                            let ixRef = { v: 0 };
+                            const ixRef = { v: 0 };
                             for (const part of delta.content) {
                                 const url = extractImageUrl(part);
                                 const evt = emitImageCandidate(url, ixRef, false);
@@ -250,7 +320,7 @@ export async function* parseOpenRouterSSE(
                         // Final message images
                         const finalImages = choice.message?.images;
                         if (Array.isArray(finalImages)) {
-                            let fIxRef = { v: 0 };
+                            const fIxRef = { v: 0 };
                             for (const img of finalImages) {
                                 const url = img?.image_url?.url || img?.url;
                                 const evt = emitImageCandidate(
@@ -265,7 +335,7 @@ export async function* parseOpenRouterSSE(
                         // Or inside message.content array (Gemini/OpenAI final message style)
                         const finalContent = choice.message?.content;
                         if (Array.isArray(finalContent)) {
-                            let fIxRef2 = { v: 0 };
+                            const fIxRef2 = { v: 0 };
                             for (const part of finalContent) {
                                 const url = extractImageUrl(part);
                                 const evt = emitImageCandidate(url, fIxRef2, true);
