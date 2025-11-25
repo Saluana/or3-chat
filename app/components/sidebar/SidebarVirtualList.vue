@@ -143,52 +143,16 @@ import {
 } from '~/utils/projects/normalizeProjectData';
 import type { Thread } from '~/db';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import type {
+    ProjectLite,
+    DocLite,
+    SidebarVirtualItem,
+} from '~/types/sidebar';
 
-interface Project {
-    id: string;
-    name: string;
+// Local Project interface extends ProjectLite with typed data field for entries
+interface Project extends ProjectLite {
     data?: ProjectEntry[];
 }
-interface DocLite {
-    id: string;
-    title: string;
-    updated_at?: number;
-    created_at?: number;
-    postType?: string;
-}
-
-// Row item discriminated union with explicit heights
-interface SectionHeaderItem {
-    type: 'sectionHeader';
-    key: string;
-    label: string;
-    height: 36;
-}
-interface ProjectGroupItem {
-    type: 'projectGroup';
-    key: string;
-    project: Project;
-    children: ProjectEntry[];
-    height: number; // dynamic: 48 + (children.length * 40)
-}
-interface ThreadItem {
-    type: 'thread';
-    key: string;
-    thread: Thread;
-    height: 44;
-}
-interface DocItem {
-    type: 'doc';
-    key: string;
-    doc: DocLite;
-    height: 44;
-}
-
-type SidebarVirtualItem =
-    | SectionHeaderItem
-    | ProjectGroupItem
-    | ThreadItem
-    | DocItem;
 
 const props = defineProps<{
     projects: Project[];

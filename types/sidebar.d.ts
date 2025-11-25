@@ -110,3 +110,85 @@ export function isProjectItem(
         !('title' in item)
     );
 }
+
+// ============================================================================
+// Virtual List Item Types
+// ============================================================================
+
+import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
+import type { Thread } from '~/db';
+
+/**
+ * Lightweight document representation for sidebar display
+ * (strips heavy fields like content)
+ */
+export interface DocLite {
+    id: string;
+    title: string;
+    updated_at?: number;
+    created_at?: number;
+    postType?: string;
+}
+
+/**
+ * Section header row in the virtual list
+ */
+export interface SectionHeaderItem {
+    type: 'sectionHeader';
+    key: string;
+    label: string;
+    height: 36;
+}
+
+/**
+ * Minimal project shape for virtual list display
+ */
+export interface ProjectLite {
+    id: string;
+    name: string;
+    description?: string | null;
+    data?: unknown;
+    created_at?: number;
+    updated_at?: number;
+    deleted?: boolean;
+}
+
+/**
+ * Project group row containing root + children
+ */
+export interface ProjectGroupItem {
+    type: 'projectGroup';
+    key: string;
+    project: ProjectLite;
+    children: ProjectEntry[];
+    height: number; // dynamic: 48 + (children.length * 40)
+}
+
+/**
+ * Thread row in the virtual list
+ */
+export interface SidebarThreadRow {
+    type: 'thread';
+    key: string;
+    thread: Thread;
+    height: 44;
+}
+
+/**
+ * Document row in the virtual list
+ */
+export interface SidebarDocRow {
+    type: 'doc';
+    key: string;
+    doc: DocLite;
+    height: 44;
+}
+
+/**
+ * Discriminated union of all virtual list row types
+ */
+export type SidebarVirtualItem =
+    | SectionHeaderItem
+    | ProjectGroupItem
+    | SidebarThreadRow
+    | SidebarDocRow;
