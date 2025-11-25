@@ -451,9 +451,4 @@ export async function hardDeleteDocument(id: string): Promise<void> {
     await hooks.doAction('db.documents.delete:action:hard:after', payload);
 }
 
-// Convenience for ensuring DB open (mirrors pattern in other modules)
-export async function ensureDbOpen() {
-    if (!db.isOpen()) await db.open();
-}
-
 export type { DocumentRecord as Document };

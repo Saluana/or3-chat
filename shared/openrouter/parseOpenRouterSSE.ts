@@ -36,6 +36,27 @@ export async function* parseOpenRouterSSE(
     // Track tool calls being streamed across chunks
     const toolCallMap = new Map<string, any>();
 
+    /**
+     * Extract image URL from various provider-specific part formats.
+     * Handles OpenAI, Gemini, and other provider variations.
+     */
+    function extractImageUrl(part: any): string | null {
+        if (!part || typeof part !== 'object') return null;
+        
+        return (
+            part.image_url?.url ||
+            part.url ||
+            (part.type === 'image' && part.url) ||
+            (part.type === 'image_url' &&
+                (typeof part.image_url === 'string'
+                    ? part.image_url
+                    : part.image_url?.url)) ||
+            (part.type === 'media' && part.media?.url) ||
+            (part.type === 'image' && part.inline_data?.url) ||
+            null
+        );
+    }
+
     function emitImageCandidate(
         url: string | undefined | null,
         indexRef: { v: number },
@@ -220,26 +241,9 @@ export async function* parseOpenRouterSSE(
                         if (Array.isArray(delta.content)) {
                             let ixRef = { v: 0 };
                             for (const part of delta.content) {
-                                if (part && typeof part === 'object') {
-                                    const url =
-                                        part.image_url?.url ||
-                                        part.url ||
-                                        (part.type === 'image' && part.url) ||
-                                        (part.type === 'image_url' &&
-                                            (typeof part.image_url === 'string'
-                                                ? part.image_url
-                                                : part.image_url?.url)) ||
-                                        (part.type === 'media' &&
-                                            part.media?.url) ||
-                                        (part.type === 'image' &&
-                                            part.inline_data?.url);
-                                    const evt = emitImageCandidate(
-                                        url,
-                                        ixRef,
-                                        false
-                                    );
-                                    if (evt) yield evt;
-                                }
+                                const url = extractImageUrl(part);
+                                const evt = emitImageCandidate(url, ixRef, false);
+                                if (evt) yield evt;
                             }
                         }
 
@@ -263,26 +267,9 @@ export async function* parseOpenRouterSSE(
                         if (Array.isArray(finalContent)) {
                             let fIxRef2 = { v: 0 };
                             for (const part of finalContent) {
-                                if (part && typeof part === 'object') {
-                                    const url =
-                                        part.image_url?.url ||
-                                        part.url ||
-                                        (part.type === 'image' && part.url) ||
-                                        (part.type === 'image_url' &&
-                                            (typeof part.image_url === 'string'
-                                                ? part.image_url
-                                                : part.image_url?.url)) ||
-                                        (part.type === 'media' &&
-                                            part.media?.url) ||
-                                        (part.type === 'image' &&
-                                            part.inline_data?.url);
-                                    const evt = emitImageCandidate(
-                                        url,
-                                        fIxRef2,
-                                        true
-                                    );
-                                    if (evt) yield evt;
-                                }
+                                const url = extractImageUrl(part);
+                                const evt = emitImageCandidate(url, fIxRef2, true);
+                                if (evt) yield evt;
                             }
                         }
                     }
