@@ -51,15 +51,15 @@ export function err(
     e.tags = o.tags;
     e.timestamp = Date.now();
     if (o.cause && e.cause === undefined) e.cause = o.cause;
-    return e as AppError;
+    return e;
 }
 
 export function isAppError(v: unknown): v is AppError {
     return (
         !!v &&
         typeof v === 'object' &&
-        'code' in (v as object) &&
-        'severity' in (v as object)
+        'code' in v &&
+        'severity' in v
     );
 }
 
@@ -72,7 +72,7 @@ export function asAppError(
         return err(
             fb.code || 'ERR_INTERNAL',
             v.message || fb.message || 'Error',
-            { cause: (v as Error & { cause?: unknown }).cause }
+            { cause: v.cause }
         );
     if (typeof v === 'string') return err(fb.code || 'ERR_INTERNAL', v);
     return err(fb.code || 'ERR_INTERNAL', fb.message || 'Unknown error');
@@ -166,7 +166,7 @@ export function reportError(
                     : e.severity === 'info'
                     ? 'info'
                     : 'error';
-            console[level as 'warn' | 'info' | 'error']('[err]', {
+            console[level]('[err]', {
                 code: e.code,
                 msg: e.message,
                 severity: e.severity,

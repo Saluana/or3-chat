@@ -51,10 +51,6 @@ export function partsToText(parts: string | ContentPartLike[] | null | undefined
     let out = '';
     for (const p of parts) {
         if (!p) continue;
-        if (typeof p === 'string') {
-            out += p;
-            continue;
-        }
         if (typeof p === 'object') {
             if (p.type === 'text' && typeof p.text === 'string') out += p.text;
             else if (p.type === 'image') {
@@ -105,7 +101,7 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
     } else if (typeof raw.content === 'string') {
         text = raw.content;
     } else {
-        text = partsToText(raw.content as ContentPartLike[] | undefined, role);
+        text = partsToText(raw.content, role);
     }
     // Inject markdown placeholders for assistant file_hashes with de-duplication logic.
     // Goal: avoid showing the same logical image twice when the model already emitted

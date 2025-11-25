@@ -2,15 +2,34 @@
  * Utility functions for system prompts
  */
 
+/** TipTap node types */
+interface TipTapTextNode {
+    type: 'text';
+    text?: string;
+}
+
+interface TipTapBlockNode {
+    type: string;
+    content?: TipTapNode[];
+}
+
+type TipTapNode = TipTapTextNode | TipTapBlockNode;
+
+interface TipTapDocument {
+    content?: TipTapNode[];
+}
+
 /**
  * Converts TipTap JSON content to plain text string for use as system message.
  * Extracts text from paragraph nodes and joins with newlines.
  */
-export function promptJsonToString(json: any): string {
+export function promptJsonToString(
+    json: TipTapDocument | TipTapNode[] | null | undefined
+): string {
     if (!json) return '';
     const lines: string[] = [];
 
-    function walk(node: any, collectLine = false) {
+    function walk(node: TipTapNode | TipTapNode[] | undefined) {
         if (!node) return;
         // Gather plain text from leaf text nodes
         if (Array.isArray(node)) {
@@ -18,7 +37,7 @@ export function promptJsonToString(json: any): string {
             return;
         }
         if (node.type === 'text') {
-            currentLine += node.text || '';
+            currentLine += (node as TipTapTextNode).text || '';
             return;
         }
         const blockTypes = new Set([
@@ -30,11 +49,13 @@ export function promptJsonToString(json: any): string {
             'bulletList',
             'listItem',
         ]);
-        let isBlock = blockTypes.has(node.type);
+        const isBlock = blockTypes.has(node.type);
         if (isBlock) {
             flushLine();
         }
-        if (node.content) node.content.forEach((c: any) => walk(c));
+        if ('content' in node && node.content) {
+            node.content.forEach((c: TipTapNode) => walk(c));
+        }
         if (isBlock) flushLine();
     }
 
@@ -44,7 +65,17 @@ export function promptJsonToString(json: any): string {
         currentLine = '';
     }
 
-    walk(json.content || json);
+    // Handle both array and document formats
+    let content: TipTapNode[] | TipTapNode | undefined;
+    if (Array.isArray(json)) {
+        content = json;
+    } else if ('content' in json && json.content) {
+        content = json.content;
+    }
+
+    if (content) {
+        walk(content);
+    }
     flushLine();
     return lines.join('\n');
 }

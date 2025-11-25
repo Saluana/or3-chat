@@ -11,7 +11,7 @@ type ThemeModuleLoader = () => Promise<{ default: ThemeDefinition }>;
 
 type StylesheetModuleLoader = () => Promise<string>;
 
-type ThemeAppConfig = Record<string, any>;
+type ThemeAppConfig = Record<string, unknown>;
 
 type ThemeAppConfigLoader = () => Promise<
     { default: ThemeAppConfig } | ThemeAppConfig
@@ -116,7 +116,7 @@ export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
                               Promise.resolve(
                                   configModules[
                                       `../${entry.dirName}/app.config.ts`
-                                  ] as any
+                                  ] as { default: ThemeAppConfig } | ThemeAppConfig
                               )
                         : undefined,
                     iconsLoader:
@@ -153,7 +153,7 @@ export async function loadThemeStylesheets(
 ): Promise<void> {
     const stylesheets = overrideList ?? entry.stylesheets;
 
-    if (!stylesheets || stylesheets.length === 0) {
+    if (stylesheets.length === 0) {
         return;
     }
 
@@ -238,7 +238,8 @@ export async function loadThemeAppConfig(
 
     try {
         const module = await entry.appConfigLoader();
-        const config = (module as any)?.default ?? module;
+        const moduleWithDefault = module as { default?: ThemeAppConfig };
+        const config = moduleWithDefault.default ?? module;
         if (config && typeof config === 'object') {
             return config as ThemeAppConfig;
         }
@@ -261,7 +262,7 @@ function containsStyleSelectors(definition: ThemeDefinition): boolean {
     }
 
     return Object.values(selectors).some((config) => {
-        const style = config?.style;
+        const style = config.style;
         return style !== undefined && Object.keys(style).length > 0;
     });
 }

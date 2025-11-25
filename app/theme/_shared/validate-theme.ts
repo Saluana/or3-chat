@@ -54,7 +54,7 @@ export function validateThemeDefinition(
     }
 
     // Check colors object
-    if (!config.colors) {
+    if (!config.colors || typeof config.colors !== 'object') {
         errors.push({
             severity: 'error',
             code: 'THEME_003',
@@ -139,7 +139,7 @@ export function validateThemeDefinition(
             }
 
             // Validate props object
-            if (!props || typeof props !== 'object') {
+            if (typeof props !== 'object' || props === null) {
                 errors.push({
                     severity: 'error',
                     code: 'THEME_009',
@@ -185,10 +185,11 @@ export function validateThemeDefinition(
                 });
             }
             if (layer.fit && layer.fit !== 'cover' && layer.fit !== 'contain') {
+                const fitValue: string = layer.fit;
                 warnings.push({
                     severity: 'warning',
                     code: 'THEME_013',
-                    message: `Background layer "${location}" uses an unsupported fit value "${layer.fit}"`,
+                    message: `Background layer "${location}" uses an unsupported fit value "${fitValue}"`,
                     file: 'theme.ts',
                     suggestion: 'Use either "cover" or "contain"',
                 });
@@ -296,7 +297,7 @@ function isValidColor(color: string): boolean {
     // RGB/RGBA with proper format validation
     // Matches: rgb(0, 0, 0), rgba(0, 0, 0, 0.5), rgb(0 0 0), rgb(0 0 0 / 50%)
     if (
-        /^rgba?\s*\(\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*(?:[,\/]\s*[\d.%]+)?\s*\)$/i.test(
+        /^rgba?\s*\(\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*(?:[,/]\s*[\d.%]+)?\s*\)$/i.test(
             trimmed
         )
     ) {
@@ -306,7 +307,7 @@ function isValidColor(color: string): boolean {
     // HSL/HSLA with proper format validation
     // Matches: hsl(0, 0%, 0%), hsla(0, 0%, 0%, 0.5), hsl(0 0% 0%), hsl(0 0% 0% / 50%)
     if (
-        /^hsla?\s*\(\s*[\d.]+(?:deg|grad|rad|turn)?\s*[,\s]\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*(?:[,\/]\s*[\d.%]+)?\s*\)$/i.test(
+        /^hsla?\s*\(\s*[\d.]+(?:deg|grad|rad|turn)?\s*[,\s]\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*(?:[,/]\s*[\d.%]+)?\s*\)$/i.test(
             trimmed
         )
     ) {

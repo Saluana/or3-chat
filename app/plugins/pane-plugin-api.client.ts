@@ -36,7 +36,7 @@ export type PaneApiErrorCode =
     | 'post_delete_failed';
 
 /** Success result helper */
-export type Ok<T extends object = {}> = { ok: true } & T;
+export type Ok<T extends object = Record<string, unknown>> = { ok: true } & T;
 /** Error result helper */
 export interface Err<C extends PaneApiErrorCode = PaneApiErrorCode> {
     ok: false;
@@ -45,7 +45,7 @@ export interface Err<C extends PaneApiErrorCode = PaneApiErrorCode> {
 }
 
 /** Unified result type */
-export type Result<T extends object = {}> = Ok<T> | Err;
+export type Result<T extends object = Record<string, unknown>> = Ok<T> | Err;
 interface MultiPaneApi {
     panes: Ref<PaneState[]>;
     activePaneIndex: Ref<number>;
@@ -190,18 +190,18 @@ const err = <C extends PaneApiErrorCode>(code: C, message: string): Err<C> => ({
     message,
 });
 const mp = (): MultiPaneApi | undefined =>
-    (globalThis as any).__or3MultiPaneApi;
+    (globalThis as unknown as { __or3MultiPaneApi?: MultiPaneApi }).__or3MultiPaneApi;
 function getPaneEntry(
     id: string
 ): { pane: PaneState; index: number; mp: MultiPaneApi } | null {
     const m = mp();
-    const ps = m?.panes?.value;
+    const ps = m?.panes.value;
     if (!ps) return null;
     const index = ps.findIndex((p) => p.id === id);
     if (index < 0) return null;
     const pane = ps[index];
     if (!pane) return null;
-    return { pane, index, mp: m! };
+    return { pane, index, mp: m };
 }
 async function ensureThread(
     p: PaneState,
@@ -227,7 +227,7 @@ async function ensureThread(
             paneIndex: i,
             messageCount: 0,
         });
-    } catch (e) {
+    } catch {
         // Hook errors should not abort thread creation
         reportError(coreErr('ERR_INTERNAL', 'pane thread hook failed'), {
             silent: true,
@@ -238,7 +238,7 @@ async function ensureThread(
 }
 type DocJson = { type: string; content?: unknown[]; [k: string]: unknown };
 function patchDoc(base: unknown, patch: unknown): DocJson {
-    let b: DocJson =
+    const b: DocJson =
         base && typeof base === 'object'
             ? (base as DocJson)
             : { type: 'doc', content: [] };
@@ -247,8 +247,11 @@ function patchDoc(base: unknown, patch: unknown): DocJson {
         if (Array.isArray(b.content) && Array.isArray(p.content))
             b.content = [...b.content, ...p.content];
         else if (Array.isArray(p.content)) b.content = p.content;
-        for (const k of Object.keys(p))
-            if (k !== 'content') (b as any)[k] = (p as any)[k];
+        for (const k of Object.keys(p)) {
+            if (k !== 'content') {
+                (b as Record<string, unknown>)[k] = (p as Record<string, unknown>)[k];
+            }
+        }
     }
     return b;
 }
@@ -256,7 +259,7 @@ const log = (tag: string, meta: unknown) => {
     if (import.meta.dev)
         try {
             console.debug('[pane-plugin-api] ' + tag, meta);
-        } catch {}
+        } catch { /* ignore */ }
 };
 
 /**
@@ -273,8 +276,9 @@ function parseMeta(meta: unknown): unknown {
     }
 }
 
-async function makeApi(): Promise<PanePluginApi> {
-    const hooks: HookBus = (useNuxtApp() as any).$hooks;
+function makeApi(): PanePluginApi {
+    const nuxtApp = useNuxtApp() as unknown as { $hooks?: HookBus };
+    const hooks: HookBus = nuxtApp.$hooks ?? {};
     return {
         async sendMessage({
             paneId,
@@ -317,7 +321,7 @@ async function makeApi(): Promise<PanePluginApi> {
                                 ok: true,
                                 messageId: 'bridge',
                                 threadId,
-                            } as any;
+                            };
                         }
                     }
                 }
@@ -339,7 +343,7 @@ async function makeApi(): Promise<PanePluginApi> {
                         },
                         meta: { source },
                     });
-                } catch (e) {
+                } catch {
                     reportError(
                         coreErr('ERR_INTERNAL', 'pane msg hook failed'),
                         {
@@ -406,8 +410,8 @@ async function makeApi(): Promise<PanePluginApi> {
         },
         getActivePaneData() {
             const m = mp();
-            const panes = m?.panes?.value;
-            const idx = m?.activePaneIndex?.value ?? -1;
+            const panes = m?.panes.value;
+            const idx = m?.activePaneIndex.value ?? -1;
             if (!panes || idx < 0 || idx >= panes.length)
                 return err('no_active_pane', 'no active pane');
             const p = panes[idx];
@@ -426,11 +430,11 @@ async function makeApi(): Promise<PanePluginApi> {
                     const st = useDocumentState(p.documentId) as {
                         record?: { content?: unknown };
                     };
-                    const c = st?.record?.content;
+                    const c = st.record?.content;
                     base.contentSnapshot = c
                         ? JSON.parse(JSON.stringify(c))
                         : undefined;
-                } catch (e) {
+                } catch {
                     reportError(
                         coreErr('ERR_INTERNAL', 'pane doc snapshot failed'),
                         {
@@ -444,9 +448,9 @@ async function makeApi(): Promise<PanePluginApi> {
         },
         getPanes() {
             const m = mp();
-            const panes = m?.panes?.value;
+            const panes = m?.panes.value;
             if (!panes) return err('no_panes', 'no panes');
-            const activeIndex = m?.activePaneIndex?.value ?? -1;
+            const activeIndex = m.activePaneIndex.value;
             const mapped: PaneDescriptor[] = panes.map((p) => ({
                 paneId: p.id,
                 mode: p.mode,
@@ -475,7 +479,7 @@ async function makeApi(): Promise<PanePluginApi> {
                         title: title.trim(),
                         content,
                         postType,
-                        meta: meta as any, // Schema will normalize
+                        meta: meta as Post['meta'], // Schema will normalize
                     };
                     const created = await createPost(input);
                     log('posts.create', { source, postType, id: created.id });
@@ -533,7 +537,7 @@ async function makeApi(): Promise<PanePluginApi> {
                         postType: patch.postType ?? existingPost.postType,
                         meta:
                             patch.meta !== undefined
-                                ? (patch.meta as any)
+                                ? (patch.meta as Post['meta'])
                                 : existingPost.meta,
                         updated_at: nowSec(),
                     };
@@ -604,10 +608,11 @@ async function makeApi(): Promise<PanePluginApi> {
         },
     };
 }
-export default defineNuxtPlugin(async () => {
-    if ((globalThis as any).__or3PanePluginApi) return;
+export default defineNuxtPlugin(() => {
+    const g = globalThis as unknown as { __or3PanePluginApi?: PanePluginApi };
+    if (g.__or3PanePluginApi) return;
     try {
-        (globalThis as any).__or3PanePluginApi = await makeApi();
+        g.__or3PanePluginApi = makeApi();
         if (import.meta.dev) console.log('[pane-plugin-api] ready');
     } catch (e) {
         console.error('[pane-plugin-api] failed to init', e);

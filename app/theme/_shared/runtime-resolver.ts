@@ -13,7 +13,6 @@
 import type {
     CompiledOverride,
     CompiledTheme,
-    OverrideProps,
     AttributeMatcher,
     PropClassMaps,
 } from './types';
@@ -424,12 +423,14 @@ export class RuntimeResolver {
             for (const [key, value] of Object.entries(override.props)) {
                 if (key === 'class') {
                     // Concatenate classes (highest specificity first)
+                    const existingClass = merged[key];
                     merged[key] =
-                        value + (merged[key] ? ` ${merged[key]}` : '');
+                        String(value) + (existingClass ? ` ${String(existingClass)}` : '');
                 } else if (key === 'ui') {
                     // Deep merge ui objects
+                    const existingUi = merged[key];
                     merged[key] = this.deepMerge(
-                        (merged[key] as Record<string, unknown>) || {},
+                        (existingUi && typeof existingUi === 'object' ? existingUi : {}) as Record<string, unknown>,
                         value as Record<string, unknown>
                     );
                 } else {
@@ -462,8 +463,9 @@ export class RuntimeResolver {
                 !Array.isArray(value)
             ) {
                 // Recursively merge nested objects
+                const existingValue = result[key];
                 result[key] = this.deepMerge(
-                    (result[key] as Record<string, unknown>) || {},
+                    (existingValue && typeof existingValue === 'object' ? existingValue : {}) as Record<string, unknown>,
                     value as Record<string, unknown>
                 );
             } else {
@@ -488,7 +490,7 @@ export class RuntimeResolver {
         const classes: string[] = [];
         const cleanProps: Record<string, unknown> = {};
 
-        const entries = Object.entries(override.props || {});
+        const entries = Object.entries(override.props);
 
         for (const [key, value] of entries) {
             if (key === 'ui') {

@@ -5,7 +5,6 @@ import {
 } from '~/composables';
 import type { Editor } from '@tiptap/vue-3';
 import AutocompleteState from './EditorAutocomplete/state';
-import { computed } from 'vue';
 import type { EditorExtension } from '~/composables/editor/useEditorNodes';
 
 export default defineNuxtPlugin(() => {
@@ -31,11 +30,7 @@ export default defineNuxtPlugin(() => {
             registerEditorToolbarButton({
                 id: 'editor-autocomplete:toggle',
                 icon: 'pixelarticons:zap',
-                tooltip: computed(() =>
-                    AutocompleteState.value.isEnabled
-                        ? 'Disable Autocomplete'
-                        : 'Enable Autocomplete'
-                ) as any,
+                tooltip: 'Toggle Autocomplete',
                 order: 300,
                 isActive: (editor: Editor) => AutocompleteState.value.isEnabled,
                 onClick: (editor: Editor) => {

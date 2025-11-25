@@ -17,7 +17,7 @@ type MaybeImageLike = {
 
 function parseJsonArray(raw: string): unknown[] | null {
     try {
-        const parsed = JSON.parse(raw);
+        const parsed: unknown = JSON.parse(raw);
         return Array.isArray(parsed) ? parsed : null;
     } catch {
         return null;

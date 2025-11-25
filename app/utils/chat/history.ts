@@ -1,6 +1,12 @@
 import type { Ref } from 'vue';
 import type { ChatMessage } from './types';
 import { db } from '~/db';
+import type { Message } from '~/db/schema';
+
+interface MessageData extends Record<string, unknown> {
+    content?: string;
+    reasoning_text?: string;
+}
 export async function ensureThreadHistoryLoaded(
     threadIdRef: Ref<string | undefined>,
     historyLoadedFor: Ref<string | null>,
@@ -17,34 +23,35 @@ export async function ensureThreadHistoryLoaded(
                 [threadIdRef.value, DexieMod.minKey],
                 [threadIdRef.value, DexieMod.maxKey]
             )
-            .filter((m: any) => !m.deleted)
+            .filter((m: Message) => !m.deleted)
             .toArray();
 
-        all.sort((a: any, b: any) => (a.index || 0) - (b.index || 0));
+        all.sort((a: Message, b: Message) => (a.index || 0) - (b.index || 0));
 
-        messages.value = all.map((dbMsg: any) => ({
-            role: dbMsg.role,
-            content:
-                typeof dbMsg?.data?.content === 'string'
-                    ? dbMsg.data.content
-                    : (dbMsg as any)?.content || '',
-            id: dbMsg.id,
-            stream_id: dbMsg.stream_id,
-            file_hashes: dbMsg.file_hashes,
-            reasoning_text:
-                typeof dbMsg?.data?.reasoning_text === 'string'
-                    ? dbMsg.data.reasoning_text
-                    : null,
-            data: dbMsg.data || null,
-            index:
-                typeof dbMsg.index === 'number'
-                    ? dbMsg.index
-                    : typeof dbMsg.index === 'string'
-                    ? Number(dbMsg.index) || null
-                    : null,
-            created_at:
-                typeof dbMsg.created_at === 'number' ? dbMsg.created_at : null,
-        }));
+        messages.value = all.map((dbMsg: Message) => {
+            const data = dbMsg.data as MessageData | null | undefined;
+            return {
+                role: dbMsg.role as ChatMessage['role'],
+                content:
+                    typeof data?.content === 'string'
+                        ? data.content
+                        : '',
+                id: dbMsg.id,
+                stream_id: dbMsg.stream_id ?? undefined,
+                file_hashes: dbMsg.file_hashes,
+                reasoning_text:
+                    typeof data?.reasoning_text === 'string'
+                        ? data.reasoning_text
+                        : null,
+                data: data || null,
+                index:
+                    typeof dbMsg.index === 'number'
+                        ? dbMsg.index
+                        : null,
+                created_at:
+                    typeof dbMsg.created_at === 'number' ? dbMsg.created_at : null,
+            };
+        });
 
         historyLoadedFor.value = threadIdRef.value;
     } catch (e) {
