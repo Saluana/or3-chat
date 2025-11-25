@@ -3,7 +3,7 @@ import type {
     ThemeBackgrounds,
 } from '../../theme/_shared/types';
 import { getFileBlob } from '../../db/files';
-import { isBrowserWithDocument } from '../../utils/environment';
+import { isBrowserWithDocument } from '../../utils/env';
 
 const CACHE_KEY = '__or3ThemeBackgroundTokenCache';
 const DEFAULT_REPEAT = 'repeat';

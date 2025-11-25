@@ -27,3 +27,10 @@ export const hasDocument = (): boolean => typeof document !== 'undefined';
  * Returns false during SSR.
  */
 export const hasNavigator = (): boolean => typeof navigator !== 'undefined';
+
+/**
+ * Check if code is running in a browser environment with document access.
+ * Returns false during SSR or if document is unavailable.
+ */
+export const isBrowserWithDocument = (): boolean =>
+    typeof window !== 'undefined' && typeof document !== 'undefined';
