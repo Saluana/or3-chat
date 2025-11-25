@@ -1,5 +1,6 @@
-import { computed, reactive } from 'vue';
+import { computed } from 'vue';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
+import { createRegistry } from '../_registry';
 
 /** Definition for an extendable chat message action button. */
 export interface ChatMessageAction {
@@ -20,43 +21,33 @@ export interface ChatMessageAction {
     }) => void | Promise<void>;
 }
 
-interface MessageActionsRegistryGlobal {
-    __or3MessageActionsRegistry?: Map<string, ChatMessageAction>;
-}
-
-// Module-level singleton registry (survives HMR within the same module instance)
-const registry = new Map<string, ChatMessageAction>();
-
-// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
-const reactiveList = reactive<{ items: ChatMessageAction[] }>({ items: [] });
-
-function syncReactiveList() {
-    reactiveList.items = Array.from(registry.values());
-}
+const registry = createRegistry<ChatMessageAction>(
+    '__or3MessageActionsRegistry'
+);
 
 /** Register (or replace) a message action. */
 export function registerMessageAction(action: ChatMessageAction) {
-    registry.set(action.id, action);
-    syncReactiveList();
+    registry.register(action);
 }
 
 /** Unregister an action by id (optional utility). */
 export function unregisterMessageAction(id: string) {
-    if (registry.delete(id)) syncReactiveList();
+    registry.unregister(id);
 }
 
 /** Accessor for actions applicable to a specific message. */
 export function useMessageActions(message: { role: 'user' | 'assistant' }) {
+    const allActions = registry.useItems();
     return computed(() =>
-        reactiveList.items
-            .filter((a) => a.showOn === 'both' || a.showOn === message.role)
-            .sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
+        allActions.value.filter(
+            (a) => a.showOn === 'both' || a.showOn === message.role
+        )
     );
 }
 
 /** Convenience for plugin authors to check existing action ids. */
 export function listRegisteredMessageActionIds(): string[] {
-    return Array.from(registry.keys());
+    return registry.listIds();
 }
 
 // Note: Core (built-in) actions remain hard-coded in ChatMessage.vue so they always appear;

@@ -826,6 +826,7 @@ import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import type { UserThemeOverrides } from '~/core/theme/user-overrides-types';
 import type { Ref } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { isBrowser } from '~/utils/env';
 
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides as Ref<UserThemeOverrides>; // active mode overrides
@@ -857,8 +858,6 @@ function getCurrentThemeColor(cssVar: string): string {
     }
     return value.startsWith('#') ? value : '';
 }
-
-const isBrowser = () => typeof window !== 'undefined';
 
 // Helper to read url(...) from CSS custom properties and normalize to an absolute path
 function getCssVarUrl(cssVar: string): string | null {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
-import type { FileMeta } from '~/db/schema';
+import { makeMeta } from './test-utils';
 
 const factory = vi.hoisted(() => {
     const toastAdd = vi.fn();
@@ -23,22 +23,6 @@ const ModalStub = defineComponent({
     setup(_, { slots }) {
         return () => h('div', slots.default?.());
     },
-});
-
-const makeMeta = (hash: string): FileMeta => ({
-    hash,
-    name: `Image ${hash}`,
-    mime_type: 'image/png',
-    kind: 'image',
-    size_bytes: 256,
-    width: 32,
-    height: 32,
-    page_count: undefined,
-    ref_count: 0,
-    created_at: 1,
-    updated_at: 2,
-    deleted: false,
-    clock: 0,
 });
 
 describe('ImageViewer error handling', () => {

@@ -60,8 +60,8 @@
  * ```
  */
 
-import { computed, reactive } from 'vue';
 import type { Post } from '~/db';
+import { createRegistry } from '../_registry';
 
 /** Definition for an extendable chat message action button. */
 export interface DocumentHistoryAction {
@@ -77,42 +77,28 @@ export interface DocumentHistoryAction {
     handler: (ctx: { document: Post }) => void | Promise<void>;
 }
 
-// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
-const g: any = globalThis as any;
-const registry: Map<string, DocumentHistoryAction> =
-    g.__or3DocumentHistoryActionsRegistry ||
-    (g.__or3DocumentHistoryActionsRegistry = new Map());
-
-// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
-const reactiveList = reactive<{ items: DocumentHistoryAction[] }>({
-    items: [],
-});
-
-function syncReactiveList() {
-    reactiveList.items = Array.from(registry.values());
-}
+const registry = createRegistry<DocumentHistoryAction>(
+    '__or3DocumentHistoryActionsRegistry'
+);
 
 /** Register (or replace) a message action. */
 export function registerDocumentHistoryAction(action: DocumentHistoryAction) {
-    registry.set(action.id, action);
-    syncReactiveList();
+    registry.register(action);
 }
 
 /** Unregister an action by id (optional utility). */
 export function unregisterDocumentHistoryAction(id: string) {
-    if (registry.delete(id)) syncReactiveList();
+    registry.unregister(id);
 }
 
 /** Accessor for actions applicable to a specific message. */
 export function useDocumentHistoryActions() {
-    return computed(() =>
-        reactiveList.items.sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
-    );
+    return registry.useItems();
 }
 
 /** Convenience for plugin authors to check existing action ids. */
 export function listRegisteredDocumentHistoryActionIds(): string[] {
-    return Array.from(registry.keys());
+    return registry.listIds();
 }
 
 // Note: Core (built-in) actions remain hard-coded in ChatDocumentHistory.vue so they always appear;

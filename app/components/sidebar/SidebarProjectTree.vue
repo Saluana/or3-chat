@@ -154,6 +154,9 @@ import {
 } from '~/utils/projects/normalizeProjectData';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
+
+const { handlePopoverTriggerKey } = usePopoverKeyboard();
 
 interface ProjectRow {
     id: string;
@@ -356,15 +359,6 @@ async function runExtraAction(action: any, data: { root?: any; child?: any }) {
         } catch {}
         console.error('Project tree action error', action.id, e);
     }
-}
-
-function handlePopoverTriggerKey(event: KeyboardEvent) {
-    const key = event.key;
-    if (key !== 'Enter' && key !== ' ') return;
-    event.preventDefault();
-    event.stopPropagation();
-    const target = event.currentTarget as HTMLElement | null;
-    target?.click();
 }
 </script>
 

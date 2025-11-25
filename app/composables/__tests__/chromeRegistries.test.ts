@@ -90,9 +90,10 @@ describe('UI chrome registries', () => {
             isCollapsed: false,
         })).value;
 
+        // With alphabetical tie-breaking, 'test:disabled' comes before 'test:visible'
         expect(entries.map((entry) => entry.action.id)).toEqual([
-            'test:visible',
             'test:disabled',
+            'test:visible',
         ]);
         const disabledEntry = entries.find(
             (entry) => entry.action.id === 'test:disabled'

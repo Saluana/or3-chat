@@ -3,13 +3,11 @@ import type {
     ThemeBackgrounds,
 } from '../../theme/_shared/types';
 import { getFileBlob } from '../../db/files';
+import { isBrowserWithDocument } from '../../utils/env';
 
 const CACHE_KEY = '__or3ThemeBackgroundTokenCache';
 const DEFAULT_REPEAT = 'repeat';
 const DEFAULT_SIZE = '150px';
-
-const isBrowser = () =>
-    typeof window !== 'undefined' && typeof document !== 'undefined';
 
 function getCache(): Map<string, string> {
     const g = globalThis as typeof globalThis & {
@@ -97,7 +95,7 @@ async function applyLayer(
     layer: ThemeBackgroundLayer | undefined,
     resolveToken: (token: string) => Promise<string | null>
 ) {
-    if (!isBrowser()) return;
+    if (!isBrowserWithDocument()) return;
     const style = document.documentElement.style;
     const colorVar = getColorVar(cssVar);
 
@@ -137,7 +135,7 @@ async function applyGradient(
     layer: ThemeBackgroundLayer | undefined,
     resolveToken: (token: string) => Promise<string | null>
 ) {
-    if (!isBrowser()) return;
+    if (!isBrowserWithDocument()) return;
     const style = document.documentElement.style;
     if (!layer || !layer.image) {
         style.setProperty(cssVar, 'none');
@@ -164,7 +162,7 @@ export async function applyThemeBackgrounds(
     backgrounds: ThemeBackgrounds | undefined,
     options: { resolveToken: (token: string) => Promise<string | null> }
 ) {
-    if (!isBrowser()) return;
+    if (!isBrowserWithDocument()) return;
     await Promise.all([
         applyLayer(
             '--app-content-bg-1',

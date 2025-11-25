@@ -17,7 +17,9 @@ export interface RegistryApi<T extends RegistryItem> {
 const DEFAULT_ORDER = 200;
 
 function defaultSort<T extends RegistryItem>(a: T, b: T) {
-    return (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER);
+    const orderDiff = (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER);
+    // Stable sort: tie-break by id for predictable ordering
+    return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
 }
 
 /**
