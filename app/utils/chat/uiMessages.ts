@@ -4,7 +4,7 @@ import { parseHashes } from '~/utils/files/attachments';
 interface ContentPartLike {
     type?: string;
     text?: string;
-    image?: string;
+    image?: string | Uint8Array | Buffer;
     image_url?: { url?: string };
 }
 
@@ -14,7 +14,7 @@ interface RawMessageLike {
     role?: 'user' | 'assistant' | 'system' | 'tool';
     text?: string;
     content?: string | ContentPartLike[];
-    file_hashes?: string[] | string;
+    file_hashes?: string[] | string | null;
     reasoning_text?: string | null;
     pending?: boolean;
     data?: {
@@ -22,6 +22,8 @@ interface RawMessageLike {
         tool_calls?: ToolCallInfo[];
         [key: string]: unknown;
     } | null;
+    index?: number | string | null;
+    created_at?: number | null;
 }
 
 export interface ToolCallInfo {

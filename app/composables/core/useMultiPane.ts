@@ -16,7 +16,6 @@ import { getGlobalMultiPaneApi, setGlobalMultiPaneApi } from '~/utils/multiPaneA
 
 type PaneAppsModule = typeof import('./usePaneApps');
 type PaneAppGetter = ReturnType<PaneAppsModule['usePaneApps']>['getPaneApp'];
-type RegisteredPaneApp = ReturnType<PaneAppGetter>;
 
 // Pane mode: allow built-in modes with full autocomplete, but accept arbitrary strings for custom pane apps
 export type PaneMode = 'chat' | 'doc' | (string & { _brand?: 'pane-mode' });
@@ -28,7 +27,7 @@ export type MultiPaneMessage = {
     file_hashes?: string | null;
     id?: string;
     stream_id?: string;
-    data?: Record<string, any> | null;
+    data?: Record<string, unknown> | null;
     reasoning_text?: string | null;
     index?: number | null;
     created_at?: number | null;
@@ -103,37 +102,47 @@ function createEmptyPane(initialThreadId = ''): PaneState {
     };
 }
 
+interface DbMessageRow {
+    id: string;
+    role: string;
+    content?: string;
+    file_hashes?: string | null;
+    stream_id?: string | null;
+    data?: { content?: string; reasoning_text?: string | null } | null;
+    index?: number | null;
+    created_at?: number | null;
+    deleted?: boolean;
+}
+
 async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
     if (!id) return [];
     try {
         const msgs = await db.messages
             .where('[thread_id+index]')
             .between([id, Dexie.minKey], [id, Dexie.maxKey])
-            .filter((m: any) => !m.deleted)
+            .filter((m) => !m.deleted)
             .toArray();
-        return (msgs || []).map((msg: any) => {
-            const data = msg.data as {
-                content?: string;
-                reasoning_text?: string | null;
-            };
+        return (msgs || []).map((msg) => {
+            const row = msg as unknown as DbMessageRow;
+            const data = row.data;
             const content =
                 typeof data === 'object' && data !== null && 'content' in data
-                    ? String((data as any).content ?? '')
-                    : String((msg.content) ?? '');
+                    ? String(data.content ?? '')
+                    : String(row.content ?? '');
             return {
-                role: msg.role as 'user' | 'assistant' | 'system' | 'tool',
+                role: row.role as 'user' | 'assistant' | 'system' | 'tool',
                 content,
-                file_hashes: msg.file_hashes,
-                id: msg.id,
-                stream_id: msg.stream_id,
-                data,
+                file_hashes: row.file_hashes,
+                id: row.id,
+                stream_id: row.stream_id ?? undefined,
+                data: data ?? undefined,
                 reasoning_text: data?.reasoning_text || null,
-                index: typeof msg.index === 'number' ? msg.index : null,
+                index: typeof row.index === 'number' ? row.index : null,
                 created_at:
-                    typeof msg.created_at === 'number' ? msg.created_at : null,
+                    typeof row.created_at === 'number' ? row.created_at : null,
             } as MultiPaneMessage;
         });
-    } catch (e) {
+    } catch {
         return [];
     }
 }
@@ -207,7 +216,7 @@ export function useMultiPane(
             const saved = localStorage.getItem(storageKey);
             if (!saved) return;
 
-            const parsed = JSON.parse(saved);
+            const parsed: unknown = JSON.parse(saved);
             if (!Array.isArray(parsed)) {
                 if (import.meta.dev) {
                     console.warn(
@@ -228,7 +237,7 @@ export function useMultiPane(
                 return;
             }
 
-            paneWidths.value = parsed.map((w) => clampWidth(w));
+            paneWidths.value = (parsed as number[]).map((w) => clampWidth(w));
         } catch (e) {
             console.warn('[useMultiPane] Failed to restore widths:', e);
             // On error, fall back to percentage-based widths by not setting paneWidths
@@ -286,7 +295,7 @@ export function useMultiPane(
         const paneCount = panes.value.length;
         const equalWidth = Math.floor(totalWidth / paneCount);
 
-        paneWidths.value = new Array(paneCount).fill(clampWidth(equalWidth));
+        paneWidths.value = new Array<number>(paneCount).fill(clampWidth(equalWidth));
     }
 
     /**
@@ -346,7 +355,7 @@ export function useMultiPane(
         const pane = panes.value[index];
         if (!pane) return;
         const oldId = pane.threadId;
-        let requested: string | '' | false = threadId;
+        let requested: string | false = threadId;
         if (import.meta.dev) {
             try {
                 console.debug('[multiPane] setPaneThread:request', {
@@ -354,7 +363,7 @@ export function useMultiPane(
                     oldId,
                     incoming: threadId,
                 });
-            } catch {}
+            } catch { /* intentionally empty */ }
         }
         // Allow external transform / veto
         try {
@@ -363,15 +372,15 @@ export function useMultiPane(
                 requested,
                 pane,
                 oldId
-            )) as string | '' | false;
-        } catch {}
+            )) as string | false;
+        } catch { /* intentionally empty */ }
         if (requested === false) return; // veto
         // Clear association
         if (requested === '') {
             pane.threadId = '';
             pane.messages = [];
             if (oldId !== '')
-                hooks.doAction('ui.pane.thread:action:changed', {
+                void hooks.doAction('ui.pane.thread:action:changed', {
                     pane,
                     oldThreadId: oldId,
                     newThreadId: '',
@@ -384,14 +393,14 @@ export function useMultiPane(
                         index,
                         oldId,
                     });
-                } catch {}
+                } catch { /* intentionally empty */ }
             }
             return;
         }
         pane.threadId = requested;
         pane.messages = await loadMessagesFor(requested);
         if (oldId !== requested)
-            hooks.doAction('ui.pane.thread:action:changed', {
+            void hooks.doAction('ui.pane.thread:action:changed', {
                 pane,
                 oldThreadId: oldId,
                 newThreadId: requested,
@@ -406,7 +415,7 @@ export function useMultiPane(
                     newId: requested,
                     messages: pane.messages.length,
                 });
-            } catch {}
+            } catch { /* intentionally empty */ }
         }
     }
 
@@ -426,20 +435,20 @@ export function useMultiPane(
                     prevThread: prevPane?.threadId,
                     nextThread: panes.value[i]?.threadId,
                 });
-            } catch {}
+            } catch { /* intentionally empty */ }
         }
         if (prevPane)
-            hooks.doAction('ui.pane.blur:action', {
+            void hooks.doAction('ui.pane.blur:action', {
                 pane: prevPane,
                 previousIndex: prevIndex,
             });
         // Preserve existing switch hook for compatibility
-        hooks.doAction('ui.pane.switch:action', {
+        void hooks.doAction('ui.pane.switch:action', {
             pane: nextPane,
             index: i,
             previousIndex: prevIndex,
         });
-        hooks.doAction('ui.pane.active:action', {
+        void hooks.doAction('ui.pane.active:action', {
             pane: nextPane,
             index: i,
             previousIndex: prevIndex,
@@ -473,7 +482,7 @@ export function useMultiPane(
         const prevIndex = activePaneIndex.value;
         const newIndex = panes.value.length - 1;
         setActive(newIndex);
-        hooks.doAction('ui.pane.open:action:after', {
+        void hooks.doAction('ui.pane.open:action:after', {
             pane,
             index: newIndex,
             previousIndex: prevIndex === newIndex ? undefined : prevIndex,
@@ -485,7 +494,7 @@ export function useMultiPane(
         const closing = panes.value[i];
         if (!closing) return;
         // Pre-close hook
-        hooks.doAction('ui.pane.close:action:before', {
+        void hooks.doAction('ui.pane.close:action:before', {
             pane: closing,
             index: i,
             previousIndex: activePaneIndex.value,
@@ -497,7 +506,7 @@ export function useMultiPane(
         ) {
             try {
                 await options.onFlushDocument(closing.documentId);
-            } catch {}
+            } catch { /* intentionally empty */ }
         }
 
         // Redistribute width to remaining panes
@@ -625,7 +634,7 @@ export function useMultiPane(
         setActive(newIndex);
 
         // Fire existing pane open hook
-        hooks.doAction('ui.pane.open:action:after', {
+        void hooks.doAction('ui.pane.open:action:after', {
             pane,
             index: newIndex,
             previousIndex: prevIndex === newIndex ? undefined : prevIndex,
@@ -639,7 +648,7 @@ export function useMultiPane(
                     recordId: pane.documentId,
                     index: newIndex,
                 });
-            } catch {}
+            } catch { /* intentionally empty */ }
         }
     }
 
@@ -682,7 +691,8 @@ export function useMultiPane(
 
         // Store old values for hooks
         const oldMode = pane.mode;
-        const oldDocumentId = pane.documentId;
+        // oldDocumentId preserved for potential future hook use
+        void pane.documentId;
 
         // If no recordId provided and app has createInitialRecord, create new record
         let recordId = opts.recordId;
@@ -714,7 +724,7 @@ export function useMultiPane(
         // Fire hook if mode changed
         if (oldMode !== appId) {
             try {
-                hooks.doAction('ui.pane.open:action:after', {
+                void hooks.doAction('ui.pane.open:action:after', {
                     pane,
                     index,
                     previousIndex: index, // Same pane, just mode changed
@@ -736,7 +746,7 @@ export function useMultiPane(
                     index,
                     oldMode,
                 });
-            } catch {}
+            } catch { /* intentionally empty */ }
         }
     }
 
@@ -781,7 +791,7 @@ export function useMultiPane(
     // This is intentionally lightweight; if multiple instances are created the latest wins.
     try {
         setGlobalMultiPaneApi(api);
-    } catch {}
+    } catch { /* intentionally empty */ }
 
     // Clean up global reference on scope disposal to prevent memory leaks
     onScopeDispose(() => {
@@ -793,7 +803,7 @@ export function useMultiPane(
     // Initialize widths on mount (client-side only)
     if (typeof window !== 'undefined') {
         // Use nextTick to ensure DOM is ready
-        nextTick(() => {
+        void nextTick(() => {
             restoreWidths();
         });
     }

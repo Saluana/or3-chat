@@ -51,7 +51,7 @@ export function useModelStore() {
     ): Promise<OpenRouterModel[] | null> {
         if (!canUseDexie()) return null;
         try {
-            const rec: any = await kv.get(MODELS_CACHE_KEY);
+            const rec = await kv.get(MODELS_CACHE_KEY);
             if (!rec) return null;
             // rec.updated_at is seconds in Kv schema; convert to ms
             const updatedAtMs = rec.updated_at
@@ -71,9 +71,9 @@ export function useModelStore() {
             const raw = rec?.value;
             if (!raw || typeof raw !== 'string') return null;
             try {
-                const parsed = JSON.parse(raw);
+                const parsed: unknown = JSON.parse(raw);
                 if (!Array.isArray(parsed)) return null;
-                catalog.value = parsed;
+                catalog.value = parsed as OpenRouterModel[];
                 lastLoadedAt.value = updatedAtMs;
                 if (import.meta.dev)
                     console.debug(
@@ -84,16 +84,16 @@ export function useModelStore() {
                         }
                     );
                 // Removed dexie source console.log
-                return parsed;
-            } catch (e) {
+                return parsed as OpenRouterModel[];
+            } catch (parseErr) {
                 console.warn(
                     '[models-cache] JSON parse failed; deleting corrupt record',
-                    e
+                    parseErr
                 );
                 // best-effort cleanup
                 try {
                     await kv.delete(MODELS_CACHE_KEY);
-                } catch {}
+                } catch { /* intentionally empty */ }
                 return null;
             }
         } catch (e) {
@@ -185,28 +185,28 @@ export function useModelStore() {
                 const MAX_STALE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
                 if (canUseDexie()) {
                     try {
-                        const rec: any = await kv.get(MODELS_CACHE_KEY);
+                        const rec = await kv.get(MODELS_CACHE_KEY);
                         const raw = rec?.value;
                         const updatedAtMs = rec?.updated_at ? rec.updated_at * 1000 : 0;
                         const staleness = Date.now() - updatedAtMs;
                         
                         if (raw && typeof raw === 'string' && staleness < MAX_STALE_AGE_MS) {
                             try {
-                                const parsed = JSON.parse(raw);
+                                const parsed: unknown = JSON.parse(raw);
                                 if (Array.isArray(parsed) && parsed.length) {
                                     console.warn(
                                         '[models-cache] network failed; serving stale cached models',
                                         { count: parsed.length, staleDays: Math.floor(staleness / (24 * 60 * 60 * 1000)) }
                                     );
-                                    return parsed;
+                                    return parsed as OpenRouterModel[];
                                 }
-                            } catch (e) {
+                            } catch {
                                 // corrupted; best-effort delete
                                 try {
                                     await kv.delete(MODELS_CACHE_KEY);
-                                } catch (e2) {
+                                } catch (deleteErr: any) {
                                     if (import.meta.dev) {
-                                        console.warn('[models-cache] failed to delete corrupt record', e2);
+                                        console.warn('[models-cache] failed to delete corrupt record', deleteErr);
                                     }
                                 }
                             }
@@ -266,12 +266,12 @@ export function useModelStore() {
 
     async function getFavoriteModels() {
         try {
-            const record: any = await kv.get('favorite_models');
+            const record = await kv.get('favorite_models');
             const raw = record?.value;
             if (raw && typeof raw === 'string') {
-                const parsed = JSON.parse(raw);
+                const parsed: unknown = JSON.parse(raw);
                 if (Array.isArray(parsed)) {
-                    favoriteModels.value = parsed;
+                    favoriteModels.value = parsed as OpenRouterModel[];
                 } else {
                     favoriteModels.value = [];
                 }

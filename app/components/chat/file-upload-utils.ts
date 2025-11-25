@@ -40,7 +40,7 @@ export interface AttachmentLike {
     mime?: string;
     kind?: string | null;
     hash?: string;
-    meta?: any;
+    meta?: { hash: string; name?: string; mime_type?: string; size?: number } | null;
     error?: string;
 }
 
@@ -80,9 +80,9 @@ export async function persistAttachment(att: AttachmentLike) {
     };
     try {
         await persist();
-    } catch (e: any) {
+    } catch (e: unknown) {
         att.status = 'error';
-        att.error = e?.message || 'failed';
+        att.error = e instanceof Error ? e.message : 'failed';
         reportError(e, {
             code: 'ERR_FILE_PERSIST',
             toast: true,
@@ -90,7 +90,7 @@ export async function persistAttachment(att: AttachmentLike) {
                 att.status = 'pending';
                 persist().catch((err2) => {
                     att.status = 'error';
-                    att.error = err2?.message || 'failed';
+                    att.error = err2 instanceof Error ? err2.message : 'failed';
                 });
             },
             tags: { domain: 'files', stage: 'persist', name: att.name },

@@ -42,7 +42,7 @@ export function createRegistry<T extends RegistryItem>(
     globalKey: string,
     sortFn: (a: T, b: T) => number = defaultSort
 ): RegistryApi<T> {
-    const g: any = globalThis as any;
+    const g = globalThis as unknown as Record<string, Map<string, T>>;
     const registry: Map<string, T> =
         g[globalKey] || (g[globalKey] = new Map<string, T>());
 

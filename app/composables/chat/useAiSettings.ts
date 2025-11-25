@@ -21,20 +21,22 @@ function isBrowser() {
     return typeof window !== 'undefined' && typeof document !== 'undefined';
 }
 
-function coerceStringOrNull(v: any) {
+function coerceStringOrNull(v: unknown): string | null {
     if (v === null || v === undefined) return null;
-    return typeof v === 'string' ? v : String(v);
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+    return null;
 }
 
-function isObj(v: any): v is Record<string, any> {
-    return v && typeof v === 'object' && !Array.isArray(v);
+function isObj(v: unknown): v is Record<string, unknown> {
+    return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
 export function sanitizeAiSettings(
-    input: any,
+    input: unknown,
     defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS
 ): AiSettingsV1 {
-    const inObj: any = isObj(input) ? input : {};
+    const inObj = isObj(input) ? input : {} as Record<string, unknown>;
     const masterSystemPrompt =
         typeof inObj.masterSystemPrompt === 'string'
             ? inObj.masterSystemPrompt
@@ -71,7 +73,7 @@ function loadFromStorage(): AiSettingsV1 | null {
     try {
         const raw = localStorage.getItem(AI_SETTINGS_STORAGE_KEY);
         if (!raw) return null;
-        const parsed = JSON.parse(raw);
+        const parsed: unknown = JSON.parse(raw);
         return sanitizeAiSettings(parsed);
     } catch (e) {
          
@@ -80,8 +82,13 @@ function loadFromStorage(): AiSettingsV1 | null {
     }
 }
 
+interface AiSettingsStore {
+    settings: ReturnType<typeof ref<AiSettingsV1>>;
+    loaded: boolean;
+}
+
 // HMR-safe singleton store
-const g: any = globalThis as any;
+const g = globalThis as unknown as { __or3AiSettingsStoreV1?: AiSettingsStore };
 if (!g.__or3AiSettingsStoreV1) {
     g.__or3AiSettingsStoreV1 = {
         settings: ref<AiSettingsV1>({ ...DEFAULT_AI_SETTINGS }),
@@ -89,9 +96,9 @@ if (!g.__or3AiSettingsStoreV1) {
     };
 }
 
-const store = g.__or3AiSettingsStoreV1 as {
-    settings: ReturnType<typeof ref<AiSettingsV1>>;
-    loaded: boolean;
+const store: AiSettingsStore = g.__or3AiSettingsStoreV1 ?? {
+    settings: ref<AiSettingsV1>({ ...DEFAULT_AI_SETTINGS }),
+    loaded: false,
 };
 
 /** Public composable API */

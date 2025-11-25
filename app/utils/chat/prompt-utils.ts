@@ -10,13 +10,14 @@ interface TipTapTextNode {
 
 interface TipTapBlockNode {
     type: string;
-    content?: TipTapNode[];
+    content?: TipTapNode[] | readonly TipTapNode[];
 }
 
 type TipTapNode = TipTapTextNode | TipTapBlockNode;
 
 interface TipTapDocument {
-    content?: TipTapNode[];
+    type?: string;
+    content?: TipTapNode[] | readonly TipTapNode[];
 }
 
 /**
@@ -29,14 +30,14 @@ export function promptJsonToString(
     if (!json) return '';
     const lines: string[] = [];
 
-    function walk(node: TipTapNode | TipTapNode[] | undefined) {
+    function walk(node: TipTapNode | TipTapNode[] | readonly TipTapNode[] | undefined): void {
         if (!node) return;
         // Gather plain text from leaf text nodes
         if (Array.isArray(node)) {
-            node.forEach((n) => walk(n));
+            node.forEach((n: TipTapNode) => walk(n));
             return;
         }
-        if (node.type === 'text') {
+        if ((node as TipTapNode).type === 'text') {
             currentLine += (node as TipTapTextNode).text || '';
             return;
         }
@@ -49,7 +50,7 @@ export function promptJsonToString(
             'bulletList',
             'listItem',
         ]);
-        const isBlock = blockTypes.has(node.type);
+        const isBlock = blockTypes.has((node as TipTapNode).type);
         if (isBlock) {
             flushLine();
         }
@@ -66,7 +67,7 @@ export function promptJsonToString(
     }
 
     // Handle both array and document formats
-    let content: TipTapNode[] | TipTapNode | undefined;
+    let content: TipTapNode[] | readonly TipTapNode[] | TipTapNode | undefined;
     if (Array.isArray(json)) {
         content = json;
     } else if ('content' in json && json.content) {

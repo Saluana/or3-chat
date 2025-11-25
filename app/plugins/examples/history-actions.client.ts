@@ -8,7 +8,7 @@ import {
 } from '~/composables/threads/useThreadHistoryActions';
 import { useToast } from '#imports';
 import { db } from '~/db';
-import type { Post, Thread } from '~/db';
+import type { Post } from '~/db';
 
 /**
  * Example plugin: History Actions
