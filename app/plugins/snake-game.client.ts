@@ -21,7 +21,9 @@ export default defineNuxtPlugin(() => {
             postType: 'snake-game-score',
             createInitialRecord: async () => {
                 // Create a new game session record
-                const api = (globalThis as { __or3PanePluginApi?: PanePluginApi }).__or3PanePluginApi;
+                const api = (
+                    globalThis as { __or3PanePluginApi?: PanePluginApi }
+                ).__or3PanePluginApi;
                 if (!api?.posts) {
                     return null;
                 }

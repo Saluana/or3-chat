@@ -190,7 +190,8 @@ const err = <C extends PaneApiErrorCode>(code: C, message: string): Err<C> => ({
     message,
 });
 const mp = (): MultiPaneApi | undefined =>
-    (globalThis as unknown as { __or3MultiPaneApi?: MultiPaneApi }).__or3MultiPaneApi;
+    (globalThis as unknown as { __or3MultiPaneApi?: MultiPaneApi })
+        .__or3MultiPaneApi;
 function getPaneEntry(
     id: string
 ): { pane: PaneState; index: number; mp: MultiPaneApi } | null {
@@ -249,7 +250,9 @@ function patchDoc(base: unknown, patch: unknown): DocJson {
         else if (Array.isArray(p.content)) b.content = p.content;
         for (const k of Object.keys(p)) {
             if (k !== 'content') {
-                (b as Record<string, unknown>)[k] = (p as Record<string, unknown>)[k];
+                (b as Record<string, unknown>)[k] = (
+                    p as Record<string, unknown>
+                )[k];
             }
         }
     }
@@ -259,7 +262,9 @@ const log = (tag: string, meta: unknown) => {
     if (import.meta.dev)
         try {
             console.debug('[pane-plugin-api] ' + tag, meta);
-        } catch { /* ignore */ }
+        } catch {
+            /* ignore */
+        }
 };
 
 /**
@@ -393,7 +398,10 @@ function makeApi(): PanePluginApi {
                 record?: { content?: unknown };
             };
             const merged = patchDoc(st?.record?.content, patch);
-            setDocumentContent(p.documentId, merged as unknown as TipTapDocument);
+            setDocumentContent(
+                p.documentId,
+                merged as unknown as TipTapDocument
+            );
             log('patchDocumentContent', { source, paneId });
             return { ok: true };
         },

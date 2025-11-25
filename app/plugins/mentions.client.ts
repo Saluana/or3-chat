@@ -47,7 +47,9 @@ function isNonNullObject(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
 }
 
-function normalizeMessagesPayload(payload: MessagesPayload): OpenRouterMessage[] {
+function normalizeMessagesPayload(
+    payload: MessagesPayload
+): OpenRouterMessage[] {
     if (Array.isArray(payload)) {
         // Array of { messages: ... } objects
         return payload.flatMap((p) => p.messages);
@@ -58,7 +60,11 @@ function normalizeMessagesPayload(payload: MessagesPayload): OpenRouterMessage[]
     return [];
 }
 
-function safeId(payload: { entity?: { id?: string }; updated?: { id?: string }; id?: string }): string | null {
+function safeId(payload: {
+    entity?: { id?: string };
+    updated?: { id?: string };
+    id?: string;
+}): string | null {
     if (typeof payload.id === 'string') return payload.id;
     if (payload.entity && typeof payload.entity.id === 'string')
         return payload.entity.id;
@@ -185,9 +191,14 @@ export default defineNuxtPlugin(() => {
 
             const MentionExtension = MentionWithAttrs.configure({
                 HTMLAttributes: { class: 'mention' },
-                renderText({ node }: { node: { attrs: Record<string, unknown> } }) {
+                renderText({
+                    node,
+                }: {
+                    node: { attrs: Record<string, unknown> };
+                }) {
                     const attrs = node.attrs || {};
-                    const label = typeof attrs.label === 'string' ? attrs.label : '';
+                    const label =
+                        typeof attrs.label === 'string' ? attrs.label : '';
                     const id = typeof attrs.id === 'string' ? attrs.id : '';
                     return `@${label || id}`;
                 },
@@ -207,81 +218,90 @@ export default defineNuxtPlugin(() => {
     );
 
     // 3) Inject context via filter before send (registered once at plugin init)
-    hooks.on('ai.chat.messages:filter:before_send', async (payload: MessagesPayload) => {
-        const module = mentionsModule || (await loadMentionsModule());
-        if (!module) return payload;
+    hooks.on(
+        'ai.chat.messages:filter:before_send',
+        async (payload: MessagesPayload) => {
+            const module = mentionsModule || (await loadMentionsModule());
+            if (!module) return payload;
 
-        const originalMessages = normalizeMessagesPayload(payload);
+            const originalMessages = normalizeMessagesPayload(payload);
 
-        if (!originalMessages.length) {
-            return { messages: originalMessages };
+            if (!originalMessages.length) {
+                return { messages: originalMessages };
+            }
+
+            const lastUser = [...originalMessages]
+                .reverse()
+                .find((m) => m.role === 'user');
+
+            const editorContent =
+                lastUser &&
+                isNonNullObject(lastUser) &&
+                'editorContent' in lastUser
+                    ? (lastUser as Record<string, unknown>).editorContent ??
+                      lastEditorContent
+                    : lastEditorContent;
+            if (!editorContent) {
+                return { messages: originalMessages };
+            }
+
+            if (!isNonNullObject(editorContent)) {
+                return { messages: originalMessages };
+            }
+
+            const mentions = module.collectMentions(editorContent);
+            if (mentions.length === 0) {
+                return { messages: originalMessages };
+            }
+
+            const resolved = await Promise.all(
+                mentions.map(module.resolveMention)
+            );
+            const contextBlocks = resolved.filter(
+                (c): c is string => c !== null
+            );
+
+            if (contextBlocks.length === 0) {
+                return { messages: originalMessages };
+            }
+
+            // Build XML-wrapped context with mention metadata
+            const escapeXml = (s: string) =>
+                s
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&apos;');
+
+            const contextMessages: OpenRouterMessage[] = mentions
+                .map((m, idx): OpenRouterMessage | null => {
+                    const content = resolved[idx];
+                    if (!content) return null;
+                    const label = m.label || '';
+                    const xml = `<context type="mention" source="${
+                        m.source
+                    }" id="${m.id}" label="${escapeXml(label)}">\n${escapeXml(
+                        content
+                    )}\n</context>`;
+                    return {
+                        role: 'system',
+                        content: [{ type: 'text', text: xml }],
+                    };
+                })
+                .filter((m): m is OpenRouterMessage => m !== null);
+
+            // Clear captured content after use to avoid stale data
+            lastEditorContent = null;
+
+            const merged: OpenRouterMessage[] = [
+                ...contextMessages,
+                ...originalMessages,
+            ];
+
+            return { messages: merged };
         }
-
-        const lastUser = [...originalMessages]
-            .reverse()
-            .find((m) => m.role === 'user');
-
-        const editorContent =
-            lastUser && isNonNullObject(lastUser) && 'editorContent' in lastUser
-                ? (lastUser as Record<string, unknown>).editorContent ??
-                  lastEditorContent
-                : lastEditorContent;
-        if (!editorContent) {
-            return { messages: originalMessages };
-        }
-
-        if (!isNonNullObject(editorContent)) {
-            return { messages: originalMessages };
-        }
-
-        const mentions = module.collectMentions(
-            editorContent
-        );
-        if (mentions.length === 0) {
-            return { messages: originalMessages };
-        }
-
-        const resolved = await Promise.all(mentions.map(module.resolveMention));
-        const contextBlocks = resolved.filter((c): c is string => c !== null);
-
-        if (contextBlocks.length === 0) {
-            return { messages: originalMessages };
-        }
-
-        // Build XML-wrapped context with mention metadata
-        const escapeXml = (s: string) =>
-            s
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&apos;');
-
-        const contextMessages: OpenRouterMessage[] = mentions
-            .map((m, idx): OpenRouterMessage | null => {
-                const content = resolved[idx];
-                if (!content) return null;
-                const label = m.label || '';
-                const xml = `<context type="mention" source="${m.source}" id="${m.id}" label="${escapeXml(label)}">\n${escapeXml(
-                    content
-                )}\n</context>`;
-                return {
-                    role: 'system',
-                    content: [{ type: 'text', text: xml }],
-                };
-            })
-            .filter((m): m is OpenRouterMessage => m !== null);
-
-        // Clear captured content after use to avoid stale data
-        lastEditorContent = null;
-
-        const merged: OpenRouterMessage[] = [
-            ...contextMessages,
-            ...originalMessages,
-        ];
-
-        return { messages: merged };
-    });
+    );
 
     // 4) Wire DB hooks for incremental index updates (registered once at plugin init)
     // These are intentionally fire-and-forget async operations
@@ -306,7 +326,8 @@ export default defineNuxtPlugin(() => {
         (payload: DbUpdatePayload<DocumentEntity>) => {
             void (async () => {
                 const module = mentionsModule || (await loadMentionsModule());
-                if (module && payload.updated) module.upsertDocument(payload.updated);
+                if (module && payload.updated)
+                    module.upsertDocument(payload.updated);
             })();
         },
         { kind: 'action' }
@@ -339,7 +360,8 @@ export default defineNuxtPlugin(() => {
         (payload: DbCreatePayload<ThreadEntity>) => {
             void (async () => {
                 const module = mentionsModule || (await loadMentionsModule());
-                if (module && payload.entity) module.upsertThread(payload.entity);
+                if (module && payload.entity)
+                    module.upsertThread(payload.entity);
             })();
         },
         { kind: 'action' }
@@ -350,7 +372,8 @@ export default defineNuxtPlugin(() => {
         (payload: DbCreatePayload<ThreadEntity>) => {
             void (async () => {
                 const module = mentionsModule || (await loadMentionsModule());
-                if (module && payload.entity) module.upsertThread(payload.entity);
+                if (module && payload.entity)
+                    module.upsertThread(payload.entity);
             })();
         },
         { kind: 'action' }
