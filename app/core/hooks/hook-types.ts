@@ -469,10 +469,10 @@ export type ExtensionActionHookName = keyof Or3ActionHooks;
 // NOTE: ExtensionActionHookName is included for API consumers to extend via global augmentation.
 // When Or3ActionHooks is empty, it resolves to `never` which is intentionally left out of the
 // union until it's augmented with actual keys.
-// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 export type ActionHookName =
     | CoreActionHookName
     | DbActionHookName
+    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
     | ExtensionActionHookName
     | (string & {});
 
@@ -490,10 +490,10 @@ export type ExtensionFilterHookName = keyof Or3FilterHooks;
 // NOTE: ExtensionFilterHookName is included for API consumers to extend via global augmentation.
 // When Or3FilterHooks is empty, it resolves to `never` which is intentionally left out of the
 // union until it's augmented with actual keys.
-// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 export type FilterHookName =
     | CoreFilterHookName
     | DbFilterHookName
+    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
     | ExtensionFilterHookName
     | (string & {});
 
