@@ -19,11 +19,12 @@ interface ModelDoc {
     modalities: string;
 }
 
-type OramaInstance = any;
+// Orama instance type (opaque to avoid @orama/orama type dependency)
+type OramaInstance = Record<string, unknown>;
 let currentDb: OramaInstance | null = null;
 let lastQueryToken = 0;
 
-async function buildIndex(models: OpenRouterModel[]) {
+async function buildIndex(models: OpenRouterModel[]): Promise<OramaInstance | null> {
     currentDb = await createDb({
         id: 'string',
         slug: 'string',
@@ -86,10 +87,15 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
             const r = await searchWithIndex(currentDb, raw, 100);
             if (token !== lastQueryToken) return; // stale response
             const hits = Array.isArray(r?.hits) ? r.hits : [];
+            interface SearchHit {
+                document?: { id?: string };
+                id?: string;
+            }
             const mapped = hits
-                .map((h: any) => {
+                .map((h: SearchHit) => {
                     const doc = h.document || h; // support differing shapes
-                    return idToModel.value[doc?.id];
+                    const docId = doc?.id;
+                    return docId ? idToModel.value[docId] : undefined;
                 })
                 .filter(
                     (m: OpenRouterModel | undefined): m is OpenRouterModel =>
@@ -128,10 +134,12 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
         await runSearch();
     });
 
-    let t: any;
+    let searchTimeout: ReturnType<typeof setTimeout> | undefined;
     watch(query, () => {
-        clearTimeout(t);
-        t = setTimeout(runSearch, 120);
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            void runSearch();
+        }, 120);
     });
 
     return { query, results, ready, busy, rebuild: ensureIndex };

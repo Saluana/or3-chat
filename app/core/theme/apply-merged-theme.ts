@@ -8,6 +8,10 @@ import {
 import { isBrowser } from '~/utils/env';
 const backgroundTokenResolver = createThemeBackgroundTokenResolver();
 
+type NuxtAppGlobals = typeof globalThis & {
+    useNuxtApp?: () => { $theme?: ThemePlugin };
+};
+
 export async function applyMergedTheme(
     mode: 'light' | 'dark',
     overrides: UserThemeOverrides
@@ -15,8 +19,9 @@ export async function applyMergedTheme(
     if (!isBrowser()) return;
 
     // Get active base theme (from theme plugin registry)
-    const nuxtApp = (globalThis as any).useNuxtApp?.();
-    const themePlugin = nuxtApp?.$theme as ThemePlugin | undefined;
+    const g = globalThis as NuxtAppGlobals;
+    const nuxtApp = g.useNuxtApp?.();
+    const themePlugin = nuxtApp?.$theme;
 
     if (!themePlugin) {
         console.warn('[apply-merged-theme] Theme plugin not found');
@@ -265,7 +270,22 @@ function buildMergedBackgrounds(
     return result;
 }
 
-function convertLayerToThemeFormat(layer: Partial<any>): any {
+interface LayerInput {
+    url?: string | null;
+    opacity?: number;
+    fit?: boolean;
+    sizePx?: number;
+    repeat?: 'repeat' | 'no-repeat';
+}
+
+interface ThemeLayerFormat {
+    image: string | null;
+    opacity?: number;
+    size?: string;
+    repeat?: 'repeat' | 'no-repeat';
+}
+
+function convertLayerToThemeFormat(layer: LayerInput): ThemeLayerFormat {
     return {
         image: layer.url || null,
         opacity: layer.opacity,

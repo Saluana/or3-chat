@@ -9,6 +9,12 @@ import { isBrowser } from '~/utils/env';
 const STORAGE_KEY_LIGHT = 'or3:user-theme-overrides:light';
 const STORAGE_KEY_DARK = 'or3:user-theme-overrides:dark';
 
+interface ToastPayload {
+    title?: string;
+    description?: string;
+    color?: string;
+}
+
 type UserThemeOverrideGlobals = typeof globalThis & {
     __or3UserThemeOverrides?: {
         light: ReturnType<typeof ref<UserThemeOverrides>>;
@@ -17,7 +23,8 @@ type UserThemeOverrideGlobals = typeof globalThis & {
         loaded: boolean;
     };
     useNuxtApp?: () => {
-        $toast?: { add?: (payload: any) => void };
+        $toast?: { add?: (payload: ToastPayload) => void };
+        $theme?: { set?: (mode: 'light' | 'dark') => void };
     };
 };
 
@@ -46,7 +53,7 @@ function loadFromStorage(mode: 'light' | 'dark'): UserThemeOverrides | null {
         const key = mode === 'light' ? STORAGE_KEY_LIGHT : STORAGE_KEY_DARK;
         const raw = localStorage.getItem(key);
         if (!raw) return null;
-        return JSON.parse(raw);
+        return JSON.parse(raw) as UserThemeOverrides;
     } catch (e) {
         console.warn('[user-theme-overrides] Failed to parse stored data', e);
         return null;
@@ -244,8 +251,8 @@ export function useUserThemeOverrides() {
 
         // Also update theme plugin to sync classes
         if (isBrowser()) {
-            const nuxtApp: any = (globalThis as any).useNuxtApp?.();
-            nuxtApp?.$theme?.set(mode);
+            const nuxtApp = g.useNuxtApp?.();
+            nuxtApp?.$theme?.set?.(mode);
         }
     }
 
@@ -298,8 +305,8 @@ export function useUserThemeOverrides() {
 }
 
 /** Deep merge helper for user overrides */
-function deepMerge<T>(base: T, patch: Partial<T>): T {
-    const result: any = { ...base };
+function deepMerge<T extends Record<string, unknown>>(base: T, patch: Partial<T>): T {
+    const result = { ...base } as Record<string, unknown>;
     for (const key in patch) {
         const val = patch[key];
         if (val === undefined) continue; // skip undefined
@@ -307,8 +314,11 @@ function deepMerge<T>(base: T, patch: Partial<T>): T {
         if (val === null || typeof val !== 'object' || Array.isArray(val)) {
             result[key] = val; // allow null to clear, primitives, and arrays
         } else {
-            result[key] = deepMerge(result[key] || {}, val);
+            result[key] = deepMerge(
+                (result[key] || {}) as Record<string, unknown>,
+                val as Record<string, unknown>
+            );
         }
     }
-    return result;
+    return result as T;
 }
