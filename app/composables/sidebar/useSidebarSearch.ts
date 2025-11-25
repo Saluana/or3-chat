@@ -108,6 +108,7 @@ async function buildIndex(
     projects: Project[],
     documents: Post[]
 ) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const instance = await createDb({
         id: 'string',
         kind: 'string',
@@ -117,6 +118,7 @@ async function buildIndex(
     if (!instance) return null;
     const docs = toDocs(threads, projects, documents);
     if (docs.length) await buildOramaIndex(instance, docs);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return instance;
 }
 
@@ -160,6 +162,7 @@ export function useSidebarSearch(
     projects: Ref<Project[]>,
     documents: Ref<Post[]>
 ) {
+    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
     let dbInstance: OramaInstance | null = null;
     let lastQueryToken = 0;
     let warnedFallback = false;
@@ -263,7 +266,8 @@ export function useSidebarSearch(
         try {
             const res = await searchWithIndex(dbInstance, raw, 500);
             if (token !== lastQueryToken) return; // stale
-            const hits = Array.isArray(res?.hits) ? res.hits : [];
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            const hits = Array.isArray(res?.hits) ? res.hits as unknown[] : [];
             const byKind: Record<'thread' | 'project' | 'doc', Set<string>> = {
                 thread: new Set(),
                 project: new Set(),
@@ -273,8 +277,8 @@ export function useSidebarSearch(
                 const doc =
                     (h as { document?: IndexDoc }).document || (h as IndexDoc);
                 if (
-                    doc?.kind &&
-                    doc?.id &&
+                    doc.kind &&
+                    doc.id &&
                     byKind[doc.kind]
                 ) {
                     byKind[doc.kind].add(doc.id);
@@ -300,7 +304,7 @@ export function useSidebarSearch(
                 byKind.doc.has(d.id)
             );
             // If a project contains matching threads/docs but project name itself didn't match, UI can choose to retain by containment; we leave that logic to integration to keep composable lean.
-        } catch (e) {
+        } catch {
             substringFallback(raw);
         }
     }
@@ -311,9 +315,11 @@ export function useSidebarSearch(
         [threads, projects, documents],
         () => {
             if (rebuildTimer) clearTimeout(rebuildTimer);
-            rebuildTimer = setTimeout(async () => {
-                await ensureIndex();
-                await runSearch();
+            rebuildTimer = setTimeout(() => {
+                void (async () => {
+                    await ensureIndex();
+                    await runSearch();
+                })();
             }, SEARCH_DEBOUNCE_MS);
         },
         { deep: false }
@@ -324,7 +330,7 @@ export function useSidebarSearch(
     let queryTimer: ReturnType<typeof setTimeout> | null = null;
     const stopQueryWatch = watch(query, () => {
         if (queryTimer) clearTimeout(queryTimer);
-        queryTimer = setTimeout(runSearch, QUERY_DEBOUNCE_MS);
+        queryTimer = setTimeout(() => void runSearch(), QUERY_DEBOUNCE_MS);
     });
     cleanupFns.push(stopQueryWatch);
 

@@ -205,7 +205,7 @@ export function useSidebarFooterActions(
 ): ComputedRef<SidebarFooterActionEntry[]> {
     const items = footerRegistry.useItems();
     return computed(() => {
-        const ctx = context() || {};
+        const ctx = context();
         return items.value
             .filter((action) => !action.visible || action.visible(ctx))
             .sort(

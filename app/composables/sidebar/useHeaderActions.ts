@@ -102,7 +102,7 @@ export function useHeaderActions(
 ): ComputedRef<HeaderActionEntry[]> {
     const items = registry.useItems();
     return computed(() => {
-        const ctx = context() || {};
+        const ctx = context();
         return items.value
             .filter((action) => !action.visible || action.visible(ctx))
             .sort(

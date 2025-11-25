@@ -12,11 +12,15 @@ interface ThreadDoc {
     updated_at: number;
 }
 
+// OramaInstance is typed as any from the orama module
+// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-explicit-any
 type OramaInstance = any;
+// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 let dbInstance: OramaInstance | null = null;
 let lastQueryToken = 0;
 
 async function buildIndex(threads: Thread[]) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     dbInstance = await createDb({
         id: 'string',
         title: 'string',
@@ -29,6 +33,7 @@ async function buildIndex(threads: Thread[]) {
         updated_at: t.updated_at,
     }));
     await buildOramaIndex(dbInstance, docs);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return dbInstance;
 }
 
@@ -69,11 +74,13 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
         try {
             const r = await searchWithIndex(dbInstance, raw, 200);
             if (token !== lastQueryToken) return;
-            const hits = Array.isArray(r?.hits) ? r.hits : [];
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            const hits: unknown[] = Array.isArray(r?.hits) ? r.hits as unknown[] : [];
             const mapped = hits
-                .map((h: any) => {
-                    const doc = h.document || h;
-                    return idToThread.value[doc?.id];
+                .map((h) => {
+                    const hit = h as { document?: ThreadDoc } | ThreadDoc;
+                    const doc: ThreadDoc = 'document' in hit && hit.document ? hit.document : hit as ThreadDoc;
+                    return idToThread.value[doc.id];
                 })
                 .filter((t: Thread | undefined): t is Thread => !!t);
             if (!mapped.length) {
@@ -102,7 +109,7 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     watch(query, () => {
         if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(runSearch, 120);
+        debounceTimer = setTimeout(() => void runSearch(), 120);
     });
 
     // Cleanup on component unmount
