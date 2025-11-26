@@ -74,7 +74,7 @@ export async function exchangeOpenRouterCode(
         );
         return { ok: false, status: resp.status, reason: 'bad-response' };
     }
-    const userKey = json.key || json.access_token;
+    const userKey = json.key ?? json.access_token;
     if (!userKey) {
         reportError(
             err('ERR_AUTH', 'Auth exchange returned no key', {

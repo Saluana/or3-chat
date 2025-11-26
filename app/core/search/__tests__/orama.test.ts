@@ -120,7 +120,7 @@ describe('Orama search helpers', () => {
                 term: 'test query',
                 limit: 50,
             });
-            expect(results).toBe(mockResults);
+            expect(results).toStrictEqual(mockResults);
         });
 
         it('should use default limit of 100', async () => {

@@ -38,12 +38,15 @@ export interface ORMessage {
 }
 
 // Caches on global scope to avoid repeated blob -> base64 conversions.
-const dataUrlCache: Map<string, string> = ((
-    globalThis as any
-).__or3ImageDataUrlCache ||= new Map());
-const inflight: Map<string, Promise<string | null>> = ((
-    globalThis as any
-).__or3ImageHydrateInflight ||= new Map());
+type GlobalCaches = {
+    __or3ImageDataUrlCache?: Map<string, string>;
+    __or3ImageHydrateInflight?: Map<string, Promise<string | null>>;
+};
+const g = globalThis as GlobalCaches;
+if (!g.__or3ImageDataUrlCache) g.__or3ImageDataUrlCache = new Map();
+if (!g.__or3ImageHydrateInflight) g.__or3ImageHydrateInflight = new Map();
+const dataUrlCache: Map<string, string> = g.__or3ImageDataUrlCache;
+const inflight: Map<string, Promise<string | null>> = g.__or3ImageHydrateInflight;
 // Simple LRU pruning to prevent unbounded growth
 const MAX_DATA_URL_CACHE = 64;
 function pruneCache(map: Map<string, string>, limit = MAX_DATA_URL_CACHE) {
@@ -138,8 +141,19 @@ const DEFAULT_MAX_IMAGE_INPUTS = 8;
 
 interface ChatMessageLike {
     role: 'user' | 'assistant' | 'system';
-    content: any; // string | parts[]
+    content: string | ChatContentPart[]; // proper content typing
     file_hashes?: string | null;
+}
+
+/** Incoming message content part (from Vercel AI SDK / DB format) */
+interface ChatContentPart {
+    type: string;
+    text?: string;
+    image?: string;
+    data?: string;
+    mediaType?: string;
+    mime?: string;
+    filename?: string;
 }
 
 // Build OpenRouter messages with hydrated images.
@@ -213,7 +227,7 @@ export async function buildOpenRouterMessages(
                     ) {
                         hashCandidates.push({
                             hash: p.image,
-                            role: m.role as any,
+                            role: m.role as BuildImageCandidate['role'],
                             messageIndex: idx,
                         });
                     }
@@ -268,11 +282,11 @@ export async function buildOpenRouterMessages(
         // Extract textual content
         let text = '';
         if (Array.isArray(m.content)) {
-            const textParts = m.content.filter((p: any) => p.type === 'text');
+            const textParts = m.content.filter((p) => p.type === 'text');
             if (textParts.length)
-                text = textParts.map((p: any) => p.text || '').join('');
+                text = textParts.map((p) => p.text || '').join('');
             // Add files (PDFs etc) directly
-            const fileParts = m.content.filter((p: any) => p.type === 'file');
+            const fileParts = m.content.filter((p) => p.type === 'file');
             for (const fp of fileParts) {
                 if (!fp.data) continue;
                 const mediaType =
@@ -375,9 +389,9 @@ export async function buildOpenRouterMessages(
             if (looksLocal) {
                 try {
                     const { getFileMeta } = await import('~/db/files');
-                    const meta: any = await getFileMeta(img.hash).catch(
+                    const meta = await getFileMeta(img.hash).catch(
                         () => null
-                    );
+                    ) as { mime?: string } | null;
                     if (
                         meta &&
                         typeof meta.mime === 'string' &&
