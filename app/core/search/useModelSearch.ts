@@ -88,7 +88,7 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
         try {
             const r = await searchWithIndex(currentDb, raw, 100);
             if (token !== lastQueryToken) return; // stale response
-            const hits = Array.isArray(r?.hits) ? r.hits : [];
+            const hits = Array.isArray(r.hits) ? r.hits : [];
             interface SearchHit {
                 document?: { id?: string };
                 id?: string;
@@ -96,7 +96,7 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
             const mapped = hits
                 .map((h: SearchHit) => {
                     const doc = h.document || h; // support differing shapes
-                    const docId = doc?.id;
+                    const docId = doc.id;
                     return docId ? idToModel.value[docId] : undefined;
                 })
                 .filter(

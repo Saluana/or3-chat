@@ -191,7 +191,7 @@ export async function buildOpenRouterMessages(
         if (!m) continue;
         if (m.file_hashes) {
             try {
-                const hashes = parseFileHashes(m.file_hashes) || [];
+                const hashes = parseFileHashes(m.file_hashes);
                 for (const h of hashes) {
                     if (!h) continue;
                     if (
@@ -219,7 +219,7 @@ export async function buildOpenRouterMessages(
         // Also inspect inline parts if array form
         if (Array.isArray(m.content)) {
             for (const p of m.content) {
-                if (p?.type === 'image' && typeof p.image === 'string') {
+                if (p.type === 'image' && typeof p.image === 'string') {
                     if (
                         p.image.startsWith('data:image/') ||
                         /^https?:/i.test(p.image) ||

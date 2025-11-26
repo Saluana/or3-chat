@@ -30,9 +30,12 @@ import { useNuxtApp } from '#app';
 import type { ComputedRef, ComponentPublicInstance } from 'vue';
 import type { ResolveParams } from '../theme/_shared/runtime-resolver';
 
+/** Resolved theme override props - can contain any component props */
+type OverrideProps = Record<string, unknown>;
+
 interface ComponentOverrideCache {
     theme: string;
-    entries: Map<string, Record<string, any>>;
+    entries: Map<string, OverrideProps>;
 }
 
 // Resolution cache using WeakMap to prevent memory leaks
@@ -72,7 +75,7 @@ export interface UseThemeResolverReturn {
      * @param params - Resolution parameters
      * @returns Resolved override props
      */
-    resolveOverrides: (params: ResolveParams) => Record<string, any>;
+    resolveOverrides: (params: ResolveParams) => OverrideProps;
 
     /**
      * Current active theme name
@@ -99,13 +102,9 @@ export function useThemeResolver(): UseThemeResolverReturn {
     const nuxtApp = useNuxtApp();
     const theme = nuxtApp.$theme;
 
-    if (!theme) {
-        throw new Error('[useThemeResolver] Theme plugin not found');
-    }
-
     const activeTheme = computed(() => theme.activeTheme.value);
 
-    const resolveOverrides = (params: ResolveParams): Record<string, any> => {
+    const resolveOverrides = (params: ResolveParams): OverrideProps => {
         const currentTheme = theme.activeTheme.value;
         const resolver = theme.getResolver(currentTheme);
 
@@ -161,7 +160,7 @@ export function useThemeResolver(): UseThemeResolverReturn {
  */
 export function useThemeOverrides(
     params: ResolveParams | ComputedRef<ResolveParams>
-): ComputedRef<Record<string, any>> {
+): ComputedRef<OverrideProps> {
     const { resolveOverrides, activeTheme } = useThemeResolver();
     const instance = getCurrentInstance();
 

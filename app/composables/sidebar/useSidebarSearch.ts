@@ -266,7 +266,7 @@ export function useSidebarSearch(
         try {
             const res = await searchWithIndex(dbInstance, raw, 500);
             if (token !== lastQueryToken) return; // stale
-            const hits = Array.isArray(res?.hits) ? res.hits : [];
+            const hits = Array.isArray(res.hits) ? res.hits : [];
             const byKind: Record<'thread' | 'project' | 'doc', Set<string>> = {
                 thread: new Set(),
                 project: new Set(),
@@ -275,12 +275,9 @@ export function useSidebarSearch(
             for (const h of hits) {
                 const doc =
                     (h as { document?: IndexDoc }).document || (h as IndexDoc);
-                if (
-                    doc.kind &&
-                    doc.id &&
-                    byKind[doc.kind]
-                ) {
-                    byKind[doc.kind].add(doc.id);
+                const kind = doc.kind as 'thread' | 'project' | 'doc' | undefined;
+                if (kind && doc.id) {
+                    byKind[kind].add(doc.id);
                 }
             }
             // Apply sets

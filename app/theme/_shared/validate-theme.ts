@@ -33,8 +33,11 @@ export function validateThemeDefinition(
     const errors: ValidationError[] = [];
     const warnings: ValidationError[] = [];
 
+    // Cast to partial for validation checks (runtime may have missing fields)
+    const partialConfig = config as Partial<ThemeDefinition>;
+
     // Check required fields
-    if (!config.name) {
+    if (!partialConfig.name) {
         errors.push({
             severity: 'error',
             code: 'THEME_001',
@@ -43,18 +46,18 @@ export function validateThemeDefinition(
             suggestion:
                 'Add a "name" field with a kebab-case identifier (e.g., "nature", "cyberpunk")',
         });
-    } else if (!/^[a-z][a-z0-9-]*$/.test(config.name)) {
+    } else if (!/^[a-z][a-z0-9-]*$/.test(partialConfig.name)) {
         errors.push({
             severity: 'error',
             code: 'THEME_002',
-            message: `Theme name "${config.name}" must be kebab-case (lowercase letters, numbers, and hyphens only)`,
+            message: `Theme name "${partialConfig.name}" must be kebab-case (lowercase letters, numbers, and hyphens only)`,
             file: 'theme.ts',
             suggestion: 'Use kebab-case format: "my-theme-name"',
         });
     }
 
     // Check colors object
-    if (!config.colors || typeof config.colors !== 'object') {
+    if (!partialConfig.colors || typeof partialConfig.colors !== 'object') {
         errors.push({
             severity: 'error',
             code: 'THEME_003',
@@ -137,17 +140,6 @@ export function validateThemeDefinition(
                     suggestion: 'Use standard CSS selectors instead',
                 });
             }
-
-            // Validate props object
-            if (typeof props !== 'object' || props === null) {
-                errors.push({
-                    severity: 'error',
-                    code: 'THEME_009',
-                    message: `Invalid props for selector "${selector}"`,
-                    file: 'theme.ts',
-                    suggestion: 'Props must be an object with valid properties',
-                });
-            }
         }
     }
 
@@ -184,7 +176,7 @@ export function validateThemeDefinition(
                     suggestion: `Use one of: ${[...repeatOptions].join(', ')}`,
                 });
             }
-            if (layer.fit && layer.fit !== 'cover' && layer.fit !== 'contain') {
+            if (layer.fit && layer.fit !== 'cover' && layer.fit !== ('contain' as string)) {
                 const fitValue: string = layer.fit;
                 warnings.push({
                     severity: 'warning',

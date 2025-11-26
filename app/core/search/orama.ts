@@ -102,7 +102,8 @@ export async function searchWithIndex(
         query.where = options.where;
     }
     const result = await searchFn(db, query);
-    return result || { hits: [] };
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- searchFn may return null at runtime
+    return result ?? { hits: [] };
 }
 
 /**

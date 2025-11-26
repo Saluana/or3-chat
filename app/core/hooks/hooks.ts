@@ -8,7 +8,7 @@ import { reportError, err } from '~/utils/errors';
 
 export type HookKind = 'action' | 'filter';
 
-type AnyFn = (...args: any[]) => any;
+type AnyFn = (...args: unknown[]) => unknown;
 
 export interface RegisterOptions {
     priority?: number; // default 10
@@ -240,6 +240,7 @@ export function createHookEngine(): HookEngine {
     }
 
     function recordTiming(name: string, ms: number) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- key may not exist at runtime
         (diagnostics.timings[name] ||= []).push(ms);
     }
 
@@ -266,10 +267,7 @@ export function createHookEngine(): HookEngine {
                 if (currentPriorityStack.length)
                     currentPriorityStack[currentPriorityStack.length - 1] =
                         priority;
-                const start =
-                    typeof performance !== 'undefined' && performance.now
-                        ? performance.now()
-                        : Date.now();
+                const start = performance.now();
                 try {
                     if (isFilter) {
                         value = await fn(value, ...args);
@@ -286,10 +284,7 @@ export function createHookEngine(): HookEngine {
                     );
                     recordError(name);
                 } finally {
-                    const end =
-                        typeof performance !== 'undefined' && performance.now
-                            ? performance.now()
-                            : Date.now();
+                    const end = performance.now();
                     recordTiming(name, end - start);
                 }
             }
@@ -317,10 +312,7 @@ export function createHookEngine(): HookEngine {
                 if (currentPriorityStack.length)
                     currentPriorityStack[currentPriorityStack.length - 1] =
                         priority;
-                const start =
-                    typeof performance !== 'undefined' && performance.now
-                        ? performance.now()
-                        : Date.now();
+                const start = performance.now();
                 try {
                     if (isFilter) {
                         value = fn(value, ...args);
@@ -337,10 +329,7 @@ export function createHookEngine(): HookEngine {
                     );
                     recordError(name);
                 } finally {
-                    const end =
-                        typeof performance !== 'undefined' && performance.now
-                            ? performance.now()
-                            : Date.now();
+                    const end = performance.now();
                     recordTiming(name, end - start);
                 }
             }

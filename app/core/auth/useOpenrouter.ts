@@ -31,10 +31,8 @@ export function useOpenRouterAuth() {
         let codeChallenge = codeVerifier;
         let codeChallengeMethod: 'S256' | 'plain' = 'plain';
         try {
-            if (
-                typeof crypto !== 'undefined' &&
-                typeof crypto.subtle?.digest === 'function'
-            ) {
+            const subtle = typeof crypto !== 'undefined' ? crypto.subtle : undefined;
+            if (subtle && typeof subtle.digest === 'function') {
                 const challengeBuffer = await sha256(codeVerifier);
                 codeChallenge = base64urlencode(challengeBuffer);
                 codeChallengeMethod = 'S256';

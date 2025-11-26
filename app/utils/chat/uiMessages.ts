@@ -53,7 +53,6 @@ export function partsToText(parts: string | ContentPartLike[] | null | undefined
     if (!Array.isArray(parts)) return '';
     let out = '';
     for (const p of parts) {
-        if (!p) continue;
         if (typeof p === 'object') {
             if (p.type === 'text' && typeof p.text === 'string') out += p.text;
             else if (p.type === 'image') {

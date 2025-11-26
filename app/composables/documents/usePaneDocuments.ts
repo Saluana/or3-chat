@@ -36,11 +36,9 @@ export function usePaneDocuments(
             if (pane.mode === 'doc' && pane.documentId) {
                 // Detect pending changes before flush
                 const prevState = useDocumentState(pane.documentId);
-                const hadPending = !!(
-                    prevState &&
-                    (prevState.pendingTitle !== undefined ||
-                        prevState.pendingContent !== undefined)
-                );
+                const hadPending =
+                    prevState.pendingTitle !== undefined ||
+                    prevState.pendingContent !== undefined;
                 await flushDocument(pane.documentId);
                 // Emit saved hook if pending changes existed (defensive for test scenarios)
                 if (hadPending && pane.documentId) {
@@ -103,11 +101,9 @@ export function usePaneDocuments(
         if (pane.mode === 'doc' && pane.documentId && pane.documentId !== id) {
             try {
                 const prevState = useDocumentState(pane.documentId);
-                const hadPending = !!(
-                    prevState &&
-                    (prevState.pendingTitle !== undefined ||
-                        prevState.pendingContent !== undefined)
-                );
+                const hadPending =
+                    prevState.pendingTitle !== undefined ||
+                    prevState.pendingContent !== undefined;
                 await flushDocument(pane.documentId);
                 // Emit saved hook if pending changes existed (defensive for test scenarios)
                 if (hadPending && pane.documentId) {
