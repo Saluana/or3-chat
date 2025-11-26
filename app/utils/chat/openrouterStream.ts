@@ -93,7 +93,7 @@ function setServerRouteAvailable(available: boolean): void {
 }
 
 function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     const { ui: _ui, ...rest } = tool as ToolDefinition & {
         ui?: Record<string, unknown>;
     };

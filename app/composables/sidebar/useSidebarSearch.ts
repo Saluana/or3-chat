@@ -108,7 +108,7 @@ async function buildIndex(
     projects: Project[],
     documents: Post[]
 ) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
     const instance = await createDb({
         id: 'string',
         kind: 'string',
@@ -118,7 +118,7 @@ async function buildIndex(
     if (!instance) return null;
     const docs = toDocs(threads, projects, documents);
     if (docs.length) await buildOramaIndex(instance, docs);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+     
     return instance;
 }
 
@@ -162,7 +162,7 @@ export function useSidebarSearch(
     projects: Ref<Project[]>,
     documents: Ref<Post[]>
 ) {
-    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
+     
     let dbInstance: OramaInstance | null = null;
     let lastQueryToken = 0;
     let warnedFallback = false;

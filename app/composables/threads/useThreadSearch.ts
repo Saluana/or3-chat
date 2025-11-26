@@ -13,14 +13,14 @@ interface ThreadDoc {
 }
 
 // OramaInstance is typed as any from the orama module
-// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type OramaInstance = any;
-// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
+ 
 let dbInstance: OramaInstance | null = null;
 let lastQueryToken = 0;
 
 async function buildIndex(threads: Thread[]) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
     dbInstance = await createDb({
         id: 'string',
         title: 'string',
@@ -33,7 +33,7 @@ async function buildIndex(threads: Thread[]) {
         updated_at: t.updated_at,
     }));
     await buildOramaIndex(dbInstance, docs);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+     
     return dbInstance;
 }
 

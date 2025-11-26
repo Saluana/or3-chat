@@ -3,7 +3,7 @@
 // produce OpenAI-compatible content arrays.
 //
 // This module handles OpenRouter API response parsing which requires flexible typing.
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
+ 
 
 import { parseFileHashes } from '~/db/files-util';
 
@@ -33,7 +33,7 @@ export type ORContentPart =
 export interface ORMessage {
     role: 'user' | 'assistant' | 'system';
     content: ORContentPart[];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     tool_calls?: unknown[];
 }
 

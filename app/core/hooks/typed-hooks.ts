@@ -145,7 +145,7 @@ export interface TypedHookEngine {
  * Create a typed wrapper around an existing HookEngine.
  * Zero-cost at runtime; only types improve.
  */
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export function createTypedHookEngine(engine: HookEngine): TypedHookEngine {
     return {
         // Actions
@@ -198,4 +198,4 @@ export function createTypedHookEngine(engine: HookEngine): TypedHookEngine {
         _diagnostics: engine._diagnostics,
     };
 }
-/* eslint-enable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
+/* eslint-enable @typescript-eslint/no-explicit-any */

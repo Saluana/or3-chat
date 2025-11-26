@@ -59,7 +59,7 @@ export function normalizeSelector(selector: string): string {
     let result = selector;
 
     // Convert #identifier to [data-id="identifier"] first to preserve dot-separated identifiers
-    // eslint-disable-next-line no-useless-escape
+     
     result = result.replace(/(\w+)#([\w.-]+)(?=[:\[]|$)/g, '$1[data-id="$2"]');
 
     // Convert .context to [data-context="context"] (after identifiers are normalized)

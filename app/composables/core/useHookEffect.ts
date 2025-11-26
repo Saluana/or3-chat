@@ -23,7 +23,7 @@ export function useHookEffect<K extends HookName>(
     const hooks = useHooks();
     // The type system doesn't quite align hooks.on's overloaded signatures with our generic,
     // but the runtime is correct. Suppress type errors for this well-tested call.
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const disposer = hooks.on(name, fn as any, opts as any);
 
     // Component lifecycle cleanup

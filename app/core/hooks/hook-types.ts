@@ -398,9 +398,9 @@ export interface DbDeletePayload<T = unknown> {
 
 // Allow plugins to extend hook payloads via global augmentation (types-only)
 declare global {
-    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+     
     interface Or3ActionHooks {} // e.g. { 'my.plugin.ready:action': [MyPayload] }
-    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+     
     interface Or3FilterHooks {} // e.g. { 'my.plugin.value:filter:transform': [InType] }
 }
 // Ensure this file is always a module so augmentation is picked up
@@ -472,7 +472,7 @@ export type ExtensionActionHookName = keyof Or3ActionHooks;
 export type ActionHookName =
     | CoreActionHookName
     | DbActionHookName
-    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
+     
     | ExtensionActionHookName
     | (string & {});
 
@@ -493,7 +493,7 @@ export type ExtensionFilterHookName = keyof Or3FilterHooks;
 export type FilterHookName =
     | CoreFilterHookName
     | DbFilterHookName
-    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
+     
     | ExtensionFilterHookName
     | (string & {});
 
@@ -798,7 +798,7 @@ export type CallbackMismatch<Expected, Got> =
     `Callback signature mismatch. Expected ${TypeName<Expected>}, got ${TypeName<Got>}`;
 
 // Temporary dev guard to ensure hook names stay registered in types.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 const __hook_name_checks__: [
     ValidateHookName<'branch.fork:filter:options'>,
     ValidateHookName<'branch.fork:action:before'>,

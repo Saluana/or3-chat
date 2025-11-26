@@ -373,7 +373,7 @@ export function createHookEngine(): HookEngine {
 
     const engine: HookEngine = {
         // filters
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+         
         addFilter(name, fn, priority, _acceptedArgs?) {
             add(filters, filterWildcards, name, fn, priority);
         },
@@ -398,7 +398,7 @@ export function createHookEngine(): HookEngine {
         },
 
         // actions
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+         
         addAction(name, fn, priority, _acceptedArgs?) {
             add(actions, actionWildcards, name, fn, priority);
         },
