@@ -54,7 +54,7 @@ export async function exchangeOpenRouterCode(
     }
     let json: AuthResponse | null = null;
     try {
-        json = await resp.json() as AuthResponse;
+        json = (await resp.json()) as AuthResponse;
     } catch {
         /* ignore parse */
     }

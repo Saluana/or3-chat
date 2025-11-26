@@ -305,7 +305,10 @@ export function useUserThemeOverrides() {
 }
 
 /** Deep merge helper for user overrides */
-function deepMerge<T extends Record<string, unknown>>(base: T, patch: Partial<T>): T {
+function deepMerge<T extends Record<string, unknown>>(
+    base: T,
+    patch: Partial<T>
+): T {
     const result = { ...base } as Record<string, unknown>;
     for (const key in patch) {
         const val = patch[key];

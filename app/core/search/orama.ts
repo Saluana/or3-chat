@@ -48,7 +48,9 @@ export async function createDb(
     schema: Record<string, string>
 ): Promise<OramaInstance> {
     const orama = await importOrama();
-    const create = orama.create as (options: { schema: Record<string, string> }) => Promise<OramaInstance>;
+    const create = orama.create as (options: {
+        schema: Record<string, string>;
+    }) => Promise<OramaInstance>;
     return create({ schema });
 }
 
@@ -65,7 +67,10 @@ export async function buildIndex<T = unknown>(
 ): Promise<OramaInstance> {
     if (!docs.length) return db;
     const orama = await importOrama();
-    const insertMultiple = orama.insertMultiple as (db: OramaInstance, docs: T[]) => Promise<void>;
+    const insertMultiple = orama.insertMultiple as (
+        db: OramaInstance,
+        docs: T[]
+    ) => Promise<void>;
     await insertMultiple(db, docs);
     return db;
 }
@@ -85,7 +90,10 @@ export async function searchWithIndex(
     options?: { returning?: string[]; where?: Record<string, unknown> }
 ): Promise<{ hits: unknown[] }> {
     const orama = await importOrama();
-    const searchFn = orama.search as (db: OramaInstance, query: Record<string, unknown>) => Promise<{ hits: unknown[] }>;
+    const searchFn = orama.search as (
+        db: OramaInstance,
+        query: Record<string, unknown>
+    ) => Promise<{ hits: unknown[] }>;
     const query: Record<string, unknown> = { term, limit };
     if (options?.returning && Array.isArray(options.returning)) {
         query.returning = options.returning;

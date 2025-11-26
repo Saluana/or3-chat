@@ -24,7 +24,9 @@ type OramaInstance = Record<string, unknown>;
 let currentDb: OramaInstance | null = null;
 let lastQueryToken = 0;
 
-async function buildIndex(models: OpenRouterModel[]): Promise<OramaInstance | null> {
+async function buildIndex(
+    models: OpenRouterModel[]
+): Promise<OramaInstance | null> {
     currentDb = await createDb({
         id: 'string',
         slug: 'string',
@@ -121,7 +123,7 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
                 }\n${m.description || ''}`.toLowerCase();
                 return hay.includes(ql);
             });
-             
+
             console.warn(
                 '[useModelSearch] Fallback substring search used:',
                 err
