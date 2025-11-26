@@ -176,8 +176,8 @@ export function validateThemeDefinition(
                     suggestion: `Use one of: ${[...repeatOptions].join(', ')}`,
                 });
             }
-            if (layer.fit && layer.fit !== 'cover' && layer.fit !== ('contain' as string)) {
-                const fitValue: string = layer.fit;
+            const fitValue = layer.fit as string | undefined;
+            if (fitValue && fitValue !== 'cover' && fitValue !== 'contain') {
                 warnings.push({
                     severity: 'warning',
                     code: 'THEME_013',
