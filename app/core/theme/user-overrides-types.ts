@@ -1,5 +1,3 @@
-import type { ThemeBackgrounds } from '../../theme/_shared/types';
-
 /**
  * User theme overrides - aligns with ThemeDefinition structure
  * Stored per mode (light/dark) in localStorage

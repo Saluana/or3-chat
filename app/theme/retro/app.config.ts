@@ -1,5 +1,3 @@
-import { search } from '@orama/orama';
-
 export default {
     ui: {
         tooltip: {

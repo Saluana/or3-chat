@@ -424,8 +424,9 @@ export class RuntimeResolver {
                 if (key === 'class') {
                     // Concatenate classes (highest specificity first)
                     const existingClass = merged[key];
+                    const existingClassStr = typeof existingClass === 'string' ? existingClass : '';
                     merged[key] =
-                        String(value) + (existingClass ? ` ${String(existingClass)}` : '');
+                        String(value) + (existingClassStr ? ` ${existingClassStr}` : '');
                 } else if (key === 'ui') {
                     // Deep merge ui objects
                     const existingUi = merged[key];

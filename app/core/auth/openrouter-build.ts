@@ -1,6 +1,9 @@
 // Utility helpers to build OpenRouter payload messages including historical images.
 // Focus: hydrate file_hashes into base64 data URLs, enforce limits, dedupe, and
 // produce OpenAI-compatible content arrays.
+//
+// This module handles OpenRouter API response parsing which requires flexible typing.
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 
 import { parseFileHashes } from '~/db/files-util';
 
@@ -30,7 +33,8 @@ export type ORContentPart =
 export interface ORMessage {
     role: 'user' | 'assistant' | 'system';
     content: ORContentPart[];
-    tool_calls?: any[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    tool_calls?: unknown[];
 }
 
 // Caches on global scope to avoid repeated blob -> base64 conversions.
@@ -85,7 +89,7 @@ async function remoteRefToDataUrl(ref: string): Promise<string | null> {
 async function blobToDataUrl(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
         const fr = new FileReader();
-        fr.onerror = () => reject(fr.error);
+        fr.onerror = () => reject(fr.error ?? new Error('FileReader error'));
         fr.onload = () => resolve(fr.result as string);
         fr.readAsDataURL(blob);
     });
@@ -194,7 +198,9 @@ export async function buildOpenRouterMessages(
                         });
                     }
                 }
-            } catch {}
+            } catch {
+                // Parse error - skip this message
+            }
         }
         // Also inspect inline parts if array form
         if (Array.isArray(m.content)) {
@@ -226,7 +232,9 @@ export async function buildOpenRouterMessages(
         try {
             const res = await filterIncludeImages(hashCandidates);
             if (Array.isArray(res)) filtered = res;
-        } catch {}
+        } catch {
+            // Filter error - use unfiltered
+        }
     }
 
     // Enforce max & dedupe
@@ -277,7 +285,7 @@ export async function buildOpenRouterMessages(
                 // Local hash or opaque ref -> hydrate via blob to data URL preserving mime
                 if (!/^data:|^https?:|^blob:/i.test(String(fileData))) {
                     try {
-                        const { getFileBlob, getFileMeta } = await import(
+                        const { getFileBlob } = await import(
                             '~/db/files'
                         );
                         const blob = await getFileBlob(String(fileData));
@@ -377,7 +385,9 @@ export async function buildOpenRouterMessages(
                     ) {
                         isImage = true;
                     }
-                } catch {}
+                } catch {
+                    // File meta lookup failed - assume image
+                }
             }
             if (!isImage && looksLocal) {
                 // Not an image (likely a PDF or other file) -> skip to avoid triggering image-capable endpoint routing
@@ -409,8 +419,7 @@ export async function buildOpenRouterMessages(
 
 // Decide modalities based on prepared ORMessages + heuristic prompt.
 export function decideModalities(
-    orMessages: ORMessage[],
-    requestedModel?: string
+    orMessages: ORMessage[]
 ): string[] {
     const hasImageInput = orMessages.some((m) =>
         m.content.some((p) => p.type === 'image_url')

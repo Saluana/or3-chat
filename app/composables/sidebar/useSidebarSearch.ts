@@ -266,8 +266,7 @@ export function useSidebarSearch(
         try {
             const res = await searchWithIndex(dbInstance, raw, 500);
             if (token !== lastQueryToken) return; // stale
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            const hits = Array.isArray(res?.hits) ? res.hits as unknown[] : [];
+            const hits = Array.isArray(res?.hits) ? res.hits : [];
             const byKind: Record<'thread' | 'project' | 'doc', Set<string>> = {
                 thread: new Set(),
                 project: new Set(),

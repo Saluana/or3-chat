@@ -60,7 +60,9 @@ function saveCache(data: OpenRouterModel[]): void {
         if (typeof window === 'undefined') return;
         const payload: ModelCatalogCache = { data, fetchedAt: Date.now() };
         localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
-    } catch {}
+    } catch {
+        // localStorage may fail in private browsing - ignore
+    }
 }
 
 function loadCache(): ModelCatalogCache | null {

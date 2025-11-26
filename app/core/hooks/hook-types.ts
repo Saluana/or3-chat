@@ -148,7 +148,7 @@ export interface UiPaneSwitchPayload {
 
 export interface UiPaneThreadChangedPayload {
     pane: PaneState;
-    oldThreadId: string | '';
+    oldThreadId: string;
     newThreadId: string;
     paneIndex: number;
     messageCount?: number;
@@ -156,7 +156,7 @@ export interface UiPaneThreadChangedPayload {
 
 export interface UiPaneDocChangedPayload {
     pane: PaneState;
-    oldDocumentId: string | '';
+    oldDocumentId: string;
     newDocumentId: string;
     paneIndex: number;
     meta?: Record<string, unknown>;
@@ -398,7 +398,9 @@ export interface DbDeletePayload<T = unknown> {
 
 // Allow plugins to extend hook payloads via global augmentation (types-only)
 declare global {
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
     interface Or3ActionHooks {} // e.g. { 'my.plugin.ready:action': [MyPayload] }
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
     interface Or3FilterHooks {} // e.g. { 'my.plugin.value:filter:transform': [InType] }
 }
 // Ensure this file is always a module so augmentation is picked up
@@ -448,7 +450,6 @@ export type DbFilterHookName =
     | `db.${DbEntityName}.${DbOperation}:filter:output`
     // extra specialized filters seen in docs
     | `db.messages.files.validate:filter:hashes`
-    | `db.documents.list:filter:output`
     | `db.kv.getByName:filter:output`
     | `db.kv.upsertByName:filter:input`
     | `db.threads.searchByTitle:filter:output`
@@ -465,9 +466,13 @@ export type CoreActionHookName = Extract<
     `${string}:action${string}`
 >;
 export type ExtensionActionHookName = keyof Or3ActionHooks;
+// NOTE: ExtensionActionHookName is included for API consumers to extend via global augmentation.
+// When Or3ActionHooks is empty, it resolves to `never` which is intentionally left out of the
+// union until it's augmented with actual keys.
 export type ActionHookName =
     | CoreActionHookName
     | DbActionHookName
+    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
     | ExtensionActionHookName
     | (string & {});
 
@@ -482,9 +487,13 @@ export type CoreFilterHookName = Extract<
     `${string}:filter${string}`
 >;
 export type ExtensionFilterHookName = keyof Or3FilterHooks;
+// NOTE: ExtensionFilterHookName is included for API consumers to extend via global augmentation.
+// When Or3FilterHooks is empty, it resolves to `never` which is intentionally left out of the
+// union until it's augmented with actual keys.
 export type FilterHookName =
     | CoreFilterHookName
     | DbFilterHookName
+    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
     | ExtensionFilterHookName
     | (string & {});
 
@@ -549,8 +558,8 @@ export type CoreHookPayloadMap = {
     'db.threads.getSystemPrompt:filter:output': [string | null];
 
     // Editor Lifecycle (Examples/Plugins)
-    'editor.created:action:after': [{ editor: EditorInstance | unknown }];
-    'editor.updated:action:after': [{ editor: EditorInstance | unknown }];
+    'editor.created:action:after': [{ editor: unknown }];
+    'editor.updated:action:after': [{ editor: unknown }];
     'editor:request-extensions': [void];
 
     // UI/Chat Extensions
@@ -615,7 +624,7 @@ type DbActionPayloadFor<K extends DbActionHookName> =
             : Op extends 'search' | 'byProject' | 'children' | 'byThread'
             ? [{ query?: unknown }]
             : Op extends 'delete'
-            ? K extends `db.${string}.delete:action:${infer DeleteType}:${string}`
+            ? K extends `db.${string}.delete:action:${string}:${string}`
                 ? [DbDeletePayload<InferDbEntity<K>>]
                 : [DbDeletePayload<InferDbEntity<K>>]
             : [unknown]

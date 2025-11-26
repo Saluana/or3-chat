@@ -373,7 +373,8 @@ export function createHookEngine(): HookEngine {
 
     const engine: HookEngine = {
         // filters
-        addFilter(name, fn, priority, _acceptedArgs) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        addFilter(name, fn, priority, _acceptedArgs?) {
             add(filters, filterWildcards, name, fn, priority);
         },
         removeFilter(name, fn, priority) {
@@ -397,7 +398,8 @@ export function createHookEngine(): HookEngine {
         },
 
         // actions
-        addAction(name, fn, priority, _acceptedArgs) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        addAction(name, fn, priority, _acceptedArgs?) {
             add(actions, actionWildcards, name, fn, priority);
         },
         removeAction(name, fn, priority) {
@@ -456,7 +458,7 @@ export function createHookEngine(): HookEngine {
         off(disposer: () => void) {
             try {
                 disposer();
-            } catch (e) {
+            } catch {
                 // Disposer failures are non-critical; log silently
                 reportError(err('ERR_INTERNAL', 'hook disposer failed'), {
                     silent: true,

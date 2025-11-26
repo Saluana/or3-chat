@@ -48,9 +48,13 @@ export async function exchangeOpenRouterCode(
         });
         return { ok: false, status: 0, reason: 'network' };
     }
-    let json: any = null;
+    interface AuthResponse {
+        key?: string;
+        access_token?: string;
+    }
+    let json: AuthResponse | null = null;
     try {
-        json = await resp.json();
+        json = await resp.json() as AuthResponse;
     } catch {
         /* ignore parse */
     }
@@ -78,7 +82,7 @@ export async function exchangeOpenRouterCode(
                 tags: {
                     domain: 'auth',
                     stage: 'exchange',
-                    keys: Object.keys(json || {}).length,
+                    keys: Object.keys(json).length,
                 },
             }),
             { toast: true }
