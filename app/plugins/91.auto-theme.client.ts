@@ -134,7 +134,7 @@ function detectContext(el: HTMLElement): string {
  */
 function getComponentName(vnode: VNode): string {
     const instance: ComponentInternalInstance | null =
-        vnode.component as ComponentInternalInstance | null;
+        vnode.component;
     if (!instance) return 'div';
 
     // Try multiple ways to get component name
@@ -208,7 +208,7 @@ function applyOverrides(
     resolvedProps: Record<string, unknown>,
     identifier?: string
 ) {
-    const instance = vnode.component as ComponentInternalInstance | null;
+    const instance = vnode.component;
 
     if (!instance) {
         // For plain elements, apply as data attributes that can be read by CSS
@@ -323,7 +323,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             // For components, try to get the actual rendered root element
             // This helps avoid the "non-element root node" warning
             const instance =
-                vnode.component as ComponentInternalInstance | null;
+                vnode.component;
             const targetEl =
                 (instance?.subTree?.el as HTMLElement | null) || el;
 

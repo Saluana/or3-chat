@@ -4,12 +4,11 @@ import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 
 // Client: keep a singleton across HMR to avoid duplicate engines
 export default defineNuxtPlugin(() => {
-    const g = globalThis as any;
-    let engine: HookEngine;
+    const g = globalThis as { __NUXT_HOOKS__?: HookEngine };
     if (!g.__NUXT_HOOKS__) {
         g.__NUXT_HOOKS__ = createHookEngine();
     }
-    engine = g.__NUXT_HOOKS__ as HookEngine;
+    const engine: HookEngine = g.__NUXT_HOOKS__;
 
     // Optional: on HMR module dispose, we could clean up or keep state.
     if (import.meta.hot) {

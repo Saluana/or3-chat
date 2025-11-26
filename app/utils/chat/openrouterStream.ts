@@ -1,5 +1,35 @@
 import type { ToolDefinition } from './types';
-import { parseOpenRouterSSE, type ORStreamEvent } from '../../../shared/openrouter/parseOpenRouterSSE';
+import {
+    parseOpenRouterSSE,
+    type ORStreamEvent,
+} from '../../../shared/openrouter/parseOpenRouterSSE';
+
+type ORMessagePart = { type: string; [key: string]: unknown };
+
+// Permissive message type that accepts both strict ORMessage from openrouter-build
+// and tool messages. Content is optional for tool role messages.
+type ORMessage = {
+    role: string;
+    content?: string | ORMessagePart[];
+    name?: string;
+    tool_call_id?: string;
+    [key: string]: unknown;
+};
+
+interface ServerRouteCacheEntry {
+    available: boolean;
+    timestamp: number;
+}
+
+type OpenRouterRequestBody = {
+    model: string;
+    messages: ORMessage[];
+    modalities: string[];
+    stream: true;
+    reasoning?: unknown;
+    tools?: ToolDefinition[];
+    tool_choice?: 'auto';
+};
 
 // Cache key for detecting static build (no server routes)
 const SERVER_ROUTE_AVAILABLE_CACHE_KEY = 'or3:server-route-available';
@@ -20,16 +50,28 @@ function isServerRouteAvailable(): boolean {
     }
 
     try {
-        const { available, timestamp } = JSON.parse(cached);
-        const now = Date.now();
-        const isExpired = now - timestamp > SERVER_ROUTE_AVAILABLE_TTL_MS;
+        const parsed: unknown = JSON.parse(cached);
+        if (
+            typeof parsed === 'object' &&
+            parsed !== null &&
+            'available' in parsed &&
+            'timestamp' in parsed &&
+            typeof (parsed as ServerRouteCacheEntry).available === 'boolean' &&
+            typeof (parsed as ServerRouteCacheEntry).timestamp === 'number'
+        ) {
+            const { available, timestamp } = parsed as ServerRouteCacheEntry;
+            const now = Date.now();
+            const isExpired = now - timestamp > SERVER_ROUTE_AVAILABLE_TTL_MS;
 
-        if (isExpired) {
-            // TTL expired; retry the server route
-            return true;
+            if (isExpired) {
+                // TTL expired; retry the server route
+                return true;
+            }
+
+            return available;
         }
-
-        return available;
+        // Invalid shape; assume available
+        return true;
     } catch {
         // Invalid cache; assume available
         return true;
@@ -51,7 +93,8 @@ function setServerRouteAvailable(available: boolean): void {
 }
 
 function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
-    const { ui: _ignored, ...rest } = tool as ToolDefinition & {
+     
+    const { ui: _ui, ...rest } = tool as ToolDefinition & {
         ui?: Record<string, unknown>;
     };
     return {
@@ -66,28 +109,28 @@ function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
 export async function* openRouterStream(params: {
     apiKey: string;
     model: string;
-    orMessages: any[];
+    orMessages: ORMessage[];
     modalities: string[];
     tools?: ToolDefinition[];
     signal?: AbortSignal;
-    reasoning?: any;
+    reasoning?: unknown;
 }): AsyncGenerator<ORStreamEvent, void, unknown> {
     const { apiKey, model, orMessages, modalities, tools, signal } = params;
 
-    const body = {
+    const body: OpenRouterRequestBody = {
         model,
         messages: orMessages,
         modalities,
         stream: true,
-    } as any;
+    };
 
     if (params.reasoning) {
-        body['reasoning'] = params.reasoning;
+        body.reasoning = params.reasoning;
     }
 
     if (tools) {
-        body['tools'] = tools.map(stripUiMetadata);
-        body['tool_choice'] = 'auto';
+        body.tools = tools.map(stripUiMetadata);
+        body.tool_choice = 'auto';
     }
 
     // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available
@@ -114,7 +157,7 @@ export async function* openRouterStream(params: {
 
             // Server route not OK; mark as unavailable and fall through
             setServerRouteAvailable(false);
-        } catch (e: any) {
+        } catch {
             // Server route unavailable (404, network error, etc.); mark as unavailable and fall back
             setServerRouteAvailable(false);
         }
@@ -141,8 +184,10 @@ export async function* openRouterStream(params: {
         let respText = '<no-body>';
         try {
             respText = await resp.text();
-        } catch (e) {
-            respText = `<error-reading-body:${(e as any)?.message || 'err'}>`;
+        } catch (readErr) {
+            respText = `<error-reading-body:${
+                readErr instanceof Error ? readErr.message : 'err'
+            }>`;
         }
 
         // Produce a truncated preview of the outgoing body to help debug (truncate long strings)
@@ -150,31 +195,30 @@ export async function* openRouterStream(params: {
         try {
             bodyPreview = JSON.stringify(
                 body,
-                (_key, value) => {
-                    if (typeof value === 'string') {
-                        if (value.length > 300)
-                            return value.slice(0, 300) + `...(${value.length})`;
+                (_key: string, value: unknown): unknown => {
+                    if (typeof value === 'string' && value.length > 300) {
+                        return `${value.slice(0, 300)}...(${value.length})`;
                     }
                     return value;
                 },
                 2
             );
-        } catch (e) {
-            bodyPreview = `<stringify-error:${(e as any)?.message || 'err'}>`;
+        } catch (stringifyErr) {
+            bodyPreview = `<stringify-error:${
+                stringifyErr instanceof Error ? stringifyErr.message : 'err'
+            }>`;
         }
 
         console.warn('[openrouterStream] OpenRouter request failed', {
             status: resp.status,
             statusText: resp.statusText,
-            responseSnippet: respText?.slice
-                ? respText.slice(0, 2000)
-                : String(respText),
+            responseSnippet: respText.slice(0, 2000),
             bodyPreview,
         });
 
         throw new Error(
             `OpenRouter request failed ${resp.status} ${resp.statusText}: ${
-                respText?.slice ? respText.slice(0, 300) : String(respText)
+                respText.slice(0, 300)
             }`
         );
     }

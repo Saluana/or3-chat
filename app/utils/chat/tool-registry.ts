@@ -1,12 +1,4 @@
-import {
-    markRaw,
-    reactive,
-    shallowReactive,
-    ref,
-    watch,
-    computed,
-    type Ref,
-} from 'vue';
+import { markRaw, shallowReactive, ref, watch, computed, type Ref } from 'vue';
 import type { ToolDefinition } from './types';
 
 /**
@@ -14,7 +6,7 @@ import type { ToolDefinition } from './types';
  * Takes parsed arguments and returns a string result or promise thereof.
  * Handlers run in the app context and should handle their own error handling/downstream validation.
  */
-export type ToolHandler<TArgs = any> = (
+export type ToolHandler<TArgs = Record<string, unknown>> = (
     args: TArgs
 ) => Promise<string> | string;
 
@@ -86,7 +78,16 @@ function loadEnabledStates(): Record<string, boolean> {
     if (typeof window === 'undefined') return {};
     try {
         const stored = localStorage.getItem(TOOL_STORAGE_KEY);
-        return stored ? JSON.parse(stored) : {};
+        if (!stored) return {};
+        const parsed: unknown = JSON.parse(stored);
+        if (
+            typeof parsed === 'object' &&
+            parsed !== null &&
+            !Array.isArray(parsed)
+        ) {
+            return parsed as Record<string, boolean>;
+        }
+        return {};
     } catch (e) {
         console.warn('[tool-registry] failed to load persisted states', e);
         return {};
@@ -126,20 +127,26 @@ function safeParse(
     jsonString: string,
     schema: {
         type: string;
-        properties?: Record<string, any>;
+        properties?: Record<string, unknown>;
         required?: string[];
     }
-): { valid: boolean; args: any; error?: string } {
+): { valid: boolean; args: Record<string, unknown> | null; error?: string } {
     try {
-        const args = JSON.parse(jsonString);
+        const parsed: unknown = JSON.parse(jsonString);
 
-        if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+        if (
+            typeof parsed !== 'object' ||
+            parsed === null ||
+            Array.isArray(parsed)
+        ) {
             return {
                 valid: false,
                 args: null,
                 error: 'Arguments must be a JSON object.',
             };
         }
+
+        const args = parsed as Record<string, unknown>;
 
         // Validate required fields
         if (schema.required) {
@@ -286,9 +293,7 @@ export function useToolRegistry() {
     /**
      * List all registered tools as a reactive computed array.
      */
-    const listTools = computed(() =>
-        Array.from(registryState.tools.values())
-    );
+    const listTools = computed(() => Array.from(registryState.tools.values()));
 
     /**
      * Get a tool by name (for handler lookup).

@@ -2,12 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 
 // Mock defineNuxtConfig to avoid Nuxt runtime dependency
 vi.mock('#app', () => ({
-    defineNuxtConfig: (config: any) => config,
+    defineNuxtConfig: (config: Record<string, unknown>) => config,
 }));
 
 // Import after mocking
-const defineNuxtConfig = (config: any) => config;
-(globalThis as any).defineNuxtConfig = defineNuxtConfig;
+const defineNuxtConfig = (config: Record<string, unknown>) => config;
+(globalThis as Record<string, unknown>).defineNuxtConfig = defineNuxtConfig;
 
 describe('Nuxt config cache headers', () => {
     it('should set immutable cache for /_nuxt/** assets', async () => {

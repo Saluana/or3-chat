@@ -139,7 +139,7 @@ export async function loadThemeCSS(themeName: string): Promise<void> {
         return Promise.resolve();
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
         link.href = `/themes/${themeName}.css`;

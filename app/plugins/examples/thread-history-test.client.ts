@@ -103,7 +103,7 @@ export default defineNuxtPlugin(() => {
             // if hooks unavailable, it's non-fatal — actions will persist for dev session
         }
     } catch (e) {
-        // eslint-disable-next-line no-console
+         
         console.error('[thread-history-test] plugin failed to initialize', e);
     }
 });

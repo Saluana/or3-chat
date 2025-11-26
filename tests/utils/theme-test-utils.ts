@@ -3,7 +3,7 @@
  * Provides factories and helpers for testing themed components
  */
 
-import { ref, type Ref, type App } from 'vue';
+import { ref, type App } from 'vue';
 import { vi } from 'vitest';
 import type {
     ThemeDefinition,
@@ -64,7 +64,10 @@ export function mockThemeOverrides(overrides: Partial<OverrideProps> = {}) {
  * @param wrapper Vue wrapper from mount()
  * @param themeName Name of theme to activate
  */
-export function setActiveTheme(wrapper: any, themeName: string) {
+export function setActiveTheme(
+    wrapper: { vm: { $theme?: { activeTheme: { value: string } } } },
+    themeName: string
+) {
     if (wrapper.vm.$theme) {
         wrapper.vm.$theme.activeTheme.value = themeName;
     }

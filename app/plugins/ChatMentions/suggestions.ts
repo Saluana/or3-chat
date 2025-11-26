@@ -24,7 +24,7 @@ export function createMentionSuggestion(
         },
         render: () => {
             let component: VueRenderer;
-            let closeHandler: (() => void) | null = null;
+            const closeHandler: (() => void) | null = null;
 
             return {
                 onStart: (props: any) => {

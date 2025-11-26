@@ -1,4 +1,4 @@
-import { reactive, ref, shallowRef, toRaw } from 'vue';
+import { ref, shallowRef } from 'vue';
 import { DEFAULT_ICONS, type IconToken } from '~/config/icon-tokens';
 
 export type IconMap = Partial<Record<IconToken, string>>;
@@ -82,23 +82,16 @@ export class IconRegistry {
 
         // Slow path: resolving for a specific non-active theme
         // Track version to ensure reactivity when new themes are registered
-        const _ = this.version.value;
+        void this.version.value;
 
         // 1. Try theme override
         const themeMap = this.themes.get(themeName);
-        if (themeMap && themeMap[token]) {
-            return themeMap[token]!;
+        if (themeMap?.[token]) {
+            return themeMap[token];
         }
 
         // 2. Fallback to default
-        const defaultIcon = this.defaults[token];
-        if (defaultIcon) {
-            return defaultIcon;
-        }
-
-        // 3. Ultimate fallback
-        console.warn(`[IconRegistry] Missing icon for token: ${token}`);
-        return 'pixelarticons:alert';
+        return this.defaults[token];
     }
 
     /**

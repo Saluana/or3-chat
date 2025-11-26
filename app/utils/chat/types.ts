@@ -22,7 +22,7 @@ export interface ChatMessage {
     stream_id?: string;
     file_hashes?: string | null;
     reasoning_text?: string | null;
-    data?: Record<string, any> | null;
+    data?: Record<string, unknown> | null;
     index?: number | null;
     created_at?: number | null;
     name?: string;
@@ -55,7 +55,7 @@ export interface ToolDefinition {
         description: string;
         parameters: {
             type: 'object';
-            properties: Record<string, any>;
+            properties: Record<string, unknown>;
             required?: string[];
         };
     };

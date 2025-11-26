@@ -13,7 +13,7 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
     const hooks = useHooks();
     const filtered = await hooks.applyFilters(
         'db.threads.create:filter:input',
-        input as any
+        input
     );
     // Apply create-time defaults (id/clock/timestamps, etc.)
     const prepared = parseOrThrow(ThreadCreateSchema, filtered);
@@ -85,7 +85,7 @@ export function getThread(id: string) {
         op: 'read',
         entity: 'threads',
         action: 'get',
-    })?.then((res) =>
+    }).then((res) =>
         res
             ? hooks.applyFilters('db.threads.get:filter:output', res)
             : undefined

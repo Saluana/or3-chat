@@ -1,7 +1,6 @@
 import { db } from './client';
 import type { FileMeta } from './schema';
 import { parseFileHashes, serializeFileHashes } from './files-util';
-import { computeFileHash } from '../utils/hash';
 import { createOrRefFile, derefFile, getFileMeta } from './files';
 import { useHooks } from '../core/hooks/useHooks';
 import { nowSec } from './util';
@@ -53,7 +52,7 @@ export async function addFilesToMessage(
                     if (meta) newHashes.push(meta.hash);
                 }
             }
-            let combined = existing.concat(newHashes);
+            const combined = existing.concat(newHashes);
             // Provide hook for validation & pruning
             const filtered = await hooks.applyFilters(
                 'db.messages.files.validate:filter:hashes',

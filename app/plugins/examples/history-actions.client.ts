@@ -8,6 +8,7 @@ import {
 } from '~/composables/threads/useThreadHistoryActions';
 import { useToast } from '#imports';
 import { db } from '~/db';
+import type { Post } from '~/db';
 
 /**
  * Example plugin: History Actions
@@ -26,24 +27,24 @@ export function setupHistoryActionsExample() {
         handler: async ({ document }) => {
             try {
                 // Ensure we have the full content (document items may be partial in lists)
-                let full = document;
+                let full: Post = document;
                 if (!full.content || full.content.length === 0) {
                     const rec = await db.posts.get(document.id);
-                    if (rec) full = rec as any;
+                    if (rec) full = rec;
                 }
 
                 // In a real plugin you'd serialize and offer a download. Here we just show a toast.
                 toast.add({
                     title: 'Export (example)',
-                    description: `Document ${document.id} has ${
-                        full?.content?.length ?? 0
-                    } characters`,
+                    description: `Document ${document.id} has ${full.content.length} characters`,
                     duration: 4000,
                 });
-            } catch (e: any) {
+            } catch (e: unknown) {
+                const message =
+                    e instanceof Error ? e.message : 'Unknown error';
                 toast.add({
                     title: 'Export failed',
-                    description: e?.message || 'Unknown error',
+                    description: message,
                     color: 'error',
                     duration: 4000,
                 });
@@ -59,7 +60,7 @@ export function setupHistoryActionsExample() {
         handler: async ({ document }) => {
             try {
                 // Toggle a 'pinned' flag on the thread record if present
-                const threadId = (document as any).id;
+                const threadId = document.id;
                 const row = await db.threads.get(threadId);
                 if (!row) {
                     toast.add({
@@ -79,10 +80,11 @@ export function setupHistoryActionsExample() {
                     }`,
                     duration: 2500,
                 });
-            } catch (e: any) {
+            } catch (e: unknown) {
+                const message = e instanceof Error ? e.message : 'Error';
                 toast.add({
                     title: 'Pin failed',
-                    description: e?.message || 'Error',
+                    description: message,
                     color: 'error',
                 });
             }

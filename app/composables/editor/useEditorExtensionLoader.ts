@@ -1,5 +1,4 @@
 import type { Node, Mark, Extension } from '@tiptap/core';
-import { useLazyBoundaries } from '../core/useLazyBoundaries';
 import type { EditorNode, EditorMark, EditorExtension } from './useEditorNodes';
 
 /**
@@ -44,14 +43,13 @@ export interface LoadedExtensions {
 
 /**
  * Load all lazy editor extensions, resolving factories and skipping failures.
+ * Uses simple promise resolution since editor extensions don't need the lazy boundary tracking.
  */
 export async function loadEditorExtensions(
     nodeDescriptors: Array<EditorNode | EditorNodeDescriptor>,
     markDescriptors: Array<EditorMark | EditorMarkDescriptor>,
     extensionDescriptors: Array<EditorExtension | EditorExtensionDescriptor>
 ): Promise<LoadedExtensions> {
-    const lazyBoundaries = useLazyBoundaries();
-
     // Load nodes
     const nodes: Node[] = [];
     for (const desc of nodeDescriptors) {
@@ -60,11 +58,8 @@ export async function loadEditorExtensions(
                 // Already loaded
                 nodes.push(desc.extension);
             } else if ('factory' in desc && desc.factory) {
-                // Lazy load with unique key per extension
-                const node = await lazyBoundaries.load({
-                    key: `editor-extensions:node:${desc.id}` as any,
-                    loader: desc.factory,
-                });
+                // Lazy load
+                const node = await desc.factory();
                 nodes.push(node);
             }
         } catch (error) {
@@ -83,10 +78,7 @@ export async function loadEditorExtensions(
             if ('extension' in desc && desc.extension) {
                 marks.push(desc.extension);
             } else if ('factory' in desc && desc.factory) {
-                const mark = await lazyBoundaries.load({
-                    key: `editor-extensions:mark:${desc.id}` as any,
-                    loader: desc.factory,
-                });
+                const mark = await desc.factory();
                 marks.push(mark);
             }
         } catch (error) {
@@ -104,10 +96,7 @@ export async function loadEditorExtensions(
             if ('extension' in desc && desc.extension) {
                 extensions.push(desc.extension);
             } else if ('factory' in desc && desc.factory) {
-                const ext = await lazyBoundaries.load({
-                    key: `editor-extensions:ext:${desc.id}` as any,
-                    loader: desc.factory,
-                });
+                const ext = await desc.factory();
                 extensions.push(ext);
             }
         } catch (error) {

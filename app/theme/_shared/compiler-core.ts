@@ -59,14 +59,13 @@ export function normalizeSelector(selector: string): string {
     let result = selector;
 
     // Convert #identifier to [data-id="identifier"] first to preserve dot-separated identifiers
-    result = result.replace(
-        /(\w+)#([\w.-]+)(?=[:\[]|$)/g,
-        '$1[data-id="$2"]'
-    );
+     
+    result = result.replace(/(\w+)#([\w.-]+)(?=[:\[]|$)/g, '$1[data-id="$2"]');
 
     // Convert .context to [data-context="context"] (after identifiers are normalized)
     for (const context of KNOWN_THEME_CONTEXTS) {
         const escapedContext = escapeRegex(context);
+         
         const regex = new RegExp(
             '(\\w+)\\.' + escapedContext + '(?=[:\\[]|$)',
             'g'

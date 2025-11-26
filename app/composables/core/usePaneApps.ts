@@ -44,9 +44,8 @@ export interface PaneAppDef {
     order?: number;
 }
 
-export interface RegisteredPaneApp extends PaneAppDef {
-    // PaneAppDef fields, component already wrapped
-}
+// RegisteredPaneApp is exactly PaneAppDef, but semantically represents a validated/normalized entry
+export type RegisteredPaneApp = PaneAppDef;
 
 /**
  * Zod schema for validating pane app definitions at registration.

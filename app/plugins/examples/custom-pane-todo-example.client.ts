@@ -458,7 +458,7 @@ export default defineNuxtPlugin(async () => {
                                               {
                                                   class: 'text-xs opacity-70',
                                               },
-                                              (post.meta as any)?.completed
+                                              (post.meta)?.completed
                                                   ? 'Completed'
                                                   : 'Pending'
                                           ),

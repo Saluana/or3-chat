@@ -5,7 +5,9 @@ import { defineComponent, h, ref } from 'vue';
 // Mock errors utility globally for all tests
 vi.mock('~/utils/errors', () => ({
     reportError: vi.fn(),
-    err: vi.fn((_code: string, _message: string, meta: any) => meta),
+    err: vi.fn(
+        (_code: string, _message: string, meta: Record<string, unknown>) => meta
+    ),
 }));
 
 // Mock useChat globally for tests (can be overridden in individual test files)
@@ -27,7 +29,7 @@ vi.mock('~/composables/chat/useAi', () => {
 });
 
 // Make useChat available globally for components that use it without imports (Nuxt auto-import)
-(globalThis as any).useChat = () => ({
+(globalThis as Record<string, unknown>).useChat = () => ({
     messages: ref([]),
     loading: ref(false),
     streamId: ref(null),
@@ -41,8 +43,8 @@ vi.mock('~/composables/chat/useAi', () => {
 });
 
 // Mock useNuxtApp globally
-vi.mock('#app', () => {
-    const { ref } = require('vue');
+vi.mock('#app', async () => {
+    const { ref } = await import('vue');
     return {
         useNuxtApp: () => ({
             $iconRegistry: {
@@ -108,8 +110,11 @@ vi.mock('virtua/vue', () => {
                 h(
                     'div',
                     { class: 'mock-virtualizer' },
-                    (props.data as any[]).map((item: any, index: number) =>
-                        slots.default ? slots.default({ item, index }) : null
+                    (props.data as unknown[]).map(
+                        (item: unknown, index: number) =>
+                            slots.default
+                                ? slots.default({ item, index })
+                                : null
                     )
                 );
         },

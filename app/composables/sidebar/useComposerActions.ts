@@ -70,10 +70,13 @@ const DEFAULT_ORDER = 200;
  * Global registry for composer actions using the globalThis pattern.
  * Ensures actions persist across component instances.
  */
-const g: any = globalThis as any;
+interface ComposerActionsGlobalThis {
+    __or3ComposerActionsRegistry?: Map<string, ComposerAction>;
+}
+const g = globalThis as typeof globalThis & ComposerActionsGlobalThis;
 const registry: Map<string, ComposerAction> =
-    g.__or3ComposerActionsRegistry ||
-    (g.__or3ComposerActionsRegistry = new Map());
+    g.__or3ComposerActionsRegistry ??
+    (g.__or3ComposerActionsRegistry = new Map<string, ComposerAction>());
 
 /**
  * Reactive list that mirrors the registry for Vue reactivity.
@@ -127,7 +130,7 @@ export function useComposerActions(
     context: () => ComposerActionContext = () => ({})
 ): ComputedRef<ComposerActionEntry[]> {
     return computed(() => {
-        const ctx = context() || {};
+        const ctx = context();
         return reactiveList.items
             .filter((action) => !action.visible || action.visible(ctx))
             .sort(

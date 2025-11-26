@@ -8,6 +8,22 @@ export interface NormalizedImageAttachment {
     mime?: string; // optional mime type
 }
 
+type MaybeImageLike = {
+    url?: unknown;
+    data?: unknown;
+    mime?: unknown;
+    hash?: unknown;
+};
+
+function parseJsonArray(raw: string): unknown[] | null {
+    try {
+        const parsed: unknown = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
 // Tolerant hash parser: accepts array, JSON string, comma list, single hash.
 export function parseHashes(raw: unknown): string[] {
     if (!raw) return [];
@@ -17,11 +33,8 @@ export function parseHashes(raw: unknown): string[] {
         if (!s) return [];
         // Try JSON array
         if (s.startsWith('[')) {
-            try {
-                const arr = JSON.parse(s);
-                if (Array.isArray(arr))
-                    return arr.filter((h) => typeof h === 'string');
-            } catch {}
+            const arr = parseJsonArray(s);
+            if (arr) return arr.filter((h) => typeof h === 'string');
         }
         // Comma separated fallback
         if (s.includes(','))
@@ -65,26 +78,31 @@ export function normalizeImagesParam(
     const arr = Array.isArray(input) ? input : [input];
     const out: NormalizedImageAttachment[] = [];
     for (const item of arr) {
-        if (!item) continue;
-        if (typeof item === 'string') {
-            out.push({ kind: 'image', src: item });
-            continue;
-        }
-        if (typeof item === 'object') {
-            const anyItem: any = item;
-            const src =
-                typeof anyItem.url === 'string'
-                    ? anyItem.url
-                    : typeof anyItem.data === 'string'
-                    ? anyItem.data
-                    : undefined;
-            if (!src) continue;
-            const mime =
-                typeof anyItem.mime === 'string' ? anyItem.mime : undefined;
-            const hash =
-                typeof anyItem.hash === 'string' ? anyItem.hash : undefined;
-            out.push({ kind: 'image', src, mime, hash });
-        }
+        const normalized = toNormalizedImage(item);
+        if (normalized) out.push(normalized);
     }
     return out;
+}
+
+function toNormalizedImage(item: unknown): NormalizedImageAttachment | null {
+    if (!item) return null;
+    if (typeof item === 'string') {
+        return { kind: 'image', src: item };
+    }
+    if (typeof item === 'object') {
+        const imageLike = item as MaybeImageLike;
+        const src =
+            typeof imageLike.url === 'string'
+                ? imageLike.url
+                : typeof imageLike.data === 'string'
+                ? imageLike.data
+                : undefined;
+        if (!src) return null;
+        const mime =
+            typeof imageLike.mime === 'string' ? imageLike.mime : undefined;
+        const hash =
+            typeof imageLike.hash === 'string' ? imageLike.hash : undefined;
+        return { kind: 'image', src, mime, hash };
+    }
+    return null;
 }

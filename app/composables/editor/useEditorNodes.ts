@@ -43,14 +43,14 @@ type EditorRegistryGlobals = typeof globalThis & {
 const g = globalThis as EditorRegistryGlobals;
 
 const nodesRegistry: Map<string, EditorNode> =
-    g.__or3EditorNodesRegistry || (g.__or3EditorNodesRegistry = new Map());
+    g.__or3EditorNodesRegistry ?? (g.__or3EditorNodesRegistry = new Map<string, EditorNode>());
 
 const marksRegistry: Map<string, EditorMark> =
-    g.__or3EditorMarksRegistry || (g.__or3EditorMarksRegistry = new Map());
+    g.__or3EditorMarksRegistry ?? (g.__or3EditorMarksRegistry = new Map<string, EditorMark>());
 
 const extensionsRegistry: Map<string, EditorExtension> =
-    g.__or3EditorExtensionsRegistry ||
-    (g.__or3EditorExtensionsRegistry = new Map());
+    g.__or3EditorExtensionsRegistry ??
+    (g.__or3EditorExtensionsRegistry = new Map<string, EditorExtension>());
 
 // Reactive wrapper lists we maintain for computed filtering (Map itself not reactive).
 const nodesReactiveList = reactive<{ items: EditorNode[] }>({ items: [] });

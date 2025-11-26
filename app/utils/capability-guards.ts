@@ -5,6 +5,8 @@ import {
 import { useToast } from '#imports';
 import { reportError, err } from './errors';
 
+type ToastInput = Parameters<ReturnType<typeof useToast>['add']>[0];
+
 /**
  * Guard function to check if the current plugin context has the required capability.
  * If no plugin context is present, the operation is allowed (no gating for non-plugin code).
@@ -34,14 +36,14 @@ export function guardCapability(
         const message = `Plugin "${activePluginId}" lacks required capability: ${capability}`;
         const toast = useToast();
 
-        if (toast?.add) {
-            toast.add({
-                title: 'Permission Denied',
-                description: `This plugin cannot perform "${operation}" (missing capability: ${capability})`,
-                color: 'error',
-                timeout: 5000,
-            } as any);
-        }
+        const toastPayload: ToastInput = {
+            title: 'Permission Denied',
+            description: `This plugin cannot perform "${operation}" (missing capability: ${capability})`,
+            color: 'error',
+            duration: 5000,
+        };
+
+        toast.add(toastPayload);
 
         reportError(
             err('ERR_INTERNAL', message, {
@@ -102,14 +104,14 @@ export function guardAnyCapability(
         )}`;
         const toast = useToast();
 
-        if (toast?.add) {
-            toast.add({
-                title: 'Permission Denied',
-                description: `This plugin cannot perform "${operation}"`,
-                color: 'error',
-                timeout: 5000,
-            } as any);
-        }
+        const toastPayload: ToastInput = {
+            title: 'Permission Denied',
+            description: `This plugin cannot perform "${operation}"`,
+            color: 'error',
+            duration: 5000,
+        };
+
+        toast.add(toastPayload);
 
         reportError(
             err('ERR_INTERNAL', message, {

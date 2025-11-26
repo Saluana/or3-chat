@@ -160,7 +160,7 @@ export function createSidebarMultiPaneApi(
                 await multiPaneApi.setPaneThread(index, threadId);
             }
         },
-        openDoc: async (documentId?: string) => {
+        openDoc: (documentId?: string) => {
             const nextIndex = multiPaneApi.panes.value.length;
             multiPaneApi.addPane();
             const pane = multiPaneApi.panes.value[nextIndex];
@@ -249,11 +249,10 @@ export function useSidebarDocuments() {
 export function useSidebarQuery() {
     const environment = useSidebarEnvironment();
     const query = environment.getSidebarQuery();
-    const setQuery = environment.setSidebarQuery;
 
     return {
         query,
-        setQuery,
+        setQuery: (q: string) => environment.setSidebarQuery(q),
     };
 }
 
@@ -266,11 +265,10 @@ export function useSidebarQuery() {
 export function useActiveSections() {
     const environment = useSidebarEnvironment();
     const activeSections = environment.getActiveSections();
-    const setActiveSections = environment.setActiveSections;
 
     return {
         activeSections,
-        setActiveSections,
+        setActiveSections: (sections: ActiveSections) => environment.setActiveSections(sections),
     };
 }
 
@@ -283,11 +281,10 @@ export function useActiveSections() {
 export function useExpandedProjects() {
     const environment = useSidebarEnvironment();
     const expandedProjects = environment.getExpandedProjects();
-    const setExpandedProjects = environment.setExpandedProjects;
 
     return {
         expandedProjects,
-        setExpandedProjects,
+        setExpandedProjects: (projects: string[]) => environment.setExpandedProjects(projects),
     };
 }
 
@@ -300,11 +297,10 @@ export function useExpandedProjects() {
 export function useActiveThreadIds() {
     const environment = useSidebarEnvironment();
     const activeThreadIds = environment.getActiveThreadIds();
-    const setActiveThreadIds = environment.setActiveThreadIds;
 
     return {
         activeThreadIds,
-        setActiveThreadIds,
+        setActiveThreadIds: (ids: string[]) => environment.setActiveThreadIds(ids),
     };
 }
 
@@ -317,11 +313,10 @@ export function useActiveThreadIds() {
 export function useActiveDocumentIds() {
     const environment = useSidebarEnvironment();
     const activeDocumentIds = environment.getActiveDocumentIds();
-    const setActiveDocumentIds = environment.setActiveDocumentIds;
 
     return {
         activeDocumentIds,
-        setActiveDocumentIds,
+        setActiveDocumentIds: (ids: string[]) => environment.setActiveDocumentIds(ids),
     };
 }
 

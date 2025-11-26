@@ -45,40 +45,37 @@ const postMessage = (message: TokenizerResponse) => {
     ctx.postMessage(message);
 };
 
-ctx.addEventListener(
-    'message',
-    async (event: MessageEvent<TokenizerRequest>) => {
-        const { id, type } = event.data;
+ctx.addEventListener('message', (event: MessageEvent<TokenizerRequest>) => {
+    void handleMessage(event);
+});
 
-        try {
-            const encode = await ensureEncoder();
+async function handleMessage(event: MessageEvent<TokenizerRequest>) {
+    const { id, type } = event.data;
 
-            if (type === 'encode') {
-                const count = event.data.text
-                    ? encode(event.data.text).length
-                    : 0;
-                postMessage({ id, type: 'result', count });
-                return;
-            }
+    try {
+        const encode = await ensureEncoder();
 
-            if (type === 'batch') {
-                const { texts, keys } = event.data;
-                const counts: Record<string, number> = {};
-
-                for (let index = 0; index < texts.length; index++) {
-                    const key = keys?.[index] ?? String(index);
-                    const text = texts[index] ?? '';
-                    counts[key] = text ? encode(text).length : 0;
-                }
-
-                postMessage({ id, type: 'batch-result', counts });
-            }
-        } catch (error) {
-            postMessage({
-                id,
-                type: 'error',
-                error: error instanceof Error ? error.message : String(error),
-            });
+        if (type === 'encode') {
+            const count = event.data.text ? encode(event.data.text).length : 0;
+            postMessage({ id, type: 'result', count });
+            return;
         }
+
+        const { texts, keys } = event.data;
+        const counts: Record<string, number> = {};
+
+        for (let index = 0; index < texts.length; index++) {
+            const key = keys?.[index] ?? String(index);
+            const text = texts[index] ?? '';
+            counts[key] = text ? encode(text).length : 0;
+        }
+
+        postMessage({ id, type: 'batch-result', counts });
+    } catch (error) {
+        postMessage({
+            id,
+            type: 'error',
+            error: error instanceof Error ? error.message : String(error),
+        });
     }
-);
+}

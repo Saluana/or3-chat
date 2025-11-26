@@ -1,14 +1,5 @@
-import type {
-    CompiledOverride,
-    OverrideProps,
-    ParsedSelector,
-    AttributeMatcher,
-    AttributeOperator,
-} from './types';
-import {
-    parseSelector,
-    calculateSpecificity,
-} from './compiler-core';
+import type { CompiledOverride, OverrideProps } from './types';
+import { parseSelector, calculateSpecificity } from './compiler-core';
 
 /**
  * Compile override definitions into runtime-friendly structures.
@@ -39,5 +30,3 @@ export function compileOverridesRuntime(
     // Sort by specificity (descending)
     return compiled.sort((a, b) => b.specificity - a.specificity);
 }
-
-

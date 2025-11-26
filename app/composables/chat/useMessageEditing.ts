@@ -68,10 +68,8 @@ export function useMessageEditing(message: EditableMessageSource) {
                 updated_at: nowSec(),
             });
             // Persist to both fields so renderers using either stay in sync
-            if (m) {
-                m.content = trimmed;
-                m.text = trimmed;
-            }
+            m.content = trimmed;
+            m.text = trimmed;
             editing.value = false;
         } finally {
             saving.value = false;

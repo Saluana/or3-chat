@@ -40,26 +40,26 @@ export function err(
     o: {
         severity?: ErrorSeverity;
         retryable?: boolean;
-        tags?: Record<string, any>;
+        tags?: Record<string, string | number | boolean | undefined>;
         cause?: unknown;
     } = {}
 ): AppError {
-    const e = new Error(message) as AppError & { cause?: unknown };
+    const e = new Error(message) as AppError;
     e.code = code;
     e.severity = o.severity || 'error';
     e.retryable = o.retryable;
     e.tags = o.tags;
     e.timestamp = Date.now();
     if (o.cause && e.cause === undefined) e.cause = o.cause;
-    return e as AppError;
+    return e;
 }
 
 export function isAppError(v: unknown): v is AppError {
     return (
         !!v &&
         typeof v === 'object' &&
-        'code' in (v as any) &&
-        'severity' in (v as any)
+        'code' in v &&
+        'severity' in v
     );
 }
 
@@ -72,7 +72,7 @@ export function asAppError(
         return err(
             fb.code || 'ERR_INTERNAL',
             v.message || fb.message || 'Error',
-            { cause: (v as any).cause }
+            { cause: v.cause }
         );
     if (typeof v === 'string') return err(fb.code || 'ERR_INTERNAL', v);
     return err(fb.code || 'ERR_INTERNAL', fb.message || 'Unknown error');
@@ -101,7 +101,7 @@ function shouldLog(code: string, message: string): boolean {
 }
 
 // Use Nuxt UI toast directly; no custom store.
-function pushToast(error: AppError, retry?: () => any) {
+function pushToast(error: AppError, retry?: () => void) {
     if (!import.meta.client) return;
     try {
         const { add } = useToast();
@@ -116,7 +116,7 @@ function pushToast(error: AppError, retry?: () => any) {
                           onClick: () => {
                               try {
                                   retry();
-                              } catch {}
+                              } catch { /* ignore */ }
                           },
                       },
                   ]
@@ -130,16 +130,16 @@ function pushToast(error: AppError, retry?: () => any) {
                     ? 'info'
                     : 'error',
         });
-    } catch {}
+    } catch { /* ignore */ }
 }
 
 export interface ReportOptions {
     code?: ErrorCode;
     message?: string;
-    tags?: Record<string, any>;
+    tags?: Record<string, string | number | boolean | undefined>;
     toast?: boolean; // force toast even if info
     silent?: boolean; // never show toast
-    retry?: () => any; // optional retry closure
+    retry?: () => void; // optional retry closure
     severity?: ErrorSeverity; // override severity if wrapping non-error
     retryable?: boolean; // override retryable
 }
@@ -157,7 +157,7 @@ export function reportError(
         // Scrub shallow string fields
         e.message = scrubValue(e.message) as string;
         if (e.tags) {
-            for (const k in e.tags) e.tags[k] = scrubValue(e.tags[k]) as any;
+            for (const k in e.tags) e.tags[k] = scrubValue(e.tags[k]) as string | number | boolean | undefined;
         }
         if (shouldLog(e.code, e.message)) {
             const level =
@@ -166,7 +166,7 @@ export function reportError(
                     : e.severity === 'info'
                     ? 'info'
                     : 'error';
-            (console as any)[level]('[err]', {
+            console[level]('[err]', {
                 code: e.code,
                 msg: e.message,
                 severity: e.severity,
@@ -175,11 +175,11 @@ export function reportError(
             });
         }
         const hooks = useHooks();
-        hooks.doAction('error:raised', e);
+        void hooks.doAction('error:raised', e);
         const domain = e.tags?.domain as string | undefined;
-        if (domain) hooks.doAction('error:' + domain, e);
+        if (domain) void hooks.doAction('error:' + domain, e);
         if (domain === 'chat')
-            hooks.doAction('ai.chat.error:action', { error: e });
+            void hooks.doAction('ai.chat.error:action', { error: e });
         if (
             !opts.silent &&
             !(e.code === 'ERR_STREAM_ABORTED' && e.severity === 'info')
@@ -190,7 +190,7 @@ export function reportError(
     } catch (inner) {
         try {
             console.error('[reportError-fallback]', inner, input);
-        } catch {}
+        } catch { /* ignore */ }
         // Best effort fallback error
         return err('ERR_INTERNAL', 'Reporting failed');
     }
@@ -201,7 +201,7 @@ export async function simpleRetry<T>(
     attempts = 2,
     delayMs = 400
 ): Promise<T> {
-    let lastErr: any;
+    let lastErr: unknown;
     for (let i = 0; i < attempts; i++) {
         try {
             return await fn();

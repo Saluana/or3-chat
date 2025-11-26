@@ -60,7 +60,9 @@ function saveCache(data: OpenRouterModel[]): void {
         if (typeof window === 'undefined') return;
         const payload: ModelCatalogCache = { data, fetchedAt: Date.now() };
         localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
-    } catch {}
+    } catch {
+        // localStorage may fail in private browsing - ignore
+    }
 }
 
 function loadCache(): ModelCatalogCache | null {
@@ -69,7 +71,7 @@ function loadCache(): ModelCatalogCache | null {
         const raw = localStorage.getItem(CACHE_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw) as ModelCatalogCache;
-        if (!Array.isArray(parsed?.data)) return null;
+        if (!Array.isArray(parsed.data)) return null;
         return parsed;
     } catch {
         return null;
@@ -107,13 +109,13 @@ export async function fetchModels(opts?: {
     if (!res.ok) {
         // Fallback to any cache on failure
         const cached = loadCache();
-        if (cached?.data?.length) return cached.data;
+        if (cached?.data.length) return cached.data;
         throw new Error(
             `Failed to fetch models: ${res.status} ${res.statusText}`
         );
     }
     const json = (await res.json()) as ModelsResponse;
-    const list = Array.isArray(json?.data) ? json.data : [];
+    const list = Array.isArray(json.data) ? json.data : [];
     saveCache(list);
     return list;
 }
@@ -123,7 +125,7 @@ export function filterByText(
     models: OpenRouterModel[],
     q: string
 ): OpenRouterModel[] {
-    const query = q?.trim().toLowerCase();
+    const query = q.trim().toLowerCase();
     if (!query) return models;
     return models.filter((m) => {
         const hay = `${m.id}\n${m.name || ''}\n${
@@ -165,7 +167,7 @@ export function filterByParameters(
     models: OpenRouterModel[],
     params: string[]
 ): OpenRouterModel[] {
-    if (!params?.length) return models;
+    if (!params.length) return models;
     return models.filter((m) => {
         const supported = m.supported_parameters || [];
         return params.every((p) => supported.includes(p));
@@ -178,15 +180,15 @@ export function filterByPriceBucket(
     models: OpenRouterModel[],
     bucket: PriceBucket
 ): OpenRouterModel[] {
-    if (!bucket || bucket === 'any') return models;
+    if (bucket === 'any') return models;
     return models.filter((m) => {
         const p = toNumber(m.pricing?.prompt) ?? 0;
         const c = toNumber(m.pricing?.completion) ?? 0;
         const max = Math.max(p, c);
         if (bucket === 'free') return max === 0;
         if (bucket === 'low') return max > 0 && max <= 0.000002; // heuristic
-        if (bucket === 'medium') return max > 0.000002 && max <= 0.00001;
-        return true;
+        // bucket === 'medium'
+        return max > 0.000002 && max <= 0.00001;
     });
 }
 

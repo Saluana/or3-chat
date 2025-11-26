@@ -16,15 +16,16 @@ import { serializeFileHashes } from './files-util';
 function toMessageEntity(msg: Message): MessageEntity {
     // Validate role is one of the expected types
     const role = msg.role;
-    if (role !== 'user' && role !== 'assistant' && role !== 'system') {
-        throw new Error(`Invalid message role: ${role}`);
-    }
-    
+    // Cast data to proper type, defaulting to empty object if null/undefined
+    const safeData =
+        msg.data != null
+            ? (msg.data as Record<string, unknown>)
+            : ({} as Record<string, unknown>);
     return {
         id: msg.id,
         thread_id: msg.thread_id,
-        role: role,
-        data: (msg.data as Record<string, unknown>) ?? {},
+        role: role as 'user' | 'assistant' | 'system',
+        data: safeData,
         index: msg.index,
         created_at: msg.created_at,
         updated_at: msg.updated_at,
@@ -51,9 +52,8 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
     );
     // Support passing file_hashes as string[] for convenience
     if (hasFileHashesArray(filtered)) {
-        (filtered as { file_hashes: string | string[] }).file_hashes = serializeFileHashes(
-            filtered.file_hashes
-        );
+        (filtered as { file_hashes: string | string[] }).file_hashes =
+            serializeFileHashes(filtered.file_hashes);
     }
     // Apply defaults (id/clock/timestamps) then validate fully
     const prepared = parseOrThrow(MessageCreateSchema, filtered);
@@ -101,7 +101,7 @@ export function messagesByThread(threadId: string) {
     return dbTry(
         () => db.messages.where('thread_id').equals(threadId).sortBy('index'),
         { op: 'read', entity: 'messages', action: 'byThread' }
-    )?.then((res) =>
+    ).then((res) =>
         hooks.applyFilters('db.messages.byThread:filter:output', res)
     );
 }
@@ -112,7 +112,7 @@ export function getMessage(id: string) {
         op: 'read',
         entity: 'messages',
         action: 'get',
-    })?.then((res) =>
+    }).then((res) =>
         res
             ? hooks.applyFilters('db.messages.get:filter:output', res)
             : undefined
@@ -124,7 +124,7 @@ export function messageByStream(streamId: string) {
     return dbTry(
         () => db.messages.where('stream_id').equals(streamId).first(),
         { op: 'read', entity: 'messages', action: 'byStream' }
-    )?.then((res) =>
+    ).then((res) =>
         hooks.applyFilters('db.messages.byStream:filter:output', res)
     );
 }
@@ -187,14 +187,13 @@ export async function appendMessage(input: MessageCreate): Promise<Message> {
         // Handle file_hashes array serialization
         const processedInput = { ...input };
         if (hasFileHashesArray(processedInput)) {
-            (processedInput as { file_hashes: string | string[] }).file_hashes = serializeFileHashes(
-                processedInput.file_hashes
-            );
+            (processedInput as { file_hashes: string | string[] }).file_hashes =
+                serializeFileHashes(processedInput.file_hashes);
         }
         const value = parseOrThrow(MessageCreateSchema, processedInput);
         await hooks.doAction('db.messages.append:action:before', value);
         // If index not set, compute next sparse index in thread
-        if (value.index === undefined || value.index === null) {
+        if (value.index === undefined) {
             const last = await db.messages
                 .where('[thread_id+index]')
                 .between(
@@ -202,8 +201,7 @@ export async function appendMessage(input: MessageCreate): Promise<Message> {
                     [value.thread_id, Dexie.maxKey]
                 )
                 .last();
-            const lastIdx = last?.index ?? 0;
-            value.index = last ? lastIdx + 1000 : 1000;
+            value.index = last ? last.index + 1000 : 1000;
         }
         const finalized = parseOrThrow(MessageSchema, value);
         await db.messages.put(finalized);
@@ -329,9 +327,8 @@ export async function insertMessageAfter(
         // Handle file_hashes array serialization
         const processedInput = { ...input };
         if (hasFileHashesArray(processedInput)) {
-            (processedInput as { file_hashes: string | string[] }).file_hashes = serializeFileHashes(
-                processedInput.file_hashes
-            );
+            (processedInput as { file_hashes: string | string[] }).file_hashes =
+                serializeFileHashes(processedInput.file_hashes);
         }
         const value = parseOrThrow(MessageCreateSchema, {
             ...processedInput,

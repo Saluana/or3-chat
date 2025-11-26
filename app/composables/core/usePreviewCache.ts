@@ -186,8 +186,8 @@ export function useSharedPreviewCache(
     } else if (import.meta.dev && overrides && Object.keys(overrides).length) {
         const next = resolvePreviewCacheOptions(overrides);
         const mismatch =
-            next.maxUrls !== sharedOptions?.maxUrls ||
-            next.maxBytes !== sharedOptions?.maxBytes;
+            next.maxUrls !== sharedOptions.maxUrls ||
+            next.maxBytes !== sharedOptions.maxBytes;
         if (mismatch) {
             console.info(
                 '[preview-cache] shared cache already initialized; overrides ignored',

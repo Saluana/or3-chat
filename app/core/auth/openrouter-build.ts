@@ -1,6 +1,9 @@
 // Utility helpers to build OpenRouter payload messages including historical images.
 // Focus: hydrate file_hashes into base64 data URLs, enforce limits, dedupe, and
 // produce OpenAI-compatible content arrays.
+//
+// This module handles OpenRouter API response parsing which requires flexible typing.
+ 
 
 import { parseFileHashes } from '~/db/files-util';
 
@@ -30,16 +33,20 @@ export type ORContentPart =
 export interface ORMessage {
     role: 'user' | 'assistant' | 'system';
     content: ORContentPart[];
-    tool_calls?: any[];
+     
+    tool_calls?: unknown[];
 }
 
 // Caches on global scope to avoid repeated blob -> base64 conversions.
-const dataUrlCache: Map<string, string> = ((
-    globalThis as any
-).__or3ImageDataUrlCache ||= new Map());
-const inflight: Map<string, Promise<string | null>> = ((
-    globalThis as any
-).__or3ImageHydrateInflight ||= new Map());
+type GlobalCaches = {
+    __or3ImageDataUrlCache?: Map<string, string>;
+    __or3ImageHydrateInflight?: Map<string, Promise<string | null>>;
+};
+const g = globalThis as GlobalCaches;
+if (!g.__or3ImageDataUrlCache) g.__or3ImageDataUrlCache = new Map();
+if (!g.__or3ImageHydrateInflight) g.__or3ImageHydrateInflight = new Map();
+const dataUrlCache: Map<string, string> = g.__or3ImageDataUrlCache;
+const inflight: Map<string, Promise<string | null>> = g.__or3ImageHydrateInflight;
 // Simple LRU pruning to prevent unbounded growth
 const MAX_DATA_URL_CACHE = 64;
 function pruneCache(map: Map<string, string>, limit = MAX_DATA_URL_CACHE) {
@@ -85,7 +92,7 @@ async function remoteRefToDataUrl(ref: string): Promise<string | null> {
 async function blobToDataUrl(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
         const fr = new FileReader();
-        fr.onerror = () => reject(fr.error);
+        fr.onerror = () => reject(fr.error ?? new Error('FileReader error'));
         fr.onload = () => resolve(fr.result as string);
         fr.readAsDataURL(blob);
     });
@@ -134,8 +141,19 @@ const DEFAULT_MAX_IMAGE_INPUTS = 8;
 
 interface ChatMessageLike {
     role: 'user' | 'assistant' | 'system';
-    content: any; // string | parts[]
+    content: string | ChatContentPart[]; // proper content typing
     file_hashes?: string | null;
+}
+
+/** Incoming message content part (from Vercel AI SDK / DB format) */
+interface ChatContentPart {
+    type: string;
+    text?: string;
+    image?: string;
+    data?: string;
+    mediaType?: string;
+    mime?: string;
+    filename?: string;
 }
 
 // Build OpenRouter messages with hydrated images.
@@ -173,7 +191,7 @@ export async function buildOpenRouterMessages(
         if (!m) continue;
         if (m.file_hashes) {
             try {
-                const hashes = parseFileHashes(m.file_hashes) || [];
+                const hashes = parseFileHashes(m.file_hashes);
                 for (const h of hashes) {
                     if (!h) continue;
                     if (
@@ -194,12 +212,14 @@ export async function buildOpenRouterMessages(
                         });
                     }
                 }
-            } catch {}
+            } catch {
+                // Parse error - skip this message
+            }
         }
         // Also inspect inline parts if array form
         if (Array.isArray(m.content)) {
             for (const p of m.content) {
-                if (p?.type === 'image' && typeof p.image === 'string') {
+                if (p.type === 'image' && typeof p.image === 'string') {
                     if (
                         p.image.startsWith('data:image/') ||
                         /^https?:/i.test(p.image) ||
@@ -207,7 +227,7 @@ export async function buildOpenRouterMessages(
                     ) {
                         hashCandidates.push({
                             hash: p.image,
-                            role: m.role as any,
+                            role: m.role as BuildImageCandidate['role'],
                             messageIndex: idx,
                         });
                     }
@@ -226,7 +246,9 @@ export async function buildOpenRouterMessages(
         try {
             const res = await filterIncludeImages(hashCandidates);
             if (Array.isArray(res)) filtered = res;
-        } catch {}
+        } catch {
+            // Filter error - use unfiltered
+        }
     }
 
     // Enforce max & dedupe
@@ -260,11 +282,11 @@ export async function buildOpenRouterMessages(
         // Extract textual content
         let text = '';
         if (Array.isArray(m.content)) {
-            const textParts = m.content.filter((p: any) => p.type === 'text');
+            const textParts = m.content.filter((p) => p.type === 'text');
             if (textParts.length)
-                text = textParts.map((p: any) => p.text || '').join('');
+                text = textParts.map((p) => p.text || '').join('');
             // Add files (PDFs etc) directly
-            const fileParts = m.content.filter((p: any) => p.type === 'file');
+            const fileParts = m.content.filter((p) => p.type === 'file');
             for (const fp of fileParts) {
                 if (!fp.data) continue;
                 const mediaType =
@@ -277,7 +299,7 @@ export async function buildOpenRouterMessages(
                 // Local hash or opaque ref -> hydrate via blob to data URL preserving mime
                 if (!/^data:|^https?:|^blob:/i.test(String(fileData))) {
                     try {
-                        const { getFileBlob, getFileMeta } = await import(
+                        const { getFileBlob } = await import(
                             '~/db/files'
                         );
                         const blob = await getFileBlob(String(fileData));
@@ -367,9 +389,9 @@ export async function buildOpenRouterMessages(
             if (looksLocal) {
                 try {
                     const { getFileMeta } = await import('~/db/files');
-                    const meta: any = await getFileMeta(img.hash).catch(
+                    const meta = await getFileMeta(img.hash).catch(
                         () => null
-                    );
+                    ) as { mime?: string } | null;
                     if (
                         meta &&
                         typeof meta.mime === 'string' &&
@@ -377,7 +399,9 @@ export async function buildOpenRouterMessages(
                     ) {
                         isImage = true;
                     }
-                } catch {}
+                } catch {
+                    // File meta lookup failed - assume image
+                }
             }
             if (!isImage && looksLocal) {
                 // Not an image (likely a PDF or other file) -> skip to avoid triggering image-capable endpoint routing
@@ -409,8 +433,7 @@ export async function buildOpenRouterMessages(
 
 // Decide modalities based on prepared ORMessages + heuristic prompt.
 export function decideModalities(
-    orMessages: ORMessage[],
-    requestedModel?: string
+    orMessages: ORMessage[]
 ): string[] {
     const hasImageInput = orMessages.some((m) =>
         m.content.some((p) => p.type === 'image_url')

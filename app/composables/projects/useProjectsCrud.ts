@@ -75,8 +75,7 @@ export function useProjectsCrud() {
             updated_at: now,
             deleted: false,
             clock: 0,
-            meta: null,
-        } as any);
+        });
         const entries = normalizeProjectData(project.data);
         entries.push({ id: threadId, name: title, kind: 'chat' });
         await upsert.project({
@@ -132,25 +131,20 @@ export function useProjectsCrud() {
         const now = nowSec();
         for (const project of projects) {
             const entries = normalizeProjectData(project.data);
-            let changed = false;
-            const nextEntries = entries.map((entry) => {
-                if (entry.id === entryId) {
-                    if (entry.name !== title) {
-                        changed = true;
+            const hasChange = entries.some(
+                (entry) => entry.id === entryId && entry.name !== title
+            );
+            if (hasChange) {
+                const nextEntries = entries.map((entry) => {
+                    if (entry.id === entryId && entry.name !== title) {
                         return {
                             ...entry,
                             name: title,
-                            kind: entry.kind ?? kind,
+                            kind: entry.kind,
                         };
                     }
-                    if (!entry.kind) {
-                        changed = true;
-                        return { ...entry, kind };
-                    }
-                }
-                return entry;
-            });
-            if (changed) {
+                    return entry;
+                });
                 updates.push({
                     ...project,
                     data: nextEntries,

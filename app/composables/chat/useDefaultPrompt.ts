@@ -27,7 +27,7 @@ async function loadOnce() {
 
 export function useDefaultPrompt() {
     const hooks = useHooks();
-    if (import.meta.client) loadOnce();
+    if (import.meta.client) void loadOnce();
 
     async function setDefaultPrompt(id: string | null) {
         await loadOnce();

@@ -8,7 +8,7 @@ import { reportError, err } from '~/utils/errors';
 
 export type HookKind = 'action' | 'filter';
 
-type AnyFn = (...args: any[]) => any;
+type AnyFn = (...args: unknown[]) => unknown;
 
 export interface RegisterOptions {
     priority?: number; // default 10
@@ -240,6 +240,7 @@ export function createHookEngine(): HookEngine {
     }
 
     function recordTiming(name: string, ms: number) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- key may not exist at runtime
         (diagnostics.timings[name] ||= []).push(ms);
     }
 
@@ -266,10 +267,7 @@ export function createHookEngine(): HookEngine {
                 if (currentPriorityStack.length)
                     currentPriorityStack[currentPriorityStack.length - 1] =
                         priority;
-                const start =
-                    typeof performance !== 'undefined' && performance.now
-                        ? performance.now()
-                        : Date.now();
+                const start = performance.now();
                 try {
                     if (isFilter) {
                         value = await fn(value, ...args);
@@ -277,7 +275,7 @@ export function createHookEngine(): HookEngine {
                         await fn(...args);
                     }
                 } catch (err) {
-                    // eslint-disable-next-line no-console
+                     
                     console.error(
                         `[hooks] Error in ${
                             isFilter ? 'filter' : 'action'
@@ -286,10 +284,7 @@ export function createHookEngine(): HookEngine {
                     );
                     recordError(name);
                 } finally {
-                    const end =
-                        typeof performance !== 'undefined' && performance.now
-                            ? performance.now()
-                            : Date.now();
+                    const end = performance.now();
                     recordTiming(name, end - start);
                 }
             }
@@ -317,10 +312,7 @@ export function createHookEngine(): HookEngine {
                 if (currentPriorityStack.length)
                     currentPriorityStack[currentPriorityStack.length - 1] =
                         priority;
-                const start =
-                    typeof performance !== 'undefined' && performance.now
-                        ? performance.now()
-                        : Date.now();
+                const start = performance.now();
                 try {
                     if (isFilter) {
                         value = fn(value, ...args);
@@ -328,7 +320,7 @@ export function createHookEngine(): HookEngine {
                         fn(...args);
                     }
                 } catch (err) {
-                    // eslint-disable-next-line no-console
+                     
                     console.error(
                         `[hooks] Error in ${
                             isFilter ? 'filter' : 'action'
@@ -337,10 +329,7 @@ export function createHookEngine(): HookEngine {
                     );
                     recordError(name);
                 } finally {
-                    const end =
-                        typeof performance !== 'undefined' && performance.now
-                            ? performance.now()
-                            : Date.now();
+                    const end = performance.now();
                     recordTiming(name, end - start);
                 }
             }
@@ -373,7 +362,8 @@ export function createHookEngine(): HookEngine {
 
     const engine: HookEngine = {
         // filters
-        addFilter(name, fn, priority, _acceptedArgs) {
+         
+        addFilter(name, fn, priority, _acceptedArgs?) {
             add(filters, filterWildcards, name, fn, priority);
         },
         removeFilter(name, fn, priority) {
@@ -397,7 +387,8 @@ export function createHookEngine(): HookEngine {
         },
 
         // actions
-        addAction(name, fn, priority, _acceptedArgs) {
+         
+        addAction(name, fn, priority, _acceptedArgs?) {
             add(actions, actionWildcards, name, fn, priority);
         },
         removeAction(name, fn, priority) {
@@ -456,7 +447,7 @@ export function createHookEngine(): HookEngine {
         off(disposer: () => void) {
             try {
                 disposer();
-            } catch (e) {
+            } catch {
                 // Disposer failures are non-critical; log silently
                 reportError(err('ERR_INTERNAL', 'hook disposer failed'), {
                     silent: true,

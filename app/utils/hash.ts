@@ -7,44 +7,55 @@ import { reportError, err } from '~/utils/errors';
 
 const CHUNK_SIZE = 256 * 1024; // 256KB
 
+type SparkMd5ArrayBuffer = {
+    append(data: ArrayBuffer | ArrayBufferView): SparkMd5ArrayBuffer;
+    end(raw?: boolean): string;
+};
+
+type SparkMd5Module = {
+    ArrayBuffer: new () => SparkMd5ArrayBuffer;
+};
+
 // Lazy import spark-md5 only if needed (returns default export class)
-async function loadSpark() {
-    const mod = await import('spark-md5');
-    return (mod as any).default; // SparkMD5 constructor with ArrayBuffer helper
+async function loadSpark(): Promise<SparkMd5Module> {
+    const mod = (await import('spark-md5')) as { default: SparkMd5Module };
+    return mod.default; // SparkMD5 constructor with ArrayBuffer helper
+}
+
+function isDev(): boolean {
+    const meta = import.meta as ImportMeta & { env: { DEV?: boolean } };
+    return Boolean(meta.env.DEV);
 }
 
 /** Compute MD5 hash (hex lowercase) for a Blob using chunked reads. */
 export async function computeFileHash(blob: Blob): Promise<string> {
-    const dev = (import.meta as any).dev;
+    const dev = isDev();
     const hasPerf = typeof performance !== 'undefined';
     const markId =
         dev && hasPerf
             ? `hash-${Date.now()}-${Math.random().toString(36).slice(2)}`
             : undefined;
-    let t0 = 0;
-    if (markId && hasPerf) {
-        t0 = performance.now();
-        performance.mark(`${markId}:start`);
-    }
+    if (markId && hasPerf) performance.mark(`${markId}:start`);
     try {
         // Try Web Crypto subtle.digest if md5 supported (some browsers may block MD5; if so, fallback)
         try {
+            const canUseSubtle =
+                typeof crypto !== 'undefined' &&
+                typeof crypto.subtle !== 'undefined' &&
+                typeof crypto.subtle.digest === 'function';
             if (
                 blob.size <= 4 * 1024 * 1024 &&
-                'crypto' in globalThis &&
-                (globalThis as any).crypto?.subtle
+                canUseSubtle
             ) {
                 const buf = await blob.arrayBuffer();
-                // @ts-ignore - MD5 not in TypeScript lib, but some browsers support it; fallback otherwise
-                const digest = await (globalThis as any).crypto.subtle.digest(
-                    'MD5',
-                    buf
-                );
+                // @ts-expect-error MD5 not in lib types; supported in some browsers
+                const digest = await crypto.subtle.digest('MD5', buf);
                 const hex = bufferToHex(new Uint8Array(digest));
-                if (markId && hasPerf) finishMark(markId, blob.size, 'subtle');
+                if (markId && hasPerf)
+                    finishMark(markId, blob.size, 'subtle', dev);
                 return hex;
             }
-        } catch (_) {
+        } catch {
             // ignore and fallback to streaming spark-md5
         }
         // Streaming approach with spark-md5
@@ -54,26 +65,33 @@ export async function computeFileHash(blob: Blob): Promise<string> {
         while (offset < blob.size) {
             const slice = blob.slice(offset, offset + CHUNK_SIZE);
             const buf = await slice.arrayBuffer();
-            hash.append(buf as ArrayBuffer);
+            hash.append(buf);
             offset += CHUNK_SIZE;
             if (offset < blob.size) await microTask();
         }
         const hex = hash.end();
-        if (markId && hasPerf) finishMark(markId, blob.size, 'stream');
+        if (markId && hasPerf) finishMark(markId, blob.size, 'stream', dev);
         return hex;
-    } catch (e) {
+    } catch (error) {
         if (markId && hasPerf) {
             performance.mark(`${markId}:error`);
             performance.measure(
-                `hash:md5:error:${(e as any)?.message || 'unknown'}`,
+                `hash:md5:error:${
+                    error instanceof Error ? error.message : 'unknown'
+                }`,
                 `${markId}:start`
             );
         }
-        throw e;
+        throw error;
     }
 }
 
-function finishMark(id: string, size: number, mode: 'subtle' | 'stream') {
+function finishMark(
+    id: string,
+    size: number,
+    mode: 'subtle' | 'stream',
+    dev: boolean
+) {
     try {
         performance.mark(`${id}:end`);
         performance.measure(
@@ -85,8 +103,7 @@ function finishMark(id: string, size: number, mode: 'subtle' | 'stream') {
             .getEntriesByName(`hash:md5:${mode}:bytes=${size}`)
             .slice(-1)[0];
         if (entry && entry.duration && entry.duration > 0) {
-            if ((import.meta as any).dev) {
-                // eslint-disable-next-line no-console
+            if (dev) {
                 console.debug(
                     '[perf] computeFileHash',
                     mode,
@@ -95,7 +112,7 @@ function finishMark(id: string, size: number, mode: 'subtle' | 'stream') {
                 );
             }
         }
-    } catch (e) {
+    } catch {
         // Perf instrumentation failure is non-fatal
         reportError(err('ERR_INTERNAL', 'perf mark failed'), {
             silent: true,
@@ -112,6 +129,6 @@ function bufferToHex(buf: Uint8Array): string {
     return hex;
 }
 
-function microTask() {
+function microTask(): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, 0));
 }

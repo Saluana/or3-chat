@@ -48,9 +48,13 @@ export async function exchangeOpenRouterCode(
         });
         return { ok: false, status: 0, reason: 'network' };
     }
-    let json: any = null;
+    interface AuthResponse {
+        key?: string;
+        access_token?: string;
+    }
+    let json: AuthResponse | null = null;
     try {
-        json = await resp.json();
+        json = (await resp.json()) as AuthResponse;
     } catch {
         /* ignore parse */
     }
@@ -70,7 +74,7 @@ export async function exchangeOpenRouterCode(
         );
         return { ok: false, status: resp.status, reason: 'bad-response' };
     }
-    const userKey = json.key || json.access_token;
+    const userKey = json.key ?? json.access_token;
     if (!userKey) {
         reportError(
             err('ERR_AUTH', 'Auth exchange returned no key', {
@@ -78,7 +82,7 @@ export async function exchangeOpenRouterCode(
                 tags: {
                     domain: 'auth',
                     stage: 'exchange',
-                    keys: Object.keys(json || {}).length,
+                    keys: Object.keys(json).length,
                 },
             }),
             { toast: true }

@@ -51,6 +51,18 @@ export interface WorkspaceBackupApi {
     reset(): void;
 }
 
+interface FilePickerOptions {
+    suggestedName?: string;
+    types?: Array<{
+        description: string;
+        accept: Record<string, string[]>;
+    }>;
+}
+
+interface WindowWithFilePicker {
+    showSaveFilePicker?: (options?: FilePickerOptions) => Promise<FileSystemFileHandle>;
+}
+
 const STREAM_CHUNK_SIZE = 500;
 const DEFAULT_KILOBYTES_PER_CHUNK = 1024;
 
@@ -92,8 +104,15 @@ async function loadStreamSaver() {
     }
 }
 
-function validateBackupMeta(meta: any): ImportMetadata {
-    if (meta.formatName !== 'dexie') {
+interface DexieBackupMeta {
+    formatName: string;
+    formatVersion: number;
+    data: ImportMetadata;
+}
+
+function validateBackupMeta(meta: unknown): ImportMetadata {
+    const backupMeta = meta as DexieBackupMeta;
+    if (backupMeta.formatName !== 'dexie') {
         throw err(
             'ERR_VALIDATION',
             'Invalid backup format. Expected Dexie format.',
@@ -102,7 +121,7 @@ function validateBackupMeta(meta: any): ImportMetadata {
             }
         );
     }
-    if (meta.formatVersion !== 1) {
+    if (backupMeta.formatVersion !== 1) {
         throw err(
             'ERR_VALIDATION',
             'Unsupported backup version. Please update the app.',
@@ -111,12 +130,12 @@ function validateBackupMeta(meta: any): ImportMetadata {
             }
         );
     }
-    if (meta.data.databaseName !== 'or3-db') {
+    if (backupMeta.data.databaseName !== 'or3-db') {
         throw err('ERR_VALIDATION', 'Backup is for a different database.', {
             tags: { domain: 'db', action: 'validate' },
         });
     }
-    if (meta.data.databaseVersion > db.verno) {
+    if (backupMeta.data.databaseVersion > db.verno) {
         throw err(
             'ERR_VALIDATION',
             'Backup is from a newer app version. Please update.',
@@ -125,7 +144,7 @@ function validateBackupMeta(meta: any): ImportMetadata {
             }
         );
     }
-    return meta.data;
+    return backupMeta.data;
 }
 
 export function useWorkspaceBackup(): WorkspaceBackupApi {
@@ -182,13 +201,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         try {
             const showSaveFilePicker =
                 typeof window !== 'undefined'
-                    ? (
-                          window as unknown as {
-                              showSaveFilePicker?: (
-                                  options?: any
-                              ) => Promise<FileSystemFileHandle>;
-                          }
-                      ).showSaveFilePicker
+                    ? (window as unknown as WindowWithFilePicker).showSaveFilePicker
                     : undefined;
 
             const filenameBase = `or3-workspace-${new Date()
@@ -254,8 +267,11 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 }
 
                 const streamSaverModule = await loadStreamSaver();
-                const streamSaver =
-                    (streamSaverModule as any)?.default ?? streamSaverModule;
+                // StreamSaver module may have default export or direct export
+                const streamSaverModuleWithDefault = streamSaverModule as { default?: typeof import('streamsaver') } | typeof import('streamsaver') | null;
+                const streamSaver = streamSaverModuleWithDefault && 'default' in streamSaverModuleWithDefault 
+                    ? streamSaverModuleWithDefault.default 
+                    : streamSaverModuleWithDefault;
 
                 if (!streamSaver) {
                     throw err(
@@ -279,11 +295,11 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                             'Content-Type': 'application/json',
                             'Content-Disposition': `attachment; filename="${suggestedName}"`,
                         },
-                    } as any
+                    } as unknown as Parameters<typeof streamSaverApi.createWriteStream>[1]
                 );
 
                 const writer =
-                    typeof fileStream?.getWriter === 'function'
+                    typeof fileStream.getWriter === 'function'
                         ? fileStream.getWriter()
                         : null;
 
@@ -311,7 +327,8 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 durationMs: Date.now() - exportStartedAt,
             });
         } catch (e) {
-            if ((e as DOMException)?.name === 'AbortError') {
+            const error = e as DOMException;
+            if (error.name === 'AbortError') {
                 state.currentStep.value = 'idle';
                 state.progress.value = 0;
                 await hooks.doAction(
@@ -353,8 +370,9 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         state.currentStep.value = 'peeking';
         state.error.value = null;
 
+        const fileWithName = file as Blob & { name?: string };
         const fileName =
-            typeof (file as any).name === 'string' ? (file as any).name : null;
+            typeof fileWithName.name === 'string' ? fileWithName.name : null;
         const peekStartedAt = Date.now();
         const peekTelemetryBase = {
             fileName,
@@ -433,8 +451,9 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         state.progress.value = 0;
         state.error.value = null;
 
+        const fileWithName = file as Blob & { name?: string };
         const fileName =
-            typeof (file as any).name === 'string' ? (file as any).name : null;
+            typeof fileWithName.name === 'string' ? fileWithName.name : null;
         const baseImportTelemetry = {
             fileName,
             mode: state.importMode.value,
@@ -479,14 +498,20 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 });
             } else if (format === 'dexie') {
                 const { importInto } = await loadDexieExportImport();
+                interface DexieImportProgress {
+                    totalTables: number;
+                    totalRows?: number;
+                    completedTables: number;
+                    completedRows?: number;
+                }
                 const baseOptions = {
                     chunkSizeBytes: DEFAULT_KILOBYTES_PER_CHUNK,
-                    progressCallback: (progress: any) => {
+                    progressCallback: (progress: DexieImportProgress) => {
                         const total =
-                            progress.totalTables + (progress.totalRows || 0);
+                            progress.totalTables + (progress.totalRows ?? 0);
                         const completed =
                             progress.completedTables +
-                            (progress.completedRows || 0);
+                            (progress.completedRows ?? 0);
                         state.progress.value =
                             total > 0
                                 ? Math.round((completed / total) * 100)
@@ -550,11 +575,14 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 }
 
 function validateStreamHeader(header: WorkspaceBackupHeaderLine) {
+    // These comparisons validate external data against known constants
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (header.format !== WORKSPACE_BACKUP_FORMAT) {
         throw err('ERR_VALIDATION', 'Invalid backup format.', {
             tags: { domain: 'db', action: 'validate' },
         });
     }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (header.version !== WORKSPACE_BACKUP_VERSION) {
         throw err(
             'ERR_VALIDATION',

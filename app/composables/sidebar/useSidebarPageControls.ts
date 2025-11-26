@@ -51,7 +51,7 @@ export async function useSwitchToPage(pageId: string): Promise<boolean> {
         return await setActivePage(pageId);
     } catch (error) {
         if (import.meta.dev) {
-            // eslint-disable-next-line no-console
+             
             console.error('[useSwitchToPage] Failed to switch to page:', pageId, error);
         }
         return false;
@@ -70,7 +70,7 @@ export async function useResetToDefaultPage(): Promise<boolean> {
         return await resetToDefault();
     } catch (error) {
         if (import.meta.dev) {
-            // eslint-disable-next-line no-console
+             
             console.error('[useResetToDefaultPage] Failed to reset to default page:', error);
         }
         return false;

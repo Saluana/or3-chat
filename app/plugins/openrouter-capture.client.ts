@@ -33,7 +33,7 @@ export default defineNuxtPlugin(() => {
                 }
             }
         }
-    } catch (e) {
+    } catch {
         // Non-fatal: capture failure only reduces resilience of auth callback; log silently
         reportError(err('ERR_INTERNAL', 'OpenRouter param capture failed'), {
             silent: true,

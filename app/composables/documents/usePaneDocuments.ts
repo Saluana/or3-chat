@@ -29,10 +29,6 @@ export function usePaneDocuments(
     const { panes, activePaneIndex, createNewDoc, flushDocument } = opts;
     const hooks = useHooks();
 
-    function findPaneByDoc(id: string) {
-        return panes.value.find((p) => p.mode === 'doc' && p.documentId === id);
-    }
-
     async function newDocumentInActive(initial?: { title?: string }) {
         const pane = panes.value[activePaneIndex.value];
         if (!pane) return;
@@ -40,15 +36,13 @@ export function usePaneDocuments(
             if (pane.mode === 'doc' && pane.documentId) {
                 // Detect pending changes before flush
                 const prevState = useDocumentState(pane.documentId);
-                const hadPending = !!(
-                    prevState &&
-                    (prevState.pendingTitle !== undefined ||
-                        prevState.pendingContent !== undefined)
-                );
+                const hadPending =
+                    prevState.pendingTitle !== undefined ||
+                    prevState.pendingContent !== undefined;
                 await flushDocument(pane.documentId);
                 // Emit saved hook if pending changes existed (defensive for test scenarios)
                 if (hadPending && pane.documentId) {
-                    hooks.doAction('ui.pane.doc:action:saved', {
+                    void hooks.doAction('ui.pane.doc:action:saved', {
                         pane,
                         oldDocumentId: pane.documentId,
                         newDocumentId: pane.documentId,
@@ -60,25 +54,25 @@ export function usePaneDocuments(
             }
             const doc = await createNewDoc(initial);
             const oldId = pane.documentId || '';
-            let newId: string | '' | false = doc.id;
+            let newId: string | false = doc.id;
             try {
                 newId = (await hooks.applyFilters(
                     'ui.pane.doc:filter:select',
                     newId,
                     pane,
                     oldId
-                )) as string | '' | false;
-            } catch {}
+                )) as string | false;
+            } catch { /* ignore filter errors */ }
             if (newId === false) return undefined; // veto
             pane.mode = 'doc';
             pane.documentId = newId || undefined;
             pane.threadId = '';
             pane.messages = [];
             if (oldId !== newId)
-                hooks.doAction('ui.pane.doc:action:changed', {
+                void hooks.doAction('ui.pane.doc:action:changed', {
                     pane,
                     oldDocumentId: oldId,
-                    newDocumentId: (newId || '') as string,
+                    newDocumentId: (newId || ''),
                     paneIndex: activePaneIndex.value,
                     meta: { created: true },
                 });
@@ -94,28 +88,26 @@ export function usePaneDocuments(
         const pane = panes.value[activePaneIndex.value];
         if (!pane) return;
         const oldId = pane.documentId || '';
-        let requested: string | '' | false = id;
+        let requested: string | false = id;
         try {
             requested = (await hooks.applyFilters(
                 'ui.pane.doc:filter:select',
                 requested,
                 pane,
                 oldId
-            )) as string | '' | false;
-        } catch {}
+            )) as string | false;
+        } catch { /* ignore filter errors */ }
         if (requested === false) return; // veto
         if (pane.mode === 'doc' && pane.documentId && pane.documentId !== id) {
             try {
                 const prevState = useDocumentState(pane.documentId);
-                const hadPending = !!(
-                    prevState &&
-                    (prevState.pendingTitle !== undefined ||
-                        prevState.pendingContent !== undefined)
-                );
+                const hadPending =
+                    prevState.pendingTitle !== undefined ||
+                    prevState.pendingContent !== undefined;
                 await flushDocument(pane.documentId);
                 // Emit saved hook if pending changes existed (defensive for test scenarios)
                 if (hadPending && pane.documentId) {
-                    hooks.doAction('ui.pane.doc:action:saved', {
+                    void hooks.doAction('ui.pane.doc:action:saved', {
                         pane,
                         oldDocumentId: pane.documentId,
                         newDocumentId: pane.documentId,
@@ -130,14 +122,14 @@ export function usePaneDocuments(
             await releaseDocument(pane.documentId, { flush: false });
         }
         pane.mode = 'doc';
-        pane.documentId = (requested as string) || undefined;
+        pane.documentId = (requested) || undefined;
         pane.threadId = '';
         pane.messages = [];
         if (oldId !== requested)
-            hooks.doAction('ui.pane.doc:action:changed', {
+            void hooks.doAction('ui.pane.doc:action:changed', {
                 pane,
                 oldDocumentId: oldId,
-                newDocumentId: (requested || '') as string,
+                newDocumentId: (requested || ''),
                 paneIndex: activePaneIndex.value,
                 meta: { reason: 'select' },
             });

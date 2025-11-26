@@ -24,9 +24,11 @@ export const useIcon = (token: IconToken) => {
     const { activeTheme } = useThemeResolver();
 
     return computed(() => {
-        // $iconRegistry is typed as any usually in Nuxt plugins unless we extend the type,
-        // but we know it's there.
-        const registry = $iconRegistry as any;
+        // $iconRegistry is typed loosely in Nuxt plugins, but we know the shape
+        interface IconRegistry {
+            resolve: (token: IconToken, theme: string) => string;
+        }
+        const registry = $iconRegistry as IconRegistry;
         // Registry uses a reactive Map internally, so accessing resolve -> themes.get()
         // will automatically track the dependency on the specific theme's icons.
         return registry.resolve(token, activeTheme.value);

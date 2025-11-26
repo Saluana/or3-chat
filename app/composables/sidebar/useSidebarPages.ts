@@ -67,12 +67,10 @@ export interface SidebarActivateContext {
 }
 
 /**
- * Extended interface for registered sidebar pages.
- * Includes all SidebarPageDef fields with components already wrapped and normalized.
+ * Type alias for registered sidebar pages.
+ * RegisteredSidebarPage is exactly SidebarPageDef semantically (component already wrapped).
  */
-export interface RegisteredSidebarPage extends SidebarPageDef {
-    // SidebarPageDef fields, component already wrapped
-}
+export type RegisteredSidebarPage = SidebarPageDef;
 
 /**
  * Zod schema for validating sidebar page definitions at registration.

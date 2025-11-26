@@ -15,7 +15,7 @@ export async function listImageMetasPaged(
         .filter(
             (m) =>
                 m.deleted !== true &&
-                (m.kind === 'image' || m.mime_type?.startsWith('image/'))
+                (m.kind === 'image' || m.mime_type.startsWith('image/'))
         )
         .offset(offset)
         .limit(limit)
@@ -33,7 +33,7 @@ export async function listDeletedImageMetasPaged(
         .filter(
             (m) =>
                 m.deleted === true &&
-                (m.kind === 'image' || m.mime_type?.startsWith('image/'))
+                (m.kind === 'image' || m.mime_type.startsWith('image/'))
         )
         .offset(offset)
         .limit(limit)

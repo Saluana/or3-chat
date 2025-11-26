@@ -51,7 +51,7 @@ export default defineNuxtPlugin(() => {
             // ignore
         }
     } catch (e) {
-        // eslint-disable-next-line no-console
+         
         console.error('[message-actions-test] plugin failed to initialize', e);
     }
 });

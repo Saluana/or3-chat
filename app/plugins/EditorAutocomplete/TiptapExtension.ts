@@ -120,7 +120,7 @@ export const AutocompleteExtension = Extension.create<{}>({
         // Loading timeout to prevent stuck loading state
         let loadingTimeoutId: number | null = null;
         // Last typing time for smart debounce
-        let lastTypingTime = 0;
+        const lastTypingTime = 0;
 
         // Helper function to abort current request and cancel debounce
         function abortCurrentRequest() {

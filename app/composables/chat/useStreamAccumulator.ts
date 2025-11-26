@@ -29,25 +29,27 @@ export interface StreamAccumulatorApi {
 }
 
 // Resolve rAF/CAF dynamically to honor test-time stubs and late availability
-function nowTs() {
+function nowTs(): number {
     try {
-        return (globalThis.performance?.now?.() as number) ?? Date.now();
+        return globalThis.performance.now();
     } catch {
         return Date.now();
     }
 }
+type GlobalWithRAF = typeof globalThis & {
+    requestAnimationFrame?: (cb: FrameRequestCallback) => number;
+    cancelAnimationFrame?: (id: number) => void;
+};
+
 function getRAF(): (cb: FrameRequestCallback) => number {
-    const raf = (globalThis as any).requestAnimationFrame as
-        | undefined
-        | ((cb: FrameRequestCallback) => number);
-    if (typeof raf === 'function') return raf;
+    const g = globalThis as GlobalWithRAF;
+    if (typeof g.requestAnimationFrame === 'function') return g.requestAnimationFrame;
     return (cb: FrameRequestCallback) =>
-        setTimeout(() => cb(nowTs()), 0) as any;
+        setTimeout(() => cb(nowTs()), 0) as unknown as number;
 }
 function getCAF(): (id: number) => void {
-    const caf = (globalThis as any).cancelAnimationFrame as
-        | undefined
-        | ((id: number) => void);
+    const g = globalThis as GlobalWithRAF;
+    const caf = g.cancelAnimationFrame;
     if (typeof caf === 'function') return caf;
     return (id: number) => clearTimeout(id);
 }
@@ -106,7 +108,7 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
     function schedule() {
         if (frame != null || microtaskToken != null || _finalized) return;
         // Prefer real rAF if available; otherwise, queue a microtask (cancelable via token)
-        if (typeof (globalThis as any).requestAnimationFrame === 'function') {
+        if (typeof (globalThis as GlobalWithRAF).requestAnimationFrame === 'function') {
             const raf = getRAF();
             frame = raf(flush);
             return;

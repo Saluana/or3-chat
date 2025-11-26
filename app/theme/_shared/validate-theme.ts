@@ -33,8 +33,11 @@ export function validateThemeDefinition(
     const errors: ValidationError[] = [];
     const warnings: ValidationError[] = [];
 
+    // Cast to partial for validation checks (runtime may have missing fields)
+    const partialConfig = config as Partial<ThemeDefinition>;
+
     // Check required fields
-    if (!config.name) {
+    if (!partialConfig.name) {
         errors.push({
             severity: 'error',
             code: 'THEME_001',
@@ -43,18 +46,18 @@ export function validateThemeDefinition(
             suggestion:
                 'Add a "name" field with a kebab-case identifier (e.g., "nature", "cyberpunk")',
         });
-    } else if (!/^[a-z][a-z0-9-]*$/.test(config.name)) {
+    } else if (!/^[a-z][a-z0-9-]*$/.test(partialConfig.name)) {
         errors.push({
             severity: 'error',
             code: 'THEME_002',
-            message: `Theme name "${config.name}" must be kebab-case (lowercase letters, numbers, and hyphens only)`,
+            message: `Theme name "${partialConfig.name}" must be kebab-case (lowercase letters, numbers, and hyphens only)`,
             file: 'theme.ts',
             suggestion: 'Use kebab-case format: "my-theme-name"',
         });
     }
 
     // Check colors object
-    if (!config.colors) {
+    if (!partialConfig.colors || typeof partialConfig.colors !== 'object') {
         errors.push({
             severity: 'error',
             code: 'THEME_003',
@@ -137,17 +140,6 @@ export function validateThemeDefinition(
                     suggestion: 'Use standard CSS selectors instead',
                 });
             }
-
-            // Validate props object
-            if (!props || typeof props !== 'object') {
-                errors.push({
-                    severity: 'error',
-                    code: 'THEME_009',
-                    message: `Invalid props for selector "${selector}"`,
-                    file: 'theme.ts',
-                    suggestion: 'Props must be an object with valid properties',
-                });
-            }
         }
     }
 
@@ -184,11 +176,12 @@ export function validateThemeDefinition(
                     suggestion: `Use one of: ${[...repeatOptions].join(', ')}`,
                 });
             }
-            if (layer.fit && layer.fit !== 'cover' && layer.fit !== 'contain') {
+            const fitValue = layer.fit as string | undefined;
+            if (fitValue && fitValue !== 'cover' && fitValue !== 'contain') {
                 warnings.push({
                     severity: 'warning',
                     code: 'THEME_013',
-                    message: `Background layer "${location}" uses an unsupported fit value "${layer.fit}"`,
+                    message: `Background layer "${location}" uses an unsupported fit value "${fitValue}"`,
                     file: 'theme.ts',
                     suggestion: 'Use either "cover" or "contain"',
                 });
@@ -296,7 +289,7 @@ function isValidColor(color: string): boolean {
     // RGB/RGBA with proper format validation
     // Matches: rgb(0, 0, 0), rgba(0, 0, 0, 0.5), rgb(0 0 0), rgb(0 0 0 / 50%)
     if (
-        /^rgba?\s*\(\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*(?:[,\/]\s*[\d.%]+)?\s*\)$/i.test(
+        /^rgba?\s*\(\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*(?:[,/]\s*[\d.%]+)?\s*\)$/i.test(
             trimmed
         )
     ) {
@@ -306,7 +299,7 @@ function isValidColor(color: string): boolean {
     // HSL/HSLA with proper format validation
     // Matches: hsl(0, 0%, 0%), hsla(0, 0%, 0%, 0.5), hsl(0 0% 0%), hsl(0 0% 0% / 50%)
     if (
-        /^hsla?\s*\(\s*[\d.]+(?:deg|grad|rad|turn)?\s*[,\s]\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*(?:[,\/]\s*[\d.%]+)?\s*\)$/i.test(
+        /^hsla?\s*\(\s*[\d.]+(?:deg|grad|rad|turn)?\s*[,\s]\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*(?:[,/]\s*[\d.%]+)?\s*\)$/i.test(
             trimmed
         )
     ) {

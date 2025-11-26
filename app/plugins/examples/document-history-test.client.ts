@@ -40,7 +40,7 @@ export default defineNuxtPlugin(() => {
                     });
                 } catch (e) {
                     // If useToast isn't available, still continue — we logged details above
-                    // eslint-disable-next-line no-console
+                     
                     console.warn('[doc-history-test] useToast unavailable', e);
                 }
             },
@@ -54,7 +54,7 @@ export default defineNuxtPlugin(() => {
             // ignore
         }
     } catch (e) {
-        // eslint-disable-next-line no-console
+         
         console.error('[doc-history-test] plugin failed to initialize', e);
     }
 });

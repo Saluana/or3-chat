@@ -31,10 +31,8 @@ export function useOpenRouterAuth() {
         let codeChallenge = codeVerifier;
         let codeChallengeMethod: 'S256' | 'plain' = 'plain';
         try {
-            if (
-                typeof crypto !== 'undefined' &&
-                typeof crypto.subtle?.digest === 'function'
-            ) {
+            const subtle = typeof crypto !== 'undefined' ? crypto.subtle : undefined;
+            if (subtle && typeof subtle.digest === 'function') {
                 const challengeBuffer = await sha256(codeVerifier);
                 codeChallenge = base64urlencode(challengeBuffer);
                 codeChallengeMethod = 'S256';
@@ -44,16 +42,15 @@ export function useOpenRouterAuth() {
             codeChallenge = codeVerifier;
             codeChallengeMethod = 'plain';
         }
-
-        // store verifier in session storage
-        sessionStorage.setItem('openrouter_code_verifier', codeVerifier);
         // store the method so the callback knows how to exchange
         try {
             sessionStorage.setItem(
                 'openrouter_code_method',
                 codeChallengeMethod
             );
-        } catch {}
+        } catch {
+            // sessionStorage may fail in private browsing - continue anyway
+        }
         // store a random state to protect against CSRF
         const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
             .map((b) => ('0' + b.toString(16)).slice(-2))
@@ -62,8 +59,9 @@ export function useOpenRouterAuth() {
 
         const rc = useRuntimeConfig();
         // default callback to current origin + known path when not provided
+        const redirectUri = rc.public.openRouterRedirectUri;
         const callbackUrl =
-            String(rc.public.openRouterRedirectUri || '') ||
+            (typeof redirectUri === 'string' && redirectUri) ||
             `${window.location.origin}/openrouter-callback`;
 
         const params = new URLSearchParams();
@@ -78,9 +76,8 @@ export function useOpenRouterAuth() {
         const clientId = rc.public.openRouterClientId as string | undefined;
         if (clientId) params.append('client_id', String(clientId));
 
-        const authUrl = String(
-            rc.public.openRouterAuthUrl || 'https://openrouter.ai/auth'
-        );
+        const authUrlConfig = rc.public.openRouterAuthUrl;
+        const authUrl = (typeof authUrlConfig === 'string' && authUrlConfig) || 'https://openrouter.ai/auth';
         const url = `${authUrl}?${params.toString()}`;
 
         // Warn if callback URL is not HTTPS or localhost (common iOS issue)
@@ -94,11 +91,13 @@ export function useOpenRouterAuth() {
                     callbackUrl
                 );
             }
-        } catch {}
+        } catch {
+            // Invalid URL - skip warning
+        }
 
         // Debug (dev only): final URL for parameter inspection
         if (import.meta.dev) {
-            // eslint-disable-next-line no-console
+             
             console.debug('OpenRouter PKCE redirect URL:', url);
         }
 
@@ -115,11 +114,15 @@ export function useOpenRouterAuth() {
             // Best-effort: clear synced KV by setting empty
             try {
                 await kv.delete('openrouter_api_key');
-            } catch {}
+            } catch {
+                // KV delete may fail - non-critical
+            }
             // Notify UI listeners (Sidebar, etc.) to recompute state
             try {
                 window.dispatchEvent(new CustomEvent('openrouter:connected'));
-            } catch {}
+            } catch {
+                // Event dispatch may fail in SSR - non-critical
+            }
         } catch (e) {
             console.error('OpenRouter logout failed', e);
         }

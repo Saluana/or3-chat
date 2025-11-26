@@ -17,7 +17,7 @@ export function generateThemeCssVariables(def: ThemeDefinition): string {
     }
 
     const darkOverrides = def.colors.dark
-        ? buildPalette(def.colors.dark as ColorPalette, true)
+        ? buildPalette(def.colors.dark as ColorPalette)
         : {};
     applyFontVars(darkOverrides, def.fonts?.dark);
 
@@ -47,10 +47,7 @@ function kebab(str: string): string {
     return cached;
 }
 
-function buildPalette(
-    colors: ColorPalette,
-    isDark = false
-): Record<string, string> {
+function buildPalette(colors: ColorPalette): Record<string, string> {
     const entries: Record<string, string> = {};
     for (const key in colors) {
         if (key === 'dark') continue;

@@ -2,12 +2,7 @@ import { db } from './client';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow } from './util';
 import { nowSec } from './util';
-import {
-    FileMetaCreateSchema,
-    FileMetaSchema,
-    type FileMeta,
-    type FileMetaCreate,
-} from './schema';
+import { FileMetaCreateSchema, FileMetaSchema, type FileMeta } from './schema';
 import { computeFileHash } from '../utils/hash';
 import { reportError, err } from '../utils/errors';
 import type {
@@ -49,7 +44,7 @@ function toFileEntity(meta: FileMeta): FileEntity {
     };
 }
 
-function applyFileEntityToMeta<T extends Record<string, any>>(
+function applyFileEntityToMeta<T extends Record<string, unknown>>(
     meta: T,
     entity: FileEntity
 ): T {
@@ -109,7 +104,7 @@ export async function createOrRefFile(
     file: Blob,
     name: string
 ): Promise<FileMeta> {
-    const dev = (import.meta as any).dev;
+    const dev = import.meta.dev;
     const hasPerf = typeof performance !== 'undefined';
     const markId =
         dev && hasPerf
@@ -122,8 +117,7 @@ export async function createOrRefFile(
     const existing = await db.file_meta.get(hash);
     if (existing) {
         await changeRefCount(hash, 1);
-        if ((import.meta as any).dev) {
-            // eslint-disable-next-line no-console
+        if (import.meta.dev) {
             console.debug('[files] ref existing', {
                 hash: hash.slice(0, 8),
                 size: existing.size_bytes,
@@ -133,7 +127,7 @@ export async function createOrRefFile(
         if (markId && hasPerf) finalizePerf(markId, 'ref', file.size);
         return existing;
     }
-    const mime = (file as any).type || 'application/octet-stream';
+    const mime = file.type || 'application/octet-stream';
     // Basic image dimension extraction if image
     let width: number | undefined;
     let height: number | undefined;
@@ -142,7 +136,9 @@ export async function createOrRefFile(
             const bmp = await blobImageSize(file);
             width = bmp?.width;
             height = bmp?.height;
-        } catch {}
+        } catch {
+            // Silently ignore image dimension extraction failures
+        }
     }
     const baseCreate = {
         hash,
@@ -191,9 +187,10 @@ export async function createOrRefFile(
         };
         await hooks.doAction('db.files.create:action:after', actionPayload);
     });
-    const finalMeta = storedMeta ?? meta;
-    if ((import.meta as any).dev) {
-        // eslint-disable-next-line no-console
+    // storedMeta is always set within the transaction, but TypeScript doesn't track this
+    // Use non-null assertion since the transaction guarantees the value is set
+    const finalMeta = storedMeta!;
+    if (import.meta.dev) {
         console.debug('[files] created', {
             hash: finalMeta.hash.slice(0, 8),
             size: file.size,
@@ -352,11 +349,9 @@ function finalizePerf(id: string, kind: 'create' | 'ref', bytes: number) {
             `${id}:start`,
             `${id}:end`
         );
-        const entry = performance
-            .getEntriesByName(`file:${kind}:bytes=${bytes}`)
-            .slice(-1)[0];
         // Intentionally omit console logging to keep production console clean.
-    } catch (e) {
+        // The measure is still recorded for performance profiling tools.
+    } catch {
         // Perf metric finalize is best-effort only
         reportError(err('ERR_INTERNAL', 'file perf finalize failed'), {
             silent: true,

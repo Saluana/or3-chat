@@ -20,7 +20,7 @@ export type { ToolDefinition, ToolCall } from './types';
  *     ui: { label, icon, defaultEnabled }
  *   });
  */
-export function defineTool<T extends Record<string, any>>(
+export function defineTool<T extends Record<string, unknown>>(
     def: T
 ): T {
     return def;

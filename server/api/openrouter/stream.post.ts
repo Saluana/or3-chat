@@ -12,10 +12,10 @@ const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 export default defineEventHandler(async (event) => {
     // Read request body
-    let body: any;
+    let body: Record<string, unknown>;
     try {
         body = await readBody(event);
-    } catch (e) {
+    } catch {
         setResponseStatus(event, 400);
         return 'Invalid request body';
     }
@@ -37,15 +37,9 @@ export default defineEventHandler(async (event) => {
     const ac = new AbortController();
 
     // Listen for client disconnect
-    if (event.node?.req?.on) {
-        event.node.req.on('close', () => {
-            ac.abort();
-        });
-    } else if (import.meta.dev) {
-        console.warn(
-            '[openrouter/stream] event.node.req not available for abort handling'
-        );
-    }
+    event.node.req.on('close', () => {
+        ac.abort();
+    });
 
     // Req 2: Proxy POST to OpenRouter with Accept: text/event-stream
     let upstream: Response;
@@ -69,9 +63,9 @@ export default defineEventHandler(async (event) => {
             body: JSON.stringify(body),
             signal: ac.signal,
         });
-    } catch (e: any) {
+    } catch (e: unknown) {
         // Handle abort or network error
-        if (e?.name === 'AbortError') {
+        if (e instanceof Error && e.name === 'AbortError') {
             // Client disconnected
             return;
         }

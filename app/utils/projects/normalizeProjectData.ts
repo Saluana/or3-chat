@@ -11,11 +11,13 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function parseEntriesArray(raw: unknown): unknown[] | null {
-    if (Array.isArray(raw)) return [...raw];
+    if (Array.isArray(raw)) return raw.map((item) => item as unknown);
     if (typeof raw === 'string') {
         try {
-            const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? [...parsed] : null;
+            const parsed: unknown = JSON.parse(raw);
+            return Array.isArray(parsed)
+                ? parsed.map((item) => item as unknown)
+                : null;
         } catch {
             return null;
         }

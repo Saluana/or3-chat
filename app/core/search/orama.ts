@@ -10,8 +10,9 @@
  * - Isolated DB instances per schema (no cross-contamination)
  */
 
-type OramaModule = any;
-type OramaInstance = any;
+// Orama types are dynamically imported and not strongly typed
+type OramaModule = Record<string, unknown>;
+type OramaInstance = unknown;
 
 let oramaModuleCache: OramaModule | null = null;
 
@@ -29,10 +30,10 @@ export async function importOrama(): Promise<OramaModule> {
 
     try {
         const mod = await import('@orama/orama');
-        oramaModuleCache = mod;
-        return mod;
+        oramaModuleCache = mod as OramaModule;
+        return mod as OramaModule;
     } catch (error) {
-        throw new Error(`Failed to import Orama: ${error}`);
+        throw new Error(`Failed to import Orama: ${String(error)}`);
     }
 }
 
@@ -46,7 +47,10 @@ export async function importOrama(): Promise<OramaModule> {
 export async function createDb(
     schema: Record<string, string>
 ): Promise<OramaInstance> {
-    const { create } = await importOrama();
+    const orama = await importOrama();
+    const create = orama.create as (options: {
+        schema: Record<string, string>;
+    }) => Promise<OramaInstance>;
     return create({ schema });
 }
 
@@ -57,12 +61,16 @@ export async function createDb(
  * @param docs - Array of documents to index
  * @returns Promise resolving to the DB instance (for chaining)
  */
-export async function buildIndex<T = any>(
+export async function buildIndex<T = unknown>(
     db: OramaInstance,
     docs: T[]
 ): Promise<OramaInstance> {
     if (!docs.length) return db;
-    const { insertMultiple } = await importOrama();
+    const orama = await importOrama();
+    const insertMultiple = orama.insertMultiple as (
+        db: OramaInstance,
+        docs: T[]
+    ) => Promise<void>;
     await insertMultiple(db, docs);
     return db;
 }
@@ -79,18 +87,23 @@ export async function searchWithIndex(
     db: OramaInstance,
     term: string,
     limit = 100,
-    options?: { returning?: string[]; where?: Record<string, any> }
-): Promise<{ hits: any[] }> {
-    const { search } = await importOrama();
-    const query: any = { term, limit };
+    options?: { returning?: string[]; where?: Record<string, unknown> }
+): Promise<{ hits: unknown[] }> {
+    const orama = await importOrama();
+    const searchFn = orama.search as (
+        db: OramaInstance,
+        query: Record<string, unknown>
+    ) => Promise<{ hits: unknown[] }>;
+    const query: Record<string, unknown> = { term, limit };
     if (options?.returning && Array.isArray(options.returning)) {
         query.returning = options.returning;
     }
     if (options?.where) {
         query.where = options.where;
     }
-    const result = await search(db, query);
-    return result || { hits: [] };
+    const result = await searchFn(db, query);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- searchFn may return null at runtime
+    return result ?? { hits: [] };
 }
 
 /**

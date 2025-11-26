@@ -9,80 +9,116 @@
         ]"
         :data-theme-target="messageContainerProps?.['data-theme-target']"
         :data-theme-matches="messageContainerProps?.['data-theme-matches']"
-        :style="{
-            paddingRight:
-                props.message.role === 'user' && hashList.length && !expanded
-                    ? '80px'
-                    : '16px',
-        }"
         class="p-2 min-w-[140px] rounded-[var(--md-border-radius)] first:mt-3 first:mb-6 not-first:my-6 relative"
     >
-        <!-- Compact thumb (collapsed state) -->
-        <button
-            v-if="props.message.role === 'user' && hashList.length && !expanded"
-            :class="[
-                'attachment-thumb-button absolute -top-2 -right-2 overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group',
-                attachmentThumbButtonProps?.class || '',
-            ]"
-            :data-theme-target="
-                attachmentThumbButtonProps?.['data-theme-target']
-            "
-            :data-theme-matches="
-                attachmentThumbButtonProps?.['data-theme-matches']
-            "
-            @click="toggleExpanded"
-            type="button"
-            aria-label="Show attachments"
+        <!-- Attachments bar (above message content) -->
+        <div
+            v-if="props.message.role === 'user' && hashList.length"
+            class="attachments-bar mb-3"
         >
-            <template v-if="firstThumb && pdfMeta[firstThumb]">
-                <div class="pdf-thumb retro-pdf-thumb w-full h-full">
-                    <div
-                        class="h-full line-clamp-2 flex items-center justify-center text-xs text-black dark:text-white"
-                    >
-                        {{ pdfDisplayName }}
-                    </div>
-
-                    <div
-                        class="pdf-thumb__ext retro-pdf-thumb-ext"
-                        aria-hidden="true"
-                    >
-                        PDF
-                    </div>
-                </div>
-            </template>
-            <template
-                v-else-if="
-                    firstThumb && thumbnails[firstThumb]?.status === 'ready'
-                "
+            <!-- Collapsed: show compact row of thumbnails -->
+            <div
+                v-if="!expanded"
+                class="attachments-row flex flex-wrap gap-2.5"
             >
-                <img
-                    :src="thumbnails[firstThumb!]?.url"
-                    :alt="'attachment ' + firstThumb.slice(0, 6)"
-                    class="attachment-thumb-image object-cover w-full h-full"
-                    draggable="false"
-                />
-            </template>
-            <template
-                v-else-if="
-                    firstThumb && thumbnails[firstThumb]?.status === 'error'
-                "
-            >
-                <span class="attachment-thumb-error text-[10px] text-error"
-                    >err</span
+                <button
+                    v-for="(hash, idx) in displayedHashes"
+                    :key="hash"
+                    type="button"
+                    class="attachment-item flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer shadow-sm backdrop-blur-sm"
+                    @click="toggleExpanded"
+                    :aria-label="'View attachment ' + (idx + 1)"
                 >
-            </template>
-            <template v-else>
-                <span
-                    class="attachment-thumb-loading text-[10px] animate-pulse opacity-70"
-                    >…</span
+                    <!-- PDF thumbnail -->
+                    <template v-if="pdfMeta[hash]">
+                        <div
+                            class="attachment-icon w-10 h-10 flex items-center justify-center bg-red-500/30 rounded-lg border border-red-400/30"
+                        >
+                            <span
+                                class="text-[11px] font-bold text-red-200 tracking-wide"
+                                >PDF</span
+                            >
+                        </div>
+                        <div
+                            class="attachment-info flex flex-col min-w-0 gap-0.5"
+                        >
+                            <span
+                                class="attachment-name text-[13px] font-medium truncate max-w-[140px] leading-tight"
+                            >
+                                {{ getAttachmentName(hash) }}
+                            </span>
+                            <span class="attachment-type text-[11px] opacity-50"
+                                >Document</span
+                            >
+                        </div>
+                    </template>
+                    <!-- Image thumbnail -->
+                    <template v-else-if="thumbnails[hash]?.status === 'ready'">
+                        <img
+                            :src="thumbnails[hash]?.url"
+                            :alt="'Attachment ' + (idx + 1)"
+                            class="attachment-thumb w-10 h-10 object-cover rounded-lg"
+                            draggable="false"
+                        />
+                        <div
+                            class="attachment-info flex flex-col min-w-0 gap-0.5"
+                        >
+                            <span
+                                class="attachment-name text-[13px] font-medium truncate max-w-[140px] leading-tight"
+                            >
+                                Image {{ idx + 1 }}
+                            </span>
+                            <span class="attachment-type text-[11px] opacity-50"
+                                >Image</span
+                            >
+                        </div>
+                    </template>
+                    <!-- Loading state -->
+                    <template
+                        v-else-if="thumbnails[hash]?.status === 'loading'"
+                    >
+                        <div
+                            class="attachment-icon w-10 h-10 flex items-center justify-center bg-white/10 rounded-lg animate-pulse"
+                        >
+                            <span class="text-xs opacity-40">···</span>
+                        </div>
+                        <div
+                            class="attachment-info flex flex-col min-w-0 gap-0.5"
+                        >
+                            <span
+                                class="attachment-name text-[13px] font-medium opacity-40"
+                                >Loading...</span
+                            >
+                        </div>
+                    </template>
+                    <!-- Error state -->
+                    <template v-else>
+                        <div
+                            class="attachment-icon w-10 h-10 flex items-center justify-center bg-white/10 rounded-lg"
+                        >
+                            <span class="text-xs opacity-40">?</span>
+                        </div>
+                        <div
+                            class="attachment-info flex flex-col min-w-0 gap-0.5"
+                        >
+                            <span
+                                class="attachment-name text-[13px] font-medium opacity-40"
+                                >File</span
+                            >
+                        </div>
+                    </template>
+                </button>
+                <!-- Show more indicator if there are hidden attachments -->
+                <button
+                    v-if="hashList.length > maxDisplayedThumbs"
+                    type="button"
+                    class="attachment-more flex items-center justify-center px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer text-[13px] font-medium shadow-sm backdrop-blur-sm"
+                    @click="toggleExpanded"
                 >
-            </template>
-            <span
-                v-if="hashList.length > 1"
-                class="attachment-thumb-count absolute bottom-0 right-0 text-[14px] font-semibold bg-black/70 text-white px-1"
-                >+{{ hashList.length - 1 }}</span
-            >
-        </button>
+                    +{{ hashList.length - maxDisplayedThumbs }} more
+                </button>
+            </div>
+        </div>
 
         <div
             v-if="!editing"
@@ -418,17 +454,6 @@ const cancelEditButtonProps = computed(() => {
     };
 });
 
-const attachmentThumbButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'message',
-        identifier: 'message.attachment-thumb',
-        isNuxtUI: false,
-    });
-
-    return overrides.value;
-});
-
 const messageContainerProps = computed(() => {
     const overrides = useThemeOverrides({
         component: 'div',
@@ -630,6 +655,28 @@ const pdfDisplayName = computed(() => {
     const tail = Math.floor(keep / 2);
     return base.slice(0, head) + '…' + base.slice(base.length - tail) + ext;
 });
+
+// Maximum number of attachment thumbnails to show in collapsed view
+const maxDisplayedThumbs = 4;
+const displayedHashes = computed(() =>
+    hashList.value.slice(0, maxDisplayedThumbs)
+);
+
+// Get display name for an attachment
+function getAttachmentName(hash: string): string {
+    const meta = pdfMeta[hash];
+    if (meta?.name) {
+        const name = meta.name;
+        const max = 20;
+        if (name.length <= max) return name;
+        const dot = name.lastIndexOf('.');
+        const ext = dot > 0 ? name.slice(dot) : '';
+        const base = dot > 0 ? name.slice(0, dot) : name;
+        const keep = max - ext.length - 2;
+        return base.slice(0, keep) + '…' + ext;
+    }
+    return 'Document';
+}
 
 // Module-level caches for thumbnails
 const thumbCache = new Map<string, ThumbState>();
@@ -1009,70 +1056,36 @@ const streamMdClasses = [
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
-/* PDF compact thumb */
-.pdf-thumb {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    background: linear-gradient(
-        180deg,
-        var(--md-surface-container-lowest) 0%,
-        var(--md-surface-container-low) 100%
-    );
-    width: 100%;
-    height: 100%;
-    padding: 2px 2px 3px;
-    font-family: 'VT323', monospace;
+
+/* Attachment bar items */
+.attachment-item {
+    max-width: 200px;
+    min-height: 44px;
 }
-.pdf-thumb__icon {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--md-inverse-surface);
-    width: 100%;
+
+.attachment-item:hover .attachment-thumb {
+    transform: scale(1.02);
 }
-.pdf-thumb__name {
-    font-size: 8px;
-    line-height: 1.05;
-    font-weight: 600;
-    text-align: center;
-    max-height: 3.2em;
-    overflow: hidden;
-    display: -webkit-box;
-    line-clamp: 3;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    margin-top: 1px;
-    padding: 0 1px;
-    text-shadow: 0 1px 0 #000;
-    color: var(--md-inverse-on-surface);
+
+.attachment-thumb {
+    transition: transform 0.15s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
-.pdf-thumb__ext {
-    position: absolute;
-    top: 0;
-    left: 0;
-    background: var(--md-inverse-surface);
-    color: var(--md-inverse-on-surface);
-    font-size: 7px;
-    font-weight: 700;
-    padding: 1px 3px;
-    letter-spacing: 0.5px;
+
+.attachment-icon {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
-.pdf-thumb::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 10px;
-    height: 10px;
-    background: linear-gradient(
-        135deg,
-        var(--md-surface-container-low) 0%,
-        var(--md-surface-container-high) 100%
-    );
-    clip-path: polygon(0 0, 100% 0, 100% 100%);
+
+.attachment-name {
+    color: inherit;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.attachment-type {
+    color: inherit;
+}
+
+.attachment-more {
+    min-height: 44px;
 }
 </style>

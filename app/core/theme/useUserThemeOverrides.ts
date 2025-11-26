@@ -1,8 +1,5 @@
 import { ref, watch, computed } from 'vue';
-import type {
-    UserThemeOverrides,
-    UserBackgroundLayer,
-} from './user-overrides-types';
+import type { UserThemeOverrides } from './user-overrides-types';
 import { EMPTY_USER_OVERRIDES } from './user-overrides-types';
 import { applyMergedTheme } from './apply-merged-theme';
 import { revokeBackgroundBlobs } from './backgrounds';
@@ -12,6 +9,12 @@ import { isBrowser } from '~/utils/env';
 const STORAGE_KEY_LIGHT = 'or3:user-theme-overrides:light';
 const STORAGE_KEY_DARK = 'or3:user-theme-overrides:dark';
 
+interface ToastPayload {
+    title?: string;
+    description?: string;
+    color?: string;
+}
+
 type UserThemeOverrideGlobals = typeof globalThis & {
     __or3UserThemeOverrides?: {
         light: ReturnType<typeof ref<UserThemeOverrides>>;
@@ -20,7 +23,8 @@ type UserThemeOverrideGlobals = typeof globalThis & {
         loaded: boolean;
     };
     useNuxtApp?: () => {
-        $toast?: { add?: (payload: any) => void };
+        $toast?: { add?: (payload: ToastPayload) => void };
+        $theme?: { set?: (mode: 'light' | 'dark') => void };
     };
 };
 
@@ -49,7 +53,7 @@ function loadFromStorage(mode: 'light' | 'dark'): UserThemeOverrides | null {
         const key = mode === 'light' ? STORAGE_KEY_LIGHT : STORAGE_KEY_DARK;
         const raw = localStorage.getItem(key);
         if (!raw) return null;
-        return JSON.parse(raw);
+        return JSON.parse(raw) as UserThemeOverrides;
     } catch (e) {
         console.warn('[user-theme-overrides] Failed to parse stored data', e);
         return null;
@@ -86,10 +90,6 @@ export function useUserThemeOverrides() {
         const lightValue = store.light.value;
         const darkValue = store.dark.value;
         const modeValue = store.activeMode.value;
-
-        if (!lightValue || !darkValue) {
-            return { ...EMPTY_USER_OVERRIDES };
-        }
 
         return modeValue === 'light' ? lightValue : darkValue;
     });
@@ -130,16 +130,9 @@ export function useUserThemeOverrides() {
     }
 
     function set(patch: Partial<UserThemeOverrides>) {
-        const mode = store.activeMode.value || 'light';
+        const mode = store.activeMode.value;
         const baseValue =
             mode === 'light' ? store.light.value : store.dark.value;
-
-        if (!baseValue) {
-            console.warn(
-                '[user-theme-overrides] Cannot set overrides: no base value found'
-            );
-            return;
-        }
 
         // Validate before merge
         const validated = validatePatch(patch);
@@ -215,7 +208,7 @@ export function useUserThemeOverrides() {
     }
 
     function reset(mode?: 'light' | 'dark') {
-        const target = mode || store.activeMode.value || 'light';
+        const target = mode ?? store.activeMode.value;
         const empty = { ...EMPTY_USER_OVERRIDES };
 
         if (target === 'light') {
@@ -241,20 +234,17 @@ export function useUserThemeOverrides() {
         store.activeMode.value = mode;
         const overrides =
             mode === 'light' ? store.light.value : store.dark.value;
-        if (overrides) {
-            void applyMergedTheme(mode, overrides);
-        }
+        void applyMergedTheme(mode, overrides);
 
         // Also update theme plugin to sync classes
         if (isBrowser()) {
-            const nuxtApp: any = (globalThis as any).useNuxtApp?.();
-            nuxtApp?.$theme?.set(mode);
+            const nuxtApp = g.useNuxtApp?.();
+            nuxtApp?.$theme?.set?.(mode);
         }
     }
 
     function reapply() {
         const mode = store.activeMode.value;
-        if (!mode) return;
         void applyMergedTheme(mode, current.value);
     }
 
@@ -263,12 +253,10 @@ export function useUserThemeOverrides() {
         watch(
             () => store.light.value,
             (v) => {
-                if (store.activeMode.value === 'light' && v) {
+                if (store.activeMode.value === 'light') {
                     void applyMergedTheme('light', v);
                 }
-                if (v) {
-                    saveToStorage('light', v);
-                }
+                saveToStorage('light', v);
             },
             { deep: true }
         );
@@ -276,12 +264,10 @@ export function useUserThemeOverrides() {
         watch(
             () => store.dark.value,
             (v) => {
-                if (store.activeMode.value === 'dark' && v) {
+                if (store.activeMode.value === 'dark') {
                     void applyMergedTheme('dark', v);
                 }
-                if (v) {
-                    saveToStorage('dark', v);
-                }
+                saveToStorage('dark', v);
             },
             { deep: true }
         );
@@ -301,8 +287,11 @@ export function useUserThemeOverrides() {
 }
 
 /** Deep merge helper for user overrides */
-function deepMerge<T>(base: T, patch: Partial<T>): T {
-    const result: any = { ...base };
+function deepMerge<T extends Record<string, unknown>>(
+    base: T,
+    patch: Partial<T>
+): T {
+    const result = { ...base } as Record<string, unknown>;
     for (const key in patch) {
         const val = patch[key];
         if (val === undefined) continue; // skip undefined
@@ -310,8 +299,11 @@ function deepMerge<T>(base: T, patch: Partial<T>): T {
         if (val === null || typeof val !== 'object' || Array.isArray(val)) {
             result[key] = val; // allow null to clear, primitives, and arrays
         } else {
-            result[key] = deepMerge(result[key] || {}, val);
+            result[key] = deepMerge(
+                (result[key] || {}) as Record<string, unknown>,
+                val as Record<string, unknown>
+            );
         }
     }
-    return result;
+    return result as T;
 }

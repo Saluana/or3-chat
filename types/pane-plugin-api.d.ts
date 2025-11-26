@@ -16,7 +16,7 @@ import type {
 declare global {
     // Global (SSR unsafe) handle exposed by pane-plugin-api.client.ts
     // Optional during early app boot / before plugin init.
-    var __or3PanePluginApi: PanePluginApi | undefined; // eslint-disable-line no-var
+    var __or3PanePluginApi: PanePluginApi | undefined;  
     interface Window {
         __or3PanePluginApi?: PanePluginApi;
     }

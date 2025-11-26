@@ -1,4 +1,4 @@
-import { ref, reactive } from 'vue';
+import { reactive } from 'vue';
 import { useNuxtApp } from '#app';
 import {
     createDocument,
@@ -22,7 +22,6 @@ interface DocState {
 }
 
 const documentsMap = reactive(new Map<string, DocState>());
-const loadingIds = ref(new Set<string>());
 
 function ensure(id: string): DocState {
     let st = documentsMap.get(id);
@@ -37,7 +36,7 @@ function scheduleSave(id: string, delay = 750) {
     const st = documentsMap.get(id);
     if (!st) return;
     if (st.timer) clearTimeout(st.timer);
-    st.timer = setTimeout(() => flush(id), delay);
+    st.timer = setTimeout(() => void flush(id), delay);
 }
 
 export async function flush(id: string) {
@@ -82,13 +81,14 @@ export async function flush(id: string) {
             try {
                 if (typeof window !== 'undefined') {
                     const nuxt = useNuxtApp();
-                    const hooks: unknown = (nuxt as any)?.$hooks;
+                    interface NuxtWithHooks { $hooks?: { doAction: (name: string, payload: unknown) => void } }
+                    const hooks = (nuxt as NuxtWithHooks).$hooks;
                     const mpApi = getGlobalMultiPaneApi();
-                    const panes = mpApi?.panes?.value || [];
+                    const panes = mpApi?.panes.value ?? [];
                     if (hooks && panes.length) {
                         panes.forEach((p, paneIndex: number) => {
-                            if (p?.mode === 'doc' && p?.documentId === id) {
-                                (hooks as any).doAction(
+                            if (p.mode === 'doc' && p.documentId === id) {
+                                hooks.doAction(
                                     'ui.pane.doc:action:saved',
                                     {
                                         pane: p,
@@ -102,7 +102,7 @@ export async function flush(id: string) {
                         });
                     }
                 }
-            } catch {}
+            } catch { /* Silently ignore hook errors */ }
         }
     })();
 
@@ -202,7 +202,7 @@ export async function releaseDocument(
     if (shouldFlush) {
         try {
             await flush(id);
-        } catch {}
+        } catch { /* Silently ignore flush errors during release */ }
     }
     // Null record to drop heavy content reference; then optionally drop entry entirely.
     if (st.record) {
@@ -211,7 +211,7 @@ export async function releaseDocument(
             if (st.record.content) {
                 (st.record as { content?: unknown }).content = undefined;
             }
-        } catch {}
+        } catch { /* Silently ignore content cleanup errors */ }
         st.record = null;
     }
     st.pendingTitle = undefined;
@@ -224,7 +224,7 @@ export async function releaseDocument(
 // HMR cleanup: clear all pending timers on module disposal
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        for (const [_id, st] of documentsMap) {
+        for (const [, st] of documentsMap) {
             if (st.timer) {
                 clearTimeout(st.timer);
                 st.timer = undefined;
