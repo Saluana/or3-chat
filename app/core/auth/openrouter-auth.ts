@@ -1,4 +1,4 @@
-import { err, reportError } from '~/utils/errors';
+import { err, reportError, type ErrorCode } from '~/utils/errors';
 import { createOpenRouterClient } from '../../../shared/openrouter/client';
 import { normalizeSDKError } from '../../../shared/openrouter/errors';
 
@@ -20,6 +20,25 @@ export interface ExchangeParams {
     codeMethod: string;
     fetchImpl?: typeof fetch;
     attempt?: number;
+}
+
+/**
+ * Map SDK error codes to app-level ErrorCode for reporting.
+ * SDK errors that don't have a direct mapping use ERR_NETWORK as fallback.
+ */
+function mapToErrorCode(sdkCode: string): ErrorCode {
+    switch (sdkCode) {
+        case 'ERR_AUTH':
+            return 'ERR_AUTH';
+        case 'ERR_RATE_LIMIT':
+            return 'ERR_RATE_LIMIT';
+        case 'ERR_TIMEOUT':
+            return 'ERR_TIMEOUT';
+        case 'ERR_ABORTED':
+        case 'ERR_NETWORK':
+        default:
+            return 'ERR_NETWORK';
+    }
 }
 
 export async function exchangeOpenRouterCode(
@@ -61,7 +80,7 @@ export async function exchangeOpenRouterCode(
         }
 
         reportError(
-            err(normalized.code, normalized.message, {
+            err(mapToErrorCode(normalized.code), normalized.message, {
                 severity: 'error',
                 tags: {
                     domain: 'auth',

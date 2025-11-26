@@ -182,25 +182,3 @@ export function normalizeSDKError(error: unknown): NormalizedError {
         raw: error,
     };
 }
-
-/**
- * Check if an error is an SDK error type.
- * Useful for conditional handling.
- */
-export function isSDKError(error: unknown): boolean {
-    return (
-        error instanceof UnauthorizedResponseError ||
-        error instanceof PaymentRequiredResponseError ||
-        error instanceof ForbiddenResponseError ||
-        error instanceof TooManyRequestsResponseError ||
-        error instanceof BadRequestResponseError ||
-        error instanceof NotFoundResponseError ||
-        error instanceof RequestTimeoutResponseError ||
-        error instanceof InternalServerResponseError ||
-        error instanceof BadGatewayResponseError ||
-        error instanceof ServiceUnavailableResponseError ||
-        error instanceof EdgeNetworkTimeoutResponseError ||
-        error instanceof ProviderOverloadedResponseError ||
-        error instanceof ChatError
-    );
-}

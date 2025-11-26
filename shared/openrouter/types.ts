@@ -60,6 +60,3 @@ export function sdkModelToLocal(model: SDKModel): OpenRouterModel {
         ),
     };
 }
-
-// Re-export SDK Model type for convenience
-export type { SDKModel };

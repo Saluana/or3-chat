@@ -47,7 +47,9 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
         );
 
         // SDK returns ChatResponse with choices array
-        const generatedText = completion.choices?.[0]?.message?.content || '';
+        // content can be string or array of content parts - we need string for regex matching
+        const rawContent = completion.choices?.[0]?.message?.content;
+        const generatedText = typeof rawContent === 'string' ? rawContent : '';
 
         let parsedCompletion = '';
 

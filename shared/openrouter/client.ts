@@ -4,13 +4,6 @@
 
 import { OpenRouter } from '@openrouter/sdk';
 
-// Configuration interface for client creation
-export interface OpenRouterClientConfig {
-    apiKey?: string;
-    referer?: string;
-    title?: string;
-}
-
 // Default headers for all requests
 const DEFAULT_HEADERS = {
     'HTTP-Referer': 'https://or3.chat',
@@ -23,9 +16,7 @@ const DEFAULT_HEADERS = {
  * In SSR context: Uses env key if available, otherwise empty (will fail for auth-required calls)
  * In client context: Uses user's stored key from state/localStorage
  */
-export function createOpenRouterClient(
-    config: OpenRouterClientConfig = {}
-): OpenRouter {
+export function createOpenRouterClient(config: { apiKey?: string } = {}): OpenRouter {
     return new OpenRouter({
         apiKey: config.apiKey ?? '',
     });
@@ -43,6 +34,3 @@ export function getRequestOptions(signal?: AbortSignal) {
         },
     };
 }
-
-// Re-export SDK types and classes for convenience
-export { OpenRouter };
