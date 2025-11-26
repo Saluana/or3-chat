@@ -1,6 +1,10 @@
 // ModelsService: Fetch OpenRouter models, cache, and provide simple filters
-// Source: https://openrouter.ai/api/v1/models
+// Uses OpenRouter SDK for API calls
 // Usage: import { modelsService } from "~/utils/models-service";
+
+import { createOpenRouterClient, getRequestOptions } from '../../../shared/openrouter/client';
+import { normalizeSDKError } from '../../../shared/openrouter/errors';
+import { sdkModelToLocal } from '../../../shared/openrouter/types';
 
 export interface OpenRouterModel {
     id: string; // e.g. "deepseek/deepseek-r1-0528:free"
@@ -33,10 +37,6 @@ export interface OpenRouterModel {
     hugging_face_id?: string;
     per_request_limits?: Record<string, unknown>;
     supported_parameters?: string[]; // e.g. ["temperature","top_p","reasoning"]
-}
-
-interface ModelsResponse {
-    data: OpenRouterModel[];
 }
 
 export interface ModelCatalogCache {
@@ -100,24 +100,27 @@ export async function fetchModels(opts?: {
         }
     }
 
-    const url = 'https://openrouter.ai/api/v1/models';
     const key = readApiKey();
-    const headers: Record<string, string> = {};
-    if (key) headers['Authorization'] = `Bearer ${key}`;
+    const client = createOpenRouterClient({ apiKey: key ?? '' });
 
-    const res = await fetch(url, { headers });
-    if (!res.ok) {
-        // Fallback to any cache on failure
+    try {
+        const response = await client.models.list({}, getRequestOptions());
+        // SDK returns ModelsListResponse with .data array
+        const sdkModels = response.data;
+
+        // Map SDK model type to our OpenRouterModel interface
+        const models: OpenRouterModel[] = sdkModels.map(sdkModelToLocal);
+
+        saveCache(models);
+        return models;
+    } catch (error) {
+        // Fallback to cache on any error
         const cached = loadCache();
         if (cached?.data.length) return cached.data;
-        throw new Error(
-            `Failed to fetch models: ${res.status} ${res.statusText}`
-        );
+
+        const normalized = normalizeSDKError(error);
+        throw new Error(`Failed to fetch models: ${normalized.message}`);
     }
-    const json = (await res.json()) as ModelsResponse;
-    const list = Array.isArray(json.data) ? json.data : [];
-    saveCache(list);
-    return list;
 }
 
 // Filters

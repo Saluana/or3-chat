@@ -4,6 +4,8 @@ import { Decoration, DecorationSet, EditorView } from 'prosemirror-view';
 import { useDebounceFn } from '@vueuse/core';
 import { state, isMobile } from '~/state/global';
 import AutocompleteState from './state';
+import { createOpenRouterClient, getRequestOptions } from '../../../shared/openrouter/client';
+import { normalizeSDKError } from '../../../shared/openrouter/errors';
 
 interface AutocompletePluginState {
     suggestion: string;
@@ -24,19 +26,12 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
     const { default: systemPrompt } = await import('./AutocompletePrompt');
     const prompt = systemPrompt(content);
 
-    const response = await fetch(
-        'https://openrouter.ai/api/v1/chat/completions',
-        {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${orKey}`,
-                'HTTP-Referer': 'https://or3.chat', // Optional. Site URL for rankings on openrouter.ai.
-                'X-Title': 'or3.chat', // Optional. Site title for rankings on openrouter.ai.
-                'Content-Type': 'application/json',
-            },
-            signal: abortSignal,
-            body: JSON.stringify({
-                model: AutocompleteState.value.aiModel || 'openai/gpt-5-mini',
+    const client = createOpenRouterClient({ apiKey: orKey });
+
+    try {
+        const completion = await client.chat.send(
+            {
+                model: AutocompleteState.value.aiModel || 'openai/gpt-4o-mini',
                 messages: [
                     {
                         role: 'system',
@@ -47,44 +42,42 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
                         content,
                     },
                 ],
-            }),
+            },
+            getRequestOptions(abortSignal)
+        );
+
+        // SDK returns ChatResponse with choices array
+        const generatedText = completion.choices?.[0]?.message?.content || '';
+
+        let parsedCompletion = '';
+
+        // Try to match with closing tag first
+        let match = /<next_line>(.*?)<\/next_line>/s.exec(generatedText);
+
+        // If no closing tag, try to match just the opening tag and take everything after it
+        if (!match) {
+            match = /<next_line>(.+)/s.exec(generatedText);
         }
-    );
 
-    const res = await response.json();
+        if (match && match[1]) {
+            // Don't trim! The AI handles spacing based on the prompt instructions
+            parsedCompletion = match[1];
+        }
 
-    if (!response.ok) {
-        const errorMsg =
-            res?.error?.message ||
-            res?.detail ||
-            'Failed to fetch autocomplete suggestion';
-        throw new Error(errorMsg);
+        if (!parsedCompletion || parsedCompletion.length === 0) {
+            return { completion: '' };
+        }
+
+        return { completion: parsedCompletion };
+    } catch (error) {
+        const normalized = normalizeSDKError(error);
+
+        if (normalized.code === 'ERR_ABORTED') {
+            throw error; // Re-throw AbortError for existing handling
+        }
+
+        throw new Error(normalized.message);
     }
-
-    const completion = res;
-
-    const generatedText = completion.choices[0]?.message?.content || '';
-
-    let parsedCompletion = '';
-
-    // Try to match with closing tag first
-    let match = /<next_line>(.*?)<\/next_line>/s.exec(generatedText);
-
-    // If no closing tag, try to match just the opening tag and take everything after it
-    if (!match) {
-        match = /<next_line>(.+)/s.exec(generatedText);
-    }
-
-    if (match && match[1]) {
-        // Don't trim! The AI handles spacing based on the prompt instructions
-        parsedCompletion = match[1];
-    }
-
-    if (!parsedCompletion || parsedCompletion.length === 0) {
-        return { completion: '' };
-    }
-
-    return { completion: parsedCompletion };
 }
 
 const pluginKey = new PluginKey<AutocompletePluginState>('autocomplete');

@@ -4,6 +4,10 @@ import {
     type ORStreamEvent,
 } from '../../../shared/openrouter/parseOpenRouterSSE';
 
+// Note: Streaming requires direct body access which the SDK doesn't expose.
+// Per design document, we keep raw fetch for streaming but use SDK for non-streaming calls.
+// The SDK's chat.send() method buffers the entire response, which breaks streaming.
+
 type ORMessagePart = { type: string; [key: string]: unknown };
 
 // Permissive message type that accepts both strict ORMessage from openrouter-build

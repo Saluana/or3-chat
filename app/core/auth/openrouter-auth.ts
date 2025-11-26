@@ -1,4 +1,6 @@
 import { err, reportError } from '~/utils/errors';
+import { createOpenRouterClient } from '../../../shared/openrouter/client';
+import { normalizeSDKError } from '../../../shared/openrouter/errors';
 
 export interface ExchangeResultSuccess {
     ok: true;
@@ -23,71 +25,54 @@ export interface ExchangeParams {
 export async function exchangeOpenRouterCode(
     p: ExchangeParams
 ): Promise<ExchangeResult> {
-    const fetchFn = p.fetchImpl || fetch;
-    let resp: Response;
+    // SDK OAuth doesn't require auth for exchange
+    const client = createOpenRouterClient({ apiKey: '' });
+
     try {
-        resp = await fetchFn('https://openrouter.ai/api/v1/auth/keys', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                code: p.code,
-                code_verifier: p.verifier,
-                code_challenge_method: p.codeMethod,
-            }),
+        const response = await client.oAuth.exchangeAuthCodeForAPIKey({
+            code: p.code,
+            codeVerifier: p.verifier,
+            codeChallengeMethod: p.codeMethod as 'S256' | 'plain',
         });
-    } catch (e) {
-        reportError(e, {
-            code: 'ERR_NETWORK',
-            tags: {
-                domain: 'auth',
-                stage: 'exchange',
-                attempt: p.attempt || 1,
-            },
-            toast: true,
-            retryable: true,
-        });
-        return { ok: false, status: 0, reason: 'network' };
-    }
-    interface AuthResponse {
-        key?: string;
-        access_token?: string;
-    }
-    let json: AuthResponse | null = null;
-    try {
-        json = (await resp.json()) as AuthResponse;
-    } catch {
-        /* ignore parse */
-    }
-    if (!resp.ok || !json) {
+
+        // SDK response contains { key: string }
+        const userKey = response.key;
+
+        if (!userKey) {
+            reportError(
+                err('ERR_AUTH', 'Auth exchange returned no key', {
+                    severity: 'error',
+                    tags: {
+                        domain: 'auth',
+                        stage: 'exchange',
+                    },
+                }),
+                { toast: true }
+            );
+            return { ok: false, status: 200, reason: 'no-key' };
+        }
+
+        return { ok: true, userKey, status: 200 };
+    } catch (error) {
+        const normalized = normalizeSDKError(error);
+
+        if (normalized.code === 'ERR_ABORTED') {
+            return { ok: false, status: 0, reason: 'network' };
+        }
+
         reportError(
-            err('ERR_NETWORK', 'Auth code exchange failed', {
+            err(normalized.code, normalized.message, {
                 severity: 'error',
                 tags: {
                     domain: 'auth',
                     stage: 'exchange',
-                    status: resp.status,
                     attempt: p.attempt || 1,
                 },
-                retryable: true,
+                retryable: normalized.retryable,
             }),
             { toast: true }
         );
-        return { ok: false, status: resp.status, reason: 'bad-response' };
+
+        return { ok: false, status: normalized.status, reason: 'bad-response' };
     }
-    const userKey = json.key ?? json.access_token;
-    if (!userKey) {
-        reportError(
-            err('ERR_AUTH', 'Auth exchange returned no key', {
-                severity: 'error',
-                tags: {
-                    domain: 'auth',
-                    stage: 'exchange',
-                    keys: Object.keys(json).length,
-                },
-            }),
-            { toast: true }
-        );
-        return { ok: false, status: resp.status, reason: 'no-key' };
-    }
-    return { ok: true, userKey, status: resp.status };
 }
