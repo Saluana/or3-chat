@@ -299,7 +299,7 @@ export async function resolveDashboardPluginPageComponent(
     if (isAsyncLoader(comp)) {
         const loaded = await comp();
         // Handle both { default: Component } and direct Component returns
-        comp = (loaded && typeof loaded === 'object' && 'default' in loaded ? loaded.default : loaded) as Component;
+        comp = (typeof loaded === 'object' && 'default' in loaded ? loaded.default : loaded) as Component;
         if (process.dev && typeof comp !== 'object') {
              
             console.warn(

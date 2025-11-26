@@ -74,7 +74,7 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
         try {
             const r = await searchWithIndex(dbInstance, raw, 200);
             if (token !== lastQueryToken) return;
-            const hits = Array.isArray(r?.hits) ? r.hits : [];
+            const hits = Array.isArray(r.hits) ? r.hits : [];
             const mapped = hits
                 .map((h) => {
                     const hit = h as { document?: ThreadDoc } | ThreadDoc;

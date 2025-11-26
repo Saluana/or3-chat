@@ -31,6 +31,7 @@ export async function applyMergedTheme(
     const activeThemeName = themePlugin.activeTheme.value;
 
     // Prefer cached theme to avoid redundant dynamic imports
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- getTheme may not exist in test mocks
     let theme = themePlugin.getTheme?.(activeThemeName) ?? null;
 
     // Fallback: ensure theme is loaded once if cache missed (e.g. on app boot)

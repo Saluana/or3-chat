@@ -91,10 +91,6 @@ export function useUserThemeOverrides() {
         const darkValue = store.dark.value;
         const modeValue = store.activeMode.value;
 
-        if (!lightValue || !darkValue) {
-            return { ...EMPTY_USER_OVERRIDES };
-        }
-
         return modeValue === 'light' ? lightValue : darkValue;
     });
 
@@ -134,16 +130,9 @@ export function useUserThemeOverrides() {
     }
 
     function set(patch: Partial<UserThemeOverrides>) {
-        const mode = store.activeMode.value || 'light';
+        const mode = store.activeMode.value;
         const baseValue =
             mode === 'light' ? store.light.value : store.dark.value;
-
-        if (!baseValue) {
-            console.warn(
-                '[user-theme-overrides] Cannot set overrides: no base value found'
-            );
-            return;
-        }
 
         // Validate before merge
         const validated = validatePatch(patch);
@@ -219,7 +208,7 @@ export function useUserThemeOverrides() {
     }
 
     function reset(mode?: 'light' | 'dark') {
-        const target = mode || store.activeMode.value || 'light';
+        const target = mode ?? store.activeMode.value;
         const empty = { ...EMPTY_USER_OVERRIDES };
 
         if (target === 'light') {
@@ -245,9 +234,7 @@ export function useUserThemeOverrides() {
         store.activeMode.value = mode;
         const overrides =
             mode === 'light' ? store.light.value : store.dark.value;
-        if (overrides) {
-            void applyMergedTheme(mode, overrides);
-        }
+        void applyMergedTheme(mode, overrides);
 
         // Also update theme plugin to sync classes
         if (isBrowser()) {
@@ -258,7 +245,6 @@ export function useUserThemeOverrides() {
 
     function reapply() {
         const mode = store.activeMode.value;
-        if (!mode) return;
         void applyMergedTheme(mode, current.value);
     }
 
@@ -267,12 +253,10 @@ export function useUserThemeOverrides() {
         watch(
             () => store.light.value,
             (v) => {
-                if (store.activeMode.value === 'light' && v) {
+                if (store.activeMode.value === 'light') {
                     void applyMergedTheme('light', v);
                 }
-                if (v) {
-                    saveToStorage('light', v);
-                }
+                saveToStorage('light', v);
             },
             { deep: true }
         );
@@ -280,12 +264,10 @@ export function useUserThemeOverrides() {
         watch(
             () => store.dark.value,
             (v) => {
-                if (store.activeMode.value === 'dark' && v) {
+                if (store.activeMode.value === 'dark') {
                     void applyMergedTheme('dark', v);
                 }
-                if (v) {
-                    saveToStorage('dark', v);
-                }
+                saveToStorage('dark', v);
             },
             { deep: true }
         );

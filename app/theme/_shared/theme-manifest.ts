@@ -88,7 +88,7 @@ export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
         rawThemeEntries.map(async (entry) => {
             try {
                 const module = await entry.loader();
-                const definition = module?.default as
+                const definition = module.default as
                     | ThemeDefinition
                     | undefined;
 
@@ -240,7 +240,7 @@ export async function loadThemeAppConfig(
         const module = await entry.appConfigLoader();
         const moduleWithDefault = module as { default?: ThemeAppConfig };
         const config = moduleWithDefault.default ?? module;
-        if (config && typeof config === 'object') {
+        if (typeof config === 'object') {
             return config as ThemeAppConfig;
         }
     } catch (error) {

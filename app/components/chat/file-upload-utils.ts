@@ -53,7 +53,7 @@ export async function persistAttachment(att: AttachmentLike) {
             name: att.name,
             mime: att.mime || att.file.type || '',
             size: att.file.size,
-            kind: (att.kind as 'image' | 'pdf') || 'image',
+            kind: att.kind ?? 'image',
         };
 
         const filtered = (await hooks.applyFilters(
@@ -61,8 +61,8 @@ export async function persistAttachment(att: AttachmentLike) {
             payload
         ));
 
-        // If filter returns false or null, reject the attachment
-        if (filtered === false || !filtered) {
+        // If filter returns false, reject the attachment
+        if (filtered === false) {
             throw err(
                 'ERR_FILE_VALIDATION',
                 'File attachment was rejected by filter',
