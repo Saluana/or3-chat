@@ -25,6 +25,10 @@ export interface ExchangeParams {
 /**
  * Map SDK error codes to app-level ErrorCode for reporting.
  * SDK errors that don't have a direct mapping use ERR_NETWORK as fallback.
+ *
+ * Note: SDK error codes are defined in shared/openrouter/errors.ts.
+ * Only codes that exist in both places (ErrorCode union and SDK normalizer)
+ * should be mapped directly. All others fall through to ERR_NETWORK.
  */
 function mapToErrorCode(sdkCode: string): ErrorCode {
     switch (sdkCode) {
@@ -37,6 +41,7 @@ function mapToErrorCode(sdkCode: string): ErrorCode {
         case 'ERR_ABORTED':
         case 'ERR_NETWORK':
         default:
+            // Unknown SDK codes fallback to generic network error
             return 'ERR_NETWORK';
     }
 }

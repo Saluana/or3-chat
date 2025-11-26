@@ -47,9 +47,20 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
         );
 
         // SDK returns ChatResponse with choices array
-        // content can be string or array of content parts - we need string for regex matching
+        // content can be string or array of content parts - extract text for regex matching
         const rawContent = completion.choices?.[0]?.message?.content;
-        const generatedText = typeof rawContent === 'string' ? rawContent : '';
+        let generatedText = '';
+        if (typeof rawContent === 'string') {
+            generatedText = rawContent;
+        } else if (Array.isArray(rawContent)) {
+            // Extract text from content parts (e.g., { type: 'text', text: '...' })
+            generatedText = rawContent
+                .filter((part): part is { type: 'text'; text: string } =>
+                    typeof part === 'object' && part !== null && part.type === 'text' && typeof part.text === 'string'
+                )
+                .map(part => part.text)
+                .join('');
+        }
 
         let parsedCompletion = '';
 
