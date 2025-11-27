@@ -4,6 +4,16 @@ import { nowSec } from './util';
 import type { IndexableType } from 'dexie';
 
 /**
+ * Type helper for compound index key values.
+ * Dexie's IndexableType doesn't include boolean, but IndexedDB converts
+ * booleans to 0/1 internally, so this is valid at runtime.
+ */
+type CompoundKey = [string, boolean];
+function toIndexableKey(key: CompoundKey): IndexableType {
+    return key as unknown as IndexableType;
+}
+
+/**
  * List image FileMeta records, newest first, with simple paging.
  * Uses the compound index [kind+deleted] for efficient filtering,
  * then sorts by updated_at in memory for the filtered subset.
@@ -17,7 +27,7 @@ export async function listImageMetasPaged(
     // This leverages IndexedDB indexing instead of scanning all records
     const results = await db.file_meta
         .where('[kind+deleted]')
-        .equals(['image', false] as unknown as IndexableType)
+        .equals(toIndexableKey(['image', false]))
         .toArray();
 
     // Sort by updated_at descending in memory (only for filtered subset)
@@ -38,7 +48,7 @@ export async function listDeletedImageMetasPaged(
     // Use compound index [kind+deleted] to get only deleted images
     const results = await db.file_meta
         .where('[kind+deleted]')
-        .equals(['image', true] as unknown as IndexableType)
+        .equals(toIndexableKey(['image', true]))
         .toArray();
 
     // Sort by updated_at descending in memory
