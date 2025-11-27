@@ -1,43 +1,51 @@
 import { db } from './client';
 import type { FileMeta } from './schema';
 import { nowSec } from './util';
+import type { IndexableType } from 'dexie';
 
-// List image FileMeta records, newest first, with simple paging.
-// Filters: deleted !== true AND kind === 'image'.
-// Uses the updated_at index for ordering, then filters in-collection for simplicity.
+/**
+ * List image FileMeta records, newest first, with simple paging.
+ * Uses the compound index [kind+deleted] for efficient filtering,
+ * then sorts by updated_at in memory for the filtered subset.
+ * This is faster than scanning the entire table with .filter().
+ */
 export async function listImageMetasPaged(
     offset = 0,
     limit = 50
 ): Promise<FileMeta[]> {
-    return db.file_meta
-        .orderBy('updated_at')
-        .reverse()
-        .filter(
-            (m) =>
-                m.deleted !== true &&
-                (m.kind === 'image' || m.mime_type.startsWith('image/'))
-        )
-        .offset(offset)
-        .limit(limit)
+    // Use compound index [kind+deleted] to get only non-deleted images
+    // This leverages IndexedDB indexing instead of scanning all records
+    const results = await db.file_meta
+        .where('[kind+deleted]')
+        .equals(['image', false] as unknown as IndexableType)
         .toArray();
+
+    // Sort by updated_at descending in memory (only for filtered subset)
+    results.sort((a, b) => b.updated_at - a.updated_at);
+
+    // Apply pagination
+    return results.slice(offset, offset + limit);
 }
 
-// List deleted image FileMeta records, newest first, with paging.
+/**
+ * List deleted image FileMeta records, newest first, with paging.
+ * Uses the compound index [kind+deleted] for efficient filtering.
+ */
 export async function listDeletedImageMetasPaged(
     offset = 0,
     limit = 50
 ): Promise<FileMeta[]> {
-    return db.file_meta
-        .orderBy('updated_at')
-        .reverse()
-        .filter(
-            (m) =>
-                m.deleted === true &&
-                (m.kind === 'image' || m.mime_type.startsWith('image/'))
-        )
-        .offset(offset)
-        .limit(limit)
+    // Use compound index [kind+deleted] to get only deleted images
+    const results = await db.file_meta
+        .where('[kind+deleted]')
+        .equals(['image', true] as unknown as IndexableType)
         .toArray();
+
+    // Sort by updated_at descending in memory
+    results.sort((a, b) => b.updated_at - a.updated_at);
+
+    // Apply pagination
+    return results.slice(offset, offset + limit);
 }
 
 // Update a file's display name and bump updated_at.

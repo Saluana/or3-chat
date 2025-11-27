@@ -18,6 +18,22 @@ vi.mock('../client', () => {
         __setRows(data: FileMeta[]) {
             tableState.setRows(data);
         },
+        where(indexName: string) {
+            let matchFn: (meta: FileMeta) => boolean = () => true;
+            const chain = {
+                equals(values: unknown[]) {
+                    if (indexName === '[kind+deleted]' && Array.isArray(values)) {
+                        const [kind, deleted] = values;
+                        matchFn = (m) => m.kind === kind && m.deleted === deleted;
+                    }
+                    return chain;
+                },
+                async toArray() {
+                    return [...rows].filter(matchFn);
+                },
+            };
+            return chain;
+        },
         orderBy(_field: string) {
             let reverse = false;
             let predicate: (meta: FileMeta) => boolean = () => true;

@@ -8,7 +8,7 @@ import {
     ref,
 } from 'vue';
 import type { FileMeta } from '../../db/schema';
-import { getFileBlob } from '../../db/files';
+import { getFileBlob, getFileBlobsBulk } from '../../db/files';
 import { reportError } from '../../utils/errors';
 import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
@@ -51,6 +51,11 @@ let idleHandle: number | null = null;
 let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 let visibilityHandler: (() => void) | null = null;
 
+// Batch loading queue for performance optimization
+const pendingLoads = new Set<string>();
+let batchLoadTimeout: ReturnType<typeof setTimeout> | null = null;
+const BATCH_DELAY_MS = 16; // Debounce to next frame
+
 function isSelected(hash: string): boolean {
     return props.selectedHashes?.has?.(hash) ?? false;
 }
@@ -59,6 +64,7 @@ function dropHash(hash: string) {
     delete state.urlByHash[hash];
     delete state.errorByHash[hash];
     visibleHashes.delete(hash);
+    pendingLoads.delete(hash);
 }
 
 function pruneStaleState() {
@@ -66,6 +72,103 @@ function pruneStaleState() {
         if (!cache?.peek(hash)) {
             dropHash(hash);
         }
+    }
+}
+
+/**
+ * Process all pending image loads in a single batch.
+ * Uses bulk blob retrieval for better IndexedDB performance.
+ */
+async function processBatchLoads() {
+    batchLoadTimeout = null;
+    if (!cache || pendingLoads.size === 0) return;
+
+    // Snapshot and clear the pending set
+    const hashesToLoad = Array.from(pendingLoads);
+    pendingLoads.clear();
+
+    // Filter out already cached and errored hashes
+    const uncached = hashesToLoad.filter(
+        (hash) => !cache.peek(hash) && !state.errorByHash[hash]
+    );
+
+    if (uncached.length === 0) return;
+
+    try {
+        // Bulk load all blobs in a single transaction
+        const blobMap = await getFileBlobsBulk(uncached);
+
+        // Process each blob and create object URLs
+        for (const hash of uncached) {
+            const blob = blobMap.get(hash);
+            if (!blob) {
+                state.errorByHash[hash] = true;
+                const meta = props.items.find((m) => m.hash === hash);
+                reportError(new Error('blob missing'), {
+                    code: 'ERR_DB_READ_FAILED',
+                    message: `Couldn't load preview for "${meta?.name || hash}".`,
+                    tags: {
+                        domain: 'images',
+                        action: 'preview-batch',
+                        hash,
+                    },
+                });
+                continue;
+            }
+
+            try {
+                const url = await cache.ensure(
+                    hash,
+                    async () => {
+                        const objectUrl = URL.createObjectURL(blob);
+                        return { url: objectUrl, bytes: blob.size };
+                    },
+                    1
+                );
+                if (url) {
+                    state.urlByHash[hash] = url;
+                    state.errorByHash[hash] = undefined;
+                }
+            } catch (error) {
+                state.errorByHash[hash] = true;
+            }
+        }
+    } catch (error) {
+        // Mark all as errored on bulk load failure
+        for (const hash of uncached) {
+            state.errorByHash[hash] = true;
+        }
+        reportError(error, {
+            code: 'ERR_DB_READ_FAILED',
+            message: `Couldn't load ${uncached.length} image previews.`,
+            tags: {
+                domain: 'images',
+                action: 'preview-batch',
+            },
+        });
+    } finally {
+        pruneStaleState();
+    }
+}
+
+/**
+ * Queue a hash for batch loading.
+ * Batches are processed after a short delay to combine multiple requests.
+ */
+function queueForBatchLoad(hash: string) {
+    if (!cache) return;
+    if (state.errorByHash[hash]) return;
+    if (cache.peek(hash)) {
+        // Already cached, just update state
+        state.urlByHash[hash] = cache.peek(hash);
+        return;
+    }
+
+    pendingLoads.add(hash);
+
+    // Schedule batch processing if not already scheduled
+    if (batchLoadTimeout === null) {
+        batchLoadTimeout = setTimeout(processBatchLoads, BATCH_DELAY_MS);
     }
 }
 
@@ -126,11 +229,9 @@ function ensureObserver(): IntersectionObserver | null {
                     if (!hash) continue;
                     if (e.isIntersecting) {
                         visibleHashes.add(hash);
-                        const meta = props.items.find((m) => m.hash === hash);
-                        if (meta) {
-                            ensureUrl(meta);
-                            cache?.promote(hash, 1);
-                        }
+                        // Use batch loading for better IndexedDB performance
+                        queueForBatchLoad(hash);
+                        cache?.promote(hash, 1);
                     } else {
                         visibleHashes.delete(hash);
                         releaseHash(hash);
@@ -239,6 +340,12 @@ watch(
 onBeforeUnmount(() => {
     if (io) io.disconnect();
     cancelScheduledObserve();
+    // Clean up batch load timeout
+    if (batchLoadTimeout !== null) {
+        clearTimeout(batchLoadTimeout);
+        batchLoadTimeout = null;
+    }
+    pendingLoads.clear();
     if (typeof document !== 'undefined' && visibilityHandler) {
         document.removeEventListener('visibilitychange', visibilityHandler);
     }
