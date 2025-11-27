@@ -27,14 +27,14 @@ let lastQueryToken = 0;
 async function buildIndex(
     models: OpenRouterModel[]
 ): Promise<OramaInstance | null> {
-    currentDb = await createDb({
+    currentDb = (await createDb({
         id: 'string',
         slug: 'string',
         name: 'string',
         description: 'string',
         ctx: 'number',
         modalities: 'string',
-    });
+    })) as OramaInstance | null;
     if (!currentDb) return null;
     const docs: ModelDoc[] = models.map((m) => ({
         id: m.id,
@@ -88,13 +88,12 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
         try {
             const r = await searchWithIndex(currentDb, raw, 100);
             if (token !== lastQueryToken) return; // stale response
-            const hits = Array.isArray(r.hits) ? r.hits : [];
-            interface SearchHit {
+            const hits = (Array.isArray(r.hits) ? r.hits : []) as Array<{
                 document?: { id?: string };
                 id?: string;
-            }
+            }>;
             const mapped = hits
-                .map((h: SearchHit) => {
+                .map((h) => {
                     const doc = h.document || h; // support differing shapes
                     const docId = doc.id;
                     return docId ? idToModel.value[docId] : undefined;

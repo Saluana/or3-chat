@@ -4,8 +4,11 @@ import { Decoration, DecorationSet, EditorView } from 'prosemirror-view';
 import { useDebounceFn } from '@vueuse/core';
 import { state, isMobile } from '~/state/global';
 import AutocompleteState from './state';
-import { createOpenRouterClient, getRequestOptions } from '../../../shared/openrouter/client';
-import { normalizeSDKError } from '../../../shared/openrouter/errors';
+import {
+    createOpenRouterClient,
+    getRequestOptions,
+} from '~~/shared/openrouter/client';
+import { normalizeSDKError } from '~~/shared/openrouter/errors';
 
 interface AutocompletePluginState {
     suggestion: string;
@@ -55,10 +58,14 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
         } else if (Array.isArray(rawContent)) {
             // Extract text from content parts (e.g., { type: 'text', text: '...' })
             generatedText = rawContent
-                .filter((part): part is { type: 'text'; text: string } =>
-                    typeof part === 'object' && part !== null && part.type === 'text' && typeof part.text === 'string'
+                .filter(
+                    (part): part is { type: 'text'; text: string } =>
+                        typeof part === 'object' &&
+                        part !== null &&
+                        part.type === 'text' &&
+                        typeof part.text === 'string'
                 )
-                .map(part => part.text)
+                .map((part) => part.text)
                 .join('');
         }
 

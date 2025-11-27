@@ -183,7 +183,12 @@ export function useSharedPreviewCache(
     if (!sharedCache) {
         sharedCache = usePreviewCache(overrides);
         sharedOptions = sharedCache.options;
-    } else if (import.meta.dev && overrides && Object.keys(overrides).length) {
+    } else if (
+        import.meta.dev &&
+        overrides &&
+        Object.keys(overrides).length &&
+        sharedOptions
+    ) {
         const next = resolvePreviewCacheOptions(overrides);
         const mismatch =
             next.maxUrls !== sharedOptions.maxUrls ||

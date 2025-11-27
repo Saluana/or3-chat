@@ -1,6 +1,6 @@
 import { err, reportError, type ErrorCode } from '~/utils/errors';
-import { createOpenRouterClient } from '../../../shared/openrouter/client';
-import { normalizeSDKError } from '../../../shared/openrouter/errors';
+import { createOpenRouterClient } from '~~/shared/openrouter/client';
+import { normalizeSDKError } from '~~/shared/openrouter/errors';
 
 export interface ExchangeResultSuccess {
     ok: true;

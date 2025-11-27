@@ -2,7 +2,41 @@
 // Type mapping between SDK types and internal OR3 types
 
 import type { Model as SDKModel } from '@openrouter/sdk/models';
-import type { OpenRouterModel } from '~/core/auth/models-service';
+
+// Define the OpenRouterModel interface here to avoid circular imports
+// This is the canonical snake_case representation matching the OpenRouter REST API
+export interface OpenRouterModel {
+    id: string;
+    name: string;
+    description?: string;
+    created?: number;
+    architecture?: {
+        input_modalities?: string[];
+        output_modalities?: string[];
+        tokenizer?: string;
+        instruct_type?: string;
+    };
+    top_provider?: {
+        is_moderated?: boolean;
+        context_length?: number;
+        max_completion_tokens?: number;
+    };
+    pricing?: {
+        prompt?: string;
+        completion?: string;
+        image?: string;
+        request?: string;
+        web_search?: string;
+        internal_reasoning?: string;
+        input_cache_read?: string;
+        input_cache_write?: string;
+    };
+    canonical_slug?: string;
+    context_length?: number;
+    hugging_face_id?: string;
+    per_request_limits?: Record<string, unknown>;
+    supported_parameters?: string[];
+}
 
 /**
  * Convert SDK Model type to our internal OpenRouterModel type.

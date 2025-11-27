@@ -13,6 +13,7 @@ interface ToastPayload {
     title?: string;
     description?: string;
     color?: string;
+    timeout?: number;
 }
 
 type UserThemeOverrideGlobals = typeof globalThis & {
@@ -287,23 +288,23 @@ export function useUserThemeOverrides() {
 }
 
 /** Deep merge helper for user overrides */
-function deepMerge<T extends Record<string, unknown>>(
-    base: T,
-    patch: Partial<T>
-): T {
+function deepMerge(
+    base: UserThemeOverrides,
+    patch: Partial<UserThemeOverrides>
+): UserThemeOverrides {
     const result = { ...base } as Record<string, unknown>;
     for (const key in patch) {
-        const val = patch[key];
+        const val = (patch as Record<string, unknown>)[key];
         if (val === undefined) continue; // skip undefined
 
         if (val === null || typeof val !== 'object' || Array.isArray(val)) {
             result[key] = val; // allow null to clear, primitives, and arrays
         } else {
             result[key] = deepMerge(
-                (result[key] || {}) as Record<string, unknown>,
-                val as Record<string, unknown>
+                (result[key] || {}) as UserThemeOverrides,
+                val as Partial<UserThemeOverrides>
             );
         }
     }
-    return result as T;
+    return result as UserThemeOverrides;
 }

@@ -12,7 +12,7 @@
             />
         </template>
         <template #sidebar-collapsed>
-            <lazy-sidebar-side-nav-content-collapsed
+            <sidebar-side-nav-content-collapsed
                 :active-thread="activeChatThreadId"
                 class="w-[65px]"
                 @new-chat="onNewChat"
@@ -596,11 +596,12 @@ function buildPaneProps(
 
     // Custom pane app - provide generic contract
     const app = getPaneApp(pane.mode);
-    const panePluginApi = (
-        globalThis as typeof globalThis & {
-            __or3PanePluginApi?: PanePluginApi;
-        }
-    ).__or3PanePluginApi ?? null;
+    const panePluginApi =
+        (
+            globalThis as typeof globalThis & {
+                __or3PanePluginApi?: PanePluginApi;
+            }
+        ).__or3PanePluginApi ?? null;
     if (import.meta.dev) {
         console.debug('[PageShell] build props for custom pane', {
             paneId: pane.id,

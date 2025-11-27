@@ -6,6 +6,7 @@ export default defineNuxtConfig({
     alias: {
         types: resolve(__dirname, './types'),
         '~/types': resolve(__dirname, './types'),
+        '~~/shared': resolve(__dirname, './shared'),
     },
     compatibilityDate: '2025-07-15',
     runtimeConfig: {
@@ -313,7 +314,6 @@ export default defineNuxtConfig({
             themeCompilerPlugin({
                 failOnError: true,
                 showWarnings: true,
-                generateTypes: true,
             }),
         ],
         worker: {

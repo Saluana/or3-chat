@@ -137,7 +137,7 @@ export const SidebarEnvironmentKey: InjectionKey<SidebarEnvironment> =
 /**
  * Creates a simplified SidebarMultiPaneApi adapter from the full UseMultiPaneApi.
  * Trims down the API to only the methods needed for sidebar operations.
- * 
+ *
  * @param multiPaneApi - The full multi-pane API from useMultiPane
  * @returns A simplified API adapter for sidebar usage
  */
@@ -160,7 +160,7 @@ export function createSidebarMultiPaneApi(
                 await multiPaneApi.setPaneThread(index, threadId);
             }
         },
-        openDoc: (documentId?: string) => {
+        openDoc: async (documentId?: string) => {
             const nextIndex = multiPaneApi.panes.value.length;
             multiPaneApi.addPane();
             const pane = multiPaneApi.panes.value[nextIndex];
@@ -187,7 +187,7 @@ export function createSidebarMultiPaneApi(
 /**
  * Provide sidebar environment to child components.
  * Should be called in a parent component to make the environment available to descendants.
- * 
+ *
  * @param environment - The sidebar environment instance to provide
  */
 export function provideSidebarEnvironment(environment: SidebarEnvironment) {
@@ -197,7 +197,7 @@ export function provideSidebarEnvironment(environment: SidebarEnvironment) {
 /**
  * Inject and return the sidebar environment from the current component context.
  * Must be used within a component tree where provideSidebarEnvironment was called.
- * 
+ *
  * @returns The SidebarEnvironment instance
  * @throws Error if used outside of a provided environment
  */
@@ -213,7 +213,7 @@ export function useSidebarEnvironment(): SidebarEnvironment {
 
 /**
  * Composable for accessing the projects list from the sidebar environment.
- * 
+ *
  * @returns Reactive reference to the projects array
  */
 export function useSidebarProjects() {
@@ -223,7 +223,7 @@ export function useSidebarProjects() {
 
 /**
  * Composable for accessing the threads list from the sidebar environment.
- * 
+ *
  * @returns Reactive reference to the threads array
  */
 export function useSidebarThreads() {
@@ -233,7 +233,7 @@ export function useSidebarThreads() {
 
 /**
  * Composable for accessing the documents list from the sidebar environment.
- * 
+ *
  * @returns Reactive reference to the documents array
  */
 export function useSidebarDocuments() {
@@ -243,7 +243,7 @@ export function useSidebarDocuments() {
 
 /**
  * Composable for accessing and managing the sidebar search query.
- * 
+ *
  * @returns Object containing the reactive query and setter function
  */
 export function useSidebarQuery() {
@@ -259,7 +259,7 @@ export function useSidebarQuery() {
 /**
  * Composable for accessing and managing active sidebar sections.
  * Controls which sections (projects, chats, docs) are currently visible.
- * 
+ *
  * @returns Object containing the active sections state and setter function
  */
 export function useActiveSections() {
@@ -268,14 +268,15 @@ export function useActiveSections() {
 
     return {
         activeSections,
-        setActiveSections: (sections: ActiveSections) => environment.setActiveSections(sections),
+        setActiveSections: (sections: ActiveSections) =>
+            environment.setActiveSections(sections),
     };
 }
 
 /**
  * Composable for accessing and managing expanded project states.
  * Controls which projects show their nested content in the sidebar.
- * 
+ *
  * @returns Object containing the expanded projects array and setter function
  */
 export function useExpandedProjects() {
@@ -284,14 +285,15 @@ export function useExpandedProjects() {
 
     return {
         expandedProjects,
-        setExpandedProjects: (projects: string[]) => environment.setExpandedProjects(projects),
+        setExpandedProjects: (projects: string[]) =>
+            environment.setExpandedProjects(projects),
     };
 }
 
 /**
  * Composable for accessing and managing active thread IDs.
  * Controls which threads are marked as active/selected in the sidebar.
- * 
+ *
  * @returns Object containing the active thread IDs array and setter function
  */
 export function useActiveThreadIds() {
@@ -300,14 +302,15 @@ export function useActiveThreadIds() {
 
     return {
         activeThreadIds,
-        setActiveThreadIds: (ids: string[]) => environment.setActiveThreadIds(ids),
+        setActiveThreadIds: (ids: string[]) =>
+            environment.setActiveThreadIds(ids),
     };
 }
 
 /**
  * Composable for accessing and managing active document IDs.
  * Controls which documents are marked as active/selected in the sidebar.
- * 
+ *
  * @returns Object containing the active document IDs array and setter function
  */
 export function useActiveDocumentIds() {
@@ -316,14 +319,15 @@ export function useActiveDocumentIds() {
 
     return {
         activeDocumentIds,
-        setActiveDocumentIds: (ids: string[]) => environment.setActiveDocumentIds(ids),
+        setActiveDocumentIds: (ids: string[]) =>
+            environment.setActiveDocumentIds(ids),
     };
 }
 
 /**
  * Composable for accessing the multi-pane API from the sidebar environment.
  * Provides pane management functionality for sidebar operations.
- * 
+ *
  * @returns The SidebarMultiPaneApi instance
  */
 export function useSidebarMultiPane(): SidebarMultiPaneApi {
@@ -334,7 +338,7 @@ export function useSidebarMultiPane(): SidebarMultiPaneApi {
 /**
  * Composable for accessing the pane plugin API from the sidebar environment.
  * Provides access to custom pane plugin functionality.
- * 
+ *
  * @returns The PanePluginApi instance or null if not available
  */
 export function useSidebarPostsApi(): PanePluginApi | null {

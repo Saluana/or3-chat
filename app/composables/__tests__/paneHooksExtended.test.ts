@@ -143,19 +143,28 @@ describe('extended pane hooks coverage', () => {
                     { role: 'assistant', content: 'b' },
                 ] as any,
         });
-        let changedPayload: any = null;
-        hookEngine.addAction('ui.pane.thread:action:changed', (payload) => {
+        let changedPayload: {
+            _old: string;
+            _new: string;
+            count: number;
+            paneIndex: number;
+        } | null = null;
+        hookEngine.addAction('ui.pane.thread:action:changed', ((payload: {
+            oldThreadId: string;
+            newThreadId: string;
+            messageCount: number;
+            paneIndex: number;
+        }) => {
             changedPayload = {
                 _old: payload.oldThreadId,
                 _new: payload.newThreadId,
                 count: payload.messageCount,
                 paneIndex: payload.paneIndex,
             };
-        });
+        }) as (...args: unknown[]) => unknown);
         // Veto first
-        hookEngine.addFilter('ui.pane.thread:filter:select', (req: string) =>
-            req === 'veto' ? false : req
-        );
+        hookEngine.addFilter('ui.pane.thread:filter:select', ((req: string) =>
+            req === 'veto' ? false : req) as (v: unknown) => unknown);
         await setPaneThread(0, 'veto');
         expect(changedPayload).toBeNull();
         await setPaneThread(0, 'thread-ABC');
@@ -193,18 +202,28 @@ describe('extended pane hooks coverage', () => {
             createNewDoc,
             flushDocument,
         });
-        let saved: any = null;
-        let changed: any = null;
-        hookEngine.addAction('ui.pane.doc:action:saved', (payload) => {
+        let saved: string | null = null;
+        let changed: {
+            oldId: string;
+            newId: string;
+            paneIndex: number;
+        } | null = null;
+        hookEngine.addAction('ui.pane.doc:action:saved', ((payload: {
+            newDocumentId: string;
+        }) => {
             saved = payload.newDocumentId;
-        });
-        hookEngine.addAction('ui.pane.doc:action:changed', (payload) => {
+        }) as (...args: unknown[]) => unknown);
+        hookEngine.addAction('ui.pane.doc:action:changed', ((payload: {
+            oldDocumentId: string;
+            newDocumentId: string;
+            paneIndex: number;
+        }) => {
             changed = {
                 oldId: payload.oldDocumentId,
                 newId: payload.newDocumentId,
                 paneIndex: payload.paneIndex,
             };
-        });
+        }) as (...args: unknown[]) => unknown);
         await newDocumentInActive({ title: 'New' });
         expect(saved).toBe('doc-old');
         expect(changed).toEqual({
@@ -235,9 +254,8 @@ describe('extended pane hooks coverage', () => {
                 createNewDoc,
                 flushDocument,
             });
-        hookEngine.addFilter('ui.pane.doc:filter:select', (req: string) =>
-            req === 'doc-B' ? 'doc-B-TRANS' : req
-        );
+        hookEngine.addFilter('ui.pane.doc:filter:select', ((req: string) =>
+            req === 'doc-B' ? 'doc-B-TRANS' : req) as (v: unknown) => unknown);
         await newDocumentInActive();
         // after new doc created, filter should have transformed id
         expect(panes.value[0]!.documentId).toBe('doc-B-TRANS');
@@ -245,9 +263,8 @@ describe('extended pane hooks coverage', () => {
         hookEngine.addAction('ui.pane.doc:action:changed', () => {
             changedCount++;
         });
-        hookEngine.addFilter('ui.pane.doc:filter:select', (req: string) =>
-            req === 'doc-C' ? false : req
-        );
+        hookEngine.addFilter('ui.pane.doc:filter:select', ((req: string) =>
+            req === 'doc-C' ? false : req) as (v: unknown) => unknown);
         await selectDocumentInActive('doc-C'); // veto
         expect(changedCount).toBe(0);
     });
@@ -265,21 +282,25 @@ describe('extended pane hooks coverage', () => {
             activePaneIndex: ref(0),
         };
 
-        let sent: any = null;
-        let received: any = null;
-        hookEngine.addAction('ui.pane.msg:action:sent', (payload) => {
+        let sent: string | null = null;
+        let received: string | null = null;
+        hookEngine.addAction('ui.pane.msg:action:sent', ((payload: {
+            message: string;
+        }) => {
             sent = payload.message;
-        });
-        hookEngine.addAction('ui.pane.msg:action:received', (payload) => {
+        }) as (...args: unknown[]) => unknown);
+        hookEngine.addAction('ui.pane.msg:action:received', ((payload: {
+            message: string;
+        }) => {
             received = payload.message;
-        });
+        }) as (...args: unknown[]) => unknown);
         const chat = useChat([], 't1');
         await chat.sendMessage('Hello AI');
         await flush();
         expect(sent).toBeTruthy();
         expect(received).toBeTruthy();
-        expect(sent.length).toBe(8); // 'Hello AI'.length
-        expect(received.length).toBeGreaterThan(0); // from mock stream text accumulation
+        expect(sent!.length).toBe(8); // 'Hello AI'.length
+        expect(received!.length).toBeGreaterThan(0); // from mock stream text accumulation
 
         delete (globalThis as any).__or3MultiPaneApi;
     });

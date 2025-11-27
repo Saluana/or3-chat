@@ -3,7 +3,6 @@
 // produce OpenAI-compatible content arrays.
 //
 // This module handles OpenRouter API response parsing which requires flexible typing.
- 
 
 import { parseFileHashes } from '~/db/files-util';
 
@@ -33,7 +32,7 @@ export type ORContentPart =
 export interface ORMessage {
     role: 'user' | 'assistant' | 'system';
     content: ORContentPart[];
-     
+
     tool_calls?: unknown[];
 }
 
@@ -46,7 +45,10 @@ const g = globalThis as GlobalCaches;
 if (!g.__or3ImageDataUrlCache) g.__or3ImageDataUrlCache = new Map();
 if (!g.__or3ImageHydrateInflight) g.__or3ImageHydrateInflight = new Map();
 const dataUrlCache: Map<string, string> = g.__or3ImageDataUrlCache;
-const inflight: Map<string, Promise<string | null>> = g.__or3ImageHydrateInflight;
+const inflight: Map<
+    string,
+    Promise<string | null>
+> = g.__or3ImageHydrateInflight;
 // Simple LRU pruning to prevent unbounded growth
 const MAX_DATA_URL_CACHE = 64;
 function pruneCache(map: Map<string, string>, limit = MAX_DATA_URL_CACHE) {
@@ -149,11 +151,12 @@ interface ChatMessageLike {
 interface ChatContentPart {
     type: string;
     text?: string;
-    image?: string;
-    data?: string;
+    image?: string | Uint8Array | Buffer;
+    data?: string | Uint8Array | Buffer;
     mediaType?: string;
     mime?: string;
     filename?: string;
+    name?: string;
 }
 
 // Build OpenRouter messages with hydrated images.
@@ -293,15 +296,15 @@ export async function buildOpenRouterMessages(
                     fp.mediaType || fp.mime || 'application/octet-stream';
                 const isPdf = mediaType === 'application/pdf';
                 const filename =
-                    fp.filename || (isPdf ? 'document.pdf' : 'file');
-                let fileData: string | null | undefined = fp.data;
+                    fp.filename || fp.name || (isPdf ? 'document.pdf' : 'file');
+                // Convert Uint8Array/Buffer to string if needed
+                let fileData: string | null | undefined =
+                    typeof fp.data === 'string' ? fp.data : null; // Binary data needs special handling below
 
                 // Local hash or opaque ref -> hydrate via blob to data URL preserving mime
                 if (!/^data:|^https?:|^blob:/i.test(String(fileData))) {
                     try {
-                        const { getFileBlob } = await import(
-                            '~/db/files'
-                        );
+                        const { getFileBlob } = await import('~/db/files');
                         const blob = await getFileBlob(String(fileData));
                         if (blob) {
                             const mime = blob.type || mediaType;
@@ -389,9 +392,9 @@ export async function buildOpenRouterMessages(
             if (looksLocal) {
                 try {
                     const { getFileMeta } = await import('~/db/files');
-                    const meta = await getFileMeta(img.hash).catch(
+                    const meta = (await getFileMeta(img.hash).catch(
                         () => null
-                    ) as { mime?: string } | null;
+                    )) as { mime?: string } | null;
                     if (
                         meta &&
                         typeof meta.mime === 'string' &&
@@ -432,9 +435,7 @@ export async function buildOpenRouterMessages(
 }
 
 // Decide modalities based on prepared ORMessages + heuristic prompt.
-export function decideModalities(
-    orMessages: ORMessage[]
-): string[] {
+export function decideModalities(orMessages: ORMessage[]): string[] {
     const hasImageInput = orMessages.some((m) =>
         m.content.some((p) => p.type === 'image_url')
     );

@@ -299,6 +299,26 @@ export interface ThreadEntity {
     system_prompt_id?: string | null;
 }
 
+/** DB entity: thread create input */
+export interface ThreadCreateEntity {
+    id?: string;
+    title?: string | null;
+    created_at?: number;
+    updated_at?: number;
+    last_message_at?: number | null;
+    parent_thread_id?: string | null;
+    anchor_message_id?: string | null;
+    anchor_index?: number | null;
+    branch_mode?: 'reference' | 'copy' | null;
+    status?: string;
+    deleted?: boolean;
+    pinned?: boolean;
+    clock?: number;
+    forked?: boolean;
+    project_id?: string | null;
+    system_prompt_id?: string | null;
+}
+
 /** DB entity: document */
 export interface DocumentEntity {
     id: string;
@@ -398,9 +418,8 @@ export interface DbDeletePayload<T = unknown> {
 
 // Allow plugins to extend hook payloads via global augmentation (types-only)
 declare global {
-     
     interface Or3ActionHooks {} // e.g. { 'my.plugin.ready:action': [MyPayload] }
-     
+
     interface Or3FilterHooks {} // e.g. { 'my.plugin.value:filter:transform': [InType] }
 }
 // Ensure this file is always a module so augmentation is picked up
@@ -472,7 +491,6 @@ export type ExtensionActionHookName = keyof Or3ActionHooks;
 export type ActionHookName =
     | CoreActionHookName
     | DbActionHookName
-     
     | ExtensionActionHookName
     | (string & {});
 
@@ -493,7 +511,6 @@ export type ExtensionFilterHookName = keyof Or3FilterHooks;
 export type FilterHookName =
     | CoreFilterHookName
     | DbFilterHookName
-     
     | ExtensionFilterHookName
     | (string & {});
 
@@ -742,6 +759,8 @@ export type InferDbCreateEntity<K extends string> =
         ? MessageCreateEntity
         : K extends `db.posts.${string}`
         ? PostCreateEntity
+        : K extends `db.threads.${string}`
+        ? ThreadCreateEntity
         : InferDbEntity<K>;
 
 // Utility: Tail of a tuple
@@ -798,7 +817,7 @@ export type CallbackMismatch<Expected, Got> =
     `Callback signature mismatch. Expected ${TypeName<Expected>}, got ${TypeName<Got>}`;
 
 // Temporary dev guard to ensure hook names stay registered in types.
- 
+
 const __hook_name_checks__: [
     ValidateHookName<'branch.fork:filter:options'>,
     ValidateHookName<'branch.fork:action:before'>,

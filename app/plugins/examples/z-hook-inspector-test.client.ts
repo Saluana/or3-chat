@@ -56,9 +56,9 @@ export default defineNuxtPlugin(() => {
 
     hooks.on(
         'test.inspector.filter',
-        (value: string) => {
+        ((value: string) => {
             return value.toUpperCase();
-        },
+        }) as (v: unknown) => unknown,
         { kind: 'filter' }
     );
 

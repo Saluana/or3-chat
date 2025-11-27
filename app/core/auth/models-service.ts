@@ -2,42 +2,18 @@
 // Uses OpenRouter SDK for API calls
 // Usage: import { modelsService } from "~/utils/models-service";
 
-import { createOpenRouterClient, getRequestOptions } from '../../../shared/openrouter/client';
-import { normalizeSDKError } from '../../../shared/openrouter/errors';
-import { sdkModelToLocal } from '../../../shared/openrouter/types';
+import {
+    createOpenRouterClient,
+    getRequestOptions,
+} from '~~/shared/openrouter/client';
+import { normalizeSDKError } from '~~/shared/openrouter/errors';
+import {
+    sdkModelToLocal,
+    type OpenRouterModel,
+} from '~~/shared/openrouter/types';
 
-export interface OpenRouterModel {
-    id: string; // e.g. "deepseek/deepseek-r1-0528:free"
-    name: string;
-    description?: string;
-    created?: number;
-    architecture?: {
-        input_modalities?: string[];
-        output_modalities?: string[];
-        tokenizer?: string;
-        instruct_type?: string;
-    };
-    top_provider?: {
-        is_moderated?: boolean;
-        context_length?: number;
-        max_completion_tokens?: number;
-    };
-    pricing?: {
-        prompt?: string; // USD per input token (stringified number)
-        completion?: string; // USD per output token
-        image?: string;
-        request?: string;
-        web_search?: string;
-        internal_reasoning?: string;
-        input_cache_read?: string;
-        input_cache_write?: string;
-    };
-    canonical_slug?: string;
-    context_length?: number;
-    hugging_face_id?: string;
-    per_request_limits?: Record<string, unknown>;
-    supported_parameters?: string[]; // e.g. ["temperature","top_p","reasoning"]
-}
+// Re-export the type from shared location for consumers
+export type { OpenRouterModel } from '~~/shared/openrouter/types';
 
 export interface ModelCatalogCache {
     data: OpenRouterModel[];

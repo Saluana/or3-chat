@@ -64,8 +64,12 @@ export default defineNuxtPlugin(() => {
     // Register the tool handler
     registerTool(
         calculatorTool,
-        async (args: { operation: string; a: number; b: number }) => {
-            const { operation, a, b } = args;
+        async (args) => {
+            const { operation, a, b } = args as {
+                operation: string;
+                a: number;
+                b: number;
+            };
 
             let result: number;
 

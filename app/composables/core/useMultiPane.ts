@@ -12,10 +12,13 @@ import {
 } from 'vue';
 import { db } from '~/db';
 import { useHooks } from '../../core/hooks/useHooks';
-import { getGlobalMultiPaneApi, setGlobalMultiPaneApi } from '~/utils/multiPaneApi';
+import {
+    getGlobalMultiPaneApi,
+    setGlobalMultiPaneApi,
+} from '~/utils/multiPaneApi';
+import { usePaneApps } from './usePaneApps';
 
-type PaneAppsModule = typeof import('./usePaneApps');
-type PaneAppGetter = ReturnType<PaneAppsModule['usePaneApps']>['getPaneApp'];
+type PaneAppGetter = ReturnType<typeof usePaneApps>['getPaneApp'];
 
 // Pane mode: allow built-in modes with full autocomplete, but accept arbitrary strings for custom pane apps
 export type PaneMode = 'chat' | 'doc' | (string & { _brand?: 'pane-mode' });
@@ -86,7 +89,10 @@ export interface UseMultiPaneApi {
 }
 
 function genId(): string {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    if (
+        typeof crypto !== 'undefined' &&
+        typeof crypto.randomUUID === 'function'
+    ) {
         return crypto.randomUUID();
     }
     return 'pane-' + Math.random().toString(36).slice(2);
@@ -148,29 +154,12 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
 }
 
 let cachedPaneAppGetter: PaneAppGetter | null = null;
-let paneAppGetterPromise: Promise<PaneAppGetter | null> | null = null;
 
-async function ensurePaneAppGetter(): Promise<PaneAppGetter | null> {
-    if (cachedPaneAppGetter) return cachedPaneAppGetter;
-    if (!paneAppGetterPromise) {
-        paneAppGetterPromise = import('./usePaneApps')
-            .then((mod: PaneAppsModule) => {
-                const getter = mod.usePaneApps().getPaneApp;
-                cachedPaneAppGetter = getter;
-                return getter;
-            })
-            .catch((err) => {
-                if (import.meta.dev) {
-                    console.error(
-                        '[multiPane] Failed to import usePaneApps',
-                        err
-                    );
-                }
-                paneAppGetterPromise = null;
-                return null;
-            });
+function ensurePaneAppGetter(): PaneAppGetter {
+    if (!cachedPaneAppGetter) {
+        cachedPaneAppGetter = usePaneApps().getPaneApp;
     }
-    return paneAppGetterPromise;
+    return cachedPaneAppGetter;
 }
 
 export function useMultiPane(
@@ -292,7 +281,9 @@ export function useMultiPane(
         const paneCount = panes.value.length;
         const equalWidth = Math.floor(totalWidth / paneCount);
 
-        paneWidths.value = new Array<number>(paneCount).fill(clampWidth(equalWidth));
+        paneWidths.value = new Array<number>(paneCount).fill(
+            clampWidth(equalWidth)
+        );
     }
 
     /**
@@ -360,7 +351,9 @@ export function useMultiPane(
                     oldId,
                     incoming: threadId,
                 });
-            } catch { /* intentionally empty */ }
+            } catch {
+                /* intentionally empty */
+            }
         }
         // Allow external transform / veto
         try {
@@ -370,7 +363,9 @@ export function useMultiPane(
                 pane,
                 oldId
             )) as string | false;
-        } catch { /* intentionally empty */ }
+        } catch {
+            /* intentionally empty */
+        }
         if (requested === false) return; // veto
         // Clear association
         if (requested === '') {
@@ -390,7 +385,9 @@ export function useMultiPane(
                         index,
                         oldId,
                     });
-                } catch { /* intentionally empty */ }
+                } catch {
+                    /* intentionally empty */
+                }
             }
             return;
         }
@@ -412,7 +409,9 @@ export function useMultiPane(
                     newId: requested,
                     messages: pane.messages.length,
                 });
-            } catch { /* intentionally empty */ }
+            } catch {
+                /* intentionally empty */
+            }
         }
     }
 
@@ -432,7 +431,9 @@ export function useMultiPane(
                     prevThread: prevPane?.threadId,
                     nextThread: panes.value[i]?.threadId,
                 });
-            } catch { /* intentionally empty */ }
+            } catch {
+                /* intentionally empty */
+            }
         }
         if (prevPane)
             void hooks.doAction('ui.pane.blur:action', {
@@ -503,7 +504,9 @@ export function useMultiPane(
         ) {
             try {
                 await options.onFlushDocument(closing.documentId);
-            } catch { /* intentionally empty */ }
+            } catch {
+                /* intentionally empty */
+            }
         }
 
         // Redistribute width to remaining panes
@@ -578,9 +581,8 @@ export function useMultiPane(
             return;
         }
 
-        // Lazy import to avoid circular dependencies and keep server bundle clean
-        const getPaneApp = await ensurePaneAppGetter();
-        if (!getPaneApp) return;
+        // Get pane app getter (module is already bundled statically)
+        const getPaneApp = ensurePaneAppGetter();
 
         // Resolve pane app definition
         const appDef = getPaneApp(appId);
@@ -645,7 +647,9 @@ export function useMultiPane(
                     recordId: pane.documentId,
                     index: newIndex,
                 });
-            } catch { /* intentionally empty */ }
+            } catch {
+                /* intentionally empty */
+            }
         }
     }
 
@@ -671,9 +675,8 @@ export function useMultiPane(
             return;
         }
 
-        // Lazy import to avoid circular dependencies
-        const getPaneApp = await ensurePaneAppGetter();
-        if (!getPaneApp) return;
+        // Get pane app getter (module is already bundled statically)
+        const getPaneApp = ensurePaneAppGetter();
 
         // Resolve pane app definition
         const appDef = getPaneApp(appId);
@@ -743,7 +746,9 @@ export function useMultiPane(
                     index,
                     oldMode,
                 });
-            } catch { /* intentionally empty */ }
+            } catch {
+                /* intentionally empty */
+            }
         }
     }
 
@@ -788,7 +793,9 @@ export function useMultiPane(
     // This is intentionally lightweight; if multiple instances are created the latest wins.
     try {
         setGlobalMultiPaneApi(api);
-    } catch { /* intentionally empty */ }
+    } catch {
+        /* intentionally empty */
+    }
 
     // Clean up global reference on scope disposal to prevent memory leaks
     onScopeDispose(() => {

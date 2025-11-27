@@ -59,7 +59,7 @@ describe('uiMessages utilities', () => {
     it('ensureUiMessage adds placeholders only for missing hashes', () => {
         const raw = {
             id: 'a1',
-            role: 'assistant',
+            role: 'assistant' as const,
             text: 'Some intro',
             file_hashes: ['h1', 'h2'],
         };
@@ -70,7 +70,7 @@ describe('uiMessages utilities', () => {
     it('ensureUiMessage does not exceed hash count when images already present', () => {
         const raw = {
             id: 'a2',
-            role: 'assistant',
+            role: 'assistant' as const,
             text: '![generated image](data:image/png;base64,abc)',
             file_hashes: ['h1'],
         };
@@ -81,7 +81,7 @@ describe('uiMessages utilities', () => {
     it('ensureUiMessage only appends up to remaining needed placeholders', () => {
         const raw = {
             id: 'a3',
-            role: 'assistant',
+            role: 'assistant' as const,
             text: '![generated image](data:image/png;base64,abc)',
             file_hashes: ['h1', 'h2', 'h3'],
         };

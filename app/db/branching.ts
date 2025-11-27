@@ -69,7 +69,7 @@ function mergeMessageEntity(entity: MessageEntity, base?: Message): Message {
         data: entity.data,
         index: entity.index,
         created_at: entity.created_at,
-        updated_at: entity.updated_at,
+        updated_at: entity.updated_at ?? entity.created_at,
     };
 }
 

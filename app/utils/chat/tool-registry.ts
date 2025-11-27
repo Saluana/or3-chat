@@ -376,7 +376,7 @@ export function useToolRegistry() {
 
         // Execute with timeout
         const execution = await withTimeout(
-            () => tool.handler(parsed.args),
+            () => tool.handler(parsed.args ?? {}),
             DEFAULT_TIMEOUT_MS
         );
 

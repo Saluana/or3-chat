@@ -11,10 +11,10 @@ import {
 
 export async function createThread(input: ThreadCreate): Promise<Thread> {
     const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
+    const filtered = (await hooks.applyFilters(
         'db.threads.create:filter:input',
         input
-    );
+    )) as ThreadCreate;
     // Apply create-time defaults (id/clock/timestamps, etc.)
     const prepared = parseOrThrow(ThreadCreateSchema, filtered);
     // Validate against full schema so required defaults (status/pinned/etc.) are present

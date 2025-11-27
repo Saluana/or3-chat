@@ -9,7 +9,7 @@ import { onMounted, ref } from 'vue';
 type EncodeFn = (text: string) => number[];
 
 interface PendingRequest {
-    resolve: (value: number | Record<string, number>) => void;
+    resolve: (value: unknown) => void;
     reject: (error: Error) => void;
 }
 
@@ -138,7 +138,10 @@ const runWorkerRequest = async <T>(
     const id = nextMessageId++;
 
     return new Promise<T>((resolve, reject) => {
-        pendingRequests.set(id, { resolve, reject });
+        pendingRequests.set(id, {
+            resolve: resolve as (value: unknown) => void,
+            reject,
+        });
 
         try {
             worker.postMessage({ id, ...payload });

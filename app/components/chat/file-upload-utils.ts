@@ -40,7 +40,12 @@ export interface AttachmentLike {
     mime?: string;
     kind?: string | null;
     hash?: string;
-    meta?: { hash: string; name?: string; mime_type?: string; size?: number } | null;
+    meta?: {
+        hash: string;
+        name?: string;
+        mime_type?: string;
+        size?: number;
+    } | null;
     error?: string;
 }
 
@@ -53,13 +58,13 @@ export async function persistAttachment(att: AttachmentLike) {
             name: att.name,
             mime: att.mime || att.file.type || '',
             size: att.file.size,
-            kind: att.kind ?? 'image',
+            kind: (att.kind === 'pdf' ? 'pdf' : 'image') as 'image' | 'pdf',
         };
 
-        const filtered = (await hooks.applyFilters(
+        const filtered = await hooks.applyFilters(
             'files.attach:filter:input',
             payload
-        ));
+        );
 
         // If filter returns false, reject the attachment
         if (filtered === false) {

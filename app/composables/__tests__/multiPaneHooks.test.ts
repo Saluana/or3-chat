@@ -57,15 +57,26 @@ describe('multi-pane new hooks', () => {
         const { setPaneThread, panes } = useMultiPane();
         hookEngine.addFilter(
             'ui.pane.thread:filter:select',
-            (_req: string, pane: any) => 'thread-X'
+            ((_req: string, _pane: unknown) => 'thread-X') as (
+                v: unknown
+            ) => unknown
         );
-        let changed: any = null;
-        hookEngine.addAction(
-            'ui.pane.thread:action:changed',
-            ({ oldThreadId, newThreadId, paneIndex }) => {
-                changed = { oldId: oldThreadId, newId: newThreadId, paneIndex };
-            }
-        );
+        let changed: {
+            oldId: string;
+            newId: string;
+            paneIndex: number;
+        } | null = null;
+        hookEngine.addAction('ui.pane.thread:action:changed', ((payload: {
+            oldThreadId: string;
+            newThreadId: string;
+            paneIndex: number;
+        }) => {
+            changed = {
+                oldId: payload.oldThreadId,
+                newId: payload.newThreadId,
+                paneIndex: payload.paneIndex,
+            };
+        }) as (...args: unknown[]) => unknown);
         await setPaneThread(0, 'thread-1');
         expect(panes.value[0]!.threadId).toBe('thread-X');
         expect(changed).toEqual({
