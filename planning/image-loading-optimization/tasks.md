@@ -2,11 +2,35 @@
 
 ## Overview
 
-This task list implements thumbnail generation and storage to optimize image loading performance. Tasks are ordered by dependency and grouped by phase.
+This task list implements image loading optimizations. **Recommended approach**: Start with Service Worker cache (Phase 0) for instant repeat access, then optionally add thumbnails for faster first loads.
 
 ---
 
-## Phase 1: Database Schema & Core Infrastructure
+## Phase 0: Service Worker Image Cache (Recommended First)
+
+> This phase provides near-instant loading for any previously viewed image without schema changes or migrations. See [sw-cache-design.md](./sw-cache-design.md) for full design.
+
+### 0. Service Worker Image Cache Implementation
+- [ ] 0.1 Create `public/sw.js` with image route interception (`/_img/{hash}`)
+- [ ] 0.2 Implement Cache API storage for image responses
+- [ ] 0.3 Create BroadcastChannel bridge for SW ↔ main thread communication
+- [ ] 0.4 Create `plugins/sw-register.client.ts` to register SW
+- [ ] 0.5 Create `composables/core/useImageCacheBridge.ts` for Dexie lookups
+- [ ] 0.6 Update image display components to use `/_img/{hash}` URLs
+- [ ] 0.7 Add cache management utilities (clear, evict, prewarm)
+- [ ] 0.8 Add fallback for browsers without SW support
+- [ ] 0.9 Add unit tests for SW cache operations
+
+**Estimated Effort**: 4-6 hours  
+**Benefits**: 
+- Instant repeat access (<5ms vs 50-500ms)
+- No schema changes needed
+- No migration needed  
+- Works with existing images immediately
+
+---
+
+## Phase 1: Database Schema & Core Infrastructure (Thumbnails)
 
 ### 1. Add `file_thumbs` table to Dexie schema
 - [ ] 1.1 Add `FileThumbRow` interface to `app/db/client.ts`
@@ -141,19 +165,28 @@ This task list implements thumbnail generation and storage to optimize image loa
 ## Dependencies Graph
 
 ```
-1 (schema) ──────────────────────────────────────┐
-    │                                            │
-    ├──> 2 (thumbs.ts) ──> 5 (useThumbnails) ───┤
-    │                            │              │
-    └──> 3 (generator) ──> 4 (upload) ──────────┼──> 7 (migration)
-                                 │              │
-                                 └──> 6 (ensureThumb)
-                                                │
-                                                ├──> 8 (on-demand)
-                                                │
-                                                ├──> 9 (full image)
-                                                │
-                                                └──> 10 (memory) ──> 11, 12 (testing)
+Phase 0 (SW Cache) ─────────────────────────────────────────────────┐
+    │                                                               │
+    │   (Can be implemented independently, no dependencies)         │
+    │                                                               │
+    └───────────────────────────────────────────────────────────────┤
+                                                                    │
+1 (schema) ──────────────────────────────────────┐                  │
+    │                                            │                  │
+    ├──> 2 (thumbs.ts) ──> 5 (useThumbnails) ───┤                  │
+    │                            │              │                  │
+    └──> 3 (generator) ──> 4 (upload) ──────────┼──> 7 (migration) │
+                                 │              │                  │
+                                 └──> 6 (ensureThumb)              │
+                                                │                  │
+                                                ├──> 8 (on-demand) │
+                                                │                  │
+                                                ├──> 9 (full image)│
+                                                │                  │
+                                                └──> 10 (memory) ──┼──> 11, 12 (testing)
+                                                                   │
+                                                                   ▼
+                                                    (Hybrid: SW cache + thumbnails)
 ```
 
 ---
@@ -162,22 +195,45 @@ This task list implements thumbnail generation and storage to optimize image loa
 
 | Phase | Tasks | Estimate |
 |-------|-------|----------|
-| 1. Schema | 1-2 | 2 hours |
+| **0. SW Cache (Recommended First)** | 0 | **4-6 hours** |
+| 1. Schema (Thumbnails) | 1-2 | 2 hours |
 | 2. Upload | 4 | 3 hours |
 | 3. Loading | 5-6 | 4 hours |
 | 4. Migration | 7-8 | 4 hours |
 | 5. Full Image | 9 | 2 hours |
 | 6. Memory | 10 | 2 hours |
 | 7. Testing | 11-12 | 3 hours |
-| **Total** | | **~20 hours** |
+| **SW Cache Only** | Phase 0 | **~5 hours** |
+| **Full Thumbnail System** | Phases 1-7 | **~20 hours** |
+| **Hybrid (Both)** | All | **~25 hours** |
 
 ---
 
 ## Success Criteria
 
+### Phase 0 (SW Cache) - Immediate Impact
+- [ ] Previously viewed images load in <10ms (down from 50-500ms)
+- [ ] First-time image load unchanged (still uses Dexie)
+- [ ] No JavaScript heap memory increase
+- [ ] Workspace backup/restore unaffected
+- [ ] Works in all major browsers (graceful fallback where unsupported)
+
+### Phases 1-7 (Thumbnails) - Additional Optimization
 - [ ] Thread with 4 thumbnails opens in <300ms (down from 3-5s)
 - [ ] Thread with 10 thumbnails opens in <500ms
 - [ ] No visible UI jank during thumbnail loading
 - [ ] Existing images migrate within 1 week of normal usage
 - [ ] Memory usage stays under configured limits
 - [ ] All existing tests continue to pass
+
+---
+
+## Recommendation
+
+**Start with Phase 0 (SW Cache)** for immediate, high-impact results:
+- Fastest implementation (~5 hours)
+- No database schema changes
+- No migration needed
+- Instant benefit for returning users
+
+Then evaluate if Phase 1-7 (Thumbnails) is needed for first-load optimization.

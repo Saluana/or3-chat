@@ -6,6 +6,27 @@ When opening a thread with multiple images (especially 2K/4K resolution), the UI
 
 ---
 
+## 0. Service Worker Image Cache (Primary Optimization)
+
+### User Story
+As a user, I want images I've seen before to load instantly when I revisit them, without any noticeable delay.
+
+### Acceptance Criteria
+- WHEN an image has been viewed before THEN it SHALL load in <10ms from SW cache
+- WHEN an image is first viewed THEN it SHALL be cached automatically for future instant access
+- WHEN SW cache is used THEN Dexie SHALL remain the source of truth for workspace backups
+- WHEN the browser evicts cached images under storage pressure THEN the app SHALL gracefully fall back to Dexie
+- WHEN the browser doesn't support Service Workers THEN the app SHALL fall back to direct Dexie loading
+- WHEN a user clears app data THEN cached images SHALL be regenerated on next view (not require re-upload)
+
+### Non-Functional Requirements
+- SW code SHALL be <100 lines and handle only `/_img/*` routes
+- Cache Storage SHALL NOT consume JavaScript heap memory (disk-backed only)
+- No schema changes or database migrations SHALL be required
+- Implementation SHALL NOT affect workspace backup/restore functionality
+
+---
+
 ## 1. Thumbnail Generation and Storage
 
 ### User Story

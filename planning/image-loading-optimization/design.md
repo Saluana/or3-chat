@@ -1,8 +1,12 @@
 # Image Loading Optimization - Technical Design
 
+> ⚠️ **Update**: The thumbnail approach below still requires IndexedDB reads on every page load, which remains slow. See **[sw-cache-design.md](./sw-cache-design.md)** for a new Service Worker cache approach that provides near-instant image loading for previously viewed images.
+
 ## Overview
 
 This document describes the technical architecture for optimizing image loading in the chat interface. The core strategy is to generate and store small thumbnails (~400px) at upload time, then load thumbnails first with full images on-demand.
+
+**Note**: This approach reduces the size of data transferred from IndexedDB but doesn't eliminate the IndexedDB read latency. For instant loading of seen images, the SW cache approach is recommended (see sw-cache-design.md).
 
 ---
 
