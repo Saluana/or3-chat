@@ -18,7 +18,6 @@ export interface ExchangeParams {
     code: string;
     verifier: string;
     codeMethod: string;
-    fetchImpl?: typeof fetch;
     attempt?: number;
 }
 

@@ -61,7 +61,16 @@ try {
 | `ERR_FILE_PERSIST`      | Failed to persist file blob/meta | Yes     | Retry closure provided.                              |
 | `ERR_VALIDATION`        | Generic user input validation    | No      | Provide precise message.                             |
 | `ERR_AUTH`              | Auth / CSRF / exchange issues    | Depends | OpenRouter callback flow.                            |
-| `ERR_RATE_LIMIT`        | Provider rate limit hit          | Yes     | Not all providers send clear signals.                |
+| `ERR_CREDITS`           | Insufficient OpenRouter credits  | No      | SDK: PaymentRequiredResponseError (402).             |
+| `ERR_FORBIDDEN`         | Access denied by API             | No      | SDK: ForbiddenResponseError (403).                   |
+| `ERR_RATE_LIMIT`        | Provider rate limit hit          | Yes     | SDK: TooManyRequestsResponseError (429).             |
+| `ERR_BAD_REQUEST`       | Invalid request parameters       | No      | SDK: BadRequestResponseError (400).                  |
+| `ERR_NOT_FOUND`         | Resource not found               | No      | SDK: NotFoundResponseError (404).                    |
+| `ERR_SERVER`            | OpenRouter service error         | Yes     | SDK: InternalServerResponseError (500).              |
+| `ERR_PROVIDER`          | AI provider unavailable          | Yes     | SDK: BadGateway/ServiceUnavailable (502/503).        |
+| `ERR_OVERLOADED`        | Provider overloaded              | Yes     | SDK: ProviderOverloadedResponseError (529).          |
+| `ERR_CHAT`              | Chat-specific failure            | No      | SDK: ChatError.                                      |
+| `ERR_ABORTED`           | Request cancelled by user        | No      | AbortError from AbortController.                     |
 | `ERR_UNSUPPORTED_MODEL` | Model not allowed / recognized   | No      | surfaced in UI.                                      |
 | `ERR_HOOK_FAILURE`      | Plugin hook handler threw        | Depends | Emitted silently unless needed.                      |
 

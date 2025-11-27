@@ -65,10 +65,10 @@ This document provides a detailed task checklist for implementing the OpenRouter
         -   [x] Map `pricing` fields
         -   [x] Map remaining optional fields
 
--   [ ] 2.4 Create `shared/openrouter/index.ts` barrel export
-    -   [ ] Export from `client.ts`
-    -   [ ] Export from `errors.ts`
-    -   [ ] Export from `types.ts`
+-   [x] 2.4 Create `shared/openrouter/index.ts` barrel export
+    -   [x] Export from `client.ts`
+    -   [x] Export from `errors.ts`
+    -   [x] Export from `types.ts`
 
 ### 3. Add Type Definitions
 
@@ -268,20 +268,20 @@ This document provides a detailed task checklist for implementing the OpenRouter
 
 **Requirements: All**
 
--   [ ] 13.1 Remove any commented-out old fetch code
--   [ ] 13.2 Remove unused imports
--   [ ] 13.3 Run linter: `bun run lint`
--   [ ] 13.4 Fix any lint errors
--   [ ] 13.5 Final code formatting pass
+-   [x] 13.1 Remove any commented-out old fetch code
+-   [x] 13.2 Remove unused imports
+-   [x] 13.3 Run linter: `bun run lint`
+-   [x] 13.4 Fix any lint errors
+-   [x] 13.5 Final code formatting pass
 
 ### 14. Update Documentation
 
 **Requirements: All**
 
--   [ ] 14.1 Update `docs/error-handling.md` with SDK error types
--   [ ] 14.2 Add `docs/openrouter-integration.md` documenting the adapter layer
--   [ ] 14.3 Update any README references to OpenRouter integration
--   [ ] 14.4 Document streaming limitation (raw fetch required)
+-   [x] 14.1 Update `docs/error-handling.md` with SDK error types
+-   [x] 14.2 Add `docs/openrouter-integration.md` documenting the adapter layer
+-   [x] 14.3 Update any README references to OpenRouter integration
+-   [x] 14.4 Document streaming limitation (raw fetch required)
 
 ### 15. Final Review
 

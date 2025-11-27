@@ -18,8 +18,23 @@ import {
     ChatError,
 } from '@openrouter/sdk/models/errors';
 
+export type ErrorCode =
+    | 'ERR_AUTH'
+    | 'ERR_CREDITS'
+    | 'ERR_FORBIDDEN'
+    | 'ERR_RATE_LIMIT'
+    | 'ERR_BAD_REQUEST'
+    | 'ERR_NOT_FOUND'
+    | 'ERR_TIMEOUT'
+    | 'ERR_SERVER'
+    | 'ERR_PROVIDER'
+    | 'ERR_OVERLOADED'
+    | 'ERR_CHAT'
+    | 'ERR_ABORTED'
+    | 'ERR_UNKNOWN';
+
 export interface NormalizedError {
-    code: string;
+    code: ErrorCode;
     message: string;
     status: number;
     retryable: boolean;
@@ -56,7 +71,8 @@ export function normalizeSDKError(error: unknown): NormalizedError {
     if (error instanceof ForbiddenResponseError) {
         return {
             code: 'ERR_FORBIDDEN',
-            message: 'Access denied. Your key may not have required permissions.',
+            message:
+                'Access denied. Your key may not have required permissions.',
             status: 403,
             retryable: false,
             raw: error,
@@ -133,8 +149,7 @@ export function normalizeSDKError(error: unknown): NormalizedError {
     if (error instanceof ProviderOverloadedResponseError) {
         return {
             code: 'ERR_OVERLOADED',
-            message:
-                'AI provider is overloaded. Please try again in a moment.',
+            message: 'AI provider is overloaded. Please try again in a moment.',
             status: 529,
             retryable: true,
             raw: error,
