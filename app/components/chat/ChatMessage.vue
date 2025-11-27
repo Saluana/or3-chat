@@ -311,8 +311,17 @@ import {
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
 import { parseHashes } from '~/utils/files/attachments';
-import { getFileMeta } from '~/db/files';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
+import {
+    type ThumbState,
+    type PdfMeta,
+    retainThumb,
+    releaseThumb,
+    ensureThumb as ensureThumbFromCache,
+    queuePrefetch,
+    getThumbCache,
+    peekPdfMeta,
+} from '~/composables/core/useThumbnails';
 import { shallowRef } from 'vue';
 import { useToast } from '#imports';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
@@ -678,59 +687,6 @@ function getAttachmentName(hash: string): string {
     return 'Document';
 }
 
-// Module-level caches for thumbnails
-const thumbCache = new Map<string, ThumbState>();
-const thumbLoadPromises = new Map<string, Promise<void>>();
-const thumbRefCounts = new Map<string, number>();
-const thumbCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-function retainThumb(hash: string) {
-    // Cancel any pending cleanup for this hash
-    if (thumbCleanupTimers.has(hash)) {
-        clearTimeout(thumbCleanupTimers.get(hash)!);
-        thumbCleanupTimers.delete(hash);
-    }
-    const prev = thumbRefCounts.get(hash) || 0;
-    thumbRefCounts.set(hash, prev + 1);
-}
-
-function releaseThumb(hash: string) {
-    const prev = thumbRefCounts.get(hash) || 0;
-    if (prev <= 1) {
-        thumbRefCounts.set(hash, 0); // Mark as 0 but don't delete yet
-
-        // Schedule cleanup with a grace period (e.g. 30 seconds)
-        // This allows scrolling back up without re-fetching from DB
-        if (!thumbCleanupTimers.has(hash)) {
-            const timer = setTimeout(() => {
-                thumbCleanupTimers.delete(hash);
-                // Double check ref count is still 0
-                if ((thumbRefCounts.get(hash) || 0) > 0) return;
-
-                thumbRefCounts.delete(hash);
-                const state = thumbCache.get(hash);
-                if (state?.url) {
-                    try {
-                        URL.revokeObjectURL(state.url);
-                    } catch (e: unknown) {
-                        if (import.meta.dev) {
-                            console.warn(
-                                '[ChatMessage] Failed to revoke object URL',
-                                e
-                            );
-                        }
-                    }
-                }
-                thumbCache.delete(hash);
-                thumbLoadPromises.delete(hash);
-            }, 30000); // 30s grace period
-            thumbCleanupTimers.set(hash, timer);
-        }
-    } else {
-        thumbRefCounts.set(hash, prev - 1);
-    }
-}
-
 // Per-message persistent UI state stored directly on the message object to
 // survive virtualization recycling without external maps.
 const expanded = ref<boolean>(props.message._expanded === true);
@@ -743,70 +699,47 @@ function toggleExpanded() {
     expanded.value = !expanded.value;
 }
 
+// Use shared thumbnail cache - wrapper for local reactive state
 async function ensureThumb(h: string) {
-    // If we already know it's a PDF just ensure meta exists.
-    if (pdfMeta[h]) {
+    // Check PDF meta cache first
+    const cachedPdf = peekPdfMeta(h);
+    if (cachedPdf) {
+        pdfMeta[h] = cachedPdf;
         return;
     }
-    if (thumbnails[h] && thumbnails[h].status === 'ready') return;
-    const cached = thumbCache.get(h);
-    if (cached) {
-        thumbnails[h] = cached;
-        return;
-    }
-    if (thumbLoadPromises.has(h)) {
-        await thumbLoadPromises.get(h);
-        const after = thumbCache.get(h);
-        if (after) thumbnails[h] = after;
-        return;
-    }
-    thumbnails[h] = { status: 'loading' };
-    const p = (async () => {
-        try {
-            const [blob, meta] = await Promise.all([
-                (await import('~/db/files')).getFileBlob(h),
-                getFileMeta(h).catch(() => undefined),
-            ]);
-            if (meta && meta.kind === 'pdf') {
-                pdfMeta[h] = { name: meta.name, kind: meta.kind };
-                // Remove the temporary loading state since we won't have an image thumb
-                delete thumbnails[h];
-                return;
-            }
-            if (!blob) throw new Error('missing');
-            if (blob.type === 'application/pdf') {
-                pdfMeta[h] = { name: meta?.name, kind: 'pdf' };
-                delete thumbnails[h];
-                return;
-            }
-            const url = URL.createObjectURL(blob);
-            const ready: ThumbState = { status: 'ready', url };
-            thumbCache.set(h, ready);
-            thumbnails[h] = ready;
-        } catch {
-            const err: ThumbState = { status: 'error' };
-            thumbCache.set(h, err);
-            thumbnails[h] = err;
-        } finally {
-            thumbLoadPromises.delete(h);
-        }
-    })();
-    thumbLoadPromises.set(h, p);
-    await p;
+    if (pdfMeta[h]) return;
+
+    // Use the shared thumbnail system
+    await ensureThumbFromCache(h, thumbnails, pdfMeta);
 }
 
 // Track current hashes used by this message for ref counting.
 const currentHashes = new Set<string>();
 let isComponentActive = true;
 
+// Queue prefetch on mount for bulk loading optimization
+onMounted(() => {
+    if (hashList.value.length > 0) {
+        queuePrefetch(hashList.value);
+    }
+});
+
 // Load new hashes when list changes with diffing for retain/release.
 watch(
     hashList,
     async (list) => {
+        const thumbCache = getThumbCache();
         const nextSet = new Set(list);
-        // Additions
-        for (const h of nextSet) {
-            if (!currentHashes.has(h)) {
+
+        // Queue new hashes for prefetch (batch loading) - this is non-blocking
+        const newHashes = list.filter((h) => !currentHashes.has(h));
+        if (newHashes.length > 0) {
+            queuePrefetch(newHashes);
+        }
+
+        // Wait for all new thumbnails to load in parallel (not sequentially)
+        await Promise.all(
+            newHashes.map(async (h) => {
                 await ensureThumb(h);
                 const state = thumbCache.get(h);
                 if (state?.status === 'ready') {
@@ -818,8 +751,9 @@ watch(
                     retainThumb(h);
                     currentHashes.add(h);
                 }
-            }
-        }
+            })
+        );
+
         // Removals
         for (const h of Array.from(currentHashes)) {
             if (!nextSet.has(h)) {
@@ -848,6 +782,7 @@ async function hydrateInlineImages() {
     const spans = root.querySelectorAll(
         'span.or3-img-ph[data-file-hash]:not([data-hydrated])'
     );
+    const thumbCache = getThumbCache();
     spans.forEach((span) => {
         const hash = span.getAttribute('data-file-hash') || '';
         if (!hash) return;

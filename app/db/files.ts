@@ -221,6 +221,28 @@ export async function getFileBlob(hash: string): Promise<Blob | undefined> {
 }
 
 /**
+ * Get multiple file metadata records by hash in a single database transaction.
+ * Returns a Map of hash -> FileMeta for efficient lookup.
+ * Missing hashes are omitted from the result.
+ */
+export async function getFileMetaBulk(
+    hashes: string[]
+): Promise<Map<string, FileMeta>> {
+    const unique = Array.from(new Set(hashes.filter(Boolean)));
+    if (!unique.length) return new Map();
+
+    const rows = await db.file_meta.bulkGet(unique);
+    const result = new Map<string, FileMeta>();
+    for (let i = 0; i < unique.length; i++) {
+        const row = rows[i];
+        if (row) {
+            result.set(unique[i]!, row);
+        }
+    }
+    return result;
+}
+
+/**
  * Get multiple blobs by hash in a single database transaction.
  * Returns a Map of hash -> Blob for efficient lookup.
  * Missing hashes are omitted from the result.

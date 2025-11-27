@@ -80,21 +80,19 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch, onBeforeUnmount } from 'vue';
-import { getFileBlob, getFileMeta } from '~/db/files';
+import { reactive, watch, onBeforeUnmount, onMounted } from 'vue';
+import { getFileMeta } from '~/db/files';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { FileMeta } from '../../../types/chat-internal';
-
-interface ThumbState {
-    status: 'loading' | 'ready' | 'error';
-    url?: string;
-}
-
-interface GlobalThumbCache {
-    cache: Map<string, ThumbState>;
-    inflight: Map<string, Promise<void>>;
-    refCounts: Map<string, number>;
-}
+import {
+    type ThumbState,
+    retainThumb,
+    releaseThumb,
+    ensureThumb as ensureThumbFromCache,
+    queuePrefetch,
+    getThumbCache,
+    peekPdfMeta,
+} from '~/composables/core/useThumbnails';
 
 const props = defineProps<{ hashes: string[] }>();
 defineEmits<{ (e: 'collapse'): void }>();
@@ -113,98 +111,85 @@ const attachmentItemProps = useThemeOverrides({
     isNuxtUI: false,
 });
 
-// Reuse global caches so virtualization doesn't thrash
-type GlobalWithThumbCache = typeof globalThis & {
-    __or3ThumbCache?: GlobalThumbCache;
-};
-
-const globalCache: GlobalThumbCache = (
-    (globalThis as GlobalWithThumbCache).__or3ThumbCache ??= {
-        cache: new Map<string, ThumbState>(),
-        inflight: new Map<string, Promise<void>>(),
-        refCounts: new Map<string, number>(),
-    }
-);
-
-const cache = globalCache.cache;
-const inflight = globalCache.inflight;
-const thumbRefCounts = globalCache.refCounts;
-
 const thumbs = reactive<Record<string, ThumbState>>({});
-const meta = reactive<Record<string, FileMeta>>({});
+const meta = reactive<
+    Record<string, FileMeta | { name?: string; kind: string }>
+>({});
 const fileNames = reactive<Record<string, string>>({});
 
-function retainThumb(hash: string) {
-    const prev = thumbRefCounts.get(hash) || 0;
-    thumbRefCounts.set(hash, prev + 1);
-}
-function releaseThumb(hash: string) {
-    const prev = thumbRefCounts.get(hash) || 0;
-    if (prev <= 1) {
-        thumbRefCounts.delete(hash);
-        const state = cache.get(hash);
-        if (state?.url) {
-            try {
-                URL.revokeObjectURL(state.url);
-            } catch {}
-        }
-        cache.delete(hash);
-        inflight.delete(hash);
-        delete thumbs[hash];
-    } else {
-        thumbRefCounts.set(hash, prev - 1);
-    }
-}
-
 async function ensure(h: string) {
+    // Check PDF meta cache first
+    const cachedPdf = peekPdfMeta(h);
+    if (cachedPdf) {
+        meta[h] = cachedPdf as FileMeta;
+        if (cachedPdf.name) fileNames[h] = cachedPdf.name;
+        return;
+    }
+
     if (thumbs[h] && thumbs[h].status === 'ready') return;
+
+    const cache = getThumbCache();
     const cached = cache.get(h);
     if (cached) {
         thumbs[h] = cached;
-        return;
-    }
-    if (inflight.has(h)) {
-        await inflight.get(h);
-        const after = cache.get(h);
-        if (after) thumbs[h] = after;
-        return;
-    }
-    thumbs[h] = { status: 'loading' };
-    const p = (async () => {
-        try {
-            const [blob, m] = await Promise.all([
-                getFileBlob(h),
-                getFileMeta(h).catch(() => undefined),
-            ]);
-            if (m) {
-                meta[h] = m;
-                if (m.name) fileNames[h] = m.name;
-            }
-            if (!blob) throw new Error('missing');
-            const url = URL.createObjectURL(blob);
-            const ready: ThumbState = { status: 'ready', url };
-            cache.set(h, ready);
-            thumbs[h] = ready;
-        } catch {
-            const err: ThumbState = { status: 'error' };
-            cache.set(h, err);
-            thumbs[h] = err;
-        } finally {
-            inflight.delete(h);
+        // Also load meta for file names
+        if (!meta[h]) {
+            getFileMeta(h)
+                .then((m) => {
+                    if (m) {
+                        meta[h] = m;
+                        if (m.name) fileNames[h] = m.name;
+                    }
+                })
+                .catch(() => {});
         }
-    })();
-    inflight.set(h, p);
-    await p;
+        return;
+    }
+
+    // Use shared thumbnail loading
+    const pdfMeta: Record<string, { name?: string; kind: string }> = {};
+    await ensureThumbFromCache(h, thumbs, pdfMeta);
+
+    // Copy any PDF meta discovered
+    if (pdfMeta[h]) {
+        meta[h] = pdfMeta[h] as FileMeta;
+        if (pdfMeta[h].name) fileNames[h] = pdfMeta[h].name!;
+    } else {
+        // Load file meta for names
+        getFileMeta(h)
+            .then((m) => {
+                if (m) {
+                    meta[h] = m;
+                    if (m.name) fileNames[h] = m.name;
+                }
+            })
+            .catch(() => {});
+    }
 }
 
 // Track current hashes and manage ref counting/object URL cleanup
 const currentHashes = new Set<string>();
 let isComponentActive = true;
 
+// Queue prefetch on mount
+onMounted(() => {
+    if (props.hashes.length > 0) {
+        queuePrefetch(props.hashes);
+    }
+});
+
 watch(
     () => props.hashes,
     async (list) => {
+        const cache = getThumbCache();
         const next = new Set(list);
+
+        // Queue new hashes for bulk prefetch
+        const newHashes = list.filter((h) => !currentHashes.has(h));
+        if (newHashes.length > 0) {
+            queuePrefetch(newHashes);
+        }
+
         for (const h of next) {
             if (!currentHashes.has(h)) {
                 await ensure(h);

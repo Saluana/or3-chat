@@ -17,6 +17,7 @@ import {
     setGlobalMultiPaneApi,
 } from '~/utils/multiPaneApi';
 import { usePaneApps } from './usePaneApps';
+import { prefetchThreadThumbnails } from './useThumbnails';
 
 type PaneAppGetter = ReturnType<typeof usePaneApps>['getPaneApp'];
 
@@ -393,6 +394,10 @@ export function useMultiPane(
         }
         pane.threadId = requested;
         pane.messages = await loadMessagesFor(requested);
+
+        // Prefetch all thumbnails for the thread in bulk (non-blocking)
+        prefetchThreadThumbnails(pane.messages);
+
         if (oldId !== requested)
             void hooks.doAction('ui.pane.thread:action:changed', {
                 pane,
