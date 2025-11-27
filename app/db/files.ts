@@ -220,6 +220,28 @@ export async function getFileBlob(hash: string): Promise<Blob | undefined> {
     return row?.blob;
 }
 
+/**
+ * Get multiple blobs by hash in a single database transaction.
+ * Returns a Map of hash -> Blob for efficient lookup.
+ * Missing hashes are omitted from the result.
+ */
+export async function getFileBlobsBulk(
+    hashes: string[]
+): Promise<Map<string, Blob>> {
+    const unique = Array.from(new Set(hashes.filter(Boolean)));
+    if (!unique.length) return new Map();
+
+    const rows = await db.file_blobs.bulkGet(unique);
+    const result = new Map<string, Blob>();
+    for (let i = 0; i < unique.length; i++) {
+        const row = rows[i];
+        if (row?.blob) {
+            result.set(unique[i]!, row.blob);
+        }
+    }
+    return result;
+}
+
 /** Soft delete file (mark deleted flag only) */
 export async function softDeleteFile(hash: string): Promise<void> {
     const hooks = useHooks();
