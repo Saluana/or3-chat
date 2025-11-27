@@ -22,14 +22,9 @@ async function loadSpark(): Promise<SparkMd5Module> {
     return mod.default; // SparkMD5 constructor with ArrayBuffer helper
 }
 
-function isDev(): boolean {
-    const meta = import.meta as ImportMeta & { env: { DEV?: boolean } };
-    return Boolean(meta.env.DEV);
-}
-
 /** Compute MD5 hash (hex lowercase) for a Blob using chunked reads. */
 export async function computeFileHash(blob: Blob): Promise<string> {
-    const dev = isDev();
+    const dev = import.meta.dev;
     const hasPerf = typeof performance !== 'undefined';
     const markId =
         dev && hasPerf
@@ -43,13 +38,10 @@ export async function computeFileHash(blob: Blob): Promise<string> {
                 typeof crypto !== 'undefined' &&
                 typeof crypto.subtle !== 'undefined' &&
                 typeof crypto.subtle.digest === 'function';
-            if (
-                blob.size <= 4 * 1024 * 1024 &&
-                canUseSubtle
-            ) {
+            if (blob.size <= 4 * 1024 * 1024 && canUseSubtle) {
                 const buf = await blob.arrayBuffer();
-                // @ts-expect-error MD5 not in lib types; supported in some browsers
-                const digest = await crypto.subtle.digest('MD5', buf);
+                // MD5 not in lib types but supported in some browsers
+                const digest = await crypto.subtle.digest('MD5' as string, buf);
                 const hex = bufferToHex(new Uint8Array(digest));
                 if (markId && hasPerf)
                     finishMark(markId, blob.size, 'subtle', dev);

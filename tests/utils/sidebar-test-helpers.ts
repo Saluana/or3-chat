@@ -80,13 +80,11 @@ export function createMockPost(overrides: Partial<Post> = {}): Post {
 
 export function createMockPanePluginApi(): PanePluginApi {
     return {
-        sendMessage: vi
-            .fn()
-            .mockResolvedValue({
-                ok: true,
-                messageId: 'message-1',
-                threadId: 'thread-1',
-            }),
+        sendMessage: vi.fn().mockResolvedValue({
+            ok: true,
+            messageId: 'message-1',
+            threadId: 'thread-1',
+        }),
         updateDocumentContent: vi.fn().mockReturnValue({ ok: true }),
         patchDocumentContent: vi.fn().mockReturnValue({ ok: true }),
         setDocumentTitle: vi.fn().mockReturnValue({ ok: true }),
@@ -310,7 +308,10 @@ export function createFakePosts(
  */
 export function mountWithSidebar<T>(
     component: T,
-    options: Record<string, unknown> = {},
+    options: { global?: { stubs?: Record<string, boolean | object> } } & Record<
+        string,
+        unknown
+    > = {},
     sidebarEnvironment?: Partial<SidebarEnvironment>,
     sidebarControls?: Partial<
         SidebarPageControls & { __activationLog: string[] }
@@ -320,6 +321,9 @@ export function mountWithSidebar<T>(
         sidebarEnvironment,
         sidebarControls
     );
+
+    const existingStubs = options.global?.stubs ?? {};
+    const existingGlobal = options.global ?? {};
 
     return mount(component, {
         global: {
@@ -338,9 +342,9 @@ export function mountWithSidebar<T>(
                 UCard: true,
                 UInput: true,
                 UForm: true,
-                ...options.global?.stubs,
+                ...existingStubs,
             },
-            ...options.global,
+            ...existingGlobal,
         },
         ...options,
     });
@@ -350,7 +354,14 @@ export function mountWithSidebar<T>(
  * Creates a mock multi-pane API for testing pane interactions
  */
 export function createMockMultiPaneApi() {
-    const panes = ref([
+    const panes = ref<
+        Array<{
+            id: string;
+            mode: string;
+            threadId?: string;
+            documentId?: string;
+        }>
+    >([
         { id: 'pane-1', mode: 'chat', threadId: 'thread-1' },
         { id: 'pane-2', mode: 'doc', documentId: 'doc-1' },
     ]);

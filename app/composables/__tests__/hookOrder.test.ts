@@ -34,28 +34,28 @@ describe('Hook System - Execution Order', () => {
         // Register filters that transform a value and track execution
         engine.addFilter(
             'test.filter',
-            (value: number) => {
+            ((value: number) => {
                 operations.push('double');
                 return value * 2;
-            },
+            }) as (v: unknown) => unknown,
             10
         );
 
         engine.addFilter(
             'test.filter',
-            (value: number) => {
+            ((value: number) => {
                 operations.push('add-10');
                 return value + 10;
-            },
+            }) as (v: unknown) => unknown,
             20
         );
 
         engine.addFilter(
             'test.filter',
-            (value: number) => {
+            ((value: number) => {
                 operations.push('square');
                 return value * value;
-            },
+            }) as (v: unknown) => unknown,
             5
         );
 

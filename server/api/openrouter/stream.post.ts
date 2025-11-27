@@ -5,6 +5,9 @@
  * Pipes upstream SSE through to the client; the client parses with the shared parser.
  * Aborts upstream on client disconnect.
  *
+ * Note: Per design doc, we keep raw fetch for streaming because the SDK's chat.send()
+ * buffers the entire response. Streaming requires direct body access which SDK doesn't expose.
+ *
  * Reqs: 1 (env-or-client key), 2 (streaming + abort), 4 (no logging keys)
  */
 

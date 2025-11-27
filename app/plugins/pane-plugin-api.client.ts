@@ -8,6 +8,10 @@ import {
     setDocumentTitle,
     useDocumentState,
 } from '~/composables/documents/useDocumentsStore';
+import {
+    programmaticSend,
+    hasPane,
+} from '~/composables/chat/useChatInputBridge';
 import type { Ref } from 'vue';
 import type { PaneState } from '~/composables/core/useMultiPane';
 import { createPost, upsertPost, getPost, softDeletePost } from '~/db/posts';
@@ -311,9 +315,6 @@ function makeApi(): PanePluginApi {
             try {
                 // Simplest non-duplicating behavior: if role is user & stream requested, use ChatInput bridge instead of manual append.
                 if (role === 'user' && stream) {
-                    const { programmaticSend, hasPane } = await import(
-                        '~/composables/chat/useChatInputBridge'
-                    );
                     if (hasPane(p.id)) {
                         const okBridge = programmaticSend(p.id, text);
                         if (okBridge) {

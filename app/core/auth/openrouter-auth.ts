@@ -1,4 +1,6 @@
-import { err, reportError } from '~/utils/errors';
+import { err, reportError, type ErrorCode } from '~/utils/errors';
+import { createOpenRouterClient } from '~~/shared/openrouter/client';
+import { normalizeSDKError } from '~~/shared/openrouter/errors';
 
 export interface ExchangeResultSuccess {
     ok: true;
@@ -16,78 +18,84 @@ export interface ExchangeParams {
     code: string;
     verifier: string;
     codeMethod: string;
-    fetchImpl?: typeof fetch;
     attempt?: number;
+}
+
+/**
+ * Map SDK error codes to app-level ErrorCode for reporting.
+ * SDK errors that don't have a direct mapping use ERR_NETWORK as fallback.
+ *
+ * Note: SDK error codes are defined in shared/openrouter/errors.ts.
+ * Only codes that exist in both places (ErrorCode union and SDK normalizer)
+ * should be mapped directly. All others fall through to ERR_NETWORK.
+ */
+function mapToErrorCode(sdkCode: string): ErrorCode {
+    switch (sdkCode) {
+        case 'ERR_AUTH':
+            return 'ERR_AUTH';
+        case 'ERR_RATE_LIMIT':
+            return 'ERR_RATE_LIMIT';
+        case 'ERR_TIMEOUT':
+            return 'ERR_TIMEOUT';
+        case 'ERR_ABORTED':
+        case 'ERR_NETWORK':
+        default:
+            // Unknown SDK codes fallback to generic network error
+            return 'ERR_NETWORK';
+    }
 }
 
 export async function exchangeOpenRouterCode(
     p: ExchangeParams
 ): Promise<ExchangeResult> {
-    const fetchFn = p.fetchImpl || fetch;
-    let resp: Response;
+    // SDK OAuth doesn't require auth for exchange
+    const client = createOpenRouterClient({ apiKey: '' });
+
     try {
-        resp = await fetchFn('https://openrouter.ai/api/v1/auth/keys', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                code: p.code,
-                code_verifier: p.verifier,
-                code_challenge_method: p.codeMethod,
-            }),
+        const response = await client.oAuth.exchangeAuthCodeForAPIKey({
+            code: p.code,
+            codeVerifier: p.verifier,
+            codeChallengeMethod: p.codeMethod as 'S256' | 'plain',
         });
-    } catch (e) {
-        reportError(e, {
-            code: 'ERR_NETWORK',
-            tags: {
-                domain: 'auth',
-                stage: 'exchange',
-                attempt: p.attempt || 1,
-            },
-            toast: true,
-            retryable: true,
-        });
-        return { ok: false, status: 0, reason: 'network' };
-    }
-    interface AuthResponse {
-        key?: string;
-        access_token?: string;
-    }
-    let json: AuthResponse | null = null;
-    try {
-        json = (await resp.json()) as AuthResponse;
-    } catch {
-        /* ignore parse */
-    }
-    if (!resp.ok || !json) {
+
+        // SDK response contains { key: string }
+        const userKey = response.key;
+
+        if (!userKey) {
+            reportError(
+                err('ERR_AUTH', 'Auth exchange returned no key', {
+                    severity: 'error',
+                    tags: {
+                        domain: 'auth',
+                        stage: 'exchange',
+                    },
+                }),
+                { toast: true }
+            );
+            return { ok: false, status: 200, reason: 'no-key' };
+        }
+
+        return { ok: true, userKey, status: 200 };
+    } catch (error) {
+        const normalized = normalizeSDKError(error);
+
+        if (normalized.code === 'ERR_ABORTED') {
+            return { ok: false, status: 0, reason: 'network' };
+        }
+
         reportError(
-            err('ERR_NETWORK', 'Auth code exchange failed', {
+            err(mapToErrorCode(normalized.code), normalized.message, {
                 severity: 'error',
                 tags: {
                     domain: 'auth',
                     stage: 'exchange',
-                    status: resp.status,
                     attempt: p.attempt || 1,
                 },
-                retryable: true,
+                retryable: normalized.retryable,
             }),
             { toast: true }
         );
-        return { ok: false, status: resp.status, reason: 'bad-response' };
+
+        return { ok: false, status: normalized.status, reason: 'bad-response' };
     }
-    const userKey = json.key ?? json.access_token;
-    if (!userKey) {
-        reportError(
-            err('ERR_AUTH', 'Auth exchange returned no key', {
-                severity: 'error',
-                tags: {
-                    domain: 'auth',
-                    stage: 'exchange',
-                    keys: Object.keys(json).length,
-                },
-            }),
-            { toast: true }
-        );
-        return { ok: false, status: resp.status, reason: 'no-key' };
-    }
-    return { ok: true, userKey, status: resp.status };
 }

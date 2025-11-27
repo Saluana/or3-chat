@@ -142,7 +142,7 @@ export async function streamWorkspaceExport({
 }): Promise<void> {
     const writable = await fileHandle.createWritable();
     const writer: WorkspaceBackupWriter = {
-        write: (chunk) => writable.write(chunk),
+        write: (chunk) => writable.write(chunk as unknown as Blob),
         close: () => writable.close().catch(() => undefined),
     };
 
@@ -564,21 +564,18 @@ export async function importWorkspaceStream({
                         progress.completedRows += payload.length;
                         emitProgress(progress, onProgress);
                     } else {
+                        // For outbound tables (no inbound key), tuples have explicit keys.
+                        // However, we just extract values since they should contain the key property.
                         const tuples = entry.rows as Array<{
                             key: IndexableType;
                             value: Record<string, unknown>;
                         }>;
+                        const values = tuples.map((tuple) => tuple.value);
                         if (overwriteValues) {
-                            await table.bulkPut(
-                                tuples.map((tuple) => tuple.value),
-                                tuples.map((tuple) => tuple.key)
-                            );
+                            await table.bulkPut(values);
                         } else {
                             await handleConflict(currentTable, () =>
-                                table.bulkAdd(
-                                    tuples.map((tuple) => tuple.value),
-                                    tuples.map((tuple) => tuple.key)
-                                )
+                                table.bulkAdd(values)
                             );
                         }
                         progress.completedRows += tuples.length;

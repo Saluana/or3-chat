@@ -3,12 +3,17 @@ import { useToast, useAppConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
 import { create, db, tx, upsert, type Message } from '~/db';
 import { createOrRefFile } from '~/db/files';
-import { serializeFileHashes, MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
+import {
+    serializeFileHashes,
+    parseFileHashes,
+    MAX_MESSAGE_FILE_HASHES,
+} from '~/db/files-util';
 import {
     parseHashes,
     mergeAssistantFileHashes,
 } from '~/utils/files/attachments';
 import { getThreadSystemPrompt } from '~/db/threads';
+import { messagesByThread } from '~/db/messages';
 import { getPrompt } from '~/db/prompts';
 import type {
     ContentPart,
@@ -121,7 +126,11 @@ export function useChat(
             console.warn('Failed to load thread system prompt', e);
         }
         return activePromptContent.value
-            ? promptJsonToString(activePromptContent.value as Parameters<typeof promptJsonToString>[0])
+            ? promptJsonToString(
+                  activePromptContent.value as Parameters<
+                      typeof promptJsonToString
+                  >[0]
+              )
             : null;
     }
 
@@ -285,7 +294,9 @@ export function useChat(
             if (!effectivePromptId) {
                 try {
                     effectivePromptId = await getDefaultPromptId();
-                } catch { /* intentionally empty */ }
+                } catch {
+                    /* intentionally empty */
+                }
             }
             try {
                 const { settings } = useAiSettings();
@@ -303,7 +314,9 @@ export function useChat(
                         lastSelected = localStorage.getItem(
                             'last_selected_model'
                         );
-                } catch { /* intentionally empty */ }
+                } catch {
+                    /* intentionally empty */
+                }
                 const chosen = resolveDefaultModel(
                     {
                         defaultModelMode,
@@ -311,9 +324,7 @@ export function useChat(
                     },
                     {
                         isAvailable: (id: string) =>
-                            catalog.value.some(
-                                (m: ModelInfo) => m.id === id
-                            ),
+                            catalog.value.some((m: ModelInfo) => m.id === id),
                         lastSelectedModelId: () => lastSelected,
                         recommendedDefault: () => DEFAULT_AI_MODEL,
                     }
@@ -332,9 +343,13 @@ export function useChat(
                                 'Your fixed model was not used. Falling back to last selected or default.',
                             duration: 3500,
                         });
-                    } catch { /* intentionally empty */ }
+                    } catch {
+                        /* intentionally empty */
+                    }
                 }
-            } catch { /* intentionally empty */ }
+            } catch {
+                /* intentionally empty */
+            }
             const newThread = await create.thread({
                 title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
                 last_message_at: nowSec(),
@@ -346,10 +361,7 @@ export function useChat(
             try {
                 const mpApi = (globalThis as GlobalWithPaneApi)
                     .__or3MultiPaneApi;
-                if (
-                    mpApi?.panes.value &&
-                    mpApi.activePaneIndex.value >= 0
-                ) {
+                if (mpApi?.panes.value && mpApi.activePaneIndex.value >= 0) {
                     const pane = mpApi.panes.value[mpApi.activePaneIndex.value];
                     if (pane && pane.mode === 'chat' && !pane.threadId) {
                         if (typeof mpApi.setPaneThread === 'function') {
@@ -366,7 +378,9 @@ export function useChat(
                         }
                     }
                 }
-            } catch { /* intentionally empty */ }
+            } catch {
+                /* intentionally empty */
+            }
         } // END create-new-thread block
 
         if (
@@ -439,7 +453,10 @@ export function useChat(
                     if (blob) {
                         url = await new Promise<string>((resolve, reject) => {
                             const fr = new FileReader();
-                            fr.onerror = () => reject(fr.error ?? new Error('FileReader error'));
+                            fr.onerror = () =>
+                                reject(
+                                    fr.error ?? new Error('FileReader error')
+                                );
                             fr.onload = () => resolve(fr.result as string);
                             fr.readAsDataURL(blob);
                         });
@@ -453,7 +470,10 @@ export function useChat(
                         const blob = await resp.blob();
                         url = await new Promise<string>((resolve, reject) => {
                             const fr = new FileReader();
-                            fr.onerror = () => reject(fr.error ?? new Error('FileReader error'));
+                            fr.onerror = () =>
+                                reject(
+                                    fr.error ?? new Error('FileReader error')
+                                );
                             fr.onload = () => resolve(fr.result as string);
                             fr.readAsDataURL(blob);
                         });
@@ -484,7 +504,10 @@ export function useChat(
                     const dataUrl = await new Promise<string>(
                         (resolve, reject) => {
                             const fr = new FileReader();
-                            fr.onerror = () => reject(fr.error ?? new Error('FileReader error'));
+                            fr.onerror = () =>
+                                reject(
+                                    fr.error ?? new Error('FileReader error')
+                                );
                             fr.onload = () => resolve(fr.result as string);
                             fr.readAsDataURL(blob);
                         }
@@ -499,7 +522,8 @@ export function useChat(
                 if (!mime.startsWith('image/')) return null;
                 const dataUrl = await new Promise<string>((resolve, reject) => {
                     const fr = new FileReader();
-                    fr.onerror = () => reject(fr.error ?? new Error('FileReader error'));
+                    fr.onerror = () =>
+                        reject(fr.error ?? new Error('FileReader error'));
                     fr.onload = () => resolve(fr.result as string);
                     fr.readAsDataURL(blob);
                 });
@@ -517,10 +541,7 @@ export function useChat(
             thread_id: threadIdRef.value,
             role: 'user',
             data: { content: outgoing, attachments: files ?? [] },
-            file_hashes:
-                file_hashes.length
-                    ? file_hashes.join(',')
-                    : undefined,
+            file_hashes: file_hashes.length ? file_hashes.join(',') : undefined,
         });
         const parts: ContentPart[] = buildParts(
             outgoing,
@@ -600,9 +621,7 @@ export function useChat(
 
             // Remove prior empty assistant placeholder messages
             const sanitizedEffectiveMessages = (
-                Array.isArray(effectiveMessages)
-                    ? (effectiveMessages)
-                    : []
+                Array.isArray(effectiveMessages) ? effectiveMessages : []
             ).filter(shouldKeepAssistantMessage);
 
             const isModelMessage = (
@@ -653,9 +672,7 @@ export function useChat(
                 }
                 if (contextParts.length) {
                     const lastUserIdx = [...modelInputMessages]
-                        .map((m, idx: number) =>
-                            m.role === 'user' ? idx : -1
-                        )
+                        .map((m, idx: number) => (m.role === 'user' ? idx : -1))
                         .filter((idx) => idx >= 0)
                         .pop();
                     if (lastUserIdx != null && lastUserIdx >= 0) {
@@ -683,7 +700,10 @@ export function useChat(
                     debug: false,
                 }
             );
-            trimOrMessagesImages(orMessages as Parameters<typeof trimOrMessagesImages>[0], 5);
+            trimOrMessagesImages(
+                orMessages as Parameters<typeof trimOrMessagesImages>[0],
+                5
+            );
 
             const hasImageInput = modelInputMessages.some((m) =>
                 Array.isArray(m.content)
@@ -771,7 +791,9 @@ export function useChat(
                 const stream = openRouterStream({
                     apiKey: apiKey.value,
                     model: modelId,
-                    orMessages: orMessages as Parameters<typeof openRouterStream>[0]['orMessages'],
+                    orMessages: orMessages as Parameters<
+                        typeof openRouterStream
+                    >[0]['orMessages'],
                     modalities,
                     tools:
                         enabledToolDefs.length > 0
@@ -850,7 +872,9 @@ export function useChat(
                                             current.reasoning_text?.length || 0,
                                     }
                                 );
-                            } catch { /* intentionally empty */ }
+                            } catch {
+                                /* intentionally empty */
+                            }
                         } else if (ev.type === 'text') {
                             if (current.pending) current.pending = false;
                             const delta = ev.text;
@@ -864,8 +888,7 @@ export function useChat(
                                     streamId: newStreamId,
                                     deltaLength: delta.length,
                                     totalLength:
-                                        current.text.length +
-                                        delta.length,
+                                        current.text.length + delta.length,
                                     chunkIndex: chunkIndex++,
                                 }
                             );
@@ -886,7 +909,9 @@ export function useChat(
                                     try {
                                         const r = await fetch(ev.url);
                                         if (r.ok) blob = await r.blob();
-                                    } catch { /* intentionally empty */ }
+                                    } catch {
+                                        /* intentionally empty */
+                                    }
                                 }
                                 if (blob) {
                                     try {
@@ -903,7 +928,9 @@ export function useChat(
                                             });
                                         current.file_hashes =
                                             serialized?.split(',') ?? [];
-                                    } catch { /* intentionally empty */ }
+                                    } catch {
+                                        /* intentionally empty */
+                                    }
                                 }
                             }
                         }
@@ -1043,11 +1070,11 @@ export function useChat(
             const fullText = current.text;
             const hookName = 'ui.chat.message:filter:incoming';
             const errorsBefore = hooks._diagnostics.errors[hookName] ?? 0;
-            const incoming = (await hooks.applyFilters(
+            const incoming = await hooks.applyFilters(
                 hookName,
                 fullText,
                 threadIdRef.value
-            ));
+            );
             const errorsAfter = hooks._diagnostics.errors[hookName] ?? 0;
             if (errorsAfter > errorsBefore) {
                 throw new Error('Incoming filter threw an exception');
@@ -1069,7 +1096,7 @@ export function useChat(
                 threadId: threadIdRef.value,
                 assistantId: assistantDbMsg.id,
                 streamId: newStreamId,
-                totalLength: (incoming).length,
+                totalLength: incoming.length,
                 reasoningLength: (current.reasoning_text || '').length,
                 fileHashes: finalized.file_hashes || null,
             });
@@ -1082,21 +1109,23 @@ export function useChat(
                         message: {
                             id: finalized.id,
                             threadId: threadIdRef.value,
-                            length: (incoming).length,
+                            length: incoming.length,
                             fileHashes: finalized.file_hashes || null,
                             reasoningLength: (current.reasoning_text || '')
                                 .length,
                         },
                     });
                 }
-            } catch { /* intentionally empty */ }
+            } catch {
+                /* intentionally empty */
+            }
             const endedAt = Date.now();
             await hooks.doAction('ai.chat.send:action:after', {
                 threadId: threadIdRef.value,
                 request: { modelId, userId: userDbMsg.id },
                 response: {
                     assistantId: assistantDbMsg.id,
-                    length: (incoming).length,
+                    length: incoming.length,
                 },
                 timings: {
                     startedAt,
@@ -1142,7 +1171,9 @@ export function useChat(
                     .reverse()
                     .find((m) => m.role === 'user');
                 const retryFn = lastUser
-                    ? () => { void retryMessage(lastUser.id); }
+                    ? () => {
+                          void retryMessage(lastUser.id);
+                      }
                     : undefined;
                 // Inline tag object (Req 18.1) for clarity & tree-shaking
                 reportError(err, {
@@ -1173,7 +1204,9 @@ export function useChat(
                             (m) => m.id === tailAssistant.value!.id
                         );
                         if (idx >= 0) rawMessages.value.splice(idx, 1);
-                    } catch { /* intentionally empty */ }
+                    } catch {
+                        /* intentionally empty */
+                    }
                     tailAssistant.value = null;
                 } else if (tailAssistant.value?.pending) {
                     tailAssistant.value.pending = false;
@@ -1266,13 +1299,11 @@ export function useChat(
                     : '';
             let hashes: string[] = [];
             if (userMsg.file_hashes) {
-                const { parseFileHashes } = await import('~/db/files-util');
                 hashes = parseFileHashes(userMsg.file_hashes);
             }
 
             // CRITICAL: Before deleting, ensure in-memory state matches DB state
             // This handles edge cases where messages exist in DB but not in memory
-            const { messagesByThread } = await import('~/db/messages');
             const dbMessages =
                 ((await messagesByThread(threadIdRef.value)) as
                     | StoredMessage[]
@@ -1335,13 +1366,22 @@ export function useChat(
                 const uiMessages = dbMessages.filter((m) => m.role !== 'tool');
                 messages.value = uiMessages.map((m) =>
                     ensureUiMessage({
-                        role: m.role as 'user' | 'assistant' | 'system' | 'tool',
+                        role: m.role as
+                            | 'user'
+                            | 'assistant'
+                            | 'system'
+                            | 'tool',
                         content: toContent(m),
                         id: m.id,
                         stream_id: m.stream_id ?? undefined,
                         file_hashes: m.file_hashes ?? undefined,
                         reasoning_text: toReasoning(m),
-                        data: m.data ? { ...m.data, tool_calls: m.data.tool_calls ?? undefined } : m.data,
+                        data: m.data
+                            ? {
+                                  ...m.data,
+                                  tool_calls: m.data.tool_calls ?? undefined,
+                              }
+                            : m.data,
                         index:
                             typeof m.index === 'number'
                                 ? m.index
@@ -1442,9 +1482,7 @@ export function useChat(
         if (raw) {
             if (Array.isArray(raw.content)) {
                 raw.content = raw.content.map((p) =>
-                    p.type === 'text'
-                        ? { ...p, text }
-                        : p
+                    p.type === 'text' ? { ...p, text } : p
                 );
             } else {
                 raw.content = text;
@@ -1488,12 +1526,16 @@ export function useChat(
             aborted.value = true;
             try {
                 abortController.value.abort();
-            } catch { /* intentionally empty */ }
+            } catch {
+                /* intentionally empty */
+            }
             streamAcc.finalize({ aborted: true });
             if (tailAssistant.value?.pending)
                 tailAssistant.value.pending = false;
             try {
-                const appConfig = useAppConfig() as { errors?: { showAbortInfo?: boolean } };
+                const appConfig = useAppConfig() as {
+                    errors?: { showAbortInfo?: boolean };
+                };
                 const showAbort =
                     typeof appConfig.errors === 'object' &&
                     appConfig.errors.showAbortInfo === true;
@@ -1509,7 +1551,9 @@ export function useChat(
                     }),
                     { code: 'ERR_STREAM_ABORTED', toast: showAbort }
                 );
-            } catch { /* intentionally empty */ }
+            } catch {
+                /* intentionally empty */
+            }
         },
         clear,
     };

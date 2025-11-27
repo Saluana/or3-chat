@@ -1,43 +1,19 @@
 // ModelsService: Fetch OpenRouter models, cache, and provide simple filters
-// Source: https://openrouter.ai/api/v1/models
+// Uses OpenRouter SDK for API calls
 // Usage: import { modelsService } from "~/utils/models-service";
 
-export interface OpenRouterModel {
-    id: string; // e.g. "deepseek/deepseek-r1-0528:free"
-    name: string;
-    description?: string;
-    created?: number;
-    architecture?: {
-        input_modalities?: string[];
-        output_modalities?: string[];
-        tokenizer?: string;
-        instruct_type?: string;
-    };
-    top_provider?: {
-        is_moderated?: boolean;
-        context_length?: number;
-        max_completion_tokens?: number;
-    };
-    pricing?: {
-        prompt?: string; // USD per input token (stringified number)
-        completion?: string; // USD per output token
-        image?: string;
-        request?: string;
-        web_search?: string;
-        internal_reasoning?: string;
-        input_cache_read?: string;
-        input_cache_write?: string;
-    };
-    canonical_slug?: string;
-    context_length?: number;
-    hugging_face_id?: string;
-    per_request_limits?: Record<string, unknown>;
-    supported_parameters?: string[]; // e.g. ["temperature","top_p","reasoning"]
-}
+import {
+    createOpenRouterClient,
+    getRequestOptions,
+} from '~~/shared/openrouter/client';
+import { normalizeSDKError } from '~~/shared/openrouter/errors';
+import {
+    sdkModelToLocal,
+    type OpenRouterModel,
+} from '~~/shared/openrouter/types';
 
-interface ModelsResponse {
-    data: OpenRouterModel[];
-}
+// Re-export the type from shared location for consumers
+export type { OpenRouterModel } from '~~/shared/openrouter/types';
 
 export interface ModelCatalogCache {
     data: OpenRouterModel[];
@@ -100,24 +76,27 @@ export async function fetchModels(opts?: {
         }
     }
 
-    const url = 'https://openrouter.ai/api/v1/models';
     const key = readApiKey();
-    const headers: Record<string, string> = {};
-    if (key) headers['Authorization'] = `Bearer ${key}`;
+    const client = createOpenRouterClient({ apiKey: key ?? '' });
 
-    const res = await fetch(url, { headers });
-    if (!res.ok) {
-        // Fallback to any cache on failure
+    try {
+        const response = await client.models.list({}, getRequestOptions());
+        // SDK returns ModelsListResponse with .data array
+        const sdkModels = response.data;
+
+        // Map SDK model type to our OpenRouterModel interface
+        const models: OpenRouterModel[] = sdkModels.map(sdkModelToLocal);
+
+        saveCache(models);
+        return models;
+    } catch (error) {
+        // Fallback to cache on any error
         const cached = loadCache();
         if (cached?.data.length) return cached.data;
-        throw new Error(
-            `Failed to fetch models: ${res.status} ${res.statusText}`
-        );
+
+        const normalized = normalizeSDKError(error);
+        throw new Error(`Failed to fetch models: ${normalized.message}`);
     }
-    const json = (await res.json()) as ModelsResponse;
-    const list = Array.isArray(json.data) ? json.data : [];
-    saveCache(list);
-    return list;
 }
 
 // Filters

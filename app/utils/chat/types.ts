@@ -79,4 +79,4 @@ export type ToolChoice =
       };
 
 // Re-export from shared location (single source of truth)
-export type { ORStreamEvent } from '../../../shared/openrouter/parseOpenRouterSSE';
+export type { ORStreamEvent } from '~~/shared/openrouter/parseOpenRouterSSE';

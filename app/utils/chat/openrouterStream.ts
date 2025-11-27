@@ -2,7 +2,11 @@ import type { ToolDefinition } from './types';
 import {
     parseOpenRouterSSE,
     type ORStreamEvent,
-} from '../../../shared/openrouter/parseOpenRouterSSE';
+} from '~~/shared/openrouter/parseOpenRouterSSE';
+
+// Note: Streaming requires direct body access which the SDK doesn't expose.
+// Per design document, we keep raw fetch for streaming but use SDK for non-streaming calls.
+// The SDK's chat.send() method buffers the entire response, which breaks streaming.
 
 type ORMessagePart = { type: string; [key: string]: unknown };
 
@@ -93,7 +97,6 @@ function setServerRouteAvailable(available: boolean): void {
 }
 
 function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
-     
     const { ui: _ui, ...rest } = tool as ToolDefinition & {
         ui?: Record<string, unknown>;
     };
@@ -217,9 +220,9 @@ export async function* openRouterStream(params: {
         });
 
         throw new Error(
-            `OpenRouter request failed ${resp.status} ${resp.statusText}: ${
-                respText.slice(0, 300)
-            }`
+            `OpenRouter request failed ${resp.status} ${
+                resp.statusText
+            }: ${respText.slice(0, 300)}`
         );
     }
 

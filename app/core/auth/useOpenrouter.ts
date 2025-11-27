@@ -31,7 +31,8 @@ export function useOpenRouterAuth() {
         let codeChallenge = codeVerifier;
         let codeChallengeMethod: 'S256' | 'plain' = 'plain';
         try {
-            const subtle = typeof crypto !== 'undefined' ? crypto.subtle : undefined;
+            const subtle =
+                typeof crypto !== 'undefined' ? crypto.subtle : undefined;
             if (subtle && typeof subtle.digest === 'function') {
                 const challengeBuffer = await sha256(codeVerifier);
                 codeChallenge = base64urlencode(challengeBuffer);
@@ -48,6 +49,11 @@ export function useOpenRouterAuth() {
                 'openrouter_code_method',
                 codeChallengeMethod
             );
+            // Store the verifier so the callback can exchange it for a key
+            sessionStorage.setItem('openrouter_code_verifier', codeVerifier);
+            // Also store in localStorage as fallback for page reloads
+            localStorage.setItem('openrouter_code_verifier', codeVerifier);
+            localStorage.setItem('openrouter_code_method', codeChallengeMethod);
         } catch {
             // sessionStorage may fail in private browsing - continue anyway
         }
@@ -56,6 +62,7 @@ export function useOpenRouterAuth() {
             .map((b) => ('0' + b.toString(16)).slice(-2))
             .join('');
         sessionStorage.setItem('openrouter_state', state);
+        localStorage.setItem('openrouter_state', state);
 
         const rc = useRuntimeConfig();
         // default callback to current origin + known path when not provided
@@ -77,7 +84,9 @@ export function useOpenRouterAuth() {
         if (clientId) params.append('client_id', String(clientId));
 
         const authUrlConfig = rc.public.openRouterAuthUrl;
-        const authUrl = (typeof authUrlConfig === 'string' && authUrlConfig) || 'https://openrouter.ai/auth';
+        const authUrl =
+            (typeof authUrlConfig === 'string' && authUrlConfig) ||
+            'https://openrouter.ai/auth';
         const url = `${authUrl}?${params.toString()}`;
 
         // Warn if callback URL is not HTTPS or localhost (common iOS issue)
@@ -97,7 +106,6 @@ export function useOpenRouterAuth() {
 
         // Debug (dev only): final URL for parameter inspection
         if (import.meta.dev) {
-             
             console.debug('OpenRouter PKCE redirect URL:', url);
         }
 

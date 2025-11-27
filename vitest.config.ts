@@ -15,6 +15,8 @@ export default defineConfig({
         alias: {
             '#imports': path.resolve(__dirname, 'tests/stubs/nuxt-imports.ts'),
             '~': path.resolve(__dirname, 'app'),
+            '~~': path.resolve(__dirname),
+            '~~/': path.resolve(__dirname) + '/',
             '#app': path.resolve(__dirname, 'tests/stubs/nuxt-app.ts'),
         },
     },

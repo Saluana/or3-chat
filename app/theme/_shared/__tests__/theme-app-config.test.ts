@@ -14,7 +14,13 @@ describe('theme manifest app config integration', () => {
 
         if (!blankEntry) return;
 
-        const config = await loadThemeAppConfig(blankEntry);
+        const config = (await loadThemeAppConfig(blankEntry)) as {
+            ui?: {
+                button?: {
+                    variants?: { size?: Record<string, { base?: string }> };
+                };
+            };
+        } | null;
         expect(config).toBeTruthy();
         expect(
             config?.ui?.button?.variants?.size?.['sb-square']?.base
