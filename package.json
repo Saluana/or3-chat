@@ -23,6 +23,8 @@
     "dependencies": {
         "@nuxt/ui": "^3.3.2",
         "@openrouter/sdk": "^0.1.27",
+        "@or3/workflow-core": "link:@or3/workflow-core",
+        "@or3/workflow-vue": "link:@or3/workflow-vue",
         "@orama/orama": "^3.1.11",
         "@tiptap/core": "^3.8.0",
         "@tiptap/extension-mention": "^3.8.0",

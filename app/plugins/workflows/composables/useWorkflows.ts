@@ -1,0 +1,245 @@
+import {
+    WorkflowEditor,
+    StarterKit,
+    type WorkflowData,
+} from '@or3/workflow-core';
+
+import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
+
+const POST_TYPE = 'workflow-entry';
+const SOURCE = 'workflows-plugin';
+
+// Type for workflow posts with parsed meta
+export interface WorkflowPost {
+    id: string;
+    title: string;
+    content: string;
+    postType: typeof POST_TYPE;
+    meta: WorkflowData | null;
+    created_at: number;
+    updated_at: number;
+}
+
+/**
+ * Check if a post is a workflow post
+ */
+export function isWorkflowPost(post: unknown): post is WorkflowPost {
+    return (
+        typeof post === 'object' &&
+        post !== null &&
+        'postType' in post &&
+        (post as { postType: string }).postType === POST_TYPE
+    );
+}
+
+/**
+ * Composable for workflow CRUD operations.
+ * Must be called in component setup to capture the posts API.
+ */
+export function useWorkflowsCrud(postApi: PanePluginApi['posts'] | null) {
+    /**
+     * Create a new workflow
+     */
+    async function createWorkflow(
+        title: string,
+        data?: WorkflowData
+    ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+        if (!postApi) {
+            return { ok: false, error: 'Posts API not available' };
+        }
+
+        try {
+            const result = await postApi.create({
+                postType: POST_TYPE,
+                title,
+                content: '',
+                meta: data ?? null,
+                source: SOURCE,
+            });
+
+            if (!result.ok) {
+                return { ok: false, error: result.message };
+            }
+
+            return { ok: true, id: result.id };
+        } catch (e) {
+            return {
+                ok: false,
+                error: e instanceof Error ? e.message : 'Unknown error',
+            };
+        }
+    }
+
+    /**
+     * Get a workflow by ID
+     */
+    async function getWorkflow(
+        id: string
+    ): Promise<
+        { ok: true; workflow: WorkflowPost } | { ok: false; error: string }
+    > {
+        if (!postApi) {
+            return { ok: false, error: 'Posts API not available' };
+        }
+
+        try {
+            const result = await postApi.get({ id });
+
+            if (!result.ok) {
+                return { ok: false, error: result.message };
+            }
+
+            const post = result.post;
+            return {
+                ok: true,
+                workflow: {
+                    id: post.id,
+                    title: post.title,
+                    content: post.content,
+                    postType: POST_TYPE,
+                    meta: post.meta as WorkflowData | null,
+                    created_at: post.created_at,
+                    updated_at: post.updated_at,
+                },
+            };
+        } catch (e) {
+            return {
+                ok: false,
+                error: e instanceof Error ? e.message : 'Unknown error',
+            };
+        }
+    }
+
+    /**
+     * Update a workflow's data
+     */
+    async function updateWorkflow(
+        id: string,
+        patch: {
+            title?: string;
+            data?: WorkflowData;
+        }
+    ): Promise<{ ok: true } | { ok: false; error: string }> {
+        if (!postApi) {
+            return { ok: false, error: 'Posts API not available' };
+        }
+
+        try {
+            const result = await postApi.update({
+                id,
+                patch: {
+                    ...(patch.title !== undefined && { title: patch.title }),
+                    ...(patch.data !== undefined && { meta: patch.data }),
+                },
+                source: SOURCE,
+            });
+
+            if (!result.ok) {
+                return { ok: false, error: result.message };
+            }
+
+            return { ok: true };
+        } catch (e) {
+            return {
+                ok: false,
+                error: e instanceof Error ? e.message : 'Unknown error',
+            };
+        }
+    }
+
+    /**
+     * Delete a workflow (soft delete)
+     */
+    async function deleteWorkflow(
+        id: string
+    ): Promise<{ ok: true } | { ok: false; error: string }> {
+        if (!postApi) {
+            return { ok: false, error: 'Posts API not available' };
+        }
+
+        try {
+            const result = await postApi.delete({
+                id,
+                source: SOURCE,
+            });
+
+            if (!result.ok) {
+                return { ok: false, error: result.message };
+            }
+
+            return { ok: true };
+        } catch (e) {
+            return {
+                ok: false,
+                error: e instanceof Error ? e.message : 'Unknown error',
+            };
+        }
+    }
+
+    /**
+     * List all workflows
+     */
+    async function listWorkflows(
+        limit?: number
+    ): Promise<
+        { ok: true; workflows: WorkflowPost[] } | { ok: false; error: string }
+    > {
+        if (!postApi) {
+            return { ok: false, error: 'Posts API not available' };
+        }
+
+        try {
+            const result = await postApi.listByType({
+                postType: POST_TYPE,
+                limit,
+            });
+
+            if (!result.ok) {
+                return { ok: false, error: result.message };
+            }
+
+            const workflows: WorkflowPost[] = result.posts.map((post) => ({
+                id: post.id,
+                title: post.title,
+                content: post.content,
+                postType: POST_TYPE,
+                meta: post.meta as WorkflowData | null,
+                created_at: post.created_at,
+                updated_at: post.updated_at,
+            }));
+
+            return { ok: true, workflows };
+        } catch (e) {
+            return {
+                ok: false,
+                error: e instanceof Error ? e.message : 'Unknown error',
+            };
+        }
+    }
+
+    return {
+        createWorkflow,
+        getWorkflow,
+        updateWorkflow,
+        deleteWorkflow,
+        listWorkflows,
+    };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Workflow Editor Instance
+// ─────────────────────────────────────────────────────────────
+
+// Customize which extensions to include
+export const workflowEditor = new WorkflowEditor({
+    extensions: StarterKit.configure({
+        // Disable specific nodes
+        tool: false,
+        memory: false,
+
+        // Configure specific nodes
+        agent: {
+            defaultModel: 'anthropic/claude-3.5-sonnet',
+        },
+    }),
+});
