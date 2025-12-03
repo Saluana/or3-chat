@@ -1,149 +1,181 @@
 <script setup lang="ts">
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
+import { WorkflowCanvas, Controls } from '@or3/workflow-vue';
+import type { WorkflowData } from '@or3/workflow-core';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
-import { workflowEditor } from '../composables/useWorkflows';
 import {
-    WorkflowCanvas,
-    EdgeLabelEditor,
-    ValidationOverlay,
-    type Edge,
-} from '@or3/workflow-vue';
+    getEditorForPane,
+    destroyEditorForPane,
+    useWorkflowsCrud,
+} from '../composables/useWorkflows';
 
+// Empty workflow template
+const EMPTY_WORKFLOW: WorkflowData = {
+    meta: { version: '2.0.0', name: 'Untitled' },
+    nodes: [
+        {
+            id: 'start',
+            type: 'start',
+            position: { x: 250, y: 100 },
+            data: { label: 'Start' },
+        },
+    ],
+    edges: [],
+};
+
+// Standard pane app props
 const props = defineProps<{
     paneId: string;
     recordId?: string | null;
-    postApi?: PanePluginApi['posts'] | null;
-    nodeStatuses?: Record<string, 'idle' | 'active' | 'completed' | 'error'>;
-    showLeftSidebar?: boolean;
-    isMobile?: boolean;
-    selectedEdge?: Edge | null;
-    showEdgeEditor?: boolean;
+    postType: string;
+    postApi: PanePluginApi['posts'];
 }>();
 
-const emit = defineEmits<{
-    (e: 'expand-sidebar'): void;
-    (e: 'node-click', node: any): void;
-    (e: 'edge-click', edge: Edge): void;
-    (e: 'pane-click'): void;
-    (e: 'update-edge-label', edgeId: string, label: string): void;
-    (e: 'delete-edge', edgeId: string): void;
-    (e: 'close-edge-editor'): void;
-}>();
+// Get or create editor for this specific pane
+const editor = computed(() => getEditorForPane(props.paneId));
+
+// Initialize CRUD operations
+const { getWorkflow, updateWorkflow } = useWorkflowsCrud(props.postApi);
+
+// State
+const loading = ref(false);
+const error = ref<string | null>(null);
+const hasLoaded = ref(false);
+
+// Debounced auto-save
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function debouncedSave() {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+        void saveWorkflow();
+    }, 1000);
+}
+
+// Load workflow from database
+async function loadWorkflow() {
+    if (!props.recordId) {
+        // No record - start with empty workflow
+        editor.value.load(EMPTY_WORKFLOW);
+        hasLoaded.value = true;
+        return;
+    }
+
+    loading.value = true;
+    error.value = null;
+
+    const result = await getWorkflow(props.recordId);
+    if (result.ok) {
+        const workflowData = result.workflow.meta;
+        if (workflowData) {
+            editor.value.load(workflowData);
+        } else {
+            // Empty workflow in DB - create default
+            editor.value.load(EMPTY_WORKFLOW);
+        }
+        hasLoaded.value = true;
+    } else {
+        error.value = result.error;
+    }
+
+    loading.value = false;
+}
+
+// Save workflow to database
+async function saveWorkflow() {
+    if (!props.recordId || !hasLoaded.value) return;
+
+    const data = editor.value.getJSON();
+    const result = await updateWorkflow(props.recordId, { data });
+    if (!result.ok) {
+        console.error('[WorkflowPane] Failed to save:', result.error);
+    }
+}
+
+// Subscribe to editor changes for auto-save
+function setupChangeListener() {
+    // The editor emits 'update' event when nodes/edges change
+    const unsubscribe = editor.value.on('update', () => {
+        if (hasLoaded.value) {
+            debouncedSave();
+        }
+    });
+    return unsubscribe;
+}
+
+// Watch for recordId changes (switching workflows in same pane)
+watch(
+    () => props.recordId,
+    () => {
+        hasLoaded.value = false;
+        void loadWorkflow();
+    }
+);
+
+// Lifecycle
+onMounted(() => {
+    void loadWorkflow();
+    setupChangeListener();
+});
+
+onUnmounted(() => {
+    // Save any pending changes
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
+        void saveWorkflow();
+    }
+    // Destroy the editor instance for this pane
+    destroyEditorForPane(props.paneId);
+});
 </script>
 
 <template>
-    <div class="canvas-container">
-        <div
-            v-if="!showLeftSidebar"
-            class="canvas-actions"
-            :class="{ 'is-mobile': isMobile }"
-        >
-            <button
-                class="sidebar-expand-btn"
-                @click="emit('expand-sidebar')"
-                title="Expand sidebar"
-            >
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    class="icon"
-                >
-                    <polyline points="13 17 18 12 13 7"></polyline>
-                    <polyline points="6 17 11 12 6 7"></polyline>
-                </svg>
-            </button>
+    <div class="workflow-app">
+        <!-- Loading state -->
+        <div v-if="loading" class="loading-overlay">
+            <UIcon name="tabler:loader-2" class="animate-spin text-2xl" />
+            <span>Loading workflow...</span>
         </div>
+
+        <!-- Error state -->
+        <div v-else-if="error" class="error-overlay">
+            <UIcon name="tabler:alert-circle" class="text-2xl text-red-500" />
+            <span>{{ error }}</span>
+            <UButton size="sm" @click="loadWorkflow">Retry</UButton>
+        </div>
+
+        <!-- Workflow canvas -->
         <WorkflowCanvas
-            v-if="workflowEditor"
-            :editor="workflowEditor"
-            :node-statuses="nodeStatuses"
-            @node-click="emit('node-click', $event)"
-            @edge-click="emit('edge-click', $event)"
-            @pane-click="emit('pane-click')"
-        />
-        <ValidationOverlay
-            v-if="workflowEditor"
-            class="canvas-overlay"
-            :editor="workflowEditor"
+            v-else
+            :editor="editor"
+            @node-click="() => {}"
+            @edge-click="() => {}"
+            @pane-click="() => {}"
         />
 
-        <!-- Edge Label Editor -->
-        <EdgeLabelEditor
-            :edge="selectedEdge ?? null"
-            :show="showEdgeEditor ?? false"
-            @close="emit('close-edge-editor')"
-            @update="(edgeId: string, label: string) => emit('update-edge-label', edgeId, label)"
-            @delete="(edgeId: string) => emit('delete-edge', edgeId)"
-        />
+        <!-- Controls -->
+        <Controls v-if="!loading && !error" />
     </div>
 </template>
 
 <style scoped>
-.canvas-container {
-    flex: 1;
+.workflow-app {
+    width: 100%;
+    height: 100%;
+    min-height: 500px;
     position: relative;
-    overflow: hidden;
 }
 
-.canvas-overlay {
+.loading-overlay,
+.error-overlay {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    z-index: 10;
-}
-
-.canvas-actions {
-    position: absolute;
-    top: 12px;
-    left: 12px;
+    inset: 0;
     display: flex;
-    align-items: center;
-    gap: 8px;
-    z-index: 12;
-}
-
-.canvas-actions.is-mobile {
-    top: 16px;
-    left: 16px;
-}
-
-.sidebar-expand-btn {
-    display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
-    padding: 0;
-    background: var(--or3-color-surface-card, #f5f5f7);
-    border: 1px solid var(--or3-color-border, rgba(17, 24, 39, 0.1));
-    border-radius: var(--or3-radius-sm, 8px);
-    color: var(--or3-color-text-primary, #0f172a);
-    cursor: pointer;
-    transition: all var(--or3-transition-fast, 120ms);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-
-.sidebar-expand-btn:hover {
-    background: var(--or3-color-bg-elevated, #ffffff);
-    color: var(--or3-color-accent, #8b5cf6);
-    border-color: var(--or3-color-accent, #8b5cf6);
-    box-shadow: 0 10px 30px rgba(139, 92, 246, 0.25);
-}
-
-.sidebar-expand-btn .icon {
-    width: 16px;
-    height: 16px;
-}
-
-@media (max-width: 768px) {
-    .canvas-container {
-        position: fixed;
-        top: 56px;
-        left: 0;
-        right: 0;
-        bottom: calc(72px + env(safe-area-inset-bottom, 0));
-        padding-bottom: env(safe-area-inset-bottom, 0);
-    }
+    gap: 1rem;
+    background: var(--or3-color-bg-primary, var(--md-surface));
+    color: var(--or3-color-text-secondary, var(--md-on-surface-variant));
 }
 </style>

@@ -9,6 +9,88 @@ import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 const POST_TYPE = 'workflow-entry';
 const SOURCE = 'workflows-plugin';
 
+// ─────────────────────────────────────────────────────────────
+// Per-Pane Workflow Editor Management
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Map of pane IDs to their workflow editor instances.
+ * Each pane gets its own isolated editor state.
+ */
+const editorInstances = new Map<string, WorkflowEditor>();
+
+// Debug logging in development
+if (import.meta.dev) {
+    (globalThis as any).__workflowEditorInstances = editorInstances;
+}
+
+/**
+ * Empty workflow template
+ */
+const EMPTY_WORKFLOW: WorkflowData = {
+    meta: { version: '2.0.0', name: 'Untitled' },
+    nodes: [
+        {
+            id: 'start',
+            type: 'start',
+            position: { x: 250, y: 100 },
+            data: { label: 'Start' },
+        },
+    ],
+    edges: [],
+};
+
+/**
+ * Create default editor options for new instances
+ */
+function createDefaultEditorOptions() {
+    return {
+        extensions: StarterKit.configure({
+            // Disable specific nodes
+            tool: false,
+            memory: false,
+
+            // Configure specific nodes
+            agent: {
+                defaultModel: 'anthropic/claude-3.5-sonnet',
+            },
+        }),
+    };
+}
+
+/**
+ * Get or create a workflow editor for a specific pane.
+ * Each pane ID gets its own isolated editor instance.
+ */
+export function getEditorForPane(paneId: string): WorkflowEditor {
+    let editor = editorInstances.get(paneId);
+    if (!editor) {
+        editor = new WorkflowEditor(createDefaultEditorOptions());
+        editorInstances.set(paneId, editor);
+    }
+    return editor;
+}
+
+/**
+ * Destroy a workflow editor instance when pane is closed.
+ * Call this when a workflow pane is unmounted.
+ */
+export function destroyEditorForPane(paneId: string): void {
+    const editor = editorInstances.get(paneId);
+    if (editor) {
+        // Reset the editor to empty state before removing
+        editor.load(EMPTY_WORKFLOW);
+        editorInstances.delete(paneId);
+    }
+}
+
+/**
+ * Get all active editor instances (for debugging/inspection)
+ */
+export function getActiveEditorCount(): number {
+    return editorInstances.size;
+}
+
 // Type for workflow posts with parsed meta
 export interface WorkflowPost {
     id: string;
@@ -225,21 +307,3 @@ export function useWorkflowsCrud(postApi: PanePluginApi['posts'] | null) {
         listWorkflows,
     };
 }
-
-// ─────────────────────────────────────────────────────────────
-// Workflow Editor Instance
-// ─────────────────────────────────────────────────────────────
-
-// Customize which extensions to include
-export const workflowEditor = new WorkflowEditor({
-    extensions: StarterKit.configure({
-        // Disable specific nodes
-        tool: false,
-        memory: false,
-
-        // Configure specific nodes
-        agent: {
-            defaultModel: 'anthropic/claude-3.5-sonnet',
-        },
-    }),
-});

@@ -7,7 +7,7 @@ import {
     useSidebarPostsApi,
 } from '~/composables/sidebar/useSidebarEnvironment';
 import {
-    workflowEditor,
+    getEditorForPane,
     useWorkflowsCrud,
     type WorkflowPost,
 } from '../composables/useWorkflows';
@@ -27,6 +27,29 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 const newWorkflowName = ref('');
 const isCreating = ref(false);
+const isDev = import.meta.dev;
+
+// Get the active workflow pane's editor (if any)
+const activeWorkflowEditor = computed<WorkflowEditor | null>(() => {
+    const panes = multiPane.panes.value;
+    const activePaneId = multiPane.activePaneId.value;
+
+    // Find the active pane
+    const activePane = panes.find((p) => p.id === activePaneId);
+
+    // Check if it's a workflow pane
+    if (activePane?.mode === 'or3-workflows') {
+        return getEditorForPane(activePane.id);
+    }
+
+    // Otherwise find any workflow pane
+    const workflowPane = panes.find((p) => p.mode === 'or3-workflows');
+    if (workflowPane) {
+        return getEditorForPane(workflowPane.id);
+    }
+
+    return null;
+});
 
 const items: TabsItem[] = [
     { label: 'Workflows', value: 'workflows' },
@@ -183,7 +206,10 @@ onMounted(() => {
             </div>
 
             <!-- Workflow list -->
-            <div v-else class="flex flex-col gap-2 overflow-y-auto flex-1">
+            <div
+                v-else
+                class="flex flex-col gap-2 overflow-y-auto px-0.5 flex-1"
+            >
                 <div
                     v-for="workflow in workflows"
                     :key="workflow.id"
@@ -217,7 +243,7 @@ onMounted(() => {
         <!-- Node Palette Panel -->
         <div
             v-else-if="activePanel === 'palette'"
-            class="flex-1 overflow-y-auto"
+            class="flex-1 overflow-y-auto px-0.5"
         >
             <NodePalette />
         </div>
@@ -227,9 +253,15 @@ onMounted(() => {
             v-else-if="activePanel === 'inspector'"
             class="flex-1 overflow-y-auto"
         >
+            <!-- Debug info -->
+            <div v-if="isDev" class="text-xs opacity-50 mb-2 p-2 bg-black/10 rounded">
+                Panes: {{ multiPane.panes.value.length }} |
+                Workflow panes: {{ multiPane.panes.value.filter(p => p.mode === 'or3-workflows').length }} |
+                Editor found: {{ !!activeWorkflowEditor }}
+            </div>
             <NodeInspector
-                v-if="workflowEditor"
-                :editor="workflowEditor"
+                v-if="activeWorkflowEditor"
+                :editor="activeWorkflowEditor"
                 @close="activePanel = 'workflows'"
             />
             <div
