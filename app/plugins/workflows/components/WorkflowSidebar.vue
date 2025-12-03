@@ -92,7 +92,7 @@ async function handleCreateWorkflow() {
 
 // Open workflow in pane
 function openWorkflow(id: string) {
-    multiPane.openApp('or3-workflows', { initialRecordId: id });
+    multiPane.switchToApp('or3-workflows', { recordId: id });
 }
 
 // Delete workflow
@@ -131,153 +131,149 @@ onMounted(() => {
 </script>
 
 <template>
-    <aside class="flex flex-col h-full w-full p-3 gap-4">
-        <!-- Tabs -->
-        <div class="flex">
-            <UTabs
-                size="sm"
-                v-model="activePanel"
-                :content="false"
-                :items="items"
-                class="w-full"
-            />
-        </div>
-
-        <!-- Workflows Panel -->
-        <div
-            v-if="activePanel === 'workflows'"
-            class="flex flex-col flex-1 gap-4"
-        >
-            <!-- Header with create -->
-            <div class="flex justify-between items-center">
-                <h1 class="font-medium text-lg">Workflows</h1>
-                <UButton
+    <aside
+        class="flex flex-col h-full w-full p-3 pr-0.5 justify-between overflow-hidden"
+    >
+        <div class="flex flex-col h-full gap-4 overfloy-y-auto">
+            <!-- Tabs -->
+            <div class="flex">
+                <UTabs
                     size="sm"
-                    variant="ghost"
-                    icon="tabler:plus"
-                    @click="handleCreateWorkflow"
-                    :loading="isCreating"
-                    title="Create workflow"
+                    v-model="activePanel"
+                    :content="false"
+                    :items="items"
+                    class="w-full"
                 />
             </div>
 
-            <!-- Quick create input -->
-            <div class="flex gap-2">
-                <UInput
-                    v-model="newWorkflowName"
-                    placeholder="New workflow name..."
-                    size="sm"
-                    class="flex-1"
-                    @keyup.enter="handleCreateWorkflow"
-                />
-                <UButton
-                    size="sm"
-                    color="primary"
-                    icon="tabler:plus"
-                    :loading="isCreating"
-                    @click="handleCreateWorkflow"
-                />
-            </div>
-
-            <!-- Error state -->
+            <!-- Workflows Panel -->
             <div
-                v-if="error"
-                class="text-sm text-red-500 p-2 bg-red-50 dark:bg-red-900/20 rounded"
+                v-if="activePanel === 'workflows'"
+                class="flex flex-col flex-1 gap-4"
             >
-                {{ error }}
-            </div>
+                <!-- Header with create -->
+                <div class="flex justify-between items-center">
+                    <h1 class="font-medium text-lg">Workflows</h1>
+                    <UButton
+                        size="sm"
+                        variant="ghost"
+                        icon="tabler:plus"
+                        class="center-it"
+                        @click="handleCreateWorkflow"
+                        :loading="isCreating"
+                        title="Create workflow"
+                    />
+                </div>
 
-            <!-- Loading state -->
-            <div v-if="loading" class="flex items-center justify-center py-8">
-                <UIcon name="tabler:loader-2" class="animate-spin text-xl" />
-            </div>
-
-            <!-- Empty state -->
-            <div
-                v-else-if="workflows.length === 0"
-                class="flex flex-col items-center justify-center py-8 text-center"
-            >
-                <UIcon
-                    name="tabler:binary-tree-2"
-                    class="text-4xl mb-2 opacity-50"
-                />
-                <p class="text-sm opacity-70">No workflows yet</p>
-                <p class="text-xs opacity-50">Create one to get started</p>
-            </div>
-
-            <!-- Workflow list -->
-            <div
-                v-else
-                class="flex flex-col gap-2 overflow-y-auto px-0.5 flex-1"
-            >
+                <!-- Error state -->
                 <div
-                    v-for="workflow in workflows"
-                    :key="workflow.id"
-                    class="group flex items-center justify-between p-3 rounded-lg border border-(--md-outline-variant) hover:border-(--md-primary) hover:bg-(--md-surface-container) cursor-pointer transition-colors"
-                    @click="openWorkflow(workflow.id)"
+                    v-if="error"
+                    class="text-sm text-red-500 p-2 bg-red-50 dark:bg-red-900/20 rounded"
                 >
-                    <div class="flex flex-col gap-0.5 min-w-0 flex-1">
-                        <span class="font-medium text-sm truncate">{{
-                            workflow.title
-                        }}</span>
-                        <span class="text-xs opacity-60">{{
-                            formatTime(workflow.updated_at)
-                        }}</span>
-                    </div>
+                    {{ error }}
+                </div>
+
+                <!-- Loading state -->
+                <div
+                    v-if="loading"
+                    class="flex items-center justify-center py-8"
+                >
+                    <UIcon
+                        name="tabler:loader-2"
+                        class="animate-spin text-xl"
+                    />
+                </div>
+
+                <!-- Empty state -->
+                <div
+                    v-else-if="workflows.length === 0"
+                    class="flex flex-col items-center justify-center py-8 text-center"
+                >
+                    <UIcon
+                        name="tabler:binary-tree-2"
+                        class="text-4xl mb-2 opacity-50"
+                    />
+                    <p class="text-sm opacity-70">No workflows yet</p>
+                    <p class="text-xs opacity-50">Create one to get started</p>
+                </div>
+
+                <!-- Workflow list -->
+                <div
+                    v-else
+                    class="flex flex-col gap-2 overflow-y-auto px-0.5 flex-1"
+                >
                     <div
-                        class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        v-for="workflow in workflows"
+                        :key="workflow.id"
+                        class="group flex items-center justify-between p-3 rounded-lg border border-(--md-outline-variant) hover:border-(--md-primary) hover:bg-(--md-surface-container) cursor-pointer transition-colors"
+                        @click="openWorkflow(workflow.id)"
                     >
-                        <UButton
-                            size="xs"
-                            variant="ghost"
-                            color="error"
-                            icon="tabler:trash"
-                            @click="handleDeleteWorkflow(workflow.id, $event)"
-                            title="Delete workflow"
-                        />
+                        <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+                            <span class="font-medium text-sm truncate">{{
+                                workflow.title
+                            }}</span>
+                            <span class="text-xs opacity-60">{{
+                                formatTime(workflow.updated_at)
+                            }}</span>
+                        </div>
+                        <div
+                            class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                            <UButton
+                                size="xs"
+                                variant="ghost"
+                                color="error"
+                                class="center-it"
+                                icon="tabler:trash"
+                                @click="
+                                    handleDeleteWorkflow(workflow.id, $event)
+                                "
+                                title="Delete workflow"
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Node Palette Panel -->
-        <div
-            v-else-if="activePanel === 'palette'"
-            class="flex-1 overflow-y-auto px-0.5"
-        >
-            <NodePalette />
-        </div>
-
-        <!-- Node Inspector Panel -->
-        <div
-            v-else-if="activePanel === 'inspector'"
-            class="flex-1 overflow-y-auto"
-        >
-            <!-- Debug info -->
+            <!-- Node Palette Panel -->
             <div
-                v-if="isDev"
-                class="text-xs opacity-50 mb-2 p-2 bg-black/10 rounded"
+                v-else-if="activePanel === 'palette'"
+                class="flex-1 overflow-y-auto px-0.5"
             >
-                Panes: {{ multiPane.panes.value.length }} | Workflow panes:
-                {{
-                    multiPane.panes.value.filter(
-                        (p) => p.mode === 'or3-workflows'
-                    ).length
-                }}
-                | Editor found: {{ !!activeWorkflowEditor }}
+                <NodePalette />
             </div>
-            <NodeInspector
-                v-if="activeWorkflowEditor"
-                :editor="activeWorkflowEditor"
-                @close="activePanel = 'workflows'"
-            />
+
+            <!-- Node Inspector Panel -->
             <div
-                v-else
-                class="flex flex-col items-center justify-center py-8 text-center"
+                v-else-if="activePanel === 'inspector'"
+                class="flex-1 overflow-y-auto"
             >
-                <p class="text-sm opacity-70">
-                    Open a workflow to inspect nodes
-                </p>
+                <!-- Debug info -->
+                <div
+                    v-if="isDev"
+                    class="text-xs opacity-50 mb-2 p-2 bg-black/10 rounded"
+                >
+                    Panes: {{ multiPane.panes.value.length }} | Workflow panes:
+                    {{
+                        multiPane.panes.value.filter(
+                            (p) => p.mode === 'or3-workflows'
+                        ).length
+                    }}
+                    | Editor found: {{ !!activeWorkflowEditor }}
+                </div>
+                <NodeInspector
+                    v-if="activeWorkflowEditor"
+                    :editor="activeWorkflowEditor"
+                    @close="activePanel = 'workflows'"
+                />
+                <div
+                    v-else
+                    class="flex flex-col items-center justify-center py-8 text-center"
+                >
+                    <p class="text-sm opacity-70">
+                        Open a workflow to inspect nodes
+                    </p>
+                </div>
             </div>
         </div>
     </aside>
