@@ -114,7 +114,10 @@ export async function getWorkflowByName(
                         ? JSON.parse(workflow.meta)
                         : workflow.meta;
             } catch (e) {
-                console.error('[workflow-slash] Failed to parse workflow meta:', e);
+                console.error(
+                    '[workflow-slash] Failed to parse workflow meta:',
+                    e
+                );
             }
         }
 
@@ -160,7 +163,10 @@ export async function getWorkflowById(
                         ? JSON.parse(workflow.meta)
                         : workflow.meta;
             } catch (e) {
-                console.error('[workflow-slash] Failed to parse workflow meta:', e);
+                console.error(
+                    '[workflow-slash] Failed to parse workflow meta:',
+                    e
+                );
             }
         }
 

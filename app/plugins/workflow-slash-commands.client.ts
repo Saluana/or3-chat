@@ -369,21 +369,18 @@ export default defineNuxtPlugin((nuxtApp) => {
             }
 
             // Log workflow structure for debugging
-            console.log(
-                '[workflow-slash] Workflow structure:',
-                {
-                    id: workflowPost.id,
-                    title: workflowPost.title,
-                    hasNodes: Array.isArray(workflowPost.meta.nodes),
-                    hasEdges: Array.isArray(workflowPost.meta.edges),
-                    nodesCount: Array.isArray(workflowPost.meta.nodes)
-                        ? workflowPost.meta.nodes.length
-                        : 'N/A',
-                    edgesCount: Array.isArray(workflowPost.meta.edges)
-                        ? workflowPost.meta.edges.length
-                        : 'N/A',
-                }
-            );
+            console.log('[workflow-slash] Workflow structure:', {
+                id: workflowPost.id,
+                title: workflowPost.title,
+                hasNodes: Array.isArray(workflowPost.meta.nodes),
+                hasEdges: Array.isArray(workflowPost.meta.edges),
+                nodesCount: Array.isArray(workflowPost.meta.nodes)
+                    ? workflowPost.meta.nodes.length
+                    : 'N/A',
+                edgesCount: Array.isArray(workflowPost.meta.edges)
+                    ? workflowPost.meta.edges.length
+                    : 'N/A',
+            });
 
             // Execute the workflow
             if (import.meta.dev) {
@@ -399,7 +396,9 @@ export default defineNuxtPlugin((nuxtApp) => {
             // Capture context before starting async work
             const assistantContext = pendingAssistantContext;
             if (!assistantContext) {
-                console.error('[workflow-slash] No assistant context available');
+                console.error(
+                    '[workflow-slash] No assistant context available'
+                );
                 return { messages };
             }
 
@@ -414,7 +413,9 @@ export default defineNuxtPlugin((nuxtApp) => {
                 updatePending = true;
 
                 try {
-                    const existingMsg = await db.messages.get(assistantContext.id);
+                    const existingMsg = await db.messages.get(
+                        assistantContext.id
+                    );
                     if (existingMsg) {
                         await db.messages.put({
                             ...existingMsg,
@@ -428,7 +429,10 @@ export default defineNuxtPlugin((nuxtApp) => {
                     }
                 } catch (e) {
                     if (import.meta.dev) {
-                        console.warn('[workflow-slash] Stream update failed:', e);
+                        console.warn(
+                            '[workflow-slash] Stream update failed:',
+                            e
+                        );
                     }
                 } finally {
                     updatePending = false;
@@ -441,18 +445,14 @@ export default defineNuxtPlugin((nuxtApp) => {
                 const now = Date.now();
 
                 // Emit delta hook for any listeners
-                await hooks.doAction(
-                    'ai.chat.stream:action:delta',
-                    delta,
-                    {
-                        threadId: assistantContext.threadId,
-                        assistantId: assistantContext.id,
-                        streamId: assistantContext.streamId,
-                        deltaLength: delta.length,
-                        totalLength: output.length,
-                        chunkIndex: chunkIndex++,
-                    }
-                );
+                await hooks.doAction('ai.chat.stream:action:delta', delta, {
+                    threadId: assistantContext.threadId,
+                    assistantId: assistantContext.id,
+                    streamId: assistantContext.streamId,
+                    deltaLength: delta.length,
+                    totalLength: output.length,
+                    chunkIndex: chunkIndex++,
+                });
 
                 // Throttle database updates
                 if (now - lastUpdate > 50) {
@@ -462,7 +462,10 @@ export default defineNuxtPlugin((nuxtApp) => {
             };
 
             if (import.meta.dev) {
-                console.log('[workflow-slash] Starting execution with prompt:', parsed.prompt);
+                console.log(
+                    '[workflow-slash] Starting execution with prompt:',
+                    parsed.prompt
+                );
             }
 
             // Create execution controller (allows stopping)
@@ -517,13 +520,19 @@ export default defineNuxtPlugin((nuxtApp) => {
                     }
 
                     if (import.meta.dev) {
-                        console.log('[workflow-slash] Execution complete, output length:', output.length);
+                        console.log(
+                            '[workflow-slash] Execution complete, output length:',
+                            output.length
+                        );
                     }
 
                     // Final update to ensure complete output is saved
-                    const finalOutput = output || 'Workflow executed successfully.';
+                    const finalOutput =
+                        output || 'Workflow executed successfully.';
                     try {
-                        const existingMsg = await db.messages.get(assistantContext.id);
+                        const existingMsg = await db.messages.get(
+                            assistantContext.id
+                        );
                         if (existingMsg) {
                             await db.messages.put({
                                 ...existingMsg,
@@ -547,11 +556,17 @@ export default defineNuxtPlugin((nuxtApp) => {
                             );
 
                             if (import.meta.dev) {
-                                console.log('[workflow-slash] Final update to message:', assistantContext.id);
+                                console.log(
+                                    '[workflow-slash] Final update to message:',
+                                    assistantContext.id
+                                );
                             }
                         }
                     } catch (dbError) {
-                        console.error('[workflow-slash] Failed to update message:', dbError);
+                        console.error(
+                            '[workflow-slash] Failed to update message:',
+                            dbError
+                        );
                     }
                 })
                 .catch((error) => {
@@ -559,7 +574,10 @@ export default defineNuxtPlugin((nuxtApp) => {
                     console.error('[workflow-slash] Execution failed:', error);
                     toast.add({
                         title: 'Workflow Failed',
-                        description: error instanceof Error ? error.message : 'Unknown error',
+                        description:
+                            error instanceof Error
+                                ? error.message
+                                : 'Unknown error',
                         color: 'error',
                     });
                 });
