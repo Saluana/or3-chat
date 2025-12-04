@@ -3,20 +3,21 @@
  *
  * Registers the slash command TipTap extension via the hooks system.
  * When a user types `/`, a popover shows available workflows.
- * Selecting a workflow inserts `/WorkflowName ` as text.
+ * Selecting a workflow inserts a styled workflow node.
  *
  * Also intercepts message sends to detect and execute workflow commands.
  */
 
 import { defineNuxtPlugin } from '#app';
 import { useAppConfig, useHooks, useToast } from '#imports';
-import type { Extension } from '@tiptap/core';
+import type { Extension, Node } from '@tiptap/core';
 import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type { WorkflowExecutionController } from './WorkflowSlashCommands/executeWorkflow';
 
 // Types for lazy-loaded modules
 interface SlashCommandsModule {
     SlashCommand: Extension;
+    WorkflowNode: Node;
     createSlashCommandSuggestion: typeof import('./WorkflowSlashCommands/suggestions').createSlashCommandSuggestion;
     searchWorkflows: typeof import('./WorkflowSlashCommands/useWorkflowSlashCommands').searchWorkflows;
     getWorkflowByName: typeof import('./WorkflowSlashCommands/useWorkflowSlashCommands').getWorkflowByName;
@@ -160,6 +161,7 @@ export default defineNuxtPlugin((nuxtApp) => {
 
             slashModule = {
                 SlashCommand: extensionModule.SlashCommand,
+                WorkflowNode: extensionModule.WorkflowNode,
                 createSlashCommandSuggestion:
                     suggestionsModule.createSlashCommandSuggestion,
                 searchWorkflows: searchModule.searchWorkflows,
@@ -248,10 +250,10 @@ export default defineNuxtPlugin((nuxtApp) => {
                 suggestion: suggestionConfig,
             });
 
-            // Provide the extension via filter
+            // Provide both WorkflowNode and SlashCommand extension via filter
             hooks.on('ui.chat.editor:filter:extensions', (existing) => {
                 const list = Array.isArray(existing) ? existing : [];
-                return [...list, SlashCommandExtension];
+                return [...list, module.WorkflowNode, SlashCommandExtension];
             });
 
             console.log('[workflow-slash] Extension registered');

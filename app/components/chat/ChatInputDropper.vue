@@ -1055,9 +1055,9 @@ const handleSend = async () => {
             const hooks = useHooks();
             const json = editor.value?.getJSON?.();
             // Fire as an action to avoid transforming data; listeners can stash it
-        if (json) {
-            await hooks.doAction('ui.chat.editor:action:before_send', json);
-        }
+            if (json) {
+                await hooks.doAction('ui.chat.editor:action:before_send', json);
+            }
         } catch (e) {
             // Silently handle editor JSON dispatch failure
         }
@@ -1259,6 +1259,26 @@ textarea::-webkit-scrollbar-thumb:hover {
 }
 .prosemirror-host :deep(.mention::before) {
     content: '📎';
+    margin-right: 0.25rem;
+    font-size: 0.875em;
+}
+
+/* Workflow tag styling inside the TipTap editor */
+.prosemirror-host :deep(.workflow-tag) {
+    background: var(--md-tertiary-container, #e0e0ff);
+    color: var(--md-on-tertiary-container, #1a1a66);
+    border-radius: 4px;
+    padding: 0.125rem 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.prosemirror-host :deep(.workflow-tag:hover) {
+    background: var(--md-tertiary, #8080ff);
+    color: var(--md-on-tertiary, #ffffff);
+}
+.prosemirror-host :deep(.workflow-tag::before) {
+    content: '⚡';
     margin-right: 0.25rem;
     font-size: 0.875em;
 }

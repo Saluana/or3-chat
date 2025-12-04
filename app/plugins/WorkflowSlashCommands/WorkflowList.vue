@@ -35,7 +35,7 @@
                     'w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors cursor-pointer',
                     'hover:bg-(--md-surface-container-high)',
                     {
-                        'bg-(--md-primary-container) text-(--md-on-primary-container)':
+                        'bg-(--md-surface-container-highest)':
                             idx === selectedIndex,
                     },
                 ]"
