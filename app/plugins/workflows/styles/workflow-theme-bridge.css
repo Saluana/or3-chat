@@ -267,6 +267,18 @@
   background-color: var(--or3-color-bg-primary) !important;
 }
 
+/* Grid background - Light mode (dots) */
+.workflow-app .vue-flow__pane {
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.18) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Grid background - Dark mode (dots) */
+.dark .workflow-app .vue-flow__pane {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.18) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
 /* Default node styling */
 .workflow-app .vue-flow__node {
   background-color: var(--or3-color-surface);
