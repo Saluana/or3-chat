@@ -277,11 +277,23 @@
 /* Edge/connection styling */
 .workflow-app .vue-flow__edge-path {
   stroke: var(--or3-color-border);
+  stroke-width: 2px;
 }
 
 .workflow-app .vue-flow__edge.selected .vue-flow__edge-path,
 .workflow-app .vue-flow__edge:hover .vue-flow__edge-path {
   stroke: var(--or3-color-accent);
+}
+
+/* Dark mode edge visibility fix */
+.dark .workflow-app .vue-flow__edge-path {
+  stroke: rgba(255, 255, 255, 0.35) !important;
+  stroke-width: 2px !important;
+}
+
+.dark .workflow-app .vue-flow__edge.selected .vue-flow__edge-path,
+.dark .workflow-app .vue-flow__edge:hover .vue-flow__edge-path {
+  stroke: var(--or3-color-accent, #4E8FBC) !important;
 }
 
 /* Handle styling */
@@ -602,6 +614,39 @@
 .light .workflow-app .error-handle,
 :root:not(.dark) .workflow-app .error-handle {
   border-color: #dc2626 !important;
+}
+
+/* Handles in dark mode */
+.dark .workflow-app .vue-flow__handle {
+  background-color: var(--or3-color-accent, #4E8FBC) !important;
+  border: 2px solid var(--md-surface, #18181d) !important;
+  width: 12px !important;
+  height: 12px !important;
+}
+
+.dark .workflow-app .vue-flow__handle:hover {
+  background-color: var(--or3-color-accent-hover, #6BA8D4) !important;
+  transform: scale(1.2);
+}
+
+.dark .workflow-app .error-handle {
+  background-color: var(--or3-color-error, #ef4444) !important;
+  border-color: var(--md-surface, #18181d) !important;
+}
+
+/* Node wrapper in dark mode */
+.dark .workflow-app .node-wrapper {
+  background: var(--or3-color-bg-elevated, #1f1f26) !important;
+  border: 1px solid var(--or3-color-border, rgba(255, 255, 255, 0.12)) !important;
+}
+
+.dark .workflow-app .node-wrapper:hover {
+  border-color: var(--or3-color-accent, #4E8FBC) !important;
+}
+
+.dark .workflow-app .node-wrapper.selected {
+  border-color: var(--or3-color-accent, #4E8FBC) !important;
+  border-width: 2px !important;
 }
 
 /* ═══════════════════════════════════════════════════════

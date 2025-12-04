@@ -248,19 +248,6 @@ onMounted(() => {
                 v-else-if="activePanel === 'inspector'"
                 class="flex-1 overflow-y-auto"
             >
-                <!-- Debug info -->
-                <div
-                    v-if="isDev"
-                    class="text-xs opacity-50 mb-2 p-2 bg-black/10 rounded"
-                >
-                    Panes: {{ multiPane.panes.value.length }} | Workflow panes:
-                    {{
-                        multiPane.panes.value.filter(
-                            (p) => p.mode === 'or3-workflows'
-                        ).length
-                    }}
-                    | Editor found: {{ !!activeWorkflowEditor }}
-                </div>
                 <NodeInspector
                     v-if="activeWorkflowEditor"
                     :editor="activeWorkflowEditor"
