@@ -145,6 +145,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Show branches as nested collapsibles within parent node
     -   Show branch status indicators
     -   Show branch streaming/output text
+    -   **Handle `__merge__` branch ID specially** - display as "Merging results..." or similar
     -   Requirements: 5.3
 
 -   [ ] **3.6 Add error display within nodes**
@@ -205,58 +206,121 @@ This task list implements the workflow/agent message integration into the chat i
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
     -   Import `createWorkflowStreamAccumulator`
+    -   Import `createAccumulatorCallbacks` from `@or3/workflow-core`
     -   Import `WorkflowMessageData` type
+    -   Import `nowSec` from `~/db/utils` for correct timestamp format
     -   Requirements: 3.1, 4.1
 
--   [ ] **5.2 Create workflow message with correct type**
+-   [ ] **5.2 Create workflow message with correct data**
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
-    -   Modify `tx.appendMessage` call to include `message_type: 'workflow'`
+    -   Use existing `db.messages.put()` pattern but with workflow data structure
+    -   Store `data.type: 'workflow-execution'` as discriminator
     -   Initialize with empty `WorkflowMessageData` structure
+    -   **Use `nowSec()` NOT `Date.now()` for timestamps**
     -   Requirements: 1.1, 1.2
+    -   **No breaking changes:** Uses existing `data` field
 
--   [ ] **5.3 Initialize accumulator and wire callbacks**
+-   [ ] **5.3 Initialize accumulator and wire callbacks (SIMPLIFIED)**
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
     -   Create accumulator instance at start of workflow execution
-    -   Map `onNodeStart` → `accumulator.nodeStart()`
-    -   Map `onToken` → `accumulator.nodeToken()`
-    -   Map `onNodeFinish` → `accumulator.nodeFinish()`
-    -   Map `onBranchStart` → `accumulator.branchStart()`
-    -   Map `onBranchToken` → `accumulator.branchToken()`
-    -   Map `onBranchComplete` → `accumulator.branchComplete()`
-    -   Map `onError` → `accumulator.finalize({ error })`
+    -   **Use `createAccumulatorCallbacks` helper** to wire all callbacks:
+
+        ```typescript
+        import { createAccumulatorCallbacks } from '@or3/workflow-core';
+
+        const callbacks = createAccumulatorCallbacks(workflow, {
+            onNodeStart: accumulator.nodeStart,
+            onNodeToken: accumulator.nodeToken,
+            onNodeReasoning: accumulator.nodeReasoning,
+            onNodeFinish: (nodeId, output) => {
+                accumulator.nodeFinish(nodeId, output);
+                schedulePersist();
+            },
+            onNodeError: (nodeId, error) => {
+                accumulator.nodeError(nodeId, error);
+                schedulePersist();
+            },
+            onBranchStart: accumulator.branchStart,
+            onBranchToken: accumulator.branchToken,
+            onBranchComplete: accumulator.branchComplete,
+        });
+        ```
+
+    -   The helper automatically:
+        -   Looks up node metadata (label, type) from the workflow
+        -   Maps `StreamAccumulatorCallbacks` to `ExecutionCallbacks`
+        -   Handles all branch callback signatures (including 4-param branchToken)
+    -   **Note:** `onNodeStart` now receives optional `NodeInfo` with `{label, type}` automatically
     -   Requirements: 4.1
 
--   [ ] **5.4 Implement reactive state updates**
+-   [ ] **5.4 Implement reactive state bridge (CRITICAL)**
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
-    -   Create mechanism to update tailAssistant reactive ref with workflow state
-    -   Emit `workflow.execution:action:state_update` hook for ChatContainer
+    -   Emit `workflow.execution:action:state_update` hook with reactive state reference
+    -   The accumulator.state is `reactive()` - pass it directly so watchers update
     -   Requirements: 4.1
+    -   **This is critical for UI updates - DB writes alone don't trigger re-renders**
 
 -   [ ] **5.5 Implement throttled persistence**
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
-    -   Create `persistWorkflowState()` function
-    -   Throttle to 500ms during streaming
-    -   Persist immediately on completion/error
+    -   Create `schedulePersist()` function with 500ms throttle
+    -   Create `persistFinal()` for immediate final write
+    -   **Use `nowSec()` for `updated_at` timestamp**
     -   Update message `data` field with `accumulator.toMessageData()`
     -   Requirements: 8.1
 
 -   [ ] **5.6 Handle workflow completion**
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
-    -   Call `accumulator.finalize()` on success
+    -   In `controller.promise.then()`: call `accumulator.finalize()`
+    -   In `controller.promise.catch()`: call `accumulator.finalize({ error })`
     -   Persist final state
-    -   Clear accumulator reference
+    -   Emit `workflow.execution:action:complete` hook
     -   Requirements: 8.1
 
 -   [ ] **5.7 Wire stop functionality to accumulator**
+
     -   File: `app/plugins/workflow-slash-commands.client.ts`
     -   On `workflow:stop` event, call `accumulator.finalize({ stopped: true })`
     -   Persist stopped state
     -   Requirements: 7.1
+
+-   [ ] **5.8 Handle `__merge__` branch display**
+    -   The parallel node emits `__merge__` as branchId for merge step
+    -   Display as "Merging results..." in `WorkflowExecutionStatus.vue`
+    -   The branch callbacks include this automatically - just handle UI display
+    -   Requirements: 5.3
+
+---
+
+## Phase 5.5: Reactivity Bridge (NEW - CRITICAL)
+
+### 5.5. Connect workflow state to Vue reactivity
+
+-   [ ] **5.5.1 Subscribe to workflow state updates in ChatContainer**
+
+    -   File: `app/components/chat/ChatContainer.vue` or `app/composables/chat/useAi.ts`
+    -   Create `workflowStates = reactive(new Map<string, WorkflowStreamingState>())`
+    -   Subscribe to `workflow.execution:action:state_update` hook
+    -   Store reactive state reference in the map
+    -   Requirements: 4.1, 9.1
+
+-   [ ] **5.5.2 Merge workflow state into allMessages computed**
+
+    -   In ChatContainer/useAi, modify the messages computed to check workflowStates map
+    -   If message has workflow state, add `isWorkflow: true` and `workflowState`
+    -   The state.version changes will trigger Vue reactivity
+    -   Requirements: 4.1
+
+-   [ ] **5.5.3 Clean up state on completion**
+
+    -   Listen for `workflow.execution:action:complete` hook
+    -   Optionally remove from workflowStates map after delay
+    -   Or keep for historical display
+    -   Requirements: 9.2
 
 ---
 
@@ -413,19 +477,19 @@ Phase 5 (Integration)
 
 ## Estimated Timeline
 
-| Phase | Description               | Effort    |
-| ----- | ------------------------- | --------- |
-| 1     | Data Model Foundation     | 2-3 hours |
-| 2     | Streaming Infrastructure  | 4-5 hours |
-| 3     | UI Components             | 4-6 hours |
-| 4     | ChatMessage Integration   | 1-2 hours |
-| 5     | Slash Command Integration | 3-4 hours |
-| 6     | Hook Integration          | 1 hour    |
-| 7     | Icon Registration         | 0.5 hours |
-| 8     | Testing & Polish          | 3-4 hours |
-| 9     | Documentation             | 1-2 hours |
+| Phase | Description               | Effort        | Notes                                                  |
+| ----- | ------------------------- | ------------- | ------------------------------------------------------ |
+| 1     | Data Model Foundation     | 2-3 hours     |                                                        |
+| 2     | Streaming Infrastructure  | 4-5 hours     |                                                        |
+| 3     | UI Components             | 4-6 hours     |                                                        |
+| 4     | ChatMessage Integration   | 1-2 hours     |                                                        |
+| 5     | Slash Command Integration | **2-3 hours** | ⬇️ Reduced from 3-4h with `createAccumulatorCallbacks` |
+| 6     | Hook Integration          | 1 hour        |                                                        |
+| 7     | Icon Registration         | 0.5 hours     |                                                        |
+| 8     | Testing & Polish          | 3-4 hours     |                                                        |
+| 9     | Documentation             | 1-2 hours     |                                                        |
 
-**Total Estimated Effort: 20-27 hours**
+**Total Estimated Effort: 19-26 hours** (reduced from 20-27h)
 
 ---
 

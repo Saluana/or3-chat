@@ -322,8 +322,14 @@ export interface WorkflowStreamAccumulatorApi {
     nodeError(nodeId: string, error: Error): void;
 
     // Branch lifecycle (for parallel nodes)
+    // NOTE: branchToken receives label from callback since or3-workflows passes it
     branchStart(nodeId: string, branchId: string, label: string): void;
-    branchToken(nodeId: string, branchId: string, token: string): void;
+    branchToken(
+        nodeId: string,
+        branchId: string,
+        label: string,
+        token: string
+    ): void;
     branchComplete(nodeId: string, branchId: string, output: string): void;
 
     // Execution lifecycle
@@ -478,7 +484,14 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         state.version++;
     }
 
-    function branchToken(nodeId: string, branchId: string, token: string) {
+    // NOTE: label param comes from or3-workflows callback (4th positional param)
+    // We don't use it here since branch was created with label in branchStart
+    function branchToken(
+        nodeId: string,
+        branchId: string,
+        _label: string,
+        token: string
+    ) {
         if (finalized || !token) return;
 
         const key = `${nodeId}:${branchId}`;
@@ -920,13 +933,17 @@ watch(
 
 ### 1. Modified workflow-slash-commands.client.ts
 
-The key integration is wiring the workflow execution callbacks to the accumulator and updating reactive state:
+The key integration is wiring the workflow execution callbacks to the accumulator and updating reactive state.
+
+**With the new `createAccumulatorCallbacks` helper from or3-workflows, this is now dramatically simplified:**
 
 ```typescript
 // Key changes to workflow-slash-commands.client.ts
 
 import { createWorkflowStreamAccumulator } from '~/composables/chat/useWorkflowStreamAccumulator';
+import { createAccumulatorCallbacks } from '@or3/workflow-core';
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
+import { nowSec } from '~/db/utils';
 
 // Inside the before_send hook:
 
@@ -946,58 +963,132 @@ const assistantDbMsg = await tx.appendMessage({
     ),
 });
 
-// Wire execution callbacks to accumulator
+// Wire execution callbacks to accumulator using the new helper
+// This eliminates ~30 lines of manual node lookups and callback mappings
+const callbacks = createAccumulatorCallbacks(workflowPost.meta, {
+    onNodeStart: accumulator.nodeStart,
+    onNodeToken: accumulator.nodeToken,
+    onNodeReasoning: accumulator.nodeReasoning,
+    onNodeFinish: (nodeId, output) => {
+        accumulator.nodeFinish(nodeId, output);
+        schedulePersist();
+    },
+    onNodeError: (nodeId, error) => {
+        accumulator.nodeError(nodeId, error);
+        schedulePersist();
+    },
+    onBranchStart: accumulator.branchStart,
+    onBranchToken: accumulator.branchToken,
+    onBranchComplete: accumulator.branchComplete,
+});
+
+// Execute with the wired callbacks
 const controller = execMod.executeWorkflow({
     workflow: workflowPost.meta,
     prompt: parsed.prompt,
     conversationHistory,
     apiKey: apiKey.value,
-
-    onNodeStart: (nodeId) => {
-        const node = workflowPost.meta.nodes.find((n) => n.id === nodeId);
-        accumulator.nodeStart(
-            nodeId,
-            node?.data?.label || nodeId,
-            node?.type || 'unknown'
-        );
-    },
-
-    onToken: (nodeId, token) => {
-        accumulator.nodeToken(nodeId, token);
-    },
-
-    onNodeFinish: (nodeId, output) => {
-        accumulator.nodeFinish(nodeId, output);
-        // Persist state
-        persistWorkflowState(assistantDbMsg.id, accumulator, workflowPost);
-    },
-
-    onBranchStart: (nodeId, branchId, label) => {
-        accumulator.branchStart(nodeId, branchId, label);
-    },
-
-    onBranchToken: (nodeId, branchId, _, token) => {
-        accumulator.branchToken(nodeId, branchId, token);
-    },
-
-    onBranchComplete: (nodeId, branchId, _, output) => {
-        accumulator.branchComplete(nodeId, branchId, output);
-    },
-
-    onError: (error) => {
-        accumulator.finalize({ error });
-        persistWorkflowState(assistantDbMsg.id, accumulator, workflowPost);
-    },
+    ...callbacks, // Spread the wired callbacks
 });
 
-// Emit workflow-specific reactive state for ChatContainer
+// Handle completion
+controller.promise
+    .then(({ stopped }) => {
+        accumulator.finalize({ stopped });
+        persistFinal();
+    })
+    .catch((error) => {
+        accumulator.finalize({ error });
+        persistFinal();
+    });
+
+// ─────────────────────────────────────────────────────────────────────
+// CRITICAL: Reactivity Bridge
+// ─────────────────────────────────────────────────────────────────────
+// The accumulator.state is reactive, but ChatContainer doesn't watch it.
+// We emit a hook with the reactive state reference so ChatContainer can
+// subscribe and update its local workflow state map.
+
 hooks.doAction('workflow.execution:action:state_update', {
     messageId: assistantDbMsg.id,
-    state: accumulator.state,
+    state: accumulator.state, // This is a reactive() object
+});
+
+// Throttled persistence using nowSec() for correct timestamp format
+let persistTimeout: ReturnType<typeof setTimeout> | null = null;
+function schedulePersist() {
+    if (persistTimeout) return;
+    persistTimeout = setTimeout(async () => {
+        persistTimeout = null;
+        await db.messages.put({
+            ...existingMsg,
+            data: accumulator.toMessageData(
+                workflowPost.id,
+                workflowPost.title,
+                parsed.prompt
+            ),
+            updated_at: nowSec(), // IMPORTANT: Use seconds, not milliseconds
+        });
+    }, 500);
+}
+
+async function persistFinal() {
+    if (persistTimeout) {
+        clearTimeout(persistTimeout);
+        persistTimeout = null;
+    }
+    await db.messages.put({
+        ...existingMsg,
+        data: accumulator.toMessageData(
+            workflowPost.id,
+            workflowPost.title,
+            parsed.prompt
+        ),
+        updated_at: nowSec(),
+    });
+}
+```
+
+**Note on `__merge__` branch:** Parallel nodes emit a special branch with `branchId === '__merge__'` for the merge step. The UI should display this as "Merging results..." in `WorkflowExecutionStatus.vue`.
+
+### 2. ChatContainer Reactivity Subscription
+
+```typescript
+// In ChatContainer.vue or useAi.ts
+
+// Map of active workflow states by message ID
+const workflowStates = reactive(new Map<string, WorkflowStreamingState>());
+
+// Subscribe to workflow state updates
+hooks.on('workflow.execution:action:state_update', ({ messageId, state }) => {
+    workflowStates.set(messageId, state);
+});
+
+// Clean up when execution completes
+hooks.on('workflow.execution:action:complete', ({ messageId }) => {
+    // Keep in map for display, but could remove after delay
+});
+
+// In allMessages computed, merge workflow state:
+const allMessages = computed(() => {
+    return stableMessages.value.map((msg) => {
+        const workflowState = workflowStates.get(msg.id);
+        if (workflowState) {
+            return {
+                ...msg,
+                isWorkflow: true,
+                workflowState: {
+                    ...workflowState,
+                    // version change triggers re-render
+                },
+            };
+        }
+        return msg;
+    });
 });
 ```
 
-### 2. Modified ChatMessage.vue
+### 3. Modified ChatMessage.vue
 
 Add conditional rendering for workflow messages:
 
