@@ -3,6 +3,10 @@
  *
  * Creates a TipTap extension that triggers workflow suggestions on `/`.
  * When a workflow is selected, it inserts a styled workflow node.
+ *
+ * Constraints:
+ * - Only triggers when `/` is typed at the very start of input
+ * - Does not trigger if a workflow node already exists in the editor
  */
 
 import { Extension, Node, mergeAttributes } from '@tiptap/core';
@@ -16,6 +20,26 @@ export const SlashCommandPluginKey = new PluginKey('slashCommandSuggestion');
 
 export interface SlashCommandOptions {
     suggestion: Omit<SuggestionOptions<WorkflowItem>, 'editor'>;
+}
+
+/**
+ * Check if the editor already contains a workflow node.
+ * Exported for use by the suggestion configuration.
+ */
+export function hasWorkflowNode(editor: any): boolean {
+    let found = false;
+    try {
+        editor.state.doc.descendants((node: any) => {
+            if (node.type.name === 'workflow') {
+                found = true;
+                return false; // Stop traversal
+            }
+            return true;
+        });
+    } catch {
+        // Silently handle traversal errors
+    }
+    return found;
 }
 
 /**
@@ -62,6 +86,9 @@ export const WorkflowNode = Node.create({
  *
  * This extension uses TipTap's Suggestion utility to show a popover
  * when the user types `/`. On selection, it inserts a styled workflow node.
+ *
+ * The actual constraints (only at start, no duplicates) are enforced in
+ * the suggestion configuration created by createSlashCommandSuggestion().
  */
 export const SlashCommand = Extension.create<SlashCommandOptions>({
     name: 'slashCommand',
@@ -70,27 +97,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         return {
             suggestion: {
                 char: '/',
-                allowedPrefixes: [null, ' ', '\n'],
                 pluginKey: SlashCommandPluginKey,
-                command: ({ editor, range, props }) => {
-                    // Delete the `/query` text and insert workflow node + space
-                    const item = props as WorkflowItem;
-                    editor
-                        .chain()
-                        .focus()
-                        .deleteRange(range)
-                        .insertContent([
-                            {
-                                type: 'workflow',
-                                attrs: {
-                                    id: item.id,
-                                    label: item.label,
-                                },
-                            },
-                            { type: 'text', text: ' ' },
-                        ])
-                        .run();
-                },
             } as Omit<SuggestionOptions<WorkflowItem>, 'editor'>,
         };
     },

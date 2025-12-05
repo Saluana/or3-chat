@@ -1265,7 +1265,7 @@ textarea::-webkit-scrollbar-thumb:hover {
 
 /* Workflow tag styling inside the TipTap editor */
 .prosemirror-host :deep(.workflow-tag) {
-    background: var(--md-tertiary-container, #e0e0ff);
+    background: var(--md-info, #e0e0ff);
     color: var(--md-on-tertiary-container, #1a1a66);
     border-radius: 4px;
     padding: 0.125rem 0.375rem;
@@ -1273,10 +1273,7 @@ textarea::-webkit-scrollbar-thumb:hover {
     cursor: pointer;
     transition: background 0.15s ease;
 }
-.prosemirror-host :deep(.workflow-tag:hover) {
-    background: var(--md-tertiary, #8080ff);
-    color: var(--md-on-tertiary, #ffffff);
-}
+
 .prosemirror-host :deep(.workflow-tag::before) {
     content: '⚡';
     margin-right: 0.25rem;

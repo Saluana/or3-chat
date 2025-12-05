@@ -3,6 +3,10 @@
  *
  * Creates a TipTap suggestion configuration for `/` workflow triggers.
  * This is used by the SlashCommand extension to render the popover UI.
+ *
+ * Constraints:
+ * - Only triggers when `/` is at position 1 (start of document)
+ * - Does not trigger if a workflow node already exists in the editor
  */
 
 import { VueRenderer } from '@tiptap/vue-3';
@@ -10,7 +14,10 @@ import { useDebounceFn } from '@vueuse/core';
 import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
 import type { WorkflowItem } from './useWorkflowSlashCommands';
 import WorkflowPopover from './WorkflowPopover.vue';
-import { SlashCommandPluginKey } from './slashCommandExtension';
+import {
+    SlashCommandPluginKey,
+    hasWorkflowNode,
+} from './slashCommandExtension';
 
 /**
  * Create the render lifecycle for the workflow suggestion popover.
@@ -118,12 +125,46 @@ export function createSlashCommandSuggestion(
         // Trigger character
         char: '/',
 
-        // Only trigger at start of input or after whitespace
-        // null means start of text - TipTap's type definition doesn't match runtime behavior
-        allowedPrefixes: [null, ' ', '\n'] as unknown as string[],
+        // Only trigger at start of input (null = start of document)
+        allowedPrefixes: [null] as unknown as string[],
 
         // Use consistent plugin key
         pluginKey: SlashCommandPluginKey,
+
+        // Custom allow function to enforce constraints:
+        // - Only trigger if `/` is at position 1 (very start of input)
+        // - Don't trigger if there's already a workflow node (no duplicates)
+        allow: ({ editor, range }) => {
+            // Position 1 means: doc(0) > paragraph(1) > text starts at 1
+            if (range.from !== 1) {
+                return false;
+            }
+            // Don't trigger if there's already a workflow node
+            if (hasWorkflowNode(editor)) {
+                return false;
+            }
+            return true;
+        },
+
+        // Command to insert the selected workflow
+        command: ({ editor, range, props }) => {
+            const item = props as WorkflowItem;
+            editor
+                .chain()
+                .focus()
+                .deleteRange(range)
+                .insertContent([
+                    {
+                        type: 'workflow',
+                        attrs: {
+                            id: item.id,
+                            label: item.label,
+                        },
+                    },
+                    { type: 'text', text: ' ' },
+                ])
+                .run();
+        },
 
         // Fetch matching items
         items: async ({ query }: { query: string }) => {
