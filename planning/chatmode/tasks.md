@@ -12,7 +12,7 @@ This task list implements the workflow/agent message integration into the chat i
 
 ### 1. Create Workflow Type Definitions (NO schema changes)
 
--   [ ] **1.1 Create workflow-types.ts**
+-   [ ] **1.1 Create workflow-types.ts (v2 Update - Message Type Discriminator)**
 
     -   File: `app/utils/chat/workflow-types.ts`
     -   Define `NodeExecutionStatus` type: `'pending' | 'running' | 'completed' | 'error'`
@@ -20,8 +20,10 @@ This task list implements the workflow/agent message integration into the chat i
     -   Define `NodeState` interface
     -   Define `BranchState` interface
     -   Define `WorkflowMessageData` interface with `type: 'workflow-execution'` discriminator
-    -   Create `isWorkflowMessageData(data)` type guard
-    -   Requirements: 1.2
+    -   **v2 Addition:** Define base message type with `type: 'message'` for non-workflow messages
+    -   Create `isWorkflowMessageData(data)` type guard for discriminated union
+    -   Create message type union for safe type narrowing
+    -   Requirements: 1.1, 1.2, v2 default message typing
     -   **No breaking changes:** New file, no modifications to existing code
 
 -   [ ] **1.2 Extend UiChatMessage interface (additive only)**
@@ -155,13 +157,16 @@ This task list implements the workflow/agent message integration into the chat i
     -   Highlight failed node with error icon
     -   Requirements: 6.2
 
--   [ ] **3.7 Add theme/icon integration**
+-   [ ] **3.7 Add theme/icon integration (v2 Update - Theme System)**
 
     -   File: `app/components/chat/WorkflowExecutionStatus.vue`
     -   Use `useIcon()` for all icons (define new workflow.status.\* icons if needed)
-    -   Use `useThemeOverrides()` for theming
-    -   Apply CSS variables for colors
-    -   Requirements: NFR-3
+    -   Import and use theme composable from `plugins/theme.ts`
+    -   **Use semantic tokens only:** `var(--md-surface)`, `var(--md-outline-variant)`, `var(--md-primary)`, `var(--md-error)`, etc.
+    -   **NO ad-hoc CSS variables** - all colors must come from theme system
+    -   Apply theme tokens for surface, border, accent, and semantic state colors
+    -   Ensure accessibility-compliant contrast ratios via theme system
+    -   Requirements: NFR-3, NFR-5, v2 theme integration
 
 -   [ ] **3.8 Write component tests**
     -   File: `app/components/chat/__tests__/WorkflowExecutionStatus.test.ts`
@@ -172,26 +177,39 @@ This task list implements the workflow/agent message integration into the chat i
 
 ---
 
-## Phase 4: ChatMessage Integration
+## Phase 4: ChatMessage Integration (v2 Update - Rendering Split)
 
-### 4. Modify ChatMessage for Workflow Rendering
+### 4. Create Dedicated WorkflowChatMessage Component
 
--   [ ] **4.1 Add workflow detection computed**
+-   [ ] **4.1 Create WorkflowChatMessage.vue component**
+
+    -   File: `app/components/chat/WorkflowChatMessage.vue`
+    -   Create dedicated component for workflow message rendering
+    -   Define props: `message: UiChatMessage` with workflow state
+    -   Import `WorkflowExecutionStatus` and `StreamMarkdown`
+    -   Requirements: v2 rendering split
+    -   **No breaking changes:** New component, doesn't affect existing code
+
+-   [ ] **4.2 Implement workflow message rendering**
+
+    -   File: `app/components/chat/WorkflowChatMessage.vue`
+    -   Render `WorkflowExecutionStatus` component with workflow state
+    -   Render final output using `StreamMarkdown`
+    -   Apply theme tokens for styling
+    -   Requirements: 5.1, 6.1, NFR-3
+
+-   [ ] **4.3 Modify ChatMessage.vue for conditional delegation**
 
     -   File: `app/components/chat/ChatMessage.vue`
-    -   Add `isWorkflow` computed property checking `props.message.isWorkflow`
-    -   Requirements: 2.1
+    -   Import `WorkflowChatMessage` component
+    -   Add discriminator function: `isWorkflowMessage(message)`
+    -   Use `v-if` to conditionally render `WorkflowChatMessage` for workflow messages
+    -   Keep existing rendering logic for regular messages
+    -   Requirements: 1.1, v2 rendering split
+    -   **No breaking changes:** Existing message rendering unchanged
 
--   [ ] **4.2 Add WorkflowExecutionStatus to template**
-
-    -   File: `app/components/chat/ChatMessage.vue`
-    -   Import `WorkflowExecutionStatus` component
-    -   Add conditional render above message content when `isWorkflow`
-    -   Pass workflow state props
-    -   Requirements: 5.1
-
--   [ ] **4.3 Ensure final output renders correctly**
-    -   File: `app/components/chat/ChatMessage.vue`
+-   [ ] **4.4 Ensure final output renders correctly**
+    -   File: `app/components/chat/WorkflowChatMessage.vue`
     -   Verify `StreamMarkdown` renders `message.text` (which is `finalOutput` for workflows)
     -   Test markdown/code rendering in final output
     -   Requirements: 6.1
@@ -296,24 +314,29 @@ This task list implements the workflow/agent message integration into the chat i
 
 ---
 
-## Phase 5.5: Reactivity Bridge (NEW - CRITICAL)
+## Phase 5.5: Reactivity Bridge (v2 MANDATORY - CRITICAL)
 
-### 5.5. Connect workflow state to Vue reactivity
+### 5.5. Connect workflow state to Vue reactivity (THE REACTIVE BRIDGE)
 
--   [ ] **5.5.1 Subscribe to workflow state updates in ChatContainer**
+**v2 REQUIREMENT:** This is now a mandatory architectural component, not optional. Without this, the UI will show stale content because Dexie writes alone don't trigger Vue reactivity.
+
+-   [ ] **5.5.1 Subscribe to workflow state updates in ChatContainer (MANDATORY)**
 
     -   File: `app/components/chat/ChatContainer.vue` or `app/composables/chat/useAi.ts`
     -   Create `workflowStates = reactive(new Map<string, WorkflowStreamingState>())`
     -   Subscribe to `workflow.execution:action:state_update` hook
-    -   Store reactive state reference in the map
-    -   Requirements: 4.1, 9.1
+    -   Store reactive state reference in the map (keyed by message ID)
+    -   **This enables workflow updates through the same reactive channel as streaming chat**
+    -   Requirements: 4.1, 9.1, v2 reactive bridge
+    -   **Critical:** This is the ONLY way to get real-time workflow UI updates
 
--   [ ] **5.5.2 Merge workflow state into allMessages computed**
+-   [ ] **5.5.2 Merge workflow state into allMessages computed (MANDATORY)**
 
     -   In ChatContainer/useAi, modify the messages computed to check workflowStates map
     -   If message has workflow state, add `isWorkflow: true` and `workflowState`
     -   The state.version changes will trigger Vue reactivity
-    -   Requirements: 4.1
+    -   **This connects the reactive accumulator to the message rendering system**
+    -   Requirements: 4.1, v2 reactive bridge
 
 -   [ ] **5.5.3 Clean up state on completion**
 
@@ -385,19 +408,29 @@ This task list implements the workflow/agent message integration into the chat i
     -   Verify RAF batching reduces update count
     -   Requirements: 4.1, 9.1
 
-### 9. Error Handling
+### 9. Error Handling (v2 Update - Centralized Error System)
 
--   [ ] **9.1 Handle workflow validation errors**
+-   [ ] **9.1 Integrate centralized error system**
 
-    -   Ensure validation errors display in error banner
+    -   File: `app/plugins/workflow-slash-commands.client.ts`
+    -   Import error utilities from `~/utils/errors` or equivalent
+    -   Route all workflow errors through centralized error system
+    -   Use `showError()` or similar API for consistent error UX
+    -   Requirements: 6.2, NFR-4, v2 error system
+
+-   [ ] **9.2 Handle workflow validation errors with theme tokens**
+
+    -   Ensure validation errors display through centralized system
     -   Set node state to error if validation fails on a specific node
-    -   Requirements: 6.2
+    -   Use theme error tokens (`var(--md-error)`, `var(--md-error-container)`)
+    -   Requirements: 6.2, NFR-3, v2 error system
 
--   [ ] **9.2 Handle execution errors gracefully**
+-   [ ] **9.3 Handle execution errors gracefully**
     -   Test error during node execution
-    -   Verify error node is highlighted
+    -   Verify error node is highlighted with theme error colors
     -   Verify partial output is preserved
-    -   Requirements: 6.2, 8.2
+    -   Verify errors appear in centralized error system
+    -   Requirements: 6.2, 8.2, NFR-4
 
 ### 10. Performance Validation
 
@@ -412,38 +445,77 @@ This task list implements the workflow/agent message integration into the chat i
     -   Verify no memory leaks in long sessions
     -   Requirements: 9.2
 
+### 11. Accessibility Testing (v2 NEW - Theme System)
+
+-   [ ] **11.1 Validate theme token contrast ratios**
+
+    -   Verify all workflow status colors meet WCAG AA contrast standards
+    -   Test with both light and dark themes
+    -   Use theme system's built-in contrast validation
+    -   Requirements: NFR-5, v2 theme integration
+
+-   [ ] **11.2 Test screen reader accessibility**
+
+    -   Verify semantic states have appropriate ARIA labels
+    -   Test status indicators with screen readers
+    -   Ensure collapsible sections announce state changes
+    -   Requirements: NFR-5
+
+-   [ ] **11.3 Test keyboard navigation**
+    -   Verify all collapsible sections work with keyboard only
+    -   Test tab order and focus management
+    -   Ensure stop button is keyboard accessible
+    -   Requirements: NFR-5
+
 ---
 
 ## Phase 9: Documentation
 
-### 11. Update Documentation
+### 12. Update Documentation (v2 Updates)
 
--   [ ] **11.1 Document WorkflowMessageData schema**
+-   [ ] **12.1 Document WorkflowMessageData schema and discriminators**
 
     -   Add documentation for workflow message format
     -   Include examples of workflow message data
-    -   Requirements: Documentation
+    -   **v2 Addition:** Document message type discriminators and discriminated unions
+    -   Document default `type: 'message'` for non-workflow messages
+    -   Requirements: Documentation, v2 default message typing
 
--   [ ] **11.2 Document new hooks**
+-   [ ] **12.2 Document new hooks and reactive bridge**
 
     -   Add workflow execution hooks to hooks documentation
     -   Include usage examples for plugin authors
-    -   Requirements: Documentation
+    -   **v2 Addition:** Document reactive bridge architecture and requirements
+    -   Explain why reactive bridge is mandatory for real-time updates
+    -   Requirements: Documentation, v2 reactive bridge
 
--   [ ] **11.3 Update ChatMessage component docs**
-    -   Document new workflow-specific props and behavior
-    -   Requirements: Documentation
+-   [ ] **12.3 Document WorkflowChatMessage component**
+
+    -   Document new `WorkflowChatMessage.vue` component
+    -   Explain rendering split and conditional delegation
+    -   Document prop contracts and type safety
+    -   Requirements: Documentation, v2 rendering split
+
+-   [ ] **12.4 Document theme system integration**
+    -   Document semantic token usage in workflow components
+    -   List all theme tokens used (surface, border, accent, error)
+    -   Explain accessibility benefits of theme system
+    -   Requirements: Documentation, v2 theme integration
+
+-   [ ] **12.5 Document centralized error system integration**
+    -   Document how workflow errors integrate with centralized system
+    -   Include examples of error handling
+    -   Requirements: Documentation, v2 error system
 
 ---
 
-## Dependency Graph
+## Dependency Graph (v2 Update)
 
 ```
-Phase 1 (Data Model)
-  ├── 1.1 Schema extension
-  ├── 1.2 workflow-types.ts
-  ├── 1.3 UiChatMessage extension
-  └── 1.4 ensureUiMessage update
+Phase 1 (Data Model + v2 Discriminators)
+  ├── 1.1 workflow-types.ts with discriminated unions
+  ├── 1.2 UiChatMessage extension
+  └── 1.3 ensureUiMessage update
         │
         ▼
 Phase 2 (Streaming)
@@ -451,45 +523,79 @@ Phase 2 (Streaming)
   └── 2.6 Unit tests
         │
         ▼
-Phase 3 (UI Components)
-  ├── 3.1-3.7 WorkflowExecutionStatus.vue
+Phase 3 (UI Components + v2 Theme Integration)
+  ├── 3.1-3.6 WorkflowExecutionStatus.vue
+  ├── 3.7 Theme system integration (semantic tokens)
   └── 3.8 Component tests
         │
         ▼
-Phase 4 (ChatMessage)
-  └── 4.1-4.3 ChatMessage modifications
+Phase 4 (v2 NEW: Dedicated Component + Rendering Split)
+  ├── 4.1 Create WorkflowChatMessage.vue
+  ├── 4.2 Implement workflow rendering
+  ├── 4.3 Modify ChatMessage.vue for conditional delegation
+  └── 4.4 Test final output rendering
         │
         ▼
-Phase 5 (Integration)
-  └── 5.1-5.7 workflow-slash-commands.client.ts
+Phase 5 (Integration + v2 Error System)
+  ├── 5.1-5.3 workflow-slash-commands.client.ts with createAccumulatorCallbacks
+  ├── 5.4 Reactive state bridge (emit hooks)
+  ├── 5.5 Throttled persistence with nowSec()
+  ├── 5.6-5.7 Completion and stop handling
+  └── 5.8 __merge__ branch handling
+        │
+        ├──► Phase 5.5 (v2 CRITICAL: Reactive Bridge) - parallel
+        │     ├── 5.5.1 Subscribe to workflow state updates
+        │     ├── 5.5.2 Merge workflow state into allMessages
+        │     └── 5.5.3 Clean up state on completion
         │
         ├──► Phase 6 (Hooks) - parallel
-        └──► Phase 7 (Icons) - parallel
+        │
+        ├──► Phase 7 (Icons) - parallel
+        │
+        └──► Phase 9 (v2 NEW: Error System Integration) - parallel
               │
               ▼
         Phase 8 (Testing)
               │
               ▼
-        Phase 9 (Documentation)
+        Phase 10 (Performance)
+              │
+              ▼
+        Phase 11 (v2 NEW: Accessibility Testing)
+              │
+              ▼
+        Phase 12 (Documentation + v2 Updates)
 ```
 
 ---
 
-## Estimated Timeline
+## Estimated Timeline (v2 Update)
 
-| Phase | Description               | Effort        | Notes                                                  |
-| ----- | ------------------------- | ------------- | ------------------------------------------------------ |
-| 1     | Data Model Foundation     | 2-3 hours     |                                                        |
-| 2     | Streaming Infrastructure  | 4-5 hours     |                                                        |
-| 3     | UI Components             | 4-6 hours     |                                                        |
-| 4     | ChatMessage Integration   | 1-2 hours     |                                                        |
-| 5     | Slash Command Integration | **2-3 hours** | ⬇️ Reduced from 3-4h with `createAccumulatorCallbacks` |
-| 6     | Hook Integration          | 1 hour        |                                                        |
-| 7     | Icon Registration         | 0.5 hours     |                                                        |
-| 8     | Testing & Polish          | 3-4 hours     |                                                        |
-| 9     | Documentation             | 1-2 hours     |                                                        |
+| Phase | Description                    | Effort        | Notes                                                   |
+| ----- | ------------------------------ | ------------- | ------------------------------------------------------- |
+| 1     | Data Model Foundation          | 2-3 hours     | +0.5h for discriminated union types                     |
+| 2     | Streaming Infrastructure       | 4-5 hours     |                                                         |
+| 3     | UI Components                  | 5-7 hours     | +1h for theme system integration                        |
+| 4     | WorkflowChatMessage Component  | 2-3 hours     | +1h for new dedicated component                         |
+| 5     | Slash Command Integration      | **2-3 hours** | ⬇️ Reduced from 3-4h with `createAccumulatorCallbacks`  |
+| 5.5   | **Reactive Bridge (MANDATORY)** | **2-3 hours** | ⚠️ CRITICAL: Required for real-time updates            |
+| 6     | Hook Integration               | 1 hour        |                                                         |
+| 7     | Icon Registration              | 0.5 hours     |                                                         |
+| 8     | Testing & Polish               | 3-4 hours     |                                                         |
+| 9     | Error System Integration       | 1-2 hours     | +1-2h for centralized error system                      |
+| 10    | Performance Validation         | 1-2 hours     |                                                         |
+| 11    | Accessibility Testing          | 2-3 hours     | +2-3h for theme system accessibility                    |
+| 12    | Documentation                  | 2-3 hours     | +1h for v2 additions                                    |
 
-**Total Estimated Effort: 19-26 hours** (reduced from 20-27h)
+**Total Estimated Effort: 28-39 hours** (increased from 19-26h due to v2 requirements)
+
+**v2 Additions Account For:**
+- Dedicated `WorkflowChatMessage.vue` component (+1h)
+- Reactive bridge implementation (+2-3h) **CRITICAL**
+- Centralized error system integration (+1-2h)
+- Theme system integration with semantic tokens (+1h)
+- Accessibility testing with theme system (+2-3h)
+- Additional documentation for v2 features (+1h)
 
 ---
 

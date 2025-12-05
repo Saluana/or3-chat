@@ -89,9 +89,10 @@ sequenceDiagram
 | `WorkflowMessageData`                          | **NEW** TypeScript interface for workflow-specific `data` field |
 | `UiChatMessage` (extended)                     | **ADDITIVE** - Add optional workflow fields for rendering       |
 | `WorkflowStreamAccumulator`                    | **NEW** RAF-batched reactive state for execution progress       |
+| `WorkflowChatMessage.vue`                      | **NEW** Dedicated component for workflow message rendering      |
 | `WorkflowExecutionStatus.vue`                  | **NEW** Collapsible node pipeline visualization                 |
-| `ChatMessage.vue` (modified)                   | **CONDITIONAL** - Only renders workflow UI if `isWorkflow`      |
-| `workflow-slash-commands.client.ts` (modified) | Wire execution callbacks to accumulator                         |
+| `ChatMessage.vue` (modified)                   | **CONDITIONAL** - Delegates to `WorkflowChatMessage.vue` if discriminator matches |
+| `workflow-slash-commands.client.ts` (modified) | Wire execution callbacks to accumulator with `createAccumulatorCallbacks` |
 
 ---
 
@@ -913,18 +914,72 @@ watch(
 </script>
 
 <style scoped>
+/* Theme System Integration */
 .workflow-execution-status {
+    /* Surface tokens for background */
+    background: var(--md-surface-container-low);
+    
+    /* Border tokens for outlines */
     border: 1px solid var(--md-outline-variant);
     border-radius: var(--md-border-radius);
+    
     margin-bottom: 1rem;
     overflow: hidden;
-    background: var(--md-surface-container-low);
+}
+
+.wes-header:hover {
+    /* Surface token for hover state */
+    background: var(--md-surface-container);
+}
+
+.wes-node-summary:hover {
+    /* Surface token for hover state */
+    background: var(--md-surface-container);
+}
+
+.wes-node-content {
+    /* Surface token for node content */
+    background: var(--md-surface);
+    
+    /* Border token for separator */
+    border-top: 1px solid var(--md-outline-variant);
+}
+
+.wes-node-error {
+    /* Error tokens for error display */
+    color: var(--md-error);
+    background: var(--md-error-container);
 }
 
 .wes-node-output {
     font-family: var(--md-font-mono);
 }
+
+.wes-branches {
+    /* Border token for branch separator */
+    border-left: 2px solid var(--md-outline-variant);
+}
+
+/* Status indicator colors using theme tokens */
+.status-running { color: var(--md-primary); }
+.status-completed { color: var(--md-tertiary); }
+.status-error { color: var(--md-error); }
+.status-stopped { color: var(--md-outline); }
+.status-warning { color: var(--md-warning); }
 </style>
+
+**Theme Token Usage:**
+- **Surface tokens**: `var(--md-surface)`, `var(--md-surface-container)`, `var(--md-surface-container-low)`
+- **Border tokens**: `var(--md-outline-variant)`, `var(--md-outline)`
+- **Accent tokens**: `var(--md-primary)`, `var(--md-tertiary)`
+- **Semantic state tokens**: `var(--md-error)`, `var(--md-error-container)`, `var(--md-warning)`
+- **Text tokens**: `var(--md-on-surface)`, `var(--md-on-error)`
+
+This approach ensures:
+1. Consistent theming across the application
+2. Automatic adaptation to theme changes
+3. Accessibility-compliant contrast ratios
+4. No ad-hoc CSS variables
 ```
 
 ---
@@ -1049,24 +1104,36 @@ async function persistFinal() {
 }
 ```
 
-**Note on `__merge__` branch:** Parallel nodes emit a special branch with `branchId === '__merge__'` for the merge step. The UI should display this as "Merging results..." in `WorkflowExecutionStatus.vue`.
+**Branching Support:**
+1. **Parallel Execution:** When a parallel node executes, it creates multiple branches that run concurrently
+2. **Branch Tracking:** Each branch has a unique `branchId` and is tracked in the `branches` map with composite key `${nodeId}:${branchId}`
+3. **Merge Step:** Parallel nodes emit a special `__merge__` branch (with `branchId === '__merge__'`) for the merge step
+4. **UI Display:** The `WorkflowExecutionStatus` component should display `__merge__` as "Merging results..." with appropriate styling
+5. **Adapter-Driven:** The `createAccumulatorCallbacks` helper automatically wires branch callbacks from the execution adapter
 
-### 2. ChatContainer Reactivity Subscription
+### 2. ChatContainer Reactivity Subscription (Reactive Bridge)
+
+**Critical:** This reactive bridge ensures workflow state updates trigger UI re-renders. Without this, the UI will show stale content because Dexie writes alone don't trigger Vue reactivity.
 
 ```typescript
 // In ChatContainer.vue or useAi.ts
 
-// Map of active workflow states by message ID
+// Map of active workflow states by message ID (keyed by message id)
 const workflowStates = reactive(new Map<string, WorkflowStreamingState>());
 
-// Subscribe to workflow state updates
+// Subscribe to workflow state updates (THE REACTIVE BRIDGE)
+// This hook is emitted by workflow-slash-commands plugin
+// and provides the reactive accumulator state reference
 hooks.on('workflow.execution:action:state_update', ({ messageId, state }) => {
+    // Store the reactive state reference
+    // When state.version increments, this triggers re-renders
     workflowStates.set(messageId, state);
 });
 
 // Clean up when execution completes
 hooks.on('workflow.execution:action:complete', ({ messageId }) => {
     // Keep in map for display, but could remove after delay
+    // setTimeout(() => workflowStates.delete(messageId), 60000);
 });
 
 // In allMessages computed, merge workflow state:
@@ -1079,7 +1146,8 @@ const allMessages = computed(() => {
                 isWorkflow: true,
                 workflowState: {
                     ...workflowState,
-                    // version change triggers re-render
+                    // The version field in workflowState ensures
+                    // Vue's reactivity detects changes
                 },
             };
         }
@@ -1088,42 +1156,110 @@ const allMessages = computed(() => {
 });
 ```
 
+**Why this is critical:**
+1. The workflow plugin bypasses the normal `useAi.send()` streaming loop
+2. Direct Dexie writes (`db.messages.put()`) don't trigger Vue reactivity
+3. The reactive bridge broadcasts state through hooks, staying in sync with streaming chat
+4. Components watch `workflowStates` map, which updates when `state.version` increments
+5. This provides the same real-time experience as regular chat streaming
+
 ### 3. Modified ChatMessage.vue
 
-Add conditional rendering for workflow messages:
+Add conditional delegation to workflow-specific component:
 
 ```vue
 <!-- Inside ChatMessage.vue template -->
 
 <template>
-    <!-- Existing message structure... -->
-
-    <!-- Workflow execution status (above final output) -->
-    <WorkflowExecutionStatus
-        v-if="isWorkflow && message.workflowState"
-        :workflow-name="message.workflowState.workflowName"
-        :execution-state="message.workflowState.executionState"
-        :node-states="message.workflowState.nodeStates"
-        :execution-order="message.workflowState.executionOrder"
-        :current-node-id="message.workflowState.currentNodeId"
-        :branches="message.workflowState.branches"
-        class="mb-4"
+    <!-- Conditional rendering based on message type discriminator -->
+    <WorkflowChatMessage
+        v-if="isWorkflowMessage(message)"
+        :message="message"
+        v-bind="$attrs"
     />
-
-    <!-- Final output (uses existing StreamMarkdown) -->
-    <StreamMarkdown
-        v-if="hasContent"
-        :content="message.text"
-        :theme="currentShikiTheme"
-        :class="streamMdClasses"
-    />
+    
+    <!-- Regular chat message rendering -->
+    <template v-else>
+        <!-- Existing message structure... -->
+        <StreamMarkdown
+            v-if="hasContent"
+            :content="message.text"
+            :theme="currentShikiTheme"
+            :class="streamMdClasses"
+        />
+    </template>
 </template>
 
 <script setup lang="ts">
-// Add computed for workflow detection
-const isWorkflow = computed(() => props.message.isWorkflow === true);
+import WorkflowChatMessage from './WorkflowChatMessage.vue';
+
+// Type guard for discriminated union
+function isWorkflowMessage(message: UiChatMessage): boolean {
+    return message.isWorkflow === true || message.data?.type === 'workflow-execution';
+}
 </script>
 ```
+
+### 3a. New WorkflowChatMessage.vue Component
+
+Dedicated component for rendering workflow messages:
+
+```vue
+<!-- app/components/chat/WorkflowChatMessage.vue -->
+<template>
+    <div class="workflow-chat-message">
+        <!-- Workflow execution status (above final output) -->
+        <WorkflowExecutionStatus
+            v-if="message.workflowState"
+            :workflow-name="message.workflowState.workflowName"
+            :execution-state="message.workflowState.executionState"
+            :node-states="message.workflowState.nodeStates"
+            :execution-order="message.workflowState.executionOrder"
+            :current-node-id="message.workflowState.currentNodeId"
+            :branches="message.workflowState.branches"
+            class="mb-4"
+        />
+
+        <!-- Final output (uses existing StreamMarkdown) -->
+        <StreamMarkdown
+            v-if="hasContent"
+            :content="message.text"
+            :theme="currentShikiTheme"
+            :class="streamMdClasses"
+        />
+    </div>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue';
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
+import WorkflowExecutionStatus from './WorkflowExecutionStatus.vue';
+import StreamMarkdown from './StreamMarkdown.vue';
+
+const props = defineProps<{
+    message: UiChatMessage;
+}>();
+
+const hasContent = computed(() => Boolean(props.message.text));
+const currentShikiTheme = computed(() => {
+    // Get theme from theme system
+    return 'github-dark'; // Placeholder
+});
+const streamMdClasses = computed(() => 'stream-markdown');
+</script>
+```
+
+**Prop Contract:**
+- **Input**: `message: UiChatMessage` with `isWorkflow: true` and populated `workflowState`
+- **Emits**: None (read-only rendering)
+- **Slots**: None (structured component)
+
+**Rendering Clarity:**
+The dedicated component provides:
+1. Clear separation between workflow and regular message rendering
+2. Type-safe props specific to workflow messages
+3. Single responsibility for workflow visualization
+4. Easy to test and maintain independently
 
 ### 3. Modified ensureUiMessage
 
@@ -1171,9 +1307,14 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
 
 ## Error Handling
 
-### Workflow Execution Errors
+### Centralized Error System Integration
+
+**Requirement:** Workflow failures must use the centralized or3 error/alert tooling for consistent UX.
 
 ```typescript
+// Import centralized error utilities
+import { showError, ErrorType } from '~/utils/errors';
+
 interface WorkflowError {
     type: 'validation' | 'execution' | 'timeout' | 'cancelled';
     message: string;
@@ -1191,7 +1332,7 @@ function handleWorkflowError(
     const isTimeout = error.message.includes('timeout');
     const isCancelled = error.name === 'AbortError';
 
-    return {
+    const workflowError: WorkflowError = {
         type: isCancelled
             ? 'cancelled'
             : isValidation
@@ -1207,8 +1348,39 @@ function handleWorkflowError(
             : undefined,
         recoverable: !isValidation,
     };
+    
+    // Use centralized error system for display
+    // This ensures consistent error UX across the application
+    showError({
+        type: ErrorType.WORKFLOW_EXECUTION,
+        message: workflowError.message,
+        context: {
+            nodeId: workflowError.nodeId,
+            nodeLabel: workflowError.nodeLabel,
+        },
+        recoverable: workflowError.recoverable,
+    });
+    
+    return workflowError;
 }
 ```
+
+### Error Display Requirements
+
+1. **Use Theme Error Tokens:**
+   - Error messages use `var(--md-error)` for text color
+   - Error containers use `var(--md-error-container)` for background
+   - Ensures accessibility-compliant contrast ratios
+
+2. **Centralized Alert System:**
+   - All workflow errors route through `~/utils/errors` or equivalent
+   - Error banners appear in consistent location (top of viewport or in-message)
+   - Error dismissal behavior matches other application errors
+
+3. **Error Context:**
+   - Node-level errors highlight the failing node in `WorkflowExecutionStatus`
+   - Workflow-level errors show in main error banner
+   - Both use the centralized error system for display
 
 ---
 
