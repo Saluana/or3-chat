@@ -24,7 +24,11 @@ import type {
 import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
-import { buildParts, trimOrMessagesImages } from '~/utils/chat/messages';
+import {
+    buildParts,
+    deriveMessageContent,
+    trimOrMessagesImages,
+} from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import { openRouterStream } from '../../utils/chat/openrouterStream';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
@@ -100,6 +104,7 @@ export function useChat(
     const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
     const historyLoadedFor = ref<string | null>(null);
+    const cleanupFns: Array<() => void> = [];
 
     if (import.meta.dev) {
         if (state.value.openrouterKey && apiKey.value) {
@@ -222,6 +227,110 @@ export function useChat(
         }
         return true;
     }
+
+    async function applyWorkflowResultToMessages(
+        messageId: string,
+        finalOutput: string
+    ) {
+        if (!messageId || !finalOutput) return;
+        let updated = false;
+
+        const rawIdx = rawMessages.value.findIndex((m) => m.id === messageId);
+        if (rawIdx !== -1) {
+            const existing = rawMessages.value[rawIdx];
+            rawMessages.value.splice(rawIdx, 1, {
+                ...existing,
+                content: finalOutput,
+            });
+            updated = true;
+        }
+
+        const uiIdx = messages.value.findIndex((m) => m.id === messageId);
+        if (uiIdx !== -1) {
+            const next = { ...messages.value[uiIdx], text: finalOutput };
+            messages.value.splice(uiIdx, 1, next);
+            updated = true;
+        }
+
+        if (!updated && threadIdRef.value) {
+            try {
+                const row = await db.messages.get(messageId);
+                if (row && row.thread_id === threadIdRef.value) {
+                    const data =
+                        (row.data as Record<string, unknown> | null) || null;
+                    const content =
+                        deriveMessageContent({
+                            content:
+                                typeof row === 'object' && 'content' in row
+                                    ? (row as any).content
+                                    : undefined,
+                            data,
+                        }) || finalOutput;
+                    const chatMsg: ChatMessage = {
+                        role: row.role as ChatMessage['role'],
+                        content,
+                        id: row.id,
+                        stream_id: row.stream_id ?? undefined,
+                        file_hashes: row.file_hashes ?? undefined,
+                        reasoning_text:
+                            data &&
+                            typeof data === 'object' &&
+                            typeof (data as { reasoning_text?: unknown })
+                                .reasoning_text === 'string'
+                                ? (data as { reasoning_text: string })
+                                      .reasoning_text
+                                : null,
+                        data: data || null,
+                        index:
+                            typeof row.index === 'number'
+                                ? row.index
+                                : typeof row.index === 'string'
+                                ? Number(row.index) || null
+                                : null,
+                        created_at:
+                            typeof row.created_at === 'number'
+                                ? row.created_at
+                                : null,
+                    };
+                    rawMessages.value.push(chatMsg);
+                    messages.value.push(
+                        ensureUiMessage({
+                            ...chatMsg,
+                            data,
+                        })
+                    );
+                }
+            } catch {
+                /* intentionally empty */
+            }
+        }
+    }
+
+    cleanupFns.push(
+        hooks.on(
+            'workflow.execution:action:state_update',
+            (payload: {
+                messageId: string;
+                state?: { executionState?: string; finalOutput?: string };
+            }) => {
+                const state = payload?.state || {};
+                const executionState = state.executionState;
+                const isDone =
+                    executionState &&
+                    executionState !== 'running' &&
+                    executionState !== 'idle';
+                const finalOutput =
+                    typeof state.finalOutput === 'string'
+                        ? state.finalOutput
+                        : '';
+                if (!isDone || !finalOutput) return;
+                void applyWorkflowResultToMessages(
+                    payload?.messageId,
+                    finalOutput
+                );
+            }
+        )
+    );
 
     async function ensureHistorySynced() {
         if (threadIdRef.value && historyLoadedFor.value !== threadIdRef.value) {
@@ -1352,18 +1461,6 @@ export function useChat(
                     dbCount: dbMessages.length,
                     memoryCount: rawMessages.value.length,
                 });
-                const toContent = (m: StoredMessage) => {
-                    if (
-                        m.data &&
-                        typeof m.data === 'object' &&
-                        'content' in m.data &&
-                        typeof (m.data as { content?: unknown }).content ===
-                            'string'
-                    ) {
-                        return (m.data as { content: string }).content;
-                    }
-                    return typeof m.content === 'string' ? m.content : '';
-                };
                 const toReasoning = (m: StoredMessage) => {
                     if (
                         m.data &&
@@ -1379,6 +1476,11 @@ export function useChat(
                         ? m.reasoning_text
                         : null;
                 };
+                const toContent = (m: StoredMessage) =>
+                    deriveMessageContent({
+                        content: m.content,
+                        data: m.data,
+                    });
                 rawMessages.value = dbMessages.map(
                     (m): ChatMessage => ({
                         role: m.role as ChatMessage['role'],
@@ -1504,6 +1606,17 @@ export function useChat(
             }
             streamAcc.finalize({ aborted: true });
             abortController.value = null;
+        }
+
+        // Clean up any registered hooks to avoid leaking listeners across threads
+        if (cleanupFns.length) {
+            for (const dispose of cleanupFns.splice(0, cleanupFns.length)) {
+                try {
+                    dispose();
+                } catch {
+                    /* intentionally empty */
+                }
+            }
         }
 
         rawMessages.value = [];

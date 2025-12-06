@@ -16,6 +16,7 @@ import {
     getGlobalMultiPaneApi,
     setGlobalMultiPaneApi,
 } from '~/utils/multiPaneApi';
+import { deriveMessageContent } from '~/utils/chat/messages';
 import { usePaneApps } from './usePaneApps';
 
 type PaneAppGetter = ReturnType<typeof usePaneApps>['getPaneApp'];
@@ -131,10 +132,10 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
         return msgs.map((msg) => {
             const row = msg as unknown as DbMessageRow;
             const data = row.data;
-            const content =
-                typeof data === 'object' && data !== null && 'content' in data
-                    ? String(data.content ?? '')
-                    : String(row.content ?? '');
+            const content = deriveMessageContent({
+                content: row.content,
+                data,
+            });
             return {
                 role: row.role as 'user' | 'assistant' | 'system' | 'tool',
                 content,
