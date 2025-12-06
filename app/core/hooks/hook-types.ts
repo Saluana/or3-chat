@@ -258,6 +258,7 @@ export interface MessageEntity {
     id: string;
     thread_id: string;
     role: string;
+    pending?: boolean;
     data?: unknown;
     index: number;
     created_at: number;
@@ -269,6 +270,7 @@ export interface MessageCreateEntity {
     id?: string;
     thread_id: string;
     role: string;
+    pending?: boolean;
     data?: unknown;
     index?: number;
     created_at?: number;
@@ -630,7 +632,7 @@ export type CoreHookPayloadMap = {
         { messageId: string; state: WorkflowStreamingState }
     ];
     'workflow.execution:action:complete': [
-        { messageId: string; workflowId: string }
+        { messageId: string; workflowId: string; finalOutput?: string }
     ];
 };
 

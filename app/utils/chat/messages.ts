@@ -43,7 +43,7 @@ export function deriveMessageContent(msg: {
     content?: string | ContentPart[] | null;
     data?: unknown;
 }): string {
-    const data = msg?.data;
+    const data = msg.data;
     if (isWorkflowMessageData(data)) {
         return data.finalOutput || '';
     }
@@ -55,7 +55,7 @@ export function deriveMessageContent(msg: {
         if (typeof textField === 'string') return textField;
     }
 
-    const content = msg?.content;
+    const content = msg.content;
     if (typeof content === 'string') return content;
     if (Array.isArray(content)) return getTextFromContent(content);
     return '';

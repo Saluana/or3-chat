@@ -1,5 +1,5 @@
 import type { Ref } from 'vue';
-import type { ChatMessage } from './types';
+import type { ChatMessage, ContentPart } from './types';
 import { deriveMessageContent } from './messages';
 import { db } from '~/db';
 import type { Message } from '~/db/schema';
@@ -28,10 +28,7 @@ export async function ensureThreadHistoryLoaded(
         messages.value = all.map((dbMsg: Message) => {
             const data = dbMsg.data as Record<string, unknown> | null | undefined;
             const content = deriveMessageContent({
-                content:
-                    typeof dbMsg === 'object' && 'content' in dbMsg
-                        ? (dbMsg as any).content
-                        : undefined,
+                content: (dbMsg as { content?: string | ContentPart[] | null }).content,
                 data,
             });
             return {

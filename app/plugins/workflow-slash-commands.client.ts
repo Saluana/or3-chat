@@ -37,6 +37,21 @@ interface ExecutionModule {
     getConversationHistory: typeof import('./WorkflowSlashCommands/executeWorkflow').getConversationHistory;
 }
 
+type WorkflowPost = NonNullable<
+    Awaited<
+        ReturnType<NonNullable<SlashCommandsModule['getWorkflowByName']>>
+    >
+>;
+type WorkflowPostWithMeta = WorkflowPost & {
+    meta: NonNullable<WorkflowPost['meta']>;
+};
+
+function hasWorkflowMeta(
+    post: WorkflowPost | null | undefined
+): post is WorkflowPostWithMeta {
+    return !!post && !!post.meta;
+}
+
 // Config type
 interface WorkflowSlashConfig {
     enabled?: boolean;
@@ -322,9 +337,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     }
 
     async function runWorkflowExecution(opts: {
-        workflowPost: Awaited<
-            ReturnType<NonNullable<SlashCommandsModule['getWorkflowByName']>>
-        >;
+        workflowPost: WorkflowPostWithMeta;
         prompt: string;
         assistantContext: {
             id: string;
@@ -371,7 +384,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             completedNodes.forEach((nodeId) => {
                 // Only include if we have an output for it
                 if (!resumeFrom.nodeOutputs[nodeId]) return;
-                const node = nodeMap.get(nodeId) || {};
+                const node: any = nodeMap.get(nodeId) || {};
                 const label =
                     (node.data && (node.data as any).label) ||
                     node.label ||
@@ -544,9 +557,10 @@ export default defineNuxtPlugin((nuxtApp) => {
             onBranchComplete: (
                 nodeId: string,
                 branchId: string,
+                label: string,
                 output: string
             ) => {
-                accumulator.branchComplete(nodeId, branchId, output);
+                accumulator.branchComplete(nodeId, branchId, label, output);
                 emitStateUpdate();
                 persist();
             },
@@ -710,7 +724,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                     : null) ||
                 (await slashMod.getWorkflowByName(message.data.workflowName));
 
-            if (!workflowPost || !workflowPost.meta) {
+            if (!hasWorkflowMeta(workflowPost)) {
                 reportError('Workflow not found for retry', {
                     code: 'ERR_VALIDATION',
                     toast: true,
@@ -943,7 +957,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             }
 
             // Check workflow has valid meta
-            if (!workflowPost.meta) {
+            if (!hasWorkflowMeta(workflowPost)) {
                 reportError(`Workflow "${parsed.workflowName}" has no data`, {
                     code: 'ERR_VALIDATION',
                     toast: true,

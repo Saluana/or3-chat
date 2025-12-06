@@ -236,18 +236,21 @@ export function useChat(
         let updated = false;
 
         const rawIdx = rawMessages.value.findIndex((m) => m.id === messageId);
-        if (rawIdx !== -1) {
-            const existing = rawMessages.value[rawIdx];
-            rawMessages.value.splice(rawIdx, 1, {
-                ...existing,
+        const existingRaw = rawIdx !== -1 ? rawMessages.value[rawIdx] : null;
+        if (existingRaw) {
+            const next: ChatMessage = {
+                ...existingRaw,
+                role: existingRaw.role,
                 content: finalOutput,
-            });
+            };
+            rawMessages.value.splice(rawIdx, 1, next);
             updated = true;
         }
 
         const uiIdx = messages.value.findIndex((m) => m.id === messageId);
-        if (uiIdx !== -1) {
-            const next = { ...messages.value[uiIdx], text: finalOutput };
+        const existingUi = uiIdx !== -1 ? messages.value[uiIdx] : null;
+        if (existingUi) {
+            const next: UiChatMessage = { ...existingUi, text: finalOutput };
             messages.value.splice(uiIdx, 1, next);
             updated = true;
         }
@@ -260,10 +263,7 @@ export function useChat(
                         (row.data as Record<string, unknown> | null) || null;
                     const content =
                         deriveMessageContent({
-                            content:
-                                typeof row === 'object' && 'content' in row
-                                    ? (row as any).content
-                                    : undefined,
+                            content: (row as { content?: string | ContentPart[] | null }).content,
                             data,
                         }) || finalOutput;
                     const chatMsg: ChatMessage = {
@@ -313,7 +313,7 @@ export function useChat(
                 messageId: string;
                 state?: { executionState?: string; finalOutput?: string };
             }) => {
-                const state = payload?.state || {};
+                const state = payload.state || {};
                 const executionState = state.executionState;
                 const isDone =
                     executionState &&
@@ -325,7 +325,7 @@ export function useChat(
                         : '';
                 if (!isDone || !finalOutput) return;
                 void applyWorkflowResultToMessages(
-                    payload?.messageId,
+                    payload.messageId,
                     finalOutput
                 );
             }
