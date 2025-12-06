@@ -53,9 +53,7 @@ function createMockWorkflowData(
 /**
  * Creates a mock node state
  */
-function createMockNodeState(
-    overrides: Partial<NodeState> = {}
-): NodeState {
+function createMockNodeState(overrides: Partial<NodeState> = {}): NodeState {
     return {
         status: 'pending',
         label: 'Test Node',
@@ -123,7 +121,11 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
 
     describe('toMessageData serialization', () => {
         it('serializes initial running state correctly', () => {
-            const data = accumulator.toMessageData('wf-1', 'My Workflow', 'Run this');
+            const data = accumulator.toMessageData(
+                'wf-1',
+                'My Workflow',
+                'Run this'
+            );
 
             expect(data.type).toBe('workflow-execution');
             expect(data.workflowId).toBe('wf-1');
@@ -139,9 +141,15 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
         it('serializes node states with all properties', () => {
             accumulator.nodeStart('node-1', 'Agent Node', 'agent');
             accumulator.nodeFinish('node-1', 'Node output');
-            accumulator.finalize({ result: { success: true, finalOutput: 'Node output' } });
+            accumulator.finalize({
+                result: { success: true, finalOutput: 'Node output' },
+            });
 
-            const data = accumulator.toMessageData('wf-1', 'My Workflow', 'Test');
+            const data = accumulator.toMessageData(
+                'wf-1',
+                'My Workflow',
+                'Test'
+            );
 
             expect(data.nodeStates['node-1']).toBeDefined();
             expect(data.nodeStates['node-1']!.status).toBe('completed');
@@ -159,7 +167,9 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
             accumulator.nodeFinish('node-2', 'Output 2');
             accumulator.nodeStart('node-3', 'Third', 'agent');
             accumulator.nodeFinish('node-3', 'Output 3');
-            accumulator.finalize({ result: { success: true, finalOutput: 'Output 3' } });
+            accumulator.finalize({
+                result: { success: true, finalOutput: 'Output 3' },
+            });
 
             const data = accumulator.toMessageData('wf-1', 'Workflow', 'Test');
 
@@ -173,16 +183,24 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
             accumulator.branchComplete('parallel-1', 'branch-a', 'Result A');
             accumulator.branchComplete('parallel-1', 'branch-b', 'Result B');
             accumulator.nodeFinish('parallel-1', 'Merged');
-            accumulator.finalize({ result: { success: true, finalOutput: 'Merged' } });
+            accumulator.finalize({
+                result: { success: true, finalOutput: 'Merged' },
+            });
 
             const data = accumulator.toMessageData('wf-1', 'Workflow', 'Test');
 
             expect(data.branches).toBeDefined();
             expect(data.branches!['parallel-1:branch-a']).toBeDefined();
-            expect(data.branches!['parallel-1:branch-a']!.status).toBe('completed');
-            expect(data.branches!['parallel-1:branch-a']!.output).toBe('Result A');
+            expect(data.branches!['parallel-1:branch-a']!.status).toBe(
+                'completed'
+            );
+            expect(data.branches!['parallel-1:branch-a']!.output).toBe(
+                'Result A'
+            );
             expect(data.branches!['parallel-1:branch-b']).toBeDefined();
-            expect(data.branches!['parallel-1:branch-b']!.status).toBe('completed');
+            expect(data.branches!['parallel-1:branch-b']!.status).toBe(
+                'completed'
+            );
         });
 
         it('serializes error state with failed node info', () => {
@@ -222,9 +240,18 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
                 result: {
                     success: true,
                     finalOutput: 'Done',
-                    usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+                    usage: {
+                        promptTokens: 100,
+                        completionTokens: 50,
+                        totalTokens: 150,
+                    },
                     tokenUsageDetails: [
-                        { nodeId: 'node-1', promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+                        {
+                            nodeId: 'node-1',
+                            promptTokens: 100,
+                            completionTokens: 50,
+                            totalTokens: 150,
+                        },
                     ],
                 },
             });
@@ -249,7 +276,9 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
             // Advance time by 1 second
             vi.setSystemTime(startTime + 1000);
             accumulator.nodeFinish('node-1', 'Done');
-            accumulator.finalize({ result: { success: true, finalOutput: 'Done' } });
+            accumulator.finalize({
+                result: { success: true, finalOutput: 'Done' },
+            });
 
             const data = accumulator.toMessageData('wf-1', 'Workflow', 'Test');
 
@@ -263,7 +292,9 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
             accumulator.nodeFinish('node-1', 'Output 1');
             accumulator.nodeStart('node-2', 'Second', 'agent');
             accumulator.nodeFinish('node-2', 'Output 2');
-            accumulator.finalize({ result: { success: true, finalOutput: 'Output 2' } });
+            accumulator.finalize({
+                result: { success: true, finalOutput: 'Output 2' },
+            });
 
             const data = accumulator.toMessageData('wf-1', 'Workflow', 'Test');
 
@@ -301,7 +332,9 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
         it('does not include resume state on successful completion', () => {
             accumulator.nodeStart('node-1', 'Node', 'agent');
             accumulator.nodeFinish('node-1', 'Done');
-            accumulator.finalize({ result: { success: true, finalOutput: 'Done' } });
+            accumulator.finalize({
+                result: { success: true, finalOutput: 'Done' },
+            });
 
             const data = accumulator.toMessageData('wf-1', 'Workflow', 'Test');
 
@@ -334,9 +367,15 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
 
     describe('edge cases', () => {
         it('handles empty workflow (no nodes executed)', () => {
-            accumulator.finalize({ result: { success: true, finalOutput: '' } });
+            accumulator.finalize({
+                result: { success: true, finalOutput: '' },
+            });
 
-            const data = accumulator.toMessageData('wf-1', 'Empty Workflow', 'Test');
+            const data = accumulator.toMessageData(
+                'wf-1',
+                'Empty Workflow',
+                'Test'
+            );
 
             expect(data.nodeStates).toEqual({});
             expect(data.executionOrder).toEqual([]);
@@ -357,7 +396,9 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
             accumulator.nodeStart('node-1', 'Node', 'agent');
             accumulator.nodeStart('node-1', 'Node Updated', 'tool');
             accumulator.nodeFinish('node-1', 'Done');
-            accumulator.finalize({ result: { success: true, finalOutput: 'Done' } });
+            accumulator.finalize({
+                result: { success: true, finalOutput: 'Done' },
+            });
 
             const data = accumulator.toMessageData('wf-1', 'Workflow', 'Test');
 
@@ -365,14 +406,18 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
             expect(data.nodeStates['node-1']!.label).toBe('Node Updated');
             expect(data.nodeStates['node-1']!.type).toBe('tool');
             // Should only appear once in execution order
-            expect(data.executionOrder.filter((id) => id === 'node-1')).toHaveLength(1);
+            expect(
+                data.executionOrder.filter((id) => id === 'node-1')
+            ).toHaveLength(1);
         });
 
         it('handles very long node output (memory warning threshold)', () => {
             const longOutput = 'x'.repeat(150000); // 150KB
             accumulator.nodeStart('node-1', 'Node', 'agent');
             accumulator.nodeFinish('node-1', longOutput);
-            accumulator.finalize({ result: { success: true, finalOutput: longOutput } });
+            accumulator.finalize({
+                result: { success: true, finalOutput: longOutput },
+            });
 
             const data = accumulator.toMessageData('wf-1', 'Workflow', 'Test');
 
@@ -381,12 +426,15 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
         });
 
         it('handles special characters in node labels and outputs', () => {
-            const specialLabel = 'Node with "quotes" and <html> & unicode: 你好';
+            const specialLabel =
+                'Node with "quotes" and <html> & unicode: 你好';
             const specialOutput = '{"json": true, "nested": {"key": "value"}}';
 
             accumulator.nodeStart('node-1', specialLabel, 'agent');
             accumulator.nodeFinish('node-1', specialOutput);
-            accumulator.finalize({ result: { success: true, finalOutput: specialOutput } });
+            accumulator.finalize({
+                result: { success: true, finalOutput: specialOutput },
+            });
 
             const data = accumulator.toMessageData('wf-1', 'Workflow', 'Test');
 
@@ -398,15 +446,25 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
             accumulator.nodeStart('parallel-1', 'Parallel', 'parallel');
             accumulator.branchStart('parallel-1', 'branch-a', 'A');
             accumulator.branchComplete('parallel-1', 'branch-a', 'Result A');
-            accumulator.branchStart('parallel-1', MERGE_BRANCH_ID, MERGE_BRANCH_LABEL);
+            accumulator.branchStart(
+                'parallel-1',
+                MERGE_BRANCH_ID,
+                MERGE_BRANCH_LABEL
+            );
             accumulator.branchComplete('parallel-1', MERGE_BRANCH_ID, 'Merged');
             accumulator.nodeFinish('parallel-1', 'Final');
-            accumulator.finalize({ result: { success: true, finalOutput: 'Final' } });
+            accumulator.finalize({
+                result: { success: true, finalOutput: 'Final' },
+            });
 
             const data = accumulator.toMessageData('wf-1', 'Workflow', 'Test');
 
-            expect(data.branches![`parallel-1:${MERGE_BRANCH_ID}`]).toBeDefined();
-            expect(data.branches![`parallel-1:${MERGE_BRANCH_ID}`]!.label).toBe(MERGE_BRANCH_LABEL);
+            expect(
+                data.branches![`parallel-1:${MERGE_BRANCH_ID}`]
+            ).toBeDefined();
+            expect(data.branches![`parallel-1:${MERGE_BRANCH_ID}`]!.label).toBe(
+                MERGE_BRANCH_LABEL
+            );
         });
     });
 });
@@ -488,7 +546,9 @@ describe('Phase 8.2: Workflow Message Loading', () => {
             const uiMessage = ensureUiMessage(dbMessage as any);
 
             expect(uiMessage.workflowState!.branches).toBeDefined();
-            expect(uiMessage.workflowState!.branches!['parallel-1:branch-a']).toBeDefined();
+            expect(
+                uiMessage.workflowState!.branches!['parallel-1:branch-a']
+            ).toBeDefined();
         });
 
         it('handles interrupted state with resume info', () => {
@@ -508,7 +568,9 @@ describe('Phase 8.2: Workflow Message Loading', () => {
             expect(uiMessage.workflowState!.executionState).toBe('interrupted');
             expect(uiMessage.workflowState!.failedNodeId).toBe('node-2');
             expect(uiMessage.workflowState!.resumeState).toBeDefined();
-            expect(uiMessage.workflowState!.resumeState!.startNodeId).toBe('node-2');
+            expect(uiMessage.workflowState!.resumeState!.startNodeId).toBe(
+                'node-2'
+            );
         });
 
         it('uses finalOutput as text for workflow messages', () => {
@@ -574,7 +636,11 @@ describe('Phase 8.2: Workflow Message Loading', () => {
     describe('deriveStartNodeId utility', () => {
         it('returns resumeState.startNodeId if available', () => {
             const result = deriveStartNodeId({
-                resumeState: { startNodeId: 'resume-node', nodeOutputs: {}, executionOrder: [] },
+                resumeState: {
+                    startNodeId: 'resume-node',
+                    nodeOutputs: {},
+                    executionOrder: [],
+                },
                 failedNodeId: 'failed-node',
                 currentNodeId: 'current-node',
             });
@@ -603,7 +669,9 @@ describe('Phase 8.2: Workflow Message Loading', () => {
         it('falls back to active node from nodeStates', () => {
             const result = deriveStartNodeId({
                 nodeStates: {
-                    'completed-node': createMockNodeState({ status: 'completed' }),
+                    'completed-node': createMockNodeState({
+                        status: 'completed',
+                    }),
                     'active-node': createMockNodeState({ status: 'active' }),
                 },
                 lastActiveNodeId: 'last-active',
@@ -615,7 +683,9 @@ describe('Phase 8.2: Workflow Message Loading', () => {
         it('falls back to lastActiveNodeId', () => {
             const result = deriveStartNodeId({
                 nodeStates: {
-                    'completed-node': createMockNodeState({ status: 'completed' }),
+                    'completed-node': createMockNodeState({
+                        status: 'completed',
+                    }),
                 },
                 lastActiveNodeId: 'last-active',
             });
@@ -763,13 +833,17 @@ describe('Phase 8.3: Real-time Updates', () => {
             accumulator.nodeToken('node-1', 'World');
 
             // Tokens should be pending, not yet applied
-            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe('');
+            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe(
+                ''
+            );
 
             // Flush RAF
             await flushRAF(vi);
 
             // Now tokens should be applied
-            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe('Hello World');
+            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe(
+                'Hello World'
+            );
         });
 
         it('batches multiple branchToken calls', async () => {
@@ -779,11 +853,15 @@ describe('Phase 8.3: Real-time Updates', () => {
             accumulator.branchToken('parallel-1', 'branch-a', 'A', 'Token1');
             accumulator.branchToken('parallel-1', 'branch-a', 'A', 'Token2');
 
-            expect(accumulator.state.branches['parallel-1:branch-a']!.streamingText).toBe('');
+            expect(
+                accumulator.state.branches['parallel-1:branch-a']!.streamingText
+            ).toBe('');
 
             await flushRAF(vi);
 
-            expect(accumulator.state.branches['parallel-1:branch-a']!.streamingText).toBe('Token1Token2');
+            expect(
+                accumulator.state.branches['parallel-1:branch-a']!.streamingText
+            ).toBe('Token1Token2');
         });
 
         it('flushes pending tokens on nodeFinish', async () => {
@@ -794,9 +872,13 @@ describe('Phase 8.3: Real-time Updates', () => {
             accumulator.nodeFinish('node-1', 'Final');
 
             // Tokens should be flushed immediately
-            expect(accumulator.state.nodeStates['node-1']!.output).toBe('Final');
+            expect(accumulator.state.nodeStates['node-1']!.output).toBe(
+                'Final'
+            );
             // streamingText should be cleared on finish
-            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBeUndefined();
+            expect(
+                accumulator.state.nodeStates['node-1']!.streamingText
+            ).toBeUndefined();
         });
 
         it('flushes pending tokens on finalize', async () => {
@@ -817,7 +899,9 @@ describe('Phase 8.3: Real-time Updates', () => {
 
             await flushRAF(vi);
 
-            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe('');
+            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe(
+                ''
+            );
         });
 
         it('handles high-frequency token stream', async () => {
@@ -829,13 +913,20 @@ describe('Phase 8.3: Real-time Updates', () => {
             }
 
             // Should still be pending
-            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe('');
+            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe(
+                ''
+            );
 
             await flushRAF(vi);
 
             // All tokens should be concatenated
-            const expected = Array.from({ length: 100 }, (_, i) => `t${i}`).join('');
-            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe(expected);
+            const expected = Array.from(
+                { length: 100 },
+                (_, i) => `t${i}`
+            ).join('');
+            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe(
+                expected
+            );
         });
     });
 
@@ -922,14 +1013,17 @@ describe('Phase 8.3: Real-time Updates', () => {
 
         it('ignores nodeToken after finalize', async () => {
             accumulator.nodeStart('node-1', 'Node', 'agent');
-            const streamingBefore = accumulator.state.nodeStates['node-1']!.streamingText;
+            const streamingBefore =
+                accumulator.state.nodeStates['node-1']!.streamingText;
             accumulator.finalize({ result: { success: true } });
             accumulator.nodeToken('node-1', 'Ignored');
 
             await flushRAF(vi);
 
             // Should not have added streaming text - value should remain unchanged from before finalize
-            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe(streamingBefore);
+            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe(
+                streamingBefore
+            );
         });
 
         it('ignores nodeFinish after finalize', () => {
@@ -947,7 +1041,9 @@ describe('Phase 8.3: Real-time Updates', () => {
             accumulator.nodeFinish('node-1', 'Done');
             accumulator.finalize({ result: { success: true } });
 
-            const sessionMessages = [{ role: 'user' as const, content: 'Late message' }];
+            const sessionMessages = [
+                { role: 'user' as const, content: 'Late message' },
+            ];
             accumulator.finalize({
                 result: {
                     success: true,
@@ -975,9 +1071,15 @@ describe('Phase 8.3: Real-time Updates', () => {
 
             await flushRAF(vi);
 
-            expect(accumulator.state.branches['parallel-1:branch-a']!.streamingText).toBe('A1A2');
-            expect(accumulator.state.branches['parallel-1:branch-b']!.streamingText).toBe('B1B2');
-            expect(accumulator.state.branches['parallel-1:branch-c']!.streamingText).toBe('C1');
+            expect(
+                accumulator.state.branches['parallel-1:branch-a']!.streamingText
+            ).toBe('A1A2');
+            expect(
+                accumulator.state.branches['parallel-1:branch-b']!.streamingText
+            ).toBe('B1B2');
+            expect(
+                accumulator.state.branches['parallel-1:branch-c']!.streamingText
+            ).toBe('C1');
         });
 
         it('tracks branch completion independently', () => {
@@ -987,8 +1089,12 @@ describe('Phase 8.3: Real-time Updates', () => {
 
             accumulator.branchComplete('parallel-1', 'branch-a', 'Result A');
 
-            expect(accumulator.state.branches['parallel-1:branch-a']!.status).toBe('completed');
-            expect(accumulator.state.branches['parallel-1:branch-b']!.status).toBe('active');
+            expect(
+                accumulator.state.branches['parallel-1:branch-a']!.status
+            ).toBe('completed');
+            expect(
+                accumulator.state.branches['parallel-1:branch-b']!.status
+            ).toBe('active');
         });
     });
 
@@ -1066,30 +1172,43 @@ describe('Edge Cases and Robustness', () => {
             await flushRAF(vi);
 
             // Should not crash, node should not exist
-            expect(accumulator.state.nodeStates['unknown-node']).toBeUndefined();
+            expect(
+                accumulator.state.nodeStates['unknown-node']
+            ).toBeUndefined();
         });
 
         it('handles nodeFinish for non-existent node', () => {
             accumulator.nodeFinish('unknown-node', 'Output');
 
             // Should not crash
-            expect(accumulator.state.nodeStates['unknown-node']).toBeUndefined();
+            expect(
+                accumulator.state.nodeStates['unknown-node']
+            ).toBeUndefined();
         });
 
         it('handles branchToken for non-existent branch', async () => {
-            accumulator.branchToken('node-1', 'unknown-branch', 'Label', 'Token');
+            accumulator.branchToken(
+                'node-1',
+                'unknown-branch',
+                'Label',
+                'Token'
+            );
 
             await flushRAF(vi);
 
             // Should not crash
-            expect(accumulator.state.branches['node-1:unknown-branch']).toBeUndefined();
+            expect(
+                accumulator.state.branches['node-1:unknown-branch']
+            ).toBeUndefined();
         });
 
         it('handles branchComplete for non-existent branch', () => {
             accumulator.branchComplete('node-1', 'unknown-branch', 'Output');
 
             // Should not crash
-            expect(accumulator.state.branches['node-1:unknown-branch']).toBeUndefined();
+            expect(
+                accumulator.state.branches['node-1:unknown-branch']
+            ).toBeUndefined();
         });
 
         it('handles tokenUsage for non-existent node', () => {
@@ -1122,7 +1241,9 @@ describe('Edge Cases and Robustness', () => {
             accumulator.nodeStart('node-1', 'Node', 'agent');
             accumulator.nodeError('node-1', new Error(longMessage));
 
-            expect(accumulator.state.nodeStates['node-1']!.error).toBe(longMessage);
+            expect(accumulator.state.nodeStates['node-1']!.error).toBe(
+                longMessage
+            );
         });
     });
 
@@ -1134,8 +1255,12 @@ describe('Edge Cases and Robustness', () => {
 
             accumulator.nodeFinish('node-1', 'Final');
 
-            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBeUndefined();
-            expect(accumulator.state.nodeStates['node-1']!.output).toBe('Final');
+            expect(
+                accumulator.state.nodeStates['node-1']!.streamingText
+            ).toBeUndefined();
+            expect(accumulator.state.nodeStates['node-1']!.output).toBe(
+                'Final'
+            );
         });
 
         it('clears streaming buffers on branch complete', () => {
@@ -1146,8 +1271,12 @@ describe('Edge Cases and Robustness', () => {
 
             accumulator.branchComplete('parallel-1', 'branch-a', 'Final');
 
-            expect(accumulator.state.branches['parallel-1:branch-a']!.streamingText).toBeUndefined();
-            expect(accumulator.state.branches['parallel-1:branch-a']!.output).toBe('Final');
+            expect(
+                accumulator.state.branches['parallel-1:branch-a']!.streamingText
+            ).toBeUndefined();
+            expect(
+                accumulator.state.branches['parallel-1:branch-a']!.output
+            ).toBe('Final');
         });
 
         it('reset clears all state including pending tokens', async () => {
@@ -1181,7 +1310,9 @@ describe('Edge Cases and Robustness', () => {
             vi.setSystemTime(end);
             accumulator.nodeFinish('node-1', 'Done');
 
-            expect(accumulator.state.nodeStates['node-1']!.finishedAt).toBe(end);
+            expect(accumulator.state.nodeStates['node-1']!.finishedAt).toBe(
+                end
+            );
         });
 
         it('records finishedAt on nodeError', () => {
@@ -1191,7 +1322,9 @@ describe('Edge Cases and Robustness', () => {
             accumulator.nodeStart('node-1', 'Node', 'agent');
             accumulator.nodeError('node-1', new Error('Failed'));
 
-            expect(accumulator.state.nodeStates['node-1']!.finishedAt).toBe(now);
+            expect(accumulator.state.nodeStates['node-1']!.finishedAt).toBe(
+                now
+            );
         });
     });
 
@@ -1212,7 +1345,9 @@ describe('Edge Cases and Robustness', () => {
             accumulator.nodeStart('node-1', 'Node', 'agent');
             accumulator.tokenUsage('node-1', { totalTokens: 100 });
 
-            expect(accumulator.state.nodeStates['node-1']!.tokenCount).toBe(100);
+            expect(accumulator.state.nodeStates['node-1']!.tokenCount).toBe(
+                100
+            );
         });
 
         it('accumulates token counts', () => {
@@ -1220,7 +1355,9 @@ describe('Edge Cases and Robustness', () => {
             accumulator.tokenUsage('node-1', { totalTokens: 50 });
             accumulator.tokenUsage('node-1', { totalTokens: 50 });
 
-            expect(accumulator.state.nodeStates['node-1']!.tokenCount).toBe(100);
+            expect(accumulator.state.nodeStates['node-1']!.tokenCount).toBe(
+                100
+            );
         });
     });
 
@@ -1249,7 +1386,10 @@ describe('Edge Cases and Robustness', () => {
             const nodeLabels: string[] = [];
 
             watch(
-                () => Object.values(accumulator.state.nodeStates).map((n) => n.label),
+                () =>
+                    Object.values(accumulator.state.nodeStates).map(
+                        (n) => n.label
+                    ),
                 (labels) => {
                     nodeLabels.push(...labels);
                 },
@@ -1312,17 +1452,26 @@ describe('Edge Cases and Robustness', () => {
 
             await flushRAF(vi);
 
-            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe('Thinking...');
+            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe(
+                'Thinking...'
+            );
         });
 
         it('handles branchReasoning like branchToken', async () => {
             accumulator.nodeStart('parallel-1', 'Parallel', 'parallel');
             accumulator.branchStart('parallel-1', 'branch-a', 'A');
-            accumulator.branchReasoning('parallel-1', 'branch-a', 'A', 'Reasoning...');
+            accumulator.branchReasoning(
+                'parallel-1',
+                'branch-a',
+                'A',
+                'Reasoning...'
+            );
 
             await flushRAF(vi);
 
-            expect(accumulator.state.branches['parallel-1:branch-a']!.streamingText).toBe('Reasoning...');
+            expect(
+                accumulator.state.branches['parallel-1:branch-a']!.streamingText
+            ).toBe('Reasoning...');
         });
     });
 });

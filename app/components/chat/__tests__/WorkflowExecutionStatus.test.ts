@@ -79,8 +79,10 @@ describe('WorkflowExecutionStatus', () => {
 
         expect(wrapper.text()).toContain('Test Workflow');
         expect(wrapper.text()).toContain('(Running)');
-        
-        const statusIcon = wrapper.find('.u-icon[data-name="icon-workflow.status.running"]');
+
+        const statusIcon = wrapper.find(
+            '.u-icon[data-name="icon-workflow.status.running"]'
+        );
         expect(statusIcon.exists()).toBe(true);
     });
 
@@ -189,7 +191,9 @@ describe('WorkflowExecutionStatus', () => {
 
         // Header is always visible
         expect(wrapper.text()).toContain('(Error)');
-        const errorIcon = wrapper.find('.u-icon[data-name="icon-workflow.status.error"]');
+        const errorIcon = wrapper.find(
+            '.u-icon[data-name="icon-workflow.status.error"]'
+        );
         expect(errorIcon.exists()).toBe(true);
 
         // Expand to see error message in node

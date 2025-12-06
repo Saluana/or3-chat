@@ -182,6 +182,8 @@ describe('ChatContainer', () => {
         const button = wrapper.findComponent({ name: 'UButton' });
         await button.trigger('click');
 
-        expect(scroller.vm.scrollToBottom).toHaveBeenCalledWith({ smooth: true });
+        expect(scroller.vm.scrollToBottom).toHaveBeenCalledWith({
+            smooth: true,
+        });
     });
 });

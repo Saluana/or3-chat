@@ -500,6 +500,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Requirements: Documentation, v2 rendering split
 
 -   [ ] **12.4 Document theme system integration**
+
     -   Document semantic token usage in workflow components
     -   List all theme tokens used (surface, border, accent, error)
     -   Explain accessibility benefits of theme system
@@ -574,31 +575,32 @@ Phase 5 (Integration + v2 Error System)
 
 ## Estimated Timeline (v2 Update)
 
-| Phase | Description                    | Effort        | Notes                                                   |
-| ----- | ------------------------------ | ------------- | ------------------------------------------------------- |
-| 1     | Data Model Foundation          | 2-3 hours     | +0.5h for discriminated union types                     |
-| 2     | Streaming Infrastructure       | 4-5 hours     |                                                         |
-| 3     | UI Components                  | 5-7 hours     | +1h for theme system integration                        |
-| 4     | WorkflowChatMessage Component  | 2-3 hours     | +1h for new dedicated component                         |
-| 5     | Slash Command Integration      | **2-3 hours** | ⬇️ Reduced from 3-4h with `createAccumulatorCallbacks`  |
+| Phase | Description                     | Effort        | Notes                                                  |
+| ----- | ------------------------------- | ------------- | ------------------------------------------------------ |
+| 1     | Data Model Foundation           | 2-3 hours     | +0.5h for discriminated union types                    |
+| 2     | Streaming Infrastructure        | 4-5 hours     |                                                        |
+| 3     | UI Components                   | 5-7 hours     | +1h for theme system integration                       |
+| 4     | WorkflowChatMessage Component   | 2-3 hours     | +1h for new dedicated component                        |
+| 5     | Slash Command Integration       | **2-3 hours** | ⬇️ Reduced from 3-4h with `createAccumulatorCallbacks` |
 | 5.5   | **Reactive Bridge (MANDATORY)** | **2-3 hours** | ⚠️ CRITICAL: Required for real-time updates            |
-| 6     | Hook Integration               | 1 hour        |                                                         |
-| 7     | Icon Registration              | 0.5 hours     |                                                         |
-| 8     | Testing & Polish               | 3-4 hours     |                                                         |
-| 9     | Error System Integration       | 1-2 hours     | +1-2h for centralized error system                      |
-| 10    | Performance Validation         | 1-2 hours     |                                                         |
-| 11    | Accessibility Testing          | 2-3 hours     | +2-3h for theme system accessibility                    |
-| 12    | Documentation                  | 2-3 hours     | +1h for v2 additions                                    |
+| 6     | Hook Integration                | 1 hour        |                                                        |
+| 7     | Icon Registration               | 0.5 hours     |                                                        |
+| 8     | Testing & Polish                | 3-4 hours     |                                                        |
+| 9     | Error System Integration        | 1-2 hours     | +1-2h for centralized error system                     |
+| 10    | Performance Validation          | 1-2 hours     |                                                        |
+| 11    | Accessibility Testing           | 2-3 hours     | +2-3h for theme system accessibility                   |
+| 12    | Documentation                   | 2-3 hours     | +1h for v2 additions                                   |
 
 **Total Estimated Effort: 28-39 hours** (increased from 19-26h due to v2 requirements)
 
 **v2 Additions Account For:**
-- Dedicated `WorkflowChatMessage.vue` component (+1h)
-- Reactive bridge implementation (+2-3h) **CRITICAL**
-- Centralized error system integration (+1-2h)
-- Theme system integration with semantic tokens (+1h)
-- Accessibility testing with theme system (+2-3h)
-- Additional documentation for v2 features (+1h)
+
+-   Dedicated `WorkflowChatMessage.vue` component (+1h)
+-   Reactive bridge implementation (+2-3h) **CRITICAL**
+-   Centralized error system integration (+1-2h)
+-   Theme system integration with semantic tokens (+1h)
+-   Accessibility testing with theme system (+2-3h)
+-   Additional documentation for v2 features (+1h)
 
 ---
 
