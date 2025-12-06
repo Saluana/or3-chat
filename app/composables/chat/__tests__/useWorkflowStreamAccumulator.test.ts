@@ -86,12 +86,15 @@ describe('useWorkflowStreamAccumulator', () => {
             'Part 1'
         );
 
-        // Complete branch
-        accumulator.branchComplete('parallel-1', 'branch-a', 'Branch Result');
-        expect(accumulator.state.branches[branchKey]!.status).toBe('completed');
-        expect(accumulator.state.branches[branchKey]!.output).toBe(
+        // Complete branch - streamed content is preferred over engine output
+        accumulator.branchComplete(
+            'parallel-1',
+            'branch-a',
+            'Branch A',
             'Branch Result'
         );
+        expect(accumulator.state.branches[branchKey]!.status).toBe('completed');
+        expect(accumulator.state.branches[branchKey]!.output).toBe('Part 1');
     });
 
     it('handles errors correctly', () => {

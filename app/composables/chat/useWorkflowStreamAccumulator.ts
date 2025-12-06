@@ -96,7 +96,12 @@ export interface WorkflowStreamAccumulatorApi {
         label: string,
         token: string
     ): void;
-    branchComplete(nodeId: string, branchId: string, output: string): void;
+    branchComplete(
+        nodeId: string,
+        branchId: string,
+        branchLabel: string,
+        output: string
+    ): void;
 
     // Workflow-level streaming (leaf aggregation)
     workflowToken(token: string): void;
@@ -294,8 +299,8 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
     function workflowToken(token: string) {
         if (finalized || !token) return;
         state.finalStreamingText = `${state.finalStreamingText}${token}`;
+        // Keep finalOutput in sync with streaming text for consumers expecting live updates
         state.finalOutput = state.finalStreamingText;
-        state.version++;
     }
 
     function routeSelected(nodeId: string, route: string) {
@@ -366,14 +371,20 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         branchToken(nodeId, branchId, label, token);
     }
 
-    function branchComplete(nodeId: string, branchId: string, output: string) {
+    function branchComplete(
+        nodeId: string,
+        branchId: string,
+        _branchLabel: string,
+        output: string
+    ) {
         if (finalized) return;
 
         const key = `${nodeId}:${branchId}`;
         const branch = state.branches[key];
         if (branch) {
             branch.status = 'completed';
-            branch.output = output;
+            // Prefer accumulated streaming text; fall back to engine output
+            branch.output = branch.streamingText || output || '';
             branch.streamingText = undefined;
         }
         state.version++;

@@ -180,8 +180,18 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
             accumulator.nodeStart('parallel-1', 'Parallel Node', 'parallel');
             accumulator.branchStart('parallel-1', 'branch-a', 'Branch A');
             accumulator.branchStart('parallel-1', 'branch-b', 'Branch B');
-            accumulator.branchComplete('parallel-1', 'branch-a', 'Result A');
-            accumulator.branchComplete('parallel-1', 'branch-b', 'Result B');
+            accumulator.branchComplete(
+                'parallel-1',
+                'branch-a',
+                'Branch A',
+                'Result A'
+            );
+            accumulator.branchComplete(
+                'parallel-1',
+                'branch-b',
+                'Branch B',
+                'Result B'
+            );
             accumulator.nodeFinish('parallel-1', 'Merged');
             accumulator.finalize({
                 result: { success: true, finalOutput: 'Merged' },
@@ -445,13 +455,23 @@ describe('Phase 8.1: Workflow Message Persistence', () => {
         it('handles merge branch correctly', () => {
             accumulator.nodeStart('parallel-1', 'Parallel', 'parallel');
             accumulator.branchStart('parallel-1', 'branch-a', 'A');
-            accumulator.branchComplete('parallel-1', 'branch-a', 'Result A');
+            accumulator.branchComplete(
+                'parallel-1',
+                'branch-a',
+                'A',
+                'Result A'
+            );
             accumulator.branchStart(
                 'parallel-1',
                 MERGE_BRANCH_ID,
                 MERGE_BRANCH_LABEL
             );
-            accumulator.branchComplete('parallel-1', MERGE_BRANCH_ID, 'Merged');
+            accumulator.branchComplete(
+                'parallel-1',
+                MERGE_BRANCH_ID,
+                MERGE_BRANCH_LABEL,
+                'Merged'
+            );
             accumulator.nodeFinish('parallel-1', 'Final');
             accumulator.finalize({
                 result: { success: true, finalOutput: 'Final' },
@@ -790,7 +810,7 @@ describe('Phase 8.3: Real-time Updates', () => {
             accumulator.nodeStart('parallel-1', 'Parallel', 'parallel');
             accumulator.branchStart('parallel-1', 'branch-a', 'A');
             const version = accumulator.state.version;
-            accumulator.branchComplete('parallel-1', 'branch-a', 'Done');
+            accumulator.branchComplete('parallel-1', 'branch-a', 'A', 'Done');
             expect(accumulator.state.version).toBe(version + 1);
         });
 
@@ -1087,7 +1107,12 @@ describe('Phase 8.3: Real-time Updates', () => {
             accumulator.branchStart('parallel-1', 'branch-a', 'A');
             accumulator.branchStart('parallel-1', 'branch-b', 'B');
 
-            accumulator.branchComplete('parallel-1', 'branch-a', 'Result A');
+            accumulator.branchComplete(
+                'parallel-1',
+                'branch-a',
+                'A',
+                'Result A'
+            );
 
             expect(
                 accumulator.state.branches['parallel-1:branch-a']!.status
@@ -1203,7 +1228,12 @@ describe('Edge Cases and Robustness', () => {
         });
 
         it('handles branchComplete for non-existent branch', () => {
-            accumulator.branchComplete('node-1', 'unknown-branch', 'Output');
+            accumulator.branchComplete(
+                'node-1',
+                'unknown-branch',
+                'Unknown',
+                'Output'
+            );
 
             // Should not crash
             expect(
@@ -1269,14 +1299,15 @@ describe('Edge Cases and Robustness', () => {
             accumulator.branchToken('parallel-1', 'branch-a', 'A', 'Streaming');
             vi.runAllTimers();
 
-            accumulator.branchComplete('parallel-1', 'branch-a', 'Final');
+            accumulator.branchComplete('parallel-1', 'branch-a', 'A', 'Final');
 
             expect(
                 accumulator.state.branches['parallel-1:branch-a']!.streamingText
             ).toBeUndefined();
+            // Streamed content is preferred over engine output
             expect(
                 accumulator.state.branches['parallel-1:branch-a']!.output
-            ).toBe('Final');
+            ).toBe('Streaming');
         });
 
         it('reset clears all state including pending tokens', async () => {

@@ -32,7 +32,7 @@
                 :key="nodeId"
                 class="node-item"
             >
-                <details class="group" :open="isNodeOpen(nodeId)">
+                <details class="group">
                     <summary
                         class="flex items-center gap-2 cursor-pointer list-none py-1 hover:bg-[var(--md-surface-container-high)] rounded px-1 transition-colors"
                     >
@@ -75,13 +75,13 @@
                             v-if="hasBranches(nodeId)"
                             class="space-y-2 mb-2 pl-2"
                         >
-                            <div
+                            <details
                                 v-for="branch in getBranches(nodeId)"
                                 :key="branch.id"
-                                class="branch-item"
+                                class="branch-item group"
                             >
-                                <div
-                                    class="flex items-center gap-2 text-xs opacity-80 mb-1"
+                                <summary
+                                    class="flex items-center gap-2 text-xs opacity-80 mb-1 cursor-pointer list-none hover:bg-(--md-surface-container-high) rounded px-1 py-1 transition-colors"
                                 >
                                     <UIcon
                                         :name="getBranchStatusIcon(branch)"
@@ -91,24 +91,38 @@
                                     <span class="font-medium">{{
                                         getBranchLabel(branch)
                                     }}</span>
-                                </div>
+                                    <UIcon
+                                        name="i-heroicons-chevron-right"
+                                        class="w-3 h-3 transition-transform group-open:rotate-90 opacity-50 shrink-0 ml-auto"
+                                    />
+                                </summary>
                                 <div
-                                    v-if="branch.streamingText || branch.output"
-                                    class="pl-5 text-xs opacity-70 font-mono whitespace-pre-wrap bg-[var(--md-surface)] p-1 rounded border border-[var(--md-outline-variant)]"
+                                    v-if="getBranchContent(branch)"
+                                    class="pl-5 text-xs opacity-70 font-mono whitespace-pre-wrap bg-(--md-surface) p-1 rounded border border-(--md-outline-variant) max-h-48 overflow-y-auto"
                                 >
-                                    {{ branch.streamingText || branch.output }}
+                                    {{ getBranchContent(branch) }}
                                 </div>
-                            </div>
+                            </details>
                         </div>
 
                         <!-- Node Output -->
-                        <div class="node-output overflow-x-auto pl-2">
-                            <StreamMarkdown
-                                v-if="getNodeOutput(nodeId)"
-                                :content="getNodeOutput(nodeId)"
-                                :shiki-theme="currentShikiTheme"
-                                class="cm-markdown-assistant prose max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 w-full min-w-full or3-prose prose-pre:max-w-full prose-pre:overflow-x-auto leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] dark:text-white/95 dark:prose-headings:text-white/95! prose-pre:bg-(--md-surface-container)/80 prose-pre:border-(--md-border-width) prose-pre:border-(--md-border-color) prose-pre:text-(--md-on-surface) prose-pre:font-[inherit] prose-code:text-(--md-on-surface) prose-code:font-[inherit]"
-                            />
+                        <div
+                            class="node-output overflow-x-auto pl-2 max-h-68 overflow-y-auto"
+                        >
+                            <template v-if="getNodeOutput(nodeId)">
+                                <pre
+                                    v-if="isNodeStreaming(nodeId)"
+                                    class="streaming-plain font-mono text-xs whitespace-pre-wrap bg-(--md-surface) p-2 rounded border border-(--md-outline-variant) leading-normal"
+                                >
+                                    {{ getNodeOutput(nodeId) }}
+                                </pre>
+                                <StreamMarkdown
+                                    v-else
+                                    :content="getNodeOutput(nodeId)"
+                                    :shiki-theme="currentShikiTheme"
+                                    class="cm-markdown-assistant prose max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 w-full min-w-full or3-prose prose-pre:max-w-full prose-pre:overflow-x-auto leading-normal prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] dark:text-white/95 dark:prose-headings:text-white/95! prose-pre:bg-(--md-surface-container)/80 prose-pre:border-(--md-border-color) prose-pre:text-(--md-on-surface) prose-pre:font-[inherit] prose-code:text-(--md-on-surface) prose-code:font-[inherit]"
+                                />
+                            </template>
                             <div v-else class="text-xs opacity-50 italic py-1">
                                 {{
                                     getNodeStatus(nodeId) === 'active'
@@ -261,17 +275,14 @@ function getNodeOutput(nodeId: string): string {
     return node?.streamingText || node?.output || '';
 }
 
-function getNodeError(nodeId: string): string | undefined {
-    return getNode(nodeId)?.error;
+function isNodeStreaming(nodeId: string): boolean {
+    const node = getNode(nodeId);
+    // A node is streaming if it has streamingText and status is active
+    return !!(node?.streamingText && node.status === 'active');
 }
 
-function isNodeOpen(nodeId: string): boolean {
-    const status = getNodeStatus(nodeId);
-    return (
-        status === 'active' ||
-        status === 'error' ||
-        (status === 'completed' && nodeId === props.workflowState.currentNodeId)
-    );
+function getNodeError(nodeId: string): string | undefined {
+    return getNode(nodeId)?.error;
 }
 
 // Branch Helpers
@@ -287,14 +298,21 @@ function getBranches(nodeId: string): BranchState[] {
     if (!props.workflowState.branches) return [];
     return Object.entries(props.workflowState.branches)
         .filter(([k]) => k.startsWith(nodeId + ':'))
-        .map(([_, v]) => v);
+        .map(([_, v]) => v)
+        .filter((b) => b.id !== MERGE_BRANCH_ID);
 }
 
 function getBranchLabel(branch: BranchState): string {
     if (branch.id === MERGE_BRANCH_ID) {
-        return MERGE_BRANCH_LABEL;
+        return branch.status === 'completed' ? 'Merge' : MERGE_BRANCH_LABEL;
     }
     return branch.label;
+}
+
+function getBranchContent(branch: BranchState): string {
+    if (branch.id === MERGE_BRANCH_ID) return '';
+    // Prefer output when present, otherwise show streaming text
+    return branch.output || branch.streamingText || '';
 }
 
 function getBranchStatusIcon(branch: BranchState) {

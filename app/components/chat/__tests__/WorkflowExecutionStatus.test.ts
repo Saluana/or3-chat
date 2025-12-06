@@ -114,6 +114,12 @@ describe('WorkflowExecutionStatus', () => {
         // Component starts collapsed, expand it first
         await wrapper.find('.cursor-pointer').trigger('click');
 
+        // Open both node detail panels
+        const summaries = wrapper.findAll('summary');
+        for (const summary of summaries) {
+            await summary.trigger('click');
+        }
+
         expect(wrapper.text()).toContain('Output 1');
         expect(wrapper.text()).toContain('Streaming...');
     });
@@ -199,5 +205,31 @@ describe('WorkflowExecutionStatus', () => {
         // Expand to see error message in node
         await wrapper.find('.cursor-pointer').trigger('click');
         expect(wrapper.text()).toContain('Something failed');
+    });
+
+    it('uses plaintext while streaming and markdown when completed', async () => {
+        const wrapper = mount(WorkflowExecutionStatus, {
+            props: { workflowState: mockState },
+            global: {
+                components: { StreamMarkdown, UIcon },
+            },
+        });
+
+        await wrapper.find('.cursor-pointer').trigger('click');
+
+        const summaries = wrapper.findAll('summary');
+        for (const summary of summaries) {
+            await summary.trigger('click');
+        }
+
+        const nodes = wrapper.findAll('.node-item');
+        const completedNode = nodes[0]!;
+        const streamingNode = nodes[1]!;
+
+        expect(completedNode.find('.stream-markdown').exists()).toBe(true);
+        expect(streamingNode.find('.streaming-plain').exists()).toBe(true);
+        expect(streamingNode.findComponent(StreamMarkdown).exists()).toBe(
+            false
+        );
     });
 });
