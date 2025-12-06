@@ -343,6 +343,25 @@ const stableMessages = computed<UiChatMessage[]>(() => messages.value);
 // Reactive bridge: track workflow states by message id
 const workflowStates = reactive(new Map<string, any>());
 
+// Seed workflow state map from loaded messages so reloads show correct status
+watch(
+    () => messages.value,
+    (list) => {
+        if (!Array.isArray(list)) return;
+        for (const msg of list) {
+            const wf = (msg as any).workflowState;
+            if (!wf) continue;
+            const existing = workflowStates.get(msg.id);
+            const existingVersion = existing?.version ?? -1;
+            const nextVersion = wf.version ?? 0;
+            if (!existing || nextVersion > existingVersion) {
+                workflowStates.set(msg.id, wf);
+            }
+        }
+    },
+    { immediate: true }
+);
+
 function deriveWorkflowText(wf: any): string {
     if (!wf) return '';
     // Only return finalOutput - never show intermediate node outputs
@@ -356,16 +375,7 @@ function mergeWorkflowState(msg: UiChatMessage) {
     if (!wf) return msg;
     const version = wf.version ?? 0; // Depend on version for reactivity
     const workflowText = deriveWorkflowText(wf);
-    const pending =
-        wf.executionState === 'running'
-            ? true
-            : wf.executionState === 'error'
-            ? false
-            : wf.executionState === 'stopped'
-            ? false
-            : wf.executionState === 'completed'
-            ? false
-            : wf.isActive ?? msg.pending ?? false;
+    const pending = wf.executionState === 'running';
     return {
         ...msg,
         isWorkflow: true,

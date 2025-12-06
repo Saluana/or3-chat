@@ -107,7 +107,7 @@
                                 v-if="getNodeOutput(nodeId)"
                                 :content="getNodeOutput(nodeId)"
                                 :shiki-theme="currentShikiTheme"
-                                class="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                class="cm-markdown-assistant prose max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 w-full min-w-full or3-prose prose-pre:max-w-full prose-pre:overflow-x-auto leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] dark:text-white/95 dark:prose-headings:text-white/95! prose-pre:bg-(--md-surface-container)/80 prose-pre:border-(--md-border-width) prose-pre:border-(--md-border-color) prose-pre:text-(--md-on-surface) prose-pre:font-[inherit] prose-code:text-(--md-on-surface) prose-code:font-[inherit]"
                             />
                             <div v-else class="text-xs opacity-50 italic py-1">
                                 {{
@@ -134,7 +134,7 @@ import {
     MERGE_BRANCH_LABEL,
 } from '~/utils/chat/workflow-types';
 import { useIcon } from '~/composables/useIcon';
-import { StreamMarkdown } from 'streamdown-vue';
+import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 
@@ -160,6 +160,7 @@ const statusIcon = computed(() => {
         case 'error':
             return useIcon('workflow.status.error').value;
         case 'stopped':
+        case 'interrupted':
             return useIcon('workflow.status.stopped').value;
         default:
             return useIcon('workflow.status.pending').value;
@@ -175,6 +176,7 @@ const statusColorClass = computed(() => {
         case 'error':
             return 'text-[var(--md-error)]';
         case 'stopped':
+        case 'interrupted':
             return 'text-[var(--md-outline)]';
         default:
             return 'text-[var(--md-outline)]';
@@ -208,6 +210,16 @@ function getNodeStatus(nodeId: string) {
 
 function getNodeStatusIcon(nodeId: string) {
     const status = getNodeStatus(nodeId);
+    const execState = props.workflowState.executionState;
+    // If workflow is interrupted/stopped/error but node still shows active, treat as stopped
+    if (
+        status === 'active' &&
+        (execState === 'interrupted' ||
+            execState === 'stopped' ||
+            execState === 'error')
+    ) {
+        return useIcon('workflow.status.stopped').value;
+    }
     switch (status) {
         case 'active':
             return useIcon('workflow.status.running').value;
@@ -222,6 +234,16 @@ function getNodeStatusIcon(nodeId: string) {
 
 function getNodeStatusColor(nodeId: string) {
     const status = getNodeStatus(nodeId);
+    const execState = props.workflowState.executionState;
+    // If workflow is interrupted/stopped/error but node still shows active, treat as stopped
+    if (
+        status === 'active' &&
+        (execState === 'interrupted' ||
+            execState === 'stopped' ||
+            execState === 'error')
+    ) {
+        return 'text-[var(--md-outline)]';
+    }
     switch (status) {
         case 'active':
             return 'text-[var(--md-primary)] animate-spin';
@@ -307,9 +329,15 @@ const currentShikiTheme = computed(() => {
         ? 'github-dark'
         : 'github-light';
 });
+
+onMounted(async () => {
+    // Preload shiki themes for code highlighting
+    await useShikiHighlighter();
+});
 </script>
 
 <style scoped>
+@import '~/assets/css/or3-prose.css';
 /* Remove default details marker */
 details > summary {
     list-style: none;

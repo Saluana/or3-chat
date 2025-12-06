@@ -29,6 +29,11 @@ export type WorkflowExecutionState =
     | 'stopped'
     | 'interrupted';
 
+export interface ChatHistoryMessage {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // State Interfaces
 // ─────────────────────────────────────────────────────────────────────────────
@@ -147,6 +152,21 @@ export interface WorkflowMessageData {
     /** Final output content (from output node or last agent) */
     finalOutput: string;
 
+    /** Node that failed (when executionState === 'error') */
+    failedNodeId?: string | null;
+
+    /** Per-node outputs for resume */
+    nodeOutputs?: Record<string, string>;
+
+    /** Session messages captured during execution */
+    sessionMessages?: ChatHistoryMessage[];
+
+    /** Resume metadata to allow retrying from a failed node */
+    resumeState?: WorkflowResumeState;
+
+    /** Version counter for reactivity tracking */
+    version?: number;
+
     /** Execution result metadata (populated on completion) */
     result?: {
         /** Whether execution completed successfully */
@@ -264,6 +284,55 @@ export interface UiWorkflowState {
 
     /** Final accumulated output */
     finalOutput?: string;
+
+    /** Node that failed (if any) */
+    failedNodeId?: string | null;
+
+    /** Per-node outputs for resume */
+    nodeOutputs?: Record<string, string>;
+
+    /** Session messages captured during execution */
+    sessionMessages?: ChatHistoryMessage[];
+
+    /** Resume metadata */
+    resumeState?: WorkflowResumeState;
+
+    /** Version counter for reactivity */
+    version?: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Utilities
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Derive the start node ID for resuming a workflow execution.
+ * Uses a fallback chain to find the most appropriate node to resume from.
+ *
+ * @param opts - Options containing various state sources
+ * @returns The node ID to resume from, or undefined if none found
+ */
+export function deriveStartNodeId(opts: {
+    resumeState?: WorkflowResumeState;
+    failedNodeId?: string | null;
+    currentNodeId?: string | null;
+    nodeStates?: Record<string, NodeState>;
+    lastActiveNodeId?: string | null;
+}): string | undefined {
+    const activeFromStates = opts.nodeStates
+        ? Object.entries(opts.nodeStates).find(
+              ([, ns]) => ns.status === 'active'
+          )?.[0]
+        : undefined;
+
+    return (
+        opts.resumeState?.startNodeId ||
+        opts.failedNodeId ||
+        opts.currentNodeId ||
+        activeFromStates ||
+        opts.lastActiveNodeId ||
+        undefined
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -275,3 +344,19 @@ export const MERGE_BRANCH_ID = '__merge__';
 
 /** Display label for the merge branch */
 export const MERGE_BRANCH_LABEL = 'Merging results...';
+
+/** Resume metadata for workflow executions */
+export interface WorkflowResumeState {
+    /** Node to resume from (usually the failed node) */
+    startNodeId: string;
+    /** Per-node outputs captured so far */
+    nodeOutputs: Record<string, string>;
+    /** Execution order up to failure */
+    executionOrder: string[];
+    /** Last active node when failure occurred */
+    lastActiveNodeId?: string | null;
+    /** Session messages captured so far */
+    sessionMessages?: ChatHistoryMessage[];
+    /** Suggested input when resuming (last output) */
+    resumeInput?: string;
+}

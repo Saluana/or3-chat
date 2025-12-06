@@ -4,7 +4,9 @@ import type {
     BranchState,
     WorkflowExecutionState,
     WorkflowMessageData,
+    ChatHistoryMessage,
 } from '~/utils/chat/workflow-types';
+import { deriveStartNodeId } from '~/utils/chat/workflow-types';
 
 /**
  * Reactive state interface for workflow execution streaming.
@@ -48,6 +50,12 @@ export interface WorkflowStreamingState {
     version: number;
     /** Error if any */
     error: Error | null;
+    /** Node that failed (if any) */
+    failedNodeId: string | null;
+    /** Latest per-node outputs for resume */
+    nodeOutputs?: Record<string, string>;
+    /** Session messages collected during execution */
+    sessionMessages?: ChatHistoryMessage[];
 }
 
 /**
@@ -116,6 +124,8 @@ export interface WorkflowStreamAccumulatorApi {
                 totalTokens?: number;
             }>;
             error?: Error;
+            nodeOutputs?: Record<string, string>;
+            sessionMessages?: ChatHistoryMessage[];
         };
     }): void;
     reset(): void;
@@ -146,6 +156,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         isActive: true,
         version: 0,
         error: null,
+        failedNodeId: null,
     });
 
     // Pending updates for RAF batching
@@ -275,6 +286,8 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
 
         state.error = error;
         state.executionState = 'error';
+        state.failedNodeId = nodeId;
+        state.currentNodeId = nodeId;
         state.version++;
     }
 
@@ -388,9 +401,68 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
                 totalTokens?: number;
             }>;
             error?: Error;
+            nodeOutputs?: Record<string, string>;
+            sessionMessages?: ChatHistoryMessage[];
         };
     }) {
-        if (finalized) return;
+        if (finalized) {
+            // Merge late-arriving result data (e.g., session messages)
+            if (opts?.result) {
+                let changed = false;
+
+                if (opts.result.nodeOutputs) {
+                    state.nodeOutputs = { ...opts.result.nodeOutputs };
+                    changed = true;
+                }
+
+                if (opts.result.sessionMessages?.length) {
+                    state.sessionMessages = [...opts.result.sessionMessages];
+                    changed = true;
+                }
+
+                if (opts.result.usage && !state.usage) {
+                    state.usage = opts.result.usage;
+                    changed = true;
+                }
+
+                if (
+                    opts.result.tokenUsageDetails?.length &&
+                    !state.tokenUsageDetails
+                ) {
+                    state.tokenUsageDetails = opts.result.tokenUsageDetails;
+                    changed = true;
+                }
+
+                if (
+                    opts.result.executionOrder?.length &&
+                    state.executionOrder.length === 0
+                ) {
+                    state.executionOrder = [...opts.result.executionOrder];
+                    changed = true;
+                }
+
+                if (!state.lastActiveNodeId && opts.result.lastActiveNodeId) {
+                    state.lastActiveNodeId = opts.result.lastActiveNodeId;
+                    changed = true;
+                }
+
+                if (!state.finalNodeId && opts.result.finalNodeId) {
+                    state.finalNodeId = opts.result.finalNodeId;
+                    changed = true;
+                }
+
+                if (!state.finalOutput && opts.result.finalOutput) {
+                    state.finalOutput = opts.result.finalOutput;
+                    changed = true;
+                }
+
+                if (changed) {
+                    state.version++;
+                }
+            }
+            return;
+        }
+
         finalized = true;
 
         // Flush any pending tokens
@@ -429,11 +501,19 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             }
         }
 
+        const nodeOutputs =
+            result?.nodeOutputs || deriveNodeOutputs(state.nodeStates);
+        state.nodeOutputs = nodeOutputs;
+
+        if (result?.sessionMessages?.length) {
+            state.sessionMessages = [...result.sessionMessages];
+        }
+
         if (opts?.error || result?.error) {
             state.error = opts?.error || result?.error || null;
             state.executionState = 'error';
         } else if (opts?.stopped) {
-            state.executionState = 'stopped';
+            state.executionState = 'interrupted';
         } else {
             state.executionState = 'completed';
             // Only set finalOutput on successful completion
@@ -487,6 +567,9 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         state.usage = undefined;
         state.isActive = true;
         state.error = null;
+        state.failedNodeId = null;
+        state.nodeOutputs = undefined;
+        state.sessionMessages = undefined;
         state.version++;
     }
 
@@ -511,6 +594,37 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
               )
             : undefined;
 
+        const nodeOutputs =
+            state.nodeOutputs || deriveNodeOutputs(state.nodeStates);
+
+        const shouldResume =
+            state.executionState === 'error' ||
+            state.executionState === 'interrupted' ||
+            state.executionState === 'stopped';
+
+        const resumeStartNodeId = shouldResume
+            ? deriveStartNodeId({
+                  failedNodeId: state.failedNodeId,
+                  currentNodeId: state.currentNodeId,
+                  nodeStates: state.nodeStates,
+                  lastActiveNodeId: state.lastActiveNodeId,
+              })
+            : undefined;
+
+        const resumeState = resumeStartNodeId
+            ? {
+                  startNodeId: resumeStartNodeId,
+                  nodeOutputs,
+                  executionOrder: [...state.executionOrder],
+                  lastActiveNodeId: state.lastActiveNodeId,
+                  sessionMessages: state.sessionMessages,
+                  resumeInput:
+                      (state.lastActiveNodeId
+                          ? nodeOutputs[state.lastActiveNodeId]
+                          : undefined) || undefined,
+              }
+            : undefined;
+
         return {
             type: 'workflow-execution',
             workflowId,
@@ -524,6 +638,10 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             finalNodeId: state.finalNodeId,
             branches: plainBranches,
             finalOutput: state.finalOutput,
+            failedNodeId: state.failedNodeId || undefined,
+            nodeOutputs,
+            sessionMessages: state.sessionMessages,
+            resumeState,
             result:
                 state.executionState !== 'running'
                     ? {
@@ -578,4 +696,14 @@ function calculateDuration(nodeStates: Record<string, NodeState>): number {
     const latest = endTimes.length > 0 ? Math.max(...endTimes) : Date.now();
 
     return latest - earliest;
+}
+
+function deriveNodeOutputs(
+    nodeStates: Record<string, NodeState>
+): Record<string, string> {
+    return Object.fromEntries(
+        Object.entries(nodeStates)
+            .filter(([, node]) => typeof node.output === 'string')
+            .map(([id, node]) => [id, node.output])
+    );
 }

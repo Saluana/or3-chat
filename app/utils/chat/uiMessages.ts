@@ -57,7 +57,10 @@ export interface UiChatMessage {
     workflowState?: UiWorkflowState;
 }
 
-export function partsToText(parts: string | ContentPartLike[] | null | undefined, role?: string): string {
+export function partsToText(
+    parts: string | ContentPartLike[] | null | undefined,
+    role?: string
+): string {
     if (!parts) return '';
     if (typeof parts === 'string') return parts;
     if (!Array.isArray(parts)) return '';
@@ -124,6 +127,12 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
             currentNodeId: raw.data.currentNodeId,
             branches: raw.data.branches,
             finalOutput: raw.data.finalOutput,
+            failedNodeId:
+                raw.data.failedNodeId ?? raw.data.resumeState?.startNodeId,
+            nodeOutputs: raw.data.nodeOutputs,
+            sessionMessages: raw.data.sessionMessages,
+            resumeState: raw.data.resumeState,
+            version: raw.data.version ?? 0,
         };
     }
 
@@ -178,11 +187,15 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
             }
         } else if (import.meta.dev) {
             console.debug(
-                    '[uiMessages.ensureUiMessage] existing images >= hashes; skipping placeholder injection',
-                    { id, totalHashes: file_hashes.length, existingCount }
-                );
+                '[uiMessages.ensureUiMessage] existing images >= hashes; skipping placeholder injection',
+                { id, totalHashes: file_hashes.length, existingCount }
+            );
         }
     }
+    const pending = workflowState
+        ? workflowState.executionState === 'running'
+        : Boolean(raw.pending);
+
     return {
         id,
         role,
@@ -190,7 +203,7 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         file_hashes,
         reasoning_text,
         stream_id: raw.stream_id,
-        pending: Boolean(raw.pending),
+        pending,
         toolCalls,
         isWorkflow,
         workflowState,

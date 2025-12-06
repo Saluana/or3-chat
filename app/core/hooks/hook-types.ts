@@ -4,6 +4,7 @@
 import type { PaneState as MultiPaneState } from '../../composables/core/useMultiPane';
 import type { ChatMessage } from '~/utils/chat/types';
 import type { ORMessage } from '~/core/auth/openrouter-build';
+import type { WorkflowStreamingState } from '~/composables/chat/useWorkflowStreamAccumulator';
 
 export interface EditorInstance {
     commands: Record<string, unknown>;
@@ -625,7 +626,9 @@ export type CoreHookPayloadMap = {
     ];
 
     // Workflow Actions
-    'workflow.execution:action:state_update': [{ messageId: string; state: any }];
+    'workflow.execution:action:state_update': [
+        { messageId: string; state: WorkflowStreamingState }
+    ];
     'workflow.execution:action:complete': [
         { messageId: string; workflowId: string }
     ];

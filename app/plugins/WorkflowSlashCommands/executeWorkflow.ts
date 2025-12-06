@@ -8,8 +8,15 @@ import type {
     WorkflowData,
     ExecutionCallbacks,
     ExecutionResult,
-    WorkflowTokenMetadata,
+    ResumeFromOptions,
 } from '@or3/workflow-core';
+
+// WorkflowTokenMetadata shape (not exported from core, define inline)
+interface WorkflowTokenMetadata {
+    nodeId?: string;
+    branchId?: string;
+    [key: string]: unknown;
+}
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -47,6 +54,8 @@ export interface WorkflowExecutionOptions {
     onError?: (error: Error) => void;
     /** Additional execution callbacks */
     callbacks?: Partial<ExecutionCallbacks>;
+    /** Resume from a failed node without re-running completed steps */
+    resumeFrom?: ResumeFromOptions;
 }
 
 /**
@@ -186,6 +195,7 @@ export function executeWorkflow(
         onNodeFinish,
         onError,
         callbacks: extraCallbacks,
+        resumeFrom,
     } = options;
 
     let adapter: any = null;
@@ -221,6 +231,7 @@ export function executeWorkflow(
         adapter = new OpenRouterExecutionAdapter(client as any, {
             defaultModel: 'openai/gpt-4o-mini',
             preflight: true,
+            resumeFrom,
         });
 
         // Build callbacks
@@ -229,10 +240,18 @@ export function executeWorkflow(
             onNodeFinish: onNodeFinish || (() => {}),
             onNodeError: (_nodeId, error) => onError?.(error),
             onToken: (_nodeId, token) => onToken(token),
-            onWorkflowToken: (token, meta) =>
-                extraCallbacks?.onWorkflowToken?.(token, meta) ||
-                options.onWorkflowToken?.(token, meta) ||
-                onToken(token),
+            onWorkflowToken: (token: string, meta: unknown) => {
+                if (extraCallbacks?.onWorkflowToken) {
+                    extraCallbacks.onWorkflowToken(token, meta as any);
+                } else if (options.onWorkflowToken) {
+                    options.onWorkflowToken(
+                        token,
+                        meta as WorkflowTokenMetadata
+                    );
+                } else {
+                    onToken(token);
+                }
+            },
             onComplete: extraCallbacks?.onComplete,
             ...extraCallbacks,
         };
@@ -280,6 +299,8 @@ export function executeWorkflow(
 
 /**
  * Get conversation history from a thread.
+ * Handles both regular chat messages and workflow execution messages.
+ * For workflow messages, the prompt becomes a user message and finalOutput becomes assistant.
  *
  * @param threadId - The thread ID to load messages from
  * @returns Array of chat messages
@@ -293,19 +314,59 @@ export async function getConversationHistory(
 
     try {
         const { db } = await import('~/db');
+        const { isWorkflowMessageData } = await import(
+            '~/utils/chat/workflow-types'
+        );
 
         const messages = await db.messages
             .where('thread_id')
             .equals(threadId)
             .sortBy('index');
 
-        return messages.map((m: any) => ({
-            role: m.role as 'user' | 'assistant' | 'system',
-            content:
-                typeof m.data?.content === 'string'
-                    ? m.data.content
-                    : JSON.stringify(m.data?.content || ''),
-        }));
+        const result: ChatMessage[] = [];
+
+        for (const m of messages) {
+            // Handle workflow execution messages specially
+            if (isWorkflowMessageData(m.data)) {
+                // Add the user's prompt that triggered the workflow
+                if (m.data.prompt) {
+                    result.push({
+                        role: 'user',
+                        content: m.data.prompt,
+                    });
+                }
+                // Add the workflow's final output as assistant response
+                if (m.data.finalOutput) {
+                    result.push({
+                        role: 'assistant',
+                        content: m.data.finalOutput,
+                    });
+                }
+            } else {
+                // Regular message - extract content
+                const role = m.role as 'user' | 'assistant' | 'system';
+                let content = '';
+                const data = m.data as
+                    | { content?: unknown; text?: string }
+                    | null
+                    | undefined;
+
+                if (typeof data?.content === 'string') {
+                    content = data.content;
+                } else if (typeof data?.text === 'string') {
+                    content = data.text;
+                } else if (data?.content) {
+                    // Handle array content (multimodal)
+                    content = JSON.stringify(data.content);
+                }
+
+                if (content) {
+                    result.push({ role, content });
+                }
+            }
+        }
+
+        return result;
     } catch (error) {
         console.error('[workflow-slash] Failed to load history:', error);
         return [];

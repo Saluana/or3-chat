@@ -28,8 +28,9 @@
             <div class="mt-4">
                 <StreamMarkdown
                     :content="outputContent"
+                    :shiki-theme="currentShikiTheme"
                     code-block-show-line-numbers
-                    class="cm-markdown-assistant prose max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 w-full min-w-full or3-prose! prose-pre:max-w-full prose-pre:overflow-x-auto leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] dark:text-white/95 dark:prose-headings:text-white/95! prose-pre:bg-(--md-surface-container)/80 prose-pre:border-(--md-border-width) prose-pre:border-(--md-border-color) prose-pre:text-(--md-on-surface) prose-pre:font-[inherit] prose-code:text-(--md-on-surface) prose-code:font-[inherit]"
+                    class="cm-markdown-assistant prose max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 w-full min-w-full or3-prose prose-pre:max-w-full prose-pre:overflow-x-auto leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] dark:text-white/95 dark:prose-headings:text-white/95! prose-pre:bg-(--md-surface-container)/80 prose-pre:border-(--md-border-width) prose-pre:border-(--md-border-color) prose-pre:text-(--md-on-surface) prose-pre:font-[inherit] prose-code:text-(--md-on-surface) prose-code:font-[inherit]"
                 />
             </div>
         </div>
@@ -51,6 +52,14 @@
                         @click="copyResult"
                     ></UButton>
                 </UTooltip>
+                <UTooltip
+                    v-if="canRetry"
+                    :delay-duration="500"
+                    text="Retry from failed node"
+                    :teleport="true"
+                >
+                    <UButton v-bind="retryButtonProps" @click="retryFromHere" />
+                </UTooltip>
                 <!-- Add more actions like Retry/Stop here if needed in future -->
             </UButtonGroup>
         </div>
@@ -58,8 +67,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
+import { deriveStartNodeId } from '~/utils/chat/workflow-types';
 import WorkflowExecutionStatus from './WorkflowExecutionStatus.vue';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
@@ -73,9 +83,9 @@ const props = defineProps<{
 }>();
 
 const toast = useToast();
+const nuxtApp = useNuxtApp();
 
 // Theme
-const nuxtApp = useNuxtApp();
 const themePlugin = computed<ThemePlugin>(() => nuxtApp.$theme);
 const currentShikiTheme = computed(() => {
     const themeObj = themePlugin.value;
@@ -99,6 +109,25 @@ const outputContent = computed(() => {
 
 // Whether to show the result box at all (only when we have final output)
 const showResultBox = computed(() => outputContent.value.length > 0);
+
+const canRetry = computed(() => {
+    const wf = props.message.workflowState;
+    if (!wf) return false;
+    // Check if workflow is in a retryable state
+    const isRetryableState = ['error', 'interrupted', 'stopped'].includes(
+        wf.executionState as string
+    );
+    if (!isRetryableState) return false;
+    // Derive start node from utility
+    const startNodeId = deriveStartNodeId({
+        resumeState: wf.resumeState,
+        failedNodeId: wf.failedNodeId,
+        currentNodeId: wf.currentNodeId,
+        nodeStates: wf.nodeStates,
+        lastActiveNodeId: wf.lastActiveNodeId,
+    });
+    return Boolean(startNodeId);
+});
 
 // Styles
 const messageContainerProps = computed(() => {
@@ -128,6 +157,23 @@ const copyButtonProps = computed(() => {
     };
 });
 
+const retryButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.retry',
+        isNuxtUI: true,
+    });
+
+    return {
+        icon: useIcon('ui.refresh').value,
+        color: 'primary' as const,
+        variant: 'ghost' as const,
+        size: 'xs' as const,
+        ...overrides.value,
+    };
+});
+
 function copyResult() {
     if (!outputContent.value) return;
     navigator.clipboard.writeText(outputContent.value);
@@ -137,6 +183,27 @@ function copyResult() {
         icon: useIcon('ui.check').value,
     });
 }
+
+async function retryFromHere() {
+    if (!canRetry.value) return;
+    const svc = (nuxtApp as any)?.$workflowSlash as
+        | { retry?: (id: string) => Promise<boolean> }
+        | undefined;
+    if (!svc?.retry) return;
+    const ok = await svc.retry(props.message.id);
+    if (ok) {
+        toast.add({
+            title: 'Retry started',
+            color: 'info',
+            icon: useIcon('ui.check').value,
+        });
+    }
+}
+
+onMounted(async () => {
+    // Preload shiki themes for code highlighting
+    await useShikiHighlighter();
+});
 </script>
 
 <style scoped>
