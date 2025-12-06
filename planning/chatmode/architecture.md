@@ -1,8 +1,18 @@
-# Workflow Message Integration - Architecture Document
+# Workflow Message Integration - Architecture Document (v2)
 
 ## Executive Summary
 
 This document captures the architectural analysis of integrating or3-workflows execution into or3-chat's reactive message system. It identifies **critical gaps** between the current spec and actual codebase behavior, and provides **validated solutions**.
+
+### v2 Key Architectural Changes
+
+This v2 update incorporates critical architectural improvements:
+
+1. **Rendering Split:** Dedicated `WorkflowChatMessage.vue` component selected conditionally by `ChatMessage.vue` instead of overloading existing component
+2. **Reactive Bridge:** Mandates broadcasting workflow accumulator state through the same reactive channel as streaming chat (hooks or `useAi` mutators)
+3. **Error System:** Requires using centralized or3 error/alert tooling for workflow failures
+4. **Theme Integration:** Calls for using the established theme system (`app/themes`, `plugins/theme.ts`) with semantic tokens
+5. **Default Message Typing:** All non-workflow messages normalize to `data.type = 'message'` for discriminated union safety
 
 ---
 
@@ -49,7 +59,7 @@ onNodeStart: (nodeId, nodeInfo) => {
 
 ---
 
-### Finding 2: Reactivity Bypass (Critical Bug)
+### Finding 2: Reactivity Bypass (Critical Bug) ⚠️ ADDRESSED IN V2
 
 **Current behavior:** The workflow slash command plugin writes to Dexie directly via `db.messages.put()`, but this **does NOT update:**
 
@@ -60,29 +70,45 @@ onNodeStart: (nodeId, nodeInfo) => {
 
 **Why users see no updates:** The UI only re-renders when `tailAssistant` or `streamState` change. Database changes alone don't trigger re-renders.
 
-**Solution:** The spec's `WorkflowStreamAccumulator` must connect to the reactive layer. Two options:
+**v2 Solution - Reactive Bridge (MANDATORY):** The spec's `WorkflowStreamAccumulator` MUST connect to the reactive layer through a dedicated reactive bridge. This is now a core architectural requirement, not an option:
 
-1. **Option A (Recommended): Emit state via hook, let ChatContainer subscribe**
+**Implementation (REQUIRED):**
 
-    ```typescript
-    // In slash command plugin:
-    hooks.doAction('workflow.execution:action:state_update', {
-        messageId: assistantDbMsg.id,
-        state: accumulator.state, // Reactive ref
-    });
+```typescript
+// In slash command plugin:
+// MANDATORY: Emit reactive state through hook system
+hooks.doAction('workflow.execution:action:state_update', {
+    messageId: assistantDbMsg.id,
+    state: accumulator.state, // Reactive ref that updates on version++
+});
 
-    // In ChatContainer or useAi:
-    hooks.on(
-        'workflow.execution:action:state_update',
-        ({ messageId, state }) => {
-            workflowStates.set(messageId, state);
-            // Force re-render of that message
+// In ChatContainer or useAi:
+// MANDATORY: Subscribe to reactive bridge
+const workflowStates = reactive(new Map<string, WorkflowStreamingState>());
+
+hooks.on('workflow.execution:action:state_update', ({ messageId, state }) => {
+    // Store reactive reference - when state.version changes, Vue detects it
+    workflowStates.set(messageId, state);
+});
+
+// In allMessages computed:
+// MANDATORY: Merge workflow state for reactive rendering
+const allMessages = computed(() => {
+    return stableMessages.value.map((msg) => {
+        const workflowState = workflowStates.get(msg.id);
+        if (workflowState) {
+            return { ...msg, isWorkflow: true, workflowState };
         }
-    );
-    ```
+        return msg;
+    });
+});
+```
 
-2. **Option B: Expose mutation API on useAi**
-   Add `setWorkflowState(messageId, state)` to the `useAi` composable API.
+**Why This is Mandatory:**
+- Ensures workflow updates flow through the same reactive channel as streaming chat
+- Provides real-time UI updates without relying on Dexie writes alone
+- Maintains consistency with existing chat streaming behavior
+- Enables RAF-batched updates to minimize re-renders
 
 ---
 
@@ -260,6 +286,33 @@ const mergeBranchLabel = 'Merge';
 
 ## ✅ Validated Design Elements
 
+### Rendering Split: Dedicated WorkflowChatMessage.vue ✅
+
+**v2 Requirement:** Instead of conditionally rendering workflow UI within `ChatMessage.vue`, delegate to a dedicated component:
+
+```vue
+<!-- ChatMessage.vue - discriminator-based routing -->
+<template>
+    <WorkflowChatMessage v-if="isWorkflowMessage(message)" :message="message" />
+    <template v-else>
+        <!-- Regular chat message rendering -->
+    </template>
+</template>
+
+<script setup>
+function isWorkflowMessage(msg) {
+    return msg.data?.type === 'workflow-execution';
+}
+</script>
+```
+
+**Benefits:**
+1. Clear separation of concerns - workflow rendering isolated
+2. Discriminated unions enable type-safe rendering logic
+3. Easier to test and maintain independently
+4. Avoids overloading ChatMessage.vue with conditional logic
+5. Better performance through component-level optimization
+
 ### Data Field Discriminator ✅
 
 Using `data.type: 'workflow-execution'` is safe because:
@@ -267,6 +320,7 @@ Using `data.type: 'workflow-execution'` is safe because:
 -   The `data` field is `z.unknown()` - accepts any shape
 -   No existing code assumes a specific data structure
 -   Detection via `data?.type === 'workflow-execution'` is backward compatible
+-   **v2 Addition:** Non-workflow messages normalize to `data.type = 'message'` for consistent discriminated unions
 
 ### RAF Batching ✅
 
@@ -293,6 +347,49 @@ Using an array that tracks nodes in execution order:
 ```typescript
 executionOrder: string[]  // Push on nodeStart, iterate for display
 ```
+
+### Theme System Integration (v2 Requirement) ✅
+
+**Requirement:** Use the established theme system (`app/themes`, `plugins/theme.ts`) with semantic tokens instead of ad-hoc CSS variables.
+
+**Implementation:**
+```typescript
+// Import theme utilities
+import { useTheme } from '~/composables/useTheme';
+
+// In WorkflowExecutionStatus.vue
+const theme = useTheme();
+
+// Use semantic tokens in styles
+```
+
+```css
+/* Theme-first CSS - Use semantic tokens */
+.workflow-execution-status {
+    background: var(--md-surface-container-low);  /* Surface token */
+    border: 1px solid var(--md-outline-variant);   /* Border token */
+}
+
+.status-running { color: var(--md-primary); }      /* Accent token */
+.status-completed { color: var(--md-tertiary); }   /* Accent token */
+.status-error { color: var(--md-error); }          /* Error token */
+.wes-node-error {
+    color: var(--md-error);                        /* Semantic state */
+    background: var(--md-error-container);         /* Error container */
+}
+```
+
+**Token Categories:**
+1. **Surface tokens:** Background colors (`var(--md-surface)`, `var(--md-surface-container)`)
+2. **Border tokens:** Outline colors (`var(--md-outline-variant)`)
+3. **Accent tokens:** Primary colors (`var(--md-primary)`, `var(--md-tertiary)`)
+4. **Semantic state tokens:** Error, warning states (`var(--md-error)`, `var(--md-warning)`)
+
+**Benefits:**
+1. Automatic theme adaptation (light/dark mode)
+2. Accessibility-compliant contrast ratios enforced by theme system
+3. Consistent visual language across application
+4. No ad-hoc CSS variables to maintain
 
 ---
 
@@ -484,6 +581,32 @@ Existing callbacks that only accept `(nodeId)` continue to work—`NodeInfo` is 
 
 ---
 
+## v2 Architecture Requirements Summary
+
+### 1. Rendering Split (NEW)
+- **Required:** Dedicated `WorkflowChatMessage.vue` component
+- **Required:** Conditional selection by `ChatMessage.vue` based on discriminator
+- **Benefit:** Clear separation, type safety, easier maintenance
+
+### 2. Reactive Bridge (MANDATORY)
+- **Required:** Broadcast workflow state through hooks (same channel as streaming chat)
+- **Required:** ChatContainer/useAi subscribes to reactive state updates
+- **Critical:** Without this, UI shows stale content (Dexie writes don't trigger reactivity)
+
+### 3. Centralized Error System (NEW)
+- **Required:** Use `~/utils/errors` or equivalent for workflow failures
+- **Required:** Consistent error UX across application
+- **Required:** Theme-compliant error display (`var(--md-error)`, `var(--md-error-container)`)
+
+### 4. Theme System Integration (NEW)
+- **Required:** Use semantic tokens from `plugins/theme.ts`
+- **Required:** Surface, border, accent, and semantic state tokens
+- **Benefit:** Automatic theme adaptation, accessibility compliance
+
+### 5. Default Message Typing (NEW)
+- **Required:** Non-workflow messages normalize to `data.type = 'message'`
+- **Benefit:** Enables discriminated unions for type-safe rendering
+
 ## Required Spec Updates
 
 ### 1. ✅ RESOLVED: Node lookup in callback
@@ -531,12 +654,15 @@ In Phase 5, add:
 
 ---
 
-## Risk Assessment Update
+## Risk Assessment Update (v2)
 
 | Risk                               | Severity     | Mitigation                                                | Status            |
 | ---------------------------------- | ------------ | --------------------------------------------------------- | ----------------- |
-| UI doesn't update during streaming | **Critical** | Implement reactivity bridge via hooks                     | ⚠️ Still required |
-| Wrong timestamp format             | Medium       | Use `nowSec()` instead of `Date.now()`                    | ⚠️ Still required |
+| UI doesn't update during streaming | **Critical** | **v2 MANDATE:** Implement reactivity bridge via hooks     | ⚠️ Required       |
+| Wrong timestamp format             | Medium       | Use `nowSec()` instead of `Date.now()`                    | ⚠️ Required       |
+| Inconsistent error UX              | Medium       | **v2 NEW:** Use centralized error system                  | ⚠️ Required       |
+| Theme inconsistency                | Medium       | **v2 NEW:** Use semantic tokens from theme system         | ⚠️ Required       |
+| Component coupling                 | Medium       | **v2 NEW:** Dedicated WorkflowChatMessage.vue component   | ⚠️ Required       |
 | Missing node labels                | ~~Medium~~   | ~~Look up node from workflow in callback~~                | ✅ Resolved       |
 | Missing branch callbacks           | ~~Medium~~   | ~~Wire all 4 branch callbacks~~                           | ✅ Resolved       |
 | `__merge__` branch confusion       | Low          | UI displays as "Merging..." (documented in or3-workflows) | ✅ Documented     |

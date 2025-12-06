@@ -57,8 +57,9 @@ The current implementation executes workflows but bypasses the chat's reactive s
 
 -   WHEN a workflow execution starts THEN the assistant message SHALL store `data.type: 'workflow-execution'`
 -   WHEN querying messages THEN the system SHALL use `data?.type === 'workflow-execution'` to detect workflow messages
--   WHEN a message lacks `data.type` THEN it SHALL be treated as a regular chat message (backward compatible)
+-   WHEN a message lacks `data.type` THEN it SHALL default to `data.type = 'message'` (non-workflow messages normalize to this type)
 -   WHEN an existing message has a different `data` shape THEN it SHALL continue to work unchanged
+-   WHEN creating discriminated unions THEN the type field SHALL enable safe type narrowing for rendering logic
 
 ### 1.2 Workflow Data Structure
 
@@ -136,9 +137,11 @@ The current implementation executes workflows but bypasses the chat's reactive s
 **Acceptance Criteria:**
 
 -   WHEN a slash command triggers a workflow THEN the assistant message SHALL display the workflow execution UI
--   WHEN nodes execute THEN their status indicators SHALL update in real-time
--   WHEN tokens stream THEN the active node's collapsible content SHALL update live
+-   WHEN nodes execute THEN their status indicators SHALL update in real-time via the reactive bridge
+-   WHEN tokens stream THEN the active node's collapsible content SHALL update live through the same reactive channel as streaming chat
 -   WHEN workflow completes THEN the final output SHALL appear as the message content
+-   WHEN workflow state changes THEN updates SHALL be broadcast through the reactive bridge (hooks or `useAi` mutators) rather than relying on Dexie writes alone
+-   WHEN rendering workflow messages THEN components SHALL consume a reactive `workflowStates` map keyed by message id
 
 ### 4.2 Hook Integration
 
@@ -219,9 +222,11 @@ The current implementation executes workflows but bypasses the chat's reactive s
 
 **Acceptance Criteria:**
 
--   WHEN workflow fails THEN an error banner SHALL appear at the top of the message
+-   WHEN workflow fails THEN an error banner SHALL appear using the centralized or3 error/alert tooling
 -   WHEN error has a node context THEN the failing node SHALL be highlighted in the execution status
--   WHEN error has a message THEN it SHALL be displayed in the error banner
+-   WHEN error has a message THEN it SHALL be displayed through the shared error system
+-   WHEN displaying errors THEN the system SHALL use theme-defined error colors (var(--md-error), var(--md-error-container))
+-   WHEN workflow errors occur THEN they SHALL follow the same error UX patterns as other application errors
 
 ---
 
@@ -239,6 +244,8 @@ The current implementation executes workflows but bypasses the chat's reactive s
 -   WHEN stop is clicked THEN `adapter.stop()` SHALL be called
 -   WHEN workflow is stopped THEN `executionState` SHALL be set to `'stopped'`
 -   WHEN workflow is stopped THEN partial output SHALL be preserved and visible
+-   WHEN workflow stops THEN finalization SHALL update the reactive state immediately
+-   WHEN workflow errors occur THEN finalization SHALL capture the error state and persist it
 
 ---
 
@@ -252,9 +259,11 @@ The current implementation executes workflows but bypasses the chat's reactive s
 
 **Acceptance Criteria:**
 
--   WHEN node state changes THEN it SHALL be persisted within 500ms
+-   WHEN node state changes THEN it SHALL be persisted within 500ms (throttled snapshots)
 -   WHEN workflow completes THEN final state SHALL be persisted immediately
 -   WHEN loading a thread with workflow messages THEN execution state SHALL be restored
+-   WHEN persisting timestamps THEN the system SHALL use `nowSec()` for correct timestamp format (seconds, not milliseconds)
+-   WHEN persisting workflow state THEN throttled snapshots SHALL prevent excessive database writes during streaming
 
 ### 8.2 Recovery from Interruption
 
@@ -312,5 +321,22 @@ The current implementation executes workflows but bypasses the chat's reactive s
 
 ### NFR-3: Theme Compatibility
 
--   Workflow UI components SHALL use theme CSS variables
+-   Workflow UI components SHALL use the established theme system (`app/themes`, `plugins/theme.ts`)
+-   Components SHALL use semantic tokens (surface, border, accent, warning, error) instead of ad-hoc CSS variables
 -   Status indicators SHALL be visible in both light and dark themes
+-   Theme token usage SHALL follow the pattern: `var(--md-surface)`, `var(--md-border)`, `var(--md-primary)`, `var(--md-error)`, etc.
+-   Color contrast SHALL meet accessibility standards defined by the theme system
+
+### NFR-4: Centralized Error Handling
+
+-   Workflow failures SHALL integrate with the centralized or3 error/alert tooling
+-   Error messages SHALL be displayed through the shared error system
+-   Error UX SHALL be consistent with other error patterns in the application
+
+### NFR-5: Accessibility with Theme System
+
+-   Workflow status colors SHALL use contrast-safe colors from the theme system
+-   Status indicators (running, completed, error, stopped) SHALL have semantic states accessible to screen readers
+-   Color contrast ratios SHALL meet WCAG AA standards as enforced by the theme system
+-   Interactive elements SHALL have appropriate ARIA labels and roles
+-   Keyboard navigation SHALL be supported for all collapsible sections
