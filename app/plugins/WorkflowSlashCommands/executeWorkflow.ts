@@ -10,6 +10,7 @@ import type {
     ExecutionResult,
     ResumeFromOptions,
 } from '@or3/workflow-core';
+import { deriveMessageContent } from '~/utils/chat/messages';
 
 // WorkflowTokenMetadata shape (not exported from core, define inline)
 interface WorkflowTokenMetadata {
@@ -262,11 +263,15 @@ export function executeWorkflow(
                 ...validatedWorkflow,
                 conversationHistory,
             } as WorkflowData & { conversationHistory: ChatMessage[] };
+            const inputPayload = {
+                text: prompt,
+                conversationHistory,
+            };
 
             // Execute the workflow
             const result = await adapter.execute(
                 workflowWithHistory as any,
-                { text: prompt },
+                inputPayload as any,
                 callbacks
             );
 
@@ -326,6 +331,7 @@ export async function getConversationHistory(
         const result: ChatMessage[] = [];
 
         for (const m of messages) {
+            if ((m as any).deleted) continue;
             // Handle workflow execution messages specially
             if (isWorkflowMessageData(m.data)) {
                 // Add the user's prompt that triggered the workflow
@@ -345,21 +351,14 @@ export async function getConversationHistory(
             } else {
                 // Regular message - extract content
                 const role = m.role as 'user' | 'assistant' | 'system';
-                let content = '';
-                const data = m.data as
-                    | { content?: unknown; text?: string }
-                    | null
-                    | undefined;
-
-                if (typeof data?.content === 'string') {
-                    content = data.content;
-                } else if (typeof data?.text === 'string') {
-                    content = data.text;
-                } else if (data?.content) {
-                    // Handle array content (multimodal)
-                    content = JSON.stringify(data.content);
-                }
-
+                const content = deriveMessageContent({
+                    data: m.data as any,
+                    // Dexie rows don't normally store top-level content, but include for completeness
+                    content:
+                        typeof (m as any).content === 'string'
+                            ? ((m as any).content as string)
+                            : undefined,
+                });
                 if (content) {
                     result.push({ role, content });
                 }
