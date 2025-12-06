@@ -43,6 +43,7 @@ import { useUserApiKey } from '#imports';
 import { useActivePrompt } from '#imports';
 import { getDefaultPromptId } from '#imports';
 import { useHooks } from '#imports';
+import { consumeWorkflowHandlingFlag } from '~/plugins/workflow-slash-commands.client';
 // settings/model store are provided elsewhere at runtime; keep dynamic access guards
 import type {
     ChatSettings,
@@ -782,6 +783,42 @@ export function useChat(
                 if (Array.isArray(candidate)) {
                     orMessages = candidate;
                 }
+            }
+
+            // Check if a workflow is handling this request - skip AI call
+            if (consumeWorkflowHandlingFlag()) {
+                if (import.meta.dev) {
+                    console.log(
+                        '[useAi] Workflow is handling request, skipping AI call'
+                    );
+                }
+                // Seed UI with assistant placeholder so workflow state can render immediately
+                const workflowAssistant: ChatMessage = {
+                    role: 'assistant',
+                    content: '',
+                    id: assistantDbMsg.id,
+                    stream_id: newStreamId,
+                    reasoning_text: null,
+                };
+                recordRawMessage(workflowAssistant);
+                rawMessages.value.push(workflowAssistant);
+                const uiAssistant = ensureUiMessage(workflowAssistant);
+                uiAssistant.pending = true;
+                messages.value.push(uiAssistant);
+                loading.value = false;
+                abortController.value = null;
+                return;
+            }
+
+            // Also skip if messages array is empty (e.g., workflow returned empty)
+            if (orMessages.length === 0) {
+                if (import.meta.dev) {
+                    console.log(
+                        '[useAi] No messages to send, skipping AI call'
+                    );
+                }
+                loading.value = false;
+                return;
             }
 
             while (continueLoop && loopIteration < MAX_TOOL_ITERATIONS) {

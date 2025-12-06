@@ -623,6 +623,12 @@ export type CoreHookPayloadMap = {
             existing?: DocumentEntity;
         }
     ];
+
+    // Workflow Actions
+    'workflow.execution:action:state_update': [{ messageId: string; state: any }];
+    'workflow.execution:action:complete': [
+        { messageId: string; workflowId: string }
+    ];
 };
 
 // Derived payloads for DB action hooks

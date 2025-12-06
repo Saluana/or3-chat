@@ -12,7 +12,7 @@ This task list implements the workflow/agent message integration into the chat i
 
 ### 1. Create Workflow Type Definitions (NO schema changes)
 
--   [ ] **1.1 Create workflow-types.ts (v2 Update - Message Type Discriminator)**
+-   [x] **1.1 Create workflow-types.ts (v2 Update - Message Type Discriminator)**
 
     -   File: `app/utils/chat/workflow-types.ts`
     -   Define `NodeExecutionStatus` type: `'pending' | 'running' | 'completed' | 'error'`
@@ -26,7 +26,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Requirements: 1.1, 1.2, v2 default message typing
     -   **No breaking changes:** New file, no modifications to existing code
 
--   [ ] **1.2 Extend UiChatMessage interface (additive only)**
+-   [x] **1.2 Extend UiChatMessage interface (additive only)**
 
     -   File: `app/utils/chat/uiMessages.ts`
     -   Add `isWorkflow?: boolean` field (optional - existing code unaffected)
@@ -34,7 +34,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Requirements: 2.1
     -   **No breaking changes:** All new fields are optional
 
--   [ ] **1.3 Update ensureUiMessage for workflow messages**
+-   [x] **1.3 Update ensureUiMessage for workflow messages**
     -   File: `app/utils/chat/uiMessages.ts`
     -   Import `isWorkflowMessageData` from workflow-types
     -   Add conditional logic: `if (isWorkflowMessageData(data)) { ... }`
@@ -49,7 +49,7 @@ This task list implements the workflow/agent message integration into the chat i
 
 ### 2. Create WorkflowStreamAccumulator
 
--   [ ] **2.1 Create useWorkflowStreamAccumulator.ts**
+-   [x] **2.1 Create useWorkflowStreamAccumulator.ts**
 
     -   File: `app/composables/chat/useWorkflowStreamAccumulator.ts`
     -   Define `WorkflowStreamingState` interface
@@ -57,7 +57,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Requirements: 3.1
     -   **No breaking changes:** New file
 
--   [ ] **2.2 Implement createWorkflowStreamAccumulator function**
+-   [x] **2.2 Implement createWorkflowStreamAccumulator function**
 
     -   File: `app/composables/chat/useWorkflowStreamAccumulator.ts`
     -   Create reactive state object
@@ -65,7 +65,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Implement `scheduleFlush()` and `flush()` functions
     -   Requirements: 3.1, 3.2
 
--   [ ] **2.3 Implement node lifecycle methods**
+-   [x] **2.3 Implement node lifecycle methods**
 
     -   File: `app/composables/chat/useWorkflowStreamAccumulator.ts`
     -   Implement `nodeStart(nodeId, label, type)`
@@ -75,7 +75,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Implement `nodeError(nodeId, error)`
     -   Requirements: 3.1
 
--   [ ] **2.4 Implement branch lifecycle methods**
+-   [x] **2.4 Implement branch lifecycle methods**
 
     -   File: `app/composables/chat/useWorkflowStreamAccumulator.ts`
     -   Implement `branchStart(nodeId, branchId, label)`
@@ -83,7 +83,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Implement `branchComplete(nodeId, branchId, output)`
     -   Requirements: 3.1, 5.3
 
--   [ ] **2.5 Implement finalization and serialization**
+-   [x] **2.5 Implement finalization and serialization**
 
     -   File: `app/composables/chat/useWorkflowStreamAccumulator.ts`
     -   Implement `finalize({ error?, stopped? })`
@@ -91,7 +91,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Implement `toMessageData(workflowId, workflowName, prompt)` for DB serialization
     -   Requirements: 3.1, 8.1
 
--   [ ] **2.6 Write unit tests for WorkflowStreamAccumulator**
+-   [x] **2.6 Write unit tests for WorkflowStreamAccumulator**
     -   File: `app/composables/chat/__tests__/useWorkflowStreamAccumulator.test.ts`
     -   Test RAF batching (multiple tokens → single flush)
     -   Test node state transitions
@@ -106,14 +106,14 @@ This task list implements the workflow/agent message integration into the chat i
 
 ### 3. Create WorkflowExecutionStatus Component
 
--   [ ] **3.1 Create WorkflowExecutionStatus.vue**
+-   [x] **3.1 Create WorkflowExecutionStatus.vue**
 
     -   File: `app/components/chat/WorkflowExecutionStatus.vue`
     -   Define props interface matching workflowState shape
     -   Create template skeleton with header and node list areas
     -   Requirements: 5.1
 
--   [ ] **3.2 Implement header section**
+-   [x] **3.2 Implement header section**
 
     -   File: `app/components/chat/WorkflowExecutionStatus.vue`
     -   Show workflow name
@@ -122,7 +122,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Add collapse/expand toggle
     -   Requirements: 5.1
 
--   [ ] **3.3 Implement node pipeline display**
+-   [x] **3.3 Implement node pipeline display**
 
     -   File: `app/components/chat/WorkflowExecutionStatus.vue`
     -   Loop through `executionOrder` to show nodes in execution order
@@ -131,7 +131,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Use `<details>` for expandable node output
     -   Requirements: 5.1
 
--   [ ] **3.4 Implement node output expansion**
+-   [x] **3.4 Implement node output expansion**
 
     -   File: `app/components/chat/WorkflowExecutionStatus.vue`
     -   Show streaming text while active, final output when complete
@@ -140,7 +140,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Auto-scroll streaming output
     -   Requirements: 5.2
 
--   [ ] **3.5 Implement parallel branch visualization**
+-   [x] **3.5 Implement parallel branch visualization**
 
     -   File: `app/components/chat/WorkflowExecutionStatus.vue`
     -   Filter branches by nodeId prefix
@@ -150,14 +150,14 @@ This task list implements the workflow/agent message integration into the chat i
     -   **Handle `__merge__` branch ID specially** - display as "Merging results..." or similar
     -   Requirements: 5.3
 
--   [ ] **3.6 Add error display within nodes**
+-   [x] **3.6 Add error display within nodes**
 
     -   File: `app/components/chat/WorkflowExecutionStatus.vue`
     -   Show error message in red banner within node details
     -   Highlight failed node with error icon
     -   Requirements: 6.2
 
--   [ ] **3.7 Add theme/icon integration (v2 Update - Theme System)**
+-   [x] **3.7 Add theme/icon integration (v2 Update - Theme System)**
 
     -   File: `app/components/chat/WorkflowExecutionStatus.vue`
     -   Use `useIcon()` for all icons (define new workflow.status.\* icons if needed)
@@ -168,7 +168,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Ensure accessibility-compliant contrast ratios via theme system
     -   Requirements: NFR-3, NFR-5, v2 theme integration
 
--   [ ] **3.8 Write component tests**
+-   [x] **3.8 Write component tests**
     -   File: `app/components/chat/__tests__/WorkflowExecutionStatus.test.ts`
     -   Test rendering with various execution states
     -   Test collapse/expand behavior
@@ -181,7 +181,7 @@ This task list implements the workflow/agent message integration into the chat i
 
 ### 4. Create Dedicated WorkflowChatMessage Component
 
--   [ ] **4.1 Create WorkflowChatMessage.vue component**
+-   [x] **4.1 Create WorkflowChatMessage.vue component**
 
     -   File: `app/components/chat/WorkflowChatMessage.vue`
     -   Create dedicated component for workflow message rendering
@@ -190,7 +190,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Requirements: v2 rendering split
     -   **No breaking changes:** New component, doesn't affect existing code
 
--   [ ] **4.2 Implement workflow message rendering**
+-   [x] **4.2 Implement workflow message rendering**
 
     -   File: `app/components/chat/WorkflowChatMessage.vue`
     -   Render `WorkflowExecutionStatus` component with workflow state
@@ -198,7 +198,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Apply theme tokens for styling
     -   Requirements: 5.1, 6.1, NFR-3
 
--   [ ] **4.3 Modify ChatMessage.vue for conditional delegation**
+-   [x] **4.3 Modify ChatMessage.vue for conditional delegation**
 
     -   File: `app/components/chat/ChatMessage.vue`
     -   Import `WorkflowChatMessage` component
@@ -208,7 +208,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Requirements: 1.1, v2 rendering split
     -   **No breaking changes:** Existing message rendering unchanged
 
--   [ ] **4.4 Ensure final output renders correctly**
+-   [x] **4.4 Ensure final output renders correctly**
     -   File: `app/components/chat/WorkflowChatMessage.vue`
     -   Verify `StreamMarkdown` renders `message.text` (which is `finalOutput` for workflows)
     -   Test markdown/code rendering in final output
@@ -220,7 +220,7 @@ This task list implements the workflow/agent message integration into the chat i
 
 ### 5. Modify workflow-slash-commands.client.ts
 
--   [ ] **5.1 Import workflow accumulator and types**
+-   [x] **5.1 Import workflow accumulator and types**
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
     -   Import `createWorkflowStreamAccumulator`
@@ -229,7 +229,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Import `nowSec` from `~/db/utils` for correct timestamp format
     -   Requirements: 3.1, 4.1
 
--   [ ] **5.2 Create workflow message with correct data**
+-   [x] **5.2 Create workflow message with correct data**
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
     -   Use existing `db.messages.put()` pattern but with workflow data structure
@@ -239,7 +239,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Requirements: 1.1, 1.2
     -   **No breaking changes:** Uses existing `data` field
 
--   [ ] **5.3 Initialize accumulator and wire callbacks (SIMPLIFIED)**
+-   [x] **5.3 Initialize accumulator and wire callbacks (SIMPLIFIED)**
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
     -   Create accumulator instance at start of workflow execution
@@ -273,7 +273,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   **Note:** `onNodeStart` now receives optional `NodeInfo` with `{label, type}` automatically
     -   Requirements: 4.1
 
--   [ ] **5.4 Implement reactive state bridge (CRITICAL)**
+-   [x] **5.4 Implement reactive state bridge (CRITICAL)**
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
     -   Emit `workflow.execution:action:state_update` hook with reactive state reference
@@ -281,7 +281,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Requirements: 4.1
     -   **This is critical for UI updates - DB writes alone don't trigger re-renders**
 
--   [ ] **5.5 Implement throttled persistence**
+-   [x] **5.5 Implement throttled persistence**
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
     -   Create `schedulePersist()` function with 500ms throttle
@@ -290,7 +290,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Update message `data` field with `accumulator.toMessageData()`
     -   Requirements: 8.1
 
--   [ ] **5.6 Handle workflow completion**
+-   [x] **5.6 Handle workflow completion**
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
     -   In `controller.promise.then()`: call `accumulator.finalize()`
@@ -299,14 +299,14 @@ This task list implements the workflow/agent message integration into the chat i
     -   Emit `workflow.execution:action:complete` hook
     -   Requirements: 8.1
 
--   [ ] **5.7 Wire stop functionality to accumulator**
+-   [x] **5.7 Wire stop functionality to accumulator**
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
     -   On `workflow:stop` event, call `accumulator.finalize({ stopped: true })`
     -   Persist stopped state
     -   Requirements: 7.1
 
--   [ ] **5.8 Handle `__merge__` branch display**
+-   [x] **5.8 Handle `__merge__` branch display**
     -   The parallel node emits `__merge__` as branchId for merge step
     -   Display as "Merging results..." in `WorkflowExecutionStatus.vue`
     -   The branch callbacks include this automatically - just handle UI display
@@ -320,7 +320,7 @@ This task list implements the workflow/agent message integration into the chat i
 
 **v2 REQUIREMENT:** This is now a mandatory architectural component, not optional. Without this, the UI will show stale content because Dexie writes alone don't trigger Vue reactivity.
 
--   [ ] **5.5.1 Subscribe to workflow state updates in ChatContainer (MANDATORY)**
+-   [x] **5.5.1 Subscribe to workflow state updates in ChatContainer (MANDATORY)**
 
     -   File: `app/components/chat/ChatContainer.vue` or `app/composables/chat/useAi.ts`
     -   Create `workflowStates = reactive(new Map<string, WorkflowStreamingState>())`
@@ -330,7 +330,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Requirements: 4.1, 9.1, v2 reactive bridge
     -   **Critical:** This is the ONLY way to get real-time workflow UI updates
 
--   [ ] **5.5.2 Merge workflow state into allMessages computed (MANDATORY)**
+-   [x] **5.5.2 Merge workflow state into allMessages computed (MANDATORY)**
 
     -   In ChatContainer/useAi, modify the messages computed to check workflowStates map
     -   If message has workflow state, add `isWorkflow: true` and `workflowState`
@@ -338,7 +338,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   **This connects the reactive accumulator to the message rendering system**
     -   Requirements: 4.1, v2 reactive bridge
 
--   [ ] **5.5.3 Clean up state on completion**
+-   [x] **5.5.3 Clean up state on completion**
 
     -   Listen for `workflow.execution:action:complete` hook
     -   Optionally remove from workflowStates map after delay
@@ -351,7 +351,7 @@ This task list implements the workflow/agent message integration into the chat i
 
 ### 6. Add Workflow Execution Hooks
 
--   [ ] **6.1 Define hook types**
+-   [x] **6.1 Define hook types**
 
     -   File: `app/core/hooks/hook-types.ts`
     -   Add `workflow.execution:action:start` hook type
@@ -360,7 +360,7 @@ This task list implements the workflow/agent message integration into the chat i
     -   Add `workflow.execution:action:state_update` hook type
     -   Requirements: 4.2
 
--   [ ] **6.2 Emit hooks from slash command plugin**
+-   [x] **6.2 Emit hooks from slash command plugin**
     -   File: `app/plugins/workflow-slash-commands.client.ts`
     -   Emit `workflow.execution:action:start` when execution begins
     -   Emit `workflow.execution:action:node_complete` in `onNodeFinish`
@@ -373,7 +373,7 @@ This task list implements the workflow/agent message integration into the chat i
 
 ### 7. Register Workflow Icons
 
--   [ ] **7.1 Add workflow status icons to icon registry**
+-   [x] **7.1 Add workflow status icons to icon registry**
     -   File: `app/config/icons.ts` or equivalent
     -   Add `workflow.status.running` (spinner/loader)
     -   Add `workflow.status.completed` (checkmark)
@@ -410,7 +410,7 @@ This task list implements the workflow/agent message integration into the chat i
 
 ### 9. Error Handling (v2 Update - Centralized Error System)
 
--   [ ] **9.1 Integrate centralized error system**
+-   [x] **9.1 Integrate centralized error system**
 
     -   File: `app/plugins/workflow-slash-commands.client.ts`
     -   Import error utilities from `~/utils/errors` or equivalent
@@ -418,14 +418,14 @@ This task list implements the workflow/agent message integration into the chat i
     -   Use `showError()` or similar API for consistent error UX
     -   Requirements: 6.2, NFR-4, v2 error system
 
--   [ ] **9.2 Handle workflow validation errors with theme tokens**
+-   [x] **9.2 Handle workflow validation errors with theme tokens**
 
     -   Ensure validation errors display through centralized system
     -   Set node state to error if validation fails on a specific node
     -   Use theme error tokens (`var(--md-error)`, `var(--md-error-container)`)
     -   Requirements: 6.2, NFR-3, v2 error system
 
--   [ ] **9.3 Handle execution errors gracefully**
+-   [x] **9.3 Handle execution errors gracefully**
     -   Test error during node execution
     -   Verify error node is highlighted with theme error colors
     -   Verify partial output is preserved

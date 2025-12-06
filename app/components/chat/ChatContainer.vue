@@ -106,6 +106,7 @@ import {
     computed,
     watch,
     ref,
+    reactive,
     type Ref,
     type CSSProperties,
     onBeforeUnmount,
@@ -125,7 +126,7 @@ import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
-import { useToast } from '#imports';
+import { useToast, useHooks } from '#imports';
 import { MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
 import type {
     ChatInstance,
@@ -339,10 +340,46 @@ const streamingMessage = computed<UiChatMessage | null>(() => {
 const stableMessages = computed<UiChatMessage[]>(() => messages.value);
 
 // Combine stable messages and streaming message for Or3Scroll
+// Reactive bridge: track workflow states by message id
+const workflowStates = reactive(new Map<string, any>());
+
+function deriveWorkflowText(wf: any): string {
+    if (!wf) return '';
+    // Only return finalOutput - never show intermediate node outputs
+    // The result box is controlled by WorkflowChatMessage using workflowState.finalOutput directly
+    if (wf.finalOutput) return wf.finalOutput;
+    return '';
+}
+
+function mergeWorkflowState(msg: UiChatMessage) {
+    const wf = workflowStates.get(msg.id);
+    if (!wf) return msg;
+    const version = wf.version ?? 0; // Depend on version for reactivity
+    const workflowText = deriveWorkflowText(wf);
+    const pending =
+        wf.executionState === 'running'
+            ? true
+            : wf.executionState === 'error'
+            ? false
+            : wf.executionState === 'stopped'
+            ? false
+            : wf.executionState === 'completed'
+            ? false
+            : wf.isActive ?? msg.pending ?? false;
+    return {
+        ...msg,
+        isWorkflow: true,
+        workflowState: wf,
+        text: workflowText, // never fall back to original message content
+        pending,
+        _wfVersion: version,
+    } as UiChatMessage & { _wfVersion: number };
+}
+
 const allMessages = computed(() => {
-    const list = [...stableMessages.value];
+    const list = stableMessages.value.map(mergeWorkflowState);
     if (streamingMessage.value) {
-        list.push(streamingMessage.value);
+        list.push(mergeWorkflowState(streamingMessage.value));
     }
     return list;
 });
@@ -642,7 +679,16 @@ const innerInputContainerProps = useThemeOverrides({
     isNuxtUI: false,
 });
 
+const hooks = useHooks();
+const cleanupWorkflowHook = hooks.on(
+    'workflow.execution:action:state_update',
+    (payload: { messageId: string; state: any }) => {
+        workflowStates.set(payload.messageId, payload.state);
+    }
+);
+
 onBeforeUnmount(() => {
+    cleanupWorkflowHook();
     try {
         chat.value?.clear?.();
     } catch {}

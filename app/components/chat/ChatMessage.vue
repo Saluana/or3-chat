@@ -7,13 +7,20 @@
             outerClass,
             messageContainerProps?.class || '',
         ]"
-        :data-theme-target="messageContainerProps?.['data-theme-target']"
         :data-theme-matches="messageContainerProps?.['data-theme-matches']"
         class="p-2 min-w-[140px] rounded-[var(--md-border-radius)] first:mt-3 first:mb-6 not-first:my-6 relative"
     >
-        <!-- Attachments bar (above message content) -->
-        <div
-            v-if="props.message.role === 'user' && hashList.length"
+        <!-- Workflow Message Handling -->
+        <WorkflowChatMessage
+            v-if="props.message.isWorkflow"
+            :message="props.message"
+        />
+
+        <!-- Regular Chat Message Handling -->
+        <template v-else>
+            <!-- Attachments bar (above message content) -->
+            <div
+                v-if="props.message.role === 'user' && hashList.length"
             class="attachments-bar mb-3"
         >
             <!-- Collapsed: show compact row of thumbnails -->
@@ -295,6 +302,7 @@
                 </template>
             </UButtonGroup>
         </div>
+        </template>
     </div>
 </template>
 
@@ -310,6 +318,7 @@ import {
     watchEffect,
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
+import WorkflowChatMessage from './WorkflowChatMessage.vue';
 import { parseHashes } from '~/utils/files/attachments';
 import { getFileMeta } from '~/db/files';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';

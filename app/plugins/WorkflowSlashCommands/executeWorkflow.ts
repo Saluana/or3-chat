@@ -4,7 +4,12 @@
  * Handles workflow execution with streaming output and conversation history.
  */
 
-import type { WorkflowData, ExecutionCallbacks } from '@or3/workflow-core';
+import type {
+    WorkflowData,
+    ExecutionCallbacks,
+    ExecutionResult,
+    WorkflowTokenMetadata,
+} from '@or3/workflow-core';
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -32,12 +37,16 @@ export interface WorkflowExecutionOptions {
     apiKey: string;
     /** Callback for each streamed token */
     onToken: (token: string) => void;
+    /** Callback for workflow-level streamed token (leaf aggregation) */
+    onWorkflowToken?: (token: string, meta?: WorkflowTokenMetadata) => void;
     /** Callback when a node starts executing */
     onNodeStart?: (nodeId: string) => void;
     /** Callback when a node finishes */
     onNodeFinish?: (nodeId: string, output: string) => void;
     /** Callback for execution errors */
     onError?: (error: Error) => void;
+    /** Additional execution callbacks */
+    callbacks?: Partial<ExecutionCallbacks>;
 }
 
 /**
@@ -99,7 +108,7 @@ export function parseSlashCommand(text: string): ParsedSlashCommand | null {
  */
 export interface WorkflowExecutionResult {
     /** The execution result from the adapter */
-    result: unknown;
+    result: ExecutionResult | null;
     /** Whether execution was stopped early */
     stopped: boolean;
 }
@@ -176,6 +185,7 @@ export function executeWorkflow(
         onNodeStart,
         onNodeFinish,
         onError,
+        callbacks: extraCallbacks,
     } = options;
 
     let adapter: any = null;
@@ -219,6 +229,12 @@ export function executeWorkflow(
             onNodeFinish: onNodeFinish || (() => {}),
             onNodeError: (_nodeId, error) => onError?.(error),
             onToken: (_nodeId, token) => onToken(token),
+            onWorkflowToken: (token, meta) =>
+                extraCallbacks?.onWorkflowToken?.(token, meta) ||
+                options.onWorkflowToken?.(token, meta) ||
+                onToken(token),
+            onComplete: extraCallbacks?.onComplete,
+            ...extraCallbacks,
         };
 
         try {

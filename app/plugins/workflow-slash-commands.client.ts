@@ -13,6 +13,9 @@ import { useAppConfig, useHooks, useToast } from '#imports';
 import type { Extension, Node } from '@tiptap/core';
 import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type { WorkflowExecutionController } from './WorkflowSlashCommands/executeWorkflow';
+import { createWorkflowStreamAccumulator } from '~/composables/chat/useWorkflowStreamAccumulator';
+import { nowSec } from '~/db/util';
+import { reportError } from '~/utils/errors';
 
 // Types for lazy-loaded modules
 interface SlashCommandsModule {
@@ -310,10 +313,9 @@ export default defineNuxtPlugin((nuxtApp) => {
             ]);
 
             if (!slashMod || !execMod) {
-                toast.add({
-                    title: 'Workflow Error',
-                    description: 'Failed to load workflow modules',
-                    color: 'error',
+                reportError('Failed to load workflow modules', {
+                    code: 'ERR_INTERNAL',
+                    toast: true,
                 });
                 return { messages };
             }
@@ -330,10 +332,10 @@ export default defineNuxtPlugin((nuxtApp) => {
             );
 
             if (!workflowPost) {
-                toast.add({
-                    title: 'Workflow Not Found',
-                    description: `No workflow named "${parsed.workflowName}"`,
-                    color: 'warning',
+                reportError(`No workflow named "${parsed.workflowName}"`, {
+                    code: 'ERR_VALIDATION',
+                    severity: 'warn',
+                    toast: true,
                 });
                 return { messages };
             }
@@ -343,10 +345,10 @@ export default defineNuxtPlugin((nuxtApp) => {
             const { apiKey } = useUserApiKey();
 
             if (!apiKey.value) {
-                toast.add({
-                    title: 'API Key Required',
-                    description: 'Please connect your OpenRouter account',
-                    color: 'warning',
+                reportError('Please connect your OpenRouter account', {
+                    code: 'ERR_AUTH',
+                    severity: 'warn',
+                    toast: true,
                 });
                 // Dispatch event to prompt login
                 window.dispatchEvent(new CustomEvent('openrouter:login'));
@@ -362,10 +364,9 @@ export default defineNuxtPlugin((nuxtApp) => {
 
             // Check workflow has valid meta
             if (!workflowPost.meta) {
-                toast.add({
-                    title: 'Invalid Workflow',
-                    description: `Workflow "${parsed.workflowName}" has no data`,
-                    color: 'error',
+                reportError(`Workflow "${parsed.workflowName}" has no data`, {
+                    code: 'ERR_VALIDATION',
+                    toast: true,
                 });
                 return { messages };
             }
@@ -404,64 +405,196 @@ export default defineNuxtPlugin((nuxtApp) => {
                 return { messages };
             }
 
-            // Track streamed output
-            let output = '';
-            let updatePending = false;
-            let chunkIndex = 0;
+            // Create accumulator
+            const accumulator = createWorkflowStreamAccumulator();
 
-            // Update function to persist to database
-            const updateMessage = async () => {
-                if (!assistantContext || updatePending) return;
-                updatePending = true;
-
-                try {
-                    const existingMsg = await db.messages.get(
-                        assistantContext.id
-                    );
-                    if (existingMsg) {
-                        await db.messages.put({
-                            ...existingMsg,
-                            data: {
-                                content: output,
-                                attachments: [],
-                                reasoning_text: null,
-                            },
-                            updated_at: Date.now(),
-                        });
-                    }
-                } catch (e) {
-                    if (import.meta.dev) {
-                        console.warn(
-                            '[workflow-slash] Stream update failed:',
-                            e
-                        );
-                    }
-                } finally {
-                    updatePending = false;
-                }
-            };
-
-            // Throttle updates to ~50ms intervals for smooth streaming
-            let lastUpdate = 0;
-            const throttledUpdate = async (delta: string) => {
-                const now = Date.now();
-
-                // Emit delta hook for any listeners
-                await hooks.doAction('ai.chat.stream:action:delta', delta, {
-                    threadId: assistantContext.threadId,
-                    assistantId: assistantContext.id,
-                    streamId: assistantContext.streamId,
-                    deltaLength: delta.length,
-                    totalLength: output.length,
-                    chunkIndex: chunkIndex++,
+            // Reactive bridge: Emit state updates for UI
+            const emitStateUpdate = () => {
+                hooks.doAction('workflow.execution:action:state_update', {
+                    messageId: assistantContext.id,
+                    state: accumulator.state,
                 });
+            };
 
-                // Throttle database updates
-                if (now - lastUpdate > 50) {
-                    lastUpdate = now;
-                    void updateMessage();
+            // Persistence helper with throttling
+            let lastPersist = 0;
+            let persistTimeout: any = null;
+
+            const persist = (immediate = false) => {
+                const now = Date.now();
+                if (immediate || now - lastPersist > 500) {
+                    lastPersist = now;
+                    if (persistTimeout) clearTimeout(persistTimeout);
+                    persistTimeout = null;
+
+                    const data = accumulator.toMessageData(
+                        workflowPost.id,
+                        workflowPost.title,
+                        parsed.prompt || ''
+                    );
+
+                    db.messages
+                        .get(assistantContext.id)
+                        .then(async (msg) => {
+                            const timestamp = nowSec();
+                            if (msg) {
+                                return db.messages.put({
+                                    ...msg,
+                                    data,
+                                    updated_at: timestamp,
+                                });
+                            }
+
+                            // Create placeholder assistant message so UI can render it
+                            const index = Math.floor(Date.now());
+                            return db.messages.put({
+                                id: assistantContext.id,
+                                role: 'assistant',
+                                data,
+                                created_at: timestamp,
+                                updated_at: timestamp,
+                                error: null,
+                                deleted: false,
+                                thread_id: assistantContext.threadId || '',
+                                index,
+                                clock: 0,
+                                stream_id: assistantContext.streamId,
+                                file_hashes: null,
+                            });
+                        })
+                        .catch((e) =>
+                            reportError(e, {
+                                code: 'ERR_DB_WRITE_FAILED',
+                                message: 'Persist failed',
+                                silent: true,
+                            })
+                        );
+                } else if (!persistTimeout) {
+                    persistTimeout = setTimeout(() => persist(true), 500);
                 }
             };
+
+            // Initial persist to set message type
+            persist(true);
+            emitStateUpdate();
+
+            // Execution callbacks (manual wiring; helper not available in current core build)
+            const callbacks = {
+                onNodeStart: (
+                    nodeId: string,
+                    nodeInfo?: { label?: string; type?: string }
+                ) => {
+                    const meta = workflowPost.meta as any;
+                    const node = (meta?.nodes || []).find(
+                        (n: any) => n.id === nodeId
+                    );
+                    const label =
+                        nodeInfo?.label ||
+                        node?.label ||
+                        node?.name ||
+                        nodeInfo?.type ||
+                        node?.type ||
+                        nodeId;
+                    const type = nodeInfo?.type || node?.type || 'unknown';
+                    accumulator.nodeStart(nodeId, label, type);
+                    emitStateUpdate();
+                    persist();
+                },
+                onNodeFinish: (nodeId: string, output: string) => {
+                    accumulator.nodeFinish(nodeId, output);
+                    emitStateUpdate();
+                    hooks.doAction('workflow.execution:action:node_complete', {
+                        messageId: assistantContext.id,
+                        nodeId,
+                    });
+                    persist();
+                },
+                onNodeError: (nodeId: string, error: Error) => {
+                    accumulator.nodeError(nodeId, error);
+                    emitStateUpdate();
+                    persist();
+                    reportError(error, {
+                        code: 'ERR_INTERNAL',
+                        message: `Node ${nodeId} failed`,
+                        silent: true,
+                    });
+                },
+                onToken: (nodeId: string, token: string) => {
+                    accumulator.nodeToken(nodeId, token);
+                    emitStateUpdate();
+                    persist();
+                },
+                onReasoning: (nodeId: string, token: string) => {
+                    accumulator.nodeReasoning(nodeId, token);
+                    emitStateUpdate();
+                    persist();
+                },
+                onBranchStart: (
+                    nodeId: string,
+                    branchId: string,
+                    label: string
+                ) => {
+                    accumulator.branchStart(nodeId, branchId, label);
+                    emitStateUpdate();
+                    persist();
+                },
+                onBranchToken: (
+                    nodeId: string,
+                    branchId: string,
+                    label: string,
+                    token: string
+                ) => {
+                    accumulator.branchToken(nodeId, branchId, label, token);
+                    emitStateUpdate();
+                    persist();
+                },
+                onBranchReasoning: (
+                    nodeId: string,
+                    branchId: string,
+                    label: string,
+                    token: string
+                ) => {
+                    accumulator.branchReasoning(nodeId, branchId, label, token);
+                    emitStateUpdate();
+                    persist();
+                },
+                onBranchComplete: (
+                    nodeId: string,
+                    branchId: string,
+                    output: string
+                ) => {
+                    accumulator.branchComplete(nodeId, branchId, output);
+                    emitStateUpdate();
+                    persist();
+                },
+                onRouteSelected: (nodeId: string, route: string) => {
+                    accumulator.routeSelected(nodeId, route);
+                    emitStateUpdate();
+                    persist();
+                },
+                onTokenUsage: (
+                    nodeId: string,
+                    usage: {
+                        promptTokens?: number;
+                        completionTokens?: number;
+                        totalTokens?: number;
+                    }
+                ) => {
+                    accumulator.tokenUsage(nodeId, usage);
+                    emitStateUpdate();
+                    persist();
+                },
+                onWorkflowToken: (token: string) => {
+                    accumulator.workflowToken(token);
+                    emitStateUpdate();
+                    persist();
+                },
+                onComplete: (result) => {
+                    accumulator.finalize({ result });
+                    emitStateUpdate();
+                    persist(true);
+                },
+            } satisfies Record<string, (...args: any[]) => void>;
 
             if (import.meta.dev) {
                 console.log(
@@ -470,125 +603,80 @@ export default defineNuxtPlugin((nuxtApp) => {
                 );
             }
 
-            // Create execution controller (allows stopping)
+            // Fire start hook
+            await hooks.doAction('workflow.execution:action:start', {
+                messageId: assistantContext.id,
+                workflowId: workflowPost.id,
+            });
+
+            // Create execution controller
             const controller = execMod.executeWorkflow({
                 workflow: workflowPost.meta,
                 prompt: parsed.prompt || 'Execute workflow',
                 conversationHistory,
                 apiKey: apiKey.value,
-                onToken: (token) => {
-                    output += token;
-                    // Stream to the assistant message in real-time
-                    void throttledUpdate(token);
-                },
-                onNodeStart: (nodeId) => {
-                    if (import.meta.dev) {
-                        console.log('[workflow-slash] Node started:', nodeId);
-                    }
-                },
-                onNodeFinish: (nodeId, nodeOutput) => {
-                    if (import.meta.dev) {
-                        console.log(
-                            '[workflow-slash] Node finished:',
-                            nodeId,
-                            nodeOutput?.slice?.(0, 100) || ''
-                        );
-                    }
-                },
+                onToken: () => {}, // Handled by callbacks.onToken
+                onWorkflowToken: (_token) => {},
+                callbacks, // Pass our custom callbacks
                 onError: (error) => {
-                    console.error('[workflow-slash] Execution error:', error);
-                    toast.add({
-                        title: 'Workflow Error',
-                        description: error.message || 'Execution failed',
-                        color: 'error',
+                    reportError(error, {
+                        code: 'ERR_INTERNAL',
+                        message: 'Execution error',
+                        toast: true,
                     });
                 },
             });
 
-            // Track the active controller for stop functionality
             activeController = controller;
 
-            // Handle workflow completion in background (don't block the filter)
+            // Handle completion
             controller.promise
-                .then(async ({ stopped }) => {
+                .then(async ({ result, stopped }) => {
                     activeController = null;
 
-                    if (stopped) {
-                        console.log('[workflow-slash] Execution was stopped');
-                        if (output) {
-                            await updateMessage();
-                        }
-                        return;
-                    }
-
-                    if (import.meta.dev) {
-                        console.log(
-                            '[workflow-slash] Execution complete, output length:',
-                            output.length
-                        );
-                    }
-
-                    // Final update to ensure complete output is saved
                     const finalOutput =
-                        output || 'Workflow executed successfully.';
-                    try {
-                        const existingMsg = await db.messages.get(
-                            assistantContext.id
-                        );
-                        if (existingMsg) {
-                            await db.messages.put({
-                                ...existingMsg,
-                                data: {
-                                    content: finalOutput,
-                                    attachments: [],
-                                    reasoning_text: null,
-                                },
-                                updated_at: Date.now(),
-                            });
+                        result?.finalOutput ?? result?.output ?? '';
+                    accumulator.finalize({
+                        stopped,
+                        result: result || undefined,
+                        error: result?.error || undefined,
+                    });
+                    emitStateUpdate();
+                    persist(true); // Final persist
 
-                            // Emit completion hook
-                            await hooks.doAction(
-                                'ai.chat.stream:action:complete',
-                                {
-                                    threadId: assistantContext.threadId,
-                                    assistantId: assistantContext.id,
-                                    streamId: assistantContext.streamId,
-                                    totalLength: finalOutput.length,
-                                }
-                            );
-
-                            if (import.meta.dev) {
-                                console.log(
-                                    '[workflow-slash] Final update to message:',
-                                    assistantContext.id
-                                );
+                    if (stopped) {
+                        console.log('[workflow-slash] Execution stopped');
+                    } else {
+                        console.log('[workflow-slash] Execution completed');
+                        // Emit completion hook
+                        await hooks.doAction(
+                            'workflow.execution:action:complete',
+                            {
+                                messageId: assistantContext.id,
+                                workflowId: workflowPost.id,
                             }
-                        }
-                    } catch (dbError) {
-                        console.error(
-                            '[workflow-slash] Failed to update message:',
-                            dbError
                         );
                     }
                 })
                 .catch((error) => {
                     activeController = null;
-                    console.error('[workflow-slash] Execution failed:', error);
-                    toast.add({
-                        title: 'Workflow Failed',
-                        description:
-                            error instanceof Error
-                                ? error.message
-                                : 'Unknown error',
-                        color: 'error',
+                    accumulator.finalize({ error });
+                    emitStateUpdate();
+                    persist(true);
+
+                    reportError(error, {
+                        code: 'ERR_INTERNAL',
+                        message: 'Execution failed',
+                        toast: true,
                     });
                 });
 
-            // Clear pending context (we captured it above)
+            // Clear pending context
             pendingAssistantContext = null;
 
-            // Return empty messages to prevent the AI from responding
-            // The workflow is now running in the background and will update the message
+            // Signal to the chat system that workflow is handling this request
+            workflowHandlingRequest = true;
+
             return { messages: [] };
         }
     );

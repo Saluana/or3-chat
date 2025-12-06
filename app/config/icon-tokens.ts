@@ -121,6 +121,13 @@ export const DEFAULT_ICONS = {
     'image.delete': 'pixelarticons:image-delete',
     'image.repeat': 'pixelarticons:repeat',
     'image.multiple': 'pixelarticons:image-multiple',
+
+    // Workflow Status
+    'workflow.status.running': 'pixelarticons:loader',
+    'workflow.status.completed': 'pixelarticons:check',
+    'workflow.status.error': 'pixelarticons:close',
+    'workflow.status.stopped': 'pixelarticons:pause',
+    'workflow.status.pending': 'pixelarticons:clock',
 } as const;
 
 export type IconToken = keyof typeof DEFAULT_ICONS;
