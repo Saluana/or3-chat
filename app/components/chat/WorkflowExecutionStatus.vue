@@ -125,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import {
     type UiWorkflowState,
     type NodeState,

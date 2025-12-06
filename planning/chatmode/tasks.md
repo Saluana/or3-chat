@@ -388,21 +388,24 @@ This task list implements the workflow/agent message integration into the chat i
 
 ### 8. Integration Testing
 
--   [ ] **8.1 Test workflow message persistence**
+-   [x] **8.1 Test workflow message persistence**
 
+    -   File: `app/composables/chat/__tests__/workflow-integration.test.ts`
     -   Write test that executes workflow and verifies DB message has correct structure
     -   Verify `message_type: 'workflow'` is set
     -   Verify `data` contains valid `WorkflowMessageData`
     -   Requirements: 8.1
 
--   [ ] **8.2 Test workflow message loading**
+-   [x] **8.2 Test workflow message loading**
 
+    -   File: `app/composables/chat/__tests__/workflow-integration.test.ts`
     -   Write test that loads thread with workflow message
     -   Verify `ensureUiMessage` correctly populates `workflowState`
     -   Verify component renders execution status
     -   Requirements: 8.2
 
--   [ ] **8.3 Test real-time updates**
+-   [x] **8.3 Test real-time updates**
+    -   File: `app/composables/chat/__tests__/workflow-integration.test.ts`
     -   Write integration test simulating token stream
     -   Verify UI updates in real-time
     -   Verify RAF batching reduces update count

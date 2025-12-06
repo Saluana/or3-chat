@@ -47,6 +47,11 @@ vi.mock('#imports', () => ({
         sendMessage: vi.fn().mockResolvedValue(undefined),
         clear: vi.fn(),
     }),
+    useHooks: () => ({
+        on: vi.fn().mockReturnValue(() => {}),
+        off: vi.fn(),
+        doAction: vi.fn(),
+    }),
 }));
 
 vi.mock('@vueuse/core', () => ({

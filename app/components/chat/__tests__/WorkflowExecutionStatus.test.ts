@@ -17,6 +17,15 @@ vi.mock('#app', () => ({
     }),
 }));
 
+// Mock streamdown-vue
+vi.mock('streamdown-vue', () => ({
+    StreamMarkdown: {
+        template: '<div class="stream-markdown">{{ content }}</div>',
+        props: ['content', 'shikiTheme'],
+    },
+    useShikiHighlighter: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Mock StreamMarkdown component
 const StreamMarkdown = {
     template: '<div class="stream-markdown">{{ content }}</div>',
@@ -75,13 +84,16 @@ describe('WorkflowExecutionStatus', () => {
         expect(statusIcon.exists()).toBe(true);
     });
 
-    it('renders node list in execution order', () => {
+    it('renders node list in execution order', async () => {
         const wrapper = mount(WorkflowExecutionStatus, {
             props: { workflowState: mockState },
             global: {
                 components: { StreamMarkdown, UIcon },
             },
         });
+
+        // Component starts collapsed, expand it first
+        await wrapper.find('.cursor-pointer').trigger('click');
 
         const nodes = wrapper.findAll('.node-item');
         expect(nodes).toHaveLength(2);
@@ -89,13 +101,16 @@ describe('WorkflowExecutionStatus', () => {
         expect(nodes[1]!.text()).toContain('Node 2');
     });
 
-    it('renders node output', () => {
+    it('renders node output', async () => {
         const wrapper = mount(WorkflowExecutionStatus, {
             props: { workflowState: mockState },
             global: {
                 components: { StreamMarkdown, UIcon },
             },
         });
+
+        // Component starts collapsed, expand it first
+        await wrapper.find('.cursor-pointer').trigger('click');
 
         expect(wrapper.text()).toContain('Output 1');
         expect(wrapper.text()).toContain('Streaming...');
@@ -109,19 +124,19 @@ describe('WorkflowExecutionStatus', () => {
             },
         });
 
-        // Initially expanded (collapsed = false)
-        expect(wrapper.find('.node-item').exists()).toBe(true);
-
-        // Click header to collapse
-        await wrapper.find('.cursor-pointer').trigger('click');
+        // Initially collapsed (collapsed = true)
         expect(wrapper.find('.node-item').exists()).toBe(false);
 
-        // Click again to expand
+        // Click header to expand
         await wrapper.find('.cursor-pointer').trigger('click');
         expect(wrapper.find('.node-item').exists()).toBe(true);
+
+        // Click again to collapse
+        await wrapper.find('.cursor-pointer').trigger('click');
+        expect(wrapper.find('.node-item').exists()).toBe(false);
     });
 
-    it('renders parallel branches', () => {
+    it('renders parallel branches', async () => {
         const stateWithBranches: UiWorkflowState = {
             ...mockState,
             branches: {
@@ -142,11 +157,14 @@ describe('WorkflowExecutionStatus', () => {
             },
         });
 
+        // Component starts collapsed, expand it first
+        await wrapper.find('.cursor-pointer').trigger('click');
+
         expect(wrapper.text()).toContain('Branch 1');
         expect(wrapper.text()).toContain('Branch output');
     });
 
-    it('renders error state', () => {
+    it('renders error state', async () => {
         const errorState: UiWorkflowState = {
             ...mockState,
             executionState: 'error',
@@ -169,9 +187,13 @@ describe('WorkflowExecutionStatus', () => {
             },
         });
 
+        // Header is always visible
         expect(wrapper.text()).toContain('(Error)');
-        expect(wrapper.text()).toContain('Something failed');
         const errorIcon = wrapper.find('.u-icon[data-name="icon-workflow.status.error"]');
         expect(errorIcon.exists()).toBe(true);
+
+        // Expand to see error message in node
+        await wrapper.find('.cursor-pointer').trigger('click');
+        expect(wrapper.text()).toContain('Something failed');
     });
 });

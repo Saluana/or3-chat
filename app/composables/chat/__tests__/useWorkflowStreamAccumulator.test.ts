@@ -122,9 +122,9 @@ describe('useWorkflowStreamAccumulator', () => {
         expect(accumulator.state.executionState).toBe('running');
         expect(accumulator.state.isActive).toBe(true);
 
-        // Stopped case
+        // Stopped case - execution was interrupted by user
         accumulator.finalize({ stopped: true });
-        expect(accumulator.state.executionState).toBe('stopped');
+        expect(accumulator.state.executionState).toBe('interrupted');
     });
 
     it('serializes to message data', () => {
