@@ -1,27 +1,13 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
 import { WorkflowCanvas, Controls } from '@or3/workflow-vue';
-import type { WorkflowData } from '@or3/workflow-core';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import {
     getEditorForPane,
     destroyEditorForPane,
     useWorkflowsCrud,
 } from '../composables/useWorkflows';
-
-// Empty workflow template
-const EMPTY_WORKFLOW: WorkflowData = {
-    meta: { version: '2.0.0', name: 'Untitled' },
-    nodes: [
-        {
-            id: 'start',
-            type: 'start',
-            position: { x: 250, y: 100 },
-            data: { label: 'Start' },
-        },
-    ],
-    edges: [],
-};
+import { EMPTY_WORKFLOW, resolveWorkflowData } from './pane/workflowLoad';
 
 // Standard pane app props
 const props = defineProps<{
@@ -41,6 +27,7 @@ const { getWorkflow, updateWorkflow } = useWorkflowsCrud(props.postApi);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const hasLoaded = ref(false);
+let loadTicket = 0;
 
 // Debounced auto-save
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -52,30 +39,49 @@ function debouncedSave() {
     }, 1000);
 }
 
-// Load workflow from database
+// Load workflow from database with stale-response protection
 async function loadWorkflow() {
-    if (!props.recordId) {
-        // No record - start with empty workflow
+    const ticket = ++loadTicket;
+    const recordId = props.recordId;
+
+    if (!recordId) {
         editor.value.load(EMPTY_WORKFLOW);
         hasLoaded.value = true;
+        loading.value = false;
+        error.value = null;
         return;
     }
 
     loading.value = true;
     error.value = null;
 
-    const result = await getWorkflow(props.recordId);
-    if (result.ok) {
-        const workflowData = result.workflow.meta;
-        if (workflowData) {
-            editor.value.load(workflowData);
-        } else {
-            // Empty workflow in DB - create default
-            editor.value.load(EMPTY_WORKFLOW);
-        }
-        hasLoaded.value = true;
-    } else {
+    const result = await getWorkflow(recordId);
+
+    // If another load started, ignore this result
+    if (ticket !== loadTicket) return;
+
+    if (!result.ok) {
         error.value = result.error;
+        loading.value = false;
+        hasLoaded.value = false;
+        return;
+    }
+
+    const resolution = resolveWorkflowData({
+        recordId,
+        meta: result.workflow.meta,
+    });
+
+    if (resolution.status === 'error') {
+        error.value = resolution.error ?? 'Workflow data is missing';
+        hasLoaded.value = false;
+        loading.value = false;
+        return;
+    }
+
+    if (resolution.data) {
+        editor.value.load(resolution.data);
+        hasLoaded.value = true;
     }
 
     loading.value = false;
@@ -108,6 +114,7 @@ watch(
     () => props.recordId,
     () => {
         hasLoaded.value = false;
+        if (saveTimeout) clearTimeout(saveTimeout);
         void loadWorkflow();
     }
 );

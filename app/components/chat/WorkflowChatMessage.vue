@@ -95,19 +95,21 @@ const currentShikiTheme = computed(() => {
         : 'github-light';
 });
 
-// Output content: ONLY show finalOutput. Do not show intermediate/streaming text.
-// This prevents the result box from flip-flopping between nodes during execution.
+// Prefer finalOutput, fall back to live streaming text so the last message always renders as Markdown.
+// finalOutput is set once on finalize; finalStreamingText updates during execution.
 const outputContent = computed(() => {
     const wf = props.message.workflowState;
     if (!wf) return '';
-    // Only show content once we have a final output
-    if (typeof wf.finalOutput === 'string' && wf.finalOutput.length > 0) {
+    if (wf.finalOutput && typeof wf.finalOutput === 'string') {
         return wf.finalOutput;
+    }
+    if (wf.finalStreamingText && typeof wf.finalStreamingText === 'string') {
+        return wf.finalStreamingText;
     }
     return '';
 });
 
-// Whether to show the result box at all (only when we have final output)
+// Show the result box when there is any content (streaming or final)
 const showResultBox = computed(() => outputContent.value.length > 0);
 
 const canRetry = computed(() => {

@@ -82,7 +82,7 @@
                 </div>
                 <lazy-chat-input-dropper
                     :loading="loading"
-                    :streaming="loading"
+                    :streaming="streamingActive"
                     :container-width="containerWidth"
                     :thread-id="currentThreadId"
                     :pane-id="paneId"
@@ -287,6 +287,13 @@ const messages = computed<UiChatMessage[]>(
 );
 
 const loading = computed(() => chat.value?.loading?.value || false);
+const workflowRunning = computed(() => {
+    for (const wf of workflowStates.values()) {
+        if (wf && wf.executionState === 'running') return true;
+    }
+    return false;
+});
+const streamingActive = computed(() => loading.value || workflowRunning.value);
 
 // Tail streaming now provided directly by useChat composable
 // `useChat` returns many refs; unwrap common ones so computed values expose plain objects/primitives
@@ -649,6 +656,15 @@ function onStopStream() {
     } catch (e) {
         if (import.meta.dev) {
             console.warn('[ChatContainer] abort failed', e);
+        }
+    }
+    try {
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('workflow:stop'));
+        }
+    } catch (e) {
+        if (import.meta.dev) {
+            console.warn('[ChatContainer] workflow stop dispatch failed', e);
         }
     }
 }

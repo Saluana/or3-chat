@@ -227,12 +227,48 @@ export function executeWorkflow(
         // Create OpenRouter client
         const client = new OpenRouter({ apiKey });
 
+        // Determine start node (needed when seeding session messages via resumeFrom)
+        const startNodeId =
+            validatedWorkflow.nodes.find((n: any) => n?.type === 'start')?.id ||
+            validatedWorkflow.nodes[0]?.id ||
+            'start';
+
+        // Seed session history with prior thread messages (and current prompt) so LLM nodes see context
+        // Limit to last 20 messages to avoid inflating context/memory during streaming
+        const MAX_HISTORY_MESSAGES = 20;
+        const rawHistory = Array.isArray(conversationHistory)
+            ? conversationHistory
+            : [];
+        const historyMessages =
+            rawHistory.length > MAX_HISTORY_MESSAGES
+                ? rawHistory.slice(-MAX_HISTORY_MESSAGES)
+                : [...rawHistory];
+        if (historyMessages.length) {
+            historyMessages.push({
+                role: 'user',
+                content: prompt || 'Execute workflow',
+            });
+        }
+
+        const resumeFromWithHistory =
+            historyMessages.length && !resumeFrom?.sessionMessages
+                ? ({
+                      startNodeId: resumeFrom?.startNodeId ?? startNodeId,
+                      nodeOutputs: resumeFrom?.nodeOutputs ?? {},
+                      executionOrder: resumeFrom?.executionOrder,
+                      lastActiveNodeId: resumeFrom?.lastActiveNodeId,
+                      sessionMessages: historyMessages,
+                      resumeInput: resumeFrom?.resumeInput,
+                      finalNodeId: resumeFrom?.finalNodeId,
+                  } satisfies ResumeFromOptions)
+                : resumeFrom;
+
         // Create execution adapter
         // Cast to any to handle version mismatch between SDK versions
         adapter = new OpenRouterExecutionAdapter(client as any, {
             defaultModel: 'openai/gpt-4o-mini',
             preflight: true,
-            resumeFrom,
+            resumeFrom: resumeFromWithHistory,
         });
 
         // Build callbacks

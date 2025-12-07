@@ -38,9 +38,7 @@ interface ExecutionModule {
 }
 
 type WorkflowPost = NonNullable<
-    Awaited<
-        ReturnType<NonNullable<SlashCommandsModule['getWorkflowByName']>>
-    >
+    Awaited<ReturnType<NonNullable<SlashCommandsModule['getWorkflowByName']>>>
 >;
 type WorkflowPostWithMeta = WorkflowPost & {
     meta: NonNullable<WorkflowPost['meta']>;
@@ -257,19 +255,26 @@ export default defineNuxtPlugin((nuxtApp) => {
         retry: retryWorkflowMessage,
     });
 
-    // Listen for stop-stream event to stop workflow execution
+    // Listen for stop-stream event to stop workflow execution (with cleanup to avoid leaks in HMR)
+    const stopAbort = new AbortController();
     if (typeof window !== 'undefined') {
-        window.addEventListener('workflow:stop', () => {
-            if (stopWorkflowExecution()) {
-                if (import.meta.dev)
-                    console.log('[workflow-slash] Execution stopped by user');
-                toast.add({
-                    title: 'Workflow Stopped',
-                    description: 'Execution was cancelled',
-                    color: 'info',
-                });
-            }
-        });
+        window.addEventListener(
+            'workflow:stop',
+            () => {
+                if (stopWorkflowExecution()) {
+                    if (import.meta.dev)
+                        console.log(
+                            '[workflow-slash] Execution stopped by user'
+                        );
+                    toast.add({
+                        title: 'Workflow Stopped',
+                        description: 'Execution was cancelled',
+                        color: 'info',
+                    });
+                }
+            },
+            { signal: stopAbort.signal }
+        );
     }
 
     /**
@@ -399,75 +404,78 @@ export default defineNuxtPlugin((nuxtApp) => {
                 resumeFrom.lastActiveNodeId ?? null;
         }
 
-        // Reactive bridge: Emit state updates for UI
+        // Reactive bridge: Emit state updates for UI (RAF-throttled) with sync fallback for finalize
+        let emitRafId: number | null = null;
         const emitStateUpdate = () => {
+            if (emitRafId !== null) return;
+            emitRafId = requestAnimationFrame(() => {
+                emitRafId = null;
+                hooks.doAction('workflow.execution:action:state_update', {
+                    messageId: assistantContext.id,
+                    state: accumulator.state,
+                });
+            });
+        };
+        const emitStateUpdateSync = () => {
+            if (emitRafId !== null) {
+                cancelAnimationFrame(emitRafId);
+                emitRafId = null;
+            }
             hooks.doAction('workflow.execution:action:state_update', {
                 messageId: assistantContext.id,
                 state: accumulator.state,
             });
         };
 
-        // Persistence helper with throttling
-        let lastPersist = 0;
-        let persistTimeout: any = null;
+        // Persistence helper - only called on lifecycle events, not tokens
+        const persist = (_immediate = false) => {
+            // Ensure we only persist plain, cloneable data to Dexie
+            const data = safeCloneWorkflowData(
+                accumulator.toMessageData(
+                    workflowPost.id,
+                    workflowPost.title,
+                    prompt
+                )
+            );
 
-        const persist = (immediate = false) => {
-            const now = Date.now();
-            if (immediate || now - lastPersist > 500) {
-                lastPersist = now;
-                if (persistTimeout) clearTimeout(persistTimeout);
-                persistTimeout = null;
-
-                // Ensure we only persist plain, cloneable data to Dexie
-                const data = safeCloneWorkflowData(
-                    accumulator.toMessageData(
-                        workflowPost.id,
-                        workflowPost.title,
-                        prompt
-                    )
-                );
-
-                db.messages
-                    .get(assistantContext.id)
-                    .then(async (msg) => {
-                        const timestamp = nowSec();
-                        if (msg) {
-                            return db.messages.put({
-                                ...msg,
-                                data,
-                                pending: data.executionState === 'running',
-                                updated_at: timestamp,
-                            });
-                        }
-
-                        // Create placeholder assistant message so UI can render it
-                        const index = Math.floor(Date.now());
+            db.messages
+                .get(assistantContext.id)
+                .then(async (msg) => {
+                    const timestamp = nowSec();
+                    if (msg) {
                         return db.messages.put({
-                            id: assistantContext.id,
-                            role: 'assistant',
+                            ...msg,
                             data,
                             pending: data.executionState === 'running',
-                            created_at: timestamp,
                             updated_at: timestamp,
-                            error: null,
-                            deleted: false,
-                            thread_id: assistantContext.threadId || '',
-                            index,
-                            clock: 0,
-                            stream_id: assistantContext.streamId,
-                            file_hashes: null,
                         });
+                    }
+
+                    // Create placeholder assistant message so UI can render it
+                    const index = Math.floor(Date.now());
+                    return db.messages.put({
+                        id: assistantContext.id,
+                        role: 'assistant',
+                        data,
+                        pending: data.executionState === 'running',
+                        created_at: timestamp,
+                        updated_at: timestamp,
+                        error: null,
+                        deleted: false,
+                        thread_id: assistantContext.threadId || '',
+                        index,
+                        clock: 0,
+                        stream_id: assistantContext.streamId,
+                        file_hashes: null,
+                    });
+                })
+                .catch((e) =>
+                    reportError(e, {
+                        code: 'ERR_DB_WRITE_FAILED',
+                        message: 'Persist failed',
+                        silent: true,
                     })
-                    .catch((e) =>
-                        reportError(e, {
-                            code: 'ERR_DB_WRITE_FAILED',
-                            message: 'Persist failed',
-                            silent: true,
-                        })
-                    );
-            } else if (!persistTimeout) {
-                persistTimeout = setTimeout(() => persist(true), 500);
-            }
+                );
         };
 
         // Initial persist to set message type
@@ -518,12 +526,10 @@ export default defineNuxtPlugin((nuxtApp) => {
             onToken: (nodeId: string, token: string) => {
                 accumulator.nodeToken(nodeId, token);
                 emitStateUpdate();
-                persist();
             },
             onReasoning: (nodeId: string, token: string) => {
                 accumulator.nodeReasoning(nodeId, token);
                 emitStateUpdate();
-                persist();
             },
             onBranchStart: (
                 nodeId: string,
@@ -532,7 +538,6 @@ export default defineNuxtPlugin((nuxtApp) => {
             ) => {
                 accumulator.branchStart(nodeId, branchId, label);
                 emitStateUpdate();
-                persist();
             },
             onBranchToken: (
                 nodeId: string,
@@ -542,7 +547,6 @@ export default defineNuxtPlugin((nuxtApp) => {
             ) => {
                 accumulator.branchToken(nodeId, branchId, label, token);
                 emitStateUpdate();
-                persist();
             },
             onBranchReasoning: (
                 nodeId: string,
@@ -552,7 +556,6 @@ export default defineNuxtPlugin((nuxtApp) => {
             ) => {
                 accumulator.branchReasoning(nodeId, branchId, label, token);
                 emitStateUpdate();
-                persist();
             },
             onBranchComplete: (
                 nodeId: string,
@@ -567,7 +570,6 @@ export default defineNuxtPlugin((nuxtApp) => {
             onRouteSelected: (nodeId: string, route: string) => {
                 accumulator.routeSelected(nodeId, route);
                 emitStateUpdate();
-                persist();
             },
             onTokenUsage: (
                 nodeId: string,
@@ -579,12 +581,10 @@ export default defineNuxtPlugin((nuxtApp) => {
             ) => {
                 accumulator.tokenUsage(nodeId, usage);
                 emitStateUpdate();
-                persist();
             },
             onWorkflowToken: (token: string) => {
                 accumulator.workflowToken(token);
                 emitStateUpdate();
-                persist();
             },
             onComplete: (result) => {
                 accumulator.finalize({ result });
@@ -642,7 +642,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                     result: result || undefined,
                     error: result?.error || undefined,
                 });
-                emitStateUpdate();
+                emitStateUpdateSync();
                 persist(true); // Final persist
 
                 if (stopped) {
@@ -662,7 +662,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             .catch((error) => {
                 activeController = null;
                 accumulator.finalize({ error });
-                emitStateUpdate();
+                emitStateUpdateSync();
                 persist(true);
 
                 reportError(error, {
@@ -833,6 +833,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     /**
      * Register TipTap extension when editor requests extensions
      */
+    let editorExtensionsCleanup: (() => void) | null = null;
     hooks.on(
         'editor:request-extensions',
         async () => {
@@ -855,15 +856,29 @@ export default defineNuxtPlugin((nuxtApp) => {
             });
 
             // Provide both WorkflowNode and SlashCommand extension via filter
-            hooks.on('ui.chat.editor:filter:extensions', (existing) => {
-                const list = Array.isArray(existing) ? existing : [];
-                return [...list, module.WorkflowNode, SlashCommandExtension];
-            });
+            editorExtensionsCleanup = hooks.on(
+                'ui.chat.editor:filter:extensions',
+                (existing) => {
+                    const list = Array.isArray(existing) ? existing : [];
+                    return [
+                        ...list,
+                        module.WorkflowNode,
+                        SlashCommandExtension,
+                    ];
+                }
+            );
 
             console.log('[workflow-slash] Extension registered');
         },
         { kind: 'action' }
     );
+
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => {
+            stopAbort.abort();
+            editorExtensionsCleanup?.();
+        });
+    }
 
     /**
      * Intercept message send to detect and execute workflow commands
