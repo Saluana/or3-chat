@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
 import { WorkflowCanvas, Controls } from '@or3/workflow-vue';
+import '@or3/workflow-vue/style.css';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import {
     getEditorForPane,

@@ -616,15 +616,10 @@
   border-color: rgba(0, 0, 0, 0.12) !important;
 }
 
-/* Handles in light mode */
-.light .workflow-app .vue-flow__handle,
-:root:not(.dark) .workflow-app .vue-flow__handle {
-  background-color: var(--md-surface, #ffffff) !important;
-  border-color: rgba(0, 0, 0, 0.2) !important;
-}
 
 .light .workflow-app .error-handle,
 :root:not(.dark) .workflow-app .error-handle {
+  background-color: var(--md-surface, #ffffff) !important;
   border-color: #dc2626 !important;
 }
 
@@ -638,7 +633,24 @@
 
 .dark .workflow-app .vue-flow__handle:hover {
   background-color: var(--or3-color-accent-hover, #6BA8D4) !important;
-  transform: scale(1.2);
+    border: 2px solid var(--md-primary, #18181d) !important;
+      width: 15px !important;
+  height: 15px !important;
+}
+
+/* Handles in dark mode */
+.workflow-app .vue-flow__handle {
+  background-color: var(--md-primary-tint, #4E8FBC) !important;
+  border: 2px solid var(--md-surface, #18181d) !important;
+  width: 12px !important;
+  height: 12px !important;
+}
+
+.workflow-app .vue-flow__handle:hover {
+  background-color: var(--or3-color-accent-hover, #6BA8D4) !important;
+    border: 2px solid var(--md-primary, #18181d) !important;
+      width: 15px !important;
+  height: 15px !important;
 }
 
 .dark .workflow-app .error-handle {
