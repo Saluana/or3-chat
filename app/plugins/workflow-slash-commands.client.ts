@@ -525,11 +525,11 @@ export default defineNuxtPlugin((nuxtApp) => {
             },
             onToken: (nodeId: string, token: string) => {
                 accumulator.nodeToken(nodeId, token);
-                emitStateUpdate();
+                // Token updates are RAF-batched in accumulator; no hook emission needed
             },
             onReasoning: (nodeId: string, token: string) => {
                 accumulator.nodeReasoning(nodeId, token);
-                emitStateUpdate();
+                // Token updates are RAF-batched in accumulator; no hook emission needed
             },
             onBranchStart: (
                 nodeId: string,
@@ -546,7 +546,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 token: string
             ) => {
                 accumulator.branchToken(nodeId, branchId, label, token);
-                emitStateUpdate();
+                // Token updates are RAF-batched in accumulator; no hook emission needed
             },
             onBranchReasoning: (
                 nodeId: string,
@@ -555,7 +555,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 token: string
             ) => {
                 accumulator.branchReasoning(nodeId, branchId, label, token);
-                emitStateUpdate();
+                // Token updates are RAF-batched in accumulator; no hook emission needed
             },
             onBranchComplete: (
                 nodeId: string,
@@ -584,6 +584,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             },
             onWorkflowToken: (token: string) => {
                 accumulator.workflowToken(token);
+                // Emit state update for UI reactivity (RAF-throttled)
                 emitStateUpdate();
             },
             onComplete: (result) => {

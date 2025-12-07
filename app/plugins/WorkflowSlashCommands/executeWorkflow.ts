@@ -9,8 +9,10 @@ import type {
     ExecutionCallbacks,
     ExecutionResult,
     ResumeFromOptions,
+    ExecutableToolDefinition,
 } from '@or3/workflow-core';
 import { deriveMessageContent } from '~/utils/chat/messages';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
 
 // WorkflowTokenMetadata shape (not exported from core, define inline)
 interface WorkflowTokenMetadata {
@@ -112,6 +114,41 @@ export function parseSlashCommand(text: string): ParsedSlashCommand | null {
 // ─────────────────────────────────────────────────────────────
 // Execution
 // ─────────────────────────────────────────────────────────────
+
+function getWorkflowTools(): ExecutableToolDefinition[] {
+    const registry = useToolRegistry();
+    return registry.listTools.value
+        .filter((tool) => tool.enabled.value)
+        .map((tool) => ({
+            type: 'function' as const,
+            function: tool.definition.function,
+            handler: tool.handler,
+        }));
+}
+
+async function executeToolCallViaRegistry(
+    name: string,
+    args: unknown
+): Promise<string> {
+    const registry = useToolRegistry();
+
+    let serializedArgs: string;
+    if (typeof args === 'string') {
+        serializedArgs = args;
+    } else {
+        try {
+            serializedArgs = JSON.stringify(args ?? {});
+        } catch {
+            serializedArgs = '';
+        }
+    }
+
+    const execution = await registry.executeTool(name, serializedArgs);
+    if (execution.error) {
+        throw new Error(execution.error);
+    }
+    return execution.result ?? '';
+}
 
 /**
  * Result of workflow execution
@@ -263,12 +300,16 @@ export function executeWorkflow(
                   } satisfies ResumeFromOptions)
                 : resumeFrom;
 
+        const workflowTools = getWorkflowTools();
+
         // Create execution adapter
         // Cast to any to handle version mismatch between SDK versions
         adapter = new OpenRouterExecutionAdapter(client as any, {
             defaultModel: 'openai/gpt-4o-mini',
             preflight: true,
             resumeFrom: resumeFromWithHistory,
+            tools: workflowTools,
+            onToolCall: executeToolCallViaRegistry,
         });
 
         // Build callbacks

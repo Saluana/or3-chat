@@ -709,7 +709,12 @@ const hooks = useHooks();
 const cleanupWorkflowHook = hooks.on(
     'workflow.execution:action:state_update',
     (payload: { messageId: string; state: any }) => {
-        workflowStates.set(payload.messageId, payload.state);
+        // Only set if not already the same reference (avoid unnecessary reactivity triggers)
+        const existing = workflowStates.get(payload.messageId);
+        if (existing !== payload.state) {
+            workflowStates.set(payload.messageId, payload.state);
+        }
+        // If same reference, Vue reactivity will pick up internal state changes via version
     }
 );
 

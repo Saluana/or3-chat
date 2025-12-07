@@ -1,14 +1,17 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { WorkflowEditor } from '@or3/workflow-core';
 import { NodePalette, NodeInspector } from '@or3/workflow-vue';
 import type { TabsItem } from '#ui/types';
 import { useSidebarMultiPane } from '~/composables/sidebar/useSidebarEnvironment';
 import { getEditorForPane } from '../composables/useWorkflows';
 import { useWorkflowSidebarControls } from '../composables/useWorkflowSidebarControls';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
 import WorkflowsTab from './sidebar/WorkflowsTab.vue';
 
 const multiPane = useSidebarMultiPane();
 const { activePanel, setPanel } = useWorkflowSidebarControls();
+const toolRegistry = useToolRegistry();
 
 function onPanelChange(value: TabsItem['value']) {
     if (value === 'workflows' || value === 'palette' || value === 'inspector') {
@@ -37,6 +40,17 @@ const activeWorkflowEditor = computed<WorkflowEditor | null>(() => {
 
     return null;
 });
+
+const availableTools = computed(() =>
+    toolRegistry.listTools.value.map((tool) => ({
+        id: tool.definition.function.name,
+        name: tool.definition.ui?.label || tool.definition.function.name,
+        description:
+            tool.definition.function.description ||
+            tool.definition.ui?.descriptionHint ||
+            '',
+    }))
+);
 
 const items: TabsItem[] = [
     { label: 'Workflows', value: 'workflows' },
@@ -81,6 +95,7 @@ const items: TabsItem[] = [
                 <NodeInspector
                     v-if="activeWorkflowEditor"
                     :editor="activeWorkflowEditor"
+                    :available-tools="availableTools"
                     @close="
                         () =>
                             setPanel('workflows', {

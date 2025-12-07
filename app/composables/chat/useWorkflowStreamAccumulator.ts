@@ -167,6 +167,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
     // Pending updates for RAF batching
     let pendingNodeTokens: Map<string, string[]> = new Map();
     let pendingBranchTokens: Map<string, string[]> = new Map();
+    let pendingWorkflowTokens: string[] = [];
     let rafId: number | null = null;
     let finalized = false;
     let totalTokens = 0;
@@ -205,6 +206,14 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             }
         }
         pendingBranchTokens.clear();
+
+        // Flush workflow tokens
+        if (pendingWorkflowTokens.length > 0) {
+            const text = pendingWorkflowTokens.join('');
+            state.finalStreamingText = (state.finalStreamingText || '') + text;
+            state.finalOutput = state.finalStreamingText;
+            pendingWorkflowTokens = [];
+        }
 
         state.version++;
     }
@@ -298,10 +307,8 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
 
     function workflowToken(token: string) {
         if (finalized || !token) return;
-        const next = `${state.finalStreamingText}${token}`;
-        state.finalStreamingText = next;
-        state.finalOutput = next;
-        state.version++;
+        pendingWorkflowTokens.push(token);
+        scheduleFlush();
     }
 
     function routeSelected(nodeId: string, route: string) {
