@@ -298,7 +298,10 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
 
     function workflowToken(token: string) {
         if (finalized || !token) return;
-        state.finalStreamingText = `${state.finalStreamingText}${token}`;
+        const next = `${state.finalStreamingText}${token}`;
+        state.finalStreamingText = next;
+        state.finalOutput = next;
+        state.version++;
     }
 
     function routeSelected(nodeId: string, route: string) {
