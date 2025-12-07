@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { WorkflowEditor } from '@or3/workflow-core';
 import { NodePalette, NodeInspector } from '@or3/workflow-vue';
-import { type TabsItem } from '@nuxt/ui';
+import type { TabsItem } from '#ui/types';
 import { useSidebarMultiPane } from '~/composables/sidebar/useSidebarEnvironment';
 import { getEditorForPane } from '../composables/useWorkflows';
 import { useWorkflowSidebarControls } from '../composables/useWorkflowSidebarControls';
@@ -81,7 +81,12 @@ const items: TabsItem[] = [
                 <NodeInspector
                     v-if="activeWorkflowEditor"
                     :editor="activeWorkflowEditor"
-                    @close="() => setPanel('workflows', { activateSidebarPage: false })"
+                    @close="
+                        () =>
+                            setPanel('workflows', {
+                                activateSidebarPage: false,
+                            })
+                    "
                 />
                 <div
                     v-else
