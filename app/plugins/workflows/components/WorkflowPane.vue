@@ -35,6 +35,9 @@ let loadTicket = 0;
 // Debounced auto-save
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
+// Editor change listener cleanup
+let unsubscribeEditor: (() => void) | null = null;
+
 function debouncedSave() {
     if (saveTimeout) clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
@@ -104,12 +107,11 @@ async function saveWorkflow() {
 // Subscribe to editor changes for auto-save
 function setupChangeListener() {
     // The editor emits 'update' event when nodes/edges change
-    const unsubscribe = editor.value.on('update', () => {
+    unsubscribeEditor = editor.value.on('update', () => {
         if (hasLoaded.value) {
             debouncedSave();
         }
     });
-    return unsubscribe;
 }
 
 // Watch for recordId changes (switching workflows in same pane)
@@ -133,12 +135,32 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-    // Save any pending changes
+    // 1. Mark as not loaded to prevent any further saves
+    hasLoaded.value = false;
+
+    // 2. Unsubscribe from editor events BEFORE any save
+    if (unsubscribeEditor) {
+        unsubscribeEditor();
+        unsubscribeEditor = null;
+    }
+
+    // 3. Clear any pending debounced save
     if (saveTimeout) {
         clearTimeout(saveTimeout);
-        void saveWorkflow();
+        saveTimeout = null;
     }
-    // Destroy the editor instance for this pane
+
+    // 4. Synchronous save of current editor state (fire-and-forget is OK now that listener is gone)
+    //    The data is captured synchronously from getJSON() before editor destruction
+    if (props.recordId) {
+        const data = editor.value.getJSON();
+        // Only save if we have real content (not just start node)
+        if (data.nodes.length > 1 || data.edges.length > 0) {
+            void updateWorkflow(props.recordId, { data });
+        }
+    }
+
+    // 5. Destroy the editor instance for this pane
     destroyEditorForPane(props.paneId);
 });
 </script>

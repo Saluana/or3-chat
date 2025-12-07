@@ -78,8 +78,9 @@ export function getEditorForPane(paneId: string): WorkflowEditor {
 export function destroyEditorForPane(paneId: string): void {
     const editor = editorInstances.get(paneId);
     if (editor) {
-        // Reset the editor to empty state before removing
-        editor.load(EMPTY_WORKFLOW);
+        // Call destroy() to clean up listeners and extensions
+        // Do NOT load EMPTY_WORKFLOW - that would trigger update events and race with saves
+        editor.destroy();
         editorInstances.delete(paneId);
     }
 }
