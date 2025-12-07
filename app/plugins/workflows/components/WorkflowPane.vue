@@ -8,6 +8,7 @@ import {
     useWorkflowsCrud,
 } from '../composables/useWorkflows';
 import { EMPTY_WORKFLOW, resolveWorkflowData } from './pane/workflowLoad';
+import { useWorkflowSidebarControls } from '../composables/useWorkflowSidebarControls';
 
 // Standard pane app props
 const props = defineProps<{
@@ -22,6 +23,7 @@ const editor = computed(() => getEditorForPane(props.paneId));
 
 // Initialize CRUD operations
 const { getWorkflow, updateWorkflow } = useWorkflowsCrud(props.postApi);
+const { openInspector } = useWorkflowSidebarControls();
 
 // State
 const loading = ref(false);
@@ -119,6 +121,10 @@ watch(
     }
 );
 
+function handleNodeClick() {
+    void openInspector();
+}
+
 // Lifecycle
 onMounted(() => {
     void loadWorkflow();
@@ -155,7 +161,7 @@ onUnmounted(() => {
         <WorkflowCanvas
             v-else
             :editor="editor"
-            @node-click="() => {}"
+            @node-click="handleNodeClick"
             @edge-click="() => {}"
             @pane-click="() => {}"
         />

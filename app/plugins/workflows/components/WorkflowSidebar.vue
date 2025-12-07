@@ -4,12 +4,17 @@ import { NodePalette, NodeInspector } from '@or3/workflow-vue';
 import { type TabsItem } from '@nuxt/ui';
 import { useSidebarMultiPane } from '~/composables/sidebar/useSidebarEnvironment';
 import { getEditorForPane } from '../composables/useWorkflows';
+import { useWorkflowSidebarControls } from '../composables/useWorkflowSidebarControls';
 import WorkflowsTab from './sidebar/WorkflowsTab.vue';
 
 const multiPane = useSidebarMultiPane();
+const { activePanel, setPanel } = useWorkflowSidebarControls();
 
-// Local state
-const activePanel = ref<'palette' | 'inspector' | 'workflows'>('workflows');
+function onPanelChange(value: TabsItem['value']) {
+    if (value === 'workflows' || value === 'palette' || value === 'inspector') {
+        void setPanel(value);
+    }
+}
 
 // Get the active workflow pane's editor (if any)
 const activeWorkflowEditor = computed<WorkflowEditor | null>(() => {
@@ -53,6 +58,7 @@ const items: TabsItem[] = [
                     :content="false"
                     :items="items"
                     class="w-full"
+                    @update:model-value="onPanelChange"
                 />
             </div>
 
@@ -75,7 +81,7 @@ const items: TabsItem[] = [
                 <NodeInspector
                     v-if="activeWorkflowEditor"
                     :editor="activeWorkflowEditor"
-                    @close="activePanel = 'workflows'"
+                    @close="() => setPanel('workflows', { activateSidebarPage: false })"
                 />
                 <div
                     v-else
