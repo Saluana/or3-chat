@@ -4,13 +4,21 @@ import {
     modelRegistry,
     registerDefaultModels,
     type OpenRouterModel as WorkflowModel,
+    type ModelInputModality,
+    type ModelOutputModality,
+    type ModelParameter,
+    type ModelTokenizer,
+    type ModelInstructType,
+    type ModelPerRequestLimits,
 } from '@or3/workflow-core';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 
 function toWorkflowModel(model: OpenRouterModel): WorkflowModel {
-    const inputModalities = model.architecture?.input_modalities || [];
-    const outputModalities = model.architecture?.output_modalities || [];
+    const inputModalities = (model.architecture?.input_modalities ||
+        []) as ModelInputModality[];
+    const outputModalities = (model.architecture?.output_modalities ||
+        []) as ModelOutputModality[];
     return {
         id: model.id,
         canonicalSlug: model.canonical_slug ?? model.id,
@@ -21,15 +29,15 @@ function toWorkflowModel(model: OpenRouterModel): WorkflowModel {
         contextLength:
             model.top_provider?.context_length ??
             model.context_length ??
-            undefined,
+            null,
         architecture: {
             modality: `${inputModalities.join('+') || 'text'}->${
                 outputModalities.join('+') || 'text'
             }`,
             inputModalities,
             outputModalities,
-            tokenizer: model.architecture?.tokenizer ?? undefined,
-            instructType: model.architecture?.instruct_type ?? null,
+            tokenizer: (model.architecture?.tokenizer as ModelTokenizer) ?? undefined,
+            instructType: (model.architecture?.instruct_type as ModelInstructType) ?? null,
         },
         pricing: {
             prompt: model.pricing?.prompt ?? '0',
@@ -47,8 +55,8 @@ function toWorkflowModel(model: OpenRouterModel): WorkflowModel {
                 model.top_provider?.context_length ?? model.context_length,
             maxCompletionTokens: model.top_provider?.max_completion_tokens,
         },
-        perRequestLimits: model.per_request_limits ?? null,
-        supportedParameters: model.supported_parameters ?? [],
+        perRequestLimits: (model.per_request_limits as ModelPerRequestLimits) ?? null,
+        supportedParameters: (model.supported_parameters ?? []) as ModelParameter[],
         defaultParameters: null,
     };
 }

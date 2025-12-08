@@ -122,7 +122,9 @@ function getWorkflowTools(): ExecutableToolDefinition[] {
         .map((tool) => ({
             type: 'function' as const,
             function: tool.definition.function,
-            handler: tool.handler,
+            // Cast handler to match ExecutableToolDefinition signature
+            // ToolHandler<Record<string, unknown>> is compatible with (args: unknown) => string
+            handler: tool.handler as (args: unknown) => Promise<string> | string,
         }));
 }
 

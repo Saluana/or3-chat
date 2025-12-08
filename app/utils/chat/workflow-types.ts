@@ -285,6 +285,9 @@ export interface UiWorkflowState {
     /** Final accumulated output */
     finalOutput?: string;
 
+    /** Live streaming text (before finalOutput is set) */
+    finalStreamingText?: string;
+
     /** Node that failed (if any) */
     failedNodeId?: string | null;
 

@@ -4,11 +4,11 @@ import { EMPTY_WORKFLOW, resolveWorkflowData } from './workflowLoad';
 const sampleWorkflow = {
     meta: { version: '2.0.0', name: 'Sample' },
     nodes: [
-        { id: 'start', type: 'start', position: { x: 0, y: 0 }, data: {} },
-        { id: 'a', type: 'tool', position: { x: 100, y: 0 }, data: {} },
+        { id: 'start', type: 'start', position: { x: 0, y: 0 }, data: { label: 'Start' } },
+        { id: 'a', type: 'agent', position: { x: 100, y: 0 }, data: { label: 'Agent' } },
     ],
     edges: [{ id: 'e1', source: 'start', target: 'a' }],
-} as const;
+};
 
 describe('resolveWorkflowData', () => {
     it('returns empty workflow for new panes', () => {

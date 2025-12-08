@@ -307,8 +307,10 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
 
     function workflowToken(token: string) {
         if (finalized || !token) return;
-        pendingWorkflowTokens.push(token);
-        scheduleFlush();
+        // Workflow tokens update immediately for real-time final output streaming
+        state.finalStreamingText = (state.finalStreamingText || '') + token;
+        state.finalOutput = state.finalStreamingText;
+        state.version++;
     }
 
     function routeSelected(nodeId: string, route: string) {

@@ -46,10 +46,6 @@ const EMPTY_WORKFLOW: WorkflowData = {
 function createDefaultEditorOptions() {
     return {
         extensions: StarterKit.configure({
-            // Disable specific nodes
-            tool: false,
-            memory: false,
-
             // Configure specific nodes
             agent: {
                 defaultModel: 'anthropic/claude-3.5-sonnet',
