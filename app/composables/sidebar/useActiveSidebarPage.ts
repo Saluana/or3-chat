@@ -4,6 +4,7 @@
  * Integrates with the hooks system for extensibility and analytics.
  */
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
+import { useLocalStorage } from '@vueuse/core';
 import { useSidebarPages } from './useSidebarPages';
 import type {
     RegisteredSidebarPage,
@@ -23,45 +24,8 @@ const DEFAULT_PAGE_ID = 'sidebar-home';
  */
 const STORAGE_KEY = 'or3-active-sidebar-page';
 
-/**
- * Browser environment check for safe localStorage access.
- * 
- * @returns True if running in a browser environment
- */
-function isBrowser() {
-    return typeof window !== 'undefined' && typeof document !== 'undefined';
-}
-
-/**
- * Persist the active page ID to localStorage.
- * Handles storage errors gracefully with warning logs.
- * 
- * @param pageId - The page ID to persist
- */
-function persistActivePage(pageId: string) {
-    if (!isBrowser()) return;
-    try {
-        localStorage.setItem(STORAGE_KEY, pageId);
-    } catch (e) {
-        console.warn('[useActiveSidebarPage] failed to persist active page', e);
-    }
-}
-
-/**
- * Load the active page ID from localStorage.
- * Handles storage errors gracefully with warning logs.
- * 
- * @returns The stored page ID, or null if unavailable
- */
-function loadActivePage(): string | null {
-    if (!isBrowser()) return null;
-    try {
-        return localStorage.getItem(STORAGE_KEY);
-    } catch (e) {
-        console.warn('[useActiveSidebarPage] failed to load active page', e);
-        return null;
-    }
-}
+// Use VueUse's useLocalStorage for persistent active page
+const storedActivePageId = useLocalStorage<string>(STORAGE_KEY, DEFAULT_PAGE_ID);
 
 // Global singleton state (similar to useSidebarPages registry pattern)
 const g = globalThis as {
@@ -78,7 +42,7 @@ const g = globalThis as {
  * Ensures consistent state across all component instances.
  */
 if (!g.__or3ActiveSidebarPageState) {
-    const storedId = loadActivePage();
+    const storedId = storedActivePageId.value;
     const initialRequestedPageId =
         storedId && storedId !== DEFAULT_PAGE_ID ? storedId : null;
 
@@ -228,8 +192,8 @@ export function useActiveSidebarPage() {
                 }
             }
 
-            // Persist the selection
-            persistActivePage(nextPage.id);
+            // Persist the selection via useLocalStorage
+            storedActivePageId.value = nextPage.id;
 
             // Emit analytics hook
             await hooks.doAction('ui.sidebar.page:action:open', {

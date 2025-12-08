@@ -385,7 +385,6 @@ import {
     onMounted,
     shallowRef,
     nextTick,
-    onBeforeUnmount,
     defineComponent,
     h,
 } from 'vue';
@@ -395,6 +394,7 @@ import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import { useScrollLock } from '~/composables/core/useScrollLock';
 import LazySearchPanel from '~/components/documents/LazySearchPanel.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useMutationObserver, useEventListener } from '@vueuse/core';
 
 const { $theme } = useNuxtApp();
 
@@ -509,7 +509,8 @@ const currentContent = ref('');
 const isLoadingContent = ref(false);
 // Root element that contains rendered markdown to extract headings from
 const contentRoot = ref<HTMLElement | null>(null);
-let tocObserver: MutationObserver | null = null;
+// Flag to enable/disable mutation observer for TOC building
+const shouldObserveToc = ref(false);
 const headingOffsets = ref<Record<string, number>>({});
 
 // Local TOC derived from DOM when not provided via props
@@ -737,11 +738,10 @@ onMounted(async () => {
 
     // Load content based on route
     await loadContentFromRoute();
-
-    if (import.meta.client) {
-        window.addEventListener('resize', computeHeadingOffsets);
-    }
 });
+
+// Use VueUse's useEventListener for window resize (auto-cleanup)
+useEventListener(window, 'resize', computeHeadingOffsets);
 
 watch(
     () => route.path,
@@ -1078,31 +1078,27 @@ function observeTocUntilReady() {
     const hasHeadings = contentRoot.value.querySelector('h2, h3, h4');
     if (hasHeadings) {
         buildTocFromDom();
+        shouldObserveToc.value = false;
         return;
     }
 
-    // Disconnect any previous observer
-    if (tocObserver) {
-        tocObserver.disconnect();
-        tocObserver = null;
-    }
+    // Enable TOC observation
+    shouldObserveToc.value = true;
+}
 
-    tocObserver = new MutationObserver(() => {
+// Use VueUse's useMutationObserver for TOC observation (auto-cleanup)
+useMutationObserver(
+    () => shouldObserveToc.value ? contentRoot.value : null,
+    () => {
         if (!contentRoot.value) return;
         const found = contentRoot.value.querySelector('h2, h3, h4');
         if (found) {
             buildTocFromDom();
-            tocObserver?.disconnect();
-            tocObserver = null;
+            shouldObserveToc.value = false;
         }
-    });
-
-    tocObserver.observe(contentRoot.value, {
-        childList: true,
-        subtree: true,
-        characterData: false,
-    });
-}
+    },
+    { childList: true, subtree: true }
+);
 
 function computeHeadingOffsets() {
     if (!import.meta.client) return;
@@ -1132,15 +1128,7 @@ watch([displayContent, isLoadingContent], async ([content, loading]) => {
     }
 });
 
-onBeforeUnmount(() => {
-    if (tocObserver) {
-        tocObserver.disconnect();
-        tocObserver = null;
-    }
-    if (import.meta.client) {
-        window.removeEventListener('resize', computeHeadingOffsets);
-    }
-});
+
 
 // Trigger lazy search panel load when user types
 watch(searchQuery, (query) => {

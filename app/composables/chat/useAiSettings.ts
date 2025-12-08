@@ -1,4 +1,5 @@
-import { ref, computed, watch } from 'vue';
+import { computed, watch } from 'vue';
+import { useLocalStorage } from '@vueuse/core';
 
 // Minimal settings schema per design
 export interface AiSettingsV1 {
@@ -16,10 +17,6 @@ export const DEFAULT_AI_SETTINGS: AiSettingsV1 = {
     defaultModelMode: 'lastSelected',
     fixedModelId: null,
 };
-
-function isBrowser() {
-    return typeof window !== 'undefined' && typeof document !== 'undefined';
-}
 
 function coerceStringOrNull(v: unknown): string | null {
     if (v === null || v === undefined) return null;
@@ -58,97 +55,49 @@ export function sanitizeAiSettings(
     return result;
 }
 
-function persist(settings: AiSettingsV1) {
-    if (!isBrowser()) return;
-    try {
-        localStorage.setItem(AI_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-    } catch (e) {
-         
-        console.warn('[ai-settings] failed to persist settings', e);
+// Use VueUse's useLocalStorage with a custom serializer for sanitization
+const storedSettings = useLocalStorage<AiSettingsV1>(
+    AI_SETTINGS_STORAGE_KEY,
+    { ...DEFAULT_AI_SETTINGS },
+    {
+        deep: true,
+        listenToStorageChanges: true,
+        // Custom serializer to ensure sanitization on read
+        serializer: {
+            read: (raw: string): AiSettingsV1 => {
+                try {
+                    const parsed = JSON.parse(raw);
+                    return sanitizeAiSettings(parsed);
+                } catch {
+                    return { ...DEFAULT_AI_SETTINGS };
+                }
+            },
+            write: (value: AiSettingsV1): string => {
+                return JSON.stringify(value);
+            },
+        },
     }
-}
-
-function loadFromStorage(): AiSettingsV1 | null {
-    if (!isBrowser()) return null;
-    try {
-        const raw = localStorage.getItem(AI_SETTINGS_STORAGE_KEY);
-        if (!raw) return null;
-        const parsed: unknown = JSON.parse(raw);
-        return sanitizeAiSettings(parsed);
-    } catch (e) {
-         
-        console.warn('[ai-settings] failed to parse stored settings', e);
-        return null;
-    }
-}
-
-interface AiSettingsStore {
-    settings: ReturnType<typeof ref<AiSettingsV1>>;
-    loaded: boolean;
-}
-
-// HMR-safe singleton store
-const g = globalThis as unknown as { __or3AiSettingsStoreV1?: AiSettingsStore };
-if (!g.__or3AiSettingsStoreV1) {
-    g.__or3AiSettingsStoreV1 = {
-        settings: ref<AiSettingsV1>({ ...DEFAULT_AI_SETTINGS }),
-        loaded: false,
-    };
-}
-
-const store: AiSettingsStore = g.__or3AiSettingsStoreV1 ?? {
-    settings: ref<AiSettingsV1>({ ...DEFAULT_AI_SETTINGS }),
-    loaded: false,
-};
+);
 
 /** Public composable API */
 export function useAiSettings() {
-    if (!store.loaded && isBrowser()) {
-        const loaded = loadFromStorage();
-        if (loaded) store.settings.value = loaded;
-        store.loaded = true;
-    }
-
-    const current = computed(() => store.settings.value);
+    const current = computed(() => storedSettings.value);
 
     function set(patch: Partial<AiSettingsV1>) {
         const merged = sanitizeAiSettings({
-            ...store.settings.value,
+            ...storedSettings.value,
             ...patch,
         });
-        store.settings.value = merged;
-        persist(merged);
+        storedSettings.value = merged;
     }
 
     function reset() {
-        store.settings.value = { ...DEFAULT_AI_SETTINGS };
-        persist(store.settings.value);
+        storedSettings.value = { ...DEFAULT_AI_SETTINGS };
     }
 
     function load(): AiSettingsV1 {
-        const fresh = loadFromStorage();
-        if (fresh) store.settings.value = fresh;
-        // Ensure a defined return even in edge cases
-        return (store.settings.value || DEFAULT_AI_SETTINGS);
-    }
-
-    // Persist on deep changes (for direct mutations outside set())
-    if (isBrowser()) {
-        watch(
-            () => store.settings.value,
-            (v) => {
-                // Persist as-is to avoid loops; consumers should prefer set() for sanitization.
-                try {
-                    localStorage.setItem(
-                        AI_SETTINGS_STORAGE_KEY,
-                        JSON.stringify(v)
-                    );
-                } catch (e) {
-                    console.warn('[ai-settings] persist (watch) failed', e);
-                }
-            },
-            { deep: true }
-        );
+        // Return current stored value (useLocalStorage handles syncing)
+        return storedSettings.value || DEFAULT_AI_SETTINGS;
     }
 
     return {
@@ -158,3 +107,4 @@ export function useAiSettings() {
         load,
     };
 }
+

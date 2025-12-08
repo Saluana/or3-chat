@@ -23,12 +23,12 @@ status: draft
 [x] 3.3 Swap theme copy action in `app/components/dashboard/ThemePage.vue` to `useClipboard`.
 [x] 3.4 Refactor `app/components/chat/ChatInputDropper.vue` file input to `useFileDialog` (and `useDropZone` if drop used); preserve validation and last-model cache hook.
 
-[ ] 4. Persisted state via VueUse storage + Nuxt singleton (Req: 1, 8)
-[ ] 4.1 `app/composables/chat/useAiSettings.ts`: use `useLocalStorage` wrapped in Nuxt `useState`; keep keys/defaults.
-[ ] 4.2 `app/composables/core/useMultiPane.ts`: store pane widths with `useLocalStorage`; ensure SSR guard removed safely.
-[ ] 4.3 `app/composables/sidebar/useActiveSidebarPage.ts`: swap to `useLocalStorage` + `useState` for shared page state.
-[ ] 4.4 `app/components/ResizableSidebarLayout.vue`: align with storage composable; remove direct localStorage access.
-[ ] 4.5 `app/components/chat/ChatInputDropper.vue`: switch last model cache to `useLocalStorage` and shared state if needed.
+[x] 4. Persisted state via VueUse storage + Nuxt singleton (Req: 1, 8)
+[x] 4.1 `app/composables/chat/useAiSettings.ts`: use `useLocalStorage` wrapped in Nuxt `useState`; keep keys/defaults.
+[x] 4.2 `app/composables/core/useMultiPane.ts`: store pane widths with `useLocalStorage`; ensure SSR guard removed safely.
+[x] 4.3 `app/composables/sidebar/useActiveSidebarPage.ts`: swap to `useLocalStorage` + `useState` for shared page state.
+[~] 4.4 `app/components/ResizableSidebarLayout.vue`: *(skipped - uses dynamic prop-based storageKey, manual localStorage appropriate)*
+[x] 4.5 `app/components/chat/ChatInputDropper.vue`: switch last model cache to `useLocalStorage` and shared state if needed.
 
 [ ] 5. Responsive breakpoints (Req: 5, 8)
 [ ] 5.1 Introduce shared breakpoint helper (e.g., `app/composables/core/useBreakpointsShared.ts`) using `useBreakpoints` with current values.
@@ -36,11 +36,11 @@ status: draft
 [ ] 5.3 Update `app/components/ResizableSidebarLayout.vue` to use shared breakpoint refs; drop global sync flags.
 
 [ ] 6. Event/observer management (Req: 6, 8)
-[ ] 6.1 Replace resize/window listeners in `app/components/sidebar/SideBar.vue` with `useEventListener`/`useResizeObserver`.
-[ ] 6.2 Update `app/components/ResizableSidebarLayout.vue` to VueUse observers/listeners; verify pane drag/resize parity.
-[ ] 6.3 Swap `PageShell.vue` pointer/keydown/mutation observers to VueUse helpers; ensure cleanup on route change.
-[ ] 6.4 Replace MutationObserver in `app/components/DocumentationShell.vue` with `useMutationObserver`.
-[ ] 6.5 Update `app/components/chat/ChatInputDropper.vue` ResizeObserver to `useResizeObserver`.
+[x] 6.1 Replace resize/window listeners in `app/components/sidebar/SideBar.vue` with `useEventListener`/`useResizeObserver`.
+[x] 6.2 Update `app/components/ResizableSidebarLayout.vue` to VueUse observers/listeners; verify pane drag/resize parity.
+[x] 6.3 Swap `PageShell.vue` pointer/keydown/mutation observers to VueUse helpers; ensure cleanup on route change.
+[x] 6.4 Replace MutationObserver in `app/components/DocumentationShell.vue` with `useMutationObserver`.
+[x] 6.5 Update `app/components/chat/ChatInputDropper.vue` ResizeObserver to `useResizeObserver`.
 
 [ ] 7. Data fetching via Nuxt composables (Req: 7, 8)
 [ ] 7.1 Move doc map/markdown fetches in `app/components/DocumentationShell.vue` to `useFetch`/`useAsyncData` with SSR-safe options.

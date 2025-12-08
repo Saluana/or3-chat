@@ -321,7 +321,6 @@
 import {
     ref,
     nextTick,
-    defineEmits,
     onMounted,
     onBeforeUnmount,
     watch,
@@ -345,7 +344,7 @@ import {
 } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
-import { useFileDialog, useDropZone } from '@vueuse/core';
+import { useFileDialog, useDropZone, useLocalStorage } from '@vueuse/core';
 
 const props = defineProps<{
     loading?: boolean;
@@ -368,31 +367,30 @@ const { settings: aiSettings } = useAiSettings();
 const webSearchEnabled = ref<boolean>(false);
 const LAST_MODEL_KEY = 'last_selected_model';
 
+// Use VueUse's useLocalStorage for persisted model selection
+const persistedModel = useLocalStorage<string>(LAST_MODEL_KEY, 'openai/gpt-oss-120b');
+
 const suppressPersist = ref(false);
 
 onMounted(async () => {
     const fave = await getFavoriteModels();
     // Favorite models loaded (log removed)
     if (process.client) {
-        try {
-            const stored = localStorage.getItem(LAST_MODEL_KEY);
-            if (stored && typeof stored === 'string') {
-                selectedModel.value = stored;
+        // Initialize selectedModel from persistedModel
+        if (persistedModel.value) {
+            selectedModel.value = persistedModel.value;
+        }
+        // If this is a brand-new chat (no threadId), honor fixed default from AI settings for initial display
+        if (!props.threadId) {
+            const set = (aiSettings as any)?.value;
+            const fixed =
+                set?.defaultModelMode === 'fixed'
+                    ? set?.fixedModelId
+                    : null;
+            if (fixed) {
+                suppressPersist.value = true; // don't clobber last_selected_model on initial display
+                selectedModel.value = fixed;
             }
-            // If this is a brand-new chat (no threadId), honor fixed default from AI settings for initial display
-            if (!props.threadId) {
-                const set = (aiSettings as any)?.value;
-                const fixed =
-                    set?.defaultModelMode === 'fixed'
-                        ? set?.fixedModelId
-                        : null;
-                if (fixed) {
-                    suppressPersist.value = true; // don't clobber last_selected_model on initial display
-                    selectedModel.value = fixed;
-                }
-            }
-        } catch (e) {
-            // Silently handle restore failure
         }
     }
 });
@@ -782,11 +780,8 @@ watch(selectedModel, (newModel) => {
             suppressPersist.value = false;
             return;
         }
-        try {
-            localStorage.setItem(LAST_MODEL_KEY, newModel);
-        } catch (e) {
-            // Silently handle persist failure
-        }
+        // Persist via useLocalStorage
+        persistedModel.value = newModel;
     }
 });
 
@@ -1113,57 +1108,43 @@ const handlePromptModalClosed = () => {
     /* modal closed */
 };
 
-// Emit live height via ResizeObserver using provided measurements to avoid extra layout passes
-if (process.client && 'ResizeObserver' in window) {
-    let ro: ResizeObserver | null = null;
-    let lastHeight: number | null = null;
+// Emit live height via useResizeObserver (VueUse handles cleanup automatically)
+import { useResizeObserver } from '@vueuse/core';
 
-    const readEntryHeight = (entry: ResizeObserverEntry): number | null => {
-        const target = entry.target as HTMLElement;
-        const borderSize = Array.isArray(entry.borderBoxSize)
-            ? entry.borderBoxSize[0]
-            : entry.borderBoxSize;
-        if (borderSize && typeof borderSize.blockSize === 'number') {
-            return borderSize.blockSize;
-        }
-        if (entry.contentRect && typeof entry.contentRect.height === 'number') {
-            return entry.contentRect.height;
-        }
-        // Fallback – should rarely run, but keeps behavior consistent if box sizes unavailable
-        return target?.offsetHeight ?? null;
-    };
+const componentRootRef = ref<HTMLElement | null>(null);
+let lastHeight: number | null = null;
 
-    const handleEntries = (entries: ResizeObserverEntry[]) => {
-        const entry = entries[0];
-        if (!entry) return;
-        const nextHeight = readEntryHeight(entry);
-        if (nextHeight == null) return;
-        // Round to whole px so we don't emit micro-deltas that cause extra renders
-        const normalized = Math.round(nextHeight);
-        if (lastHeight === normalized) return;
-        lastHeight = normalized;
-        emit('resize', { height: normalized });
-    };
+const readEntryHeight = (entry: ResizeObserverEntry): number | null => {
+    const target = entry.target as HTMLElement;
+    const borderSize = Array.isArray(entry.borderBoxSize)
+        ? entry.borderBoxSize[0]
+        : entry.borderBoxSize;
+    if (borderSize && typeof borderSize.blockSize === 'number') {
+        return borderSize.blockSize;
+    }
+    if (entry.contentRect && typeof entry.contentRect.height === 'number') {
+        return entry.contentRect.height;
+    }
+    // Fallback – should rarely run, but keeps behavior consistent if box sizes unavailable
+    return target?.offsetHeight ?? null;
+};
 
-    onMounted(() => {
-        const inst = getCurrentInstance();
-        const rootEl = (inst?.proxy?.$el as HTMLElement) || null;
-        if (!rootEl) return;
-        ro = new ResizeObserver(handleEntries);
-        ro.observe(rootEl);
-    });
+onMounted(() => {
+    const inst = getCurrentInstance();
+    componentRootRef.value = (inst?.proxy?.$el as HTMLElement) || null;
+});
 
-    const dispose = () => {
-        try {
-            ro?.disconnect();
-        } catch {}
-        ro = null;
-        lastHeight = null;
-    };
-
-    onBeforeUnmount(dispose);
-    if (import.meta.hot) import.meta.hot.dispose(dispose);
-}
+useResizeObserver(componentRootRef, (entries) => {
+    const entry = entries[0];
+    if (!entry) return;
+    const nextHeight = readEntryHeight(entry);
+    if (nextHeight == null) return;
+    // Round to whole px so we don't emit micro-deltas that cause extra renders
+    const normalized = Math.round(nextHeight);
+    if (lastHeight === normalized) return;
+    lastHeight = normalized;
+    emit('resize', { height: normalized });
+});
 </script>
 
 <style scoped>
