@@ -329,7 +329,7 @@ import type { ThemePlugin } from '~/plugins/90.theme.client';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
-import { useRafFn } from '@vueuse/core';
+import { useRafFn, useClipboard } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 
@@ -960,14 +960,25 @@ onMounted(() => {
     loadShikiOnIdle();
 });
 
-function copyMessage() {
-    navigator.clipboard.writeText(props.message.text || '');
+const { copy: copyToClipboard } = useClipboard({ legacy: true });
 
-    useToast().add({
-        title: 'Message copied',
-        description: 'The message content has been copied to your clipboard.',
-        duration: 2000,
-    });
+function copyMessage() {
+    copyToClipboard(props.message.text || '')
+        .then(() => {
+             useToast().add({
+                title: 'Message copied',
+                description: 'The message content has been copied to your clipboard.',
+                duration: 2000,
+            });
+        })
+        .catch(() => {
+             useToast().add({
+                title: 'Copy failed',
+                description: 'Could not copy message to clipboard.',
+                color: 'error',
+                duration: 2000,
+            });
+        });
 }
 
 function onRetry() {

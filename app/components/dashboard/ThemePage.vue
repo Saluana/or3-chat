@@ -827,7 +827,7 @@ import type { UserThemeOverrides } from '~/core/theme/user-overrides-types';
 import type { Ref } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { isBrowser } from '~/utils/env';
-import { useDebounceFn } from '@vueuse/core';
+import { useDebounceFn, useClipboard } from '@vueuse/core';
 
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides as Ref<UserThemeOverrides>; // active mode overrides
@@ -1709,6 +1709,8 @@ function onHexInput(key: keyof typeof localHex) {
         }
     }
 }
+const { copy: copyToClipboard } = useClipboard({ legacy: true });
+
 async function copyColor(key: keyof typeof localHex) {
     let val = '';
     // Map to override paths
@@ -1727,7 +1729,7 @@ async function copyColor(key: keyof typeof localHex) {
 
     if (!val || !val.startsWith('#')) return;
     try {
-        await navigator.clipboard.writeText(val);
+        await copyToClipboard(val);
         notify('Copied color', val);
     } catch {
         notify('Copy failed');

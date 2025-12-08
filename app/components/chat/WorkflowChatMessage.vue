@@ -68,6 +68,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
+import { useClipboard } from '@vueuse/core';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { deriveStartNodeId } from '~/utils/chat/workflow-types';
 import WorkflowExecutionStatus from './WorkflowExecutionStatus.vue';
@@ -176,14 +177,24 @@ const retryButtonProps = computed(() => {
     };
 });
 
+const { copy } = useClipboard({ legacy: true });
+
 function copyResult() {
     if (!outputContent.value) return;
-    navigator.clipboard.writeText(outputContent.value);
-    toast.add({
-        title: 'Copied to clipboard',
-        color: 'success',
-        icon: useIcon('ui.check').value,
-    });
+    copy(outputContent.value)
+        .then(() => {
+            toast.add({
+                title: 'Copied to clipboard',
+                color: 'success',
+                icon: useIcon('ui.check').value,
+            });
+        })
+        .catch(() => {
+             toast.add({
+                title: 'Copy failed',
+                color: 'error',
+            });
+        });
 }
 
 async function retryFromHere() {
