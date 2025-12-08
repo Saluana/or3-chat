@@ -6,6 +6,7 @@
  * Exposed API mirrors existing pattern so integration stays minimal.
  */
 import { ref, watch, onBeforeUnmount, type Ref } from 'vue';
+import { useDebounceFn, watchDebounced } from '@vueuse/core';
 import type { Thread, Project, Post } from '~/db';
 import {
     createDb,
@@ -306,28 +307,26 @@ export function useSidebarSearch(
     }
 
     // Rebuild index & rerun search on data change with debounce
-    let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedRebuild = useDebounceFn(async () => {
+        await ensureIndex();
+        await runSearch();
+    }, SEARCH_DEBOUNCE_MS);
+
     const stopDataWatch = watch(
         [threads, projects, documents],
         () => {
-            if (rebuildTimer) clearTimeout(rebuildTimer);
-            rebuildTimer = setTimeout(() => {
-                void (async () => {
-                    await ensureIndex();
-                    await runSearch();
-                })();
-            }, SEARCH_DEBOUNCE_MS);
+            void debouncedRebuild();
         },
         { deep: false }
     );
     cleanupFns.push(stopDataWatch);
 
     // Debounce query changes
-    let queryTimer: ReturnType<typeof setTimeout> | null = null;
-    const stopQueryWatch = watch(query, () => {
-        if (queryTimer) clearTimeout(queryTimer);
-        queryTimer = setTimeout(() => void runSearch(), QUERY_DEBOUNCE_MS);
-    });
+    const stopQueryWatch = watchDebounced(
+        query,
+        () => void runSearch(),
+        { debounce: QUERY_DEBOUNCE_MS }
+    );
     cleanupFns.push(stopQueryWatch);
 
     // Initial population (pass-through until first build completes)
@@ -337,8 +336,6 @@ export function useSidebarSearch(
 
     // Cleanup on component unmount
     onBeforeUnmount(() => {
-        if (rebuildTimer) clearTimeout(rebuildTimer);
-        if (queryTimer) clearTimeout(queryTimer);
         while (cleanupFns.length) {
             const stop = cleanupFns.pop();
             stop?.();
@@ -348,8 +345,6 @@ export function useSidebarSearch(
     // HMR cleanup: clear timers on module disposal
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
-            if (rebuildTimer) clearTimeout(rebuildTimer);
-            if (queryTimer) clearTimeout(queryTimer);
             while (cleanupFns.length) {
                 const stop = cleanupFns.pop();
                 stop?.();

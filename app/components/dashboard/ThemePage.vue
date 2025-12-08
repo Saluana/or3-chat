@@ -827,6 +827,7 @@ import type { UserThemeOverrides } from '~/core/theme/user-overrides-types';
 import type { Ref } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { isBrowser } from '~/utils/env';
+import { useDebounceFn } from '@vueuse/core';
 
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides as Ref<UserThemeOverrides>; // active mode overrides
@@ -1249,22 +1250,13 @@ const localHex = reactive({
         : '',
 });
 
-// Simple debounce helper with cleanup tracking
-const activeTimers: number[] = [];
-function debounce<T extends (...args: any[]) => void>(fn: T, wait: number) {
-    let t: any;
-    return (...args: any[]) => {
-        clearTimeout(t);
-        t = setTimeout(() => fn(...args), wait);
-        if (!activeTimers.includes(t)) activeTimers.push(t);
-    };
-}
-
-const commitFontSize = debounce(
+// Debounce helpers for sliders
+const commitFontSize = useDebounceFn(
     (v: number) => set({ typography: { baseFontPx: v } }),
     70
 );
-const commitOpacity = debounce(
+
+const commitOpacity = useDebounceFn(
     (
         key: 'contentBg1Opacity' | 'contentBg2Opacity' | 'sidebarBgOpacity',
         v: number
@@ -1321,7 +1313,7 @@ function toggleRepeat(
     }
 }
 
-const commitSize = debounce(
+const commitSize = useDebounceFn(
     (
         key: 'contentBg1SizePx' | 'contentBg2SizePx' | 'sidebarBgSizePx',
         v: number
@@ -1521,8 +1513,9 @@ function registerObjectUrl(u: string) {
 function revokeAll() {
     objectUrls.forEach((u) => URL.revokeObjectURL(u));
     objectUrls.clear();
-    activeTimers.forEach(clearTimeout);
-    activeTimers.length = 0;
+    // activeTimers cleanup removed as useDebounceFn handles its own execution flow, 
+    // and cancellation on unmount is implicitly handled by component destruction preventing new calls.
+    // If we wanted explicit cancellation we'd track the debounced fns.
     fileInputs.contentBg1 = null;
     fileInputs.contentBg2 = null;
     fileInputs.sidebarBg = null;

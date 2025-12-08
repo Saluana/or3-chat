@@ -62,6 +62,7 @@ import {
 import { Editor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
+import { useDebounceFn } from '@vueuse/core';
 import { getPrompt, updatePrompt, type PromptRecord } from '~/db/prompts';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
@@ -74,7 +75,6 @@ const titleDraft = ref('');
 const editor = ref<Editor | null>(null);
 const pendingTitle = ref<string | undefined>();
 const pendingContent = ref<any | undefined>();
-const saveTimer = ref<any | null>(null);
 const status = ref<'idle' | 'saving' | 'error' | 'loading'>('loading');
 
 async function load(id: string) {
@@ -97,10 +97,9 @@ async function load(id: string) {
     }
 }
 
-function scheduleSave() {
-    if (saveTimer.value) clearTimeout(saveTimer.value);
-    saveTimer.value = setTimeout(flush, 600);
-}
+const scheduleSave = useDebounceFn(() => {
+    void flush();
+}, 600);
 
 async function flush() {
     if (!record.value) return;
@@ -193,7 +192,8 @@ watch(
 
 onBeforeUnmount(() => {
     editor.value?.destroy();
-    if (saveTimer.value) clearTimeout(saveTimer.value);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (scheduleSave as any).cancel();
 });
 
 const promptTitleInputProps = computed(() => {
