@@ -575,9 +575,11 @@ export function useChat(
                 }
                 // blob: object URL -> fetch and encode
                 if (url.startsWith('blob:')) {
-                    const resp = await fetch(url);
-                    if (resp.ok) {
-                        const blob = await resp.blob();
+                    // Use $fetch for blob
+                    try {
+                        const blob = await $fetch<Blob>(url, {
+                            responseType: 'blob',
+                        });
                         url = await new Promise<string>((resolve, reject) => {
                             const fr = new FileReader();
                             fr.onerror = () =>
@@ -588,6 +590,8 @@ export function useChat(
                             fr.readAsDataURL(blob);
                         });
                         return { ...f, url };
+                    } catch {
+                        // ignore fetch error
                     }
                 }
             } catch {
@@ -1053,8 +1057,10 @@ export function useChat(
                                     blob = dataUrlToBlob(ev.url);
                                 else if (/^https?:/.test(ev.url)) {
                                     try {
-                                        const r = await fetch(ev.url);
-                                        if (r.ok) blob = await r.blob();
+                                        // Use $fetch with responseType: 'blob'
+                                        blob = await $fetch<Blob>(ev.url, {
+                                            responseType: 'blob',
+                                        });
                                     } catch {
                                         /* intentionally empty */
                                     }

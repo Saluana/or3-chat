@@ -43,9 +43,9 @@ status: draft
 [x] 6.5 Update `app/components/chat/ChatInputDropper.vue` ResizeObserver to `useResizeObserver`.
 
 [ ] 7. Data fetching via Nuxt composables (Req: 7, 8)
-[ ] 7.1 Move doc map/markdown fetches in `app/components/DocumentationShell.vue` to `useFetch`/`useAsyncData` with SSR-safe options.
-[ ] 7.2 Update `app/components/ui/HelpChat.vue` to `useFetch`/`useAsyncData`; keep lazy/interactive behavior.
-[ ] 7.3 Refactor asset fetches in `app/composables/chat/useAi.ts` to Nuxt fetch composables with same endpoints and parsing.
+[x] 7.1 Move doc map/markdown fetches in `app/components/DocumentationShell.vue` to `useFetch`/`useAsyncData` with SSR-safe options.
+[x] 7.2 Update `app/components/ui/HelpChat.vue` to `useFetch`/`useAsyncData`; keep lazy/interactive behavior.
+[x] 7.3 Refactor asset fetches in `app/composables/chat/useAi.ts` to Nuxt fetch composables with same endpoints and parsing.
 
 [ ] 8. Testing & verification (Req: 1-8)
 [ ] 8.1 Add/adjust unit tests for storage, debounce, scroll lock, and breakpoint helpers (mock timers/matchMedia).

@@ -410,11 +410,11 @@ async function pushMessage(
 async function getDocumentation(path: string) {
     try {
         const normalized = path.startsWith('/') ? path : `/${path}`;
-        const response = await fetch(`/_documentation${normalized}.md`);
-        if (!response.ok) {
-            throw new Error('Failed to load documentation');
-        }
-        return await response.text();
+        // Use $fetch for consistency and configured defaults
+        const text = await $fetch<string>(`/_documentation${normalized}.md`, {
+            responseType: 'text',
+        });
+        return text;
     } catch (error) {
         console.error('[HelpChat] getDocs failed', error);
         toast.add({
@@ -476,13 +476,11 @@ async function sendMessage() {
             docmapJson = props.documentationMap;
         } else {
             try {
-                const docmapResponse = await fetch(
+                // Use $fetch for automatic JSON parsing and error handling
+                const docmapData = await $fetch<any>(
                     '/_documentation/docmap.json'
                 );
-                if (docmapResponse.ok) {
-                    const docmapData = await docmapResponse.json();
-                    docmapJson = JSON.stringify(docmapData, null, 2);
-                }
+                docmapJson = JSON.stringify(docmapData, null, 2);
             } catch (err) {
                 console.warn('[HelpChat] Failed to load docmap', err);
             }
