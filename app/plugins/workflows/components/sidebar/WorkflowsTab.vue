@@ -7,6 +7,7 @@ import {
     useWorkflowsCrud,
     type WorkflowPost,
 } from '../../composables/useWorkflows';
+import { useWorkflowStorage } from '../../composables/useWorkflowStorage';
 
 const multiPane = useSidebarMultiPane();
 const panePluginApi = useSidebarPostsApi();
@@ -15,6 +16,7 @@ const postApi = panePluginApi?.posts ?? null;
 // Initialize CRUD operations with the posts API (captured at setup time)
 const { createWorkflow, deleteWorkflow, listWorkflows, updateWorkflow } =
     useWorkflowsCrud(postApi);
+const { importWorkflow } = useWorkflowStorage();
 
 // Local state
 const workflows = ref<WorkflowPost[]>([]);
@@ -32,6 +34,7 @@ const renameValue = ref('');
 
 const showCreateModal = ref(false);
 const createName = ref('');
+const fileInputRef = ref<HTMLInputElement | null>(null);
 
 // Load workflows on mount
 async function loadWorkflows() {
@@ -72,6 +75,44 @@ async function handleCreateWorkflow() {
     isCreating.value = false;
 }
 
+async function handleWorkflowImport(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    try {
+        const data = await importWorkflow(file);
+        const fileName = file.name.replace(/\.[^/.]+$/, '').trim();
+        const title =
+            data.meta?.name?.trim() ||
+            (data as { name?: string }).name?.trim() ||
+            fileName ||
+            'Imported Workflow';
+        const payload = {
+            ...data,
+            meta: {
+                ...data.meta,
+                name: title,
+            },
+        };
+        const result = await createWorkflow(title, payload);
+        if (result.ok) {
+            await loadWorkflows();
+            openWorkflow(result.id);
+        } else {
+            error.value = result.error;
+        }
+    } catch (e) {
+        error.value = e instanceof Error ? e.message : 'Failed to import workflow';
+    } finally {
+        input.value = '';
+    }
+}
+
+function openImportDialog() {
+    fileInputRef.value?.click();
+}
+
 // Open workflow in pane
 function openWorkflow(id: string) {
     multiPane.switchToApp('or3-workflows', { recordId: id });
@@ -90,6 +131,26 @@ async function handleDeleteWorkflow() {
     const result = await deleteWorkflow(workflowToDelete.value.id);
     if (result.ok) {
         await loadWorkflows();
+        const deletedId = workflowToDelete.value.id;
+        const panes = multiPane.panes.value;
+        for (let i = panes.length - 1; i >= 0; i -= 1) {
+            const pane = panes[i];
+            if (!pane) continue;
+            if (pane.mode !== 'or3-workflows') continue;
+            if (pane.documentId !== deletedId) continue;
+
+            if (panes.length > 1) {
+                await multiPane.closePane(i);
+            } else {
+                multiPane.updatePane(i, {
+                    mode: 'chat',
+                    threadId: '',
+                    documentId: undefined,
+                    messages: [],
+                });
+                multiPane.setActive(i);
+            }
+        }
     } else {
         error.value = result.error;
     }
@@ -151,15 +212,32 @@ onMounted(() => {
         <!-- Header with create -->
         <div class="flex justify-between items-center">
             <h1 class="font-medium text-lg">Workflows</h1>
-            <UButton
-                size="sm"
-                variant="ghost"
-                icon="tabler:plus"
-                class="center-it"
-                @click="openCreateModal"
-                :loading="isCreating"
-                title="Create workflow"
-            />
+            <div class="flex items-center gap-1">
+                <UButton
+                    size="sm"
+                    variant="ghost"
+                    icon="tabler:upload"
+                    class="center-it"
+                    @click="openImportDialog"
+                    title="Upload workflow"
+                />
+                <UButton
+                    size="sm"
+                    variant="ghost"
+                    icon="tabler:plus"
+                    class="center-it"
+                    @click="openCreateModal"
+                    :loading="isCreating"
+                    title="Create workflow"
+                />
+                <input
+                    ref="fileInputRef"
+                    type="file"
+                    accept=".json"
+                    class="sr-only"
+                    @change="handleWorkflowImport"
+                />
+            </div>
         </div>
 
         <!-- Error state -->

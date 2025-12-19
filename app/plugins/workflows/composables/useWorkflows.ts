@@ -132,7 +132,7 @@ export function useWorkflowsCrud(postApi: PanePluginApi['posts'] | null) {
                 postType: POST_TYPE,
                 title,
                 content: '',
-                meta: data ?? null,
+                meta: data ?? EMPTY_WORKFLOW,
                 source: SOURCE,
             });
 
