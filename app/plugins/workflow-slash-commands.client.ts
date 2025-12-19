@@ -90,6 +90,12 @@ let pendingAssistantContext: {
 } | null = null;
 
 /**
+ * Pending TipTap editor JSON captured right before send.
+ * Used to extract workflow node metadata for slash commands.
+ */
+let pendingEditorJson: unknown | null = null;
+
+/**
  * Flag to signal that a workflow is handling the current request.
  * This is checked by the chat system to skip the AI call.
  */
@@ -141,6 +147,14 @@ export default defineNuxtPlugin((nuxtApp) => {
     }
 
     const hooks = useHooks();
+
+    hooks.on(
+        'ui.chat.editor:action:before_send',
+        (payload: unknown) => {
+            pendingEditorJson = payload;
+        },
+        { kind: 'action' }
+    );
 
     // Mark any previously running workflow messages as interrupted on load and push state to UI
     (async () => {
@@ -339,6 +353,73 @@ export default defineNuxtPlugin((nuxtApp) => {
             // Fallback to JSON clone for non-structured-cloneable fields
             return JSON.parse(JSON.stringify(value)) as T;
         }
+    }
+
+    function extractWorkflowCommandFromEditorJson(doc: unknown): {
+        workflowId?: string;
+        workflowName?: string;
+        prompt: string;
+    } | null {
+        if (!doc || typeof doc !== 'object') return null;
+
+        let found = false;
+        let workflowId: string | undefined;
+        let workflowName: string | undefined;
+        const promptParts: string[] = [];
+
+        const visit = (node: unknown) => {
+            if (!node || typeof node !== 'object') return;
+
+            const typed = node as {
+                type?: string;
+                text?: string;
+                attrs?: Record<string, unknown>;
+                content?: unknown[];
+            };
+
+            if (typed.type === 'workflow') {
+                if (!found) {
+                    found = true;
+                    workflowId =
+                        typeof typed.attrs?.id === 'string'
+                            ? typed.attrs.id
+                            : undefined;
+                    workflowName =
+                        typeof typed.attrs?.label === 'string'
+                            ? typed.attrs.label
+                            : undefined;
+                }
+                return;
+            }
+
+            if (typed.type === 'text') {
+                if (found && typeof typed.text === 'string') {
+                    promptParts.push(typed.text);
+                }
+                return;
+            }
+
+            if (typed.type === 'hardBreak') {
+                if (found) {
+                    promptParts.push('\n');
+                }
+                return;
+            }
+
+            if (Array.isArray(typed.content)) {
+                typed.content.forEach(visit);
+            }
+        };
+
+        visit(doc);
+
+        if (!found) return null;
+
+        return {
+            workflowId,
+            workflowName,
+            prompt: promptParts.join('').trimStart(),
+        };
     }
 
     async function runWorkflowExecution(opts: {
@@ -919,7 +1000,11 @@ export default defineNuxtPlugin((nuxtApp) => {
                           .join('')
                     : '';
 
-            if (!content.startsWith('/')) {
+            const normalizedContent = content.trimStart();
+            const editorDoc = pendingEditorJson;
+            pendingEditorJson = null;
+
+            if (!normalizedContent.startsWith('/')) {
                 return { messages };
             }
 
@@ -937,24 +1022,72 @@ export default defineNuxtPlugin((nuxtApp) => {
                 return { messages };
             }
 
-            // Parse the slash command
-            const parsed = execMod.parseSlashCommand(content);
-            if (!parsed) {
-                return { messages };
-            }
+            const editorMatch = editorDoc
+                ? extractWorkflowCommandFromEditorJson(editorDoc)
+                : null;
 
-            // Get the workflow
-            const workflowPost = await slashMod.getWorkflowByName(
-                parsed.workflowName
-            );
+            let workflowPost: WorkflowPostWithMeta | null = null;
+            let workflowNameForLog = '';
+            let prompt = '';
 
-            if (!workflowPost) {
-                reportError(`No workflow named "${parsed.workflowName}"`, {
-                    code: 'ERR_VALIDATION',
-                    severity: 'warn',
-                    toast: true,
-                });
-                return { messages };
+            if (editorMatch) {
+                prompt = editorMatch.prompt || '';
+                workflowNameForLog = editorMatch.workflowName || '';
+
+                if (editorMatch.workflowId) {
+                    workflowPost = await slashMod.getWorkflowById(
+                        editorMatch.workflowId
+                    );
+                }
+
+                if (!workflowPost && editorMatch.workflowName) {
+                    workflowPost = await slashMod.getWorkflowByName(
+                        editorMatch.workflowName
+                    );
+                }
+
+                if (!workflowPost) {
+                    reportError(
+                        editorMatch.workflowName
+                            ? `Workflow "${editorMatch.workflowName}" not found`
+                            : 'Workflow not found',
+                        {
+                            code: 'ERR_VALIDATION',
+                            severity: 'warn',
+                            toast: true,
+                        }
+                    );
+                    return { messages };
+                }
+            } else {
+                const workflowOptions = await slashMod.searchWorkflows(
+                    '',
+                    Number.POSITIVE_INFINITY
+                );
+                const workflowNames = workflowOptions.map((item) => item.label);
+                const parsed = execMod.parseSlashCommand(
+                    normalizedContent,
+                    workflowNames
+                );
+
+                if (!parsed) {
+                    return { messages };
+                }
+
+                workflowNameForLog = parsed.workflowName;
+                prompt = parsed.prompt || '';
+                workflowPost = await slashMod.getWorkflowByName(
+                    parsed.workflowName
+                );
+
+                if (!workflowPost) {
+                    reportError(`No workflow named "${parsed.workflowName}"`, {
+                        code: 'ERR_VALIDATION',
+                        severity: 'warn',
+                        toast: true,
+                    });
+                    return { messages };
+                }
             }
 
             // Get API key
@@ -974,10 +1107,15 @@ export default defineNuxtPlugin((nuxtApp) => {
 
             // Check workflow has valid meta
             if (!hasWorkflowMeta(workflowPost)) {
-                reportError(`Workflow "${parsed.workflowName}" has no data`, {
+                reportError(
+                    `Workflow "${
+                        workflowNameForLog || workflowPost.title
+                    }" has no data`,
+                    {
                     code: 'ERR_VALIDATION',
                     toast: true,
-                });
+                    }
+                );
                 return { messages };
             }
 
@@ -999,7 +1137,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             if (import.meta.dev) {
                 console.log(
                     '[workflow-slash] Executing workflow:',
-                    parsed.workflowName
+                    workflowNameForLog || workflowPost.title
                 );
             }
 
@@ -1018,7 +1156,7 @@ export default defineNuxtPlugin((nuxtApp) => {
 
             await runWorkflowExecution({
                 workflowPost,
-                prompt: parsed.prompt || '',
+                prompt,
                 assistantContext,
                 execMod,
                 apiKey: apiKey.value,

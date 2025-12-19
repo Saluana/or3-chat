@@ -84,7 +84,10 @@ export interface ParsedSlashCommand {
  * @param text - The full message text
  * @returns Parsed command or null if not a slash command
  */
-export function parseSlashCommand(text: string): ParsedSlashCommand | null {
+export function parseSlashCommand(
+    text: string,
+    workflowNames: string[] = []
+): ParsedSlashCommand | null {
     const trimmed = text.trim();
 
     // Must start with /
@@ -92,22 +95,54 @@ export function parseSlashCommand(text: string): ParsedSlashCommand | null {
         return null;
     }
 
-    // Extract workflow name (everything after / until first space or end)
-    const match = trimmed.match(/^\/([^\s]+)(?:\s+(.*))?$/s);
+    const raw = trimmed.slice(1);
+    if (!raw.trim()) {
+        return null;
+    }
+
+    // Allow quoted workflow names: /"My Workflow" prompt
+    const quotedMatch = raw.match(/^(["'])(.+?)\1\s*(.*)$/s);
+    if (quotedMatch) {
+        return {
+            workflowName: quotedMatch[2]?.trim() || '',
+            prompt: quotedMatch[3]?.trim() || '',
+        };
+    }
+
+    // Prefer exact workflow title matches (handles spaces and missing separators)
+    const candidates = workflowNames
+        .map((name) => name.trim())
+        .filter(Boolean);
+    if (candidates.length) {
+        const rawLower = raw.toLowerCase();
+        let best: string | null = null;
+        for (const name of candidates) {
+            if (!rawLower.startsWith(name.toLowerCase())) continue;
+            if (!best || name.length > best.length) best = name;
+        }
+
+        if (best) {
+            return {
+                workflowName: best,
+                prompt: raw.slice(best.length).trimStart(),
+            };
+        }
+    }
+
+    // Fallback: treat first token as the workflow name
+    const match = raw.match(/^([^\s]+)(?:\s+(.*))?$/s);
     if (!match) {
         return null;
     }
 
     const workflowName = match[1] || '';
-    const prompt = match[2]?.trim() || '';
-
     if (!workflowName) {
         return null;
     }
 
     return {
         workflowName,
-        prompt,
+        prompt: match[2]?.trim() || '',
     };
 }
 

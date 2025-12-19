@@ -307,83 +307,83 @@ onMounted(() => {
         </div>
 
         <!-- Create Modal -->
-        <UModal v-model:open="showCreateModal">
-            <template #content>
-                <div class="p-6 flex flex-col gap-4">
-                    <h2 class="font-medium text-lg">New Workflow</h2>
+        <UModal
+            v-model:open="showCreateModal"
+            title="New Workflow"
+            description="Give your workflow a name before creating it."
+        >
+            <template #body>
+                <div class="space-y-4">
                     <UInput
                         v-model="createName"
                         placeholder="Workflow name"
                         autofocus
                         @keydown.enter="handleCreateWorkflow"
                     />
-                    <div class="flex justify-end gap-2 mt-2">
-                        <UButton
-                            variant="ghost"
-                            @click="showCreateModal = false"
-                        >
-                            Cancel
-                        </UButton>
-                        <UButton @click="handleCreateWorkflow">
-                            Create
-                        </UButton>
-                    </div>
                 </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showCreateModal = false">
+                    Cancel
+                </UButton>
+                <UButton @click="handleCreateWorkflow">Create</UButton>
             </template>
         </UModal>
 
         <!-- Delete Confirmation Modal -->
-        <UModal v-model:open="showDeleteModal">
-            <template #content>
-                <div class="p-6 flex flex-col gap-4">
-                    <div class="flex items-center gap-3">
+        <UModal
+            v-model:open="showDeleteModal"
+            title="Delete Workflow"
+            description="This action cannot be undone."
+        >
+            <template #body>
+                <div class="space-y-3">
+                    <div class="flex items-center gap-3 text-(--md-error)">
                         <UIcon
                             name="tabler:alert-triangle"
-                            class="text-2xl text-(--md-error)"
+                            class="text-2xl"
                         />
-                        <h2 class="font-medium text-lg">Delete Workflow</h2>
+                        <span class="font-medium">
+                            Delete "{{ workflowToDelete?.title }}"?
+                        </span>
                     </div>
                     <p class="text-sm opacity-80">
-                        Are you sure you want to delete "{{
-                            workflowToDelete?.title
-                        }}"? This action cannot be undone.
+                        Are you sure you want to delete this workflow? This
+                        action cannot be undone.
                     </p>
-                    <div class="flex justify-end gap-2 mt-2">
-                        <UButton
-                            variant="ghost"
-                            @click="showDeleteModal = false"
-                        >
-                            Cancel
-                        </UButton>
-                        <UButton color="error" @click="handleDeleteWorkflow">
-                            Delete
-                        </UButton>
-                    </div>
                 </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showDeleteModal = false">
+                    Cancel
+                </UButton>
+                <UButton color="error" @click="handleDeleteWorkflow">
+                    Delete
+                </UButton>
             </template>
         </UModal>
 
         <!-- Rename Modal -->
-        <UModal v-model:open="showRenameModal">
-            <template #content>
-                <div class="p-6 flex flex-col gap-4">
-                    <h2 class="font-medium text-lg">Rename Workflow</h2>
+        <UModal
+            v-model:open="showRenameModal"
+            title="Rename Workflow"
+            description="Choose a new name for this workflow."
+        >
+            <template #body>
+                <div class="space-y-4">
                     <UInput
                         v-model="renameValue"
                         placeholder="Workflow name"
                         autofocus
                         @keydown.enter="handleRenameWorkflow"
                     />
-                    <div class="flex justify-end gap-2 mt-2">
-                        <UButton
-                            variant="ghost"
-                            @click="showRenameModal = false"
-                        >
-                            Cancel
-                        </UButton>
-                        <UButton @click="handleRenameWorkflow"> Save </UButton>
-                    </div>
                 </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showRenameModal = false">
+                    Cancel
+                </UButton>
+                <UButton @click="handleRenameWorkflow">Save</UButton>
             </template>
         </UModal>
     </div>

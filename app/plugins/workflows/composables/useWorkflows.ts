@@ -82,6 +82,19 @@ export function destroyEditorForPane(paneId: string): void {
 }
 
 /**
+ * Clear selection in all workflow editors except the active pane.
+ */
+export function deselectAllOtherEditors(activePaneId: string): void {
+    for (const [paneId, editor] of editorInstances.entries()) {
+        if (paneId === activePaneId) continue;
+        const selected = editor.getSelected();
+        if (selected.nodes.length || selected.edges.length) {
+            editor.commands.deselectAll();
+        }
+    }
+}
+
+/**
  * Get all active editor instances (for debugging/inspection)
  */
 export function getActiveEditorCount(): number {

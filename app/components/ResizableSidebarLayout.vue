@@ -1,7 +1,7 @@
 <template>
     <div
         id="page-container"
-        class="resizable-sidebar-layout relative w-full h-dvh border border-(--md-outline-variant) overflow-hidden bg-(--md-surface) text-(--md-on-surface) flex overflow-x-hidden"
+        class="resizable-sidebar-layout relative w-full h-dvh overflow-hidden bg-(--md-surface) text-(--md-on-surface) flex overflow-x-hidden"
     >
         <!-- Backdrop (mobile) -->
         <Transition
@@ -156,14 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import {
-    ref,
-    computed,
-    onMounted,
-    watch,
-    nextTick,
-    provide,
-} from 'vue';
+import { ref, computed, onMounted, watch, nextTick, provide } from 'vue';
 import { useResizeObserver, useEventListener } from '@vueuse/core';
 import SidebarHeader from './sidebar/SidebarHeader.vue';
 import ResizeHandle from './sidebar/ResizeHandle.vue';
@@ -176,7 +169,9 @@ const topHeaderHeight = ref(48);
 provide('topHeaderHeight', topHeaderHeight);
 
 // Observe sidebar header element for height changes using VueUse
-const sidebarHeaderElement = computed(() => sidebarHeaderRef.value?.$el as HTMLElement | undefined);
+const sidebarHeaderElement = computed(
+    () => sidebarHeaderRef.value?.$el as HTMLElement | undefined
+);
 useResizeObserver(sidebarHeaderElement, (entries) => {
     for (const entry of entries) {
         const target = entry.target as HTMLElement;
@@ -360,12 +355,12 @@ function onPointerUp() {
 // Use VueUse's useEventListener for pointermove/pointerup during drag
 // These only activate when isDragging is true
 useEventListener(
-    () => isDragging.value ? window : null,
+    () => (isDragging.value ? window : null),
     'pointermove',
     onPointerMove
 );
 useEventListener(
-    () => isDragging.value ? window : null,
+    () => (isDragging.value ? window : null),
     'pointerup',
     onPointerUp
 );

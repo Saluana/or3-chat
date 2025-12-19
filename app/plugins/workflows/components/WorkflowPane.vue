@@ -4,9 +4,11 @@ import { WorkflowCanvas, Controls } from '@or3/workflow-vue';
 import '@or3/workflow-vue/style.css';
 import { useIcon } from '#imports';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
+import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import {
     getEditorForPane,
     destroyEditorForPane,
+    deselectAllOtherEditors,
     useWorkflowsCrud,
 } from '../composables/useWorkflows';
 import { useWorkflowStorage } from '../composables/useWorkflowStorage';
@@ -55,12 +57,22 @@ const canRedo = ref(false);
 const interactionMode = ref<'drag' | 'select'>('drag');
 const workflowTitle = ref<string | null>(null);
 let loadTicket = 0;
+let isDisposed = false;
 
 // Debounced auto-save
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // Editor change listener cleanup
 let unsubscribeEditor: (() => void) | null = null;
+let unsubscribeSelection: (() => void) | null = null;
+
+const multiPaneApi = getGlobalMultiPaneApi();
+const isActivePane = computed(() => {
+    if (!multiPaneApi) return false;
+    const activeIndex = multiPaneApi.activePaneIndex.value;
+    const activePane = multiPaneApi.panes.value[activeIndex];
+    return activePane?.id === props.paneId;
+});
 
 const toolbarDisabled = computed(
     () => loading.value || Boolean(error.value) || !hasLoaded.value
@@ -79,6 +91,7 @@ function debouncedSave() {
 
 // Load workflow from database with stale-response protection
 async function loadWorkflow() {
+    if (isDisposed) return;
     const ticket = ++loadTicket;
     const recordId = props.recordId;
 
@@ -97,7 +110,7 @@ async function loadWorkflow() {
     const result = await getWorkflow(recordId);
 
     // If another load started, ignore this result
-    if (ticket !== loadTicket) return;
+    if (ticket !== loadTicket || isDisposed) return;
 
     if (!result.ok) {
         error.value = result.error;
@@ -130,6 +143,7 @@ async function loadWorkflow() {
 
 // Save workflow to database
 async function saveWorkflow() {
+    if (isDisposed) return;
     if (!props.recordId || !hasLoaded.value) return;
 
     const data = editor.value.getJSON();
@@ -147,6 +161,13 @@ function setupChangeListener() {
             debouncedSave();
         }
         updateHistoryState();
+    });
+}
+
+function setupSelectionListener() {
+    unsubscribeSelection = editor.value.on('selectionUpdate', () => {
+        if (!isActivePane.value) return;
+        deselectAllOtherEditors(props.paneId);
     });
 }
 
@@ -226,9 +247,13 @@ function setInteractionMode(mode: 'drag' | 'select') {
 onMounted(() => {
     void loadWorkflow();
     setupChangeListener();
+    setupSelectionListener();
 });
 
 onUnmounted(() => {
+    isDisposed = true;
+    loadTicket++;
+
     // 1. Mark as not loaded to prevent any further saves
     hasLoaded.value = false;
 
@@ -236,6 +261,10 @@ onUnmounted(() => {
     if (unsubscribeEditor) {
         unsubscribeEditor();
         unsubscribeEditor = null;
+    }
+    if (unsubscribeSelection) {
+        unsubscribeSelection();
+        unsubscribeSelection = null;
     }
 
     // 3. Clear any pending debounced save
@@ -257,6 +286,16 @@ onUnmounted(() => {
     // 5. Destroy the editor instance for this pane
     destroyEditorForPane(props.paneId);
 });
+
+watch(
+    isActivePane,
+    (active) => {
+        if (active) {
+            deselectAllOtherEditors(props.paneId);
+        }
+    },
+    { immediate: true }
+);
 </script>
 
 <template>
@@ -359,6 +398,7 @@ onUnmounted(() => {
             <WorkflowCanvas
                 v-else
                 :editor="editor"
+                :canvas-id="paneId"
                 :pan-on-drag="panOnDrag"
                 :selection-key-code="selectionKeyCode"
                 @node-click="handleNodeClick"

@@ -43,12 +43,16 @@ const POST_TYPE = 'workflow-entry';
 
 /**
  * Search workflows by query string.
- * Returns top 10 matching workflows sorted by most recently updated.
+ * Returns top matching workflows sorted by most recently updated.
  *
  * @param query - Search query (case-insensitive substring match on title)
+ * @param limit - Max number of results (default: 10). Pass undefined to return all.
  * @returns Array of matching workflow items
  */
-export async function searchWorkflows(query: string): Promise<WorkflowItem[]> {
+export async function searchWorkflows(
+    query: string,
+    limit: number | undefined = 10
+): Promise<WorkflowItem[]> {
     try {
         const { db } = await import('~/db');
 
@@ -67,15 +71,20 @@ export async function searchWorkflows(query: string): Promise<WorkflowItem[]> {
               )
             : workflows;
 
-        // Sort by most recently updated and limit to 10
-        return filtered
-            .sort((a: any, b: any) => (b.updated_at || 0) - (a.updated_at || 0))
-            .slice(0, 10)
-            .map((w: any) => ({
-                id: w.id,
-                label: w.title || 'Untitled Workflow',
-                updatedAt: w.updated_at || w.created_at || 0,
-            }));
+        // Sort by most recently updated and apply limit if provided
+        const sorted = filtered.sort(
+            (a: any, b: any) => (b.updated_at || 0) - (a.updated_at || 0)
+        );
+        const limited =
+            typeof limit === 'number'
+                ? sorted.slice(0, Math.max(limit, 0))
+                : sorted;
+
+        return limited.map((w: any) => ({
+            id: w.id,
+            label: w.title || 'Untitled Workflow',
+            updatedAt: w.updated_at || w.created_at || 0,
+        }));
     } catch (error) {
         console.error('[workflow-slash] Search failed:', error);
         return [];

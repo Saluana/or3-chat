@@ -20,7 +20,7 @@ function onPanelChange(value: TabsItem['value']) {
 }
 
 // Get the active workflow pane's editor (if any)
-const activeWorkflowEditor = computed<WorkflowEditor | null>(() => {
+const activeWorkflowPane = computed(() => {
     const panes = multiPane.panes.value;
     const activePaneId = multiPane.activePaneId.value;
 
@@ -29,17 +29,21 @@ const activeWorkflowEditor = computed<WorkflowEditor | null>(() => {
 
     // Check if it's a workflow pane
     if (activePane?.mode === 'or3-workflows') {
-        return getEditorForPane(activePane.id);
+        return activePane;
     }
 
     // Otherwise find any workflow pane
     const workflowPane = panes.find((p) => p.mode === 'or3-workflows');
-    if (workflowPane) {
-        return getEditorForPane(workflowPane.id);
-    }
-
-    return null;
+    return workflowPane ?? null;
 });
+
+const activeWorkflowEditor = computed<WorkflowEditor | null>(() => {
+    return activeWorkflowPane.value
+        ? getEditorForPane(activeWorkflowPane.value.id)
+        : null;
+});
+
+const activeWorkflowPaneId = computed(() => activeWorkflowPane.value?.id);
 
 const availableTools = computed(() =>
     toolRegistry.listTools.value.map((tool) => ({
@@ -63,7 +67,7 @@ const items: TabsItem[] = [
     <aside
         class="flex flex-col h-full w-full p-3 pr-0.5 justify-between overflow-hidden"
     >
-        <div class="flex flex-col h-full gap-4 overfloy-y-auto">
+        <div class="flex flex-col h-full gap-4 overflow-y-auto">
             <!-- Tabs -->
             <div class="flex">
                 <UTabs
@@ -84,7 +88,7 @@ const items: TabsItem[] = [
                 v-else-if="activePanel === 'palette'"
                 class="flex-1 overflow-y-auto px-0.5"
             >
-                <NodePalette />
+                <NodePalette :canvas-id="activeWorkflowPaneId" />
             </div>
 
             <!-- Node Inspector Panel -->
