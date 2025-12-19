@@ -18,6 +18,10 @@ const SOURCE = 'workflows-plugin';
  * Each pane gets its own isolated editor state.
  */
 const editorInstances = new Map<string, WorkflowEditor>();
+const workflowSyncState = new Map<
+    string,
+    { updatedAt: number; lastWriterPaneId?: string }
+>();
 
 // Debug logging in development
 if (import.meta.dev) {
@@ -99,6 +103,17 @@ export function deselectAllOtherEditors(activePaneId: string): void {
  */
 export function getActiveEditorCount(): number {
     return editorInstances.size;
+}
+
+export function getWorkflowSyncState(recordId: string) {
+    return workflowSyncState.get(recordId);
+}
+
+export function setWorkflowSyncState(
+    recordId: string,
+    state: { updatedAt: number; lastWriterPaneId?: string }
+) {
+    workflowSyncState.set(recordId, state);
 }
 
 // Type for workflow posts with parsed meta

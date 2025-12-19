@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
-import { WorkflowCanvas, Controls } from '@or3/workflow-vue';
+import { WorkflowCanvas, Controls, ValidationOverlay } from '@or3/workflow-vue';
 import '@or3/workflow-vue/style.css';
 import { useIcon } from '#imports';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
@@ -9,6 +9,8 @@ import {
     getEditorForPane,
     destroyEditorForPane,
     deselectAllOtherEditors,
+    getWorkflowSyncState,
+    setWorkflowSyncState,
     useWorkflowsCrud,
 } from '../composables/useWorkflows';
 import { useWorkflowStorage } from '../composables/useWorkflowStorage';
@@ -56,8 +58,12 @@ const canUndo = ref(false);
 const canRedo = ref(false);
 const interactionMode = ref<'drag' | 'select'>('drag');
 const workflowTitle = ref<string | null>(null);
+const showValidation = ref(false);
+const hasConflict = ref(false);
+const lastKnownUpdatedAt = ref<number | null>(null);
 let loadTicket = 0;
 let isDisposed = false;
+let forceSave = false;
 
 // Debounced auto-save
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -119,6 +125,13 @@ async function loadWorkflow() {
         return;
     }
     workflowTitle.value = result.workflow.title;
+    hasConflict.value = false;
+    lastKnownUpdatedAt.value = result.workflow.updated_at || null;
+    if (recordId && result.workflow.updated_at) {
+        setWorkflowSyncState(recordId, {
+            updatedAt: result.workflow.updated_at,
+        });
+    }
 
     const resolution = resolveWorkflowData({
         recordId,
@@ -145,12 +158,34 @@ async function loadWorkflow() {
 async function saveWorkflow() {
     if (isDisposed) return;
     if (!props.recordId || !hasLoaded.value) return;
+    if (!forceSave) {
+        const syncState = getWorkflowSyncState(props.recordId);
+        const lastKnown = lastKnownUpdatedAt.value ?? 0;
+        if (
+            syncState &&
+            syncState.lastWriterPaneId &&
+            syncState.lastWriterPaneId !== props.paneId &&
+            syncState.updatedAt > lastKnown
+        ) {
+            hasConflict.value = true;
+            return;
+        }
+    }
 
     const data = editor.value.getJSON();
     const result = await updateWorkflow(props.recordId, { data });
     if (!result.ok) {
         console.error('[WorkflowPane] Failed to save:', result.error);
+        return;
     }
+    const nowSec = Math.floor(Date.now() / 1000);
+    lastKnownUpdatedAt.value = nowSec;
+    setWorkflowSyncState(props.recordId, {
+        updatedAt: nowSec,
+        lastWriterPaneId: props.paneId,
+    });
+    hasConflict.value = false;
+    forceSave = false;
 }
 
 // Subscribe to editor changes for auto-save
@@ -176,6 +211,8 @@ watch(
     () => props.recordId,
     () => {
         hasLoaded.value = false;
+        hasConflict.value = false;
+        lastKnownUpdatedAt.value = null;
         if (saveTimeout) clearTimeout(saveTimeout);
         void loadWorkflow();
     }
@@ -236,6 +273,19 @@ function handleDownload() {
             ...data.meta,
             name: resolvedTitle,
         },
+    });
+}
+
+function handleConflictReload() {
+    hasConflict.value = false;
+    void loadWorkflow();
+}
+
+function handleConflictOverwrite() {
+    if (!props.recordId || !hasLoaded.value) return;
+    forceSave = true;
+    void saveWorkflow().finally(() => {
+        forceSave = false;
     });
 }
 
@@ -378,6 +428,43 @@ watch(
                     </button>
                 </div>
             </div>
+
+            <div v-if="hasConflict" class="workflow-toolbar-conflict">
+                <span class="workflow-toolbar-conflict-text">
+                    Edited in another pane
+                </span>
+                <button
+                    class="workflow-toolbar-conflict-button"
+                    type="button"
+                    @click="handleConflictReload"
+                >
+                    Reload
+                </button>
+                <button
+                    class="workflow-toolbar-conflict-button"
+                    type="button"
+                    @click="handleConflictOverwrite"
+                >
+                    Overwrite
+                </button>
+            </div>
+
+            <div class="workflow-toolbar-spacer"></div>
+
+            <div class="workflow-toolbar-group">
+                <UTooltip text="Toggle validation">
+                    <button
+                        class="workflow-toolbar-button workflow-toolbar-toggle-validation"
+                        type="button"
+                        :class="{ active: showValidation }"
+                        :disabled="toolbarDisabled"
+                        @click="showValidation = !showValidation"
+                    >
+                        <span class="workflow-toolbar-dot" />
+                        Validation
+                    </button>
+                </UTooltip>
+            </div>
         </div>
 
         <div class="workflow-canvas">
@@ -406,6 +493,11 @@ watch(
                 @pane-click="() => {}"
             />
 
+            <ValidationOverlay
+                v-if="showValidation && !loading && !error"
+                :editor="editor"
+            />
+
             <!-- Controls -->
             <Controls v-if="!loading && !error" />
         </div>
@@ -427,7 +519,7 @@ watch(
     align-items: center;
     flex-wrap: wrap;
     gap: 12px;
-    padding: 8px 12px 8px 56px;
+    padding: 8px 56px 8px 56px;
     border-bottom: 1px solid
         var(--or3-color-border, rgba(255, 255, 255, 0.08));
     background: var(--or3-color-bg-elevated, rgba(17, 17, 24, 0.9));
@@ -438,6 +530,56 @@ watch(
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.workflow-toolbar-spacer {
+    flex: 1;
+}
+
+.workflow-toolbar-conflict {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(255, 138, 138, 0.12);
+    border: 1px solid rgba(255, 138, 138, 0.3);
+    font-size: 12px;
+}
+
+.workflow-toolbar-conflict-text {
+    color: #ffb4b4;
+}
+
+.workflow-toolbar-conflict-button {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: inherit;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.workflow-toolbar-conflict-button:hover {
+    background: rgba(255, 255, 255, 0.16);
+}
+
+.workflow-toolbar-toggle-validation {
+    gap: 6px;
+    font-size: 12px;
+    padding: 6px 12px;
+    width: auto;
+    min-width: 0;
+    height: auto;
+    min-height: 32px;
+}
+
+.workflow-toolbar-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.5);
+    display: inline-block;
 }
 
 .workflow-toolbar-divider {
@@ -509,6 +651,19 @@ watch(
 .workflow-toolbar-toggle-button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+:deep(.validation-overlay) {
+    top: 8px;
+    right: 8px;
+    width: min(240px, calc(100vw - 24px));
+    padding: 8px;
+    font-size: 12px;
+}
+
+:deep(.validation-overlay .header-count) {
+    font-size: 11px;
+    padding: 2px 6px;
 }
 
 .workflow-canvas {
