@@ -1,6 +1,7 @@
 <template>
     <div
         class="w-[320px] max-h-[300px] bg-(--md-surface) flex flex-col border-(length:--md-border-width) border-(--md-border-color) rounded-(--md-border-radius) shadow-lg overflow-hidden"
+        data-context="workflow"
     >
         <!-- Empty state -->
         <div

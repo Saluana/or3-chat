@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
-import { WorkflowCanvas, Controls, ValidationOverlay } from '@or3/workflow-vue';
+import { WorkflowCanvas, ValidationOverlay } from '@or3/workflow-vue';
 import '@or3/workflow-vue/style.css';
 import { useIcon } from '#imports';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
@@ -355,7 +355,7 @@ watch(
 </script>
 
 <template>
-    <div class="workflow-app">
+    <div class="workflow-app flex flex-col flex-1 min-h-0 h-full w-full">
         <div
             class="flex flex-nowrap md:flex-wrap items-center gap-2 md:gap-4 px-3 sm:px-4 md:px-16 py-2.5 md:py-3 border-b border-(--md-border-color) bg-(--md-surface-variant) text-(--md-on-surface) overflow-x-auto"
         >
@@ -534,7 +534,7 @@ watch(
             </div>
         </div>
 
-        <div class="workflow-canvas">
+        <div class="workflow-canvas flex-1 min-h-0">
             <!-- Loading state -->
             <div v-if="loading" class="loading-overlay">
                 <UIcon name="tabler:loader-2" class="animate-spin text-2xl" />
@@ -565,8 +565,6 @@ watch(
                 :editor="editor"
             />
 
-            <!-- Controls -->
-            <Controls v-if="!loading && !error" />
         </div>
     </div>
 </template>
@@ -576,6 +574,7 @@ watch(
     width: 100%;
     height: 100%;
     min-height: 0;
+    align-self: stretch;
     position: relative;
     display: flex;
     flex-direction: column;

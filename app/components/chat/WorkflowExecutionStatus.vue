@@ -1,6 +1,7 @@
 <template>
     <div
         class="workflow-execution-status border rounded-md overflow-hidden bg-[var(--md-surface-container-lowest)] border-[var(--md-outline-variant)]"
+        data-context="workflow"
     >
         <!-- Header -->
         <div

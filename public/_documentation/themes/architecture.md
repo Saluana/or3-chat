@@ -1,101 +1,101 @@
 # Theme System Architecture
 
-This document explains the internal architecture of the OR3 theme system, including the compilation process and runtime resolution.
+This document describes how the current OR3 theme system is wired from
+definition to runtime application.
 
 ## Overview
 
-The theme system is designed for **performance** and **type safety**. It splits responsibilities between a build-time compiler and a runtime resolver.
-
-```mermaid
-graph TD
-    A[Theme Definition] -->|bun run theme:compile| B[Theme Compiler]
-    B --> C[Compiled Theme Config]
-    B --> D[Generated Types]
-    B --> E[CSS Variables]
-
-    C --> F[Runtime Resolver]
-    F -->|resolve()| G[Component Props]
-
-    E --> H[Browser CSS]
-    G --> I[Vue Component]
+```
+Theme Definition (app/theme/*/theme.ts)
+  -> Theme Manifest (import.meta.glob)
+  -> Runtime compile + CSS variables
+  -> Theme plugin ($theme) applies theme
+  -> RuntimeResolver resolves overrides
+  -> v-theme / useThemeOverrides apply props
+  -> cssSelectors apply styles/classes
 ```
 
-## 1. Theme Definition (DSL)
+## 1) Theme discovery
 
-Themes are defined using a TypeScript DSL (`defineTheme`). This provides:
+`app/theme/_shared/theme-manifest.ts` uses `import.meta.glob` to find:
 
--   **Type Safety**: Autocomplete for colors, overrides, and config.
--   **Validation**: Runtime checks in dev mode for missing colors or invalid selectors.
+- `app/theme/*/theme.ts`
+- optional `app.config.ts`
+- optional `icons.config.ts`
+- optional `*.css` stylesheets
 
-```typescript
-// app/theme/my-theme/theme.ts
-export default defineTheme({
-    name: 'my-theme',
-    colors: { ... },
-    overrides: { ... }
-});
-```
+Each theme becomes a `ThemeManifestEntry` with loaders and metadata. The
+default theme is taken from `isDefault` or the first discovered theme.
 
-## 2. Theme Compiler
+## 2) Runtime compilation
 
-The compiler (`scripts/theme-compiler.ts`) runs at build time (or via `bun run theme:compile`).
+When a theme is loaded:
 
-### Responsibilities:
+- Overrides are compiled with `compileOverridesRuntime()`.
+- CSS variables are generated with `generateThemeCssVariables()`.
+- A `RuntimeResolver` instance is created for the theme.
 
-1.  **Validation**: Checks all themes for errors (missing colors, invalid selectors).
-2.  **CSS Generation**: Converts the color palette and font settings into CSS variables (`.light` and `.dark` blocks).
-3.  **Selector Parsing**: Parses CSS-like selectors (e.g., `button.chat#send`) into structured objects (`ParsedSelector`).
-4.  **Specificity Calculation**: Pre-calculates specificity scores for all overrides.
-5.  **Type Generation**: Generates `types/theme-generated.d.ts` with union types for `ThemeName`, `ThemeContext`, and `ThemeIdentifier`.
+This happens in `app/plugins/90.theme.client.ts` (client) and
+`app/plugins/90.theme.server.ts` (SSR).
 
-### Output:
+## 3) Theme application
 
-The compiler produces optimized runtime configurations where selectors are already parsed and sorted by specificity.
+Activating a theme does the following:
 
-## 3. Runtime Resolver
+1. Sets `data-theme="<name>"` on `<html>`.
+2. Injects CSS variables into a per-theme `<style>` tag.
+3. Loads theme stylesheets declared in `stylesheets`.
+4. Loads `/themes/<name>.css` if `cssSelectors.style` exists.
+5. Applies `cssSelectors.class` via `applyThemeClasses()`.
+6. Applies background layers (`app/core/theme/backgrounds.ts`).
+7. Merges `app.config.ts` and `theme.ui` into `app.config`.
+8. Registers theme icons with `iconRegistry`.
 
-The `RuntimeResolver` (`app/theme/_shared/runtime-resolver.ts`) is a lightweight class instantiated for the active theme.
+Theme selection is stored in `localStorage` (`activeTheme`) and a cookie
+(`or3_active_theme`). Light/dark mode is separate and stored in `theme`
+localStorage via `$theme.set()` and `$theme.toggle()`.
 
-### Responsibilities:
+## 4) Override resolution
 
-1.  **Matching**: Efficiently matches components against the pre-compiled overrides.
-2.  **Merging**: Merges props from multiple matching overrides based on specificity.
-3.  **Prop Mapping**: Maps semantic props (`variant`, `size`, `color`) to CSS classes for non-Nuxt UI components using `propMaps`.
+`RuntimeResolver` matches overrides by:
 
-### Performance:
+- component name
+- context (`data-context`)
+- identifier (`data-id`)
+- state (only when provided)
+- HTML attribute selectors (when `element` is provided)
 
--   **Resolution**: <1ms per component.
--   **Indexing**: Overrides are indexed by component type for O(1) lookup.
--   **Caching**: Results are cached (via `useThemeOverrides`) to prevent unnecessary re-calculation.
+Matches are merged by specificity. Non-Nuxt UI components map `variant`/`size`/
+`color` to classes via `propMaps`.
 
-## 4. CSS Selectors (Hybrid)
+## 5) Component integration
 
-For global styles or 3rd party libraries, the system uses a hybrid approach:
+### v-theme
 
-1.  **Static CSS**: `style` properties in `cssSelectors` are compiled into static CSS files (`public/themes/{name}.css`).
-2.  **Runtime Classes**: `class` properties are applied at runtime using `applyThemeClasses`.
+`app/plugins/91.auto-theme.client.ts` provides the directive. It:
 
-This allows using Tailwind utilities for dynamic theming while keeping static styles performant.
+- detects component name from the VNode
+- auto-detects context from DOM containers
+- resolves overrides via `$theme.getResolver()`
+- applies props and data attributes
 
-## 5. Integration
+### useThemeOverrides
 
--   **`v-theme` Directive**: The primary interface for components. It uses the resolver to apply props.
--   **`useTheme` Composable**: Manages active theme state and persistence.
--   **`useThemeResolver`**: Provides programmatic access to the resolver.
+`app/composables/useThemeResolver.ts` provides `useThemeOverrides` for
+programmatic resolution and reactive updates on theme changes.
 
-## Directory Structure
+## 6) CSS selectors
 
-```
-app/theme/
-├── _shared/           # Core system (Compiler, Resolver, Types)
-├── retro/             # 'retro' theme definition
-├── blank/             # 'blank' theme definition
-└── ...
-```
+`cssSelectors` supports:
 
-## Key Files
+- `style`: compiled into `/public/themes/<name>.css` via
+  `bun run theme:build-css`
+- `class`: applied at runtime via `applyThemeClasses()`
 
--   `app/theme/_shared/define-theme.ts`: DSL definition.
--   `app/theme/_shared/runtime-resolver.ts`: Runtime logic.
--   `scripts/theme-compiler.ts`: Build-time compiler.
--   `app/theme/_shared/types.ts`: System type definitions.
+Theme CSS is scoped by `[data-theme="<name>"]` to avoid cross-theme bleed.
+
+## 7) Lazy components
+
+Lazy-loaded components are re-rendered on theme changes via
+`app/plugins/92.theme-lazy-sync.client.ts`. For DOM elements that appear
+after theme application, use `useThemeClasses()` to re-apply selector classes.

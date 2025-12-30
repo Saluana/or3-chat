@@ -243,7 +243,7 @@ onMounted(() => {
         <!-- Error state -->
         <div
             v-if="error"
-            class="text-sm text-red-500 p-2 bg-red-50 dark:bg-red-900/20 rounded"
+            class="text-sm text-(--md-error) p-2 bg-(--md-error-container) rounded"
         >
             {{ error }}
         </div>
