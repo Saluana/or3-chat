@@ -1,276 +1,312 @@
-# Refined Theme System - Phase 2 Complete ✅
+# Theme System (Refined)
 
-## Overview
+This README describes how the current theme system works in this repo and how
+to integrate it into components and plugins.
 
-Phase 2 of the Refined Theme System has been successfully implemented! This phase delivers the runtime components that enable automatic theme application to components through the `v-theme` directive.
+## Quick mental model
 
-## What's New in Phase 2
+1. Themes live in `app/theme/<theme>/theme.ts` and are discovered via
+   `import.meta.glob` (see `app/theme/_shared/theme-manifest.ts`).
+2. The theme plugin (`app/plugins/90.theme.client.ts` and
+   `app/plugins/90.theme.server.ts`) loads theme definitions, compiles overrides,
+   injects CSS variables, and applies selectors/backgrounds.
+3. Components consume theme overrides via `v-theme` or the `useThemeResolver`
+   composables.
+4. Optional theme assets include UI config, icon maps, backgrounds, and
+   stylesheet files.
 
-### 1. RuntimeResolver Class
-Location: `app/theme/_shared/runtime-resolver.ts`
+## Theme package structure
 
-The RuntimeResolver efficiently matches component parameters against compiled theme overrides and merges them by specificity. It supports:
-- CSS specificity-based override resolution
-- HTML attribute selector matching (all CSS operators)
-- Prop-to-class mapping for custom components
-- Performance-optimized matching with early exits
+Example layout:
 
-### 2. v-theme Directive
-Location: `app/plugins/auto-theme.client.ts`
-
-A Vue directive that automatically applies theme overrides to components without wrapper components:
-
-```vue
-<!-- Basic usage (auto-detect context) -->
-<UButton v-theme>Click me</UButton>
-
-<!-- With explicit identifier -->
-<UButton v-theme="'chat.send'">Send</UButton>
-
-<!-- With full control -->
-<UButton v-theme="{ identifier: 'chat.send', theme: 'nature', context: 'chat' }">
-  Send
-</UButton>
+```
+app/theme/blank/
+  theme.ts             # Required theme definition
+  app.config.ts        # Optional Nuxt app config patch
+  icons.config.ts      # Optional icon overrides
+  styles.css           # Optional stylesheet (loaded via stylesheets[])
+  styles/              # Optional theme-specific TS style helpers
 ```
 
-Features:
-- Auto-detects component name from Vue vnode
-- Auto-detects context from DOM ancestry
-- Reactive to theme switches
-- Component props always win over theme defaults
+Themes are discovered from any `app/theme/*/theme.ts` directory (excluding
+`_shared`).
 
-### 3. Theme Composables
-Location: `app/composables/useThemeResolver.ts`
+## Authoring a theme
 
-Composables for programmatic access to theme resolution:
+Themes use `defineTheme` from `app/theme/_shared/define-theme.ts`. A minimal
+example:
 
-```typescript
-// Get resolver utilities
-const { activeTheme, setActiveTheme, resolveOverrides } = useThemeResolver();
+```ts
+import { defineTheme } from '../_shared/define-theme';
 
-// Reactive overrides
-const buttonProps = useThemeOverrides({
-  component: 'button',
-  context: 'chat',
-  identifier: 'chat.send',
+export default defineTheme({
+  name: 'blank',
+  displayName: 'Blank',
+  description: 'Minimal theme',
+  isDefault: true,
+
+  colors: {
+    primary: '#086DB8',
+    secondary: '#ff6b6b',
+    surface: '#ffffff',
+    onSurface: '#022344',
+    dark: {
+      primary: '#2C638B',
+      surface: '#000000',
+      onSurface: '#e2e2e6',
+    },
+  },
+
+  fonts: {
+    sans: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+    heading: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+    baseSize: '16px',
+  },
+
+  overrides: {
+    button: { variant: 'solid', size: 'md' },
+    'button.chat': { variant: 'ghost' },
+    'button#chat.send': { variant: 'solid', color: 'primary' },
+  },
 });
 ```
 
-### 4. Enhanced Theme Plugin
-Location: `app/plugins/theme.client.ts` (updated)
+Key fields you can use:
 
-The existing theme plugin has been enhanced to:
-- Load compiled theme configurations
-- Initialize RuntimeResolver per theme
-- Provide `getResolver()` helper for directive access
-- Support theme switching with `setActiveTheme()`
-- Maintain backward compatibility with existing API
+- `colors`, `fonts`, `borderWidth`, `borderRadius`: generate CSS variables.
+- `overrides`: selector-driven component overrides resolved at runtime.
+- `cssSelectors`: direct DOM targeting for third-party or legacy elements.
+- `stylesheets`: optional CSS files to load per theme.
+- `ui`: Nuxt UI config merged into `app.config.ui`.
+- `propMaps`: map `variant`/`size`/`color` props to classes for non-Nuxt UI components.
+- `backgrounds`: theme background layers (applied via `app/core/theme/backgrounds.ts`).
+- `icons`: inlined icon overrides (or use `icons.config.ts`).
 
-## Usage Guide
+## Override selector syntax
 
-### Basic Usage
+Selectors are CSS-like and are normalized into `data-*` attributes:
 
-The simplest way to use the refined theme system is with the `v-theme` directive:
+- `button` applies to all buttons.
+- `button.chat` expands to `button[data-context="chat"]`.
+- `button#chat.send` expands to `button[data-id="chat.send"]`.
+- `button:hover` is a state selector (see note below).
+- `button[aria-expanded="true"]` uses attribute matching on the real element.
+
+Known contexts are listed in `app/theme/_shared/contexts.ts`. Only a subset is
+auto-detected (see "Context detection" below).
+
+Important: state selectors (`:hover`, `:active`, etc.) only work when you pass
+`state` into the resolver. The `v-theme` directive always uses
+`state: 'default'`, so state-based overrides will not match unless you resolve
+manually or use `cssSelectors` instead.
+
+## How runtime theming is applied
+
+When a theme becomes active, the theme plugin:
+
+1. Loads theme definition, theme-specific `app.config.ts`, and optional icons.
+2. Compiles overrides (`app/theme/_shared/runtime-compile.ts`) and instantiates
+   a `RuntimeResolver`.
+3. Injects CSS variables into a per-theme `<style>` tag.
+4. Applies `data-theme="<name>"` to `<html>` for CSS scoping.
+5. Loads per-theme stylesheets and `/themes/<name>.css` if needed.
+6. Applies `cssSelectors` runtime classes with
+   `applyThemeClasses()` in `app/theme/_shared/css-selector-runtime.ts`.
+7. Applies theme backgrounds and registers icon overrides.
+
+Theme selection is persisted in `localStorage`/cookies (`or3_active_theme`).
+Light/dark mode is tracked separately via the older `theme.set()` API and
+applies classes like `light`/`dark` to `<html>`.
+
+## Component integration
+
+### 1) `v-theme` directive (recommended for components)
+
+The directive auto-detects component name and context, resolves overrides, and
+applies them to components or DOM nodes:
 
 ```vue
 <template>
-  <!-- Auto-detect everything -->
-  <UButton v-theme>Button</UButton>
-  
-  <!-- Context auto-detected from DOM -->
-  <div data-context="chat">
-    <UButton v-theme>Chat Button</UButton>
-  </div>
-  
-  <!-- Explicit identifier (highest priority) -->
-  <UButton v-theme="'chat.send'">Send Message</UButton>
+  <!-- Auto-detect component name and context -->
+  <UButton v-theme>Default themed button</UButton>
+
+  <!-- Explicit identifier -->
+  <UButton v-theme="'chat.send'">Send</UButton>
+
+  <!-- Full control -->
+  <UButton
+    v-theme="{ identifier: 'chat.send', theme: 'blank', context: 'chat' }"
+  >
+    Send
+  </UButton>
 </template>
 ```
 
-### Context Detection
+Notes:
 
-Context is automatically detected by walking up the DOM tree:
+- Vue warns on directives used on components with non-element roots. The
+  directive still works (it targets the rendered root), but if the warning is
+  noisy wrap the component in a plain element or use `useThemeOverrides`.
+- The directive adds `data-id`, `data-theme-color`, `data-theme-variant`,
+  `data-theme-size`, and `data-v-theme` attributes to the rendered element.
+
+### 2) `useThemeOverrides` (programmatic + reactive)
+
+Use this when you need explicit control or want to avoid the directive warning:
 
 ```vue
-<div id="app-chat-container">
-  <!-- These get "chat" context -->
-  <UButton v-theme>Button 1</UButton>
-  <UInput v-theme />
-</div>
+<script setup lang="ts">
+const overrides = useThemeOverrides({
+  component: 'button',
+  context: 'chat',
+  identifier: 'chat.send',
+  isNuxtUI: true,
+});
+</script>
 
-<div id="app-sidebar">
-  <!-- These get "sidebar" context -->
-  <UButton v-theme>Button 2</UButton>
-</div>
-
-<!-- No specific container: "global" context -->
-<UButton v-theme>Button 3</UButton>
+<template>
+  <UButton v-bind="overrides">Send</UButton>
+</template>
 ```
 
-Supported contexts:
-- `chat` - `#app-chat-container` or `[data-context="chat"]`
-- `sidebar` - `#app-sidebar` or `[data-context="sidebar"]`
-- `dashboard` - `#app-dashboard-modal` or `[data-context="dashboard"]`
-- `header` - `#app-header` or `[data-context="header"]`
-- `global` - Default fallback
-
-### Programmatic Resolution
-
-For advanced use cases, use the composables:
+For custom (non-Nuxt UI) components, map `variant`/`size`/`color` to classes by
+setting `isNuxtUI: false` and ensuring your root element accepts `class`:
 
 ```vue
-<script setup>
-const { resolveOverrides, activeTheme } = useThemeResolver();
+<script setup lang="ts">
+const overrides = useThemeOverrides({
+  component: 'pane',
+  context: 'sidebar',
+  isNuxtUI: false,
+});
+</script>
 
-// Resolve once
+<template>
+  <div v-bind="overrides">Custom pane</div>
+</template>
+```
+
+### 3) `useThemeResolver` (one-off resolution)
+
+```ts
+const { resolveOverrides } = useThemeResolver();
 const props = resolveOverrides({
-  component: 'button',
-  context: 'chat',
-  identifier: 'chat.send',
+  component: 'input',
+  context: 'global',
+  identifier: 'search.query',
 });
-
-// Or reactive
-const reactiveProps = useThemeOverrides({
-  component: 'button',
-  context: computed(() => currentContext.value),
-});
-</script>
-
-<template>
-  <UButton v-bind="reactiveProps">Dynamic Button</UButton>
-</template>
 ```
 
-### Theme Switching
+## Context detection
 
-Switch themes programmatically:
+`v-theme` detects context via DOM ancestry:
+
+- `#app-chat-container` or `[data-context="chat"]`
+- `#app-sidebar` or `[data-context="sidebar"]`
+- `#app-dashboard-modal` or `[data-context="dashboard"]`
+- `#app-header` or `[data-context="header"]`
+- fallback: `global`
+
+For other contexts (see `app/theme/_shared/contexts.ts`), add a
+`data-context="<name>"` attribute to a wrapper element.
+
+## Plugin integration
+
+Theme APIs are available on the Nuxt app instance:
+
+```ts
+export default defineNuxtPlugin((nuxtApp) => {
+  const theme = nuxtApp.$theme;
+
+  // Switch themes
+  void theme.setActiveTheme('blank');
+
+  // Resolve overrides for a third-party element
+  const resolver = theme.getResolver(theme.activeTheme.value);
+  if (resolver) {
+    const el = document.querySelector('#external-widget');
+    if (el instanceof HTMLElement) {
+      const resolved = resolver.resolve({
+        component: 'widget',
+        context: 'global',
+        element: el,
+        isNuxtUI: false,
+      });
+      if (resolved.props.class) {
+        el.classList.add(...String(resolved.props.class).split(' '));
+      }
+    }
+  }
+});
+```
+
+The plugin also exposes:
+
+- `activeTheme` (ref)
+- `resolversVersion` (increments after theme application)
+- `getTheme()` and `loadTheme()` for cached definitions
+
+## CSS selector targeting
+
+Use `cssSelectors` when you need to style non-component DOM (Monaco, TipTap,
+modal roots, etc.). Each selector supports:
+
+- `style`: compiled into `/public/themes/<name>.css` by
+  `bun run theme:build-css`
+- `class`: applied at runtime via `applyThemeClasses()`
+
+Example:
+
+```ts
+cssSelectors: {
+  '.monaco-editor': {
+    style: { border: '2px solid var(--md-outline)' },
+    class: 'rounded-md shadow-lg',
+  },
+}
+```
+
+## App config and Nuxt UI integration
+
+Theme-specific config can be provided in two places:
+
+- `theme.ui` in `theme.ts` (merged into `app.config.ui`)
+- `app/theme/<theme>/app.config.ts` (merged into the full app config)
+
+Both are applied when the theme activates.
+
+## Icons
+
+Themes can override icon tokens via:
+
+- `icons` in `theme.ts`, or
+- `icons.config.ts` in the theme directory
+
+Use `useIcon()` to resolve tokens for the current theme:
 
 ```vue
 <script setup>
-const { activeTheme, setActiveTheme } = useThemeResolver();
-
-const switchToNature = async () => {
-  await setActiveTheme('nature');
-};
+const icon = useIcon('chat.send');
 </script>
 
 <template>
-  <div>
-    <p>Current theme: {{ activeTheme }}</p>
-    <button @click="switchToNature">Switch to Nature</button>
-  </div>
+  <UButton :icon="icon">Send</UButton>
 </template>
 ```
 
-All components with `v-theme` will automatically update when the theme changes!
+## Tooling
 
-## Component Props Override Theme
+- `bun run theme:create` scaffolds a new theme.
+- `bun run theme:validate` validates themes and generates
+  `types/theme-generated.d.ts`.
+- `bun run theme:build-css` builds `/public/themes/<name>.css` from
+  `cssSelectors` that use `style`.
+- `bun run theme:switch` updates the default theme in app config.
 
-Component props always take precedence over theme defaults:
+## Debugging tips
 
-```vue
-<!-- Theme provides: variant="solid", color="primary" -->
-<UButton v-theme="'chat.send'">
-  Uses theme defaults
-</UButton>
-
-<!-- Explicit props win -->
-<UButton v-theme="'chat.send'" color="success" size="xl">
-  Explicit props override theme
-</UButton>
-```
-
-## Demo Page
-
-Visit `/theme-demo` in your browser to see all features in action:
-- Basic v-theme usage
-- Context-based theming
-- Identifier-based theming
-- Programmatic resolution
-- Theme switching
-- Props override demonstration
-
-## Architecture
-
-```
-Theme Authoring (Build Time - Phase 1)
-   ↓
-Theme Compiler → Compiled Configs + Types
-   ↓
-Runtime (Phase 2)
-   ↓
-Theme Plugin → RuntimeResolver
-   ↓
-v-theme Directive → Auto-apply overrides
-   ↓
-Components render with resolved props
-```
-
-## Key Features
-
-✅ **Zero Boilerplate**: No wrapper components needed  
-✅ **Type-Safe**: Auto-generated types for identifiers  
-✅ **Context-Aware**: Auto-detects context from DOM  
-✅ **Reactive**: Auto-updates on theme changes  
-✅ **CSS Specificity**: Follows standard CSS rules  
-✅ **Performant**: < 1ms per component resolution  
-✅ **Graceful**: Fallbacks on errors in production
-
-## Performance
-
-Phase 2 implementation meets all performance targets:
-- **Override Resolution**: < 1ms per component
-- **Theme Switch**: < 50ms total (measured with theme-demo page)
-- **Memory Footprint**: Minimal (pre-sorted overrides)
-
-## Browser Support
-
-Same as Nuxt/Vue 3: Modern evergreen browsers (Chrome, Firefox, Safari, Edge)
-
-## Next Steps
-
-With Phase 2 complete, the foundation for the refined theme system is solid. Next phases:
-
-- **Phase 3**: Testing Infrastructure (Unit & integration tests)
-- **Phase 4**: Migration & Backward Compatibility (Retro theme migration)
-- **Phase 5**: CLI Tools (theme:create, theme:validate)
-- **Phase 6**: Documentation
-- **Phase 7**: Performance Optimization
-- **Phase 8**: Cleanup & Deprecation
-
-## Troubleshooting
-
-### v-theme directive not working
-
-1. Check that the theme plugin is loaded (should be automatic)
-2. Verify the theme has been compiled (run build)
-3. Check browser console for warnings (dev mode only)
-
-### No overrides applied
-
-1. Verify the theme has overrides defined for your component
-2. Check that context detection is working (add `data-context` attribute)
-3. Use explicit identifier: `v-theme="'your.identifier'"`
-
-### Theme not switching
-
-1. Use `setActiveTheme()` from `useThemeResolver()`
-2. Check that theme is compiled and available
-3. Verify theme name is correct (see `types/theme-generated.d.ts`)
-
-## Contributing
-
-When contributing to the theme system:
-
-1. Follow existing TypeScript patterns
-2. Add JSDoc comments for public APIs
-3. Ensure backward compatibility
-4. Update this README for new features
-5. Add tests in Phase 3
-
-## References
-
-- [Planning Documents](../../../planning/refined-theme-system/)
-- [Phase 1 Completion](../../../planning/refined-theme-system/phase1/COMPLETION.md)
-- [Architecture Diagram](../../../planning/refined-theme-system/ARCHITECTURE.md)
-- [Design Document](../../../planning/refined-theme-system/design.md)
+- In dev, resolved props include `data-theme-target` and
+  `data-theme-matches` for visibility into selector matching.
+- Elements themed via the directive include `data-v-theme`.
+- If overrides do not apply, verify component name, context, and identifier,
+  then check that the theme is active and loaded.

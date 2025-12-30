@@ -49,6 +49,12 @@ const iconClearName = computed(
 const iconDownloadName = computed(
     () => iconDownload.value || 'pixelarticons:download'
 );
+const activeButtonStyle = {
+    backgroundColor: 'var(--md-primary)',
+    color: 'var(--md-on-primary)',
+    borderColor: 'var(--md-primary)',
+    opacity: '1',
+};
 
 // State
 const loading = ref(false);
@@ -350,119 +356,180 @@ watch(
 
 <template>
     <div class="workflow-app">
-        <div class="workflow-toolbar">
-            <div class="workflow-toolbar-group">
-                <UTooltip text="Undo (⌘Z)">
-                    <button
-                        class="workflow-toolbar-button"
-                        type="button"
+        <div
+            class="flex flex-nowrap md:flex-wrap items-center gap-2 md:gap-4 px-3 sm:px-4 md:px-16 py-2.5 md:py-3 border-b border-(--md-border-color) bg-(--md-surface-variant) text-(--md-on-surface) overflow-x-auto"
+        >
+            <div class="flex items-center gap-2 shrink-0">
+                <UButtonGroup>
+                    <UTooltip text="Undo (⌘Z)">
+                        <UButton
+                        size="sm"
+                        variant="basic"
+                        :icon="iconUndoName"
+                        color="neutral"
+                        class="theme-btn"
+                        aria-label="Undo"
                         :disabled="toolbarDisabled || !canUndo"
                         @click="handleUndo"
-                    >
-                        <UIcon :name="iconUndoName" class="w-4 h-4" />
-                    </button>
+                    />
                 </UTooltip>
                 <UTooltip text="Redo (⌘⇧Z)">
-                    <button
-                        class="workflow-toolbar-button"
-                        type="button"
+                    <UButton
+                        size="sm"
+                        variant="basic"
+                        :icon="iconRedoName"
+                        color="neutral"
+                        class="theme-btn"
+                        aria-label="Redo"
                         :disabled="toolbarDisabled || !canRedo"
                         @click="handleRedo"
-                    >
-                        <UIcon :name="iconRedoName" class="w-4 h-4" />
-                    </button>
+                    />
                 </UTooltip>
+                </UButtonGroup>
             </div>
 
-            <div class="workflow-toolbar-divider"></div>
+            <div class="hidden md:block h-6 w-px bg-(--md-border-color)/70"></div>
 
-            <div class="workflow-toolbar-group">
-                <UTooltip text="Clear workflow">
-                    <button
-                        class="workflow-toolbar-button"
-                        type="button"
+            <div class="flex items-center gap-2 shrink-0">
+                <UButtonGroup>
+                    <UTooltip text="Clear workflow">
+                        <UButton
+                        size="sm"
+                        variant="basic"
+                        :icon="iconClearName"
+                        color="neutral"
+                        class="theme-btn"
+                        aria-label="Clear workflow"
                         :disabled="toolbarDisabled"
                         @click="handleClear"
-                    >
-                        <UIcon :name="iconClearName" class="w-4 h-4" />
-                    </button>
+                    />
                 </UTooltip>
                 <UTooltip text="Download workflow">
-                    <button
-                        class="workflow-toolbar-button"
-                        type="button"
+                    <UButton
+                        size="sm"
+                        variant="basic"
+                        :icon="iconDownloadName"
+                        color="neutral"
+                        class="theme-btn"
+                        aria-label="Download workflow"
                         :disabled="toolbarDisabled"
                         @click="handleDownload"
-                    >
-                        <UIcon :name="iconDownloadName" class="w-4 h-4" />
-                    </button>
+                    />
                 </UTooltip>
+                </UButtonGroup>
             </div>
 
-            <div class="workflow-toolbar-divider"></div>
+            <div class="hidden md:block h-6 w-px bg-(--md-border-color)/70"></div>
 
-            <div class="workflow-toolbar-group">
-                <span class="workflow-toolbar-label">Mode</span>
-                <div class="workflow-toolbar-toggle" role="group">
-                    <button
-                        class="workflow-toolbar-toggle-button"
-                        type="button"
-                        :class="{ active: interactionMode === 'drag' }"
+            <div class="flex items-center gap-2 shrink-0">
+                <span class="hidden md:inline text-xs uppercase tracking-wide opacity-60">
+                    Mode
+                </span>
+                <UButtonGroup>
+                    <UButton
+                        size="sm"
+                        :variant="
+                            interactionMode === 'drag' ? 'solid' : 'basic'
+                        "
+                        :color="
+                            interactionMode === 'drag' ? 'primary' : 'neutral'
+                        "
+                        :class="[
+                            'theme-btn',
+                            interactionMode === 'drag'
+                                ? 'workflow-toggle-active hover:!bg-[var(--md-primary)] hover:!text-[var(--md-on-primary)] active:!bg-[var(--md-primary)] active:!text-[var(--md-on-primary)]'
+                                : '',
+                        ]"
+                        :style="
+                            interactionMode === 'drag'
+                                ? activeButtonStyle
+                                : undefined
+                        "
                         :disabled="toolbarDisabled"
                         :aria-pressed="interactionMode === 'drag'"
                         title="Drag mode (pan the canvas)"
                         @click="setInteractionMode('drag')"
                     >
                         Drag
-                    </button>
-                    <button
-                        class="workflow-toolbar-toggle-button"
-                        type="button"
-                        :class="{ active: interactionMode === 'select' }"
+                    </UButton>
+                    <UButton
+                        size="sm"
+                        :variant="
+                            interactionMode === 'select' ? 'solid' : 'basic'
+                        "
+                        :color="
+                            interactionMode === 'select'
+                                ? 'primary'
+                                : 'neutral'
+                        "
+                        :class="[
+                            'theme-btn',
+                            interactionMode === 'select'
+                                ? 'workflow-toggle-active hover:!bg-[var(--md-primary)] hover:!text-[var(--md-on-primary)] active:!bg-[var(--md-primary)] active:!text-[var(--md-on-primary)]'
+                                : '',
+                        ]"
+                        :style="
+                            interactionMode === 'select'
+                                ? activeButtonStyle
+                                : undefined
+                        "
                         :disabled="toolbarDisabled"
                         :aria-pressed="interactionMode === 'select'"
                         title="Select mode (box select nodes)"
                         @click="setInteractionMode('select')"
                     >
                         Select
-                    </button>
-                </div>
+                    </UButton>
+                </UButtonGroup>
             </div>
 
-            <div v-if="hasConflict" class="workflow-toolbar-conflict">
-                <span class="workflow-toolbar-conflict-text">
+            <div v-if="hasConflict" class="flex items-center gap-2 shrink-0">
+                <UBadge color="error" variant="soft" size="sm">
                     Edited in another pane
-                </span>
-                <button
-                    class="workflow-toolbar-conflict-button"
-                    type="button"
+                </UBadge>
+                <UButton
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    class="theme-btn"
                     @click="handleConflictReload"
                 >
                     Reload
-                </button>
-                <button
-                    class="workflow-toolbar-conflict-button"
-                    type="button"
+                </UButton>
+                <UButton
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    class="theme-btn"
                     @click="handleConflictOverwrite"
                 >
                     Overwrite
-                </button>
+                </UButton>
             </div>
 
-            <div class="workflow-toolbar-spacer"></div>
+            <div class="hidden md:block flex-1"></div>
 
-            <div class="workflow-toolbar-group">
+            <div class="flex items-center shrink-0 md:justify-end">
                 <UTooltip text="Toggle validation">
-                    <button
-                        class="workflow-toolbar-button workflow-toolbar-toggle-validation"
-                        type="button"
-                        :class="{ active: showValidation }"
+                    <UButton
+                        size="sm"
+                        :variant="showValidation ? 'solid' : 'basic'"
+                        :color="showValidation ? 'primary' : 'neutral'"
+                        icon="tabler:shield-check"
+                        :class="[
+                            'theme-btn',
+                            'whitespace-nowrap',
+                            showValidation
+                                ? 'workflow-validation-active hover:!bg-[var(--md-primary)] hover:!text-[var(--md-on-primary)] active:!bg-[var(--md-primary)] active:!text-[var(--md-on-primary)]'
+                                : '',
+                        ]"
+                        :style="showValidation ? activeButtonStyle : undefined"
+                        :aria-pressed="showValidation"
                         :disabled="toolbarDisabled"
                         @click="showValidation = !showValidation"
                     >
-                        <span class="workflow-toolbar-dot" />
-                        Validation
-                    </button>
+                        <span class="hidden sm:inline">Validation</span>
+                    </UButton>
                 </UTooltip>
             </div>
         </div>
@@ -508,149 +575,11 @@ watch(
 .workflow-app {
     width: 100%;
     height: 100%;
-    min-height: 500px;
+    min-height: 0;
     position: relative;
     display: flex;
     flex-direction: column;
-}
-
-.workflow-toolbar {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 8px 56px 8px 56px;
-    border-bottom: 1px solid
-        var(--or3-color-border, rgba(255, 255, 255, 0.08));
-    background: var(--or3-color-bg-elevated, rgba(17, 17, 24, 0.9));
-    color: var(--or3-color-text-primary, rgba(255, 255, 255, 0.9));
-}
-
-.workflow-toolbar-group {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.workflow-toolbar-spacer {
     flex: 1;
-}
-
-.workflow-toolbar-conflict {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 8px;
-    border-radius: 999px;
-    background: rgba(255, 138, 138, 0.12);
-    border: 1px solid rgba(255, 138, 138, 0.3);
-    font-size: 12px;
-}
-
-.workflow-toolbar-conflict-text {
-    color: #ffb4b4;
-}
-
-.workflow-toolbar-conflict-button {
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 999px;
-    padding: 2px 8px;
-    font-size: 12px;
-    color: inherit;
-    background: rgba(255, 255, 255, 0.08);
-}
-
-.workflow-toolbar-conflict-button:hover {
-    background: rgba(255, 255, 255, 0.16);
-}
-
-.workflow-toolbar-toggle-validation {
-    gap: 6px;
-    font-size: 12px;
-    padding: 6px 12px;
-    width: auto;
-    min-width: 0;
-    height: auto;
-    min-height: 32px;
-}
-
-.workflow-toolbar-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.5);
-    display: inline-block;
-}
-
-.workflow-toolbar-divider {
-    width: 1px;
-    height: 20px;
-    background: var(--or3-color-border, rgba(255, 255, 255, 0.1));
-}
-
-.workflow-toolbar-label {
-    font-size: 12px;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    opacity: 0.6;
-    margin-right: 4px;
-}
-
-.workflow-toolbar-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    border: 1px solid var(--or3-color-border, rgba(255, 255, 255, 0.12));
-    background: var(--or3-color-bg-primary, rgba(10, 10, 15, 0.7));
-    color: inherit;
-    cursor: pointer;
-    transition: all 120ms ease;
-}
-
-.workflow-toolbar-button:hover:enabled {
-    border-color: var(--or3-color-accent, #8b5cf6);
-    color: var(--or3-color-accent, #8b5cf6);
-    box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.2);
-}
-
-.workflow-toolbar-button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-.workflow-toolbar-toggle {
-    display: inline-flex;
-    border-radius: 8px;
-    border: 1px solid var(--or3-color-border, rgba(255, 255, 255, 0.12));
-    overflow: hidden;
-}
-
-.workflow-toolbar-toggle-button {
-    padding: 0 12px;
-    height: 32px;
-    border: none;
-    background: transparent;
-    color: inherit;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 120ms ease;
-}
-
-.workflow-toolbar-toggle-button + .workflow-toolbar-toggle-button {
-    border-left: 1px solid var(--or3-color-border, rgba(255, 255, 255, 0.12));
-}
-
-.workflow-toolbar-toggle-button.active {
-    background: var(--or3-color-accent, #8b5cf6);
-    color: #fff;
-}
-
-.workflow-toolbar-toggle-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
 }
 
 :deep(.validation-overlay) {
@@ -666,10 +595,41 @@ watch(
     padding: 2px 6px;
 }
 
+.workflow-toggle-active:hover,
+.workflow-toggle-active:active,
+.workflow-validation-active:hover,
+.workflow-validation-active:active {
+    background: var(--md-primary) !important;
+    color: var(--md-on-primary) !important;
+    border-color: var(--md-primary) !important;
+    box-shadow: none !important;
+}
+
+.workflow-toggle-active,
+.workflow-validation-active {
+    background: var(--md-primary) !important;
+    color: var(--md-on-primary) !important;
+    border-color: var(--md-primary) !important;
+    opacity: 1 !important;
+}
+
+.workflow-toggle-active:focus,
+.workflow-toggle-active:focus-visible,
+.workflow-validation-active:focus,
+.workflow-validation-active:focus-visible {
+    box-shadow: none !important;
+}
+
 .workflow-canvas {
     position: relative;
-    flex: 1;
-    min-height: 0;
+    flex: 1 1 auto;
+    min-height: 240px;
+    height: 100%;
+}
+
+:deep(.vue-flow) {
+    height: 100%;
+    min-height: 240px;
 }
 
 .loading-overlay,
