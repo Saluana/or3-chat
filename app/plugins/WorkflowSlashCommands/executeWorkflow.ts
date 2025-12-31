@@ -4,6 +4,7 @@
  * Handles workflow execution with streaming output and conversation history.
  */
 
+import { modelRegistry } from '@or3/workflow-core';
 import type {
     WorkflowData,
     ExecutionCallbacks,
@@ -19,6 +20,19 @@ interface WorkflowTokenMetadata {
     nodeId?: string;
     branchId?: string;
     [key: string]: unknown;
+}
+
+const DEFAULT_TOOL_MODEL = 'openai/gpt-4o-mini';
+
+interface ToolModelWarning {
+    nodeId: string;
+    nodeType: string;
+    nodeLabel?: string;
+    branchId?: string;
+    branchLabel?: string;
+    modelId?: string;
+    fallbackModelId: string;
+    reason: string;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -163,6 +177,156 @@ function getWorkflowTools(): ExecutableToolDefinition[] {
         }));
 }
 
+function getToolSupport(modelId?: string): 'supported' | 'unsupported' | 'unknown' {
+    if (!modelId) return 'unknown';
+    const info = modelRegistry.get(modelId);
+    if (!info) return 'unknown';
+    return modelRegistry.supportsTools(modelId) ? 'supported' : 'unsupported';
+}
+
+function pickToolFallbackModel(defaultModel: string): string {
+    if (getToolSupport(defaultModel) === 'supported') return defaultModel;
+    const toolModels = modelRegistry.getToolCapableModels();
+    if (toolModels.length > 0) {
+        return toolModels[0].id;
+    }
+    return defaultModel;
+}
+
+function ensureToolCapableModels(
+    workflow: WorkflowData,
+    fallbackModel: string
+): { workflow: WorkflowData; warnings: ToolModelWarning[] } {
+    const warnings: ToolModelWarning[] = [];
+    let changed = false;
+
+    const nodes = workflow.nodes.map((node) => {
+        if (node.type === 'agent') {
+            const data = node.data as { tools?: string[]; model?: string; label?: string };
+            const hasTools = Array.isArray(data.tools) && data.tools.length > 0;
+            if (!hasTools) return node;
+
+            const support = getToolSupport(data.model);
+            if (support === 'unsupported') {
+                warnings.push({
+                    nodeId: node.id,
+                    nodeType: node.type,
+                    nodeLabel: data.label,
+                    modelId: data.model,
+                    fallbackModelId: fallbackModel,
+                    reason: 'agent_model_no_tool_support',
+                });
+                changed = true;
+                return {
+                    ...node,
+                    data: {
+                        ...data,
+                        model: fallbackModel,
+                    },
+                };
+            }
+            if (support === 'unknown') {
+                warnings.push({
+                    nodeId: node.id,
+                    nodeType: node.type,
+                    nodeLabel: data.label,
+                    modelId: data.model,
+                    fallbackModelId: fallbackModel,
+                    reason: 'agent_model_tool_support_unknown',
+                });
+            }
+            return node;
+        }
+
+        if (node.type === 'parallel') {
+            const data = node.data as {
+                model?: string;
+                label?: string;
+                branches?: Array<{
+                    id: string;
+                    label: string;
+                    model?: string;
+                    tools?: string[];
+                }>;
+            };
+
+            const branches = Array.isArray(data.branches) ? data.branches : [];
+            let branchesChanged = false;
+            const updatedBranches = branches.map((branch) => {
+                const hasTools =
+                    Array.isArray(branch.tools) && branch.tools.length > 0;
+                if (!hasTools) return branch;
+
+                const resolvedModel = branch.model || data.model;
+                const support = getToolSupport(resolvedModel);
+
+                if (support === 'unsupported') {
+                    warnings.push({
+                        nodeId: node.id,
+                        nodeType: node.type,
+                        nodeLabel: data.label,
+                        branchId: branch.id,
+                        branchLabel: branch.label,
+                        modelId: resolvedModel,
+                        fallbackModelId: fallbackModel,
+                        reason: 'parallel_branch_model_no_tool_support',
+                    });
+                    branchesChanged = true;
+                    return { ...branch, model: fallbackModel };
+                }
+
+                if (!resolvedModel) {
+                    warnings.push({
+                        nodeId: node.id,
+                        nodeType: node.type,
+                        nodeLabel: data.label,
+                        branchId: branch.id,
+                        branchLabel: branch.label,
+                        modelId: resolvedModel,
+                        fallbackModelId: fallbackModel,
+                        reason: 'parallel_branch_model_missing_for_tools',
+                    });
+                    branchesChanged = true;
+                    return { ...branch, model: fallbackModel };
+                }
+
+                if (support === 'unknown') {
+                    warnings.push({
+                        nodeId: node.id,
+                        nodeType: node.type,
+                        nodeLabel: data.label,
+                        branchId: branch.id,
+                        branchLabel: branch.label,
+                        modelId: resolvedModel,
+                        fallbackModelId: fallbackModel,
+                        reason: 'parallel_branch_model_tool_support_unknown',
+                    });
+                }
+
+                return branch;
+            });
+
+            if (!branchesChanged) return node;
+
+            changed = true;
+            return {
+                ...node,
+                data: {
+                    ...data,
+                    branches: updatedBranches,
+                },
+            };
+        }
+
+        return node;
+    });
+
+    return {
+        workflow: changed ? { ...workflow, nodes } : workflow,
+        warnings,
+    };
+}
+
 async function executeToolCallViaRegistry(
     name: string,
     args: unknown
@@ -301,10 +465,25 @@ export function executeWorkflow(
         // Create OpenRouter client
         const client = new OpenRouter({ apiKey });
 
+        const toolFallbackModel = pickToolFallbackModel(DEFAULT_TOOL_MODEL);
+        const toolModelCheck = ensureToolCapableModels(
+            validatedWorkflow,
+            toolFallbackModel
+        );
+        const workflowForExecution = toolModelCheck.workflow;
+
+        if (toolModelCheck.warnings.length > 0) {
+            console.warn(
+                '[workflow-slash] Tool-capable model warnings',
+                toolModelCheck.warnings
+            );
+        }
+
         // Determine start node (needed when seeding session messages via resumeFrom)
         const startNodeId =
-            validatedWorkflow.nodes.find((n: any) => n?.type === 'start')?.id ||
-            validatedWorkflow.nodes[0]?.id ||
+            workflowForExecution.nodes.find((n: any) => n?.type === 'start')
+                ?.id ||
+            workflowForExecution.nodes[0]?.id ||
             'start';
 
         // Seed session history with prior thread messages (and current prompt) so LLM nodes see context
@@ -342,7 +521,7 @@ export function executeWorkflow(
         // Create execution adapter
         // Cast to any to handle version mismatch between SDK versions
         adapter = new OpenRouterExecutionAdapter(client as any, {
-            defaultModel: 'openai/gpt-4o-mini',
+            defaultModel: DEFAULT_TOOL_MODEL,
             preflight: true,
             resumeFrom: resumeFromWithHistory,
             tools: workflowTools,
@@ -374,7 +553,7 @@ export function executeWorkflow(
         try {
             // Build workflow with conversation history
             const workflowWithHistory = {
-                ...validatedWorkflow,
+                ...workflowForExecution,
                 conversationHistory,
             } as WorkflowData & { conversationHistory: ChatMessage[] };
             const inputPayload = {

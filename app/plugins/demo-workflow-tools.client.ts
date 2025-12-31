@@ -101,9 +101,7 @@ export default defineNuxtPlugin(() => {
                 throw new Error('coinId and vsCurrency are required.');
             }
 
-            const url = new URL(
-                'https://api.coingecko.com/api/v3/simple/price'
-            );
+            const url = new URL('/api/coingecko/price', window.location.origin);
             url.searchParams.set('ids', safeCoinId);
             url.searchParams.set('vs_currencies', safeCurrency);
 
