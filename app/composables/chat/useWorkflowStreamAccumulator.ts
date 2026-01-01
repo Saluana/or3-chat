@@ -5,8 +5,10 @@ import type {
     WorkflowExecutionState,
     WorkflowMessageData,
     ChatHistoryMessage,
+    ToolCallState,
 } from '~/utils/chat/workflow-types';
 import { deriveStartNodeId } from '~/utils/chat/workflow-types';
+import type { ToolCallEventWithNode } from '@or3/workflow-core';
 
 /**
  * Reactive state interface for workflow execution streaming.
@@ -102,6 +104,7 @@ export interface WorkflowStreamAccumulatorApi {
         branchLabel: string,
         output: string
     ): void;
+    toolCallEvent(event: ToolCallEventWithNode): void;
 
     // Workflow-level streaming (leaf aggregation)
     workflowToken(token: string): void;
@@ -400,6 +403,70 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         state.version++;
     }
 
+    function toolCallEvent(event: ToolCallEventWithNode) {
+        if (finalized || !event?.nodeId) return;
+
+        const { nodeId, nodeLabel, nodeType, branchId, branchLabel } = event;
+        const targetKey = branchId ? `${nodeId}:${branchId}` : nodeId;
+
+        let target:
+            | (NodeState & { toolCalls?: ToolCallState[] })
+            | (BranchState & { toolCalls?: ToolCallState[] })
+            | undefined;
+
+        if (branchId) {
+            const branch =
+                state.branches[targetKey] ||
+                ({
+                    id: branchId,
+                    label: branchLabel || branchId,
+                    status: 'active',
+                    output: '',
+                    streamingText: '',
+                } as BranchState);
+            state.branches[targetKey] = branch;
+            target = branch as BranchState & { toolCalls?: ToolCallState[] };
+        } else {
+            const node =
+                state.nodeStates[nodeId] ||
+                ({
+                    status: 'active',
+                    label: nodeLabel || nodeId,
+                    type: nodeType || 'node',
+                    output: '',
+                    streamingText: '',
+                } as NodeState);
+            state.nodeStates[nodeId] = node;
+            target = node as NodeState & { toolCalls?: ToolCallState[] };
+        }
+
+        const toolCalls = target.toolCalls || [];
+        let tool = toolCalls.find((call) => call.id === event.id);
+
+        if (!tool) {
+            tool = {
+                id: event.id,
+                name: event.name,
+                status: event.status,
+                startedAt: Date.now(),
+            };
+            toolCalls.push(tool);
+        } else {
+            tool.status = event.status;
+        }
+
+        if (event.error) {
+            tool.error = event.error;
+        }
+
+        if (event.status !== 'active') {
+            tool.finishedAt = Date.now();
+        }
+
+        target.toolCalls = toolCalls;
+        state.version++;
+    }
+
     function finalize(opts?: {
         error?: Error;
         stopped?: boolean;
@@ -691,6 +758,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         branchToken,
         branchReasoning,
         branchComplete,
+        toolCallEvent,
         finalize,
         workflowToken,
         reset,

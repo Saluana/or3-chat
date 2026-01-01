@@ -29,6 +29,17 @@ export type WorkflowExecutionState =
     | 'stopped'
     | 'interrupted';
 
+export type ToolCallStatus = 'active' | 'completed' | 'error';
+
+export interface ToolCallState {
+    id: string;
+    name: string;
+    status: ToolCallStatus;
+    error?: string;
+    startedAt?: number;
+    finishedAt?: number;
+}
+
 export interface ChatHistoryMessage {
     role: 'user' | 'assistant' | 'system';
     content: string;
@@ -69,6 +80,9 @@ export interface NodeState {
 
     /** Selected route (for router nodes) */
     route?: string;
+
+    /** Tool calls executed by this node */
+    toolCalls?: ToolCallState[];
 }
 
 /** State of a parallel branch within a workflow node */
@@ -87,6 +101,9 @@ export interface BranchState {
 
     /** Streaming text */
     streamingText?: string;
+
+    /** Tool calls executed by this branch */
+    toolCalls?: ToolCallState[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

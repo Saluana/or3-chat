@@ -11,6 +11,7 @@
 import { defineNuxtPlugin } from '#app';
 import { useAppConfig, useHooks, useToast } from '#imports';
 import type { Extension, Node } from '@tiptap/core';
+import type { ToolCallEventWithNode } from '@or3/workflow-core';
 import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type { WorkflowExecutionController } from './WorkflowSlashCommands/executeWorkflow';
 import { createWorkflowStreamAccumulator } from '~/composables/chat/useWorkflowStreamAccumulator';
@@ -675,6 +676,14 @@ export default defineNuxtPlugin((nuxtApp) => {
             },
         } satisfies Record<string, (...args: any[]) => void>;
 
+        const handleToolCallEvent = (event: ToolCallEventWithNode) => {
+            accumulator.toolCallEvent(event);
+            emitStateUpdate();
+            if (event.status !== 'active') {
+                persist();
+            }
+        };
+
         if (import.meta.dev) {
             console.log(
                 '[workflow-slash] Starting execution with prompt:',
@@ -701,6 +710,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             onToken: () => {}, // Handled by callbacks.onToken
             onWorkflowToken: (_token) => {},
             callbacks, // Pass our custom callbacks
+            onToolCallEvent: handleToolCallEvent,
             onError: (error) => {
                 reportError(error, {
                     code: 'ERR_INTERNAL',

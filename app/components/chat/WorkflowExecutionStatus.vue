@@ -71,6 +71,38 @@
                             }}</span>
                         </div>
 
+                        <!-- Tool Calls -->
+                        <div
+                            v-if="getNodeToolCalls(nodeId).length"
+                            class="space-y-1 mb-2 pl-2"
+                        >
+                            <div
+                                v-for="tool in getNodeToolCalls(nodeId)"
+                                :key="tool.id"
+                                class="flex flex-col gap-0.5"
+                            >
+                                <div class="flex items-center gap-2 text-xs">
+                                    <UIcon
+                                        :name="getToolStatusIcon(tool)"
+                                        class="w-3 h-3 shrink-0"
+                                        :class="getToolStatusColor(tool)"
+                                    />
+                                    <span class="font-medium truncate">{{
+                                        tool.name
+                                    }}</span>
+                                    <span class="ml-auto opacity-60">{{
+                                        getToolStatusText(tool.status)
+                                    }}</span>
+                                </div>
+                                <div
+                                    v-if="tool.error"
+                                    class="pl-5 text-[11px] text-[var(--md-error)]"
+                                >
+                                    {{ tool.error }}
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Branches (if any) -->
                         <div
                             v-if="hasBranches(nodeId)"
@@ -97,6 +129,41 @@
                                         class="w-3 h-3 transition-transform group-open:rotate-90 opacity-50 shrink-0 ml-auto"
                                     />
                                 </summary>
+                                <div
+                                    v-if="getBranchToolCalls(branch).length"
+                                    class="space-y-1 mb-2 pl-5"
+                                >
+                                    <div
+                                        v-for="tool in getBranchToolCalls(
+                                            branch
+                                        )"
+                                        :key="tool.id"
+                                        class="flex flex-col gap-0.5"
+                                    >
+                                        <div
+                                            class="flex items-center gap-2 text-xs"
+                                        >
+                                            <UIcon
+                                                :name="getToolStatusIcon(tool)"
+                                                class="w-3 h-3 shrink-0"
+                                                :class="getToolStatusColor(tool)"
+                                            />
+                                            <span
+                                                class="font-medium truncate"
+                                                >{{ tool.name }}</span
+                                            >
+                                            <span class="ml-auto opacity-60">{{
+                                                getToolStatusText(tool.status)
+                                            }}</span>
+                                        </div>
+                                        <div
+                                            v-if="tool.error"
+                                            class="pl-5 text-[11px] text-[var(--md-error)]"
+                                        >
+                                            {{ tool.error }}
+                                        </div>
+                                    </div>
+                                </div>
                                 <div
                                     v-if="getBranchContent(branch)"
                                     class="pl-5 text-xs opacity-70 font-mono whitespace-pre-wrap bg-(--md-surface) p-1 rounded border border-(--md-outline-variant) max-h-48 overflow-y-auto"
@@ -145,6 +212,7 @@ import {
     type UiWorkflowState,
     type NodeState,
     type BranchState,
+    type ToolCallState,
     MERGE_BRANCH_ID,
     MERGE_BRANCH_LABEL,
 } from '~/utils/chat/workflow-types';
@@ -286,6 +354,10 @@ function getNodeError(nodeId: string): string | undefined {
     return getNode(nodeId)?.error;
 }
 
+function getNodeToolCalls(nodeId: string): ToolCallState[] {
+    return getNode(nodeId)?.toolCalls || [];
+}
+
 // Branch Helpers
 function hasBranches(nodeId: string): boolean {
     if (!props.workflowState.branches) return false;
@@ -335,6 +407,49 @@ function getBranchStatusColor(branch: BranchState) {
             return 'text-[var(--md-primary)]';
         default:
             return 'text-[var(--md-outline)] opacity-50';
+    }
+}
+
+function getBranchToolCalls(branch: BranchState): ToolCallState[] {
+    return branch.toolCalls || [];
+}
+
+function getToolStatusIcon(tool: ToolCallState) {
+    switch (tool.status) {
+        case 'active':
+            return useIcon('workflow.status.running').value;
+        case 'completed':
+            return useIcon('workflow.status.completed').value;
+        case 'error':
+            return useIcon('workflow.status.error').value;
+        default:
+            return useIcon('workflow.status.pending').value;
+    }
+}
+
+function getToolStatusColor(tool: ToolCallState) {
+    switch (tool.status) {
+        case 'active':
+            return 'text-[var(--md-primary)] animate-spin';
+        case 'completed':
+            return 'text-[var(--md-primary)]';
+        case 'error':
+            return 'text-[var(--md-error)]';
+        default:
+            return 'text-[var(--md-outline)] opacity-50';
+    }
+}
+
+function getToolStatusText(status: ToolCallState['status']): string {
+    switch (status) {
+        case 'active':
+            return 'Running';
+        case 'completed':
+            return 'Succeeded';
+        case 'error':
+            return 'Failed';
+        default:
+            return 'Pending';
     }
 }
 

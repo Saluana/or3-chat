@@ -11,6 +11,7 @@ import type {
     ExecutionResult,
     ResumeFromOptions,
     ExecutableToolDefinition,
+    ToolCallEventWithNode,
 } from '@or3/workflow-core';
 import { deriveMessageContent } from '~/utils/chat/messages';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
@@ -71,6 +72,8 @@ export interface WorkflowExecutionOptions {
     onError?: (error: Error) => void;
     /** Additional execution callbacks */
     callbacks?: Partial<ExecutionCallbacks>;
+    /** Tool call lifecycle events */
+    onToolCallEvent?: (event: ToolCallEventWithNode) => void;
     /** Resume from a failed node without re-running completed steps */
     resumeFrom?: ResumeFromOptions;
 }
@@ -526,6 +529,7 @@ export function executeWorkflow(
             resumeFrom: resumeFromWithHistory,
             tools: workflowTools,
             onToolCall: executeToolCallViaRegistry,
+            onToolCallEvent: options.onToolCallEvent,
         });
 
         // Build callbacks
