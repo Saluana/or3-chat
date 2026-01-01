@@ -4,17 +4,23 @@
  * Handles workflow execution with streaming output and conversation history.
  */
 
-import { modelRegistry } from '@or3/workflow-core';
+import {
+    DefaultSubflowRegistry,
+    createDefaultInputMappings,
+    createSubflowDefinition,
+    isSubflowNodeData,
+    modelRegistry,
+} from '@or3/workflow-core';
 import type {
     WorkflowData,
     ExecutionCallbacks,
     ExecutionResult,
     ResumeFromOptions,
     ExecutableToolDefinition,
-    ToolCallEventWithNode,
 } from '@or3/workflow-core';
 import { deriveMessageContent } from '~/utils/chat/messages';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
+import { listWorkflowsWithMeta } from './useWorkflowSlashCommands';
 
 // WorkflowTokenMetadata shape (not exported from core, define inline)
 interface WorkflowTokenMetadata {
@@ -22,6 +28,18 @@ interface WorkflowTokenMetadata {
     branchId?: string;
     [key: string]: unknown;
 }
+
+type ToolCallEventWithNode = {
+    id: string;
+    name: string;
+    status: 'active' | 'completed' | 'error';
+    error?: string;
+    nodeId?: string;
+    nodeType?: string;
+    nodeLabel?: string;
+    branchId?: string;
+    branchLabel?: string;
+};
 
 const DEFAULT_TOOL_MODEL = 'openai/gpt-4o-mini';
 
@@ -190,10 +208,8 @@ function getToolSupport(modelId?: string): 'supported' | 'unsupported' | 'unknow
 function pickToolFallbackModel(defaultModel: string): string {
     if (getToolSupport(defaultModel) === 'supported') return defaultModel;
     const toolModels = modelRegistry.getToolCapableModels();
-    if (toolModels.length > 0) {
-        return toolModels[0].id;
-    }
-    return defaultModel;
+    const firstToolModel = toolModels[0];
+    return firstToolModel ? firstToolModel.id : defaultModel;
 }
 
 function ensureToolCapableModels(
@@ -205,7 +221,11 @@ function ensureToolCapableModels(
 
     const nodes = workflow.nodes.map((node) => {
         if (node.type === 'agent') {
-            const data = node.data as { tools?: string[]; model?: string; label?: string };
+            const data = node.data as {
+                tools?: string[];
+                model?: string;
+                label?: string;
+            };
             const hasTools = Array.isArray(data.tools) && data.tools.length > 0;
             if (!hasTools) return node;
 
@@ -223,10 +243,10 @@ function ensureToolCapableModels(
                 return {
                     ...node,
                     data: {
-                        ...data,
+                        ...node.data,
                         model: fallbackModel,
                     },
-                };
+                } as typeof node;
             }
             if (support === 'unknown') {
                 warnings.push({
@@ -315,10 +335,10 @@ function ensureToolCapableModels(
             return {
                 ...node,
                 data: {
-                    ...data,
+                    ...node.data,
                     branches: updatedBranches,
                 },
-            };
+            } as typeof node;
         }
 
         return node;
@@ -328,6 +348,99 @@ function ensureToolCapableModels(
         workflow: changed ? { ...workflow, nodes } : workflow,
         warnings,
     };
+}
+
+function buildSubflowRegistry(records: {
+    id: string;
+    title: string;
+    meta: WorkflowData | null;
+}[]): DefaultSubflowRegistry {
+    const registry = new DefaultSubflowRegistry();
+
+    for (const record of records) {
+        if (!record.meta) continue;
+        const description =
+            typeof (record.meta as any)?.description === 'string'
+                ? ((record.meta as any).description as string)
+                : undefined;
+        registry.register(
+            createSubflowDefinition(record.id, record.title, record.meta, {
+                description,
+            })
+        );
+    }
+
+    return registry;
+}
+
+function applyDefaultSubflowMappings(
+    workflow: WorkflowData,
+    registry: DefaultSubflowRegistry
+): WorkflowData {
+    let changed = false;
+
+    const nodes = workflow.nodes.map((node) => {
+        if (node.type !== 'subflow') return node;
+        const data = node.data as unknown;
+        if (!isSubflowNodeData(data)) return node;
+
+        const subflowData = data as {
+            subflowId: string;
+            inputMappings: Record<string, unknown>;
+        };
+        const subflowId = subflowData.subflowId?.trim();
+        if (!subflowId) return node;
+
+        const defaults = createDefaultInputMappings(subflowId, registry);
+        if (!defaults || Object.keys(defaults).length === 0) return node;
+
+        const inputMappings = subflowData.inputMappings || {};
+        const missingRequired = Object.keys(defaults).some(
+            (key) => !(key in inputMappings)
+        );
+
+        if (!missingRequired) return node;
+        changed = true;
+
+        return {
+            ...node,
+            data: {
+                ...subflowData,
+                inputMappings: {
+                    ...defaults,
+                    ...inputMappings,
+                },
+            },
+        } as typeof node;
+    });
+
+    return changed ? { ...workflow, nodes } : workflow;
+}
+
+function assertSubflowRegistryCoverage(
+    workflow: WorkflowData,
+    registry: DefaultSubflowRegistry
+): void {
+    const missing = new Set<string>();
+
+    for (const node of workflow.nodes) {
+        if (node.type !== 'subflow') continue;
+        const data = node.data as unknown;
+        if (!isSubflowNodeData(data)) continue;
+        const subflowId = data.subflowId?.trim();
+        if (!subflowId) continue;
+        if (!registry.has(subflowId)) {
+            missing.add(subflowId);
+        }
+    }
+
+    if (missing.size > 0) {
+        const ids = Array.from(missing).join(', ');
+        throw new Error(
+            `Subflow registry missing definitions for: ${ids}. ` +
+                'Subflow IDs must match workflow record IDs.'
+        );
+    }
 }
 
 async function executeToolCallViaRegistry(
@@ -473,7 +586,21 @@ export function executeWorkflow(
             validatedWorkflow,
             toolFallbackModel
         );
-        const workflowForExecution = toolModelCheck.workflow;
+        let workflowForExecution = toolModelCheck.workflow;
+
+        const hasSubflows = workflowForExecution.nodes.some(
+            (node: any) => node?.type === 'subflow'
+        );
+        const subflowRegistry = hasSubflows
+            ? buildSubflowRegistry(await listWorkflowsWithMeta())
+            : undefined;
+        if (subflowRegistry) {
+            assertSubflowRegistryCoverage(workflowForExecution, subflowRegistry);
+            workflowForExecution = applyDefaultSubflowMappings(
+                workflowForExecution,
+                subflowRegistry
+            );
+        }
 
         if (toolModelCheck.warnings.length > 0) {
             console.warn(
@@ -528,16 +655,30 @@ export function executeWorkflow(
             preflight: true,
             resumeFrom: resumeFromWithHistory,
             tools: workflowTools,
+            subflowRegistry,
             onToolCall: executeToolCallViaRegistry,
             onToolCallEvent: options.onToolCallEvent,
         });
 
         // Build callbacks
         const callbacks: ExecutionCallbacks = {
-            onNodeStart: onNodeStart || (() => {}),
-            onNodeFinish: onNodeFinish || (() => {}),
-            onNodeError: (_nodeId, error) => onError?.(error),
-            onToken: (_nodeId, token) => onToken(token),
+            ...extraCallbacks,
+            onNodeStart: (nodeId, ...rest) => {
+                extraCallbacks?.onNodeStart?.(nodeId, ...rest);
+                onNodeStart?.(nodeId);
+            },
+            onNodeFinish: (nodeId, output, ...rest) => {
+                extraCallbacks?.onNodeFinish?.(nodeId, output, ...rest);
+                onNodeFinish?.(nodeId, output);
+            },
+            onNodeError: (nodeId, error, ...rest) => {
+                extraCallbacks?.onNodeError?.(nodeId, error, ...rest);
+                onError?.(error);
+            },
+            onToken: (nodeId, token, ...rest) => {
+                extraCallbacks?.onToken?.(nodeId, token, ...rest);
+                onToken(token);
+            },
             onWorkflowToken: (token: string, meta: unknown) => {
                 if (extraCallbacks?.onWorkflowToken) {
                     extraCallbacks.onWorkflowToken(token, meta as any);
@@ -550,8 +691,9 @@ export function executeWorkflow(
                     onToken(token);
                 }
             },
-            onComplete: extraCallbacks?.onComplete,
-            ...extraCallbacks,
+            onComplete: (...args) => {
+                extraCallbacks?.onComplete?.(...args);
+            },
         };
 
         try {

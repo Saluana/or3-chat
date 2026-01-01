@@ -64,6 +64,10 @@ function createDefaultEditorOptions() {
  */
 export function getEditorForPane(paneId: string): WorkflowEditor {
     let editor = editorInstances.get(paneId);
+    if (editor?.isDestroyed()) {
+        editorInstances.delete(paneId);
+        editor = undefined;
+    }
     if (!editor) {
         editor = new WorkflowEditor(createDefaultEditorOptions());
         editorInstances.set(paneId, editor);
@@ -91,6 +95,10 @@ export function destroyEditorForPane(paneId: string): void {
 export function deselectAllOtherEditors(activePaneId: string): void {
     for (const [paneId, editor] of editorInstances.entries()) {
         if (paneId === activePaneId) continue;
+        if (editor.isDestroyed()) {
+            editorInstances.delete(paneId);
+            continue;
+        }
         const selected = editor.getSelected();
         if (selected.nodes.length || selected.edges.length) {
             editor.commands.deselectAll();

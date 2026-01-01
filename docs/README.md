@@ -25,6 +25,10 @@ Welcome to the OR3 Chat system documentation. This guide covers plugin developme
 -   **[Thread History Extensions](UI/thread-history-extensions.md)** - Thread history management
 -   **[Workspace Backup](UI/workspace-backup.md)** - Backup and restore functionality
 
+## Workflows
+
+-   **[Subflow Registry](workflows/subflows.md)** - Subflow ID alignment and registry requirements
+
 ## Testing
 
 -   **[Custom Pane Apps Testing](testing/custom-pane-apps.md)** - Testing strategies for pane applications

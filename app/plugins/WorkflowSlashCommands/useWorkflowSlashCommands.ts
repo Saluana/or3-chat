@@ -193,6 +193,51 @@ export async function getWorkflowById(
     }
 }
 
+/**
+ * List all workflow records with parsed meta.
+ * Used to build registries for subflow execution.
+ */
+export async function listWorkflowsWithMeta(): Promise<WorkflowRecord[]> {
+    try {
+        const { db } = await import('~/db');
+
+        const workflows = await db.posts
+            .where('postType')
+            .equals(POST_TYPE)
+            .and((p: any) => !p.deleted)
+            .toArray();
+
+        return workflows.map((workflow: any) => {
+            let meta: WorkflowData | null = null;
+            if (workflow.meta) {
+                try {
+                    meta =
+                        typeof workflow.meta === 'string'
+                            ? JSON.parse(workflow.meta)
+                            : workflow.meta;
+                } catch (e) {
+                    console.error(
+                        '[workflow-slash] Failed to parse workflow meta:',
+                        e
+                    );
+                }
+            }
+
+            return {
+                id: workflow.id,
+                title: workflow.title || 'Untitled Workflow',
+                postType: workflow.postType,
+                meta,
+                created_at: workflow.created_at,
+                updated_at: workflow.updated_at,
+            };
+        });
+    } catch (error) {
+        console.error('[workflow-slash] listWorkflowsWithMeta failed:', error);
+        return [];
+    }
+}
+
 // ─────────────────────────────────────────────────────────────
 // Exports
 // ─────────────────────────────────────────────────────────────
@@ -201,4 +246,5 @@ export default {
     searchWorkflows,
     getWorkflowByName,
     getWorkflowById,
+    listWorkflowsWithMeta,
 };

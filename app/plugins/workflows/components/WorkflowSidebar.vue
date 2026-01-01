@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import type { WorkflowEditor } from '@or3/workflow-core';
 import { NodePalette, NodeInspector } from '@or3/workflow-vue';
 import type { TabsItem } from '#ui/types';
-import { useSidebarMultiPane } from '~/composables/sidebar/useSidebarEnvironment';
-import { getEditorForPane } from '../composables/useWorkflows';
+import {
+    useSidebarMultiPane,
+    useSidebarPostsApi,
+} from '~/composables/sidebar/useSidebarEnvironment';
+import {
+    getEditorForPane,
+    type WorkflowPost,
+    useWorkflowsCrud,
+} from '../composables/useWorkflows';
 import { useWorkflowSidebarControls } from '../composables/useWorkflowSidebarControls';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import WorkflowsTab from './sidebar/WorkflowsTab.vue';
@@ -12,6 +19,9 @@ import WorkflowsTab from './sidebar/WorkflowsTab.vue';
 const multiPane = useSidebarMultiPane();
 const { activePanel, setPanel } = useWorkflowSidebarControls();
 const toolRegistry = useToolRegistry();
+const panePluginApi = useSidebarPostsApi();
+const postApi = panePluginApi?.posts ?? null;
+const { listWorkflows } = useWorkflowsCrud(postApi);
 
 function onPanelChange(value: TabsItem['value']) {
     if (value === 'workflows' || value === 'palette' || value === 'inspector') {
@@ -37,10 +47,15 @@ const activeWorkflowPane = computed(() => {
     return workflowPane ?? null;
 });
 
+const editorRefresh = ref(0);
+
 const activeWorkflowEditor = computed<WorkflowEditor | null>(() => {
-    return activeWorkflowPane.value
-        ? getEditorForPane(activeWorkflowPane.value.id)
-        : null;
+    // Force refresh when inspector opens or pane changes
+    editorRefresh.value;
+
+    if (!activeWorkflowPane.value) return null;
+    const editor = getEditorForPane(activeWorkflowPane.value.id);
+    return editor.isDestroyed() ? null : editor;
 });
 
 const activeWorkflowPaneId = computed(() => activeWorkflowPane.value?.id);
@@ -54,6 +69,54 @@ const availableTools = computed(() =>
             tool.definition.ui?.descriptionHint ||
             '',
     }))
+);
+
+const subflowWorkflows = ref<WorkflowPost[]>([]);
+const subflowLoading = ref(false);
+const subflowError = ref<string | null>(null);
+
+const loadSubflowWorkflows = async () => {
+    if (subflowLoading.value) return;
+    subflowLoading.value = true;
+    subflowError.value = null;
+
+    const result = await listWorkflows();
+    if (result.ok) {
+        subflowWorkflows.value = result.workflows;
+    } else {
+        subflowError.value = result.error;
+    }
+
+    subflowLoading.value = false;
+};
+
+const availableSubflows = computed(() =>
+    subflowWorkflows.value.map((workflow) => ({
+        id: workflow.id,
+        name: workflow.title,
+        description: workflow.meta?.description || undefined,
+    }))
+);
+
+onMounted(() => {
+    void loadSubflowWorkflows();
+});
+
+watch(
+    () => activePanel.value,
+    (panel) => {
+        if (panel === 'inspector') {
+            editorRefresh.value += 1;
+            void loadSubflowWorkflows();
+        }
+    }
+);
+
+watch(
+    () => activeWorkflowPaneId.value,
+    () => {
+        editorRefresh.value += 1;
+    }
 );
 
 const items: TabsItem[] = [
@@ -100,6 +163,9 @@ const items: TabsItem[] = [
                     v-if="activeWorkflowEditor"
                     :editor="activeWorkflowEditor"
                     :available-tools="availableTools"
+                    :available-subflows="availableSubflows"
+                    :subflow-list-loading="subflowLoading"
+                    :subflow-list-error="subflowError"
                     @close="
                         () =>
                             setPanel('workflows', {

@@ -1,9 +1,11 @@
 // app/plugins/workflows.client.ts
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import { useHooks } from '#imports';
 import { registerSidebarPage } from '~/composables/sidebar/registerSidebarPage';
 import { usePaneApps } from '~/composables/core/usePaneApps';
 import WorkflowPane from './workflows/components/WorkflowPane.vue';
 import WorkflowSidebar from './workflows/components/WorkflowSidebar.vue';
+import { destroyEditorForPane } from './workflows/composables/useWorkflows';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 
 // Vue Flow styles (required)
@@ -17,6 +19,8 @@ import '@or3/workflow-vue/style.css';
 import './workflows/styles/workflow-theme-bridge.css';
 
 export default defineNuxtPlugin(() => {
+    const hooks = useHooks();
+
     // Register Workflow mini app
 
     // Register the pane app with post type for score tracking
@@ -49,10 +53,20 @@ export default defineNuxtPlugin(() => {
         console.error('[snake-game] Failed to register sidebar page:', e);
     }
 
+    const disposePaneCloseHook = hooks.on(
+        'ui.pane.close:action:before',
+        ({ pane }) => {
+            if (pane.mode === 'or3-workflows') {
+                destroyEditorForPane(pane.id);
+            }
+        }
+    );
+
     // HMR cleanup
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
             cleanup?.();
+            disposePaneCloseHook();
         });
     }
 
