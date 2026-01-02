@@ -22,7 +22,7 @@
     },
     "dependencies": {
         "@nuxt/ui": "^3.3.7",
-        "@openrouter/sdk": "^0.1.27",
+        "@openrouter/sdk": "^0.3.11",
         "@or3/workflow-core": "link:@or3/workflow-core",
         "@or3/workflow-vue": "link:@or3/workflow-vue",
         "@orama/orama": "^3.1.16",

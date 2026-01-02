@@ -18,6 +18,7 @@ import type {
 } from '@or3/workflow-core';
 import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type { WorkflowExecutionController } from './WorkflowSlashCommands/executeWorkflow';
+import type { Attachment } from '@or3/workflow-core';
 import { createWorkflowStreamAccumulator } from '~/composables/chat/useWorkflowStreamAccumulator';
 import { nowSec } from '~/db/util';
 import { reportError } from '~/utils/errors';
@@ -826,6 +827,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                     assistantContext.threadId || ''
                 )),
             apiKey,
+            attachments, // Pass extracted attachments
             onToken: () => {}, // Handled by callbacks.onToken
             onWorkflowToken: (_token) => {},
             callbacks, // Pass our custom callbacks
@@ -1131,6 +1133,27 @@ export default defineNuxtPlugin((nuxtApp) => {
                           .map((p) => p.text)
                           .join('')
                     : '';
+            
+            // Extract attachments (e.g. images)
+            const attachments: Attachment[] = [];
+            if (Array.isArray(lastUser.content)) {
+                lastUser.content.forEach((part: any, index: number) => {
+                    if (
+                        part &&
+                        typeof part === 'object' &&
+                        part.type === 'image_url' &&
+                        part.imageUrl?.url
+                    ) {
+                        attachments.push({
+                            id: `att-${index}-${nowSec()}`,
+                            type: 'image',
+                            url: part.imageUrl.url,
+                            mimeType: 'image/png', // Default assumption, or extract from data URI
+                            name: `image-${index}.png`, // Placeholder name
+                        });
+                    }
+                });
+            }
 
             const normalizedContent = content.trimStart();
             const editorDoc = pendingEditorJson;

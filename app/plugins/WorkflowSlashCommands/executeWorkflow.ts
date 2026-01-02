@@ -19,6 +19,7 @@ import type {
     ExecutableToolDefinition,
     HITLRequest,
     HITLResponse,
+    Attachment,
 } from '@or3/workflow-core';
 import { deriveMessageContent } from '~/utils/chat/messages';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
@@ -98,6 +99,8 @@ export interface WorkflowExecutionOptions {
     onHITLRequest?: (request: HITLRequest) => Promise<HITLResponse>;
     /** Resume from a failed node without re-running completed steps */
     resumeFrom?: ResumeFromOptions;
+    /** Attachments (files, images) to include */
+    attachments?: Attachment[];
 }
 
 /**
@@ -710,6 +713,7 @@ export function executeWorkflow(
             const inputPayload = {
                 text: prompt,
                 conversationHistory,
+                attachments: options.attachments,
             };
 
             // Execute the workflow
