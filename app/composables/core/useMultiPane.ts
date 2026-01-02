@@ -187,11 +187,11 @@ export function useMultiPane(
         serializer: {
             read: (raw: string): number[] => {
                 try {
-                    const parsed = JSON.parse(raw);
+                    const parsed: unknown = JSON.parse(raw);
                     if (!Array.isArray(parsed)) return [];
-                    const valid = parsed.every((w: unknown) => typeof w === 'number' && w > 0);
-                    if (!valid) return [];
-                    return (parsed as number[]).map((w) => Math.max(minPaneWidth, Math.min(maxPaneWidth, w)));
+                    const isValidArray = parsed.every((w): w is number => typeof w === 'number' && w > 0);
+                    if (!isValidArray) return [];
+                    return parsed.map((w) => Math.max(minPaneWidth, Math.min(maxPaneWidth, w)));
                 } catch {
                     return [];
                 }

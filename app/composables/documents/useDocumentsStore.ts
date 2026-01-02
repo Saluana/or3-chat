@@ -196,7 +196,6 @@ export async function releaseDocument(
     const { flush: shouldFlush = true, deleteEntry = true } = opts;
     const st = documentsMap.get(id);
     if (!st) return;
-    if (!st) return;
     // Cancel any pending debounced save
     // Note: useDebounceFn doesn't expose a per-argument cancel easily if shared,
     // but here we are using a shared debounce function.

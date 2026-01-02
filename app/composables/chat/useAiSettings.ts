@@ -66,8 +66,8 @@ const storedSettings = useLocalStorage<AiSettingsV1>(
         serializer: {
             read: (raw: string): AiSettingsV1 => {
                 try {
-                    const parsed = JSON.parse(raw);
-                    return sanitizeAiSettings(parsed);
+                    const parsed: unknown = JSON.parse(raw);
+                    return sanitizeAiSettings(parsed as Partial<AiSettingsV1>);
                 } catch {
                     return { ...DEFAULT_AI_SETTINGS };
                 }
@@ -96,8 +96,8 @@ export function useAiSettings() {
     }
 
     function load(): AiSettingsV1 {
-        // Return current stored value (useLocalStorage handles syncing)
-        return storedSettings.value || DEFAULT_AI_SETTINGS;
+        // Return current stored value (useLocalStorage always provides a value)
+        return storedSettings.value;
     }
 
     return {

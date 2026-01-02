@@ -703,7 +703,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
     }
 
     function toolCallEvent(event: ToolCallEventWithNode) {
-        if (finalized || !event?.nodeId) return;
+        if (finalized || !event.nodeId) return;
 
         const { nodeId, nodeLabel, nodeType, branchId, branchLabel } = event;
         const { targetState, nodeId: localNodeId } =

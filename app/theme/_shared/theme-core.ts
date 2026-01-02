@@ -42,23 +42,23 @@ export function cloneDeep<T>(value: T): T {
  * Deep merge patch into base object (mutates base)
  */
 export function deepMerge(
-    base: Record<string, any>,
-    patch?: Record<string, any>
-): Record<string, any> {
+    base: Record<string, unknown>,
+    patch?: Record<string, unknown>
+): Record<string, unknown> {
     if (!patch) {
         return base;
     }
 
     for (const [key, value] of Object.entries(patch)) {
         if (value && typeof value === 'object' && !Array.isArray(value)) {
-            const current = base[key];
+            const current = base[key] as Record<string, unknown> | undefined;
             base[key] = deepMerge(
                 current &&
                     typeof current === 'object' &&
                     !Array.isArray(current)
                     ? current
                     : {},
-                value as Record<string, any>
+                value as Record<string, unknown>
             );
         } else if (value !== undefined) {
             base[key] = value;
@@ -72,20 +72,24 @@ export function deepMerge(
  * Recursively update target with source values (in-place mutation)
  */
 export function recursiveUpdate(
-    target: Record<string, any>,
-    source: Record<string, any>
+    target: Record<string, unknown>,
+    source: Record<string, unknown>
 ): void {
     for (const [key, value] of Object.entries(source)) {
         if (value !== undefined) {
+            const targetValue = target[key];
             if (
                 value &&
                 typeof value === 'object' &&
                 !Array.isArray(value) &&
-                target[key] &&
-                typeof target[key] === 'object' &&
-                !Array.isArray(target[key])
+                targetValue &&
+                typeof targetValue === 'object' &&
+                !Array.isArray(targetValue)
             ) {
-                recursiveUpdate(target[key], value);
+                recursiveUpdate(
+                    targetValue as Record<string, unknown>,
+                    value as Record<string, unknown>
+                );
             } else {
                 target[key] = value;
             }
@@ -126,7 +130,7 @@ export interface ThemeLoaderOptions {
 export interface ThemeLoaderState {
     themeRegistry: Map<string, CompiledTheme>;
     resolverRegistry: Map<string, RuntimeResolver>;
-    appConfigOverrides: Map<string, Record<string, any> | null>;
+    appConfigOverrides: Map<string, Record<string, unknown> | null>;
 }
 
 /**
@@ -154,66 +158,74 @@ export async function loadTheme(
         }
 
         const themeModule = await manifestEntry.loader();
+        const definition = themeModule.default;
 
-        if (themeModule?.default) {
-            const definition = themeModule.default;
-            updateManifestEntry(manifestEntry, definition);
+        // Runtime check for dynamic imports - type says it exists but runtime may differ
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (!definition) {
+            if (options.isDev) {
+                console.warn(`[theme] Theme "${themeName}" has no default export.`);
+            }
+            return null;
+        }
 
-            // Load stylesheets
-            await loadThemeStylesheets(manifestEntry, definition.stylesheets);
+        updateManifestEntry(manifestEntry, definition);
 
-            // Load icons if available
-            let themeIcons = definition.icons;
-            if (!themeIcons && manifestEntry.iconsLoader) {
-                try {
-                    const iconsModule = await manifestEntry.iconsLoader();
-                    themeIcons = iconsModule?.default || iconsModule;
-                } catch (e) {
-                    if (options.isDev) {
-                        console.warn(
-                            `[theme] Failed to load icons for theme "${themeName}":`,
-                            e
-                        );
-                    }
+        // Load stylesheets
+        await loadThemeStylesheets(manifestEntry, definition.stylesheets);
+
+        // Load icons if available
+        let themeIcons = definition.icons;
+        if (!themeIcons && manifestEntry.iconsLoader) {
+            try {
+                const iconsModule = await manifestEntry.iconsLoader();
+                // ThemeIconsLoader returns { default: Record<string, string> }
+                themeIcons = iconsModule.default;
+            } catch (e) {
+                if (options.isDev) {
+                    console.warn(
+                        `[theme] Failed to load icons for theme "${themeName}":`,
+                        e
+                    );
                 }
             }
-
-            const compiledTheme: CompiledTheme = {
-                name: definition.name,
-                isDefault: manifestEntry.isDefault,
-                stylesheets: manifestEntry.stylesheets,
-                displayName: definition.displayName,
-                description: definition.description,
-                cssVariables: generateThemeCssVariables(definition),
-                overrides: compileOverridesRuntime(definition.overrides || {}),
-                cssSelectors: definition.cssSelectors,
-                hasStyleSelectors: manifestEntry.hasCssSelectorStyles,
-                ui: definition.ui,
-                propMaps: definition.propMaps,
-                backgrounds: definition.backgrounds,
-                icons: themeIcons,
-            };
-
-            // Register in caches
-            state.themeRegistry.set(themeName, compiledTheme);
-
-            if (compiledTheme.icons) {
-                iconRegistry.registerTheme(themeName, compiledTheme.icons);
-            }
-
-            // Load app config overrides
-            const themeSpecificConfig =
-                (await loadThemeAppConfig(manifestEntry)) ?? null;
-            state.appConfigOverrides.set(themeName, themeSpecificConfig);
-
-            // Create and cache resolver
-            const resolver = new RuntimeResolver(compiledTheme);
-            state.resolverRegistry.set(themeName, resolver);
-
-            options.onThemeRegistered?.(themeName, compiledTheme);
-
-            return compiledTheme;
         }
+
+        const compiledTheme: CompiledTheme = {
+            name: definition.name,
+            isDefault: manifestEntry.isDefault,
+            stylesheets: manifestEntry.stylesheets,
+            displayName: definition.displayName,
+            description: definition.description,
+            cssVariables: generateThemeCssVariables(definition),
+            overrides: compileOverridesRuntime(definition.overrides || {}),
+            cssSelectors: definition.cssSelectors,
+            hasStyleSelectors: manifestEntry.hasCssSelectorStyles,
+            ui: definition.ui,
+            propMaps: definition.propMaps,
+            backgrounds: definition.backgrounds,
+            icons: themeIcons,
+        };
+
+        // Register in caches
+        state.themeRegistry.set(themeName, compiledTheme);
+
+        if (compiledTheme.icons) {
+            iconRegistry.registerTheme(themeName, compiledTheme.icons);
+        }
+
+        // Load app config overrides
+        const themeSpecificConfig =
+            (await loadThemeAppConfig(manifestEntry)) ?? null;
+        state.appConfigOverrides.set(themeName, themeSpecificConfig);
+
+        // Create and cache resolver
+        const resolver = new RuntimeResolver(compiledTheme);
+        state.resolverRegistry.set(themeName, resolver);
+
+        options.onThemeRegistered?.(themeName, compiledTheme);
+
+        return compiledTheme;
     } catch (error) {
         if (options.isDev) {
             console.warn(`[theme] Failed to load theme "${themeName}":`, error);
