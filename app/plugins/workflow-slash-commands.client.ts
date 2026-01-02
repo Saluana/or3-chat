@@ -1167,15 +1167,21 @@ export default defineNuxtPlugin((nuxtApp) => {
                 workflowNameForLog = editorMatch.workflowName || '';
 
                 if (editorMatch.workflowId) {
-                    workflowPost = await slashMod.getWorkflowById(
+                    const post = await slashMod.getWorkflowById(
                         editorMatch.workflowId
                     );
+                    if (hasWorkflowMeta(post)) {
+                        workflowPost = post;
+                    }
                 }
 
                 if (!workflowPost && editorMatch.workflowName) {
-                    workflowPost = await slashMod.getWorkflowByName(
+                    const post = await slashMod.getWorkflowByName(
                         editorMatch.workflowName
                     );
+                    if (hasWorkflowMeta(post)) {
+                        workflowPost = post;
+                    }
                 }
 
                 if (!workflowPost) {
@@ -1208,9 +1214,12 @@ export default defineNuxtPlugin((nuxtApp) => {
 
                 workflowNameForLog = parsed.workflowName;
                 prompt = parsed.prompt || '';
-                workflowPost = await slashMod.getWorkflowByName(
+                const post = await slashMod.getWorkflowByName(
                     parsed.workflowName
                 );
+                if (hasWorkflowMeta(post)) {
+                    workflowPost = post;
+                }
 
                 if (!workflowPost) {
                     reportError(`No workflow named "${parsed.workflowName}"`, {
@@ -1237,19 +1246,6 @@ export default defineNuxtPlugin((nuxtApp) => {
                 return { messages };
             }
 
-            // Check workflow has valid meta
-            if (!hasWorkflowMeta(workflowPost)) {
-                reportError(
-                    `Workflow "${
-                        workflowNameForLog || workflowPost.title
-                    }" has no data`,
-                    {
-                    code: 'ERR_VALIDATION',
-                    toast: true,
-                    }
-                );
-                return { messages };
-            }
 
             // Log workflow structure for debugging
             console.log('[workflow-slash] Workflow structure:', {

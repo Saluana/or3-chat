@@ -36,7 +36,7 @@ type ToolCallEventWithNode = {
     name: string;
     status: 'active' | 'completed' | 'error';
     error?: string;
-    nodeId?: string;
+    nodeId: string;
     nodeType?: string;
     nodeLabel?: string;
     branchId?: string;

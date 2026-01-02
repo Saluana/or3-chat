@@ -169,13 +169,14 @@ function parseScopedNodeId(scopedId: string): { path: string[]; nodeId: string }
     const path: string[] = [];
     for (let i = 0; i < segments.length - 1; i++) {
         const segment = segments[i];
-        if (!segment.startsWith(SUBFLOW_SCOPE_PREFIX)) {
+        if (!segment || !segment.startsWith(SUBFLOW_SCOPE_PREFIX)) {
             return { path: [], nodeId: scopedId };
         }
         path.push(segment.slice(SUBFLOW_SCOPE_PREFIX.length));
     }
 
-    return { path, nodeId: segments[segments.length - 1] };
+    const nodeId = segments[segments.length - 1];
+    return { path, nodeId: nodeId || scopedId };
 }
 
 /**

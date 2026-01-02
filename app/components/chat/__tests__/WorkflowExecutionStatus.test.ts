@@ -17,6 +17,12 @@ vi.mock('#app', () => ({
     }),
 }));
 
+vi.mock('#imports', () => ({
+    useToast: () => ({
+        add: vi.fn(),
+    }),
+}));
+
 // Mock streamdown-vue
 vi.mock('streamdown-vue', () => ({
     StreamMarkdown: {

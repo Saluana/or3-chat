@@ -720,6 +720,7 @@ function focusHitlPath(path: string[]) {
     if (!path.length) return;
     collapsed.value = false;
     const [nodeId, ...rest] = path;
+    if (!nodeId) return;
     openNodes.value = { ...openNodes.value, [nodeId]: true };
     focusNodeId.value = nodeId;
     focusNodePath.value = rest.length ? rest : null;

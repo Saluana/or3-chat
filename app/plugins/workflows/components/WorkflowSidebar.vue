@@ -16,6 +16,12 @@ import { useWorkflowSidebarControls } from '../composables/useWorkflowSidebarCon
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import WorkflowsTab from './sidebar/WorkflowsTab.vue';
 
+/** Extended meta type that includes optional description field */
+interface WorkflowMetaWithDescription {
+    description?: string;
+    [key: string]: unknown;
+}
+
 const multiPane = useSidebarMultiPane();
 const { activePanel, setPanel } = useWorkflowSidebarControls();
 const toolRegistry = useToolRegistry();
@@ -94,7 +100,7 @@ const availableSubflows = computed(() =>
     subflowWorkflows.value.map((workflow) => ({
         id: workflow.id,
         name: workflow.title,
-        description: workflow.meta?.description || undefined,
+        description: (workflow.meta as WorkflowMetaWithDescription | null)?.description || undefined,
     }))
 );
 
