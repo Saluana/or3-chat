@@ -40,7 +40,7 @@
             class="flex justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity"
         >
             <UButtonGroup
-                class="bg-(--md-surface) rounded-(--md-border-radius) shadow-sm border border-(--md-outline-variant)"
+                class="bg-(--md-surface) rounded-(--md-border-radius) shadow-sm border border-(--md-outline-variant) overflow-hidden"
             >
                 <UTooltip
                     :delay-duration="500"
