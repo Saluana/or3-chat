@@ -764,8 +764,8 @@ export default defineNuxtPlugin((nuxtApp) => {
                 accumulator.tokenUsage(nodeId, usage);
                 emitStateUpdate();
             },
-            onWorkflowToken: (token: string) => {
-                accumulator.workflowToken(token);
+            onWorkflowToken: (token: string, meta) => {
+                accumulator.workflowToken(token, meta);
                 // Emit state update for UI reactivity (RAF-throttled)
                 emitStateUpdate();
             },

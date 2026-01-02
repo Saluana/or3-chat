@@ -1,11 +1,11 @@
 <template>
     <div
-        class="workflow-execution-status border rounded-md overflow-hidden bg-[var(--md-surface-container-lowest)] border-[var(--md-outline-variant)]"
-        data-context="workflow"
+        :class="containerClasses"
+        :data-context="depth > 0 ? 'subflow' : 'workflow'"
     >
         <!-- Header -->
         <div
-            class="flex items-center justify-between px-3 py-2 bg-[var(--md-surface-container)] cursor-pointer select-none hover:bg-[var(--md-surface-container-high)] transition-colors"
+            :class="headerClasses"
             @click="toggleCollapse"
         >
             <div class="flex items-center gap-2">
@@ -14,10 +14,14 @@
                     class="w-5 h-5"
                     :class="statusColorClass"
                 />
-                <span class="font-medium text-sm">{{
-                    props.workflowState.workflowName
-                }}</span>
-                <span class="text-xs opacity-70">({{ statusText }})</span>
+                <span :class="headerTextClass">{{ workflowTitle }}</span>
+                <span
+                    v-if="depth > 0"
+                    class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--md-surface-container-high)] text-[var(--md-on-surface-variant)]"
+                >
+                    Subflow
+                </span>
+                <span :class="statusTextClass">({{ statusText }})</span>
             </div>
             <div class="flex items-center gap-2">
                 <span
@@ -38,7 +42,7 @@
         </div>
 
         <!-- Content -->
-        <div v-if="!collapsed" class="p-3 space-y-2">
+        <div v-if="!collapsed" :class="contentClasses">
             <!-- Node List -->
             <div
                 v-for="nodeId in props.workflowState.executionOrder"
@@ -307,6 +311,18 @@
                                 }}
                             </div>
                         </div>
+
+                        <div
+                            v-if="getNodeSubflowState(nodeId)"
+                            class="mt-3"
+                        >
+                            <WorkflowExecutionStatus
+                                :workflow-state="
+                                    getNodeSubflowState(nodeId)!
+                                "
+                                :depth="depth + 1"
+                            />
+                        </div>
                     </div>
                 </details>
             </div>
@@ -331,14 +347,53 @@ import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 
+defineOptions({ name: 'WorkflowExecutionStatus' });
+
 const props = defineProps<{
     workflowState: UiWorkflowState;
+    depth?: number;
 }>();
 
-const collapsed = ref(true);
+const depth = computed(() => props.depth ?? 0);
+const collapsed = ref(depth.value === 0);
 function toggleCollapse() {
     collapsed.value = !collapsed.value;
 }
+
+const workflowTitle = computed(
+    () => props.workflowState.workflowName || 'Workflow'
+);
+const containerClasses = computed(() =>
+    [
+        'workflow-execution-status border rounded-md overflow-hidden border-[var(--md-outline-variant)]',
+        depth.value > 0
+            ? 'bg-[var(--md-surface-container-low)] ml-2'
+            : 'bg-[var(--md-surface-container-lowest)]',
+    ].join(' ')
+);
+const headerClasses = computed(() =>
+    [
+        'flex items-center justify-between cursor-pointer select-none transition-colors',
+        depth.value > 0
+            ? 'px-2 py-1 bg-[var(--md-surface-container-high)] hover:bg-[var(--md-surface-container)]'
+            : 'px-3 py-2 bg-[var(--md-surface-container)] hover:bg-[var(--md-surface-container-high)]',
+    ].join(' ')
+);
+const contentClasses = computed(() =>
+    depth.value > 0 ? 'p-2 space-y-2' : 'p-3 space-y-2'
+);
+const headerTextClass = computed(() =>
+    [
+        'font-medium',
+        depth.value > 0 ? 'text-xs' : 'text-sm',
+    ].join(' ')
+);
+const statusTextClass = computed(() =>
+    [
+        depth.value > 0 ? 'text-[10px]' : 'text-xs',
+        'opacity-70',
+    ].join(' ')
+);
 
 const pendingHitlRequests = computed(() =>
     Object.values(props.workflowState.hitlRequests || {})
@@ -440,6 +495,10 @@ const statusText = computed(() => {
 // Node Helpers
 function getNode(nodeId: string): NodeState | undefined {
     return props.workflowState.nodeStates[nodeId];
+}
+
+function getNodeSubflowState(nodeId: string): UiWorkflowState | undefined {
+    return getNode(nodeId)?.subflowState;
 }
 
 function getNodeLabel(nodeId: string): string {
@@ -663,7 +722,7 @@ function getHitlHeading(request: HitlRequestState): string {
 
 function getHitlActions(request: HitlRequestState): HitlActionDescriptor[] {
     if (request.mode === 'input') {
-        return [
+        const actions: HitlActionDescriptor[] = [
             {
                 key: `${request.id}-submit`,
                 label: 'Provide Input',
@@ -677,10 +736,11 @@ function getHitlActions(request: HitlRequestState): HitlActionDescriptor[] {
                 action: 'skip',
             },
         ];
+        return actions;
     }
 
     if (request.mode === 'review') {
-        return [
+        const actions: HitlActionDescriptor[] = [
             {
                 key: `${request.id}-approve`,
                 label: 'Review & Approve',
@@ -694,10 +754,11 @@ function getHitlActions(request: HitlRequestState): HitlActionDescriptor[] {
                 requiresInput: true,
             },
         ];
+        return actions;
     }
 
-    const options = request.options?.length
-        ? request.options.map((option) => ({
+    const options: HitlActionDescriptor[] = request.options?.length
+        ? request.options.map((option): HitlActionDescriptor => ({
               key: `${request.id}-${option.id}`,
               label:
                   option.action === 'approve'
@@ -705,7 +766,7 @@ function getHitlActions(request: HitlRequestState): HitlActionDescriptor[] {
                       : option.action === 'reject'
                       ? 'Reject & Stop'
                       : option.label,
-              action: option.action as HitlAction,
+              action: option.action,
               primary: option.action === 'approve',
               requiresInput: option.action === 'custom',
           }))

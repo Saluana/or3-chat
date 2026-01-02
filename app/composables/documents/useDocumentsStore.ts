@@ -53,7 +53,7 @@ export async function flush(id: string) {
     if (!st.pendingTitle && !st.pendingContent) return; // nothing to persist
 
     // Cancel any pending debounced save
-    if (st.debouncedSave) {
+    if (st.debouncedSave && typeof st.debouncedSave.cancel === 'function') {
         st.debouncedSave.cancel();
     }
 
@@ -299,7 +299,7 @@ export async function releaseDocument(
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
         for (const [, st] of documentsMap) {
-            if (st.debouncedSave) {
+            if (st.debouncedSave && typeof st.debouncedSave.cancel === 'function') {
                 st.debouncedSave.cancel();
             }
         }

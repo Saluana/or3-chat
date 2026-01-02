@@ -7,9 +7,13 @@ import type {
     ChatHistoryMessage,
     ToolCallState,
     HitlRequestState,
+    UiWorkflowState,
 } from '~/utils/chat/workflow-types';
 import { deriveStartNodeId } from '~/utils/chat/workflow-types';
 import type { ToolCallEventWithNode } from '@or3/workflow-core';
+
+const SUBFLOW_SCOPE_PREFIX = 'sf:';
+const SUBFLOW_SCOPE_SEPARATOR = '|';
 
 /**
  * Reactive state interface for workflow execution streaming.
@@ -115,7 +119,7 @@ export interface WorkflowStreamAccumulatorApi {
     ): void;
 
     // Workflow-level streaming (leaf aggregation)
-    workflowToken(token: string): void;
+    workflowToken(token: string, meta?: { nodeId?: string }): void;
 
     // Execution lifecycle
     finalize(opts?: {
@@ -154,6 +158,26 @@ export interface WorkflowStreamAccumulatorApi {
     ): WorkflowMessageData;
 }
 
+type WorkflowUiState = WorkflowStreamingState | UiWorkflowState;
+
+function parseScopedNodeId(scopedId: string): { path: string[]; nodeId: string } {
+    const segments = scopedId.split(SUBFLOW_SCOPE_SEPARATOR);
+    if (segments.length === 1) {
+        return { path: [], nodeId: scopedId };
+    }
+
+    const path: string[] = [];
+    for (let i = 0; i < segments.length - 1; i++) {
+        const segment = segments[i];
+        if (!segment.startsWith(SUBFLOW_SCOPE_PREFIX)) {
+            return { path: [], nodeId: scopedId };
+        }
+        path.push(segment.slice(SUBFLOW_SCOPE_PREFIX.length));
+    }
+
+    return { path, nodeId: segments[segments.length - 1] };
+}
+
 /**
  * Creates a workflow stream accumulator.
  * Manages reactive state updates with RAF batching for performance.
@@ -184,6 +208,182 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
     let finalized = false;
     let totalTokens = 0;
 
+    function createSubflowState(
+        node: NodeState,
+        nodeId: string
+    ): UiWorkflowState {
+        return {
+            workflowId: nodeId,
+            workflowName: node.label || nodeId,
+            executionState: 'running',
+            nodeStates: {},
+            executionOrder: [],
+            lastActiveNodeId: null,
+            finalNodeId: null,
+            currentNodeId: null,
+            branches: {},
+            hitlRequests: {},
+            finalOutput: '',
+            finalStreamingText: '',
+            failedNodeId: null,
+            version: 0,
+        };
+    }
+
+    function ensureNodeState(
+        targetState: WorkflowUiState,
+        nodeId: string,
+        label?: string,
+        type?: string
+    ): NodeState {
+        const existing = targetState.nodeStates[nodeId];
+        if (existing) return existing;
+
+        const node: NodeState = {
+            status: 'active',
+            label: label || nodeId,
+            type: type || 'node',
+            output: '',
+            streamingText: '',
+            startedAt: Date.now(),
+            tokenCount: 0,
+        };
+        targetState.nodeStates[nodeId] = node;
+        return node;
+    }
+
+    function getOrCreateSubflowState(path: string[]): UiWorkflowState {
+        let currentState: WorkflowUiState = state;
+        for (const nodeId of path) {
+            const node = ensureNodeState(currentState, nodeId);
+            if (!node.subflowState) {
+                node.subflowState = createSubflowState(node, nodeId);
+            }
+            currentState = node.subflowState;
+        }
+        return currentState as UiWorkflowState;
+    }
+
+    function resolveScopedTarget(scopedId: string): {
+        targetState: WorkflowUiState;
+        nodeId: string;
+        path: string[];
+    } {
+        const { path, nodeId } = parseScopedNodeId(scopedId);
+        if (path.length === 0) {
+            return { targetState: state, nodeId, path };
+        }
+        return { targetState: getOrCreateSubflowState(path), nodeId, path };
+    }
+
+    function ensureBranches(
+        targetState: WorkflowUiState
+    ): Record<string, BranchState> {
+        if (!targetState.branches) {
+            targetState.branches = {};
+        }
+        return targetState.branches;
+    }
+
+    function parseBranchKey(
+        key: string
+    ): { nodeId: string; branchId: string } | null {
+        const splitIndex = key.lastIndexOf(':');
+        if (splitIndex <= 0) return null;
+        return {
+            nodeId: key.slice(0, splitIndex),
+            branchId: key.slice(splitIndex + 1),
+        };
+    }
+
+    function ensureBranchState(
+        targetState: WorkflowUiState,
+        nodeId: string,
+        branchId: string,
+        label?: string
+    ): BranchState {
+        const branches = ensureBranches(targetState);
+        const key = `${nodeId}:${branchId}`;
+        const existing = branches[key];
+        if (existing) return existing;
+
+        const branch: BranchState = {
+            id: branchId,
+            label: label || branchId,
+            status: 'active',
+            output: '',
+            streamingText: '',
+        };
+        branches[key] = branch;
+        return branch;
+    }
+
+    function ensureHitlRequests(
+        targetState: WorkflowUiState
+    ): Record<string, HitlRequestState> {
+        if (!targetState.hitlRequests) {
+            targetState.hitlRequests = {};
+        }
+        return targetState.hitlRequests;
+    }
+
+    function touchState(targetState: WorkflowUiState) {
+        if (targetState !== state) {
+            targetState.version = (targetState.version ?? 0) + 1;
+        }
+        state.version++;
+    }
+
+    function finalizeSubflowState(
+        subflowState: UiWorkflowState,
+        output?: string
+    ) {
+        if (
+            subflowState.executionState === 'running' ||
+            subflowState.executionState === 'idle'
+        ) {
+            subflowState.executionState = 'completed';
+        }
+        subflowState.currentNodeId = null;
+        if (!subflowState.finalOutput) {
+            if (subflowState.finalStreamingText) {
+                subflowState.finalOutput = subflowState.finalStreamingText;
+            } else if (output) {
+                subflowState.finalOutput = output;
+            }
+        }
+        if (!subflowState.finalNodeId && subflowState.executionOrder.length) {
+            subflowState.finalNodeId =
+                subflowState.executionOrder[
+                    subflowState.executionOrder.length - 1
+                ];
+        }
+        subflowState.version = (subflowState.version ?? 0) + 1;
+    }
+
+    function findHitlRequestState(
+        targetState: WorkflowUiState,
+        requestId: string
+    ): { state: WorkflowUiState; request: HitlRequestState } | null {
+        if (
+            targetState.hitlRequests &&
+            targetState.hitlRequests[requestId]
+        ) {
+            return {
+                state: targetState,
+                request: targetState.hitlRequests[requestId],
+            };
+        }
+
+        for (const node of Object.values(targetState.nodeStates)) {
+            if (!node.subflowState) continue;
+            const found = findHitlRequestState(node.subflowState, requestId);
+            if (found) return found;
+        }
+
+        return null;
+    }
+
     function scheduleFlush() {
         if (rafId !== null || finalized) return;
         if (typeof requestAnimationFrame === 'function') {
@@ -196,26 +396,35 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
 
     function flush() {
         rafId = null;
+        const touchedStates = new Set<WorkflowUiState>();
 
         // Flush node tokens
-        for (const [nodeId, tokens] of pendingNodeTokens) {
-            const node = state.nodeStates[nodeId];
-            if (node) {
-                node.streamingText =
-                    (node.streamingText || '') + tokens.join('');
-                // Update token count estimate (rough approximation)
-                node.tokenCount = (node.tokenCount || 0) + tokens.length;
-            }
+        for (const [scopedNodeId, tokens] of pendingNodeTokens) {
+            const { targetState, nodeId } =
+                resolveScopedTarget(scopedNodeId);
+            const node = targetState.nodeStates[nodeId];
+            if (!node) continue;
+
+            node.streamingText = (node.streamingText || '') + tokens.join('');
+            // Update token count estimate (rough approximation)
+            node.tokenCount = (node.tokenCount || 0) + tokens.length;
+            touchedStates.add(targetState);
         }
         pendingNodeTokens.clear();
 
         // Flush branch tokens
         for (const [key, tokens] of pendingBranchTokens) {
-            const branch = state.branches[key];
-            if (branch) {
-                branch.streamingText =
-                    (branch.streamingText || '') + tokens.join('');
-            }
+            const parsed = parseBranchKey(key);
+            if (!parsed) continue;
+            const { targetState, nodeId } = resolveScopedTarget(parsed.nodeId);
+            const branches = targetState.branches;
+            if (!branches) continue;
+            const branch = branches[key];
+            if (!branch) continue;
+
+            branch.streamingText =
+                (branch.streamingText || '') + tokens.join('');
+            touchedStates.add(targetState);
         }
         pendingBranchTokens.clear();
 
@@ -225,31 +434,64 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             state.finalStreamingText = (state.finalStreamingText || '') + text;
             state.finalOutput = state.finalStreamingText;
             pendingWorkflowTokens = [];
+            touchedStates.add(state);
         }
 
-        state.version++;
+        if (touchedStates.size > 0) {
+            for (const targetState of touchedStates) {
+                if (targetState !== state) {
+                    targetState.version = (targetState.version ?? 0) + 1;
+                }
+            }
+            state.version++;
+        }
     }
 
     function nodeStart(nodeId: string, label: string, type: string) {
         if (finalized) return;
 
-        state.nodeStates[nodeId] = {
-            status: 'active',
-            label,
-            type,
-            output: '',
-            streamingText: '',
-            startedAt: Date.now(),
-            tokenCount: 0,
-        };
+        const { targetState, nodeId: localNodeId } =
+            resolveScopedTarget(nodeId);
 
-        if (!state.executionOrder.includes(nodeId)) {
-            state.executionOrder.push(nodeId);
+        const node =
+            targetState.nodeStates[localNodeId] ||
+            ({
+                status: 'active',
+                label,
+                type,
+                output: '',
+                streamingText: '',
+                startedAt: Date.now(),
+                tokenCount: 0,
+            } satisfies NodeState);
+
+        node.status = 'active';
+        node.label = label;
+        node.type = type;
+        node.output = node.output || '';
+        node.streamingText = node.streamingText ?? '';
+        node.startedAt = node.startedAt ?? Date.now();
+        node.tokenCount = node.tokenCount ?? 0;
+
+        if (type === 'subflow' && !node.subflowState) {
+            node.subflowState = createSubflowState(node, localNodeId);
+        }
+        if (node.subflowState && node.subflowState.workflowName !== node.label) {
+            node.subflowState.workflowName = node.label || localNodeId;
         }
 
-        state.currentNodeId = nodeId;
-        state.lastActiveNodeId = nodeId;
-        state.version++;
+        targetState.nodeStates[localNodeId] = node;
+
+        if (!targetState.executionOrder.includes(localNodeId)) {
+            targetState.executionOrder.push(localNodeId);
+        }
+
+        targetState.currentNodeId = localNodeId;
+        targetState.lastActiveNodeId = localNodeId;
+        if (targetState.executionState !== 'running') {
+            targetState.executionState = 'running';
+        }
+        touchState(targetState);
     }
 
     function nodeToken(nodeId: string, token: string) {
@@ -280,57 +522,89 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             flush();
         }
 
-        const node = state.nodeStates[nodeId];
-        if (node) {
-            node.status = 'completed';
-            node.output = output;
-            node.streamingText = undefined; // Clear streaming buffer
-            node.finishedAt = Date.now();
+        const { targetState, nodeId: localNodeId } =
+            resolveScopedTarget(nodeId);
+        const node = targetState.nodeStates[localNodeId];
+        if (!node) return;
+
+        node.status = 'completed';
+        node.output = output;
+        node.streamingText = undefined; // Clear streaming buffer
+        node.finishedAt = Date.now();
+
+        if (targetState.currentNodeId === localNodeId) {
+            targetState.currentNodeId = null;
         }
 
-        if (state.currentNodeId === nodeId) {
-            state.currentNodeId = null;
-        }
+        targetState.lastActiveNodeId = localNodeId;
 
-        state.lastActiveNodeId = nodeId;
+        if (node.subflowState) {
+            finalizeSubflowState(node.subflowState, output);
+        }
 
         // Do NOT set finalOutput here - intermediate nodes should not trigger
         // the result box. finalOutput is only set when finalize() is called
         // with the actual workflow result.
-        state.version++;
+        touchState(targetState);
     }
 
     function nodeError(nodeId: string, error: Error) {
         if (finalized) return;
 
-        const node = state.nodeStates[nodeId];
-        if (node) {
-            node.status = 'error';
-            node.error = error.message;
-            node.finishedAt = Date.now();
+        const { targetState, nodeId: localNodeId } =
+            resolveScopedTarget(nodeId);
+        const node = targetState.nodeStates[localNodeId];
+        if (!node) return;
+
+        node.status = 'error';
+        node.error = error.message;
+        node.finishedAt = Date.now();
+
+        if (node.subflowState) {
+            node.subflowState.executionState = 'error';
+            node.subflowState.failedNodeId =
+                node.subflowState.lastActiveNodeId || null;
+            node.subflowState.version = (node.subflowState.version ?? 0) + 1;
         }
 
-        state.error = error;
-        state.executionState = 'error';
-        state.failedNodeId = nodeId;
-        state.currentNodeId = nodeId;
-        state.version++;
+        targetState.executionState = 'error';
+        targetState.failedNodeId = localNodeId;
+        targetState.currentNodeId = localNodeId;
+
+        if (targetState === state) {
+            state.error = error;
+        }
+
+        touchState(targetState);
     }
 
-    function workflowToken(token: string) {
+    function workflowToken(token: string, meta?: { nodeId?: string }) {
         if (finalized || !token) return;
+        if (meta?.nodeId) {
+            const { targetState } = resolveScopedTarget(meta.nodeId);
+            if (targetState !== state) {
+                targetState.finalStreamingText =
+                    (targetState.finalStreamingText || '') + token;
+                targetState.finalOutput = targetState.finalStreamingText;
+                touchState(targetState);
+                return;
+            }
+        }
+
         // Workflow tokens update immediately for real-time final output streaming
         state.finalStreamingText = (state.finalStreamingText || '') + token;
         state.finalOutput = state.finalStreamingText;
-        state.version++;
+        touchState(state);
     }
 
     function routeSelected(nodeId: string, route: string) {
         if (finalized) return;
-        const node = state.nodeStates[nodeId];
+        const { targetState, nodeId: localNodeId } =
+            resolveScopedTarget(nodeId);
+        const node = targetState.nodeStates[localNodeId];
         if (node) {
             (node as NodeState & { route?: string }).route = route;
-            state.version++;
+            touchState(targetState);
         }
     }
 
@@ -343,27 +617,36 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         }
     ) {
         if (finalized) return;
-        const node = state.nodeStates[nodeId];
+        const { targetState, nodeId: localNodeId } =
+            resolveScopedTarget(nodeId);
+        const node = targetState.nodeStates[localNodeId];
         if (node) {
             const increment = usage.totalTokens ?? 0;
             node.tokenCount = (node.tokenCount || 0) + increment;
             totalTokens += increment;
-            state.version++;
+            touchState(targetState);
         }
     }
 
     function branchStart(nodeId: string, branchId: string, label: string) {
         if (finalized) return;
 
-        const key = `${nodeId}:${branchId}`;
-        state.branches[key] = {
-            id: branchId,
-            label,
-            status: 'active',
-            output: '',
-            streamingText: '',
-        };
-        state.version++;
+        const { targetState, nodeId: localNodeId } =
+            resolveScopedTarget(nodeId);
+        
+        // Parallel nodes should be started before branches
+        if (!targetState.nodeStates[localNodeId]) return;
+
+        const branch = ensureBranchState(
+            targetState,
+            localNodeId,
+            branchId,
+            label
+        );
+        branch.status = 'active';
+        branch.output = '';
+        branch.streamingText = '';
+        touchState(targetState);
     }
 
     // NOTE: label param comes from or3-workflows callback (4th positional param)
@@ -401,22 +684,32 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
     ) {
         if (finalized) return;
 
-        const key = `${nodeId}:${branchId}`;
-        const branch = state.branches[key];
-        if (branch) {
-            branch.status = 'completed';
-            // Prefer accumulated streaming text; fall back to engine output
-            branch.output = branch.streamingText || output || '';
-            branch.streamingText = undefined;
-        }
-        state.version++;
+        const { targetState, nodeId: localNodeId } =
+            resolveScopedTarget(nodeId);
+        
+        const branches = targetState.branches;
+        if (!branches) return;
+        
+        const key = `${localNodeId}:${branchId}`;
+        const branch = branches[key];
+        if (!branch) return;
+
+        branch.status = 'completed';
+        // Prefer accumulated streaming text; fall back to engine output
+        branch.output = branch.streamingText || output || '';
+        branch.streamingText = undefined;
+        touchState(targetState);
     }
 
     function toolCallEvent(event: ToolCallEventWithNode) {
         if (finalized || !event?.nodeId) return;
 
         const { nodeId, nodeLabel, nodeType, branchId, branchLabel } = event;
-        const targetKey = branchId ? `${nodeId}:${branchId}` : nodeId;
+        const { targetState, nodeId: localNodeId } =
+            resolveScopedTarget(nodeId);
+        const targetKey = branchId
+            ? `${localNodeId}:${branchId}`
+            : localNodeId;
 
         let target:
             | (NodeState & { toolCalls?: ToolCallState[] })
@@ -424,28 +717,20 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             | undefined;
 
         if (branchId) {
-            const branch =
-                state.branches[targetKey] ||
-                ({
-                    id: branchId,
-                    label: branchLabel || branchId,
-                    status: 'active',
-                    output: '',
-                    streamingText: '',
-                } as BranchState);
-            state.branches[targetKey] = branch;
+            const branch = ensureBranchState(
+                targetState,
+                localNodeId,
+                branchId,
+                branchLabel
+            );
             target = branch as BranchState & { toolCalls?: ToolCallState[] };
         } else {
-            const node =
-                state.nodeStates[nodeId] ||
-                ({
-                    status: 'active',
-                    label: nodeLabel || nodeId,
-                    type: nodeType || 'node',
-                    output: '',
-                    streamingText: '',
-                } as NodeState);
-            state.nodeStates[nodeId] = node;
+            const node = ensureNodeState(
+                targetState,
+                localNodeId,
+                nodeLabel || localNodeId,
+                nodeType || 'node'
+            );
             target = node as NodeState & { toolCalls?: ToolCallState[] };
         }
 
@@ -473,20 +758,29 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         }
 
         target.toolCalls = toolCalls;
-        state.version++;
+        touchState(targetState);
     }
 
     function hitlRequest(request: HitlRequestState) {
         if (finalized) return;
 
-        const existing = state.hitlRequests || {};
-        state.hitlRequests = { ...existing, [request.id]: request };
+        const { targetState, nodeId: localNodeId } =
+            resolveScopedTarget(request.nodeId);
+        const hitlRequests = ensureHitlRequests(targetState);
+        const scopedRequest = {
+            ...request,
+            nodeId: localNodeId,
+        } satisfies HitlRequestState;
+        targetState.hitlRequests = {
+            ...hitlRequests,
+            [request.id]: scopedRequest,
+        };
 
         const node =
-            state.nodeStates[request.nodeId] ||
+            targetState.nodeStates[localNodeId] ||
             ({
                 status: 'waiting',
-                label: request.nodeLabel || request.nodeId,
+                label: request.nodeLabel || localNodeId,
                 type: 'node',
                 output: '',
                 streamingText: '',
@@ -500,36 +794,38 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             node.startedAt = Date.now();
         }
 
-        state.nodeStates[request.nodeId] = node;
+        targetState.nodeStates[localNodeId] = node;
 
-        if (!state.executionOrder.includes(request.nodeId)) {
-            state.executionOrder.push(request.nodeId);
+        if (!targetState.executionOrder.includes(localNodeId)) {
+            targetState.executionOrder.push(localNodeId);
         }
 
-        state.currentNodeId = request.nodeId;
-        state.lastActiveNodeId = request.nodeId;
-        state.version++;
+        targetState.currentNodeId = localNodeId;
+        targetState.lastActiveNodeId = localNodeId;
+        touchState(targetState);
     }
 
     function hitlResolve(
         requestId: string,
         response?: { action?: string; data?: unknown }
     ) {
-        if (!state.hitlRequests || !state.hitlRequests[requestId]) return;
+        const found = findHitlRequestState(state, requestId);
+        if (!found) return;
 
-        const request = state.hitlRequests[requestId];
-        const nextRequests = { ...state.hitlRequests };
+        const { state: targetState, request } = found;
+        const hitlRequests = ensureHitlRequests(targetState);
+        const nextRequests = { ...hitlRequests };
         delete nextRequests[requestId];
-        state.hitlRequests =
+        targetState.hitlRequests =
             Object.keys(nextRequests).length > 0 ? nextRequests : {};
 
-        const node = state.nodeStates[request.nodeId];
+        const node = targetState.nodeStates[request.nodeId];
         if (node && node.status === 'waiting') {
             if (response?.action === 'reject') {
                 node.status = 'error';
                 node.error = 'Rejected by user';
                 node.finishedAt = Date.now();
-                state.version++;
+                touchState(targetState);
                 return;
             }
             if (
@@ -552,7 +848,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             }
         }
 
-        state.version++;
+        touchState(targetState);
     }
 
     function finalize(opts?: {

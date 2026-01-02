@@ -336,7 +336,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { computed } from 'vue';
 import { isMobile, state } from '~/state/global';
-import { useToast, useUserApiKey, useOpenRouterAuth, useModelStore } from '#imports';
+import { useToast, useUserApiKey, useOpenRouterAuth, useModelStore, useAiSettings } from '#imports';
 import {
     useComposerActions,
     type ComposerActionEntry,

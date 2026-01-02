@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { useScrollLock } from './useScrollLock';
+import { useScrollLock } from '~/composables/core/useScrollLock';
 import { ref, nextTick } from 'vue';
 
 describe('useScrollLock', () => {

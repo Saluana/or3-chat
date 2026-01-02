@@ -111,6 +111,9 @@ export interface NodeState {
 
     /** Tool calls executed by this node */
     toolCalls?: ToolCallState[];
+
+    /** Nested subflow execution state (if this node runs a subflow) */
+    subflowState?: UiWorkflowState;
 }
 
 /** State of a parallel branch within a workflow node */
@@ -169,9 +172,6 @@ export interface WorkflowMessageData {
 
     /** Workflow display name */
     workflowName: string;
-
-    /** Original user prompt that triggered the workflow */
-    prompt?: string;
 
     /** Original user prompt that triggered the workflow */
     prompt: string;
@@ -311,6 +311,9 @@ export interface UiWorkflowState {
 
     /** Workflow display name */
     workflowName: string;
+
+    /** Original user prompt that triggered the workflow */
+    prompt?: string;
 
     /** Overall execution state */
     executionState: WorkflowExecutionState;
