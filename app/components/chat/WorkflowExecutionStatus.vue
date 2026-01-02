@@ -24,16 +24,19 @@
                 <span :class="statusTextClass">({{ statusText }})</span>
             </div>
             <div class="flex items-center gap-2">
-                <span
+                <button
                     v-if="hasPendingHitl"
-                    class="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--md-extended-color-warning-color-container)] text-[var(--md-extended-color-warning-on-color-container)]"
+                    type="button"
+                    class="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--md-extended-color-warning-color-container)] text-[var(--md-extended-color-warning-on-color-container)] hover:shadow-sm transition-shadow"
+                    :title="pendingHitlContextLabel"
+                    @click.stop="focusFirstPendingHitl"
                 >
                     <UIcon
                         :name="useIcon('ui.warning').value"
                         class="w-3 h-3 shrink-0"
                     />
                     {{ pendingHitlBadgeText }}
-                </span>
+                </button>
                 <UIcon
                     :name="collapsed ? expandIcon : collapseIcon"
                     class="w-4 h-4 opacity-70"
@@ -49,7 +52,11 @@
                 :key="nodeId"
                 class="node-item"
             >
-                <details class="group">
+                <details
+                    class="group"
+                    :open="isNodeOpen(nodeId)"
+                    @toggle="handleNodeToggle(nodeId, $event)"
+                >
                     <summary
                         class="flex items-center gap-2 cursor-pointer list-none py-1 hover:bg-[var(--md-surface-container-high)] rounded px-1 transition-colors"
                     >
@@ -64,6 +71,12 @@
                         <span class="text-xs opacity-50 ml-auto shrink-0">{{
                             getNodeType(nodeId)
                         }}</span>
+                        <span
+                            v-if="getNodePendingHitlCount(nodeId) > 0"
+                            class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--md-extended-color-warning-color-container)] text-[var(--md-extended-color-warning-on-color-container)]"
+                        >
+                            Approval needed
+                        </span>
                         <UIcon
                             name="i-heroicons-chevron-right"
                             class="w-3 h-3 transition-transform group-open:rotate-90 opacity-50 shrink-0"
@@ -321,6 +334,7 @@
                                     getNodeSubflowState(nodeId)!
                                 "
                                 :depth="depth + 1"
+                                :focus-path="getChildFocusPath(nodeId)"
                             />
                         </div>
                     </div>
@@ -346,16 +360,21 @@ import { useIcon } from '~/composables/useIcon';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
+import { useToast } from '#imports';
 
 defineOptions({ name: 'WorkflowExecutionStatus' });
 
 const props = defineProps<{
     workflowState: UiWorkflowState;
     depth?: number;
+    focusPath?: string[];
 }>();
 
 const depth = computed(() => props.depth ?? 0);
 const collapsed = ref(depth.value === 0);
+const openNodes = ref<Record<string, boolean>>({});
+const focusNodeId = ref<string | null>(null);
+const focusNodePath = ref<string[] | null>(null);
 function toggleCollapse() {
     collapsed.value = !collapsed.value;
 }
@@ -395,14 +414,48 @@ const statusTextClass = computed(() =>
     ].join(' ')
 );
 
+type PendingHitlEntry = {
+    request: HitlRequestState;
+    path: string[];
+    workflowName: string;
+};
+
+function collectPendingHitl(
+    state: UiWorkflowState,
+    path: string[] = []
+): PendingHitlEntry[] {
+    const entries: PendingHitlEntry[] = [];
+    if (state.hitlRequests) {
+        for (const request of Object.values(state.hitlRequests)) {
+            entries.push({
+                request,
+                path,
+                workflowName: state.workflowName,
+            });
+        }
+    }
+
+    for (const [nodeId, node] of Object.entries(state.nodeStates)) {
+        if (node.subflowState) {
+            entries.push(
+                ...collectPendingHitl(node.subflowState, [...path, nodeId])
+            );
+        }
+    }
+
+    return entries;
+}
+
 const pendingHitlRequests = computed(() =>
-    Object.values(props.workflowState.hitlRequests || {})
+    collectPendingHitl(props.workflowState)
 );
 const pendingHitlCount = computed(() => pendingHitlRequests.value.length);
 const hasPendingHitl = computed(() => pendingHitlCount.value > 0);
 const pendingHitlBadge = computed(() => {
     if (!hasPendingHitl.value) return '';
-    const modes = new Set(pendingHitlRequests.value.map((req) => req.mode));
+    const modes = new Set(
+        pendingHitlRequests.value.map((entry) => entry.request.mode)
+    );
     if (modes.size === 1) {
         const mode = [...modes][0];
         if (mode === 'approval') return 'Approval needed';
@@ -420,7 +473,9 @@ const pendingHitlBadgeText = computed(() => {
 });
 const pendingHitlStatusText = computed(() => {
     if (!hasPendingHitl.value) return '';
-    const modes = new Set(pendingHitlRequests.value.map((req) => req.mode));
+    const modes = new Set(
+        pendingHitlRequests.value.map((entry) => entry.request.mode)
+    );
     if (modes.size === 1) {
         const mode = [...modes][0];
         if (mode === 'approval') return 'Awaiting approval';
@@ -430,12 +485,45 @@ const pendingHitlStatusText = computed(() => {
     return 'Action required';
 });
 
+const toast = useToast();
+const seenHitlRequests = new Set<string>();
+
 watch(
-    pendingHitlCount,
-    (next, prev) => {
-        if (next > 0 && (prev === undefined || next > prev)) {
-            collapsed.value = false;
+    pendingHitlRequests,
+    (next) => {
+        if (depth.value !== 0 || !import.meta.client) return;
+        for (const entry of next) {
+            if (seenHitlRequests.has(entry.request.id)) continue;
+            seenHitlRequests.add(entry.request.id);
+            toast.add({
+                id: `hitl-${entry.request.id}`,
+                title: pendingHitlBadge.value || 'Approval needed',
+                description: getPendingHitlContextLabel(entry),
+                color: 'warning',
+                icon: useIcon('ui.warning').value,
+                actions: [
+                    {
+                        label: 'Review',
+                        size: 'sm',
+                        variant: 'soft',
+                        color: 'warning',
+                        class: 'whitespace-nowrap w-auto px-3',
+                        onClick: () => {
+                            focusHitlPath(buildFocusPath(entry));
+                        },
+                    },
+                ],
+            });
         }
+    },
+    { immediate: true, deep: true }
+);
+
+watch(
+    () => props.focusPath,
+    (path) => {
+        if (!path || path.length === 0) return;
+        focusHitlPath(path);
     },
     { immediate: true }
 );
@@ -591,6 +679,26 @@ function getNodeHitlRequests(nodeId: string): HitlRequestState[] {
     return Object.values(requests).filter((req) => req.nodeId === nodeId);
 }
 
+function getNodePendingHitlCount(nodeId: string): number {
+    const localCount = getNodeHitlRequests(nodeId).length;
+    const subflowState = getNodeSubflowState(nodeId);
+    const nestedCount = subflowState ? collectPendingHitl(subflowState).length : 0;
+    return localCount + nestedCount;
+}
+
+function isNodeOpen(nodeId: string): boolean {
+    const stored = openNodes.value[nodeId];
+    if (stored !== undefined) return stored;
+    const status = getNodeStatus(nodeId);
+    return status === 'waiting' || status === 'active';
+}
+
+function handleNodeToggle(nodeId: string, event: Event) {
+    const target = event.target as HTMLDetailsElement | null;
+    if (!target) return;
+    openNodes.value = { ...openNodes.value, [nodeId]: target.open };
+}
+
 function getNodeWaitingText(nodeId: string): string {
     const requests = getNodeHitlRequests(nodeId);
     if (!requests.length) return 'Waiting for input...';
@@ -603,6 +711,50 @@ function getNodeWaitingText(nodeId: string): string {
     }
     return 'Waiting for action...';
 }
+
+function buildFocusPath(entry: PendingHitlEntry): string[] {
+    return [...entry.path, entry.request.nodeId];
+}
+
+function focusHitlPath(path: string[]) {
+    if (!path.length) return;
+    collapsed.value = false;
+    const [nodeId, ...rest] = path;
+    openNodes.value = { ...openNodes.value, [nodeId]: true };
+    focusNodeId.value = nodeId;
+    focusNodePath.value = rest.length ? rest : null;
+}
+
+function focusFirstPendingHitl() {
+    const entry = pendingHitlRequests.value[0];
+    if (!entry) return;
+    focusHitlPath(buildFocusPath(entry));
+}
+
+function getChildFocusPath(nodeId: string): string[] | undefined {
+    if (focusNodeId.value !== nodeId || !focusNodePath.value) return;
+    return focusNodePath.value;
+}
+
+function getPendingHitlContextLabel(entry: PendingHitlEntry): string {
+    const labels: string[] = [];
+    let current = props.workflowState;
+    for (const segment of entry.path) {
+        const node = current.nodeStates[segment];
+        labels.push(node?.label || segment);
+        if (node?.subflowState) {
+            current = node.subflowState;
+        }
+    }
+    labels.push(entry.request.nodeLabel || entry.request.nodeId);
+    return labels.join(' › ');
+}
+
+const pendingHitlContextLabel = computed(() => {
+    const entry = pendingHitlRequests.value[0];
+    if (!entry) return '';
+    return getPendingHitlContextLabel(entry);
+});
 
 // Branch Helpers
 function hasBranches(nodeId: string): boolean {
