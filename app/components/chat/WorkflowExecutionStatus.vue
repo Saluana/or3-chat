@@ -19,10 +19,22 @@
                 }}</span>
                 <span class="text-xs opacity-70">({{ statusText }})</span>
             </div>
-            <UIcon
-                :name="collapsed ? expandIcon : collapseIcon"
-                class="w-4 h-4 opacity-70"
-            />
+            <div class="flex items-center gap-2">
+                <span
+                    v-if="hasPendingHitl"
+                    class="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--md-extended-color-warning-color-container)] text-[var(--md-extended-color-warning-on-color-container)]"
+                >
+                    <UIcon
+                        :name="useIcon('ui.warning').value"
+                        class="w-3 h-3 shrink-0"
+                    />
+                    {{ pendingHitlBadgeText }}
+                </span>
+                <UIcon
+                    :name="collapsed ? expandIcon : collapseIcon"
+                    class="w-4 h-4 opacity-70"
+                />
+            </div>
         </div>
 
         <!-- Content -->
@@ -69,6 +81,100 @@
                             <span class="whitespace-pre-wrap">{{
                                 getNodeError(nodeId)
                             }}</span>
+                        </div>
+
+                        <!-- HITL Requests -->
+                        <div
+                            v-if="getNodeHitlRequests(nodeId).length"
+                            class="space-y-2 mb-2 pl-2"
+                        >
+                            <div
+                                v-for="request in getNodeHitlRequests(nodeId)"
+                                :key="request.id"
+                                class="rounded border border-[var(--md-extended-color-warning-color)] bg-[var(--md-extended-color-warning-color-container)] p-2 text-[var(--md-extended-color-warning-on-color-container)]"
+                            >
+                                <div class="flex items-start gap-2">
+                                    <UIcon
+                                        :name="useIcon('ui.warning').value"
+                                        class="w-4 h-4 shrink-0 mt-0.5"
+                                    />
+                                    <div class="flex-1">
+                                        <div
+                                            class="text-[11px] font-semibold uppercase tracking-wide opacity-90"
+                                        >
+                                            {{ getHitlHeading(request) }}
+                                        </div>
+                                        <div class="text-sm font-medium">
+                                            {{ request.prompt }}
+                                        </div>
+                                        <div class="mt-2">
+                                            <div
+                                                class="text-[11px] font-semibold uppercase tracking-wide opacity-90"
+                                            >
+                                                {{ getHitlInputLabel(request) }}
+                                            </div>
+                                            <div
+                                                class="mt-1 text-xs font-mono whitespace-pre-wrap bg-[var(--md-surface)] text-[var(--md-on-surface)] p-2 rounded border border-[var(--md-outline-variant)] max-h-32 overflow-y-auto"
+                                            >
+                                                {{
+                                                    getHitlInputDisplay(
+                                                        request
+                                                    )
+                                                }}
+                                            </div>
+                                        </div>
+                                        <div
+                                            v-if="
+                                                request.mode === 'review' ||
+                                                request.context?.output
+                                            "
+                                            class="mt-2"
+                                        >
+                                            <div
+                                                class="text-[11px] font-semibold uppercase tracking-wide opacity-90"
+                                            >
+                                                Output to review
+                                            </div>
+                                            <div
+                                                class="mt-1 text-xs font-mono whitespace-pre-wrap bg-[var(--md-surface)] text-[var(--md-on-surface)] p-2 rounded border border-[var(--md-outline-variant)] max-h-32 overflow-y-auto"
+                                            >
+                                                {{
+                                                    getHitlOutputDisplay(
+                                                        request
+                                                    )
+                                                }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div
+                                    class="mt-2 flex flex-wrap items-center gap-2"
+                                >
+                                    <button
+                                        v-for="action in getHitlActions(
+                                            request
+                                        )"
+                                        :key="action.key"
+                                        type="button"
+                                        class="text-xs font-semibold px-3 py-1.5 rounded transition-shadow"
+                                        :class="
+                                            action.primary
+                                                ? 'bg-[var(--md-primary)] text-[var(--md-on-primary)] shadow-sm'
+                                                : 'border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] text-[var(--md-on-surface)]'
+                                        "
+                                        @click.stop="
+                                            handleHitlAction(
+                                                request,
+                                                action.action,
+                                                action.label,
+                                                action.requiresInput
+                                            )
+                                        "
+                                    >
+                                        {{ action.label }}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Tool Calls -->
@@ -195,6 +301,8 @@
                                 {{
                                     getNodeStatus(nodeId) === 'active'
                                         ? 'Executing...'
+                                        : getNodeStatus(nodeId) === 'waiting'
+                                        ? getNodeWaitingText(nodeId)
                                         : 'No output'
                                 }}
                             </div>
@@ -207,12 +315,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref, onMounted, watch } from 'vue';
 import {
     type UiWorkflowState,
     type NodeState,
     type BranchState,
     type ToolCallState,
+    type HitlRequestState,
+    type HitlAction,
     MERGE_BRANCH_ID,
     MERGE_BRANCH_LABEL,
 } from '~/utils/chat/workflow-types';
@@ -230,11 +340,59 @@ function toggleCollapse() {
     collapsed.value = !collapsed.value;
 }
 
+const pendingHitlRequests = computed(() =>
+    Object.values(props.workflowState.hitlRequests || {})
+);
+const pendingHitlCount = computed(() => pendingHitlRequests.value.length);
+const hasPendingHitl = computed(() => pendingHitlCount.value > 0);
+const pendingHitlBadge = computed(() => {
+    if (!hasPendingHitl.value) return '';
+    const modes = new Set(pendingHitlRequests.value.map((req) => req.mode));
+    if (modes.size === 1) {
+        const mode = [...modes][0];
+        if (mode === 'approval') return 'Approval needed';
+        if (mode === 'input') return 'Input needed';
+        if (mode === 'review') return 'Review needed';
+    }
+    return 'Action required';
+});
+const pendingHitlBadgeText = computed(() => {
+    if (!hasPendingHitl.value) return '';
+    if (pendingHitlCount.value > 1) {
+        return `${pendingHitlBadge.value} (${pendingHitlCount.value})`;
+    }
+    return pendingHitlBadge.value;
+});
+const pendingHitlStatusText = computed(() => {
+    if (!hasPendingHitl.value) return '';
+    const modes = new Set(pendingHitlRequests.value.map((req) => req.mode));
+    if (modes.size === 1) {
+        const mode = [...modes][0];
+        if (mode === 'approval') return 'Awaiting approval';
+        if (mode === 'input') return 'Awaiting input';
+        if (mode === 'review') return 'Awaiting review';
+    }
+    return 'Action required';
+});
+
+watch(
+    pendingHitlCount,
+    (next, prev) => {
+        if (next > 0 && (prev === undefined || next > prev)) {
+            collapsed.value = false;
+        }
+    },
+    { immediate: true }
+);
+
 // Icons
 const expandIcon = useIcon('shell.expand');
 const collapseIcon = useIcon('shell.collapse');
 
 const statusIcon = computed(() => {
+    if (hasPendingHitl.value) {
+        return useIcon('workflow.status.pending').value;
+    }
     switch (props.workflowState.executionState) {
         case 'running':
             return useIcon('workflow.status.running').value;
@@ -251,6 +409,9 @@ const statusIcon = computed(() => {
 });
 
 const statusColorClass = computed(() => {
+    if (hasPendingHitl.value) {
+        return 'text-[var(--md-extended-color-warning-color)] animate-pulse';
+    }
     switch (props.workflowState.executionState) {
         case 'running':
             return 'text-[var(--md-primary)] animate-spin';
@@ -267,6 +428,9 @@ const statusColorClass = computed(() => {
 });
 
 const statusText = computed(() => {
+    if (hasPendingHitl.value) {
+        return pendingHitlStatusText.value;
+    }
     return (
         props.workflowState.executionState.charAt(0).toUpperCase() +
         props.workflowState.executionState.slice(1)
@@ -306,6 +470,8 @@ function getNodeStatusIcon(nodeId: string) {
     switch (status) {
         case 'active':
             return useIcon('workflow.status.running').value;
+        case 'waiting':
+            return useIcon('workflow.status.pending').value;
         case 'completed':
             return useIcon('workflow.status.completed').value;
         case 'error':
@@ -330,6 +496,8 @@ function getNodeStatusColor(nodeId: string) {
     switch (status) {
         case 'active':
             return 'text-[var(--md-primary)] animate-spin';
+        case 'waiting':
+            return 'text-[var(--md-extended-color-warning-color)] animate-pulse';
         case 'completed':
             return 'text-[var(--md-primary)]';
         case 'error':
@@ -356,6 +524,25 @@ function getNodeError(nodeId: string): string | undefined {
 
 function getNodeToolCalls(nodeId: string): ToolCallState[] {
     return getNode(nodeId)?.toolCalls || [];
+}
+
+function getNodeHitlRequests(nodeId: string): HitlRequestState[] {
+    const requests = props.workflowState.hitlRequests;
+    if (!requests) return [];
+    return Object.values(requests).filter((req) => req.nodeId === nodeId);
+}
+
+function getNodeWaitingText(nodeId: string): string {
+    const requests = getNodeHitlRequests(nodeId);
+    if (!requests.length) return 'Waiting for input...';
+    const modes = new Set(requests.map((req) => req.mode));
+    if (modes.size === 1) {
+        const mode = [...modes][0];
+        if (mode === 'approval') return 'Waiting for approval...';
+        if (mode === 'input') return 'Waiting for input...';
+        if (mode === 'review') return 'Waiting for review...';
+    }
+    return 'Waiting for action...';
 }
 
 // Branch Helpers
@@ -451,6 +638,159 @@ function getToolStatusText(status: ToolCallState['status']): string {
         default:
             return 'Pending';
     }
+}
+
+type HitlActionDescriptor = {
+    key: string;
+    label: string;
+    action: HitlAction;
+    requiresInput?: boolean;
+    primary?: boolean;
+};
+
+function getHitlHeading(request: HitlRequestState): string {
+    switch (request.mode) {
+        case 'approval':
+            return 'Approval Required';
+        case 'input':
+            return 'Input Required';
+        case 'review':
+            return 'Review Required';
+        default:
+            return 'Action Required';
+    }
+}
+
+function getHitlActions(request: HitlRequestState): HitlActionDescriptor[] {
+    if (request.mode === 'input') {
+        return [
+            {
+                key: `${request.id}-submit`,
+                label: 'Provide Input',
+                action: 'submit',
+                requiresInput: true,
+                primary: true,
+            },
+            {
+                key: `${request.id}-skip`,
+                label: 'Skip',
+                action: 'skip',
+            },
+        ];
+    }
+
+    if (request.mode === 'review') {
+        return [
+            {
+                key: `${request.id}-approve`,
+                label: 'Review & Approve',
+                action: 'approve',
+                primary: true,
+            },
+            {
+                key: `${request.id}-modify`,
+                label: 'Edit Output',
+                action: 'modify',
+                requiresInput: true,
+            },
+        ];
+    }
+
+    const options = request.options?.length
+        ? request.options.map((option) => ({
+              key: `${request.id}-${option.id}`,
+              label:
+                  option.action === 'approve'
+                      ? 'Review & Approve'
+                      : option.action === 'reject'
+                      ? 'Reject & Stop'
+                      : option.label,
+              action: option.action as HitlAction,
+              primary: option.action === 'approve',
+              requiresInput: option.action === 'custom',
+          }))
+        : [
+              {
+                  key: `${request.id}-approve`,
+                  label: 'Review & Approve',
+                  action: 'approve',
+                  primary: true,
+              },
+              {
+                  key: `${request.id}-reject`,
+                  label: 'Reject & Stop',
+                  action: 'reject',
+              },
+          ];
+
+    return options;
+}
+
+function getHitlInputDisplay(request: HitlRequestState): string {
+    const input = request.context?.input ?? props.workflowState.prompt ?? '';
+    if (typeof input === 'string' && input.trim().length > 0) {
+        return input;
+    }
+    return '(no input provided)';
+}
+
+function getHitlOutputDisplay(request: HitlRequestState): string {
+    const output = request.context?.output;
+    if (typeof output === 'string' && output.trim().length > 0) {
+        return output;
+    }
+    return '(no output provided)';
+}
+
+function getHitlInputLabel(request: HitlRequestState): string {
+    switch (request.mode) {
+        case 'approval':
+            return 'Input to approve';
+        case 'input':
+            return 'Input provided';
+        case 'review':
+            return 'Input context';
+        default:
+            return 'Input';
+    }
+}
+
+function handleHitlAction(
+    request: HitlRequestState,
+    action: HitlAction,
+    label: string,
+    requiresInput?: boolean
+) {
+    const workflowSlash = (nuxtApp as any).$workflowSlash as
+        | {
+              respondHitl?: (
+                  requestId: string,
+                  action: HitlAction,
+                  data?: string | Record<string, unknown>
+              ) => boolean;
+          }
+        | undefined;
+
+    if (!workflowSlash?.respondHitl) return;
+
+    if (
+        requiresInput ||
+        action === 'submit' ||
+        action === 'modify' ||
+        action === 'custom'
+    ) {
+        const defaultValue =
+            request.mode === 'review'
+                ? request.context?.output
+                : request.context?.input;
+        const promptLabel = label || request.prompt;
+        const response = window.prompt(promptLabel, defaultValue || '');
+        if (response === null) return;
+        workflowSlash.respondHitl(request.id, action, response);
+        return;
+    }
+
+    workflowSlash.respondHitl(request.id, action);
 }
 
 // Theme

@@ -17,6 +17,8 @@ import type {
     ExecutionResult,
     ResumeFromOptions,
     ExecutableToolDefinition,
+    HITLRequest,
+    HITLResponse,
 } from '@or3/workflow-core';
 import { deriveMessageContent } from '~/utils/chat/messages';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
@@ -92,6 +94,8 @@ export interface WorkflowExecutionOptions {
     callbacks?: Partial<ExecutionCallbacks>;
     /** Tool call lifecycle events */
     onToolCallEvent?: (event: ToolCallEventWithNode) => void;
+    /** HITL (human-in-the-loop) callback */
+    onHITLRequest?: (request: HITLRequest) => Promise<HITLResponse>;
     /** Resume from a failed node without re-running completed steps */
     resumeFrom?: ResumeFromOptions;
 }
@@ -658,6 +662,7 @@ export function executeWorkflow(
             subflowRegistry,
             onToolCall: executeToolCallViaRegistry,
             onToolCallEvent: options.onToolCallEvent,
+            onHITLRequest: options.onHITLRequest,
         });
 
         // Build callbacks

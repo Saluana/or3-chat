@@ -11,7 +11,11 @@
 import { defineNuxtPlugin } from '#app';
 import { useAppConfig, useHooks, useToast } from '#imports';
 import type { Extension, Node } from '@tiptap/core';
-import type { ToolCallEventWithNode } from '@or3/workflow-core';
+import type {
+    ToolCallEventWithNode,
+    HITLRequest,
+    HITLResponse,
+} from '@or3/workflow-core';
 import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type { WorkflowExecutionController } from './WorkflowSlashCommands/executeWorkflow';
 import { createWorkflowStreamAccumulator } from '~/composables/chat/useWorkflowStreamAccumulator';
@@ -20,6 +24,8 @@ import { reportError } from '~/utils/errors';
 import {
     isWorkflowMessageData,
     deriveStartNodeId,
+    type HitlRequestState,
+    type HitlAction,
 } from '~/utils/chat/workflow-types';
 
 // Types for lazy-loaded modules
@@ -79,6 +85,15 @@ function normalizeMessagesPayload(
 // ─────────────────────────────────────────────────────────────
 
 let activeController: WorkflowExecutionController | null = null;
+const pendingHitlRequests = new Map<
+    string,
+    {
+        messageId: string;
+        request: HitlRequestState;
+        resolve: (response: HITLResponse) => void;
+        onResolve: (response: HITLResponse) => void;
+    }
+>();
 
 /**
  * Pending assistant message context for workflow execution.
@@ -130,6 +145,31 @@ export function stopWorkflowExecution(): boolean {
  */
 export function isWorkflowExecuting(): boolean {
     return activeController !== null && activeController.isRunning();
+}
+
+function respondToHitlRequest(
+    requestId: string,
+    action: HitlAction,
+    data?: string | Record<string, unknown>
+): boolean {
+    const pending = pendingHitlRequests.get(requestId);
+    if (!pending) return false;
+
+    if (action === 'reject') {
+        stopWorkflowExecution();
+    }
+
+    const response: HITLResponse = {
+        requestId,
+        action,
+        data,
+        respondedAt: new Date().toISOString(),
+    };
+
+    pendingHitlRequests.delete(requestId);
+    pending.resolve(response);
+    pending.onResolve(response);
+    return true;
 }
 
 export default defineNuxtPlugin((nuxtApp) => {
@@ -268,6 +308,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         stop: stopWorkflowExecution,
         isExecuting: isWorkflowExecuting,
         retry: retryWorkflowMessage,
+        respondHitl: respondToHitlRequest,
     });
 
     // Listen for stop-stream event to stop workflow execution (with cleanup to avoid leaks in HMR)
@@ -560,6 +601,63 @@ export default defineNuxtPlugin((nuxtApp) => {
                 );
         };
 
+        const resolveHitlRequestsForNode = (nodeId: string) => {
+            let changed = false;
+            for (const [requestId, pending] of pendingHitlRequests) {
+                if (
+                    pending.messageId === assistantContext.id &&
+                    pending.request.nodeId === nodeId
+                ) {
+                    pendingHitlRequests.delete(requestId);
+                    accumulator.hitlResolve(requestId);
+                    changed = true;
+                }
+            }
+            if (changed) {
+                emitStateUpdate();
+                persist(true);
+            }
+        };
+
+        const handleHitlRequest = async (
+            request: HITLRequest
+        ): Promise<HITLResponse> => {
+            const requestState: HitlRequestState = {
+                id: request.id,
+                nodeId: request.nodeId,
+                nodeLabel: request.nodeLabel,
+                mode: request.mode,
+                prompt: request.prompt,
+                options: request.options?.map((option) => ({ ...option })),
+                inputSchema: request.inputSchema,
+                createdAt: request.createdAt,
+                expiresAt: request.expiresAt,
+                context: {
+                    input: request.context?.input,
+                    output: request.context?.output,
+                    workflowName: request.context?.workflowName,
+                    sessionId: request.context?.sessionId,
+                },
+            };
+
+            accumulator.hitlRequest(requestState);
+            emitStateUpdate();
+            persist(true);
+
+            return new Promise<HITLResponse>((resolve) => {
+                pendingHitlRequests.set(request.id, {
+                    messageId: assistantContext.id,
+                    request: requestState,
+                    resolve,
+                    onResolve: (response) => {
+                        accumulator.hitlResolve(request.id, response);
+                        emitStateUpdate();
+                        persist(true);
+                    },
+                });
+            });
+        };
+
         // Initial persist to set message type
         persist(true);
         emitStateUpdate();
@@ -588,6 +686,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             },
             onNodeFinish: (nodeId: string, output: string) => {
                 accumulator.nodeFinish(nodeId, output);
+                resolveHitlRequestsForNode(nodeId);
                 emitStateUpdate();
                 hooks.doAction('workflow.execution:action:node_complete', {
                     messageId: assistantContext.id,
@@ -597,6 +696,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             },
             onNodeError: (nodeId: string, error: Error) => {
                 accumulator.nodeError(nodeId, error);
+                resolveHitlRequestsForNode(nodeId);
                 emitStateUpdate();
                 persist(true);
                 reportError(error, {
@@ -684,6 +784,25 @@ export default defineNuxtPlugin((nuxtApp) => {
             }
         };
 
+        const cleanupHitlRequests = () => {
+            let changed = false;
+            for (const [requestId, pending] of pendingHitlRequests) {
+                if (pending.messageId !== assistantContext.id) continue;
+                pendingHitlRequests.delete(requestId);
+                pending.resolve({
+                    requestId,
+                    action: 'reject',
+                    respondedAt: new Date().toISOString(),
+                });
+                accumulator.hitlResolve(requestId);
+                changed = true;
+            }
+            if (changed) {
+                emitStateUpdate();
+                persist(true);
+            }
+        };
+
         if (import.meta.dev) {
             console.log(
                 '[workflow-slash] Starting execution with prompt:',
@@ -711,6 +830,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             onWorkflowToken: (_token) => {},
             callbacks, // Pass our custom callbacks
             onToolCallEvent: handleToolCallEvent,
+            onHITLRequest: handleHitlRequest,
             onError: (error) => {
                 reportError(error, {
                     code: 'ERR_INTERNAL',
@@ -736,6 +856,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 });
                 emitStateUpdateSync();
                 persist(true); // Final persist
+                cleanupHitlRequests();
 
                 if (stopped) {
                     if (import.meta.dev)
@@ -756,6 +877,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 accumulator.finalize({ error });
                 emitStateUpdateSync();
                 persist(true);
+                cleanupHitlRequests();
 
                 reportError(error, {
                     code: 'ERR_INTERNAL',

@@ -6,6 +6,7 @@ import type {
     WorkflowMessageData,
     ChatHistoryMessage,
     ToolCallState,
+    HitlRequestState,
 } from '~/utils/chat/workflow-types';
 import { deriveStartNodeId } from '~/utils/chat/workflow-types';
 import type { ToolCallEventWithNode } from '@or3/workflow-core';
@@ -58,6 +59,8 @@ export interface WorkflowStreamingState {
     nodeOutputs?: Record<string, string>;
     /** Session messages collected during execution */
     sessionMessages?: ChatHistoryMessage[];
+    /** Pending HITL requests keyed by request ID */
+    hitlRequests?: Record<string, HitlRequestState>;
 }
 
 /**
@@ -105,6 +108,11 @@ export interface WorkflowStreamAccumulatorApi {
         output: string
     ): void;
     toolCallEvent(event: ToolCallEventWithNode): void;
+    hitlRequest(request: HitlRequestState): void;
+    hitlResolve(
+        requestId: string,
+        response?: { action?: string; data?: unknown }
+    ): void;
 
     // Workflow-level streaming (leaf aggregation)
     workflowToken(token: string): void;
@@ -165,6 +173,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         version: 0,
         error: null,
         failedNodeId: null,
+        hitlRequests: {},
     });
 
     // Pending updates for RAF batching
@@ -467,6 +476,85 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         state.version++;
     }
 
+    function hitlRequest(request: HitlRequestState) {
+        if (finalized) return;
+
+        const existing = state.hitlRequests || {};
+        state.hitlRequests = { ...existing, [request.id]: request };
+
+        const node =
+            state.nodeStates[request.nodeId] ||
+            ({
+                status: 'waiting',
+                label: request.nodeLabel || request.nodeId,
+                type: 'node',
+                output: '',
+                streamingText: '',
+            } as NodeState);
+
+        if (node.status !== 'error') {
+            node.status = 'waiting';
+        }
+
+        if (!node.startedAt) {
+            node.startedAt = Date.now();
+        }
+
+        state.nodeStates[request.nodeId] = node;
+
+        if (!state.executionOrder.includes(request.nodeId)) {
+            state.executionOrder.push(request.nodeId);
+        }
+
+        state.currentNodeId = request.nodeId;
+        state.lastActiveNodeId = request.nodeId;
+        state.version++;
+    }
+
+    function hitlResolve(
+        requestId: string,
+        response?: { action?: string; data?: unknown }
+    ) {
+        if (!state.hitlRequests || !state.hitlRequests[requestId]) return;
+
+        const request = state.hitlRequests[requestId];
+        const nextRequests = { ...state.hitlRequests };
+        delete nextRequests[requestId];
+        state.hitlRequests =
+            Object.keys(nextRequests).length > 0 ? nextRequests : {};
+
+        const node = state.nodeStates[request.nodeId];
+        if (node && node.status === 'waiting') {
+            if (response?.action === 'reject') {
+                node.status = 'error';
+                node.error = 'Rejected by user';
+                node.finishedAt = Date.now();
+                state.version++;
+                return;
+            }
+            if (
+                request.mode === 'review' &&
+                response?.action === 'modify' &&
+                response.data !== undefined
+            ) {
+                node.output =
+                    typeof response.data === 'string'
+                        ? response.data
+                        : JSON.stringify(response.data);
+            }
+
+            const shouldComplete = Boolean(
+                node.output || node.finishedAt || request.mode === 'review'
+            );
+            node.status = shouldComplete ? 'completed' : 'active';
+            if (shouldComplete && !node.finishedAt) {
+                node.finishedAt = Date.now();
+            }
+        }
+
+        state.version++;
+    }
+
     function finalize(opts?: {
         error?: Error;
         stopped?: boolean;
@@ -658,6 +746,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         state.failedNodeId = null;
         state.nodeOutputs = undefined;
         state.sessionMessages = undefined;
+        state.hitlRequests = {};
         state.version++;
     }
 
@@ -725,6 +814,10 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             lastActiveNodeId: state.lastActiveNodeId,
             finalNodeId: state.finalNodeId,
             branches: plainBranches,
+            hitlRequests:
+                state.hitlRequests && Object.keys(state.hitlRequests).length
+                    ? { ...state.hitlRequests }
+                    : undefined,
             finalOutput: state.finalOutput,
             failedNodeId: state.failedNodeId || undefined,
             nodeOutputs,
@@ -759,6 +852,8 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         branchReasoning,
         branchComplete,
         toolCallEvent,
+        hitlRequest,
+        hitlResolve,
         finalize,
         workflowToken,
         reset,

@@ -121,11 +121,13 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         workflowState = {
             workflowId: raw.data.workflowId,
             workflowName: raw.data.workflowName,
+            prompt: raw.data.prompt,
             executionState: raw.data.executionState,
             nodeStates: raw.data.nodeStates,
             executionOrder: raw.data.executionOrder,
             currentNodeId: raw.data.currentNodeId,
             branches: raw.data.branches,
+            hitlRequests: raw.data.hitlRequests,
             finalOutput: raw.data.finalOutput,
             failedNodeId:
                 raw.data.failedNodeId ?? raw.data.resumeState?.startNodeId,

@@ -16,6 +16,7 @@
 export type NodeExecutionStatus =
     | 'pending'
     | 'active'
+    | 'waiting'
     | 'completed'
     | 'error'
     | 'skipped';
@@ -38,6 +39,33 @@ export interface ToolCallState {
     error?: string;
     startedAt?: number;
     finishedAt?: number;
+}
+
+export type HitlMode = 'approval' | 'input' | 'review';
+export type HitlAction =
+    | 'approve'
+    | 'reject'
+    | 'skip'
+    | 'submit'
+    | 'modify'
+    | 'custom';
+
+export interface HitlRequestState {
+    id: string;
+    nodeId: string;
+    nodeLabel: string;
+    mode: HitlMode;
+    prompt: string;
+    options?: Array<{ id: string; label: string; action: HitlAction }>;
+    inputSchema?: Record<string, unknown>;
+    createdAt: string;
+    expiresAt?: string;
+    context?: {
+        input?: string;
+        output?: string;
+        workflowName?: string;
+        sessionId?: string;
+    };
 }
 
 export interface ChatHistoryMessage {
@@ -143,6 +171,9 @@ export interface WorkflowMessageData {
     workflowName: string;
 
     /** Original user prompt that triggered the workflow */
+    prompt?: string;
+
+    /** Original user prompt that triggered the workflow */
     prompt: string;
 
     /** Overall execution state */
@@ -165,6 +196,9 @@ export interface WorkflowMessageData {
 
     /** Parallel branch states (for parallel nodes), keyed by "nodeId:branchId" */
     branches?: Record<string, BranchState>;
+
+    /** Pending HITL requests keyed by request ID */
+    hitlRequests?: Record<string, HitlRequestState>;
 
     /** Final output content (from output node or last agent) */
     finalOutput: string;
@@ -298,6 +332,9 @@ export interface UiWorkflowState {
 
     /** Parallel branch states (optional) */
     branches?: Record<string, BranchState>;
+
+    /** Pending HITL requests keyed by request ID */
+    hitlRequests?: Record<string, HitlRequestState>;
 
     /** Final accumulated output */
     finalOutput?: string;
