@@ -88,15 +88,21 @@ const isVeryCompact = computed(() => paneWidth.value > 0 && paneWidth.value < 35
 
 // Computed classes/props for responsive toolbar
 const toolbarClass = computed(() => {
-    const base = 'workflow-toolbar flex items-center border-b border-(--md-border-color) bg-(--md-surface-variant) text-(--md-on-surface) overflow-x-auto overflow-y-hidden';
+    // Base styles - no overflow scroll needed at mobile widths
+    const base = 'workflow-toolbar flex items-center border-b border-(--md-border-color) bg-(--md-surface-variant) text-(--md-on-surface)';
     
-    // Single pane needs 80px padding to avoid corner buttons (new window, theme toggle)
+    // Single pane: center toolbar content, use flex-wrap for better mobile layout
     if (isSinglePane.value) {
-        return [base, isCompact.value ? 'gap-1 py-1.5 px-20' : 'gap-2 py-2 px-20'];
+        // On mobile/compact: center the buttons with no scroll
+        if (isCompact.value) {
+            return [base, 'flex-wrap justify-center gap-3 py-2 px-4'];
+        }
+        // Wide single pane: 80px padding to avoid corner buttons
+        return [base, 'gap-3 py-2 px-20'];
     }
     
-    // Multi-pane: use tighter padding
-    return [base, isCompact.value ? 'gap-1 px-2 py-1.5' : 'gap-2 px-3 py-2'];
+    // Multi-pane: tighter spaces, allow scroll if needed
+    return [base, isCompact.value ? 'gap-2 px-3 py-1.5 overflow-x-auto' : 'gap-3 px-4 py-2'];
 });
 const buttonSize = computed(() => isCompact.value ? 'sm' as const : 'sm' as const);
 let isDisposed = false;
