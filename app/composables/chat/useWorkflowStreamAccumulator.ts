@@ -11,6 +11,7 @@ import type {
 } from '~/utils/chat/workflow-types';
 import { deriveStartNodeId } from '~/utils/chat/workflow-types';
 import type { ToolCallEventWithNode } from '@or3/workflow-core';
+import type { Attachment } from '@or3/workflow-core';
 
 const SUBFLOW_SCOPE_PREFIX = 'sf:';
 const SUBFLOW_SCOPE_SEPARATOR = '|';
@@ -20,6 +21,10 @@ const SUBFLOW_SCOPE_SEPARATOR = '|';
  * This state is exposed to UI components for real-time rendering.
  */
 export interface WorkflowStreamingState {
+    /** Attachments available to the workflow execution */
+    attachments?: Attachment[];
+    /** Auto-generated caption for image attachments */
+    imageCaption?: string;
     /** Overall execution state */
     executionState: WorkflowExecutionState;
     /** Per-node states, keyed by nodeId */
@@ -75,8 +80,17 @@ export interface WorkflowStreamAccumulatorApi {
     /** Read-only reactive state */
     state: Readonly<WorkflowStreamingState>;
 
+    // Attachments
+    setAttachments(attachments?: Attachment[]): void;
+    setImageCaption(caption?: string): void;
+
     // Node lifecycle
-    nodeStart(nodeId: string, label: string, type: string): void;
+    nodeStart(
+        nodeId: string,
+        label: string,
+        type: string,
+        modelId?: string
+    ): void;
     nodeToken(nodeId: string, token: string): void;
     nodeReasoning(nodeId: string, token: string): void;
     nodeFinish(nodeId: string, output: string): void;
@@ -185,6 +199,8 @@ function parseScopedNodeId(scopedId: string): { path: string[]; nodeId: string }
  */
 export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi {
     const state = reactive<WorkflowStreamingState>({
+        attachments: undefined,
+        imageCaption: undefined,
         executionState: 'running',
         nodeStates: {},
         executionOrder: [],
@@ -217,6 +233,8 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             workflowId: nodeId,
             workflowName: node.label || nodeId,
             executionState: 'running',
+            attachments: state.attachments,
+            imageCaption: state.imageCaption,
             nodeStates: {},
             executionOrder: [],
             lastActiveNodeId: null,
@@ -235,7 +253,8 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         targetState: WorkflowUiState,
         nodeId: string,
         label?: string,
-        type?: string
+        type?: string,
+        modelId?: string
     ): NodeState {
         const existing = targetState.nodeStates[nodeId];
         if (existing) return existing;
@@ -244,6 +263,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             status: 'active',
             label: label || nodeId,
             type: type || 'node',
+            modelId,
             output: '',
             streamingText: '',
             startedAt: Date.now(),
@@ -448,7 +468,12 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         }
     }
 
-    function nodeStart(nodeId: string, label: string, type: string) {
+    function nodeStart(
+        nodeId: string,
+        label: string,
+        type: string,
+        modelId?: string
+    ) {
         if (finalized) return;
 
         const { targetState, nodeId: localNodeId } =
@@ -460,6 +485,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
                 status: 'active',
                 label,
                 type,
+                modelId,
                 output: '',
                 streamingText: '',
                 startedAt: Date.now(),
@@ -469,6 +495,9 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         node.status = 'active';
         node.label = label;
         node.type = type;
+        if (modelId) {
+            node.modelId = modelId;
+        }
         node.output = node.output || '';
         node.streamingText = node.streamingText ?? '';
         node.startedAt = node.startedAt ?? Date.now();
@@ -1027,6 +1056,8 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         pendingBranchTokens.clear();
         finalized = false;
 
+        state.attachments = undefined;
+        state.imageCaption = undefined;
         state.executionState = 'running';
         state.nodeStates = {};
         state.executionOrder = [];
@@ -1104,6 +1135,8 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             workflowId,
             workflowName,
             prompt,
+            attachments: state.attachments,
+            imageCaption: state.imageCaption,
             executionState: state.executionState,
             nodeStates: plainNodeStates,
             executionOrder: [...state.executionOrder],
@@ -1137,8 +1170,37 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         };
     }
 
+    function setAttachments(attachments?: Attachment[]) {
+        state.attachments = attachments;
+        propagateToSubflows((target) => {
+            target.attachments = attachments;
+        });
+        touchState(state);
+    }
+
+    function setImageCaption(caption?: string) {
+        state.imageCaption = caption;
+        propagateToSubflows((target) => {
+            target.imageCaption = caption;
+        });
+        touchState(state);
+    }
+
+    function propagateToSubflows(
+        fn: (target: UiWorkflowState) => void,
+        targetState: UiWorkflowState = state
+    ) {
+        for (const node of Object.values(targetState.nodeStates)) {
+            if (!node.subflowState) continue;
+            fn(node.subflowState);
+            propagateToSubflows(fn, node.subflowState);
+        }
+    }
+
     return {
         state,
+        setAttachments,
+        setImageCaption,
         nodeStart,
         nodeToken,
         nodeReasoning,

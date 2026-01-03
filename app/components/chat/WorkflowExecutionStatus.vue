@@ -46,6 +46,40 @@
 
         <!-- Content -->
         <div v-if="!collapsed" :class="contentClasses">
+            <div
+                v-if="hasAttachments"
+                class="rounded border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-2 space-y-2"
+            >
+                <div class="text-[11px] font-semibold uppercase tracking-wide opacity-70">
+                    Attachments
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <div
+                        v-for="attachment in imageAttachments"
+                        :key="attachment.id"
+                        class="w-12 h-12 rounded-md overflow-hidden border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]"
+                    >
+                        <img
+                            :src="attachment.url"
+                            :alt="attachment.name"
+                            class="w-full h-full object-cover"
+                            loading="lazy"
+                        />
+                    </div>
+                </div>
+                <div
+                    v-if="imageCaption"
+                    class="rounded border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-2"
+                >
+                    <div class="text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                        Auto caption
+                    </div>
+                    <div class="text-xs whitespace-pre-wrap">
+                        {{ imageCaption }}
+                    </div>
+                </div>
+            </div>
+
             <!-- Node List -->
             <div
                 v-for="nodeId in props.workflowState.executionOrder"
@@ -68,6 +102,17 @@
                         <span class="text-sm font-medium truncate">{{
                             getNodeLabel(nodeId)
                         }}</span>
+                        <span
+                            v-if="getNodeAttachmentBadge(nodeId)"
+                            class="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                            :class="
+                                getNodeAttachmentBadge(nodeId)?.variant === 'image'
+                                    ? 'bg-[var(--md-extended-color-info-color-container)] text-[var(--md-extended-color-info-on-color-container)]'
+                                    : 'bg-[var(--md-surface-container-high)] text-[var(--md-on-surface-variant)]'
+                            "
+                        >
+                            {{ getNodeAttachmentBadge(nodeId)?.label }}
+                        </span>
                         <span class="text-xs opacity-50 ml-auto shrink-0">{{
                             getNodeType(nodeId)
                         }}</span>
@@ -356,6 +401,7 @@ import {
     MERGE_BRANCH_ID,
     MERGE_BRANCH_LABEL,
 } from '~/utils/chat/workflow-types';
+import { modelRegistry } from '@or3/workflow-core';
 import { useIcon } from '~/composables/useIcon';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
@@ -413,6 +459,39 @@ const statusTextClass = computed(() =>
         'opacity-70',
     ].join(' ')
 );
+
+function buildAttachmentUrl(attachment: {
+    url?: string;
+    content?: string;
+    mimeType?: string;
+}): string | null {
+    if (attachment.url) return attachment.url;
+    if (attachment.content && attachment.mimeType) {
+        return `data:${attachment.mimeType};base64,${attachment.content}`;
+    }
+    return null;
+}
+
+const imageAttachments = computed(() => {
+    const attachments = props.workflowState.attachments || [];
+    return attachments
+        .filter((attachment) => attachment.type === 'image')
+        .map((attachment) => {
+            const url = buildAttachmentUrl(attachment);
+            if (!url) return null;
+            return {
+                id: attachment.id,
+                url,
+                name: attachment.name || 'Image',
+            };
+        })
+        .filter((attachment): attachment is { id: string; url: string; name: string } =>
+            Boolean(attachment)
+        );
+});
+
+const hasAttachments = computed(() => imageAttachments.value.length > 0);
+const imageCaption = computed(() => props.workflowState.imageCaption || '');
 
 type PendingHitlEntry = {
     request: HitlRequestState;
@@ -596,6 +675,34 @@ function getNodeLabel(nodeId: string): string {
 
 function getNodeType(nodeId: string): string {
     return getNode(nodeId)?.type || '';
+}
+
+function getNodeModelId(nodeId: string): string | undefined {
+    return getNode(nodeId)?.modelId;
+}
+
+function nodeSupportsImages(modelId?: string): boolean {
+    if (!modelId) return false;
+    try {
+        return modelRegistry.supportsInputModality(modelId, 'image');
+    } catch {
+        return false;
+    }
+}
+
+function getNodeAttachmentBadge(nodeId: string):
+    | { label: string; variant: 'image' | 'caption' }
+    | null {
+    if (!hasAttachments.value) return null;
+    const modelId = getNodeModelId(nodeId);
+    if (!modelId) return null;
+    if (nodeSupportsImages(modelId)) {
+        return { label: 'Images', variant: 'image' };
+    }
+    if (imageCaption.value) {
+        return { label: 'Caption', variant: 'caption' };
+    }
+    return null;
 }
 
 function getNodeStatus(nodeId: string) {

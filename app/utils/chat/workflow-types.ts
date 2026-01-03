@@ -8,6 +8,8 @@
  * @module workflow-types
  */
 
+import type { Attachment } from '@or3/workflow-core';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Status Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,6 +89,9 @@ export interface NodeState {
 
     /** Node type (agent, router, parallel, etc.) */
     type: string;
+
+    /** Model identifier used for this node (when applicable) */
+    modelId?: string;
 
     /** Final accumulated output */
     output: string;
@@ -175,6 +180,12 @@ export interface WorkflowMessageData {
 
     /** Original user prompt that triggered the workflow */
     prompt: string;
+
+    /** Attachments available to the workflow execution */
+    attachments?: Attachment[];
+
+    /** Auto-generated caption for image attachments */
+    imageCaption?: string;
 
     /** Overall execution state */
     executionState: WorkflowExecutionState;
@@ -314,6 +325,12 @@ export interface UiWorkflowState {
 
     /** Original user prompt that triggered the workflow */
     prompt?: string;
+
+    /** Attachments available to the workflow execution */
+    attachments?: Attachment[];
+
+    /** Auto-generated caption for image attachments */
+    imageCaption?: string;
 
     /** Overall execution state */
     executionState: WorkflowExecutionState;

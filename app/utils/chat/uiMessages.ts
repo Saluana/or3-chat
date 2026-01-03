@@ -122,6 +122,8 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
             workflowId: raw.data.workflowId,
             workflowName: raw.data.workflowName,
             prompt: raw.data.prompt,
+            attachments: raw.data.attachments,
+            imageCaption: raw.data.imageCaption,
             executionState: raw.data.executionState,
             nodeStates: raw.data.nodeStates,
             executionOrder: raw.data.executionOrder,

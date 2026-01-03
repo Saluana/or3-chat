@@ -16,6 +16,7 @@ import type {
     HITLRequest,
     HITLResponse,
 } from '@or3/workflow-core';
+import { modelRegistry } from '@or3/workflow-core';
 import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type { WorkflowExecutionController } from './WorkflowSlashCommands/executeWorkflow';
 import type { Attachment } from '@or3/workflow-core';
@@ -79,6 +80,159 @@ function normalizeMessagesPayload(
         return payload.messages;
     }
     return [];
+}
+
+function parseDataUrlMimeType(url: string): string | null {
+    const match = /^data:([^;]+);base64,/i.exec(url);
+    if (!match || !match[1]) return null;
+    return match[1].toLowerCase();
+}
+
+function inferImageMimeType(url: string): string {
+    const dataMime = parseDataUrlMimeType(url);
+    if (dataMime) return dataMime;
+
+    const lower = url.toLowerCase();
+    if (lower.match(/\.(png)(\?|#|$)/)) return 'image/png';
+    if (lower.match(/\.(jpe?g)(\?|#|$)/)) return 'image/jpeg';
+    if (lower.match(/\.(webp)(\?|#|$)/)) return 'image/webp';
+    if (lower.match(/\.(gif)(\?|#|$)/)) return 'image/gif';
+    if (lower.match(/\.(avif)(\?|#|$)/)) return 'image/avif';
+
+    return 'image/png';
+}
+
+function inferImageExtension(url: string, mimeType: string): string {
+    const lowerMime = mimeType.toLowerCase();
+    if (lowerMime.includes('png')) return 'png';
+    if (lowerMime.includes('jpeg') || lowerMime.includes('jpg')) return 'jpg';
+    if (lowerMime.includes('webp')) return 'webp';
+    if (lowerMime.includes('gif')) return 'gif';
+    if (lowerMime.includes('avif')) return 'avif';
+
+    const lower = url.toLowerCase();
+    const match = lower.match(/\.(png|jpe?g|gif|webp|avif)(\?|#|$)/);
+    if (match && match[1]) {
+        return match[1] === 'jpeg' ? 'jpg' : match[1];
+    }
+
+    return 'png';
+}
+
+function extractImageAttachments(
+    content: OpenRouterMessage['content'],
+    timestamp: number
+): Attachment[] {
+    if (!Array.isArray(content)) return [];
+
+    const attachments: Attachment[] = [];
+    let imageIndex = 0;
+
+    for (const part of content) {
+        if (!part || typeof part !== 'object') continue;
+        const type = (part as { type?: string }).type;
+        let url: string | undefined;
+
+        if (type === 'image_url') {
+            const imageUrl =
+                (part as { image_url?: { url?: string } }).image_url?.url ||
+                (part as { imageUrl?: { url?: string } }).imageUrl?.url;
+            if (typeof imageUrl === 'string') url = imageUrl;
+        } else if (type === 'image') {
+            const image = (part as { image?: string }).image;
+            if (typeof image === 'string') url = image;
+        }
+
+        if (!url) continue;
+
+        const mimeType = inferImageMimeType(url);
+        const extension = inferImageExtension(url, mimeType);
+
+        attachments.push({
+            id: `att-${timestamp}-${imageIndex}`,
+            type: 'image',
+            url,
+            mimeType,
+            name: `image-${imageIndex}.${extension}`,
+        });
+        imageIndex += 1;
+    }
+
+    return attachments;
+}
+
+function buildAttachmentUrl(attachment: Attachment): string | null {
+    if (attachment.url) return attachment.url;
+    if (attachment.content) {
+        return `data:${attachment.mimeType};base64,${attachment.content}`;
+    }
+    return null;
+}
+
+function pickCaptionModelId(): string | null {
+    const visionModels = modelRegistry.getVisionModels();
+    return visionModels[0]?.id ?? null;
+}
+
+function extractTextFromMessageContent(content: unknown): string {
+    if (typeof content === 'string') return content;
+    if (!Array.isArray(content)) return '';
+    return content
+        .map((part) => {
+            if (!part || typeof part !== 'object') return '';
+            const text = (part as { text?: string }).text;
+            return typeof text === 'string' ? text : '';
+        })
+        .join('')
+        .trim();
+}
+
+async function generateImageCaption(
+    attachments: Attachment[],
+    apiKey: string
+): Promise<string | null> {
+    const images = attachments.filter((attachment) => attachment.type === 'image');
+    if (!images.length) return null;
+
+    const modelId = pickCaptionModelId();
+    if (!modelId) return null;
+
+    const parts = images
+        .map((attachment) => {
+            const url = buildAttachmentUrl(attachment);
+            if (!url) return null;
+            return {
+                type: 'image_url',
+                imageUrl: { url },
+            };
+        })
+        .filter(Boolean) as Array<{ type: 'image_url'; imageUrl: { url: string } }>;
+
+    if (!parts.length) return null;
+
+    const { OpenRouter } = await import('@openrouter/sdk');
+    const client = new OpenRouter({ apiKey });
+
+    const result = await client.chat.send({
+        model: modelId,
+        messages: [
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'text',
+                        text: 'Provide a concise, plain-text description of the image(s) for downstream text-only models.',
+                    },
+                    ...parts,
+                ],
+            },
+        ],
+        stream: false,
+    });
+
+    const messageContent = (result as any)?.choices?.[0]?.message?.content;
+    const caption = extractTextFromMessageContent(messageContent);
+    return caption ? caption.slice(0, 1000) : null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -475,6 +629,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         };
         execMod: ExecutionModule;
         apiKey: string;
+        attachments?: Attachment[];
         conversationHistory?: Awaited<
             ReturnType<ExecutionModule['getConversationHistory']>
         >;
@@ -486,6 +641,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             assistantContext,
             execMod,
             apiKey,
+            attachments,
             conversationHistory,
             resumeFrom,
         } = opts;
@@ -495,6 +651,22 @@ export default defineNuxtPlugin((nuxtApp) => {
 
         // Create accumulator
         const accumulator = createWorkflowStreamAccumulator();
+        const displayPrompt = prompt;
+        const basePrompt = prompt && prompt.trim().length > 0 ? prompt.trim() : 'Execute workflow';
+        let executionPrompt = basePrompt;
+
+        if (attachments && attachments.length > 0) {
+            accumulator.setAttachments(attachments);
+            try {
+                const caption = await generateImageCaption(attachments, apiKey);
+                if (caption) {
+                    accumulator.setImageCaption(caption);
+                    executionPrompt = `${basePrompt}\n\nImage caption: ${caption}`;
+                }
+            } catch (error) {
+                console.warn('[workflow-slash] Failed to generate image caption', error);
+            }
+        }
 
         // Pre-fill state with prior outputs when resuming to avoid re-running completed nodes visually
         // IMPORTANT: Exclude the startNodeId since we're about to re-run it
@@ -558,7 +730,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 accumulator.toMessageData(
                     workflowPost.id,
                     workflowPost.title,
-                    prompt
+                    displayPrompt
                 )
             );
 
@@ -673,6 +845,11 @@ export default defineNuxtPlugin((nuxtApp) => {
                 const node = (meta?.nodes || []).find(
                     (n: any) => n.id === nodeId
                 );
+                const modelId =
+                    node?.data?.model ||
+                    node?.data?.modelId ||
+                    node?.model ||
+                    undefined;
                 const label =
                     nodeInfo?.label ||
                     node?.label ||
@@ -681,7 +858,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                     node?.type ||
                     nodeId;
                 const type = nodeInfo?.type || node?.type || 'unknown';
-                accumulator.nodeStart(nodeId, label, type);
+                accumulator.nodeStart(nodeId, label, type, modelId);
                 emitStateUpdate();
                 persist();
             },
@@ -807,7 +984,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         if (import.meta.dev) {
             console.log(
                 '[workflow-slash] Starting execution with prompt:',
-                prompt
+                executionPrompt
             );
         }
 
@@ -820,7 +997,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         // Create execution controller
         const controller = execMod.executeWorkflow({
             workflow: workflowPost.meta,
-            prompt: prompt || 'Execute workflow',
+            prompt: executionPrompt,
             conversationHistory:
                 conversationHistory ||
                 (await execMod.getConversationHistory(
@@ -1134,26 +1311,10 @@ export default defineNuxtPlugin((nuxtApp) => {
                           .join('')
                     : '';
             
-            // Extract attachments (e.g. images)
-            const attachments: Attachment[] = [];
-            if (Array.isArray(lastUser.content)) {
-                lastUser.content.forEach((part: any, index: number) => {
-                    if (
-                        part &&
-                        typeof part === 'object' &&
-                        part.type === 'image_url' &&
-                        part.imageUrl?.url
-                    ) {
-                        attachments.push({
-                            id: `att-${index}-${nowSec()}`,
-                            type: 'image',
-                            url: part.imageUrl.url,
-                            mimeType: 'image/png', // Default assumption, or extract from data URI
-                            name: `image-${index}.png`, // Placeholder name
-                        });
-                    }
-                });
-            }
+            const attachments = extractImageAttachments(
+                lastUser.content,
+                nowSec()
+            );
 
             const normalizedContent = content.trimStart();
             const editorDoc = pendingEditorJson;
@@ -1311,6 +1472,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 assistantContext,
                 execMod,
                 apiKey: apiKey.value,
+                attachments,
                 conversationHistory,
             });
 
