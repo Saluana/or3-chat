@@ -101,6 +101,7 @@ export default <IconMap>{
     'ui.checkbox.on': 'pixelarticons:checkbox-on',
     'ui.checkbox.off': 'pixelarticons:checkbox',
     'ui.book': 'pixelarticons:book',
+    'ui.hint': 'tabler:info-circle',
 
     // Dashboard
     'dashboard.home': 'tabler:layout-dashboard',

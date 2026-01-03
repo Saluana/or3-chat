@@ -100,6 +100,7 @@ export const DEFAULT_ICONS = {
     'ui.checkbox.on': 'pixelarticons:checkbox-on',
     'ui.checkbox.off': 'pixelarticons:checkbox',
     'ui.book': 'pixelarticons:book',
+    'ui.hint': 'pixelarticons:info-box',
 
     // Dashboard
     'dashboard.home': 'pixelarticons:dashboard',
