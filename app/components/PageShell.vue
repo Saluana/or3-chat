@@ -248,6 +248,10 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { useIcon } from '~/composables/useIcon';
+import {
+    setGlobalSidebarLayoutApi,
+    type SidebarLayoutApi,
+} from '~/utils/sidebarLayoutApi';
 
 const legacyCompatClasses = {
     height: `h-[${'100dvh'}]`,
@@ -1030,6 +1034,24 @@ onMounted(() => {
     initInitial();
     syncTheme();
     ensureAtLeastOne();
+
+    // Expose sidebar layout API globally for plugins
+    const sidebarLayoutApi: SidebarLayoutApi = {
+        close: () => (layoutRef.value as any)?.close?.(),
+        open: () => (layoutRef.value as any)?.openSidebar?.(),
+        toggleCollapse: () => (layoutRef.value as any)?.toggle?.(),
+        expand: () => (layoutRef.value as any)?.expand?.(),
+        isMobile: () => isMobile.value,
+        closeSidebarIfMobile: () => {
+            if (isMobile.value) (layoutRef.value as any)?.close?.();
+        },
+    };
+    setGlobalSidebarLayoutApi(sidebarLayoutApi);
+});
+
+onUnmounted(() => {
+    // Clean up global API on unmount
+    setGlobalSidebarLayoutApi(undefined);
 });
 
 // --------------- Shortcuts ---------------

@@ -357,7 +357,7 @@ watch(
 <template>
     <div class="workflow-app flex flex-col flex-1 min-h-0 h-full w-full">
         <div
-            class="flex flex-nowrap md:flex-wrap items-center gap-2 md:gap-4 px-3 sm:px-4 md:px-16 py-2.5 md:py-3 border-b border-(--md-border-color) bg-(--md-surface-variant) text-(--md-on-surface) overflow-x-auto"
+            class="flex flex-nowrap md:flex-wrap items-center gap-2 md:gap-4 px-3 sm:px-4 md:px-16 py-2.5 md:py-3 border-b border-(--md-border-color) bg-(--md-surface-variant) text-(--md-on-surface) overflow-x-auto overflow-y-hidden"
         >
             <div class="flex items-center gap-2 shrink-0">
                 <UButtonGroup>

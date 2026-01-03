@@ -522,6 +522,12 @@
                     "path": "/utils/errors",
                     "category": "Error Handling",
                     "summary": "Centralized error utility for OR3. Provides error types, factories, reporting, retry logic, and duplicate suppression with automatic secret scrubbing and hook integration.\n\n`errors.ts` standardizes error creation, ensures secrets never leak, and integrates with the hook system so other modules can react to failures. Features include standardized error types, error factories, centralized reporting with toast notifications, secret scrubbing, duplicate suppression, hook integration, and simple retry helpers."
+                },
+                {
+                    "name": "sidebar-layout-api.md",
+                    "path": "/utils/sidebar-layout-api",
+                    "category": "Sidebar",
+                    "summary": "Global API for controlling sidebar layout state from any component. Lets plugins close the sidebar on mobile, expand/collapse, or toggle visibility without event chain modifications. Provides closeSidebarIfMobile() convenience function and full SidebarLayoutApi interface with close, open, expand, toggleCollapse, and isMobile methods. Follows the same singleton pattern as multiPaneApi."
                 }
             ]
         },

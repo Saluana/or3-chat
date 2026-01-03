@@ -8,6 +8,7 @@ import {
     type WorkflowPost,
 } from '../../composables/useWorkflows';
 import { useWorkflowStorage } from '../../composables/useWorkflowStorage';
+import { closeSidebarIfMobile } from '~/utils/sidebarLayoutApi';
 
 const multiPane = useSidebarMultiPane();
 const panePluginApi = useSidebarPostsApi();
@@ -116,6 +117,7 @@ function openImportDialog() {
 // Open workflow in pane
 function openWorkflow(id: string) {
     multiPane.switchToApp('or3-workflows', { recordId: id });
+    closeSidebarIfMobile();
 }
 
 // Delete workflow

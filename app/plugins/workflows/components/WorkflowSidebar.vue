@@ -150,7 +150,10 @@ const items: TabsItem[] = [
             </div>
 
             <!-- Workflows Panel -->
-            <WorkflowsTab v-if="activePanel === 'workflows'" />
+            <WorkflowsTab
+                v-if="activePanel === 'workflows'"
+                @workflow-selected="emit('close-sidebar')"
+            />
 
             <!-- Node Palette Panel -->
             <div
