@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
+import { useElementSize } from '@vueuse/core';
 import { WorkflowCanvas, ValidationOverlay } from '@or3/workflow-vue';
 import '@or3/workflow-vue/style.css';
 import { useIcon } from '#imports';
@@ -68,6 +69,36 @@ const showValidation = ref(false);
 const hasConflict = ref(false);
 const lastKnownUpdatedAt = ref<number | null>(null);
 let loadTicket = 0;
+
+// Responsive toolbar based on pane width
+const paneRef = ref<HTMLElement | null>(null);
+const { width: paneWidth } = useElementSize(paneRef);
+
+// Check if we're in single-pane mode (need extra padding for corner buttons)
+const isSinglePane = computed(() => {
+    if (!multiPaneApi) return true;
+    return multiPaneApi.panes.value.length <= 1;
+});
+
+// Breakpoints for responsive toolbar
+const isCompact = computed(() => paneWidth.value > 0 && paneWidth.value < 500);
+// Use icons for mode toggle at 769px or less to avoid cramped text
+const useIconsForMode = computed(() => paneWidth.value > 0 && paneWidth.value <= 769);
+const isVeryCompact = computed(() => paneWidth.value > 0 && paneWidth.value < 350);
+
+// Computed classes/props for responsive toolbar
+const toolbarClass = computed(() => {
+    const base = 'workflow-toolbar flex items-center border-b border-(--md-border-color) bg-(--md-surface-variant) text-(--md-on-surface) overflow-x-auto overflow-y-hidden';
+    
+    // Single pane needs 80px padding to avoid corner buttons (new window, theme toggle)
+    if (isSinglePane.value) {
+        return [base, isCompact.value ? 'gap-1 py-1.5 px-20' : 'gap-2 py-2 px-20'];
+    }
+    
+    // Multi-pane: use tighter padding
+    return [base, isCompact.value ? 'gap-1 px-2 py-1.5' : 'gap-2 px-3 py-2'];
+});
+const buttonSize = computed(() => isCompact.value ? 'sm' as const : 'sm' as const);
 let isDisposed = false;
 let forceSave = false;
 
@@ -355,15 +386,13 @@ watch(
 </script>
 
 <template>
-    <div class="workflow-app flex flex-col flex-1 min-h-0 h-full w-full">
-        <div
-            class="flex flex-nowrap md:flex-wrap items-center gap-2 md:gap-4 px-3 sm:px-4 md:px-16 py-2.5 md:py-3 border-b border-(--md-border-color) bg-(--md-surface-variant) text-(--md-on-surface) overflow-x-auto overflow-y-hidden"
-        >
-            <div class="flex items-center gap-2 shrink-0">
-                <UButtonGroup>
-                    <UTooltip text="Undo (⌘Z)">
-                        <UButton
-                        size="sm"
+    <div ref="paneRef" :class="{'border-t border-(--md-border-color) not-last:border-r': !isSinglePane}" class="workflow-app flex flex-col flex-1 min-h-0 h-full w-full">
+        <div :class="toolbarClass">
+            <!-- Undo/Redo group -->
+            <UButtonGroup class="shrink-0">
+                <UTooltip text="Undo (⌘Z)">
+                    <UButton
+                        :size="buttonSize"
                         variant="basic"
                         :icon="iconUndoName"
                         color="neutral"
@@ -375,7 +404,7 @@ watch(
                 </UTooltip>
                 <UTooltip text="Redo (⌘⇧Z)">
                     <UButton
-                        size="sm"
+                        :size="buttonSize"
                         variant="basic"
                         :icon="iconRedoName"
                         color="neutral"
@@ -385,16 +414,13 @@ watch(
                         @click="handleRedo"
                     />
                 </UTooltip>
-                </UButtonGroup>
-            </div>
+            </UButtonGroup>
 
-            <div class="hidden md:block h-6 w-px bg-(--md-border-color)/70"></div>
-
-            <div class="flex items-center gap-2 shrink-0">
-                <UButtonGroup>
-                    <UTooltip text="Clear workflow">
-                        <UButton
-                        size="sm"
+            <!-- Clear/Download group -->
+            <UButtonGroup class="shrink-0">
+                <UTooltip text="Clear workflow">
+                    <UButton
+                        :size="buttonSize"
                         variant="basic"
                         :icon="iconClearName"
                         color="neutral"
@@ -406,7 +432,7 @@ watch(
                 </UTooltip>
                 <UTooltip text="Download workflow">
                     <UButton
-                        size="sm"
+                        :size="buttonSize"
                         variant="basic"
                         :icon="iconDownloadName"
                         color="neutral"
@@ -416,121 +442,99 @@ watch(
                         @click="handleDownload"
                     />
                 </UTooltip>
-                </UButtonGroup>
-            </div>
+            </UButtonGroup>
 
-            <div class="hidden md:block h-6 w-px bg-(--md-border-color)/70"></div>
-
-            <div class="flex items-center gap-2 shrink-0">
-                <span class="hidden md:inline text-xs uppercase tracking-wide opacity-60">
-                    Mode
-                </span>
-                <UButtonGroup>
-                    <UButton
-                        size="sm"
-                        :variant="
-                            interactionMode === 'drag' ? 'solid' : 'basic'
-                        "
-                        :color="
-                            interactionMode === 'drag' ? 'primary' : 'neutral'
-                        "
-                        :class="[
-                            'theme-btn',
-                            interactionMode === 'drag'
-                                ? 'workflow-toggle-active hover:!bg-[var(--md-primary)] hover:!text-[var(--md-on-primary)] active:!bg-[var(--md-primary)] active:!text-[var(--md-on-primary)]'
-                                : '',
-                        ]"
-                        :style="
-                            interactionMode === 'drag'
-                                ? activeButtonStyle
-                                : undefined
-                        "
-                        :disabled="toolbarDisabled"
-                        :aria-pressed="interactionMode === 'drag'"
-                        title="Drag mode (pan the canvas)"
-                        @click="setInteractionMode('drag')"
-                    >
+            <!-- Mode toggle -->
+            <UButtonGroup class="shrink-0">
+                <UButton
+                    :size="buttonSize"
+                    :variant="interactionMode === 'drag' ? 'solid' : 'basic'"
+                    :color="interactionMode === 'drag' ? 'primary' : 'neutral'"
+                    :class="[
+                        'theme-btn',
+                        interactionMode === 'drag' ? 'workflow-toggle-active' : '',
+                    ]"
+                    :style="interactionMode === 'drag' ? activeButtonStyle : undefined"
+                    :disabled="toolbarDisabled"
+                    :aria-pressed="interactionMode === 'drag'"
+                    title="Drag mode (pan the canvas)"
+                    @click="setInteractionMode('drag')"
+                >
+                    <template v-if="useIconsForMode">
+                        <UIcon name="tabler:hand-grab" />
+                    </template>
+                    <template v-else>
                         Drag
-                    </UButton>
-                    <UButton
-                        size="sm"
-                        :variant="
-                            interactionMode === 'select' ? 'solid' : 'basic'
-                        "
-                        :color="
-                            interactionMode === 'select'
-                                ? 'primary'
-                                : 'neutral'
-                        "
-                        :class="[
-                            'theme-btn',
-                            interactionMode === 'select'
-                                ? 'workflow-toggle-active hover:!bg-[var(--md-primary)] hover:!text-[var(--md-on-primary)] active:!bg-[var(--md-primary)] active:!text-[var(--md-on-primary)]'
-                                : '',
-                        ]"
-                        :style="
-                            interactionMode === 'select'
-                                ? activeButtonStyle
-                                : undefined
-                        "
-                        :disabled="toolbarDisabled"
-                        :aria-pressed="interactionMode === 'select'"
-                        title="Select mode (box select nodes)"
-                        @click="setInteractionMode('select')"
-                    >
+                    </template>
+                </UButton>
+                <UButton
+                    :size="buttonSize"
+                    :variant="interactionMode === 'select' ? 'solid' : 'basic'"
+                    :color="interactionMode === 'select' ? 'primary' : 'neutral'"
+                    :class="[
+                        'theme-btn',
+                        interactionMode === 'select' ? 'workflow-toggle-active' : '',
+                    ]"
+                    :style="interactionMode === 'select' ? activeButtonStyle : undefined"
+                    :disabled="toolbarDisabled"
+                    :aria-pressed="interactionMode === 'select'"
+                    title="Select mode (box select nodes)"
+                    @click="setInteractionMode('select')"
+                >
+                    <template v-if="useIconsForMode">
+                        <UIcon name="tabler:drag-drop" />
+                    </template>
+                    <template v-else>
                         Select
-                    </UButton>
-                </UButtonGroup>
-            </div>
+                    </template>
+                </UButton>
+            </UButtonGroup>
 
-            <div v-if="hasConflict" class="flex items-center gap-2 shrink-0">
-                <UBadge color="error" variant="soft" size="sm">
-                    Edited in another pane
+            <!-- Validation toggle -->
+            <UTooltip text="Toggle validation" class="shrink-0">
+                <UButton
+                    :size="buttonSize"
+                    :variant="showValidation ? 'solid' : 'basic'"
+                    :color="showValidation ? 'primary' : 'neutral'"
+                    icon="tabler:shield-check"
+                    :class="[
+                        'theme-btn',
+                        showValidation ? 'workflow-validation-active' : '',
+                    ]"
+                    :style="showValidation ? activeButtonStyle : undefined"
+                    :aria-pressed="showValidation"
+                    :disabled="toolbarDisabled"
+                    @click="showValidation = !showValidation"
+                />
+            </UTooltip>
+
+            <!-- Conflict warning (shown when applicable) -->
+            <div v-if="hasConflict" class="flex items-center gap-1 shrink-0 ml-auto">
+                <UBadge v-if="!isVeryCompact" color="error" variant="soft" size="xs">
+                    Conflict
                 </UBadge>
-                <UButton
-                    size="xs"
-                    variant="ghost"
-                    color="neutral"
-                    class="theme-btn"
-                    @click="handleConflictReload"
-                >
-                    Reload
-                </UButton>
-                <UButton
-                    size="xs"
-                    variant="ghost"
-                    color="neutral"
-                    class="theme-btn"
-                    @click="handleConflictOverwrite"
-                >
-                    Overwrite
-                </UButton>
-            </div>
-
-            <div class="hidden md:block flex-1"></div>
-
-            <div class="flex items-center shrink-0 md:justify-end">
-                <UTooltip text="Toggle validation">
-                    <UButton
-                        size="sm"
-                        :variant="showValidation ? 'solid' : 'basic'"
-                        :color="showValidation ? 'primary' : 'neutral'"
-                        icon="tabler:shield-check"
-                        :class="[
-                            'theme-btn',
-                            'whitespace-nowrap',
-                            showValidation
-                                ? 'workflow-validation-active hover:!bg-[var(--md-primary)] hover:!text-[var(--md-on-primary)] active:!bg-[var(--md-primary)] active:!text-[var(--md-on-primary)]'
-                                : '',
-                        ]"
-                        :style="showValidation ? activeButtonStyle : undefined"
-                        :aria-pressed="showValidation"
-                        :disabled="toolbarDisabled"
-                        @click="showValidation = !showValidation"
-                    >
-                        <span class="hidden sm:inline">Validation</span>
-                    </UButton>
-                </UTooltip>
+                <UButtonGroup>
+                    <UTooltip text="Reload from database">
+                        <UButton
+                            size="xs"
+                            variant="ghost"
+                            color="neutral"
+                            icon="tabler:refresh"
+                            class="theme-btn"
+                            @click="handleConflictReload"
+                        />
+                    </UTooltip>
+                    <UTooltip text="Overwrite with your changes">
+                        <UButton
+                            size="xs"
+                            variant="ghost"
+                            color="neutral"
+                            icon="tabler:upload"
+                            class="theme-btn"
+                            @click="handleConflictOverwrite"
+                        />
+                    </UTooltip>
+                </UButtonGroup>
             </div>
         </div>
 
