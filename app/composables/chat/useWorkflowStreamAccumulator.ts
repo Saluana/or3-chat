@@ -21,6 +21,10 @@ const SUBFLOW_SCOPE_SEPARATOR = '|';
  * This state is exposed to UI components for real-time rendering.
  */
 export interface WorkflowStreamingState {
+    /** Workflow identification */
+    workflowId?: string;
+    /** Workflow display name */
+    workflowName?: string;
     /** Attachments available to the workflow execution */
     attachments?: Attachment[];
     /** Auto-generated caption for image attachments */
@@ -79,6 +83,9 @@ export interface WorkflowStreamingState {
 export interface WorkflowStreamAccumulatorApi {
     /** Read-only reactive state */
     state: Readonly<WorkflowStreamingState>;
+    
+    // Identification
+    setWorkflowInfo(id: string, name: string): void;
 
     // Attachments
     setAttachments(attachments?: Attachment[]): void;
@@ -199,6 +206,8 @@ function parseScopedNodeId(scopedId: string): { path: string[]; nodeId: string }
  */
 export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi {
     const state = reactive<WorkflowStreamingState>({
+        workflowId: undefined,
+        workflowName: undefined,
         attachments: undefined,
         imageCaption: undefined,
         executionState: 'running',
@@ -1169,7 +1178,17 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
                     : undefined,
         };
     }
-
+    
+    function setWorkflowInfo(id: string, name: string) {
+        state.workflowId = id;
+        state.workflowName = name;
+        propagateToSubflows((target) => {
+            target.workflowId = id;
+            target.workflowName = name;
+        });
+        touchState(state);
+    }
+    
     function setAttachments(attachments?: Attachment[]) {
         state.attachments = attachments;
         propagateToSubflows((target) => {
@@ -1199,6 +1218,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
 
     return {
         state,
+        setWorkflowInfo,
         setAttachments,
         setImageCaption,
         nodeStart,

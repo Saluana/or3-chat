@@ -9,7 +9,7 @@
  */
 
 import { defineNuxtPlugin } from '#app';
-import { useAppConfig, useHooks, useToast } from '#imports';
+import { useAppConfig, useHooks, useToast, useModelStore } from '#imports';
 import type { Extension, Node } from '@tiptap/core';
 import type {
     ToolCallEventWithNode,
@@ -172,6 +172,115 @@ function buildAttachmentUrl(attachment: Attachment): string | null {
 function pickCaptionModelId(): string | null {
     const visionModels = modelRegistry.getVisionModels();
     return visionModels[0]?.id ?? null;
+}
+
+function collectWorkflowModelIds(workflow: unknown): {
+    modelIds: string[];
+    hasMissingModel: boolean;
+} {
+    if (!workflow || typeof workflow !== 'object') {
+        return { modelIds: [], hasMissingModel: true };
+    }
+
+    const nodes = (workflow as { nodes?: unknown }).nodes;
+    if (!Array.isArray(nodes)) {
+        return { modelIds: [], hasMissingModel: true };
+    }
+
+    const modelIds: string[] = [];
+    let hasMissingModel = false;
+
+    for (const node of nodes) {
+        if (!node || typeof node !== 'object') continue;
+        const typed = node as { type?: string; data?: any };
+        const type = typed.type;
+        const data = typed.data || {};
+
+        if (type === 'agent' || type === 'router') {
+            if (typeof data.model === 'string' && data.model.trim()) {
+                modelIds.push(data.model.trim());
+            } else {
+                hasMissingModel = true;
+            }
+        }
+
+        if (type === 'parallel') {
+            const parentModel =
+                typeof data.model === 'string' && data.model.trim()
+                    ? data.model.trim()
+                    : null;
+            if (parentModel) {
+                modelIds.push(parentModel);
+            }
+            if (Array.isArray(data.branches)) {
+                for (const branch of data.branches) {
+                    if (
+                        branch &&
+                        typeof branch === 'object' &&
+                        typeof branch.model === 'string' &&
+                        branch.model.trim()
+                    ) {
+                        modelIds.push(branch.model.trim());
+                    } else if (!parentModel && branch && typeof branch === 'object') {
+                        hasMissingModel = true;
+                    }
+                }
+            }
+        }
+
+        if (type === 'subflow') {
+            hasMissingModel = true;
+        }
+    }
+
+    return { modelIds, hasMissingModel };
+}
+
+async function shouldGenerateCaption(
+    workflow: unknown,
+    attachments: Attachment[] | undefined
+): Promise<boolean> {
+    if (!attachments || attachments.length === 0) return false;
+    const images = attachments.filter((attachment) => attachment.type === 'image');
+    if (!images.length) return false;
+
+    const { modelIds, hasMissingModel } = collectWorkflowModelIds(workflow);
+    if (hasMissingModel) return true;
+    if (modelIds.length === 0) return true;
+
+    const { catalog, fetchModels } = useModelStore();
+    let modelList = catalog.value;
+    if (!modelList.length) {
+        try {
+            modelList = await fetchModels({ ttlMs: 60 * 60 * 1000 });
+        } catch (error) {
+            console.warn(
+                '[workflow-slash] Failed to load model catalog',
+                error
+            );
+            return true;
+        }
+    }
+    if (!modelList || modelList.length === 0) return true;
+
+    const modelMap = new Map(
+        modelList.map((model) => [
+            model.id,
+            Array.isArray(model.architecture?.input_modalities)
+                ? model.architecture.input_modalities.map((m) =>
+                      String(m).toLowerCase()
+                  )
+                : [],
+        ])
+    );
+
+    return modelIds.some((modelId) => {
+        const modalities = modelMap.get(modelId);
+        if (!modalities) {
+            return !modelRegistry.supportsInputModality(modelId, 'image');
+        }
+        return !modalities.includes('image');
+    });
 }
 
 function extractTextFromMessageContent(content: unknown): string {
@@ -651,20 +760,29 @@ export default defineNuxtPlugin((nuxtApp) => {
 
         // Create accumulator
         const accumulator = createWorkflowStreamAccumulator();
+        accumulator.setWorkflowInfo(workflowPost.id, workflowPost.title);
         const displayPrompt = prompt;
         const basePrompt = prompt && prompt.trim().length > 0 ? prompt.trim() : 'Execute workflow';
         let executionPrompt = basePrompt;
 
         if (attachments && attachments.length > 0) {
             accumulator.setAttachments(attachments);
-            try {
-                const caption = await generateImageCaption(attachments, apiKey);
-                if (caption) {
-                    accumulator.setImageCaption(caption);
-                    executionPrompt = `${basePrompt}\n\nImage caption: ${caption}`;
+            if (await shouldGenerateCaption(workflowPost.meta, attachments)) {
+                try {
+                    const caption = await generateImageCaption(
+                        attachments,
+                        apiKey
+                    );
+                    if (caption) {
+                        accumulator.setImageCaption(caption);
+                        executionPrompt = `${basePrompt}\n\nImage caption: ${caption}`;
+                    }
+                } catch (error) {
+                    console.warn(
+                        '[workflow-slash] Failed to generate image caption',
+                        error
+                    );
                 }
-            } catch (error) {
-                console.warn('[workflow-slash] Failed to generate image caption', error);
             }
         }
 
