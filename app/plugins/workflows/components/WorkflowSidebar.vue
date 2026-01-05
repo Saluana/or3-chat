@@ -15,6 +15,7 @@ import {
 import { useWorkflowSidebarControls } from '../composables/useWorkflowSidebarControls';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import WorkflowsTab from './sidebar/WorkflowsTab.vue';
+import { closeSidebarIfMobile } from '~/utils/sidebarLayoutApi';
 
 /** Extended meta type that includes optional description field */
 interface WorkflowMetaWithDescription {
@@ -130,6 +131,10 @@ const items: TabsItem[] = [
     { label: 'Node Palette', value: 'palette' },
     { label: 'Node Inspector', value: 'inspector' },
 ];
+
+function handlePaletteQuickAdd() {
+    closeSidebarIfMobile();
+}
 </script>
 
 <template>
@@ -160,7 +165,10 @@ const items: TabsItem[] = [
                 v-else-if="activePanel === 'palette'"
                 class="flex-1 overflow-y-auto px-0.5"
             >
-                <NodePalette :canvas-id="activeWorkflowPaneId" />
+                <NodePalette
+                    :canvas-id="activeWorkflowPaneId"
+                    @quick-add="handlePaletteQuickAdd"
+                />
             </div>
 
             <!-- Node Inspector Panel -->

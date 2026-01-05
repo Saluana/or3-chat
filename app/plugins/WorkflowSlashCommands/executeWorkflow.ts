@@ -357,6 +357,79 @@ function ensureToolCapableModels(
     };
 }
 
+function collectWorkflowToolNames(workflow: WorkflowData): Set<string> {
+    const tools = new Set<string>();
+
+    for (const node of workflow.nodes) {
+        if (node.type === 'agent') {
+            const data = node.data as { tools?: string[] };
+            if (Array.isArray(data.tools)) {
+                data.tools
+                    .map((tool) => tool?.trim())
+                    .filter((tool): tool is string => Boolean(tool))
+                    .forEach((tool) => tools.add(tool));
+            }
+        }
+
+        if (node.type === 'parallel') {
+            const data = node.data as {
+                tools?: string[];
+                branches?: Array<{ tools?: string[] }>;
+            };
+            if (Array.isArray(data.tools)) {
+                data.tools
+                    .map((tool) => tool?.trim())
+                    .filter((tool): tool is string => Boolean(tool))
+                    .forEach((tool) => tools.add(tool));
+            }
+            if (Array.isArray(data.branches)) {
+                for (const branch of data.branches) {
+                    if (!branch || !Array.isArray(branch.tools)) continue;
+                    branch.tools
+                        .map((tool) => tool?.trim())
+                        .filter((tool): tool is string => Boolean(tool))
+                        .forEach((tool) => tools.add(tool));
+                }
+            }
+        }
+    }
+
+    return tools;
+}
+
+function preflightToolAvailability(workflow: WorkflowData): void {
+    const registry = useToolRegistry();
+    const toolNames = collectWorkflowToolNames(workflow);
+    if (toolNames.size === 0) return;
+
+    const missing: string[] = [];
+    const disabled: string[] = [];
+
+    for (const name of toolNames) {
+        const tool = registry.getTool(name);
+        if (!tool) {
+            missing.push(name);
+            continue;
+        }
+        if (!tool.enabled.value) {
+            disabled.push(name);
+        }
+    }
+
+    if (missing.length || disabled.length) {
+        const parts: string[] = [];
+        if (missing.length) {
+            parts.push(`Missing tools: ${missing.join(', ')}`);
+        }
+        if (disabled.length) {
+            parts.push(`Disabled tools: ${disabled.join(', ')}`);
+        }
+        throw new Error(
+            `${parts.join('. ')}. Please update the workflow or enable the tool(s).`
+        );
+    }
+}
+
 function buildSubflowRegistry(records: {
     id: string;
     title: string;
@@ -594,6 +667,7 @@ export function executeWorkflow(
             toolFallbackModel
         );
         let workflowForExecution = toolModelCheck.workflow;
+        preflightToolAvailability(workflowForExecution);
 
         const hasSubflows = workflowForExecution.nodes.some(
             (node: any) => node?.type === 'subflow'

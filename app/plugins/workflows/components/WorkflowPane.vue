@@ -6,6 +6,7 @@ import '@or3/workflow-vue/style.css';
 import { useIcon } from '#imports';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
+import { getGlobalSidebarLayoutApi } from '~/utils/sidebarLayoutApi';
 import {
     getEditorForPane,
     destroyEditorForPane,
@@ -85,6 +86,11 @@ const isCompact = computed(() => paneWidth.value > 0 && paneWidth.value < 500);
 // Use icons for mode toggle at 769px or less to avoid cramped text
 const useIconsForMode = computed(() => paneWidth.value > 0 && paneWidth.value <= 769);
 const isVeryCompact = computed(() => paneWidth.value > 0 && paneWidth.value < 350);
+const isMobileSidebar = computed(() => {
+    const api = getGlobalSidebarLayoutApi();
+    if (api?.isMobile) return api.isMobile();
+    return paneWidth.value > 0 && paneWidth.value <= 768;
+});
 
 // Computed classes/props for responsive toolbar
 const toolbarClass = computed(() => {
@@ -262,6 +268,11 @@ watch(
 );
 
 function handleNodeClick() {
+    if (isMobileSidebar.value) return;
+    void openInspector();
+}
+
+function handleNodeInspect() {
     void openInspector();
 }
 
@@ -566,7 +577,7 @@ watch(
                 :pan-on-drag="panOnDrag"
                 :selection-key-code="selectionKeyCode"
                 @node-click="handleNodeClick"
-                @node-inspect="handleNodeClick"
+                @node-inspect="handleNodeInspect"
                 @edge-click="() => {}"
                 @pane-click="() => {}"
             />
@@ -595,7 +606,7 @@ watch(
 :deep(.validation-overlay) {
     top: 8px;
     right: 8px;
-    width: min(240px, calc(100vw - 24px));
+    width: min(320px, calc(100vw - 24px));
     padding: 8px;
     font-size: 12px;
 }
@@ -603,6 +614,15 @@ watch(
 :deep(.validation-overlay .header-count) {
     font-size: 11px;
     padding: 2px 6px;
+}
+
+@media (max-width: 768px) {
+    :deep(.validation-overlay) {
+        left: 12px;
+        right: 12px;
+        width: auto;
+        max-width: none;
+    }
 }
 
 .workflow-toggle-active:hover,
