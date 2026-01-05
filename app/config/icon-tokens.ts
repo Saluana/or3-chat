@@ -28,6 +28,7 @@ export const DEFAULT_ICONS = {
     'chat.message.retry': 'pixelarticons:reload',
     'chat.message.edit': 'pixelarticons:edit-box',
     'chat.message.branch': 'pixelarticons:git-branch',
+    'chat.message.continue': 'pixelarticons:play',
     'chat.message.delete': 'pixelarticons:trash',
     'chat.reasoning': 'pixelarticons:lightbulb-on',
 

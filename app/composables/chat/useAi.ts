@@ -1370,10 +1370,13 @@ export function useChat(
                         (m) => m.id === tailAssistant.value!.id
                     );
                     if (rawIdx >= 0) {
-                        rawMessages.value[rawIdx] = {
-                            ...rawMessages.value[rawIdx],
-                            error: 'stream_interrupted',
-                        };
+                        const existingRaw = rawMessages.value[rawIdx];
+                        if (existingRaw) {
+                            rawMessages.value[rawIdx] = {
+                                ...existingRaw,
+                                error: 'stream_interrupted',
+                            };
+                        }
                     }
                     try {
                         const existing = (await db.messages.get(
@@ -1699,9 +1702,17 @@ export function useChat(
                 });
             };
 
-            const baseMessages: ChatMessage[] = all.map((m) => {
-                const data =
-                    m.data && typeof m.data === 'object' ? m.data : null;
+            const baseMessages: ChatMessage[] = all.map((m): ChatMessage => {
+                const storedMsg: StoredMessage = {
+                    ...m,
+                    data: m.data && typeof m.data === 'object'
+                        ? (m.data as StoredMessage['data'])
+                        : null,
+                };
+                const rawData = storedMsg.data;
+                const data: Record<string, unknown> | null = rawData
+                    ? (rawData as Record<string, unknown>)
+                    : null;
                 const name =
                     data &&
                     typeof (data as { tool_name?: unknown }).tool_name ===
@@ -1716,12 +1727,12 @@ export function useChat(
                         : undefined;
                 return {
                     role: m.role as ChatMessage['role'],
-                    content: toContent(m),
+                    content: toContent(storedMsg),
                     id: m.id,
                     stream_id: m.stream_id ?? undefined,
                     file_hashes: m.file_hashes ?? undefined,
-                    reasoning_text: toReasoning(m),
-                    data: data || null,
+                    reasoning_text: toReasoning(storedMsg),
+                    data,
                     name,
                     tool_call_id: toolCallId,
                     error: m.error ?? null,
@@ -1749,13 +1760,17 @@ export function useChat(
                       '',
                       'INSTRUCTIONS:',
                       '1. Continue immediately from the last character in the context.',
-                      '2. Decide whether the next character should be a space or a letter, and start with that.',
-                      '3. Do not repeat any of the context.',
-                      '4. Do not add any conversational filler or meta commentary.',
-                      '5. Start your response with ">>" and then the continuation.',
+                      '2. Assume the context ends at a valid character boundary.',
+                      '3. Do not extend or retype the final word unless it is clearly incomplete.',
+                      '4. Decide whether the next character should be punctuation, a space, or a letter, and start with that.',
+                      '5. If a sentence should end, emit the punctuation first, then continue.',
+                      '6. Do not repeat any of the context.',
+                      '7. Do not add any conversational filler or meta commentary.',
+                      '8. Start your response with ">>" and then the continuation.',
                       'Examples:',
                       'A) Context ends with: "the" -> Response: ">> dog walked..."',
                       'B) Context ends with: "revolu" -> Response: ">>tion..."',
+                      'C) Context ends with: "data warehouses" -> Response: ">>. Organizations..."',
                   ].join('\n')
                 : 'Please continue your previous response from where you left off.';
             baseMessages.push({
@@ -1790,6 +1805,10 @@ export function useChat(
                 'Output only the exact continuation with matching tone, voice, and formatting.',
                 'Never repeat the provided context.',
                 'Never add commentary, apologies, or meta statements.',
+                'Assume the context ends at a valid character boundary.',
+                'Do not extend or retype the final word unless it is clearly incomplete.',
+                'Decide whether the very next character should be punctuation, a space, or a letter.',
+                'If a sentence should end, start with the correct punctuation (e.g. ".", "?", "!") before continuing.',
             ].join(' ');
             if (finalSystem && finalSystem.trim()) {
                 finalSystem = `${continueSystemPrefix}\n\n${finalSystem.trim()}`;
@@ -1908,7 +1927,7 @@ export function useChat(
             );
             let existingUi: UiChatMessage | null = null;
             if (existingUiIndex >= 0) {
-                existingUi = messages.value[existingUiIndex];
+                existingUi = messages.value[existingUiIndex] ?? null;
                 messages.value.splice(existingUiIndex, 1);
                 messages.value = [...messages.value];
             }
@@ -1960,6 +1979,68 @@ export function useChat(
             let stripPrefixPending = true;
             let prefixBuffer = '';
             const CONTINUATION_PREFIX = '>>';
+            let boundarySpacingApplied = false;
+            const needsBoundarySpace = (prev: string, next: string) => {
+                if (!prev || !next) return false;
+                if (/\s$/.test(prev) || /^\s/.test(next)) return false;
+                const last = prev.slice(-1);
+                const first = next[0];
+                const noSpaceAfter = new Set([
+                    '(',
+                    '[',
+                    '{',
+                    '<',
+                    '«',
+                    '“',
+                    '‘',
+                    '"',
+                    "'",
+                    '`',
+                    '/',
+                    '\\',
+                    '-',
+                    '–',
+                    '—',
+                ]);
+                const noSpaceBefore = new Set([
+                    ',',
+                    '.',
+                    '…',
+                    ';',
+                    ':',
+                    '!',
+                    '?',
+                    '%',
+                    ')',
+                    ']',
+                    '}',
+                    '>',
+                    '»',
+                    '”',
+                    '’',
+                    '"',
+                    "'",
+                    '`',
+                ]);
+                if (noSpaceAfter.has(last)) return false;
+                if (noSpaceBefore.has(first)) return false;
+                const isWordChar = (c: string) =>
+                    /[\p{L}\p{N}]/u.test(c);
+                const isClosePunct = /[)\]}>"'»”’]/.test(last);
+                const isSentencePunct = /[.!?;:…]/.test(last);
+                if (isWordChar(last) && isWordChar(first)) return true;
+                if (
+                    (isSentencePunct || isClosePunct) &&
+                    isWordChar(first)
+                )
+                    return true;
+                return false;
+            };
+            const applyBoundarySpacing = (prev: string, next: string) => {
+                if (boundarySpacingApplied) return next;
+                boundarySpacingApplied = true;
+                return needsBoundarySpace(prev, next) ? ` ${next}` : next;
+            };
             const consumeContinuationDelta = (delta: string) => {
                 if (!stripPrefixPending) return delta;
                 prefixBuffer += delta;
@@ -1986,7 +2067,12 @@ export function useChat(
                         streamAcc.append(ev.text, { kind: 'reasoning' });
                     } else if (ev.type === 'text') {
                         if (current.pending) current.pending = false;
-                        const delta = consumeContinuationDelta(ev.text);
+                        const rawDelta = consumeContinuationDelta(ev.text);
+                        if (!rawDelta) continue;
+                        const delta = applyBoundarySpacing(
+                            current.text,
+                            rawDelta
+                        );
                         if (!delta) continue;
                         streamAcc.append(delta, { kind: 'text' });
                         current.text += delta;
@@ -2064,12 +2150,16 @@ export function useChat(
                     (m) => m.id === messageId
                 );
                 if (rawIdx >= 0) {
-                    rawMessages.value[rawIdx] = {
-                        ...rawMessages.value[rawIdx],
-                        content: current.text,
-                        reasoning_text: current.reasoning_text ?? null,
-                        error: null,
-                    };
+                    const existingRaw = rawMessages.value[rawIdx];
+                    if (existingRaw) {
+                        rawMessages.value[rawIdx] = {
+                            ...existingRaw,
+                            role: existingRaw.role ?? 'assistant',
+                            content: current.text,
+                            reasoning_text: current.reasoning_text ?? null,
+                            error: null,
+                        };
+                    }
                 }
                 streamAcc.finalize();
             } catch (streamError) {
@@ -2092,17 +2182,20 @@ export function useChat(
                     (m) => m.id === messageId
                 );
                 if (rawIdx >= 0) {
-                    rawMessages.value[rawIdx] = {
-                        ...rawMessages.value[rawIdx],
-                        content:
-                            tailAssistant.value?.text ??
-                            rawMessages.value[rawIdx].content,
-                        reasoning_text:
-                            tailAssistant.value?.reasoning_text ??
-                            rawMessages.value[rawIdx].reasoning_text ??
-                            null,
-                        error: 'stream_interrupted',
-                    };
+                    const existingRaw = rawMessages.value[rawIdx];
+                    if (existingRaw) {
+                        rawMessages.value[rawIdx] = {
+                            ...existingRaw,
+                            role: existingRaw.role ?? 'assistant',
+                            content:
+                                tailAssistant.value?.text ?? existingRaw.content,
+                            reasoning_text:
+                                tailAssistant.value?.reasoning_text ??
+                                existingRaw.reasoning_text ??
+                                null,
+                            error: 'stream_interrupted',
+                        };
+                    }
                 }
                 await db.messages.update(messageId, {
                     error: 'stream_interrupted',
