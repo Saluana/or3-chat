@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
+import { getGlobalSidebarLayoutApi } from '~/utils/sidebarLayoutApi';
 
 export type WorkflowSidebarPanel = 'workflows' | 'palette' | 'inspector';
 
@@ -28,6 +29,7 @@ function createControls(): WorkflowSidebarControls {
 
     async function openInspector() {
         await setPanel('inspector');
+        getGlobalSidebarLayoutApi()?.expand();
     }
 
     return {

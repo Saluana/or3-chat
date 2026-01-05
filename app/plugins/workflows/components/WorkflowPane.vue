@@ -566,6 +566,7 @@ watch(
                 :pan-on-drag="panOnDrag"
                 :selection-key-code="selectionKeyCode"
                 @node-click="handleNodeClick"
+                @node-inspect="handleNodeClick"
                 @edge-click="() => {}"
                 @pane-click="() => {}"
             />
