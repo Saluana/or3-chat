@@ -1,14 +1,14 @@
 <template>
-    <div class="min-h-[100dvh] py-8 px-4">
+    <div class="h-[100dvh] overflow-y-auto py-8 px-4">
         <div class="max-w-5xl mx-auto space-y-6">
             <section class="space-y-3">
                 <header class="space-y-2">
                     <h1
-                        class="font-['Press_Start_2P'] text-[18px] uppercase tracking-[0.2em]"
+                        class="font-['Press_Start_2P'] text-[18px] uppercase tracking-[0.2em] fx-main-text"
                     >
                         useChat Frontend Test Bench
                     </h1>
-                    <p class="text-[17px] opacity-80 max-w-3xl">
+                    <p class="text-[17px] opacity-80 max-w-3xl fx-main-text">
                         Manual harness that exercises the chat composable
                         end-to-end: API key hydration, streaming, persistence,
                         retry, abort, filters, model selection, and image
@@ -61,11 +61,11 @@
                     <header class="flex items-start justify-between gap-3">
                         <div class="space-y-1">
                             <h2
-                                class="font-['Press_Start_2P'] text-[13px] uppercase tracking-[0.18em] leading-tight"
+                                class="font-['Press_Start_2P'] text-[13px] uppercase tracking-[0.18em] leading-tight fx-main-text"
                             >
                                 {{ result.label }}
                             </h2>
-                            <p class="text-[15px] opacity-80">
+                            <p class="text-[15px] opacity-80 fx-main-text">
                                 {{ result.description }}
                             </p>
                         </div>
@@ -123,6 +123,7 @@ import { db } from '~/db';
 import { state } from '~/state/global';
 import { nowSec, newId } from '~/db/util';
 import { useHooks } from '~/core/hooks/useHooks';
+import { deriveMessageContent } from '~/utils/chat/messages';
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
 
@@ -202,6 +203,56 @@ const summary = computed(() => {
     return { total, pass, fail, pending };
 });
 
+async function ensureApiKey(): Promise<void> {
+    if (!import.meta.client) return;
+    if (state.value.openrouterKey) return;
+    let storedKey: string | null = null;
+    try {
+        storedKey = localStorage.getItem('openrouter_api_key');
+    } catch {
+        /* intentionally empty */
+    }
+    if (!storedKey) {
+        try {
+            const rec = await db.kv
+                .where('name')
+                .equals('openrouter_api_key')
+                .first();
+            if (rec && typeof rec.value === 'string') storedKey = rec.value;
+        } catch {
+            /* intentionally empty */
+        }
+    }
+    if (storedKey) {
+        state.value.openrouterKey = storedKey;
+        return;
+    }
+    const entered = window.prompt(
+        'Enter your OpenRouter API key to run tests:'
+    );
+    if (!entered || !entered.trim()) return;
+    const key = entered.trim();
+    state.value.openrouterKey = key;
+    try {
+        localStorage.setItem('openrouter_api_key', key);
+    } catch {
+        /* intentionally empty */
+    }
+    try {
+        const now = nowSec();
+        await db.kv.put({
+            id: newId(),
+            name: 'openrouter_api_key',
+            value: key,
+            created_at: now,
+            updated_at: now,
+            clock: 0,
+        });
+    } catch {
+        /* intentionally empty */
+    }
+}
+
 function createTestResult(def: TestDefinition): TestResult {
     return {
         ...def,
@@ -225,7 +276,10 @@ function installFetchStub() {
     }
     g.fetch = async (input: FetchInput, init?: FetchInit) => {
         const url = toUrl(input);
-        if (url.includes('openrouter.ai/api/v1/chat/completions')) {
+        if (
+            url.includes('openrouter.ai/api/v1/chat/completions') ||
+            url.includes('/api/openrouter/stream')
+        ) {
             if (!fetchQueue.length) {
                 throw new Error(
                     'No mock fetch handler enqueued for OpenRouter request'
@@ -354,6 +408,43 @@ function makeSseResponse(
                 if (closed) return;
                 if (index >= events.length) {
                     controller.close();
+                    return;
+                }
+                controller.enqueue(encoder.encode(events[index++]));
+                if (intervalMs <= 0) push();
+                else setTimeout(push, intervalMs);
+            };
+            push();
+            signal?.addEventListener(
+                'abort',
+                () => {
+                    closed = true;
+                    controller.error(new DOMException('Aborted', 'AbortError'));
+                },
+                { once: true }
+            );
+        },
+    });
+    return new Response(stream, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+    });
+}
+
+function makeSseErrorResponse(
+    events: string[],
+    signal?: AbortSignal,
+    intervalMs = 10
+) {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+            let index = 0;
+            let closed = false;
+            const push = () => {
+                if (closed) return;
+                if (index >= events.length) {
+                    controller.error(new Error('Stream interrupted'));
                     return;
                 }
                 controller.enqueue(encoder.encode(events[index++]));
@@ -727,6 +818,410 @@ const testDefinitions: TestDefinition[] = [
                 'Tail assistant should not contain text after stream error'
             );
             ctx.log('Error path preserved user message and cleared assistant');
+        },
+    },
+    {
+        id: 'stream-error-partial',
+        label: 'Partial assistant persists on stream interruption',
+        description:
+            'Simulates mid-stream failure and verifies assistant text is retained with an error flag.',
+        async run(ctx) {
+            state.value.openrouterKey = 'partial-err-key';
+            const events = [
+                'data: {"choices":[{"delta":{"text":"Partial "}}]}\n\n',
+                'data: {"choices":[{"delta":{"text":"response"}}]}\n\n',
+            ];
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseErrorResponse(events, init?.signal ?? undefined)
+                )
+            );
+            const chat = useChat([]);
+            await chat.sendMessage('trigger partial error');
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 1500,
+                message: 'Loading flag did not reset after stream error',
+            });
+            const threadId = chat.threadId.value;
+            assert(threadId, 'Thread should still exist after error');
+            const records = await db.messages
+                .where('thread_id')
+                .equals(threadId!)
+                .toArray();
+            const userMessage = records.find((m) => m.role === 'user');
+            const assistantMessage = records.find((m) => m.role === 'assistant');
+            assert(userMessage, 'User message should persist on error');
+            assert(assistantMessage, 'Assistant message should persist on error');
+            assert(
+                assistantMessage?.error === 'stream_interrupted',
+                'Assistant message should be marked as interrupted'
+            );
+            const assistantText = assistantMessage
+                ? deriveMessageContent({
+                      content: (assistantMessage as { content?: string }).content,
+                      data: assistantMessage.data,
+                  })
+                : '';
+            assert(
+                assistantText.includes('Partial response'),
+                'Assistant text should include partial response'
+            );
+            ctx.log('Partial assistant preserved with error flag');
+        },
+    },
+    {
+        id: 'continue-flow',
+        label: 'Continue appends into same assistant message',
+        description:
+            'Ensures continueMessage keeps the same assistant id, appends new text, and clears error.',
+        async run(ctx) {
+            state.value.openrouterKey = 'continue-key';
+            const firstEvents = [
+                'data: {"choices":[{"delta":{"text":"Partial"}}]}\n\n',
+            ];
+            const continueEvents = [
+                'data: {"choices":[{"delta":{"text":" and done"}}]}\n\n',
+            ];
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseErrorResponse(firstEvents, init?.signal ?? undefined)
+                )
+            );
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(continueEvents, init?.signal ?? undefined)
+                )
+            );
+            const chat = useChat([]);
+            await chat.sendMessage('continue me');
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 1500,
+                message: 'Loading did not reset after initial error',
+            });
+            const threadId = chat.threadId.value;
+            assert(threadId, 'Thread should exist after initial error');
+            let records = await db.messages
+                .where('thread_id')
+                .equals(threadId!)
+                .toArray();
+            const assistantBefore = records.find(
+                (m) => m.role === 'assistant'
+            );
+            assert(assistantBefore, 'Assistant should exist after error');
+            assert(
+                assistantBefore?.error === 'stream_interrupted',
+                'Assistant should be flagged as interrupted'
+            );
+            const textBefore = deriveMessageContent({
+                content: (assistantBefore as { content?: string }).content,
+                data: assistantBefore.data,
+            });
+            assert(
+                textBefore.includes('Partial'),
+                'Assistant should contain initial partial text'
+            );
+            const recordCount = records.length;
+
+            await chat.continueMessage(assistantBefore.id, DEFAULT_AI_MODEL);
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 1500,
+                message: 'Loading did not reset after continue',
+            });
+
+            records = await db.messages
+                .where('thread_id')
+                .equals(threadId!)
+                .toArray();
+            assert(
+                records.length === recordCount,
+                'Continue should not create new messages'
+            );
+            const assistantAfter = records.find(
+                (m) => m.id === assistantBefore.id
+            );
+            assert(assistantAfter, 'Assistant should persist after continue');
+            assert(
+                assistantAfter?.error == null,
+                'Assistant error should be cleared after continue'
+            );
+            const textAfter = deriveMessageContent({
+                content: (assistantAfter as { content?: string }).content,
+                data: assistantAfter.data,
+            });
+            assert(
+                textAfter.includes('Partial') &&
+                    textAfter.includes('and done'),
+                'Assistant should include appended continuation text'
+            );
+            ctx.log('Continue appended text and cleared error');
+        },
+    },
+    {
+        id: 'continue-after-reload',
+        label: 'Continue works after reload',
+        description:
+            'Reloads chat state and verifies continue can resume from persisted error state.',
+        async run(ctx) {
+            state.value.openrouterKey = 'reload-key';
+            const firstEvents = [
+                'data: {"choices":[{"delta":{"text":"Partial"}}]}\n\n',
+            ];
+            const continueEvents = [
+                'data: {"choices":[{"delta":{"text":" reload"}}]}\n\n',
+            ];
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseErrorResponse(firstEvents, init?.signal ?? undefined)
+                )
+            );
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(
+                        [
+                            ...continueEvents,
+                            'data: [DONE]\n\n',
+                        ],
+                        init?.signal ?? undefined
+                    )
+                )
+            );
+            const chat = useChat([]);
+            await chat.sendMessage('reload me');
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 1500,
+                message: 'Loading did not reset after initial error',
+            });
+            const threadId = chat.threadId.value;
+            assert(threadId, 'Thread should exist after error');
+            const records = await db.messages
+                .where('thread_id')
+                .equals(threadId!)
+                .toArray();
+            const assistant = records.find((m) => m.role === 'assistant');
+            assert(assistant, 'Assistant should persist after error');
+            assert(
+                assistant?.error === 'stream_interrupted',
+                'Assistant should be flagged as interrupted'
+            );
+
+            const reloaded = useChat([], threadId);
+            await reloaded.ensureHistorySynced();
+            const reloadedMessage = reloaded.messages.value.find(
+                (m) => m.id === assistant!.id
+            );
+            assert(reloadedMessage, 'Reloaded message should be visible');
+            assert(
+                reloadedMessage?.error === 'stream_interrupted',
+                'Reloaded message should retain error flag'
+            );
+
+            await reloaded.continueMessage(assistant.id, DEFAULT_AI_MODEL);
+            await ctx.waitFor(() => !reloaded.loading.value, {
+                timeout: 1500,
+                message: 'Loading did not reset after continue',
+            });
+
+            const updated = await db.messages.get(assistant.id);
+            assert(updated, 'Assistant should persist after continue');
+            assert(
+                updated?.error == null,
+                'Assistant error should be cleared after continue'
+            );
+            const textAfter = deriveMessageContent({
+                content: (updated as { content?: string }).content,
+                data: updated?.data,
+            });
+            assert(
+                textAfter.includes('Partial') &&
+                    textAfter.includes('reload'),
+                'Assistant should include appended continuation text'
+            );
+            ctx.log('Continue after reload succeeded');
+        },
+    },
+    {
+        id: 'continue-preserves-reasoning',
+        label: 'Continue preserves reasoning text',
+        description:
+            'Ensures reasoning_text persists across interruption and continue.',
+        async run(ctx) {
+            state.value.openrouterKey = 'reasoning-continue-key';
+            const firstEvents = [
+                'data: {"choices":[{"delta":{"reasoning_details":[{"type":"reasoning.text","text":"Thinking..."}]}}]}\n\n',
+                'data: {"choices":[{"delta":{"text":"Hi"}}]}\n\n',
+            ];
+            const continueEvents = [
+                'data: {"choices":[{"delta":{"text":" there"}}]}\n\n',
+            ];
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseErrorResponse(firstEvents, init?.signal ?? undefined)
+                )
+            );
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(
+                        [
+                            ...continueEvents,
+                            'data: [DONE]\n\n',
+                        ],
+                        init?.signal ?? undefined
+                    )
+                )
+            );
+            const chat = useChat([]);
+            await chat.sendMessage('reasoning please');
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 1500,
+                message: 'Loading did not reset after reasoning error',
+            });
+            const threadId = chat.threadId.value;
+            assert(threadId, 'Thread should exist after reasoning error');
+            const assistant = await db.messages
+                .where('thread_id')
+                .equals(threadId!)
+                .filter((m) => m.role === 'assistant')
+                .first();
+            assert(assistant, 'Assistant should persist after error');
+            const reasoningBefore =
+                assistant?.data &&
+                typeof assistant.data === 'object' &&
+                typeof (assistant.data as { reasoning_text?: unknown })
+                    .reasoning_text === 'string'
+                    ? ((assistant.data as { reasoning_text: string })
+                          .reasoning_text as string)
+                    : '';
+            assert(
+                reasoningBefore.includes('Thinking'),
+                'Reasoning should be persisted on error'
+            );
+
+            await chat.continueMessage(assistant.id, DEFAULT_AI_MODEL);
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 1500,
+                message: 'Loading did not reset after continue',
+            });
+            const updated = await db.messages.get(assistant.id);
+            assert(updated, 'Assistant should persist after continue');
+            const reasoningAfter =
+                updated?.data &&
+                typeof updated.data === 'object' &&
+                typeof (updated.data as { reasoning_text?: unknown })
+                    .reasoning_text === 'string'
+                    ? ((updated.data as { reasoning_text: string })
+                          .reasoning_text as string)
+                    : '';
+            assert(
+                reasoningAfter.includes('Thinking'),
+                'Reasoning should be preserved after continue'
+            );
+            const textAfter = deriveMessageContent({
+                content: (updated as { content?: string }).content,
+                data: updated?.data,
+            });
+            assert(
+                textAfter.includes('Hi') && textAfter.includes('there'),
+                'Assistant should append continuation text'
+            );
+            ctx.log('Continue preserved reasoning text');
+        },
+    },
+    {
+        id: 'continue-keeps-image-hashes',
+        label: 'Continue keeps image hashes without duplication',
+        description:
+            'Ensures image placeholders and hashes persist when continuing after an interruption.',
+        async run(ctx) {
+            state.value.openrouterKey = 'continue-image-key';
+            const dataUrl =
+                'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=';
+            const firstEvents = [
+                'data: {"choices":[{"delta":{"text":"Image start"}}]}\n\n',
+                `data: {"choices":[{"delta":{"images":[{"image_url":{"url":"${dataUrl}"}}]}}]}\n\n`,
+            ];
+            const continueEvents = [
+                'data: {"choices":[{"delta":{"text":" done"}}]}\n\n',
+            ];
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseErrorResponse(firstEvents, init?.signal ?? undefined)
+                )
+            );
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(
+                        [
+                            ...continueEvents,
+                            'data: [DONE]\n\n',
+                        ],
+                        init?.signal ?? undefined
+                    )
+                )
+            );
+            const chat = useChat([]);
+            await chat.sendMessage('image then continue');
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 1500,
+                message: 'Loading did not reset after image error',
+            });
+            const threadId = chat.threadId.value;
+            assert(threadId, 'Thread should exist after image error');
+            const assistant = await db.messages
+                .where('thread_id')
+                .equals(threadId!)
+                .filter((m) => m.role === 'assistant')
+                .first();
+            assert(assistant, 'Assistant should persist after error');
+            assert(assistant?.file_hashes, 'Image hashes should persist');
+            const hashesBefore = JSON.parse(assistant.file_hashes);
+            assert(
+                Array.isArray(hashesBefore) && hashesBefore.length === 1,
+                'Expected one image hash before continue'
+            );
+            const textBefore = deriveMessageContent({
+                content: (assistant as { content?: string }).content,
+                data: assistant?.data,
+            });
+            const placeholderCountBefore =
+                (textBefore.match(/!\[generated image]/g) || []).length;
+            assert(
+                placeholderCountBefore === 1,
+                'Expected one image placeholder before continue'
+            );
+
+            await chat.continueMessage(assistant.id, DEFAULT_AI_MODEL);
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 1500,
+                message: 'Loading did not reset after continue',
+            });
+            const updated = await db.messages.get(assistant.id);
+            assert(updated, 'Assistant should persist after continue');
+            assert(
+                updated?.error == null,
+                'Assistant error should be cleared after continue'
+            );
+            const hashesAfter = updated?.file_hashes
+                ? JSON.parse(updated.file_hashes)
+                : [];
+            assert(
+                Array.isArray(hashesAfter) && hashesAfter.length === 1,
+                'Expected one image hash after continue'
+            );
+            const textAfter = deriveMessageContent({
+                content: (updated as { content?: string }).content,
+                data: updated?.data,
+            });
+            const placeholderCountAfter =
+                (textAfter.match(/!\[generated image]/g) || []).length;
+            assert(
+                placeholderCountAfter === 1,
+                'Expected one image placeholder after continue'
+            );
+            assert(
+                textAfter.includes('done'),
+                'Assistant should append continuation text'
+            );
+            ctx.log('Continue preserved image hashes and placeholders');
         },
     },
     {
@@ -1845,6 +2340,8 @@ async function runTests() {
     if (running.value) return;
     running.value = true;
     results.value = testDefinitions.map(createTestResult);
+
+    await ensureApiKey();
 
     for (const result of results.value) {
         const cleanups: Array<() => void | Promise<void>> = [];

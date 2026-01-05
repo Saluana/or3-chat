@@ -20,6 +20,7 @@ interface RawMessageLike {
     content?: string | ContentPartLike[];
     file_hashes?: string[] | string | null;
     reasoning_text?: string | null;
+    error?: string | null;
     pending?: boolean;
     data?: {
         reasoning_text?: string | null;
@@ -49,6 +50,7 @@ export interface UiChatMessage {
     stream_id?: string;
     pending?: boolean;
     toolCalls?: ToolCallInfo[];
+    error?: string | null;
 
     // Workflow-specific fields (optional - no breaking changes)
     /** True if this message represents a workflow execution */
@@ -209,6 +211,11 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         stream_id: raw.stream_id,
         pending,
         toolCalls,
+        error:
+            raw.error ??
+            (raw.data && typeof raw.data === 'object'
+                ? ((raw.data as { error?: string | null }).error ?? null)
+                : null),
         isWorkflow,
         workflowState,
     };

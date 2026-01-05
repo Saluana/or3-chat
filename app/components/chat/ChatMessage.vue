@@ -274,6 +274,18 @@
                         @click="onRetry"
                     ></UButton>
                 </UTooltip>
+                <UTooltip
+                    v-if="showContinueButton"
+                    :delay-duration="500"
+                    text="Continue"
+                    :popper="{ strategy: 'fixed' }"
+                    :teleport="true"
+                >
+                    <UButton
+                        v-bind="continueButtonProps"
+                        @click="onContinue"
+                    ></UButton>
+                </UTooltip>
                 <UTooltip :delay-duration="500" text="Branch" :teleport="true">
                     <UButton
                         v-bind="branchButtonProps"
@@ -339,6 +351,7 @@ type MessageWithUiState = UIMessage & { _expanded?: boolean };
 const props = defineProps<{ message: MessageWithUiState; threadId?: string }>();
 const emit = defineEmits<{
     (e: 'retry', id: string): void;
+    (e: 'continue', id: string): void;
     (e: 'branch', id: string): void;
     (e: 'edited', payload: { id: string; content: string }): void;
     (e: 'begin-edit', id: string): void;
@@ -375,6 +388,25 @@ const retryButtonProps = computed(() => {
     return {
         icon: useIcon('chat.message.retry').value,
         color: 'info' as const,
+        size: 'sm' as const,
+        class: 'text-black dark:text-white/95 flex items-center justify-center',
+        ...overrides.value,
+    };
+});
+
+const continueButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.continue',
+        isNuxtUI: true,
+    });
+    const continueIcon =
+        useIcon('chat.message.continue').value || 'heroicons:play-20-solid';
+
+    return {
+        icon: continueIcon,
+        color: 'success' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
         ...overrides.value,
@@ -479,6 +511,13 @@ const messageContainerProps = computed(() => {
 
 const roleVariant = computed<'user' | 'assistant'>(() =>
     props.message.role === 'user' ? 'user' : 'assistant'
+);
+
+const showContinueButton = computed(
+    () =>
+        props.message.role === 'assistant' &&
+        Boolean(props.message.error) &&
+        (props.message.text?.length ?? 0) > 0
 );
 
 const isStreamingReasoning = computed(() => {
@@ -985,6 +1024,12 @@ function onRetry() {
     const id = props.message.id;
     if (!id) return;
     emit('retry', id);
+}
+
+function onContinue() {
+    const id = props.message.id;
+    if (!id) return;
+    emit('continue', id);
 }
 
 import { forkThread } from '~/db/branching';

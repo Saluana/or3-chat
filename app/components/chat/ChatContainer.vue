@@ -39,6 +39,7 @@
                             :message="item"
                             :thread-id="props.threadId"
                             @retry="onRetry"
+                            @continue="onContinue"
                             @branch="onBranch"
                             @edited="onEdited"
                             @begin-edit="onBeginEdit(item.id)"
@@ -616,6 +617,12 @@ function onRetry(messageId: string) {
     // Provide current model so retry uses same selection
     chat.value.retryMessage(messageId, model.value);
     // Retry changes message state, force measure
+    nextTick(() => scroller.value?.refreshMeasurements?.());
+}
+
+function onContinue(messageId: string) {
+    if (!chat.value || chat.value?.loading?.value) return;
+    chat.value.continueMessage?.(messageId, model.value);
     nextTick(() => scroller.value?.refreshMeasurements?.());
 }
 

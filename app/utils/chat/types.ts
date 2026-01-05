@@ -22,6 +22,7 @@ export interface ChatMessage {
     stream_id?: string;
     file_hashes?: string | null;
     reasoning_text?: string | null;
+    error?: string | null;
     data?: Record<string, unknown> | null;
     index?: number | null;
     created_at?: number | null;
