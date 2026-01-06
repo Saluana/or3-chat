@@ -127,39 +127,127 @@ function extractImageAttachments(
 
     const attachments: Attachment[] = [];
     let imageIndex = 0;
+    let fileIndex = 0;
 
     for (const part of content) {
         if (!part || typeof part !== 'object') continue;
         const type = (part as { type?: string }).type;
-        let url: string | undefined;
 
-        if (type === 'image_url') {
-            const imageUrl =
-                (part as { image_url?: { url?: string } }).image_url?.url ||
-                (part as { imageUrl?: { url?: string } }).imageUrl?.url;
-            if (typeof imageUrl === 'string') url = imageUrl;
-        } else if (type === 'image') {
-            const image = (part as { image?: string }).image;
-            if (typeof image === 'string') url = image;
+        // Handle image types
+        if (type === 'image_url' || type === 'image') {
+            let url: string | undefined;
+            if (type === 'image_url') {
+                const imageUrl =
+                    (part as { image_url?: { url?: string } }).image_url?.url ||
+                    (part as { imageUrl?: { url?: string } }).imageUrl?.url;
+                if (typeof imageUrl === 'string') url = imageUrl;
+            } else if (type === 'image') {
+                const image = (part as { image?: string }).image;
+                if (typeof image === 'string') url = image;
+            }
+
+            if (!url) continue;
+
+            const mimeType = inferImageMimeType(url);
+            const extension = inferImageExtension(url, mimeType);
+
+            attachments.push({
+                id: `att-${timestamp}-${imageIndex}`,
+                type: 'image',
+                url,
+                mimeType,
+                name: `image-${imageIndex}.${extension}`,
+            });
+            imageIndex += 1;
+            continue;
         }
 
-        if (!url) continue;
+        if (type === 'file') {
+            const filePart = part as {
+                data?: string;
+                fileData?: string;
+                file_data?: string;
+                mediaType?: string;
+                mimeType?: string;
+                mime?: string;
+                name?: string;
+                filename?: string;
+                file?: {
+                    fileData?: string;
+                    file_data?: string;
+                    data?: string;
+                    filename?: string;
+                    name?: string;
+                    mediaType?: string;
+                    mimeType?: string;
+                    mime?: string;
+                };
+            };
 
-        const mimeType = inferImageMimeType(url);
-        const extension = inferImageExtension(url, mimeType);
+            const nestedFile = filePart.file;
+            const fileData =
+                filePart.data ||
+                filePart.fileData ||
+                filePart.file_data ||
+                nestedFile?.fileData ||
+                nestedFile?.file_data ||
+                nestedFile?.data;
+            const filename =
+                filePart.name ||
+                filePart.filename ||
+                nestedFile?.filename ||
+                nestedFile?.name;
 
-        attachments.push({
-            id: `att-${timestamp}-${imageIndex}`,
-            type: 'image',
-            url,
-            mimeType,
-            name: `image-${imageIndex}.${extension}`,
-        });
-        imageIndex += 1;
+            if (!fileData || typeof fileData !== 'string') continue;
+
+            const explicitMime =
+                filePart.mediaType ||
+                filePart.mimeType ||
+                filePart.mime ||
+                nestedFile?.mediaType ||
+                nestedFile?.mimeType ||
+                nestedFile?.mime;
+
+            const dataUrlMime = fileData.startsWith('data:')
+                ? parseDataUrlMimeType(fileData)
+                : null;
+
+            let mimeType =
+                (explicitMime && explicitMime.toLowerCase()) ||
+                dataUrlMime ||
+                'application/octet-stream';
+            if (
+                mimeType === 'application/octet-stream' &&
+                filename?.toLowerCase().endsWith('.pdf')
+            ) {
+                mimeType = 'application/pdf';
+            }
+
+            attachments.push({
+                id: `att-file-${timestamp}-${fileIndex}`,
+                type: 'file',
+                url: fileData,
+                mimeType,
+                name: filename || `file-${fileIndex}`,
+            });
+            fileIndex += 1;
+        }
+
+    }
+
+    if (import.meta.dev && attachments.length > 0) {
+        console.log('[workflow-slash] Extracted attachments:', attachments.map(a => ({
+            id: a.id,
+            type: a.type,
+            mimeType: a.mimeType,
+            name: a.name,
+            urlLength: a.url?.length || 0,
+        })));
     }
 
     return attachments;
 }
+
 
 function buildAttachmentUrl(attachment: Attachment): string | null {
     if (attachment.url) return attachment.url;
@@ -1104,6 +1192,11 @@ export default defineNuxtPlugin((nuxtApp) => {
                 '[workflow-slash] Starting execution with prompt:',
                 executionPrompt
             );
+            console.log(
+                '[workflow-slash] Attachments for execution:',
+                attachments?.length || 0,
+                attachments?.map(a => ({ type: a.type, mimeType: a.mimeType, name: a.name })) || []
+            );
         }
 
         // Fire start hook
@@ -1429,10 +1522,36 @@ export default defineNuxtPlugin((nuxtApp) => {
                           .join('')
                     : '';
             
-            const attachments = extractImageAttachments(
+            let attachments = extractImageAttachments(
                 lastUser.content,
                 nowSec()
             );
+
+            // Check for Vercel AI SDK specific attachment fields or internal data
+            const sdkAttachments = 
+                (lastUser as any).experimental_attachments || 
+                (lastUser as any).attachments || 
+                (lastUser as any).data?.attachments;
+
+            if (Array.isArray(sdkAttachments) && sdkAttachments.length > 0) {
+                const timestamp = nowSec();
+                const mapped = sdkAttachments.map((a: any, i: number) => {
+                    const mimeType = a.contentType || a.mediaType || 'application/octet-stream';
+                    const type = mimeType.startsWith('image/') ? 'image' : 'file';
+                    // Support various Vercel/Internal URL properties
+                    const url = a.url || a.content || a.data;
+                    
+                    return {
+                        id: `att-sdk-${timestamp}-${i}`,
+                        type,
+                        url,
+                        name: a.name || `file-${i}`,
+                        mimeType
+                    };
+                }).filter((a: any) => a.url);
+
+                attachments = [...attachments, ...mapped];
+            }
 
             const normalizedContent = content.trimStart();
             const editorDoc = pendingEditorJson;

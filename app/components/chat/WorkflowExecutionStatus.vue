@@ -54,6 +54,7 @@
                     Attachments
                 </div>
                 <div class="flex flex-wrap gap-2">
+                    <!-- Image attachments -->
                     <div
                         v-for="attachment in imageAttachments"
                         :key="attachment.id"
@@ -66,7 +67,22 @@
                             loading="lazy"
                         />
                     </div>
+                    <!-- File attachments (PDFs, etc.) -->
+                    <div
+                        v-for="attachment in fileAttachments"
+                        :key="attachment.id"
+                        class="w-12 h-12 rounded-md overflow-hidden border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] flex flex-col items-center justify-center gap-0.5 p-1"
+                        :title="attachment.name"
+                    >
+                        <span class="text-[8px] font-bold uppercase tracking-wide bg-black text-white px-1 py-0.5 rounded">
+                            {{ attachment.mimeType === 'application/pdf' ? 'PDF' : 'FILE' }}
+                        </span>
+                        <span class="text-[7px] text-center line-clamp-2 leading-tight opacity-70">
+                            {{ attachment.name }}
+                        </span>
+                    </div>
                 </div>
+
                 <div
                     v-if="imageCaption"
                     class="rounded border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-2"
@@ -490,8 +506,20 @@ const imageAttachments = computed(() => {
         );
 });
 
-const hasAttachments = computed(() => imageAttachments.value.length > 0);
+const fileAttachments = computed(() => {
+    const attachments = props.workflowState.attachments || [];
+    return attachments
+        .filter((attachment) => attachment.type === 'file')
+        .map((attachment) => ({
+            id: attachment.id,
+            name: attachment.name || 'File',
+            mimeType: attachment.mimeType || 'application/octet-stream',
+        }));
+});
+
+const hasAttachments = computed(() => imageAttachments.value.length > 0 || fileAttachments.value.length > 0);
 const imageCaption = computed(() => props.workflowState.imageCaption || '');
+
 
 type PendingHitlEntry = {
     request: HitlRequestState;
