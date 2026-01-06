@@ -26,6 +26,7 @@ import { reportError } from '~/utils/errors';
 import {
     isWorkflowMessageData,
     deriveStartNodeId,
+    type ChatHistoryMessage,
     type HitlRequestState,
     type HitlAction,
 } from '~/utils/chat/workflow-types';
@@ -70,6 +71,16 @@ type MessagesPayload =
     | { messages: OpenRouterMessage[] }
     | { messages: OpenRouterMessage[] }[];
 
+type SDKAttachmentPayload = {
+    contentType?: string;
+    mediaType?: string;
+    mimeType?: string;
+    url?: unknown;
+    content?: unknown;
+    data?: unknown;
+    name?: string;
+};
+
 function normalizeMessagesPayload(
     payload: MessagesPayload
 ): OpenRouterMessage[] {
@@ -88,35 +99,123 @@ function parseDataUrlMimeType(url: string): string | null {
     return match[1].toLowerCase();
 }
 
-function inferImageMimeType(url: string): string {
-    const dataMime = parseDataUrlMimeType(url);
-    if (dataMime) return dataMime;
+const imageExtensionByMime: Record<string, string> = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/avif': 'avif',
+};
 
-    const lower = url.toLowerCase();
-    if (lower.match(/\.(png)(\?|#|$)/)) return 'image/png';
-    if (lower.match(/\.(jpe?g)(\?|#|$)/)) return 'image/jpeg';
-    if (lower.match(/\.(webp)(\?|#|$)/)) return 'image/webp';
-    if (lower.match(/\.(gif)(\?|#|$)/)) return 'image/gif';
-    if (lower.match(/\.(avif)(\?|#|$)/)) return 'image/avif';
-
-    return 'image/png';
+function extensionFromMime(mimeType: string): string {
+    return imageExtensionByMime[mimeType.toLowerCase()] || 'png';
 }
 
-function inferImageExtension(url: string, mimeType: string): string {
-    const lowerMime = mimeType.toLowerCase();
-    if (lowerMime.includes('png')) return 'png';
-    if (lowerMime.includes('jpeg') || lowerMime.includes('jpg')) return 'jpg';
-    if (lowerMime.includes('webp')) return 'webp';
-    if (lowerMime.includes('gif')) return 'gif';
-    if (lowerMime.includes('avif')) return 'avif';
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
 
-    const lower = url.toLowerCase();
-    const match = lower.match(/\.(png|jpe?g|gif|webp|avif)(\?|#|$)/);
-    if (match && match[1]) {
-        return match[1] === 'jpeg' ? 'jpg' : match[1];
+function extractImageUrl(part: unknown): string | null {
+    if (!isRecord(part)) return null;
+    const type = typeof part.type === 'string' ? part.type : '';
+    if (type === 'image_url') {
+        const imageUrl = part.image_url;
+        if (typeof imageUrl === 'string') return imageUrl;
+        if (isRecord(imageUrl) && typeof imageUrl.url === 'string')
+            return imageUrl.url;
+        const camel = part.imageUrl;
+        if (isRecord(camel) && typeof camel.url === 'string') return camel.url;
+        return null;
+    }
+    if (type === 'image' && typeof part.image === 'string') {
+        return part.image;
+    }
+    return null;
+}
+
+/**
+ * Safely convert engine-level ChatMessage (multimodal) to UI-level ChatHistoryMessage (string content)
+ * by flattening multimodal content parts into a single string.
+ */
+function toChatHistoryMessage(
+    msg: import('@or3/workflow-core').ChatMessage
+): ChatHistoryMessage {
+    let content = '';
+    if (typeof msg.content === 'string') {
+        content = msg.content;
+    } else if (Array.isArray(msg.content)) {
+        content = msg.content
+            .map((part) => {
+                if (part.type === 'text') return part.text;
+                if (part.type === 'image_url') return `[Image: ${part.imageUrl.url}]`;
+                if (part.type === 'file') return `[File: ${part.file.filename}]`;
+                return '';
+            })
+            .join(' ');
     }
 
-    return 'png';
+    return {
+        role: msg.role as 'user' | 'assistant' | 'system',
+        content,
+    };
+}
+
+
+type FilePartCandidate = {
+    data?: unknown;
+    fileData?: unknown;
+    file_data?: unknown;
+    mediaType?: unknown;
+    mimeType?: unknown;
+    mime?: unknown;
+    name?: unknown;
+    filename?: unknown;
+    file?: {
+        fileData?: unknown;
+        file_data?: unknown;
+        data?: unknown;
+        filename?: unknown;
+        name?: unknown;
+        mediaType?: unknown;
+        mimeType?: unknown;
+        mime?: unknown;
+    };
+};
+
+function extractFilePart(part: unknown): {
+    fileData: string;
+    filename?: string;
+    mimeType?: string;
+} | null {
+    if (!isRecord(part) || part.type !== 'file') return null;
+    const filePart = part as FilePartCandidate;
+    const nested = isRecord(filePart.file) ? filePart.file : undefined;
+    const fileData =
+        filePart.data ||
+        filePart.fileData ||
+        filePart.file_data ||
+        nested?.fileData ||
+        nested?.file_data ||
+        nested?.data;
+    if (typeof fileData !== 'string') return null;
+
+    const filename =
+        (typeof filePart.name === 'string' && filePart.name) ||
+        (typeof filePart.filename === 'string' && filePart.filename) ||
+        (typeof nested?.filename === 'string' && nested?.filename) ||
+        (typeof nested?.name === 'string' && nested?.name) ||
+        undefined;
+
+    const explicitMime =
+        (typeof filePart.mediaType === 'string' && filePart.mediaType) ||
+        (typeof filePart.mimeType === 'string' && filePart.mimeType) ||
+        (typeof filePart.mime === 'string' && filePart.mime) ||
+        (typeof nested?.mediaType === 'string' && nested?.mediaType) ||
+        (typeof nested?.mimeType === 'string' && nested?.mimeType) ||
+        (typeof nested?.mime === 'string' && nested?.mime) ||
+        undefined;
+
+    return { fileData, filename, mimeType: explicitMime };
 }
 
 function extractImageAttachments(
@@ -130,26 +229,10 @@ function extractImageAttachments(
     let fileIndex = 0;
 
     for (const part of content) {
-        if (!part || typeof part !== 'object') continue;
-        const type = (part as { type?: string }).type;
-
-        // Handle image types
-        if (type === 'image_url' || type === 'image') {
-            let url: string | undefined;
-            if (type === 'image_url') {
-                const imageUrl =
-                    (part as { image_url?: { url?: string } }).image_url?.url ||
-                    (part as { imageUrl?: { url?: string } }).imageUrl?.url;
-                if (typeof imageUrl === 'string') url = imageUrl;
-            } else if (type === 'image') {
-                const image = (part as { image?: string }).image;
-                if (typeof image === 'string') url = image;
-            }
-
-            if (!url) continue;
-
-            const mimeType = inferImageMimeType(url);
-            const extension = inferImageExtension(url, mimeType);
+        const url = extractImageUrl(part);
+        if (url) {
+            const mimeType = parseDataUrlMimeType(url) || 'image/png';
+            const extension = extensionFromMime(mimeType);
 
             attachments.push({
                 id: `att-${timestamp}-${imageIndex}`,
@@ -162,63 +245,18 @@ function extractImageAttachments(
             continue;
         }
 
-        if (type === 'file') {
-            const filePart = part as {
-                data?: string;
-                fileData?: string;
-                file_data?: string;
-                mediaType?: string;
-                mimeType?: string;
-                mime?: string;
-                name?: string;
-                filename?: string;
-                file?: {
-                    fileData?: string;
-                    file_data?: string;
-                    data?: string;
-                    filename?: string;
-                    name?: string;
-                    mediaType?: string;
-                    mimeType?: string;
-                    mime?: string;
-                };
-            };
-
-            const nestedFile = filePart.file;
-            const fileData =
-                filePart.data ||
-                filePart.fileData ||
-                filePart.file_data ||
-                nestedFile?.fileData ||
-                nestedFile?.file_data ||
-                nestedFile?.data;
-            const filename =
-                filePart.name ||
-                filePart.filename ||
-                nestedFile?.filename ||
-                nestedFile?.name;
-
-            if (!fileData || typeof fileData !== 'string') continue;
-
-            const explicitMime =
-                filePart.mediaType ||
-                filePart.mimeType ||
-                filePart.mime ||
-                nestedFile?.mediaType ||
-                nestedFile?.mimeType ||
-                nestedFile?.mime;
-
-            const dataUrlMime = fileData.startsWith('data:')
-                ? parseDataUrlMimeType(fileData)
+        const file = extractFilePart(part);
+        if (file) {
+            const dataUrlMime = file.fileData.startsWith('data:')
+                ? parseDataUrlMimeType(file.fileData)
                 : null;
-
             let mimeType =
-                (explicitMime && explicitMime.toLowerCase()) ||
+                (file.mimeType && file.mimeType.toLowerCase()) ||
                 dataUrlMime ||
                 'application/octet-stream';
             if (
                 mimeType === 'application/octet-stream' &&
-                filename?.toLowerCase().endsWith('.pdf')
+                file.filename?.toLowerCase().endsWith('.pdf')
             ) {
                 mimeType = 'application/pdf';
             }
@@ -226,9 +264,9 @@ function extractImageAttachments(
             attachments.push({
                 id: `att-file-${timestamp}-${fileIndex}`,
                 type: 'file',
-                url: fileData,
+                url: file.fileData,
                 mimeType,
-                name: filename || `file-${fileIndex}`,
+                name: file.filename || `file-${fileIndex}`,
             });
             fileIndex += 1;
         }
@@ -246,6 +284,76 @@ function extractImageAttachments(
     }
 
     return attachments;
+}
+
+async function blobToDataUrl(blob: Blob, mimeType?: string): Promise<string> {
+    const normalized = mimeType ? new Blob([blob], { type: mimeType }) : blob;
+    return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () =>
+            reject(reader.error ?? new Error('FileReader error'));
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(normalized);
+    });
+}
+
+async function normalizeAttachmentUrl(
+    value: unknown,
+    mimeType: string
+): Promise<string | null> {
+    if (typeof value === 'string') return value;
+    if (typeof Blob !== 'undefined' && value instanceof Blob) {
+        return blobToDataUrl(value, mimeType || value.type);
+    }
+    const toArrayBuffer = (input: ArrayBuffer | SharedArrayBuffer): ArrayBuffer => {
+        if (input instanceof ArrayBuffer) return input;
+        if (
+            typeof SharedArrayBuffer !== 'undefined' &&
+            input instanceof SharedArrayBuffer
+        ) {
+            const copy = new Uint8Array(input.byteLength);
+            copy.set(new Uint8Array(input));
+            return copy.buffer;
+        }
+        return input as unknown as ArrayBuffer;
+    };
+    if (value instanceof ArrayBuffer) {
+        const buffer = toArrayBuffer(value);
+        return blobToDataUrl(new Blob([buffer], { type: mimeType }), mimeType);
+    }
+    if (typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer) {
+        const buffer = toArrayBuffer(value);
+        return blobToDataUrl(new Blob([buffer], { type: mimeType }), mimeType);
+    }
+    if (ArrayBuffer.isView(value)) {
+        const view = value as ArrayBufferView;
+        const source = view.buffer;
+        const buffer = toArrayBuffer(source);
+        const slice = buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
+        return blobToDataUrl(new Blob([slice], { type: mimeType }), mimeType);
+    }
+    return null;
+}
+
+function inheritAttachmentsFromMessages(
+    messages: OpenRouterMessage[],
+    limit = 8
+): Attachment[] {
+    const collected: Attachment[] = [];
+    const seen = new Set<string>();
+    for (let i = messages.length - 1; i >= 0 && collected.length < limit; i--) {
+        const msg = messages[i];
+        if (!msg) continue;
+        const next = extractImageAttachments(msg.content, nowSec());
+        for (const att of next) {
+            const key = att.url || att.id;
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            collected.push(att);
+            if (collected.length >= limit) break;
+        }
+    }
+    return collected;
 }
 
 
@@ -1154,7 +1262,14 @@ export default defineNuxtPlugin((nuxtApp) => {
                 emitStateUpdate();
             },
             onComplete: (result) => {
-                accumulator.finalize({ result });
+                accumulator.finalize({
+                    result: {
+                        ...result,
+                        sessionMessages: result.sessionMessages?.map(
+                            toChatHistoryMessage
+                        ),
+                    },
+                });
                 emitStateUpdate();
                 persist(true);
             },
@@ -1241,7 +1356,14 @@ export default defineNuxtPlugin((nuxtApp) => {
                 const finalOutput = result?.finalOutput ?? result?.output ?? '';
                 accumulator.finalize({
                     stopped,
-                    result: result || undefined,
+                    result: result
+                        ? {
+                              ...result,
+                              sessionMessages: result.sessionMessages?.map(
+                                  toChatHistoryMessage
+                              ),
+                          }
+                        : undefined,
                     error: result?.error || undefined,
                 });
                 emitStateUpdateSync();
@@ -1528,29 +1650,58 @@ export default defineNuxtPlugin((nuxtApp) => {
             );
 
             // Check for Vercel AI SDK specific attachment fields or internal data
-            const sdkAttachments = 
-                (lastUser as any).experimental_attachments || 
-                (lastUser as any).attachments || 
-                (lastUser as any).data?.attachments;
+            const lastUserData = lastUser as {
+                experimental_attachments?: unknown;
+                attachments?: unknown;
+                data?: { attachments?: unknown };
+            };
+            const sdkAttachments =
+                lastUserData.experimental_attachments ||
+                lastUserData.attachments ||
+                lastUserData.data?.attachments;
 
             if (Array.isArray(sdkAttachments) && sdkAttachments.length > 0) {
                 const timestamp = nowSec();
-                const mapped = sdkAttachments.map((a: any, i: number) => {
-                    const mimeType = a.contentType || a.mediaType || 'application/octet-stream';
-                    const type = mimeType.startsWith('image/') ? 'image' : 'file';
-                    // Support various Vercel/Internal URL properties
-                    const url = a.url || a.content || a.data;
-                    
-                    return {
-                        id: `att-sdk-${timestamp}-${i}`,
-                        type,
-                        url,
-                        name: a.name || `file-${i}`,
-                        mimeType
-                    };
-                }).filter((a: any) => a.url);
+                const mapped = await Promise.all(
+                    (sdkAttachments as SDKAttachmentPayload[]).map(
+                        async (a, i): Promise<Attachment | null> => {
+                        const mimeType =
+                            a.contentType ||
+                            a.mediaType ||
+                            a.mimeType ||
+                            'application/octet-stream';
+                        const type: Attachment['type'] = mimeType.startsWith(
+                            'image/'
+                        )
+                            ? 'image'
+                            : 'file';
+                        // Support various Vercel/Internal URL properties
+                        const raw = a.url || a.content || a.data;
+                        const url = await normalizeAttachmentUrl(
+                            raw,
+                            mimeType
+                        );
 
-                attachments = [...attachments, ...mapped];
+                        if (!url) return null;
+                        return {
+                            id: `att-sdk-${timestamp}-${i}`,
+                            type,
+                            url,
+                            name: a.name || `file-${i}`,
+                            mimeType,
+                        } satisfies Attachment;
+                    }
+                    )
+                );
+
+                attachments = [
+                    ...attachments,
+                    ...mapped.filter((a): a is Attachment => Boolean(a)),
+                ];
+            }
+
+            if (attachments.length === 0) {
+                attachments = inheritAttachmentsFromMessages(messages);
             }
 
             const normalizedContent = content.trimStart();

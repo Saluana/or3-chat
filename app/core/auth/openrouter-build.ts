@@ -282,93 +282,99 @@ export async function buildOpenRouterMessages(
         const m = messages[i];
         if (!m) continue;
         const parts: ORContentPart[] = [];
-        // Extract textual content
-        let text = '';
+        let hasTextPart = false;
         if (Array.isArray(m.content)) {
-            const textParts = m.content.filter((p) => p.type === 'text');
-            if (textParts.length)
-                text = textParts.map((p) => p.text || '').join('');
-            // Add files (PDFs etc) directly
-            const fileParts = m.content.filter((p) => p.type === 'file');
-            for (const fp of fileParts) {
-                if (!fp.data) continue;
-                const mediaType =
-                    fp.mediaType || fp.mime || 'application/octet-stream';
-                const isPdf = mediaType === 'application/pdf';
-                const filename =
-                    fp.filename || fp.name || (isPdf ? 'document.pdf' : 'file');
-                // Convert Uint8Array/Buffer to string if needed
-                let fileData: string | null | undefined =
-                    typeof fp.data === 'string' ? fp.data : null; // Binary data needs special handling below
+            for (const part of m.content) {
+                if (!part || typeof part !== 'object') continue;
+                if (part.type === 'text') {
+                    parts.push({ type: 'text', text: part.text || '' });
+                    hasTextPart = true;
+                    continue;
+                }
+                if (part.type === 'file') {
+                    if (!part.data) continue;
+                    const mediaType =
+                        part.mediaType || part.mime || 'application/octet-stream';
+                    const isPdf = mediaType === 'application/pdf';
+                    const filename =
+                        part.filename ||
+                        part.name ||
+                        (isPdf ? 'document.pdf' : 'file');
+                    // Convert Uint8Array/Buffer to string if needed
+                    let fileData: string | null | undefined =
+                        typeof part.data === 'string' ? part.data : null; // Binary data needs special handling below
 
-                // Local hash or opaque ref -> hydrate via blob to data URL preserving mime
-                if (!/^data:|^https?:|^blob:/i.test(String(fileData))) {
-                    try {
-                        const { getFileBlob } = await import('~/db/files');
-                        const blob = await getFileBlob(String(fileData));
-                        if (blob) {
-                            const mime = blob.type || mediaType;
-                            const dataUrl = await blobToDataUrl(blob);
-                            fileData = dataUrl.replace(
-                                /^data:[^;]+;/,
-                                `data:${mime};`
-                            );
-                        } else {
-                            const hydrated = await hydrateHashToDataUrl(
-                                String(fileData)
-                            );
-                            if (hydrated) fileData = hydrated;
+                    // Local hash or opaque ref -> hydrate via blob to data URL preserving mime
+                    if (!/^data:|^https?:|^blob:/i.test(String(fileData))) {
+                        try {
+                            const { getFileBlob } = await import('~/db/files');
+                            const blob = await getFileBlob(String(fileData));
+                            if (blob) {
+                                const mime = blob.type || mediaType;
+                                const dataUrl = await blobToDataUrl(blob);
+                                fileData = dataUrl.replace(
+                                    /^data:[^;]+;/,
+                                    `data:${mime};`
+                                );
+                            } else {
+                                const hydrated = await hydrateHashToDataUrl(
+                                    String(fileData)
+                                );
+                                if (hydrated) fileData = hydrated;
+                            }
+                            if (!fileData) {
+                                const remote = await remoteRefToDataUrl(
+                                    String(fileData)
+                                );
+                                if (remote) fileData = remote;
+                            }
+                        } catch {
+                            fileData = null;
                         }
-                        if (!fileData) {
-                            const remote = await remoteRefToDataUrl(
-                                String(fileData)
+                    }
+
+                    // If still not a usable scheme and it's a blob: URL, we can't send blob: (server can't fetch) -> skip
+                    if (fileData && /^blob:/i.test(String(fileData))) {
+                        if (debug)
+                            console.warn(
+                                '[or-build] skipping blob: URL (inaccessible server-side)',
+                                { filename }
                             );
-                            if (remote) fileData = remote;
-                        }
-                    } catch {
                         fileData = null;
                     }
-                }
-
-                // If still not a usable scheme and it's a blob: URL, we can't send blob: (server can't fetch) -> skip
-                if (fileData && /^blob:/i.test(String(fileData))) {
-                    if (debug)
+                    if (
+                        fileData &&
+                        isPdf &&
+                        !fileData.startsWith('data:application/pdf')
+                    ) {
+                        // Normalize pdf data URL mime prefix if possible
+                        if (fileData.startsWith('data:')) {
+                            fileData = fileData.replace(
+                                /^data:[^;]+/,
+                                'data:application/pdf'
+                            );
+                        }
+                    }
+                    if (fileData && /^data:|^https?:/i.test(String(fileData))) {
+                        parts.push({
+                            type: 'file',
+                            file: { filename, file_data: String(fileData) },
+                        });
+                    } else if (debug) {
                         console.warn(
-                            '[or-build] skipping blob: URL (inaccessible server-side)',
-                            { filename }
-                        );
-                    fileData = null;
-                }
-                if (
-                    fileData &&
-                    isPdf &&
-                    !fileData.startsWith('data:application/pdf')
-                ) {
-                    // Normalize pdf data URL mime prefix if possible
-                    if (fileData.startsWith('data:')) {
-                        fileData = fileData.replace(
-                            /^data:[^;]+/,
-                            'data:application/pdf'
+                            '[or-build] skipping file part, could not hydrate',
+                            { ref: part.data, filename, messageIndex: i }
                         );
                     }
-                }
-                if (fileData && /^data:|^https?:/i.test(String(fileData))) {
-                    parts.push({
-                        type: 'file',
-                        file: { filename, file_data: String(fileData) },
-                    });
-                } else if (debug) {
-                    console.warn(
-                        '[or-build] skipping file part, could not hydrate',
-                        { ref: fp.data, filename, messageIndex: i }
-                    );
                 }
             }
         } else if (typeof m.content === 'string') {
-            text = m.content;
+            parts.push({ type: 'text', text: m.content });
+            hasTextPart = true;
         }
-        if (text.trim().length === 0) text = ''; // keep empty string part to anchor order
-        parts.push({ type: 'text', text });
+        if (!hasTextPart) {
+            parts.push({ type: 'text', text: '' });
+        }
 
         // Add images associated with this message index (only if truly images)
         const imgs = byMessageIndex.get(i) || [];
