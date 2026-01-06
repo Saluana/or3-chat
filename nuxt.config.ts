@@ -338,7 +338,11 @@ export default defineNuxtConfig({
         'tests/**',
         // Example plugins and test pages (dev only); keep them out of production build
         ...(process.env.NODE_ENV === 'production'
-            ? ['app/plugins/examples/**', 'app/pages/_test.vue']
+            ? [
+                  'app/plugins/examples/**',
+                  'app/pages/_tests/**',
+                  'app/pages/_test.vue',
+              ]
             : []),
     ].filter(Boolean) as string[],
 });

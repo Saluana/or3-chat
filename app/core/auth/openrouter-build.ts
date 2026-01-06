@@ -285,7 +285,6 @@ export async function buildOpenRouterMessages(
         let hasTextPart = false;
         if (Array.isArray(m.content)) {
             for (const part of m.content) {
-                if (!part || typeof part !== 'object') continue;
                 if (part.type === 'text') {
                     parts.push({ type: 'text', text: part.text || '' });
                     hasTextPart = true;
@@ -294,7 +293,9 @@ export async function buildOpenRouterMessages(
                 if (part.type === 'file') {
                     if (!part.data) continue;
                     const mediaType =
-                        part.mediaType || part.mime || 'application/octet-stream';
+                        part.mediaType ||
+                        part.mime ||
+                        'application/octet-stream';
                     const isPdf = mediaType === 'application/pdf';
                     const filename =
                         part.filename ||

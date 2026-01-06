@@ -64,8 +64,8 @@ export function sdkModelToLocal(model: SDKModel): OpenRouterModel {
                 model.topProvider.maxCompletionTokens ?? undefined,
         },
         pricing: {
-            prompt: String(model.pricing.prompt ?? ''),
-            completion: String(model.pricing.completion ?? ''),
+            prompt: String(model.pricing.prompt),
+            completion: String(model.pricing.completion),
             image: model.pricing.image
                 ? String(model.pricing.image)
                 : undefined,

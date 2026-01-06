@@ -7,6 +7,10 @@ import {
     useSidebarMultiPane,
     useSidebarPostsApi,
 } from '~/composables/sidebar/useSidebarEnvironment';
+
+const emit = defineEmits<{
+    (e: 'close-sidebar'): void;
+}>();
 import {
     getEditorForPane,
     type WorkflowPost,
@@ -101,7 +105,9 @@ const availableSubflows = computed(() =>
     subflowWorkflows.value.map((workflow) => ({
         id: workflow.id,
         name: workflow.title,
-        description: (workflow.meta as WorkflowMetaWithDescription | null)?.description || undefined,
+        description:
+            (workflow.meta as WorkflowMetaWithDescription | null)
+                ?.description || undefined,
     }))
 );
 

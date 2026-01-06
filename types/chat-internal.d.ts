@@ -4,7 +4,10 @@
  */
 
 import type { Ref } from 'vue';
-import type { UseMultiPaneApi, PaneState } from '~/composables/core/useMultiPane';
+import type {
+    UseMultiPaneApi,
+    PaneState,
+} from '~/composables/core/useMultiPane';
 import type {
     ChatMessage,
     ToolCall,
@@ -84,6 +87,7 @@ export interface ChatInstance {
     tailAssistant?: Ref<UiChatMessage | null>;
     send: (params: SendMessageParams & { content: string }) => Promise<void>;
     retryMessage: (messageId: string, model?: string) => Promise<void>;
+    continueMessage?: (messageId: string, model?: string) => Promise<void>;
     abort: () => void;
     clear: () => void;
     ensureHistorySynced?: () => Promise<void>;

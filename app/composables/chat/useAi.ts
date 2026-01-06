@@ -263,7 +263,11 @@ export function useChat(
                         (row.data as Record<string, unknown> | null) || null;
                     const content =
                         deriveMessageContent({
-                            content: (row as { content?: string | ContentPart[] | null }).content,
+                            content: (
+                                row as {
+                                    content?: string | ContentPart[] | null;
+                                }
+                            ).content,
                             data,
                         }) || finalOutput;
                     const chatMsg: ChatMessage = {
@@ -1363,7 +1367,10 @@ export function useChat(
                         /* intentionally empty */
                     }
                     tailAssistant.value = null;
-                } else if (tailAssistant.value?.id && tailAssistant.value.text) {
+                } else if (
+                    tailAssistant.value?.id &&
+                    tailAssistant.value.text
+                ) {
                     tailAssistant.value.pending = false;
                     tailAssistant.value.error = 'stream_interrupted';
                     const rawIdx = rawMessages.value.findIndex(
@@ -1383,8 +1390,7 @@ export function useChat(
                             tailAssistant.value.id
                         )) as StoredMessage | undefined;
                         const baseData =
-                            existing?.data &&
-                            typeof existing.data === 'object'
+                            existing?.data && typeof existing.data === 'object'
                                 ? (existing.data as Record<string, unknown>)
                                 : {};
                         await db.messages.update(tailAssistant.value.id, {
@@ -1659,13 +1665,14 @@ export function useChat(
             const existingText =
                 inMemoryText ||
                 deriveMessageContent({
-                    content: (target as {
-                        content?: string | ContentPart[] | null;
-                    }).content,
+                    content: (
+                        target as {
+                            content?: string | ContentPart[] | null;
+                        }
+                    ).content,
                     data: target.data,
                 });
-            if (!existingText || typeof existingText !== 'string') return;
-            if (target.index == null) return;
+            if (!existingText) return;
 
             const DexieMod = (await import('dexie')).default;
             const all = await db.messages
@@ -1686,7 +1693,8 @@ export function useChat(
                     typeof (m.data as { reasoning_text?: unknown })
                         .reasoning_text === 'string'
                 ) {
-                    return (m.data as { reasoning_text: string }).reasoning_text;
+                    return (m.data as { reasoning_text: string })
+                        .reasoning_text;
                 }
                 return typeof m.reasoning_text === 'string'
                     ? m.reasoning_text
@@ -1695,9 +1703,11 @@ export function useChat(
             const toContent = (m: StoredMessage) => {
                 if (m.id === target.id) return existingText;
                 return deriveMessageContent({
-                    content: (m as {
-                        content?: string | ContentPart[] | null;
-                    }).content,
+                    content: (
+                        m as {
+                            content?: string | ContentPart[] | null;
+                        }
+                    ).content,
                     data: m.data,
                 });
             };
@@ -1705,9 +1715,10 @@ export function useChat(
             const baseMessages: ChatMessage[] = all.map((m): ChatMessage => {
                 const storedMsg: StoredMessage = {
                     ...m,
-                    data: m.data && typeof m.data === 'object'
-                        ? (m.data as StoredMessage['data'])
-                        : null,
+                    data:
+                        m.data && typeof m.data === 'object'
+                            ? (m.data as StoredMessage['data'])
+                            : null,
                 };
                 const rawData = storedMsg.data;
                 const data: Record<string, unknown> | null = rawData
@@ -1723,7 +1734,8 @@ export function useChat(
                     data &&
                     typeof (data as { tool_call_id?: unknown }).tool_call_id ===
                         'string'
-                        ? ((data as { tool_call_id: string }).tool_call_id as string)
+                        ? ((data as { tool_call_id: string })
+                              .tool_call_id as string)
                         : undefined;
                 return {
                     role: m.role as ChatMessage['role'],
@@ -1906,7 +1918,9 @@ export function useChat(
                 (await hooks.applyFilters(
                     'ai.chat.model:filter:select',
                     modelOverride || DEFAULT_AI_MODEL
-                )) || (modelOverride || DEFAULT_AI_MODEL);
+                )) ||
+                modelOverride ||
+                DEFAULT_AI_MODEL;
             const modelImageHint = /image|vision|flash/i.test(modelId);
             const modalities =
                 hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
@@ -2023,16 +2037,12 @@ export function useChat(
                     '`',
                 ]);
                 if (noSpaceAfter.has(last)) return false;
-                if (noSpaceBefore.has(first)) return false;
-                const isWordChar = (c: string) =>
-                    /[\p{L}\p{N}]/u.test(c);
+                if (!first || noSpaceBefore.has(first)) return false;
+                const isWordChar = (c: string) => /[\p{L}\p{N}]/u.test(c);
                 const isClosePunct = /[)\]}>"'»”’]/.test(last);
                 const isSentencePunct = /[.!?;:…]/.test(last);
                 if (isWordChar(last) && isWordChar(first)) return true;
-                if (
-                    (isSentencePunct || isClosePunct) &&
-                    isWordChar(first)
-                )
+                if ((isSentencePunct || isClosePunct) && isWordChar(first))
                     return true;
                 return false;
             };
@@ -2154,7 +2164,7 @@ export function useChat(
                     if (existingRaw) {
                         rawMessages.value[rawIdx] = {
                             ...existingRaw,
-                            role: existingRaw.role ?? 'assistant',
+                            role: existingRaw.role,
                             content: current.text,
                             reasoning_text: current.reasoning_text ?? null,
                             error: null,
@@ -2168,14 +2178,12 @@ export function useChat(
                         ? streamError
                         : new Error(String(streamError));
                 streamAcc.finalize({ error: e });
-                if (tailAssistant.value?.text) {
+                if (tailAssistant.value.text) {
                     await persistAssistant({
                         content: tailAssistant.value.text,
                         reasoning: tailAssistant.value.reasoning_text ?? null,
                         toolCalls: tailAssistant.value.toolCalls ?? null,
                     });
-                }
-                if (tailAssistant.value) {
                     tailAssistant.value.error = 'stream_interrupted';
                 }
                 const rawIdx = rawMessages.value.findIndex(
@@ -2186,13 +2194,12 @@ export function useChat(
                     if (existingRaw) {
                         rawMessages.value[rawIdx] = {
                             ...existingRaw,
-                            role: existingRaw.role ?? 'assistant',
+                            role: existingRaw.role,
                             content:
-                                tailAssistant.value?.text ?? existingRaw.content,
+                                tailAssistant.value.text || existingRaw.content,
                             reasoning_text:
-                                tailAssistant.value?.reasoning_text ??
-                                existingRaw.reasoning_text ??
-                                null,
+                                tailAssistant.value.reasoning_text ??
+                                existingRaw.reasoning_text,
                             error: 'stream_interrupted',
                         };
                     }
@@ -2214,11 +2221,10 @@ export function useChat(
                 });
             } finally {
                 loading.value = false;
-                if (tailAssistant.value?.pending)
+                if (tailAssistant.value.pending) {
                     tailAssistant.value.pending = false;
-                if (abortController.value) {
-                    abortController.value = null;
                 }
+                abortController.value = null;
                 setTimeout(() => {
                     if (!loading.value && streamState.finalized) resetStream();
                 }, 0);

@@ -83,7 +83,7 @@ export interface WorkflowStreamingState {
 export interface WorkflowStreamAccumulatorApi {
     /** Read-only reactive state */
     state: Readonly<WorkflowStreamingState>;
-    
+
     // Identification
     setWorkflowInfo(id: string, name: string): void;
 
@@ -181,7 +181,10 @@ export interface WorkflowStreamAccumulatorApi {
 
 type WorkflowUiState = WorkflowStreamingState | UiWorkflowState;
 
-function parseScopedNodeId(scopedId: string): { path: string[]; nodeId: string } {
+function parseScopedNodeId(scopedId: string): {
+    path: string[];
+    nodeId: string;
+} {
     const segments = scopedId.split(SUBFLOW_SCOPE_SEPARATOR);
     if (segments.length === 1) {
         return { path: [], nodeId: scopedId };
@@ -395,10 +398,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         targetState: WorkflowUiState,
         requestId: string
     ): { state: WorkflowUiState; request: HitlRequestState } | null {
-        if (
-            targetState.hitlRequests &&
-            targetState.hitlRequests[requestId]
-        ) {
+        if (targetState.hitlRequests && targetState.hitlRequests[requestId]) {
             return {
                 state: targetState,
                 request: targetState.hitlRequests[requestId],
@@ -430,8 +430,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
 
         // Flush node tokens
         for (const [scopedNodeId, tokens] of pendingNodeTokens) {
-            const { targetState, nodeId } =
-                resolveScopedTarget(scopedNodeId);
+            const { targetState, nodeId } = resolveScopedTarget(scopedNodeId);
             const node = targetState.nodeStates[nodeId];
             if (!node) continue;
 
@@ -515,7 +514,10 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         if (type === 'subflow' && !node.subflowState) {
             node.subflowState = createSubflowState(node, localNodeId);
         }
-        if (node.subflowState && node.subflowState.workflowName !== node.label) {
+        if (
+            node.subflowState &&
+            node.subflowState.workflowName !== node.label
+        ) {
             node.subflowState.workflowName = node.label || localNodeId;
         }
 
@@ -672,7 +674,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
 
         const { targetState, nodeId: localNodeId } =
             resolveScopedTarget(nodeId);
-        
+
         // Parallel nodes should be started before branches
         if (!targetState.nodeStates[localNodeId]) return;
 
@@ -725,10 +727,10 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
 
         const { targetState, nodeId: localNodeId } =
             resolveScopedTarget(nodeId);
-        
+
         const branches = targetState.branches;
         if (!branches) return;
-        
+
         const key = `${localNodeId}:${branchId}`;
         const branch = branches[key];
         if (!branch) return;
@@ -746,9 +748,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         const { nodeId, nodeLabel, nodeType, branchId, branchLabel } = event;
         const { targetState, nodeId: localNodeId } =
             resolveScopedTarget(nodeId);
-        const targetKey = branchId
-            ? `${localNodeId}:${branchId}`
-            : localNodeId;
+        const targetKey = branchId ? `${localNodeId}:${branchId}` : localNodeId;
 
         let target:
             | (NodeState & { toolCalls?: ToolCallState[] })
@@ -803,8 +803,9 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
     function hitlRequest(request: HitlRequestState) {
         if (finalized) return;
 
-        const { targetState, nodeId: localNodeId } =
-            resolveScopedTarget(request.nodeId);
+        const { targetState, nodeId: localNodeId } = resolveScopedTarget(
+            request.nodeId
+        );
         const hitlRequests = ensureHitlRequests(targetState);
         const scopedRequest = {
             ...request,
@@ -1178,7 +1179,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
                     : undefined,
         };
     }
-    
+
     function setWorkflowInfo(id: string, name: string) {
         state.workflowId = id;
         state.workflowName = name;
@@ -1188,7 +1189,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         });
         touchState(state);
     }
-    
+
     function setAttachments(attachments?: Attachment[]) {
         state.attachments = attachments;
         propagateToSubflows((target) => {
@@ -1207,7 +1208,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
 
     function propagateToSubflows(
         fn: (target: UiWorkflowState) => void,
-        targetState: UiWorkflowState = state
+        targetState: WorkflowStreamingState | UiWorkflowState = state
     ) {
         for (const node of Object.values(targetState.nodeStates)) {
             if (!node.subflowState) continue;
