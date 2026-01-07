@@ -72,6 +72,7 @@ export const MessageSchema = z.object({
     id: z.string(),
     data: z.unknown().nullable().optional(),
     role: z.string(),
+    pending: z.boolean().optional(),
     created_at: z.number().int(),
     updated_at: z.number().int(),
     error: z.string().nullable().optional(),

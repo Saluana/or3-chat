@@ -32,14 +32,14 @@ export class Or3DB extends Dexie {
         // loaded entire tables into memory via toArray()). Since there are
         // no external users / all data already upgraded, we can safely
         // define only the latest structure.
-        // NOTE: Keep version number at 5 so existing local DBs at v5 open
+        // NOTE: Keep version number at 6 so existing local DBs at v6 open
         // without triggering a downgrade. Future schema changes should bump.
-        this.version(5).stores({
+        this.version(6).stores({
             projects: 'id, name, clock, created_at, updated_at',
             threads:
                 'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
             messages:
-                'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
+                'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at, data.type, [data.type+data.executionState]',
             kv: 'id, &name, clock, created_at, updated_at',
             attachments: 'id, type, name, clock, created_at, updated_at',
             file_meta:

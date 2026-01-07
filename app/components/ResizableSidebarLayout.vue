@@ -1,7 +1,7 @@
 <template>
     <div
         id="page-container"
-        class="resizable-sidebar-layout relative w-full h-dvh border border-(--md-outline-variant) overflow-hidden bg-(--md-surface) text-(--md-on-surface) flex overflow-x-hidden"
+        class="resizable-sidebar-layout relative w-full h-dvh overflow-hidden bg-(--md-surface) text-(--md-on-surface) flex overflow-x-hidden"
     >
         <!-- Backdrop (mobile) -->
         <Transition
@@ -156,15 +156,8 @@
 </template>
 
 <script setup lang="ts">
-import {
-    ref,
-    computed,
-    onMounted,
-    onBeforeUnmount,
-    watch,
-    nextTick,
-    provide,
-} from 'vue';
+import { ref, computed, onMounted, watch, nextTick, provide } from 'vue';
+import { useResizeObserver, useEventListener } from '@vueuse/core';
 import SidebarHeader from './sidebar/SidebarHeader.vue';
 import ResizeHandle from './sidebar/ResizeHandle.vue';
 import { useIcon } from '~/composables/useIcon';
@@ -175,23 +168,15 @@ const sidebarHeaderRef = ref<ComponentPublicInstance | null>(null);
 const topHeaderHeight = ref(48);
 provide('topHeaderHeight', topHeaderHeight);
 
-let headerObserver: ResizeObserver | null = null;
-
-onMounted(() => {
-    if (sidebarHeaderRef.value?.$el) {
-        headerObserver = new ResizeObserver((entries) => {
-            for (const entry of entries) {
-                // Use offsetHeight if available on target, otherwise fallback
-                const target = entry.target as HTMLElement;
-                topHeaderHeight.value = target.offsetHeight || entry.contentRect.height;
-            }
-        });
-        headerObserver.observe(sidebarHeaderRef.value.$el);
+// Observe sidebar header element for height changes using VueUse
+const sidebarHeaderElement = computed(
+    () => sidebarHeaderRef.value?.$el as HTMLElement | undefined
+);
+useResizeObserver(sidebarHeaderElement, (entries) => {
+    for (const entry of entries) {
+        const target = entry.target as HTMLElement;
+        topHeaderHeight.value = target.offsetHeight || entry.contentRect.height;
     }
-});
-
-onBeforeUnmount(() => {
-    headerObserver?.disconnect();
 });
 
 const props = defineProps({
@@ -268,10 +253,15 @@ const updateMq = () => {
 const initialized = ref(false);
 const hydrated = ref(false);
 
+// Use VueUse's useEventListener for media query changes (auto-cleanup)
+const mqRef = computed(() => mq);
+useEventListener(mqRef, 'change', () => {
+    isDesktop.value = !!mq?.matches;
+});
+
 onMounted(() => {
     hydrated.value = true;
     updateMq();
-    mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
     // Open if defaultOpen & desktop
     if (props.defaultOpen && isDesktop.value) {
         openState.value = true;
@@ -288,10 +278,6 @@ onMounted(() => {
             initialized.value = true;
         });
     });
-});
-
-onBeforeUnmount(() => {
-    mq?.removeEventListener('change', () => {});
 });
 
 watch(width, (w) => {
@@ -323,6 +309,7 @@ function toggleCollapse() {
 }
 
 // Resize logic (desktop only)
+const isDragging = ref(false);
 let startX = 0;
 let startWidth = 0;
 let pendingWidthUpdate: number | null = null;
@@ -354,23 +341,37 @@ function flushWidthUpdates() {
     applyPendingWidth();
 }
 
+function onPointerMove(e: PointerEvent) {
+    const dx = e.clientX - startX;
+    const delta = props.side === 'right' ? -dx : dx;
+    scheduleWidthUpdate(clamp(startWidth + delta));
+}
+
+function onPointerUp() {
+    isDragging.value = false;
+    flushWidthUpdates();
+}
+
+// Use VueUse's useEventListener for pointermove/pointerup during drag
+// These only activate when isDragging is true
+useEventListener(
+    () => (isDragging.value ? window : null),
+    'pointermove',
+    onPointerMove
+);
+useEventListener(
+    () => (isDragging.value ? window : null),
+    'pointerup',
+    onPointerUp
+);
+
 function onPointerDown(e: PointerEvent) {
     if (!isDesktop.value || collapsed.value) return;
     flushWidthUpdates();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     startX = e.clientX;
     startWidth = width.value;
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp, { once: true });
-}
-function onPointerMove(e: PointerEvent) {
-    const dx = e.clientX - startX;
-    const delta = props.side === 'right' ? -dx : dx;
-    scheduleWidthUpdate(clamp(startWidth + delta));
-}
-function onPointerUp() {
-    window.removeEventListener('pointermove', onPointerMove);
-    flushWidthUpdates();
+    isDragging.value = true;
 }
 
 // Keyboard a11y for the resize handle

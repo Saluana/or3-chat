@@ -1,0 +1,998 @@
+/**
+ * Workflow Theme Bridge
+ * Maps or3-chat's Material Design theme variables to @or3/workflow-vue CSS variables.
+ * This allows the workflow canvas to respect light/dark mode and theme colors.
+ */
+
+/* ═══════════════════════════════════════════════════════
+   GLOBAL OR3 WORKFLOW TOKENS - LIGHT THEME
+   Applied at :root level so all workflow components inherit them
+   ═══════════════════════════════════════════════════════ */
+:root:not(.dark) {
+  /* Base Colors - Map to or3-chat surface colors */
+  --or3-color-bg-primary: var(--md-surface, #ffffff);
+  --or3-color-bg-secondary: var(--md-surface-variant, #f8f9fa);
+  --or3-color-bg-tertiary: var(--md-surface-variant, #f1f3f5);
+  --or3-color-bg-elevated: var(--md-surface, #ffffff);
+  
+  /* Surfaces */
+  --or3-color-surface: var(--md-surface, rgba(255, 255, 255, 0.95));
+  --or3-color-surface-hover: var(--md-surface-variant, rgba(248, 249, 250, 1));
+  --or3-color-surface-glass: rgba(0, 0, 0, 0.02);
+  --or3-color-surface-subtle: rgba(0, 0, 0, 0.04);
+  
+  /* Borders */
+  --or3-color-border: var(--md-border-color, rgba(0, 0, 0, 0.1));
+  --or3-color-border-hover: var(--md-border-color, rgba(0, 0, 0, 0.18));
+  --or3-color-border-active: var(--md-primary, rgba(8, 109, 184, 0.5));
+  --or3-color-border-subtle: rgba(0, 0, 0, 0.05);
+  
+  /* Typography */
+  --or3-color-text-primary: var(--md-on-surface, rgba(0, 0, 0, 0.9));
+  --or3-color-text-secondary: var(--md-on-surface-variant, rgba(0, 0, 0, 0.65));
+  --or3-color-text-muted: rgba(0, 0, 0, 0.45);
+  --or3-color-text-placeholder: rgba(0, 0, 0, 0.35);
+  
+  /* Accent - Use primary color from theme (blank theme blue) */
+  --or3-color-accent: var(--md-primary, #086DB8);
+  --or3-color-accent-hover: var(--md-primary-tint, #2A8FD6);
+  --or3-color-accent-active: var(--md-primary-shade, #064F89);
+  --or3-color-accent-muted: rgba(8, 109, 184, 0.12);
+  --or3-color-accent-subtle: rgba(8, 109, 184, 0.06);
+  
+  /* Override gradient with solid color */
+  --or3-gradient-accent: var(--md-primary, #086DB8);
+  --or3-gradient-accent-subtle: rgba(8, 109, 184, 0.12);
+  
+  /* Secondary color */
+  --or3-color-secondary: var(--md-secondary, #64748b);
+  --or3-color-secondary-muted: rgba(100, 116, 139, 0.15);
+  
+  /* Status Colors */
+  --or3-color-success: var(--md-success, #059669);
+  --or3-color-success-hover: #10b981;
+  --or3-color-success-muted: rgba(5, 150, 105, 0.12);
+  
+  --or3-color-warning: var(--md-warning, #d97706);
+  --or3-color-warning-hover: #f59e0b;
+  --or3-color-warning-muted: rgba(217, 119, 6, 0.12);
+  
+  --or3-color-error: var(--md-error, #dc2626);
+  --or3-color-error-hover: #ef4444;
+  --or3-color-error-muted: rgba(220, 38, 38, 0.12);
+  
+  --or3-color-info: var(--md-primary, #086DB8);
+  --or3-color-info-hover: var(--md-primary-tint, #2A8FD6);
+  --or3-color-info-muted: rgba(8, 109, 184, 0.12);
+  
+  /* Primary alias (some components use this) */
+  --or3-color-primary: var(--md-primary, #086DB8);
+  --or3-color-primary-hover: var(--md-primary-tint, #2A8FD6);
+  
+  /* Shadows - Softer for light mode */
+  --or3-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --or3-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --or3-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.08), 0 4px 6px rgba(0, 0, 0, 0.04);
+  
+  --or3-theme: light;
+}
+
+/* Also apply to .light class for explicit light mode */
+.light {
+  --or3-color-bg-primary: var(--md-surface, #ffffff);
+  --or3-color-bg-secondary: var(--md-surface-variant, #f8f9fa);
+  --or3-color-bg-tertiary: var(--md-surface-variant, #f1f3f5);
+  --or3-color-bg-elevated: var(--md-surface, #ffffff);
+  --or3-color-surface: var(--md-surface, rgba(255, 255, 255, 0.95));
+  --or3-color-surface-hover: var(--md-surface-variant, rgba(248, 249, 250, 1));
+  --or3-color-surface-glass: rgba(0, 0, 0, 0.02);
+  --or3-color-surface-subtle: rgba(0, 0, 0, 0.04);
+  --or3-color-border: var(--md-border-color, rgba(0, 0, 0, 0.1));
+  --or3-color-border-hover: var(--md-border-color, rgba(0, 0, 0, 0.18));
+  --or3-color-border-active: var(--md-primary, rgba(8, 109, 184, 0.5));
+  --or3-color-border-subtle: rgba(0, 0, 0, 0.05);
+  --or3-color-text-primary: var(--md-on-surface, rgba(0, 0, 0, 0.9));
+  --or3-color-text-secondary: var(--md-on-surface-variant, rgba(0, 0, 0, 0.65));
+  --or3-color-text-muted: rgba(0, 0, 0, 0.45);
+  --or3-color-text-placeholder: rgba(0, 0, 0, 0.35);
+  --or3-color-accent: var(--md-primary, #086DB8);
+  --or3-color-accent-hover: var(--md-primary-tint, #2A8FD6);
+  --or3-color-accent-active: var(--md-primary-shade, #064F89);
+  --or3-color-accent-muted: rgba(8, 109, 184, 0.12);
+  --or3-color-accent-subtle: rgba(8, 109, 184, 0.06);
+  --or3-gradient-accent: var(--md-primary, #086DB8);
+  --or3-gradient-accent-subtle: rgba(8, 109, 184, 0.12);
+  --or3-color-secondary: var(--md-secondary, #64748b);
+  --or3-color-secondary-muted: rgba(100, 116, 139, 0.15);
+  --or3-color-success: var(--md-success, #059669);
+  --or3-color-success-hover: #10b981;
+  --or3-color-success-muted: rgba(5, 150, 105, 0.12);
+  --or3-color-warning: var(--md-warning, #d97706);
+  --or3-color-warning-hover: #f59e0b;
+  --or3-color-warning-muted: rgba(217, 119, 6, 0.12);
+  --or3-color-error: var(--md-error, #dc2626);
+  --or3-color-error-hover: #ef4444;
+  --or3-color-error-muted: rgba(220, 38, 38, 0.12);
+  --or3-color-info: var(--md-primary, #086DB8);
+  --or3-color-info-hover: var(--md-primary-tint, #2A8FD6);
+  --or3-color-info-muted: rgba(8, 109, 184, 0.12);
+  --or3-color-primary: var(--md-primary, #086DB8);
+  --or3-color-primary-hover: var(--md-primary-tint, #2A8FD6);
+  --or3-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --or3-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --or3-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.08), 0 4px 6px rgba(0, 0, 0, 0.04);
+  --or3-theme: light;
+}
+
+/* ═══════════════════════════════════════════════════════
+   GLOBAL OR3 WORKFLOW TOKENS - DARK THEME
+   Applied at .dark level so all workflow components inherit them
+   ═══════════════════════════════════════════════════════ */
+.dark {
+  /* Base Colors - Map to or3-chat dark surface colors */
+  --or3-color-bg-primary: var(--md-surface, #09090c);
+  --or3-color-bg-secondary: var(--md-surface-variant, #111115);
+  --or3-color-bg-tertiary: var(--md-surface-variant, #18181d);
+  --or3-color-bg-elevated: var(--md-surface, #1f1f26);
+  
+  /* Surfaces */
+  --or3-color-surface: var(--md-surface, rgba(24, 24, 29, 0.9));
+  --or3-color-surface-hover: var(--md-surface-variant, rgba(31, 31, 38, 0.95));
+  --or3-color-surface-glass: rgba(255, 255, 255, 0.04);
+  --or3-color-surface-subtle: rgba(255, 255, 255, 0.06);
+  
+  /* Borders */
+  --or3-color-border: var(--md-border-color, rgba(255, 255, 255, 0.12));
+  --or3-color-border-hover: var(--md-border-color, rgba(255, 255, 255, 0.2));
+  --or3-color-border-active: var(--md-primary, rgba(44, 99, 139, 0.5));
+  --or3-color-border-subtle: rgba(255, 255, 255, 0.06);
+  
+  /* Typography */
+  --or3-color-text-primary: var(--md-on-surface, rgba(255, 255, 255, 0.95));
+  --or3-color-text-secondary: var(--md-on-surface-variant, rgba(255, 255, 255, 0.72));
+  --or3-color-text-muted: rgba(255, 255, 255, 0.5);
+  --or3-color-text-placeholder: rgba(255, 255, 255, 0.38);
+  
+  /* Accent - Use primary color from theme (blank theme blue) */
+  --or3-color-accent: var(--md-primary, #2C638B);
+  --or3-color-accent-hover: var(--md-primary-tint, #4E8FBC);
+  --or3-color-accent-active: var(--md-primary-shade, #204968);
+  --or3-color-accent-muted: rgba(44, 99, 139, 0.15);
+  --or3-color-accent-subtle: rgba(44, 99, 139, 0.08);
+  --or3-gradient-accent: var(--md-primary, #2C638B);
+  --or3-gradient-accent-subtle: rgba(44, 99, 139, 0.15);
+  
+  /* Secondary color */
+  --or3-color-secondary: var(--md-secondary, #64748b);
+  --or3-color-secondary-muted: rgba(100, 116, 139, 0.15);
+  
+  /* Status Colors */
+  --or3-color-success: var(--md-success, #10b981);
+  --or3-color-success-hover: #34d399;
+  --or3-color-success-muted: rgba(16, 185, 129, 0.15);
+  
+  --or3-color-warning: var(--md-warning, #f59e0b);
+  --or3-color-warning-hover: #fbbf24;
+  --or3-color-warning-muted: rgba(245, 158, 11, 0.15);
+  
+  --or3-color-error: var(--md-error, #ef4444);
+  --or3-color-error-hover: #f87171;
+  --or3-color-error-muted: rgba(239, 68, 68, 0.15);
+  
+  --or3-color-info: var(--md-primary, #2C638B);
+  --or3-color-info-hover: var(--md-primary-tint, #4E8FBC);
+  --or3-color-info-muted: rgba(44, 99, 139, 0.15);
+  
+  /* Primary alias */
+  --or3-color-primary: var(--md-primary, #2C638B);
+  --or3-color-primary-hover: var(--md-primary-tint, #4E8FBC);
+  
+  /* Shadows - Deeper for dark mode */
+  --or3-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
+  --or3-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --or3-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.25);
+  
+  --or3-theme: dark;
+}
+
+/* Also apply within .workflow-app for specificity */
+.dark .workflow-app {
+  /* Base Colors - Map to or3-chat dark surface colors */
+  --or3-color-bg-primary: var(--md-surface, #09090c);
+  --or3-color-bg-secondary: var(--md-surface-variant, #111115);
+  --or3-color-bg-tertiary: var(--md-surface-variant, #18181d);
+  --or3-color-bg-elevated: var(--md-surface, #1f1f26);
+  
+  /* Surfaces */
+  --or3-color-surface: var(--md-surface, rgba(24, 24, 29, 0.9));
+  --or3-color-surface-hover: var(--md-surface-variant, rgba(31, 31, 38, 0.95));
+  --or3-color-surface-glass: rgba(255, 255, 255, 0.04);
+  --or3-color-surface-subtle: rgba(255, 255, 255, 0.06);
+  
+  /* Borders */
+  --or3-color-border: var(--md-border-color, rgba(255, 255, 255, 0.12));
+  --or3-color-border-hover: var(--md-border-color, rgba(255, 255, 255, 0.2));
+  --or3-color-border-active: var(--md-primary, rgba(44, 99, 139, 0.5));
+  --or3-color-border-subtle: rgba(255, 255, 255, 0.06);
+  
+  /* Typography */
+  --or3-color-text-primary: var(--md-on-surface, rgba(255, 255, 255, 0.95));
+  --or3-color-text-secondary: var(--md-on-surface-variant, rgba(255, 255, 255, 0.72));
+  --or3-color-text-muted: rgba(255, 255, 255, 0.5);
+  --or3-color-text-placeholder: rgba(255, 255, 255, 0.38);
+  
+  /* Accent - Use primary color from theme (blank theme blue) */
+  --or3-color-accent: var(--md-primary, #2C638B);
+  --or3-color-accent-hover: var(--md-primary-tint, #4E8FBC);
+  --or3-color-accent-active: var(--md-primary-shade, #204968);
+  --or3-color-accent-muted: rgba(44, 99, 139, 0.15);
+  --or3-color-accent-subtle: rgba(44, 99, 139, 0.08);
+  
+  /* Override gradient with solid color */
+  --or3-gradient-accent: var(--md-primary, #2C638B);
+  --or3-gradient-accent-subtle: rgba(44, 99, 139, 0.15);
+  
+  /* Status Colors */
+  --or3-color-success: var(--md-success, #10b981);
+  --or3-color-success-hover: #34d399;
+  --or3-color-success-muted: rgba(16, 185, 129, 0.15);
+  
+  --or3-color-warning: var(--md-warning, #f59e0b);
+  --or3-color-warning-hover: #fbbf24;
+  --or3-color-warning-muted: rgba(245, 158, 11, 0.15);
+  
+  --or3-color-error: var(--md-error, #ef4444);
+  --or3-color-error-hover: #f87171;
+  --or3-color-error-muted: rgba(239, 68, 68, 0.15);
+  
+  --or3-color-info: var(--md-info, #3b82f6);
+  --or3-color-info-hover: #60a5fa;
+  --or3-color-info-muted: rgba(59, 130, 246, 0.15);
+  
+  /* Shadows - Deeper for dark mode */
+  --or3-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
+  --or3-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --or3-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.25);
+  
+  --or3-theme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════
+   VUE FLOW OVERRIDES
+   Make Vue Flow respect the theme
+   ═══════════════════════════════════════════════════════ */
+
+/* Canvas background */
+.workflow-app .vue-flow {
+  background-color: var(--or3-color-bg-primary) !important;
+}
+
+/* Grid background - Light mode (dots) */
+.workflow-app .vue-flow__pane {
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.18) 1px, transparent 1px);
+  background-size: 24px 24px;
+  width: 100%;
+  height: 100%;
+}
+
+/* Grid background - Dark mode (dots) */
+.dark .workflow-app .vue-flow__pane {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.18) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Default node styling */
+.workflow-app .vue-flow__node {
+  background-color: var(--or3-color-surface);
+  border-color: var(--or3-color-border);
+  color: var(--or3-color-text-primary);
+}
+
+/* Edge/connection styling */
+.workflow-app .vue-flow__edge-path {
+  stroke: var(--or3-color-border);
+  stroke-width: 2px;
+}
+
+.workflow-app .vue-flow__edge.selected .vue-flow__edge-path,
+.workflow-app .vue-flow__edge:hover .vue-flow__edge-path {
+  stroke: var(--or3-color-accent);
+}
+
+/* Dark mode edge visibility fix */
+.dark .workflow-app .vue-flow__edge-path {
+  stroke: rgba(255, 255, 255, 0.35) !important;
+  stroke-width: 2px !important;
+}
+
+.dark .workflow-app .vue-flow__edge.selected .vue-flow__edge-path,
+.dark .workflow-app .vue-flow__edge:hover .vue-flow__edge-path {
+  stroke: var(--or3-color-accent, #4E8FBC) !important;
+}
+
+/* Handle styling */
+.workflow-app .vue-flow__handle {
+  background-color: var(--or3-color-accent);
+  border-color: var(--or3-color-bg-primary);
+}
+
+/* Controls panel - VERTICAL layout */
+.workflow-app .vue-flow__controls {
+  display: flex !important;
+  flex-direction: column !important;
+  background-color: var(--or3-color-surface) !important;
+  border: 1px solid var(--or3-color-border) !important;
+  border-radius: 8px !important;
+  box-shadow: var(--or3-shadow-md) !important;
+  overflow: hidden !important;
+}
+
+.workflow-app .vue-flow__controls-button {
+  background-color: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--or3-color-border-subtle) !important;
+  color: var(--or3-color-text-secondary) !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: background-color 0.15s ease, color 0.15s ease !important;
+}
+
+.workflow-app .vue-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+
+.workflow-app .vue-flow__controls-button:hover {
+  background-color: var(--or3-color-surface-hover) !important;
+  color: var(--or3-color-text-primary) !important;
+}
+
+.workflow-app .vue-flow__controls-button:active,
+.workflow-app .vue-flow__controls-button.active {
+  background-color: var(--or3-color-accent-muted) !important;
+  color: var(--or3-color-accent) !important;
+}
+
+.workflow-app .vue-flow__controls-button svg {
+  fill: currentColor !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* Minimap */
+.workflow-app .vue-flow__minimap {
+  background-color: var(--or3-color-surface);
+  border-color: var(--or3-color-border);
+}
+
+/* Selection box */
+.workflow-app .vue-flow__selection {
+  background-color: var(--or3-color-accent-muted);
+  border-color: var(--or3-color-accent);
+}
+
+/* ═══════════════════════════════════════════════════════
+   LIGHT MODE CONTROLS
+   ═══════════════════════════════════════════════════════ */
+.light .workflow-app .vue-flow__controls,
+:root:not(.dark) .workflow-app .vue-flow__controls {
+  background-color: var(--md-surface, #ffffff) !important;
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.12)) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+.light .workflow-app .vue-flow__controls-button,
+:root:not(.dark) .workflow-app .vue-flow__controls-button {
+  color: var(--md-on-surface-variant, #555555) !important;
+  border-bottom-color: var(--md-border-color, rgba(0, 0, 0, 0.08)) !important;
+}
+
+.light .workflow-app .vue-flow__controls-button:hover,
+:root:not(.dark) .workflow-app .vue-flow__controls-button:hover {
+  background-color: var(--md-surface-variant, #f5f5f5) !important;
+  color: var(--md-on-surface, #1a1a1a) !important;
+}
+
+.light .workflow-app .vue-flow__controls-button:active,
+.light .workflow-app .vue-flow__controls-button.active,
+:root:not(.dark) .workflow-app .vue-flow__controls-button:active,
+:root:not(.dark) .workflow-app .vue-flow__controls-button.active {
+  background-color: rgba(8, 109, 184, 0.12) !important;
+  color: var(--md-primary, #086DB8) !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   LIGHT MODE NODE FIXES
+   Fix icons, badges, and text visibility in light mode
+   ═══════════════════════════════════════════════════════ */
+
+/* Force light mode styles when in light mode */
+.light .workflow-app,
+:root:not(.dark) .workflow-app {
+  /* Node wrapper backgrounds */
+  --or3-color-bg-elevated: var(--md-surface, #ffffff);
+  --or3-color-bg-tertiary: var(--md-surface-variant, #f5f5f5);
+  --or3-color-bg-secondary: var(--md-surface-variant, #f0f0f0);
+  
+  /* Text colors for light mode */
+  --or3-color-text-primary: var(--md-on-surface, #1a1a1a);
+  --or3-color-text-secondary: var(--md-on-surface-variant, #444444);
+  --or3-color-text-muted: rgba(0, 0, 0, 0.5);
+  
+  /* Border colors */
+  --or3-color-border: var(--md-border-color, rgba(0, 0, 0, 0.12));
+  --or3-color-border-hover: rgba(0, 0, 0, 0.2);
+  
+  /* Surfaces */
+  --or3-color-surface-glass: rgba(0, 0, 0, 0.04);
+  --or3-color-surface-hover: rgba(0, 0, 0, 0.06);
+}
+
+/* Icon wrapper backgrounds - ensure visibility in light mode */
+.light .workflow-app .icon-wrapper,
+:root:not(.dark) .workflow-app .icon-wrapper {
+  background-color: color-mix(in srgb, currentColor 15%, transparent) !important;
+}
+
+/* Agent node icon - uses theme primary (blue) */
+.light .workflow-app [class*="agent"] .icon-wrapper,
+:root:not(.dark) .workflow-app [class*="agent"] .icon-wrapper {
+  background-color: rgba(8, 109, 184, 0.15) !important;
+  color: #086DB8 !important;
+}
+
+/* Router/Decision node icon */
+.light .workflow-app [class*="router"] .icon-wrapper,
+:root:not(.dark) .workflow-app [class*="router"] .icon-wrapper {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  color: #d97706 !important;
+}
+
+/* Parallel node icon */
+.light .workflow-app [class*="parallel"] .icon-wrapper,
+:root:not(.dark) .workflow-app [class*="parallel"] .icon-wrapper {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+  color: #2563eb !important;
+}
+
+/* Tool node icon */
+.light .workflow-app [class*="tool"] .icon-wrapper,
+:root:not(.dark) .workflow-app [class*="tool"] .icon-wrapper {
+  background-color: rgba(236, 72, 153, 0.15) !important;
+  color: #db2777 !important;
+}
+
+/* Memory node icon */
+.light .workflow-app [class*="memory"] .icon-wrapper,
+:root:not(.dark) .workflow-app [class*="memory"] .icon-wrapper {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+  color: #2563eb !important;
+}
+
+/* Subflow node icon */
+.light .workflow-app [class*="subflow"] .icon-wrapper,
+:root:not(.dark) .workflow-app [class*="subflow"] .icon-wrapper {
+  background-color: rgba(100, 116, 139, 0.15) !important;
+  color: #475569 !important;
+}
+
+/* Output node icon */
+.light .workflow-app [class*="output"] .icon-wrapper,
+:root:not(.dark) .workflow-app [class*="output"] .icon-wrapper {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+  color: #2563eb !important;
+}
+
+/* Loop/While node icon */
+.light .workflow-app [class*="while"] .icon-wrapper,
+:root:not(.dark) .workflow-app [class*="while"] .icon-wrapper,
+.light .workflow-app [class*="loop"] .icon-wrapper,
+:root:not(.dark) .workflow-app [class*="loop"] .icon-wrapper {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+  color: #2563eb !important;
+}
+
+/* Node labels - ensure text is visible */
+.light .workflow-app .node-label,
+:root:not(.dark) .workflow-app .node-label {
+  color: var(--md-on-surface, #1a1a1a) !important;
+}
+
+/* Model badge */
+.light .workflow-app .model-badge,
+:root:not(.dark) .workflow-app .model-badge {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+.light .workflow-app .model-name,
+:root:not(.dark) .workflow-app .model-name {
+  color: var(--md-on-surface-variant, #444444) !important;
+}
+
+/* Router badge */
+.light .workflow-app .router-badge,
+:root:not(.dark) .workflow-app .router-badge {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+.light .workflow-app .router-badge span,
+:root:not(.dark) .workflow-app .router-badge span {
+  color: #b45309 !important;
+}
+
+/* Parallel badge */
+.light .workflow-app .parallel-badge,
+:root:not(.dark) .workflow-app .parallel-badge {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.light .workflow-app .parallel-badge span,
+:root:not(.dark) .workflow-app .parallel-badge span {
+  color: #1d4ed8 !important;
+}
+
+/* Tool badge */
+.light .workflow-app .tool-badge,
+:root:not(.dark) .workflow-app .tool-badge {
+  background-color: rgba(236, 72, 153, 0.12) !important;
+  border-color: rgba(236, 72, 153, 0.3) !important;
+}
+
+.light .workflow-app .tool-name,
+:root:not(.dark) .workflow-app .tool-name {
+  color: #be185d !important;
+}
+
+/* Memory pill */
+.light .workflow-app .pill,
+:root:not(.dark) .workflow-app .pill {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+  color: #1d4ed8 !important;
+}
+
+/* Format badge (output node) */
+.light .workflow-app .format-badge,
+:root:not(.dark) .workflow-app .format-badge {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+  color: #1d4ed8 !important;
+}
+
+/* Subflow badge */
+.light .workflow-app .subflow-badge,
+:root:not(.dark) .workflow-app .subflow-badge {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+  color: var(--md-on-surface-variant, #444444) !important;
+}
+
+/* Meta text */
+.light .workflow-app .meta,
+:root:not(.dark) .workflow-app .meta,
+.light .workflow-app .meta-item,
+:root:not(.dark) .workflow-app .meta-item {
+  color: var(--md-on-surface-variant, #555555) !important;
+}
+
+.light .workflow-app .meta-item strong,
+:root:not(.dark) .workflow-app .meta-item strong {
+  color: var(--md-on-surface, #333333) !important;
+}
+
+/* Terminal indicator */
+.light .workflow-app .terminal-indicator,
+:root:not(.dark) .workflow-app .terminal-indicator {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: var(--md-on-surface-variant, #666666) !important;
+}
+
+/* Port labels */
+.light .workflow-app .port-label,
+:root:not(.dark) .workflow-app .port-label {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+.light .workflow-app .body-label,
+:root:not(.dark) .workflow-app .body-label {
+  color: #b45309 !important;
+  background-color: rgba(245, 158, 11, 0.12) !important;
+}
+
+.light .workflow-app .done-label,
+:root:not(.dark) .workflow-app .done-label {
+  color: #15803d !important;
+  background-color: rgba(34, 197, 94, 0.12) !important;
+}
+
+/* Node ID display */
+.light .workflow-app .node-id,
+:root:not(.dark) .workflow-app .node-id {
+  background-color: var(--md-surface-variant, #f5f5f5) !important;
+  color: var(--md-on-surface-variant, #666666) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+
+.light .workflow-app .error-handle,
+:root:not(.dark) .workflow-app .error-handle {
+  background-color: var(--md-surface, #ffffff) !important;
+  border-color: #dc2626 !important;
+}
+
+/* Handles in dark mode */
+.dark .workflow-app .vue-flow__handle {
+  background-color: var(--or3-color-accent, #4E8FBC) !important;
+  border: 2px solid var(--md-surface, #18181d) !important;
+  width: 12px !important;
+  height: 12px !important;
+}
+
+.dark .workflow-app .vue-flow__handle:hover {
+  background-color: var(--or3-color-accent-hover, #6BA8D4) !important;
+    border: 2px solid var(--md-primary, #18181d) !important;
+      width: 15px !important;
+  height: 15px !important;
+}
+
+/* Handles in dark mode */
+.workflow-app .vue-flow__handle {
+  background-color: var(--md-primary-tint, #4E8FBC) !important;
+  border: 2px solid var(--md-surface, #18181d) !important;
+  width: 12px !important;
+  height: 12px !important;
+}
+
+.workflow-app .vue-flow__handle:hover {
+  background-color: var(--or3-color-accent-hover, #6BA8D4) !important;
+    border: 2px solid var(--md-primary, #18181d) !important;
+      width: 15px !important;
+  height: 15px !important;
+}
+
+.dark .workflow-app .error-handle {
+  background-color: var(--or3-color-error, #ef4444) !important;
+  border-color: var(--md-surface, #18181d) !important;
+}
+
+/* Node wrapper in dark mode */
+.dark .workflow-app .node-wrapper {
+  background: var(--or3-color-bg-elevated, #1f1f26) !important;
+  border: 1px solid var(--or3-color-border, rgba(255, 255, 255, 0.12)) !important;
+}
+
+.dark .workflow-app .node-wrapper:hover {
+  border-color: var(--or3-color-accent, #4E8FBC) !important;
+}
+
+.dark .workflow-app .node-wrapper.selected {
+  border-color: var(--or3-color-accent, #4E8FBC) !important;
+  border-width: 2px !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   SIDEBAR / NODE PALETTE - LIGHT MODE
+   Target globally since NodePalette may be outside .workflow-app
+   ═══════════════════════════════════════════════════════ */
+
+/* Palette container */
+.light .node-palette,
+:root:not(.dark) .node-palette {
+  background-color: transparent;
+}
+
+/* Palette header */
+.light .palette-header,
+:root:not(.dark) .palette-header {
+  color: var(--md-on-surface-variant, #555555) !important;
+}
+
+/* Palette node items (the draggable cards) */
+.light .palette-node,
+:root:not(.dark) .palette-node {
+  background-color: var(--md-surface, #ffffff) !important;
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.12)) !important;
+}
+
+.light .palette-node:hover,
+:root:not(.dark) .palette-node:hover {
+  background-color: var(--md-surface-variant, #f5f5f5) !important;
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.18)) !important;
+}
+
+/* Node info text */
+.light .node-palette .node-name,
+:root:not(.dark) .node-palette .node-name {
+  color: var(--md-on-surface, #1a1a1a) !important;
+}
+
+.light .node-palette .node-desc,
+:root:not(.dark) .node-palette .node-desc {
+  color: var(--md-on-surface-variant, #555555) !important;
+}
+
+/* Node icon in palette */
+.light .palette-node .node-icon,
+:root:not(.dark) .palette-node .node-icon {
+  background-color: color-mix(in srgb, var(--node-color, currentColor) 12%, transparent) !important;
+}
+
+/* Drag handle */
+.light .drag-handle,
+:root:not(.dark) .drag-handle {
+  color: var(--md-on-surface-variant, #666666) !important;
+}
+
+/* Palette hint - the info box at bottom */
+.light .palette-hint,
+:root:not(.dark) .palette-hint {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.light .palette-hint p,
+:root:not(.dark) .palette-hint p {
+  color: var(--md-on-surface-variant, #555555) !important;
+}
+
+.light .hint-icon,
+:root:not(.dark) .hint-icon {
+  color: var(--md-on-surface-variant, #666666) !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   NODE INSPECTOR - LIGHT MODE
+   Target globally since NodeInspector may be outside .workflow-app
+   ═══════════════════════════════════════════════════════ */
+
+/* Inspector empty state */
+.light .node-inspector.empty,
+:root:not(.dark) .node-inspector.empty {
+  color: var(--md-on-surface-variant, #666666) !important;
+}
+
+/* Inspector header */
+.light .inspector-header,
+:root:not(.dark) .inspector-header {
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.12)) !important;
+}
+
+.light .node-inspector .label-input,
+:root:not(.dark) .node-inspector .label-input {
+  color: var(--md-on-surface, #1a1a1a) !important;
+}
+
+/* Tabs */
+.light .node-inspector .tabs,
+:root:not(.dark) .node-inspector .tabs {
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.12)) !important;
+}
+
+.light .node-inspector .tab,
+:root:not(.dark) .node-inspector .tab {
+  color: var(--md-on-surface-variant, #666666) !important;
+}
+
+.light .node-inspector .tab:hover,
+:root:not(.dark) .node-inspector .tab:hover {
+  color: var(--md-on-surface, #333333) !important;
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+.light .node-inspector .tab.active,
+:root:not(.dark) .node-inspector .tab.active {
+  color: var(--md-primary, #086DB8) !important;
+  background-color: rgba(8, 109, 184, 0.12) !important;
+}
+
+/* Field labels */
+.light .node-inspector .field-label,
+:root:not(.dark) .node-inspector .field-label {
+  color: var(--md-on-surface-variant, #555555) !important;
+}
+
+.light .node-inspector .field-hint,
+:root:not(.dark) .node-inspector .field-hint {
+  color: var(--md-on-surface-variant, #666666) !important;
+}
+
+/* Textareas and inputs */
+.light .node-inspector .prompt-textarea,
+.light .node-inspector .model-select,
+.light .node-inspector .text-input,
+.light .node-inspector .description-textarea,
+:root:not(.dark) .node-inspector .prompt-textarea,
+:root:not(.dark) .node-inspector .model-select,
+:root:not(.dark) .node-inspector .text-input,
+:root:not(.dark) .node-inspector .description-textarea {
+  background-color: var(--md-surface-variant, #f5f5f5) !important;
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.12)) !important;
+  color: var(--md-on-surface, #1a1a1a) !important;
+}
+
+.light .node-inspector .prompt-textarea::placeholder,
+.light .node-inspector .text-input::placeholder,
+.light .node-inspector .description-textarea::placeholder,
+:root:not(.dark) .node-inspector .prompt-textarea::placeholder,
+:root:not(.dark) .node-inspector .text-input::placeholder,
+:root:not(.dark) .node-inspector .description-textarea::placeholder {
+  color: var(--md-on-surface-variant, #999999) !important;
+}
+
+/* Tool items in inspector */
+.light .node-inspector .tool-item,
+:root:not(.dark) .node-inspector .tool-item {
+  background-color: var(--md-surface-variant, #f5f5f5) !important;
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.12)) !important;
+}
+
+.light .node-inspector .tool-item.enabled,
+:root:not(.dark) .node-inspector .tool-item.enabled {
+  border-color: var(--md-primary, #086DB8) !important;
+  background-color: rgba(8, 109, 184, 0.08) !important;
+}
+
+.light .node-inspector .tool-info .tool-name,
+:root:not(.dark) .node-inspector .tool-info .tool-name {
+  color: var(--md-on-surface, #1a1a1a) !important;
+}
+
+.light .node-inspector .tool-description,
+:root:not(.dark) .node-inspector .tool-description {
+  color: var(--md-on-surface-variant, #666666) !important;
+}
+
+/* Mode buttons */
+.light .node-inspector .mode-button,
+:root:not(.dark) .node-inspector .mode-button {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.12)) !important;
+  color: var(--md-on-surface-variant, #555555) !important;
+}
+
+.light .node-inspector .mode-button.active,
+:root:not(.dark) .node-inspector .mode-button.active {
+  border-color: var(--md-warning, #d97706) !important;
+  color: var(--md-warning, #b45309) !important;
+  background-color: rgba(217, 119, 6, 0.12) !important;
+}
+
+/* Model ID display */
+.light .node-inspector .model-id,
+:root:not(.dark) .node-inspector .model-id {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+.light .node-inspector .model-id-label,
+:root:not(.dark) .node-inspector .model-id-label {
+  color: var(--md-on-surface-variant, #666666) !important;
+}
+
+/* Info box */
+.light .node-inspector .info-box,
+:root:not(.dark) .node-inspector .info-box {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+  color: var(--md-on-surface-variant, #555555) !important;
+}
+
+/* Description section */
+.light .node-inspector .description-label,
+:root:not(.dark) .node-inspector .description-label {
+  color: var(--md-on-surface-variant, #555555) !important;
+}
+
+.light .node-inspector .description-hint,
+:root:not(.dark) .node-inspector .description-hint {
+  color: var(--md-on-surface-variant, #888888) !important;
+}
+
+/* Branch items */
+.light .node-inspector .branch-item,
+:root:not(.dark) .node-inspector .branch-item {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.12)) !important;
+}
+
+.light .node-inspector .branch-label,
+:root:not(.dark) .node-inspector .branch-label {
+  color: var(--md-on-surface, #1a1a1a) !important;
+}
+
+.light .node-inspector .branch-config,
+:root:not(.dark) .node-inspector .branch-config {
+  background-color: rgba(0, 0, 0, 0.02) !important;
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.08)) !important;
+}
+
+.light .node-inspector .field-label-sm,
+:root:not(.dark) .node-inspector .field-label-sm {
+  color: var(--md-on-surface-variant, #555555) !important;
+}
+
+/* Section titles and dividers */
+.light .node-inspector .section-title,
+:root:not(.dark) .node-inspector .section-title {
+  color: var(--md-on-surface-variant, #666666) !important;
+}
+
+.light .node-inspector .section-subtitle,
+:root:not(.dark) .node-inspector .section-subtitle {
+  color: var(--md-on-surface-variant, #888888) !important;
+}
+
+.light .node-inspector .section-divider,
+:root:not(.dark) .node-inspector .section-divider {
+  background-color: var(--md-border-color, rgba(0, 0, 0, 0.12)) !important;
+}
+
+/* Checkbox items */
+.light .node-inspector .checkbox-item,
+:root:not(.dark) .node-inspector .checkbox-item {
+  background-color: var(--md-surface-variant, #f5f5f5) !important;
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.12)) !important;
+  color: var(--md-on-surface-variant, #555555) !important;
+}
+
+/* Checkbox accent color - override purple to theme blue */
+.light .node-inspector input[type="checkbox"],
+:root:not(.dark) .node-inspector input[type="checkbox"],
+.light .node-inspector input[type="radio"],
+:root:not(.dark) .node-inspector input[type="radio"] {
+  accent-color: var(--md-primary, #086DB8) !important;
+}
+
+/* Toggle rows with checkboxes */
+.light .node-inspector .toggle-row input[type="checkbox"],
+:root:not(.dark) .node-inspector .toggle-row input[type="checkbox"],
+.light .node-inspector .toggle-label input[type="checkbox"],
+:root:not(.dark) .node-inspector .toggle-label input[type="checkbox"],
+.light .node-inspector .hitl-toggle input[type="checkbox"],
+:root:not(.dark) .node-inspector .hitl-toggle input[type="checkbox"] {
+  accent-color: var(--md-primary, #086DB8) !important;
+}
+
+/* Tool item checkboxes */
+.light .node-inspector .tool-item input[type="checkbox"],
+:root:not(.dark) .node-inspector .tool-item input[type="checkbox"] {
+  accent-color: var(--md-primary, #086DB8) !important;
+}
+
+/* Validation overlay */
+.light .validation-overlay,
+:root:not(.dark) .validation-overlay {
+  background-color: var(--md-surface, rgba(255, 255, 255, 0.95)) !important;
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.12)) !important;
+  color: var(--md-on-surface, #1a1a1a) !important;
+}
+
+/* Chat panel */
+.light .chat-panel .message-content,
+:root:not(.dark) .chat-panel .message-content {
+  background-color: var(--md-surface-variant, #f5f5f5) !important;
+  color: var(--md-on-surface, #1a1a1a) !important;
+}
+
+.light .chat-panel .message.user .message-content,
+:root:not(.dark) .chat-panel .message.user .message-content {
+  background-color: rgba(8, 109, 184, 0.12) !important;
+}
+
+.light .chat-panel textarea,
+:root:not(.dark) .chat-panel textarea {
+  background-color: var(--md-surface-variant, #f5f5f5) !important;
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.12)) !important;
+  color: var(--md-on-surface, #1a1a1a) !important;
+}
+
+/* Edge label */
+.light .edge-label,
+:root:not(.dark) .edge-label {
+  background-color: var(--md-surface, #ffffff) !important;
+  border-color: var(--md-border-color, rgba(0, 0, 0, 0.12)) !important;
+  color: var(--md-on-surface-variant, #555555) !important;
+}

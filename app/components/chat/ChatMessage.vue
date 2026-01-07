@@ -7,13 +7,20 @@
             outerClass,
             messageContainerProps?.class || '',
         ]"
-        :data-theme-target="messageContainerProps?.['data-theme-target']"
         :data-theme-matches="messageContainerProps?.['data-theme-matches']"
         class="p-2 min-w-[140px] rounded-[var(--md-border-radius)] first:mt-3 first:mb-6 not-first:my-6 relative"
     >
-        <!-- Attachments bar (above message content) -->
-        <div
-            v-if="props.message.role === 'user' && hashList.length"
+        <!-- Workflow Message Handling -->
+        <WorkflowChatMessage
+            v-if="props.message.isWorkflow"
+            :message="props.message"
+        />
+
+        <!-- Regular Chat Message Handling -->
+        <template v-else>
+            <!-- Attachments bar (above message content) -->
+            <div
+                v-if="props.message.role === 'user' && hashList.length"
             class="attachments-bar mb-3"
         >
             <!-- Collapsed: show compact row of thumbnails -->
@@ -267,6 +274,18 @@
                         @click="onRetry"
                     ></UButton>
                 </UTooltip>
+                <UTooltip
+                    v-if="showContinueButton"
+                    :delay-duration="500"
+                    text="Continue"
+                    :popper="{ strategy: 'fixed' }"
+                    :teleport="true"
+                >
+                    <UButton
+                        v-bind="continueButtonProps"
+                        @click="onContinue"
+                    ></UButton>
+                </UTooltip>
                 <UTooltip :delay-duration="500" text="Branch" :teleport="true">
                     <UButton
                         v-bind="branchButtonProps"
@@ -295,6 +314,7 @@
                 </template>
             </UButtonGroup>
         </div>
+        </template>
     </div>
 </template>
 
@@ -310,6 +330,7 @@ import {
     watchEffect,
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
+import WorkflowChatMessage from './WorkflowChatMessage.vue';
 import { parseHashes } from '~/utils/files/attachments';
 import { getFileMeta } from '~/db/files';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
@@ -320,7 +341,7 @@ import type { ThemePlugin } from '~/plugins/90.theme.client';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
-import { useRafFn } from '@vueuse/core';
+import { useRafFn, useClipboard } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 
@@ -330,6 +351,7 @@ type MessageWithUiState = UIMessage & { _expanded?: boolean };
 const props = defineProps<{ message: MessageWithUiState; threadId?: string }>();
 const emit = defineEmits<{
     (e: 'retry', id: string): void;
+    (e: 'continue', id: string): void;
     (e: 'branch', id: string): void;
     (e: 'edited', payload: { id: string; content: string }): void;
     (e: 'begin-edit', id: string): void;
@@ -366,6 +388,25 @@ const retryButtonProps = computed(() => {
     return {
         icon: useIcon('chat.message.retry').value,
         color: 'info' as const,
+        size: 'sm' as const,
+        class: 'text-black dark:text-white/95 flex items-center justify-center',
+        ...overrides.value,
+    };
+});
+
+const continueButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.continue',
+        isNuxtUI: true,
+    });
+    const continueIcon =
+        useIcon('chat.message.continue').value || 'heroicons:play-20-solid';
+
+    return {
+        icon: continueIcon,
+        color: 'success' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
         ...overrides.value,
@@ -470,6 +511,13 @@ const messageContainerProps = computed(() => {
 
 const roleVariant = computed<'user' | 'assistant'>(() =>
     props.message.role === 'user' ? 'user' : 'assistant'
+);
+
+const showContinueButton = computed(
+    () =>
+        props.message.role === 'assistant' &&
+        Boolean(props.message.error) &&
+        (props.message.text?.length ?? 0) > 0
 );
 
 const isStreamingReasoning = computed(() => {
@@ -951,20 +999,37 @@ onMounted(() => {
     loadShikiOnIdle();
 });
 
-function copyMessage() {
-    navigator.clipboard.writeText(props.message.text || '');
+const { copy: copyToClipboard } = useClipboard({ legacy: true });
 
-    useToast().add({
-        title: 'Message copied',
-        description: 'The message content has been copied to your clipboard.',
-        duration: 2000,
-    });
+function copyMessage() {
+    copyToClipboard(props.message.text || '')
+        .then(() => {
+             useToast().add({
+                title: 'Message copied',
+                description: 'The message content has been copied to your clipboard.',
+                duration: 2000,
+            });
+        })
+        .catch(() => {
+             useToast().add({
+                title: 'Copy failed',
+                description: 'Could not copy message to clipboard.',
+                color: 'error',
+                duration: 2000,
+            });
+        });
 }
 
 function onRetry() {
     const id = props.message.id;
     if (!id) return;
     emit('retry', id);
+}
+
+function onContinue() {
+    const id = props.message.id;
+    if (!id) return;
+    emit('continue', id);
 }
 
 import { forkThread } from '~/db/branching';

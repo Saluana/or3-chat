@@ -67,6 +67,7 @@
             <div class="space-y-4">
                 <UInput
                     v-model="renameTitle"
+                    class="w-full"
                     :placeholder="
                         isRenamingDoc ? 'Document title' : 'Thread title'
                     "
@@ -698,17 +699,18 @@ let subProjects: { unsubscribe: () => void } | null = null;
 // Virtualization removed — always render the simple list for chats.
 
 // Calculate list height using specific element IDs for accuracy
-let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
-let resizeObserver: ResizeObserver | null = null;
-
 import { inject, type Ref } from 'vue';
-
-// ...
+import {
+    useResizeObserver,
+    useEventListener,
+    useDebounceFn,
+} from '@vueuse/core';
 
 // Inject header height at setup level
 const topHeaderHeightInjected = inject<Ref<number>>('topHeaderHeight');
 
-function recomputeListHeight() {
+// Debounce resize recomputation
+const recomputeListHeight = useDebounceFn(() => {
     // Get the viewport height
     const viewportHeight = window.innerHeight;
 
@@ -723,45 +725,24 @@ function recomputeListHeight() {
     const available = viewportHeight - topHeaderHeight - sideNavHeaderHeight;
 
     listHeight.value = available > 100 ? available : 100;
-}
+}, 50);
 
-// Setup resize observer on window
-if (process.client) {
-    onMounted(() => {
-        resizeObserver = new ResizeObserver(() => {
-            if (resizeTimeout) clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                recomputeListHeight();
-            }, 50);
-        });
+// Ref for observed header element
+const sideNavHeaderElementRef = computed(
+    () => sideNavContentRef.value?.headerElement ?? null
+);
 
-        try {
-            // Observe the specific elements
-            const sideNavHeaderElement = sideNavContentRef.value?.headerElement;
-            if (sideNavHeaderElement)
-                resizeObserver.observe(sideNavHeaderElement);
+// Setup resize observer on sidebar header element (VueUse handles cleanup)
+useResizeObserver(sideNavHeaderElementRef, () => {
+    recomputeListHeight();
+});
 
-            // Also listen to window resize
-            window.addEventListener('resize', recomputeListHeight);
+// Listen to window resize (VueUse handles cleanup)
+useEventListener(window, 'resize', recomputeListHeight);
 
-            // Watch injected height changes
-            if (topHeaderHeightInjected) {
-                watch(topHeaderHeightInjected, recomputeListHeight);
-            }
-        } catch (err) {
-            console.error('[SideBar] Failed to setup resize observers:', err);
-        }
-    });
-
-    onUnmounted(() => {
-        resizeObserver?.disconnect();
-        resizeObserver = null;
-        window.removeEventListener('resize', recomputeListHeight);
-        if (resizeTimeout) {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = null;
-        }
-    });
+// Watch injected height changes
+if (topHeaderHeightInjected) {
+    watch(topHeaderHeightInjected, recomputeListHeight);
 }
 
 onMounted(async () => {

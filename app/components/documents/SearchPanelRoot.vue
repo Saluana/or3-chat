@@ -30,6 +30,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, computed } from 'vue';
+import { watchDebounced } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 interface Props {
@@ -115,27 +116,19 @@ async function initializeSearch() {
 }
 
 // Debounced search
-let searchTimeout: ReturnType<typeof setTimeout> | null = null;
-watch(
+watchDebounced(
     () => props.searchQuery,
     async (query) => {
         searchQuery.value = query || '';
-
-        if (searchTimeout) {
-            clearTimeout(searchTimeout);
-            searchTimeout = null;
-        }
 
         if (!query || query.length < 2) {
             searchResults.value = [];
             return;
         }
 
-        searchTimeout = setTimeout(async () => {
-            await performSearch(query);
-            searchTimeout = null;
-        }, 120);
-    }
+        await performSearch(query);
+    },
+    { debounce: 120 }
 );
 
 async function performSearch(query: string) {
@@ -171,9 +164,6 @@ function handleNavigate(result: SearchResult) {
 
 // Cleanup timeout on unmount
 onBeforeUnmount(() => {
-    if (searchTimeout) {
-        clearTimeout(searchTimeout);
-        searchTimeout = null;
-    }
+    // No manual timeout cleanup needed
 });
 </script>

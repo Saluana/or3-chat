@@ -385,7 +385,6 @@ import {
     onMounted,
     shallowRef,
     nextTick,
-    onBeforeUnmount,
     defineComponent,
     h,
 } from 'vue';
@@ -395,6 +394,7 @@ import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import { useScrollLock } from '~/composables/core/useScrollLock';
 import LazySearchPanel from '~/components/documents/LazySearchPanel.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useMutationObserver, useEventListener } from '@vueuse/core';
 
 const { $theme } = useNuxtApp();
 
@@ -505,11 +505,12 @@ const props = withDefaults(
 const searchQuery = ref('');
 const searchTrigger = ref(false);
 const docmap = ref<Docmap | null>(null);
-const currentContent = ref('');
-const isLoadingContent = ref(false);
+// currentContent and isLoadingContent defined later via useAsyncData
+
 // Root element that contains rendered markdown to extract headings from
 const contentRoot = ref<HTMLElement | null>(null);
-let tocObserver: MutationObserver | null = null;
+// Flag to enable/disable mutation observer for TOC building
+const shouldObserveToc = ref(false);
 const headingOffsets = ref<Record<string, number>>({});
 
 // Local TOC derived from DOM when not provided via props
@@ -527,11 +528,6 @@ const computedShowToc = computed(
         !isLoadingContent.value &&
         !(searchQuery.value && searchTrigger.value)
 );
-
-// LRU Cache for markdown files - limit to 20 most recent files
-const MAX_CACHE_SIZE = 20;
-const contentCache = new Map<string, string>();
-const cacheAccessOrder: string[] = []; // Track access order for LRU
 
 const route = useRoute();
 
@@ -720,28 +716,35 @@ function onSidebarKeydown(event: KeyboardEvent) {
     }
 }
 
-// Load docmap on mount
-onMounted(async () => {
-    useShikiHighlighter();
+// Use useAsyncData for docmap to enable SSR and hydration
+const { data: docmapData } = await useAsyncData(
+    'docmap',
+    () => $fetch<Docmap>('/_documentation/docmap.json'),
+    { server: false }
+);
 
-    try {
-        const response = await fetch('/_documentation/docmap.json');
-        docmap.value = await response.json();
-        // Build navigation from docmap
-        if (docmap.value) {
-            applyDocmapNavigation(docmap.value);
-        }
-    } catch (error) {
-        console.error('[docs] Failed to load docmap:', error);
-    }
+// Apply docmap immediately if available (server or client)
+if (docmapData.value) {
+    docmap.value = docmapData.value;
+    applyDocmapNavigation(docmap.value);
+}
 
-    // Load content based on route
-    await loadContentFromRoute();
-
-    if (import.meta.client) {
-        window.addEventListener('resize', computeHeadingOffsets);
+// Watch for updates to docmapData (e.g. client-side navigation re-fetch if configured, though unlikely for static json)
+watch(docmapData, (newData) => {
+    if (newData) {
+        docmap.value = newData;
+        applyDocmapNavigation(newData);
     }
 });
+
+
+
+onMounted(() => {
+    useShikiHighlighter();
+});
+
+// Use VueUse's useEventListener for window resize (auto-cleanup)
+useEventListener(window, 'resize', computeHeadingOffsets);
 
 watch(
     () => route.path,
@@ -754,9 +757,7 @@ watch(
         }
         await nextTick();
         computeHeadingOffsets();
-        if (oldPath !== undefined && path !== oldPath) {
-            await loadContentFromRoute();
-        }
+        // Content loading handled by useAsyncData auto-watch
     },
     { immediate: true }
 );
@@ -795,147 +796,53 @@ watch(sidebarOpen, async (open) => {
     }
 });
 
-// Watch route changes to load new content (immediate to prevent flicker)
-watch(
-    () => route.path,
-    async (newPath, oldPath) => {
-        // Only reload if the path actually changed
-        if (newPath !== oldPath) {
-            await loadContentFromRoute();
+
+
+// ----------------------------------------------------------------------
+// Content Loading (SSR-safe via useAsyncData)
+// ----------------------------------------------------------------------
+
+const { data: fetchedContent, pending: fetchPending, error: fetchError } = await useAsyncData(
+    () => `docs-${route.path}`,
+    async () => {
+        const path = route.path.replace(/\/$/, '') || '/';
+        
+        // 1. Determine file path
+        let docPath = '';
+        if (path === '/documentation') {
+            docPath = '/_documentation/README.md';
+        } else {
+            const rel = path.replace(/^\/documentation/, '');
+            docPath = `/_documentation${rel}.md`;
+        }
+
+        // 2. Fetch content
+        try {
+            return await $fetch<string>(docPath, { responseType: 'text' });
+        } catch (e) {
+            // Re-throw to let useAsyncData handle the error state
+            throw e; 
         }
     },
-    { immediate: false }
+    {
+        watch: [() => route.path], // Reactive auto-fetch
+        server: false, // Client-side only to match previous behavior and avoid SSR loopback issues
+    }
 );
 
-async function loadContentFromRoute() {
-    const path = route.path;
-    headingOffsets.value = {};
+// Map to existing component API
+const isLoadingContent = fetchPending;
 
-    // If on base /documentation route, show welcome page
-    if (path === '/documentation' || path === '/documentation/') {
-        isLoadingContent.value = false;
-        currentContent.value = `# OR3 Documentation
-
-Welcome to the OR3 documentation. Select a topic from the sidebar to get started.
-
-## Available Sections
-
-${
-    docmap.value?.sections
-        .map(
-            (section) =>
-                `- **${section.title}**: ${section.files.length} documents`
-        )
-        .join('\n') || ''
-}`;
-        return;
+const currentContent = computed(() => {
+    if (fetchError.value) {
+        return `# Page Not Found\n\nThe documentation page you're looking for doesn't exist.\n\n[← Back to Documentation](/documentation)`;
     }
+    return fetchedContent.value || '';
+});
 
-    // Extract the doc path (e.g., /documentation/composables/useChat -> /composables/useChat)
-    const docPath = path.replace('/documentation', '');
+// Remove old manual loader watchers - useAsyncData handles route watching
+// watch(() => route.path, ...) is handled by { watch: [...] } option above
 
-    // Find the file in docmap
-    if (docmap.value) {
-        for (const section of docmap.value.sections) {
-            const file = section.files.find((f) => f.path === docPath);
-            if (file) {
-                // Don't show loading if content is cached
-                const cacheKey = `${section.path}/${file.name}`;
-                if (!contentCache.has(cacheKey)) {
-                    isLoadingContent.value = true;
-                }
-
-                try {
-                    await loadMarkdownFile(file.name, section.path);
-                } finally {
-                    isLoadingContent.value = false;
-                }
-                return;
-            }
-        }
-
-        // If not found, show 404
-        isLoadingContent.value = false;
-        currentContent.value = `# Page Not Found
-
-The documentation page you're looking for doesn't exist.
-
-[← Back to Documentation](/documentation)
-`;
-    } else {
-        // Docmap not loaded yet
-        isLoadingContent.value = true;
-        currentContent.value = `# Loading...
-
-Please wait while the documentation loads.
-`;
-    }
-}
-
-async function loadMarkdownFile(filename: string, sectionPath: string) {
-    const cacheKey = `${sectionPath}/${filename}`;
-
-    // Check cache first for instant navigation
-    if (contentCache.has(cacheKey)) {
-        // Update LRU order
-        updateCacheAccess(cacheKey);
-        currentContent.value = contentCache.get(cacheKey)!;
-        return;
-    }
-
-    try {
-        // Fetch the markdown file from public/_documentation/{section}/{filename}
-        const response = await fetch(
-            `/_documentation${sectionPath}/${filename}`
-        );
-        if (!response.ok) throw new Error('File not found');
-        const content = await response.text();
-
-        // Cache the content with LRU eviction
-        addToCache(cacheKey, content);
-        currentContent.value = content;
-    } catch (error) {
-        console.error(`[docs] Failed to load ${filename}:`, error);
-        const errorContent = `# Error Loading Document
-
-Failed to load the requested documentation.
-
-[← Back to Documentation](/documentation)
-`;
-        currentContent.value = errorContent;
-        // Don't cache error content
-    }
-}
-
-// LRU Cache Management
-function addToCache(key: string, content: string) {
-    // If already exists, remove old entry to update position
-    if (contentCache.has(key)) {
-        const index = cacheAccessOrder.indexOf(key);
-        if (index > -1) {
-            cacheAccessOrder.splice(index, 1);
-        }
-    }
-
-    // Add to cache
-    contentCache.set(key, content);
-    cacheAccessOrder.push(key);
-
-    // Evict oldest if over limit
-    while (cacheAccessOrder.length > MAX_CACHE_SIZE) {
-        const oldestKey = cacheAccessOrder.shift()!;
-        contentCache.delete(oldestKey);
-    }
-}
-
-function updateCacheAccess(key: string) {
-    // Move to end (most recently used)
-    const index = cacheAccessOrder.indexOf(key);
-    if (index > -1) {
-        cacheAccessOrder.splice(index, 1);
-        cacheAccessOrder.push(key);
-    }
-}
 
 function applyDocmapNavigation(map: Docmap) {
     if (props.navigation) return; // respect external navigation overrides
@@ -1078,31 +985,27 @@ function observeTocUntilReady() {
     const hasHeadings = contentRoot.value.querySelector('h2, h3, h4');
     if (hasHeadings) {
         buildTocFromDom();
+        shouldObserveToc.value = false;
         return;
     }
 
-    // Disconnect any previous observer
-    if (tocObserver) {
-        tocObserver.disconnect();
-        tocObserver = null;
-    }
+    // Enable TOC observation
+    shouldObserveToc.value = true;
+}
 
-    tocObserver = new MutationObserver(() => {
+// Use VueUse's useMutationObserver for TOC observation (auto-cleanup)
+useMutationObserver(
+    () => shouldObserveToc.value ? contentRoot.value : null,
+    () => {
         if (!contentRoot.value) return;
         const found = contentRoot.value.querySelector('h2, h3, h4');
         if (found) {
             buildTocFromDom();
-            tocObserver?.disconnect();
-            tocObserver = null;
+            shouldObserveToc.value = false;
         }
-    });
-
-    tocObserver.observe(contentRoot.value, {
-        childList: true,
-        subtree: true,
-        characterData: false,
-    });
-}
+    },
+    { childList: true, subtree: true }
+);
 
 function computeHeadingOffsets() {
     if (!import.meta.client) return;
@@ -1132,15 +1035,7 @@ watch([displayContent, isLoadingContent], async ([content, loading]) => {
     }
 });
 
-onBeforeUnmount(() => {
-    if (tocObserver) {
-        tocObserver.disconnect();
-        tocObserver = null;
-    }
-    if (import.meta.client) {
-        window.removeEventListener('resize', computeHeadingOffsets);
-    }
-});
+
 
 // Trigger lazy search panel load when user types
 watch(searchQuery, (query) => {

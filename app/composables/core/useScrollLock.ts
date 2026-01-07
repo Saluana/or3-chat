@@ -1,4 +1,5 @@
-import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue';
+import { computed, watch, type Ref } from 'vue';
+import { useScrollLock as useVueUseScrollLock } from '@vueuse/core';
 
 type TargetResolver = () => HTMLElement | null | undefined;
 
@@ -8,70 +9,39 @@ interface UseScrollLockOptions {
 }
 
 export function useScrollLock(options: UseScrollLockOptions = {}) {
-    const internalLocked = ref(false);
-    let previousOverflow: string | null = null;
-    let lockedElement: HTMLElement | null = null;
-
-    function resolveTarget(): HTMLElement | null {
+    // VueUse accepts a getter for the target, facilitating lazy resolution
+    const element = computed(() => {
         if (typeof window === 'undefined') return null;
         if (options.target) {
             return options.target() ?? null;
         }
         return document.body;
-    }
+    });
 
-    function performLock() {
-        if (internalLocked.value) return;
-        const target = resolveTarget();
-        if (!target) return;
-
-        lockedElement = target;
-        previousOverflow = target.style.overflow || '';
-        target.style.overflow = 'hidden';
-        internalLocked.value = true;
-    }
-
-    function performUnlock() {
-        if (!internalLocked.value) return;
-        const target = lockedElement ?? resolveTarget();
-        if (target) {
-            target.style.overflow = previousOverflow ?? '';
-        }
-        lockedElement = null;
-        previousOverflow = null;
-        internalLocked.value = false;
-    }
+    const isLockedRef = useVueUseScrollLock(element);
 
     function lock() {
-        performLock();
+        isLockedRef.value = true;
     }
 
     function unlock() {
-        performUnlock();
+        isLockedRef.value = false;
     }
 
     if (options.controlledState) {
         watch(
             options.controlledState,
-            (next) => {
-                if (next) {
-                    performLock();
-                } else {
-                    performUnlock();
-                }
+            (val) => {
+                isLockedRef.value = val;
             },
             { immediate: true }
         );
     }
 
-    onBeforeUnmount(() => {
-        performUnlock();
-    });
-
     return {
         lock,
         unlock,
-        isLocked: computed(() => internalLocked.value),
+        isLocked: computed(() => isLockedRef.value),
     };
 }
 

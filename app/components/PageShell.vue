@@ -231,7 +231,7 @@ import type {
     ThreadEntity,
     DocumentEntity,
 } from '~/core/hooks/hook-types';
-import { useMagicKeys, whenever } from '@vueuse/core';
+import { useMagicKeys, whenever, useEventListener } from '@vueuse/core';
 import {
     type Component,
     computed,
@@ -240,7 +240,6 @@ import {
     nextTick,
     watch,
     defineAsyncComponent,
-    onBeforeUnmount,
 } from 'vue';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
@@ -249,6 +248,10 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { useIcon } from '~/composables/useIcon';
+import {
+    setGlobalSidebarLayoutApi,
+    type SidebarLayoutApi,
+} from '~/utils/sidebarLayoutApi';
 
 const legacyCompatClasses = {
     height: `h-[${'100dvh'}]`,
@@ -369,6 +372,7 @@ const paneCloseButtonProps = useButtonThemeProps('shell.pane-close', {
 });
 
 // -------- Pane Resize Handlers --------
+const isResizing = ref(false);
 let resizingPaneIndex: number | null = null;
 let resizeStartX = 0;
 let resizeStartWidths: number[] = [];
@@ -386,10 +390,7 @@ function onPaneResizeStart(event: PointerEvent, paneIndex: number) {
     resizeStartX = event.clientX;
     resizeStartWidths = [...paneWidths.value];
     accumulatedDeltaX = 0;
-
-    // Add move and up listeners
-    window.addEventListener('pointermove', onPaneResizeMove);
-    window.addEventListener('pointerup', onPaneResizeEnd, { once: true });
+    isResizing.value = true;
 }
 
 function onPaneResizeMove(event: PointerEvent) {
@@ -414,8 +415,9 @@ function onPaneResizeMove(event: PointerEvent) {
 }
 
 function onPaneResizeEnd() {
+    const paneIndexAtEnd = resizingPaneIndex;
     resizingPaneIndex = null;
-    window.removeEventListener('pointermove', onPaneResizeMove);
+    isResizing.value = false;
 
     // Cancel any pending frame
     if (pendingResizeFrame !== null) {
@@ -435,6 +437,19 @@ function onPaneResizeEnd() {
     persistPaneWidths();
     accumulatedDeltaX = 0;
 }
+
+// Use VueUse's useEventListener for pointermove/pointerup during resize
+// These only activate when isResizing is true
+useEventListener(
+    () => isResizing.value ? window : null,
+    'pointermove',
+    onPaneResizeMove
+);
+useEventListener(
+    () => isResizing.value ? window : null,
+    'pointerup',
+    onPaneResizeEnd
+);
 
 function onPaneResizeKeydown(event: KeyboardEvent, paneIndex: number) {
     if (isMobile.value) return;
@@ -472,14 +487,6 @@ function onPaneResizeKeydown(event: KeyboardEvent, paneIndex: number) {
     }
 }
 
-// Cleanup on unmount
-onBeforeUnmount(() => {
-    window.removeEventListener('pointermove', onPaneResizeMove);
-    window.removeEventListener('pointerup', onPaneResizeEnd);
-    if (pendingResizeFrame !== null) {
-        cancelAnimationFrame(pendingResizeFrame);
-    }
-});
 // -------- End Pane Resize Handlers --------
 
 // Pane navigation with Shift+Arrow keys (using VueUse)
@@ -1027,38 +1034,50 @@ onMounted(() => {
     initInitial();
     syncTheme();
     ensureAtLeastOne();
+
+    // Expose sidebar layout API globally for plugins
+    const sidebarLayoutApi: SidebarLayoutApi = {
+        close: () => (layoutRef.value as any)?.close?.(),
+        open: () => (layoutRef.value as any)?.openSidebar?.(),
+        toggleCollapse: () => (layoutRef.value as any)?.toggle?.(),
+        expand: () => (layoutRef.value as any)?.expand?.(),
+        isMobile: () => isMobile.value,
+        closeSidebarIfMobile: () => {
+            if (isMobile.value) (layoutRef.value as any)?.close?.();
+        },
+    };
+    setGlobalSidebarLayoutApi(sidebarLayoutApi);
+});
+
+onUnmounted(() => {
+    // Clean up global API on unmount
+    setGlobalSidebarLayoutApi(undefined);
 });
 
 // --------------- Shortcuts ---------------
-if (process.client) {
-    const down = (e: KeyboardEvent) => {
-        if (!e.shiftKey) return;
-        const mod = e.metaKey || e.ctrlKey;
-        if (!mod) return;
-        if (e.key.toLowerCase() === 'd') {
-            const target = e.target as HTMLElement | null;
-            if (target) {
-                const tag = target.tagName;
-                if (
-                    tag === 'INPUT' ||
-                    tag === 'TEXTAREA' ||
-                    target.isContentEditable
-                )
-                    return;
-            }
-            e.preventDefault();
-            onNewDocument();
+// Ctrl/Cmd+Shift+D shortcut for new document
+function handleDocumentShortcut(e: KeyboardEvent) {
+    if (!e.shiftKey) return;
+    const mod = e.metaKey || e.ctrlKey;
+    if (!mod) return;
+    if (e.key.toLowerCase() === 'd') {
+        const target = e.target as HTMLElement | null;
+        if (target) {
+            const tag = target.tagName;
+            if (
+                tag === 'INPUT' ||
+                tag === 'TEXTAREA' ||
+                target.isContentEditable
+            )
+                return;
         }
-    };
-    window.addEventListener('keydown', down);
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() =>
-            window.removeEventListener('keydown', down)
-        );
-    } else {
-        onUnmounted(() => window.removeEventListener('keydown', down));
+        e.preventDefault();
+        onNewDocument();
     }
 }
+
+// Use VueUse's useEventListener for automatic cleanup and HMR safety
+useEventListener(window, 'keydown', handleDocumentShortcut);
 </script>
 <style scoped>
 :global(html) {

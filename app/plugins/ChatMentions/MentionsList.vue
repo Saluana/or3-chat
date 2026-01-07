@@ -88,7 +88,7 @@
                         :class="[
                             'justify-start text-left px-3 py-2',
                             {
-                                'bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]':
+                                'bg-[var(--md-surface-container-highest)]':
                                     flatIndex(section, idx) === selectedIndex,
                             },
                         ]"

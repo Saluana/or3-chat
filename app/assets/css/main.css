@@ -189,3 +189,9 @@ html {
 .hljs {
 	background: transparent !important; /* override highlight.js default bg so it works in dark mode */
 }
+
+.center-it {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}

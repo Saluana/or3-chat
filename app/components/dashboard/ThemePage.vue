@@ -234,537 +234,97 @@
         </section>
 
         <!-- Content Background Layer 1 -->
-        <section
-            id="dashboard-theme-content-layer1-section"
-            class="section-card space-y-4"
-            role="group"
-            aria-labelledby="theme-section-content1"
-        >
-            <h2
-                id="theme-section-content1"
-                class="font-heading text-base uppercase tracking-wide group-heading"
-            >
-                Content Layer 1
-            </h2>
-            <p class="supporting-text">
-                Primary pattern beneath UI chrome. Size slider disabled when Fit
-                is enabled.
-            </p>
-            <!-- Preview row -->
-            <div class="flex items-center gap-3">
-                <div
-                    class="pattern-thumb drop-zone relative flex h-24 w-[140px] flex-col items-center justify-center overflow-hidden rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)]/90 text-[var(--md-on-surface)] shadow-[2px_2px_0_var(--md-border-color)] transition-all duration-150"
-                    :class="[
-                        !contentBg1Url || local.contentBg1Opacity === 0
-                            ? 'opacity-60'
-                            : '',
-                        dragOver.contentBg1
-                            ? 'ring-2 ring-[color:var(--md-primary)] ring-offset-2 ring-offset-[var(--md-surface)] scale-[1.01]'
-                            : '',
-                    ]"
-                    :style="contentBg1PreviewStyle"
-                    aria-label="Content background layer 1 (click or drop to upload)"
-                    role="button"
-                    tabindex="0"
-                    @click="openFile('contentBg1')"
-                    @keydown.enter.prevent="openFile('contentBg1')"
-                    @dragenter.prevent="onDragEnter($event, 'contentBg1')"
-                    @dragover.prevent="onDragOver($event)"
-                    @dragleave.prevent="onDragLeave($event, 'contentBg1')"
-                    @drop.prevent="onDrop($event, 'contentBg1')"
-                >
-                    <div
-                        v-if="contentBg1Url"
-                        class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"
-                    ></div>
-                    <span
-                        class="relative z-10 rounded bg-[var(--md-surface)]/85 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em]"
-                        aria-hidden="true"
-                    >
-                        {{ contentBg1Url ? 'Replace' : 'Drop / Tap' }}
-                    </span>
-                </div>
-                <span
-                    class="text-xs truncate max-w-40"
-                    :title="displayName(contentBg1Url)"
-                >
-                    {{ contentBg1Url ? displayName(contentBg1Url) : 'None' }}
-                </span>
-            </div>
-            <div class="flex flex-wrap gap-2 items-center">
-                <span class="text-xs opacity-70">Presets:</span>
-                <UButton
-                    v-bind="presetButtonProps"
-                    v-for="p in presetsContent1"
-                    :key="p.src"
-                    @click="applyPreset('contentBg1', p.src, p.opacity)"
-                    :class="isPresetActive('contentBg1', p.src)"
-                >
-                    {{ p.label }}
-                </UButton>
-                <UButton
-                    v-bind="removeLayerButtonProps"
-                    @click="removeLayer('contentBg1')"
-                >
-                    Remove
-                </UButton>
-                <!-- hidden input for programmatic trigger -->
-                <input
-                    :ref="(el:any)=> fileInputs.contentBg1 = el"
-                    type="file"
-                    class="sr-only"
-                    accept="image/*"
-                    @change="onUpload($event, 'contentBg1')"
-                />
-                <UButton
-                    v-bind="repeatButtonProps"
-                    @click="toggleRepeat('contentBg1Repeat')"
-                    :aria-pressed="contentBg1Repeat === 'repeat'"
-                >
-                    Repeat:
-                    {{ contentBg1Repeat === 'repeat' ? 'On' : 'Off' }}
-                </UButton>
-                <label
-                    class="flex items-center gap-1 text-[10px] cursor-pointer select-none"
-                >
-                    <input
-                        type="checkbox"
-                        :checked="contentBg1Fit"
-                        @change="
-                            set({
-                                backgrounds: {
-                                    content: { base: { fit: !contentBg1Fit } },
-                                },
-                            })
-                        "
-                    />
-                    Fit
-                </label>
-            </div>
-            <div class="flex items-center gap-4">
-                <label class="w-32">Opacity</label>
-                <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    :value="local.contentBg1Opacity"
-                    @input="onOpacityRange($event, 'contentBg1Opacity')"
-                    class="flex-1"
-                />
-                <span class="w-12 text-right tabular-nums">{{
-                    local.contentBg1Opacity.toFixed(2)
-                }}</span>
-            </div>
-            <div class="flex items-center gap-4">
-                <label class="w-32">Size</label>
-                <input
-                    type="range"
-                    min="8"
-                    max="1200"
-                    :disabled="contentBg1Fit"
-                    :value="local.contentBg1SizePx"
-                    @input="onSizeRange($event, 'contentBg1SizePx')"
-                    class="flex-1"
-                />
-                <span class="w-16 text-right tabular-nums text-xs">{{
-                    contentBg1Fit ? 'cover' : local.contentBg1SizePx + 'px'
-                }}</span>
-            </div>
-            <div class="flex items-start gap-4 fallback-row">
-                <label class="w-32 text-xs pt-2">Fallback Color</label>
-                <div class="flex flex-col gap-2 w-full sm:w-auto">
-                    <UColorPicker
-                        v-bind="backgroundColorPickerProps"
-                        :disabled="!bgEnabled"
-                        :model-value="
-                            bgEnabled && contentBg1Color.startsWith('#')
-                                ? contentBg1Color
-                                : undefined
-                        "
-                        @update:model-value="(c: string | undefined)=> c && set({ backgrounds: { content: { base: { color: c } } } })"
-                        class="scale-60 origin-left"
-                    />
-                    <div class="flex items-center gap-2">
-                        <UInput
-                            v-bind="hexInputProps"
-                            class="flex-1 sm:w-24 h-8"
-                            type="text"
-                            :placeholder="'#RRGGBB'"
-                            :model-value="localHex.contentBg1Color"
-                            @update:model-value="(v:any)=>{ localHex.contentBg1Color = String(v ?? ''); onHexInput('contentBg1Color'); }"
-                            :disabled="!bgEnabled"
-                            aria-label="Content layer 1 fallback hex color"
-                        />
-                        <UButton
-                            v-bind="copyButtonProps"
-                            class="shrink-0"
-                            @click="copyColor('contentBg1Color')"
-                            :disabled="
-                                !bgEnabled || !contentBg1Color.startsWith('#')
-                            "
-                            aria-label="Copy content layer 1 color"
-                            title="Copy content layer 1 color"
-                        />
-                    </div>
-                </div>
-            </div>
-        </section>
+        <DashboardBackgroundLayerEditor
+            title="Content Layer 1"
+            description="Primary pattern beneath UI chrome. Size slider disabled when Fit is enabled."
+            section-id="content-layer1"
+            :url="contentBg1Url"
+            :opacity="local.contentBg1Opacity"
+            :size-px="local.contentBg1SizePx"
+            :repeat="contentBg1Repeat"
+            :fit="contentBg1Fit"
+            :color="contentBg1Color"
+            :preview-style="contentBg1PreviewStyle"
+            :presets="presetsContent1"
+            :bg-enabled="bgEnabled"
+            empty-label="None"
+            :preset-button-props="presetButtonProps"
+            :remove-layer-button-props="removeLayerButtonProps"
+            :repeat-button-props="repeatButtonProps"
+            :color-picker-props="backgroundColorPickerProps"
+            :hex-input-props="hexInputProps"
+            :copy-button-props="copyButtonProps"
+            @update:opacity="(v: number) => { local.contentBg1Opacity = v; commitOpacity('contentBg1Opacity', v); }"
+            @update:size-px="(v: number) => { local.contentBg1SizePx = v; commitSize('contentBg1SizePx', v); }"
+            @update:repeat="(v: 'repeat' | 'no-repeat') => set({ backgrounds: { content: { base: { repeat: v } } } })"
+            @update:fit="(v: boolean) => set({ backgrounds: { content: { base: { fit: v } } } })"
+            @update:color="(c: string) => set({ backgrounds: { content: { base: { color: c } } } })"
+            @upload="(file: File) => handleLayerUpload(file, 'contentBg1')"
+            @remove="removeLayer('contentBg1')"
+            @apply-preset="(src: string, opacity: number) => applyPreset('contentBg1', src, opacity)"
+        />
 
         <!-- Content Background Layer 2 -->
-        <section
-            id="dashboard-theme-content-layer2-section"
-            class="section-card space-y-4"
-            role="group"
-            aria-labelledby="theme-section-content2"
-        >
-            <h2
-                id="theme-section-content2"
-                class="font-heading text-base uppercase tracking-wide group-heading"
-            >
-                Content Layer 2
-            </h2>
-            <p class="supporting-text">
-                Optional overlay pattern. Lower opacity recommended for subtle
-                texture.
-            </p>
-            <div class="flex items-center gap-3">
-                <div
-                    class="pattern-thumb drop-zone relative flex h-24 w-[140px] flex-col items-center justify-center overflow-hidden rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)]/90 text-[var(--md-on-surface)] shadow-[2px_2px_0_var(--md-border-color)] transition-all duration-150"
-                    :class="[
-                        !contentBg2Url || local.contentBg2Opacity === 0
-                            ? 'opacity-60'
-                            : '',
-                        dragOver.contentBg2
-                            ? 'ring-2 ring-[color:var(--md-primary)] ring-offset-2 ring-offset-[var(--md-surface)] scale-[1.01]'
-                            : '',
-                    ]"
-                    :style="contentBg2PreviewStyle"
-                    aria-label="Content background layer 2 (click or drop to upload)"
-                    role="button"
-                    tabindex="0"
-                    @click="openFile('contentBg2')"
-                    @keydown.enter.prevent="openFile('contentBg2')"
-                    @dragenter.prevent="onDragEnter($event, 'contentBg2')"
-                    @dragover.prevent="onDragOver($event)"
-                    @dragleave.prevent="onDragLeave($event, 'contentBg2')"
-                    @drop.prevent="onDrop($event, 'contentBg2')"
-                >
-                    <div
-                        v-if="contentBg2Url"
-                        class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"
-                    ></div>
-                    <span
-                        class="relative z-10 rounded bg-[var(--md-surface)]/85 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em]"
-                        aria-hidden="true"
-                    >
-                        {{ contentBg2Url ? 'Replace' : 'Drop / Tap' }}
-                    </span>
-                </div>
-                <span
-                    class="text-xs truncate max-w-40"
-                    :title="displayName(contentBg2Url)"
-                >
-                    {{
-                        contentBg2Url ? displayName(contentBg2Url) : 'Disabled'
-                    }}
-                </span>
-            </div>
-            <div class="flex flex-wrap gap-2 items-center">
-                <span class="text-xs opacity-70">Presets:</span>
-                <UButton
-                    v-bind="presetButtonProps"
-                    v-for="p in presetsContent2"
-                    :key="p.src"
-                    @click="applyPreset('contentBg2', p.src, p.opacity)"
-                    :class="isPresetActive('contentBg2', p.src)"
-                >
-                    {{ p.label }}
-                </UButton>
-                <UButton
-                    v-bind="removeLayerButtonProps"
-                    @click="removeLayer('contentBg2')"
-                >
-                    Remove
-                </UButton>
-                <input
-                    :ref="(el:any)=> fileInputs.contentBg2 = el"
-                    type="file"
-                    class="sr-only"
-                    accept="image/*"
-                    @change="onUpload($event, 'contentBg2')"
-                />
-                <UButton
-                    v-bind="repeatButtonProps"
-                    @click="toggleRepeat('contentBg2Repeat')"
-                    :aria-pressed="contentBg2Repeat === 'repeat'"
-                >
-                    Repeat:
-                    {{ contentBg2Repeat === 'repeat' ? 'On' : 'Off' }}
-                </UButton>
-                <label
-                    class="flex items-center gap-1 text-[10px] cursor-pointer select-none"
-                >
-                    <input
-                        type="checkbox"
-                        :checked="contentBg2Fit"
-                        @change="
-                            set({
-                                backgrounds: {
-                                    content: {
-                                        overlay: { fit: !contentBg2Fit },
-                                    },
-                                },
-                            })
-                        "
-                    />
-                    Fit
-                </label>
-            </div>
-            <div class="flex items-center gap-4">
-                <label class="w-32">Opacity</label>
-                <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    :value="local.contentBg2Opacity"
-                    @input="onOpacityRange($event, 'contentBg2Opacity')"
-                    class="flex-1"
-                />
-                <span class="w-12 text-right tabular-nums">{{
-                    local.contentBg2Opacity.toFixed(2)
-                }}</span>
-            </div>
-            <div class="flex items-center gap-4">
-                <label class="w-32">Size</label>
-                <input
-                    type="range"
-                    min="8"
-                    max="1200"
-                    :disabled="contentBg2Fit"
-                    :value="local.contentBg2SizePx"
-                    @input="onSizeRange($event, 'contentBg2SizePx')"
-                    class="flex-1"
-                />
-                <span class="w-16 text-right tabular-nums text-xs">{{
-                    contentBg2Fit ? 'cover' : local.contentBg2SizePx + 'px'
-                }}</span>
-            </div>
-            <div class="flex items-start gap-4 fallback-row">
-                <label class="w-32 text-xs pt-2">Fallback Color</label>
-                <div class="flex flex-col gap-2 w-full sm:w-auto">
-                    <UColorPicker
-                        v-bind="backgroundColorPickerProps"
-                        :disabled="!bgEnabled"
-                        :model-value="
-                            bgEnabled && contentBg2Color.startsWith('#')
-                                ? contentBg2Color
-                                : undefined
-                        "
-                        @update:model-value="(c: string | undefined)=> c && set({ backgrounds: { content: { overlay: { color: c } } } })"
-                        class="scale-60 origin-left"
-                    />
-                    <div class="flex items-center gap-2">
-                        <UInput
-                            v-bind="hexInputProps"
-                            class="flex-1 sm:w-24 h-8"
-                            type="text"
-                            :placeholder="'#RRGGBB'"
-                            :model-value="localHex.contentBg2Color"
-                            @update:model-value="(v:any)=>{ localHex.contentBg2Color = String(v ?? ''); onHexInput('contentBg2Color'); }"
-                            :disabled="!bgEnabled"
-                            aria-label="Content layer 2 fallback hex color"
-                        />
-                        <UButton
-                            v-bind="copyButtonProps"
-                            class="shrink-0"
-                            @click="copyColor('contentBg2Color')"
-                            :disabled="
-                                !bgEnabled || !contentBg2Color.startsWith('#')
-                            "
-                            aria-label="Copy content layer 2 color"
-                            title="Copy content layer 2 color"
-                        />
-                    </div>
-                </div>
-            </div>
-        </section>
+        <DashboardBackgroundLayerEditor
+            title="Content Layer 2"
+            description="Optional overlay pattern. Lower opacity recommended for subtle texture."
+            section-id="content-layer2"
+            :url="contentBg2Url"
+            :opacity="local.contentBg2Opacity"
+            :size-px="local.contentBg2SizePx"
+            :repeat="contentBg2Repeat"
+            :fit="contentBg2Fit"
+            :color="contentBg2Color"
+            :preview-style="contentBg2PreviewStyle"
+            :presets="presetsContent2"
+            :bg-enabled="bgEnabled"
+            empty-label="Disabled"
+            :preset-button-props="presetButtonProps"
+            :remove-layer-button-props="removeLayerButtonProps"
+            :repeat-button-props="repeatButtonProps"
+            :color-picker-props="backgroundColorPickerProps"
+            :hex-input-props="hexInputProps"
+            :copy-button-props="copyButtonProps"
+            @update:opacity="(v: number) => { local.contentBg2Opacity = v; commitOpacity('contentBg2Opacity', v); }"
+            @update:size-px="(v: number) => { local.contentBg2SizePx = v; commitSize('contentBg2SizePx', v); }"
+            @update:repeat="(v: 'repeat' | 'no-repeat') => set({ backgrounds: { content: { overlay: { repeat: v } } } })"
+            @update:fit="(v: boolean) => set({ backgrounds: { content: { overlay: { fit: v } } } })"
+            @update:color="(c: string) => set({ backgrounds: { content: { overlay: { color: c } } } })"
+            @upload="(file: File) => handleLayerUpload(file, 'contentBg2')"
+            @remove="removeLayer('contentBg2')"
+            @apply-preset="(src: string, opacity: number) => applyPreset('contentBg2', src, opacity)"
+        />
 
         <!-- Sidebar Background -->
-        <section
-            id="dashboard-theme-sidebar-section"
-            class="section-card space-y-4"
-            role="group"
-            aria-labelledby="theme-section-sidebar"
-        >
-            <h2
-                id="theme-section-sidebar"
-                class="font-heading text-base uppercase tracking-wide group-heading"
-            >
-                Sidebar Background
-            </h2>
-            <p class="supporting-text">
-                Applies to navigation rail / project tree area.
-            </p>
-            <div class="flex items-center gap-3">
-                <div
-                    class="pattern-thumb drop-zone relative flex h-24 w-[140px] flex-col items-center justify-center overflow-hidden rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)]/90 text-[var(--md-on-surface)] shadow-[2px_2px_0_var(--md-border-color)] transition-all duration-150"
-                    :class="[
-                        !sidebarBgUrl || local.sidebarBgOpacity === 0
-                            ? 'opacity-60'
-                            : '',
-                        dragOver.sidebarBg
-                            ? 'ring-2 ring-[color:var(--md-primary)] ring-offset-2 ring-offset-[var(--md-surface)] scale-[1.01]'
-                            : '',
-                    ]"
-                    :style="sidebarBgPreviewStyle"
-                    aria-label="Sidebar background (click or drop to upload)"
-                    role="button"
-                    tabindex="0"
-                    @click="openFile('sidebarBg')"
-                    @keydown.enter.prevent="openFile('sidebarBg')"
-                    @dragenter.prevent="onDragEnter($event, 'sidebarBg')"
-                    @dragover.prevent="onDragOver($event)"
-                    @dragleave.prevent="onDragLeave($event, 'sidebarBg')"
-                    @drop.prevent="onDrop($event, 'sidebarBg')"
-                >
-                    <div
-                        v-if="sidebarBgUrl"
-                        class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"
-                    ></div>
-                    <span
-                        class="relative z-10 rounded bg-[var(--md-surface)]/85 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em]"
-                        aria-hidden="true"
-                    >
-                        {{ sidebarBgUrl ? 'Replace' : 'Drop / Tap' }}
-                    </span>
-                </div>
-                <span
-                    class="text-xs truncate max-w-40"
-                    :title="displayName(sidebarBgUrl)"
-                >
-                    {{ sidebarBgUrl ? displayName(sidebarBgUrl) : 'None' }}
-                </span>
-            </div>
-            <div class="flex flex-wrap gap-2 items-center">
-                <span class="text-xs opacity-70">Presets:</span>
-                <UButton
-                    v-bind="presetButtonProps"
-                    v-for="p in presetsSidebar"
-                    :key="p.src"
-                    @click="applyPreset('sidebarBg', p.src, p.opacity)"
-                    :class="isPresetActive('sidebarBg', p.src)"
-                >
-                    {{ p.label }}
-                </UButton>
-                <UButton
-                    v-bind="removeLayerButtonProps"
-                    @click="removeLayer('sidebarBg')"
-                >
-                    Remove
-                </UButton>
-                <input
-                    :ref="(el:any)=> fileInputs.sidebarBg = el"
-                    type="file"
-                    class="sr-only"
-                    accept="image/*"
-                    @change="onUpload($event, 'sidebarBg')"
-                />
-                <UButton
-                    v-bind="repeatButtonProps"
-                    @click="toggleRepeat('sidebarRepeat')"
-                    :aria-pressed="sidebarRepeat === 'repeat'"
-                >
-                    Repeat:
-                    {{ sidebarRepeat === 'repeat' ? 'On' : 'Off' }}
-                </UButton>
-                <label
-                    class="flex items-center gap-1 text-[10px] cursor-pointer select-none"
-                >
-                    <input
-                        type="checkbox"
-                        :checked="sidebarBgFit"
-                        @change="
-                            set({
-                                backgrounds: {
-                                    sidebar: { fit: !sidebarBgFit },
-                                },
-                            })
-                        "
-                    />
-                    Fit
-                </label>
-            </div>
-            <div class="flex items-center gap-4">
-                <label class="w-32">Opacity</label>
-                <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    :value="local.sidebarBgOpacity"
-                    @input="onOpacityRange($event, 'sidebarBgOpacity')"
-                    class="flex-1"
-                />
-                <span class="w-12 text-right tabular-nums">{{
-                    local.sidebarBgOpacity.toFixed(2)
-                }}</span>
-            </div>
-            <div class="flex items-center gap-4">
-                <label class="w-32">Size</label>
-                <input
-                    type="range"
-                    min="8"
-                    max="1200"
-                    :disabled="sidebarBgFit"
-                    :value="local.sidebarBgSizePx"
-                    @input="onSizeRange($event, 'sidebarBgSizePx')"
-                    class="flex-1"
-                />
-                <span class="w-16 text-right tabular-nums text-xs">{{
-                    sidebarBgFit ? 'cover' : local.sidebarBgSizePx + 'px'
-                }}</span>
-            </div>
-            <div class="flex items-start gap-4 fallback-row">
-                <label class="w-32 text-xs pt-2">Fallback Color</label>
-                <div class="flex flex-col gap-2 w-full sm:w-auto">
-                    <UColorPicker
-                        v-bind="backgroundColorPickerProps"
-                        :disabled="!bgEnabled"
-                        :model-value="
-                            bgEnabled && sidebarBgColor.startsWith('#')
-                                ? sidebarBgColor
-                                : undefined
-                        "
-                        @update:model-value="(c: string | undefined)=> c && set({ backgrounds: { sidebar: { color: c } } })"
-                        class="scale-60 origin-left"
-                    />
-                    <div class="flex items-center gap-2">
-                        <UInput
-                            v-bind="hexInputProps"
-                            class="flex-1 sm:w-24 h-8"
-                            type="text"
-                            :placeholder="'#RRGGBB'"
-                            :model-value="localHex.sidebarBgColor"
-                            @update:model-value="(v:any)=>{ localHex.sidebarBgColor = String(v ?? ''); onHexInput('sidebarBgColor'); }"
-                            :disabled="!bgEnabled"
-                            aria-label="Sidebar fallback hex color"
-                        />
-                        <UButton
-                            v-bind="copyButtonProps"
-                            class="shrink-0"
-                            @click="copyColor('sidebarBgColor')"
-                            :disabled="
-                                !bgEnabled || !sidebarBgColor.startsWith('#')
-                            "
-                            aria-label="Copy sidebar color"
-                            title="Copy sidebar color"
-                        />
-                    </div>
-                </div>
-            </div>
-        </section>
+        <DashboardBackgroundLayerEditor
+            title="Sidebar Background"
+            description="Applies to navigation rail / project tree area."
+            section-id="sidebar"
+            :url="sidebarBgUrl"
+            :opacity="local.sidebarBgOpacity"
+            :size-px="local.sidebarBgSizePx"
+            :repeat="sidebarRepeat"
+            :fit="sidebarBgFit"
+            :color="sidebarBgColor"
+            :preview-style="sidebarBgPreviewStyle"
+            :presets="presetsSidebar"
+            :bg-enabled="bgEnabled"
+            empty-label="None"
+            :preset-button-props="presetButtonProps"
+            :remove-layer-button-props="removeLayerButtonProps"
+            :repeat-button-props="repeatButtonProps"
+            :color-picker-props="backgroundColorPickerProps"
+            :hex-input-props="hexInputProps"
+            :copy-button-props="copyButtonProps"
+            @update:opacity="(v: number) => { local.sidebarBgOpacity = v; commitOpacity('sidebarBgOpacity', v); }"
+            @update:size-px="(v: number) => { local.sidebarBgSizePx = v; commitSize('sidebarBgSizePx', v); }"
+            @update:repeat="(v: 'repeat' | 'no-repeat') => set({ backgrounds: { sidebar: { repeat: v } } })"
+            @update:fit="(v: boolean) => set({ backgrounds: { sidebar: { fit: v } } })"
+            @update:color="(c: string) => set({ backgrounds: { sidebar: { color: c } } })"
+            @upload="(file: File) => handleLayerUpload(file, 'sidebarBg')"
+            @remove="removeLayer('sidebarBg')"
+            @apply-preset="(src: string, opacity: number) => applyPreset('sidebarBg', src, opacity)"
+        />
 
         <!-- Accessibility -->
         <section
@@ -827,6 +387,7 @@ import type { UserThemeOverrides } from '~/core/theme/user-overrides-types';
 import type { Ref } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { isBrowser } from '~/utils/env';
+import { useDebounceFn, useClipboard } from '@vueuse/core';
 
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides as Ref<UserThemeOverrides>; // active mode overrides
@@ -1249,22 +810,13 @@ const localHex = reactive({
         : '',
 });
 
-// Simple debounce helper with cleanup tracking
-const activeTimers: number[] = [];
-function debounce<T extends (...args: any[]) => void>(fn: T, wait: number) {
-    let t: any;
-    return (...args: any[]) => {
-        clearTimeout(t);
-        t = setTimeout(() => fn(...args), wait);
-        if (!activeTimers.includes(t)) activeTimers.push(t);
-    };
-}
-
-const commitFontSize = debounce(
+// Debounce helpers for sliders
+const commitFontSize = useDebounceFn(
     (v: number) => set({ typography: { baseFontPx: v } }),
     70
 );
-const commitOpacity = debounce(
+
+const commitOpacity = useDebounceFn(
     (
         key: 'contentBg1Opacity' | 'contentBg2Opacity' | 'sidebarBgOpacity',
         v: number
@@ -1321,7 +873,7 @@ function toggleRepeat(
     }
 }
 
-const commitSize = debounce(
+const commitSize = useDebounceFn(
     (
         key: 'contentBg1SizePx' | 'contentBg2SizePx' | 'sidebarBgSizePx',
         v: number
@@ -1521,8 +1073,9 @@ function registerObjectUrl(u: string) {
 function revokeAll() {
     objectUrls.forEach((u) => URL.revokeObjectURL(u));
     objectUrls.clear();
-    activeTimers.forEach(clearTimeout);
-    activeTimers.length = 0;
+    // activeTimers cleanup removed as useDebounceFn handles its own execution flow, 
+    // and cancellation on unmount is implicitly handled by component destruction preventing new calls.
+    // If we wanted explicit cancellation we'd track the debounced fns.
     fileInputs.contentBg1 = null;
     fileInputs.contentBg2 = null;
     fileInputs.sidebarBg = null;
@@ -1615,6 +1168,39 @@ async function onUpload(
         notify('Upload failed', e?.message || 'unknown error');
     } finally {
         if (input) input.value = '';
+    }
+}
+
+/**
+ * Handle file upload from BackgroundLayerEditor component
+ * This takes a File directly rather than Event (for component integration)
+ */
+async function handleLayerUpload(
+    file: File,
+    which: 'contentBg1' | 'contentBg2' | 'sidebarBg'
+) {
+    try {
+        if (!file.type.startsWith('image/')) {
+            notify('Invalid image type');
+            return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            notify('Image too large', 'Max 2MB');
+            return;
+        }
+        // Persist via file store (dedup by content hash)
+        const meta = await createOrRefFile(file, file.name || 'upload');
+        // Store as synthetic scheme so we can resolve later
+        const token = `internal-file://${meta.hash}`;
+        if (which === 'contentBg1')
+            set({ backgrounds: { content: { base: { url: token } } } });
+        else if (which === 'contentBg2')
+            set({ backgrounds: { content: { overlay: { url: token } } } });
+        else if (which === 'sidebarBg')
+            set({ backgrounds: { sidebar: { url: token } } });
+        notify('Background image saved', meta.hash.slice(0, 8));
+    } catch (e: any) {
+        notify('Upload failed', e?.message || 'unknown error');
     }
 }
 
@@ -1716,6 +1302,8 @@ function onHexInput(key: keyof typeof localHex) {
         }
     }
 }
+const { copy: copyToClipboard } = useClipboard({ legacy: true });
+
 async function copyColor(key: keyof typeof localHex) {
     let val = '';
     // Map to override paths
@@ -1734,7 +1322,7 @@ async function copyColor(key: keyof typeof localHex) {
 
     if (!val || !val.startsWith('#')) return;
     try {
-        await navigator.clipboard.writeText(val);
+        await copyToClipboard(val);
         notify('Copied color', val);
     } catch {
         notify('Copy failed');

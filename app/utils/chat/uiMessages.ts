@@ -1,5 +1,9 @@
 // Canonical UI message utilities (content part type no longer needed directly)
 import { parseHashes } from '~/utils/files/attachments';
+import {
+    isWorkflowMessageData,
+    type UiWorkflowState,
+} from '~/utils/chat/workflow-types';
 
 interface ContentPartLike {
     type?: string;
@@ -16,6 +20,7 @@ interface RawMessageLike {
     content?: string | ContentPartLike[];
     file_hashes?: string[] | string | null;
     reasoning_text?: string | null;
+    error?: string | null;
     pending?: boolean;
     data?: {
         reasoning_text?: string | null;
@@ -45,9 +50,19 @@ export interface UiChatMessage {
     stream_id?: string;
     pending?: boolean;
     toolCalls?: ToolCallInfo[];
+    error?: string | null;
+
+    // Workflow-specific fields (optional - no breaking changes)
+    /** True if this message represents a workflow execution */
+    isWorkflow?: boolean;
+    /** Workflow execution state for UI rendering */
+    workflowState?: UiWorkflowState;
 }
 
-export function partsToText(parts: string | ContentPartLike[] | null | undefined, role?: string): string {
+export function partsToText(
+    parts: string | ContentPartLike[] | null | undefined,
+    role?: string
+): string {
     if (!parts) return '';
     if (typeof parts === 'string') return parts;
     if (!Array.isArray(parts)) return '';
@@ -97,8 +112,41 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         toolCalls = raw.data.tool_calls;
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Handle workflow messages (check discriminator in data field)
+    // ─────────────────────────────────────────────────────────────────────
+    let isWorkflow = false;
+    let workflowState: UiChatMessage['workflowState'] = undefined;
+
+    if (isWorkflowMessageData(raw.data)) {
+        isWorkflow = true;
+        workflowState = {
+            workflowId: raw.data.workflowId,
+            workflowName: raw.data.workflowName,
+            prompt: raw.data.prompt,
+            attachments: raw.data.attachments,
+            imageCaption: raw.data.imageCaption,
+            executionState: raw.data.executionState,
+            nodeStates: raw.data.nodeStates,
+            executionOrder: raw.data.executionOrder,
+            currentNodeId: raw.data.currentNodeId,
+            branches: raw.data.branches,
+            hitlRequests: raw.data.hitlRequests,
+            finalOutput: raw.data.finalOutput,
+            failedNodeId:
+                raw.data.failedNodeId ?? raw.data.resumeState?.startNodeId,
+            nodeOutputs: raw.data.nodeOutputs,
+            sessionMessages: raw.data.sessionMessages,
+            resumeState: raw.data.resumeState,
+            version: raw.data.version ?? 0,
+        };
+    }
+
     let text: string;
-    if (typeof raw.text === 'string' && !Array.isArray(raw.text)) {
+    // For workflow messages, use finalOutput as the primary text
+    if (isWorkflow && isWorkflowMessageData(raw.data)) {
+        text = raw.data.finalOutput || '';
+    } else if (typeof raw.text === 'string' && !Array.isArray(raw.text)) {
         text = raw.text;
     } else if (typeof raw.content === 'string') {
         text = raw.content;
@@ -145,11 +193,15 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
             }
         } else if (import.meta.dev) {
             console.debug(
-                    '[uiMessages.ensureUiMessage] existing images >= hashes; skipping placeholder injection',
-                    { id, totalHashes: file_hashes.length, existingCount }
-                );
+                '[uiMessages.ensureUiMessage] existing images >= hashes; skipping placeholder injection',
+                { id, totalHashes: file_hashes.length, existingCount }
+            );
         }
     }
+    const pending = workflowState
+        ? workflowState.executionState === 'running'
+        : Boolean(raw.pending);
+
     return {
         id,
         role,
@@ -157,8 +209,15 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         file_hashes,
         reasoning_text,
         stream_id: raw.stream_id,
-        pending: Boolean(raw.pending),
+        pending,
         toolCalls,
+        error:
+            raw.error ??
+            (raw.data && typeof raw.data === 'object'
+                ? ((raw.data as { error?: string | null }).error ?? null)
+                : null),
+        isWorkflow,
+        workflowState,
     };
 }
 

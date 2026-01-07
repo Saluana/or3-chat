@@ -28,6 +28,7 @@ export const DEFAULT_ICONS = {
     'chat.message.retry': 'pixelarticons:reload',
     'chat.message.edit': 'pixelarticons:edit-box',
     'chat.message.branch': 'pixelarticons:git-branch',
+    'chat.message.continue': 'pixelarticons:play',
     'chat.message.delete': 'pixelarticons:trash',
     'chat.reasoning': 'pixelarticons:lightbulb-on',
 
@@ -100,6 +101,7 @@ export const DEFAULT_ICONS = {
     'ui.checkbox.on': 'pixelarticons:checkbox-on',
     'ui.checkbox.off': 'pixelarticons:checkbox',
     'ui.book': 'pixelarticons:book',
+    'ui.hint': 'pixelarticons:info-box',
 
     // Dashboard
     'dashboard.home': 'pixelarticons:dashboard',
@@ -121,6 +123,13 @@ export const DEFAULT_ICONS = {
     'image.delete': 'pixelarticons:image-delete',
     'image.repeat': 'pixelarticons:repeat',
     'image.multiple': 'pixelarticons:image-multiple',
+
+    // Workflow Status
+    'workflow.status.running': 'pixelarticons:loader',
+    'workflow.status.completed': 'pixelarticons:check',
+    'workflow.status.error': 'pixelarticons:close',
+    'workflow.status.stopped': 'pixelarticons:pause',
+    'workflow.status.pending': 'pixelarticons:clock',
 } as const;
 
 export type IconToken = keyof typeof DEFAULT_ICONS;

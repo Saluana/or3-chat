@@ -1,4 +1,5 @@
 import type { ContentPart } from './types';
+import { isWorkflowMessageData } from './workflow-types';
 
 // Build UI parts: text first, then extra text blocks, then attachments
 export function buildParts(
@@ -31,6 +32,33 @@ export function getTextFromContent(
         .filter((p): p is Extract<ContentPart, { type: 'text' }> => p.type === 'text')
         .map((p) => p.text)
         .join('');
+}
+
+/**
+ * Derive a string content value from a stored message shape.
+ * - For workflow messages, prefer the final output.
+ * - Otherwise fall back to data.content/text, then top-level content.
+ */
+export function deriveMessageContent(msg: {
+    content?: string | ContentPart[] | null;
+    data?: unknown;
+}): string {
+    const data = msg.data;
+    if (isWorkflowMessageData(data)) {
+        return data.finalOutput || '';
+    }
+
+    if (data && typeof data === 'object') {
+        const contentField = (data as { content?: unknown }).content;
+        if (typeof contentField === 'string') return contentField;
+        const textField = (data as { text?: unknown }).text;
+        if (typeof textField === 'string') return textField;
+    }
+
+    const content = msg.content;
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) return getTextFromContent(content);
+    return '';
 }
 
 // Merge and dedupe file-hash arrays

@@ -1,9 +1,7 @@
 <template>
     <div
         id="chat-input-main"
-        @dragover.prevent="onDragOver"
-        @dragleave.prevent="onDragLeave"
-        @drop.prevent="handleDrop"
+        ref="dropZoneRef"
         :class="[
             'chat-input-main flex flex-col bg-(--md-surface) mx-2 md:mx-0 items-stretch transition-all duration-300 relative cursor-text z-10',
             isDragging
@@ -323,7 +321,6 @@
 import {
     ref,
     nextTick,
-    defineEmits,
     onMounted,
     onBeforeUnmount,
     watch,
@@ -339,7 +336,13 @@ import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { computed } from 'vue';
 import { isMobile, state } from '~/state/global';
-import { useToast, useUserApiKey, useOpenRouterAuth } from '#imports';
+import {
+    useToast,
+    useUserApiKey,
+    useOpenRouterAuth,
+    useModelStore,
+    useAiSettings,
+} from '#imports';
 import {
     useComposerActions,
     type ComposerActionEntry,
@@ -347,6 +350,7 @@ import {
 } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { useFileDialog, useDropZone, useLocalStorage } from '@vueuse/core';
 
 const props = defineProps<{
     loading?: boolean;
@@ -369,31 +373,31 @@ const { settings: aiSettings } = useAiSettings();
 const webSearchEnabled = ref<boolean>(false);
 const LAST_MODEL_KEY = 'last_selected_model';
 
+// Use VueUse's useLocalStorage for persisted model selection
+const persistedModel = useLocalStorage<string>(
+    LAST_MODEL_KEY,
+    'openai/gpt-oss-120b'
+);
+
 const suppressPersist = ref(false);
 
 onMounted(async () => {
     const fave = await getFavoriteModels();
     // Favorite models loaded (log removed)
     if (process.client) {
-        try {
-            const stored = localStorage.getItem(LAST_MODEL_KEY);
-            if (stored && typeof stored === 'string') {
-                selectedModel.value = stored;
+        // Initialize selectedModel from persistedModel
+        if (persistedModel.value) {
+            selectedModel.value = persistedModel.value;
+        }
+        // If this is a brand-new chat (no threadId), honor fixed default from AI settings for initial display
+        if (!props.threadId) {
+            const set = (aiSettings as any)?.value;
+            const fixed =
+                set?.defaultModelMode === 'fixed' ? set?.fixedModelId : null;
+            if (fixed) {
+                suppressPersist.value = true; // don't clobber last_selected_model on initial display
+                selectedModel.value = fixed;
             }
-            // If this is a brand-new chat (no threadId), honor fixed default from AI settings for initial display
-            if (!props.threadId) {
-                const set = (aiSettings as any)?.value;
-                const fixed =
-                    set?.defaultModelMode === 'fixed'
-                        ? set?.fixedModelId
-                        : null;
-                if (fixed) {
-                    suppressPersist.value = true; // don't clobber last_selected_model on initial display
-                    selectedModel.value = fixed;
-                }
-            }
-        } catch (e) {
-            // Silently handle restore failure
         }
     }
 });
@@ -484,17 +488,7 @@ onBeforeUnmount(() => {
     } catch (err) {
         // Silently handle TipTap destroy error
     }
-    // Cleanup hidden file input and any blob URLs
-    if (hiddenFileInput.value) {
-        try {
-            if (hiddenFileInputListener.value)
-                hiddenFileInput.value.removeEventListener(
-                    'change',
-                    hiddenFileInputListener.value
-                );
-            hiddenFileInput.value.remove();
-        } catch {}
-    }
+    // Cleanup hidden file input logic removed (useFileDialog handles it)
     attachments.value.forEach(releaseAttachment);
 });
 
@@ -596,6 +590,7 @@ const sendButtonProps = computed(() => {
         square: true,
         size: 'sm' as const,
         color: 'primary' as const,
+        variant: 'solid' as const,
         class: 'theme-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center',
         ...(overrides.value as any),
     };
@@ -776,8 +771,8 @@ function makeId() {
 }
 const isDragging = ref(false);
 const selectedModel = ref<string>('openai/gpt-oss-120b');
-const hiddenFileInput = ref<HTMLInputElement | null>(null);
-const hiddenFileInputListener = ref<((e: Event) => void) | null>(null);
+// hiddenFileInput removed
+// hiddenFileInputListener removed
 const imageSettings = ref<ImageSettings>({
     quality: 'medium',
     numResults: 2,
@@ -793,11 +788,8 @@ watch(selectedModel, (newModel) => {
             suppressPersist.value = false;
             return;
         }
-        try {
-            localStorage.setItem(LAST_MODEL_KEY, newModel);
-        } catch (e) {
-            // Silently handle persist failure
-        }
+        // Persist via useLocalStorage
+        persistedModel.value = newModel;
     }
 });
 
@@ -876,21 +868,25 @@ const handlePaste = async (event: ClipboardEvent) => {
     }
 };
 
+const {
+    files: selectedFiles,
+    open,
+    reset: resetFileDialog,
+} = useFileDialog({
+    accept: 'image/*,application/pdf',
+    multiple: true,
+});
+
+watch(selectedFiles, (files) => {
+    if (files) {
+        processFiles(files);
+        resetFileDialog();
+    }
+});
+
 const triggerFileInput = () => {
     emit('trigger-file-input');
-    if (!hiddenFileInput.value) {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.multiple = true;
-        input.accept = 'image/*,application/pdf';
-        input.style.display = 'none';
-        const handler = (e: Event) => handleFileChange(e);
-        input.addEventListener('change', handler);
-        hiddenFileInputListener.value = handler;
-        document.body.appendChild(input);
-        hiddenFileInput.value = input;
-    }
-    hiddenFileInput.value?.click();
+    open();
 };
 
 const MAX_IMAGES = MAX_FILES_PER_MESSAGE;
@@ -948,38 +944,53 @@ const processFiles = async (files: FileList | null) => {
     }
 };
 
-const handleFileChange = (event: Event) => {
-    const target = event.target as HTMLInputElement | null;
-    if (!target || !target.files) return;
-    processFiles(target.files);
-};
+// handleFileChange removed (replaced by useFileDialog watcher)
 
+const dropZoneRef = ref<HTMLElement | null>(null);
+
+function onDropZoneDrop(files: File[] | null) {
+    if (files && files.length > 0) {
+        // Process each file directly
+        for (const file of files) {
+            processAttachment(file);
+        }
+    }
+}
+
+const { isOverDropZone } = useDropZone(dropZoneRef, {
+    onDrop: onDropZoneDrop,
+    dataTypes: (types) => {
+        // Accept images and PDFs
+        return types.some(
+            (t) =>
+                t.startsWith('image/') ||
+                t === 'application/pdf' ||
+                t === 'Files'
+        );
+    },
+});
+
+// Use isOverDropZone directly for UI state instead of isDragging for drop zone
+// Keep isDragging for backward compatibility with other parts
+watch(
+    isOverDropZone,
+    (v) => {
+        isDragging.value = v;
+    },
+    { immediate: true }
+);
+
+// Legacy handlers kept as no-ops since useDropZone handles everything
 const handleDrop = (event: DragEvent) => {
-    isDragging.value = false;
-    processFiles(event.dataTransfer?.files || null);
+    // useDropZone handles this
 };
 
 const onDragOver = (event: DragEvent) => {
-    const items = event.dataTransfer?.items;
-    if (!items) return;
-    for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (!item) continue;
-        const mime = item.type || '';
-        if (mime.startsWith('image/') || mime === 'application/pdf') {
-            isDragging.value = true;
-            return;
-        }
-    }
+    // useDropZone handles this
 };
 
 const onDragLeave = (event: DragEvent) => {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const x = event.clientX;
-    const y = event.clientY;
-    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-        isDragging.value = false;
-    }
+    // useDropZone handles this
 };
 
 const removeImage = (index: number) => {
@@ -1055,9 +1066,9 @@ const handleSend = async () => {
             const hooks = useHooks();
             const json = editor.value?.getJSON?.();
             // Fire as an action to avoid transforming data; listeners can stash it
-        if (json) {
-            await hooks.doAction('ui.chat.editor:action:before_send', json);
-        }
+            if (json) {
+                await hooks.doAction('ui.chat.editor:action:before_send', json);
+            }
         } catch (e) {
             // Silently handle editor JSON dispatch failure
         }
@@ -1118,57 +1129,43 @@ const handlePromptModalClosed = () => {
     /* modal closed */
 };
 
-// Emit live height via ResizeObserver using provided measurements to avoid extra layout passes
-if (process.client && 'ResizeObserver' in window) {
-    let ro: ResizeObserver | null = null;
-    let lastHeight: number | null = null;
+// Emit live height via useResizeObserver (VueUse handles cleanup automatically)
+import { useResizeObserver } from '@vueuse/core';
 
-    const readEntryHeight = (entry: ResizeObserverEntry): number | null => {
-        const target = entry.target as HTMLElement;
-        const borderSize = Array.isArray(entry.borderBoxSize)
-            ? entry.borderBoxSize[0]
-            : entry.borderBoxSize;
-        if (borderSize && typeof borderSize.blockSize === 'number') {
-            return borderSize.blockSize;
-        }
-        if (entry.contentRect && typeof entry.contentRect.height === 'number') {
-            return entry.contentRect.height;
-        }
-        // Fallback – should rarely run, but keeps behavior consistent if box sizes unavailable
-        return target?.offsetHeight ?? null;
-    };
+const componentRootRef = ref<HTMLElement | null>(null);
+let lastHeight: number | null = null;
 
-    const handleEntries = (entries: ResizeObserverEntry[]) => {
-        const entry = entries[0];
-        if (!entry) return;
-        const nextHeight = readEntryHeight(entry);
-        if (nextHeight == null) return;
-        // Round to whole px so we don't emit micro-deltas that cause extra renders
-        const normalized = Math.round(nextHeight);
-        if (lastHeight === normalized) return;
-        lastHeight = normalized;
-        emit('resize', { height: normalized });
-    };
+const readEntryHeight = (entry: ResizeObserverEntry): number | null => {
+    const target = entry.target as HTMLElement;
+    const borderSize = Array.isArray(entry.borderBoxSize)
+        ? entry.borderBoxSize[0]
+        : entry.borderBoxSize;
+    if (borderSize && typeof borderSize.blockSize === 'number') {
+        return borderSize.blockSize;
+    }
+    if (entry.contentRect && typeof entry.contentRect.height === 'number') {
+        return entry.contentRect.height;
+    }
+    // Fallback – should rarely run, but keeps behavior consistent if box sizes unavailable
+    return target?.offsetHeight ?? null;
+};
 
-    onMounted(() => {
-        const inst = getCurrentInstance();
-        const rootEl = (inst?.proxy?.$el as HTMLElement) || null;
-        if (!rootEl) return;
-        ro = new ResizeObserver(handleEntries);
-        ro.observe(rootEl);
-    });
+onMounted(() => {
+    const inst = getCurrentInstance();
+    componentRootRef.value = (inst?.proxy?.$el as HTMLElement) || null;
+});
 
-    const dispose = () => {
-        try {
-            ro?.disconnect();
-        } catch {}
-        ro = null;
-        lastHeight = null;
-    };
-
-    onBeforeUnmount(dispose);
-    if (import.meta.hot) import.meta.hot.dispose(dispose);
-}
+useResizeObserver(componentRootRef, (entries) => {
+    const entry = entries[0];
+    if (!entry) return;
+    const nextHeight = readEntryHeight(entry);
+    if (nextHeight == null) return;
+    // Round to whole px so we don't emit micro-deltas that cause extra renders
+    const normalized = Math.round(nextHeight);
+    if (lastHeight === normalized) return;
+    lastHeight = normalized;
+    emit('resize', { height: normalized });
+});
 </script>
 
 <style scoped>
@@ -1259,6 +1256,23 @@ textarea::-webkit-scrollbar-thumb:hover {
 }
 .prosemirror-host :deep(.mention::before) {
     content: '📎';
+    margin-right: 0.25rem;
+    font-size: 0.875em;
+}
+
+/* Workflow tag styling inside the TipTap editor */
+.prosemirror-host :deep(.workflow-tag) {
+    background: var(--md-info, #e0e0ff);
+    color: var(--md-on-tertiary-container, #1a1a66);
+    border-radius: 4px;
+    padding: 0.125rem 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.prosemirror-host :deep(.workflow-tag::before) {
+    content: '⚡';
     margin-right: 0.25rem;
     font-size: 0.875em;
 }

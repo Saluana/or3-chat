@@ -2,8 +2,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { registerSidebarPage } from '~/composables/sidebar/registerSidebarPage';
 import { usePaneApps } from '~/composables/core/usePaneApps';
-import SnakeGamePane from './examples/snake/SnakeGamePane.vue';
-import SnakeGameSidebar from './examples/snake/SnakeGameSidebar.vue';
+import SnakeGamePane from './snake/SnakeGamePane.vue';
+import SnakeGameSidebar from './snake/SnakeGameSidebar.vue';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 
 export default defineNuxtPlugin(() => {

@@ -1,12 +1,9 @@
 import type { Ref } from 'vue';
-import type { ChatMessage } from './types';
+import type { ChatMessage, ContentPart } from './types';
+import { deriveMessageContent } from './messages';
 import { db } from '~/db';
 import type { Message } from '~/db/schema';
 
-interface MessageData extends Record<string, unknown> {
-    content?: string;
-    reasoning_text?: string;
-}
 export async function ensureThreadHistoryLoaded(
     threadIdRef: Ref<string | undefined>,
     historyLoadedFor: Ref<string | null>,
@@ -29,16 +26,18 @@ export async function ensureThreadHistoryLoaded(
         all.sort((a: Message, b: Message) => (a.index || 0) - (b.index || 0));
 
         messages.value = all.map((dbMsg: Message) => {
-            const data = dbMsg.data as MessageData | null | undefined;
+            const data = dbMsg.data as Record<string, unknown> | null | undefined;
+            const content = deriveMessageContent({
+                content: (dbMsg as { content?: string | ContentPart[] | null }).content,
+                data,
+            });
             return {
                 role: dbMsg.role as ChatMessage['role'],
-                content:
-                    typeof data?.content === 'string'
-                        ? data.content
-                        : '',
+                content,
                 id: dbMsg.id,
                 stream_id: dbMsg.stream_id ?? undefined,
                 file_hashes: dbMsg.file_hashes,
+                error: dbMsg.error ?? null,
                 reasoning_text:
                     typeof data?.reasoning_text === 'string'
                         ? data.reasoning_text

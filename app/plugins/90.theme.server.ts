@@ -15,6 +15,13 @@ import {
     resolveThemeStylesheetHref,
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
+import {
+    cloneDeep,
+    deepMerge,
+    recursiveUpdate,
+    sanitizeThemeName,
+    readCookie,
+} from '~/theme/_shared/theme-core';
 
 export default defineNuxtPlugin(async (nuxtApp) => {
     const ACTIVE_THEME_COOKIE = 'or3_active_theme';
@@ -68,7 +75,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     // Read previous default from cookie to detect default changes across deploys
     const PREVIOUS_DEFAULT_COOKIE = 'or3_previous_default_theme';
-    const previousDefault = readActiveThemeCookie(
+    const previousDefault = readCookie(
         nuxtApp.ssrContext?.event.node.req.headers.cookie,
         PREVIOUS_DEFAULT_COOKIE
     );
@@ -91,12 +98,8 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const themeRegistry = new Map<string, CompiledTheme>();
     const resolverRegistry = new Map<string, RuntimeResolver>();
 
-    const sanitizeThemeName = (themeName: string | null) => {
-        if (!themeName) return null;
-        if (!/^[a-z0-9-]+$/i.test(themeName)) return null;
-        if (!availableThemes.has(themeName)) return null;
-        return themeName;
-    };
+    // Use imported sanitizeThemeName with availableThemes
+    const sanitize = (name: string | null) => sanitizeThemeName(name, availableThemes);
 
     const loadTheme = async (
         themeName: string
@@ -245,8 +248,8 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         }
     }
 
-    const cookieTheme = sanitizeThemeName(
-        readActiveThemeCookie(
+    const cookieTheme = sanitize(
+        readCookie(
             nuxtApp.ssrContext?.event.node.req.headers.cookie,
             ACTIVE_THEME_COOKIE
         )
@@ -291,7 +294,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     } catch {}
 
     const setActiveTheme = async (themeName: string) => {
-        let target = sanitizeThemeName(themeName);
+        let target = sanitize(themeName);
 
         if (!target) {
             if (themeManifest.has(DEFAULT_THEME)) {
@@ -431,84 +434,5 @@ function detectServerScheme(
     return 'light';
 }
 
-function readActiveThemeCookie(
-    cookieHeader: string | undefined,
-    cookieName: string
-): string | null {
-    if (!cookieHeader) return null;
-
-    const pairs = cookieHeader.split(';');
-    for (const pair of pairs) {
-        const [rawName, ...rest] = pair.trim().split('=');
-        if (rawName === cookieName) {
-            return decodeURIComponent(rest.join('='));
-        }
-    }
-
-    return null;
-}
-
-function cloneDeep<T>(value: T): T {
-    if (value === undefined || value === null) {
-        return value;
-    }
-
-    if (typeof globalThis.structuredClone === 'function') {
-        try {
-            return globalThis.structuredClone(value);
-        } catch {
-            // ignore
-        }
-    }
-
-    return JSON.parse(JSON.stringify(value));
-}
-
-function deepMerge(
-    base: Record<string, any>,
-    patch?: Record<string, any>
-): Record<string, any> {
-    if (!patch) {
-        return base;
-    }
-
-    for (const [key, value] of Object.entries(patch)) {
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
-            const current = base[key];
-            base[key] = deepMerge(
-                current &&
-                    typeof current === 'object' &&
-                    !Array.isArray(current)
-                    ? current
-                    : {},
-                value as Record<string, any>
-            );
-        } else if (value !== undefined) {
-            base[key] = value;
-        }
-    }
-
-    return base;
-}
-
-function recursiveUpdate(
-    target: Record<string, any>,
-    source: Record<string, any>
-) {
-    for (const [key, value] of Object.entries(source)) {
-        if (value !== undefined) {
-            if (
-                value &&
-                typeof value === 'object' &&
-                !Array.isArray(value) &&
-                target[key] &&
-                typeof target[key] === 'object' &&
-                !Array.isArray(target[key])
-            ) {
-                recursiveUpdate(target[key], value);
-            } else {
-                target[key] = value;
-            }
-        }
-    }
-}
+// Utility functions (cloneDeep, deepMerge, recursiveUpdate, readCookie, sanitizeThemeName)
+// are now imported from ~/theme/_shared/theme-core.ts

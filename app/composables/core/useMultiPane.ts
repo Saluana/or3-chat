@@ -1,7 +1,6 @@
 // Multi-pane state management composable for chat & documents
 // Keeps pane logic outside of UI components for easier testing & extension.
 
-import Dexie from 'dexie';
 import {
     ref,
     computed,
@@ -9,13 +8,17 @@ import {
     onScopeDispose,
     type Ref,
     type ComputedRef,
+    watch,
 } from 'vue';
+import { useLocalStorage } from '@vueuse/core';
+import Dexie from 'dexie';
 import { db } from '~/db';
 import { useHooks } from '../../core/hooks/useHooks';
 import {
     getGlobalMultiPaneApi,
     setGlobalMultiPaneApi,
 } from '~/utils/multiPaneApi';
+import { deriveMessageContent } from '~/utils/chat/messages';
 import { usePaneApps } from './usePaneApps';
 
 type PaneAppGetter = ReturnType<typeof usePaneApps>['getPaneApp'];
@@ -131,10 +134,10 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
         return msgs.map((msg) => {
             const row = msg as unknown as DbMessageRow;
             const data = row.data;
-            const content =
-                typeof data === 'object' && data !== null && 'content' in data
-                    ? String(data.content ?? '')
-                    : String(row.content ?? '');
+            const content = deriveMessageContent({
+                content: row.content,
+                data,
+            });
             return {
                 role: row.role as 'user' | 'assistant' | 'system' | 'tool',
                 content,
@@ -177,8 +180,27 @@ export function useMultiPane(
     const activePaneIndex = ref(0);
     const hooks = useHooks();
 
-    // Width management state
-    const paneWidths = ref<number[]>([]);
+    // Width management state using useLocalStorage
+    const paneWidths = useLocalStorage<number[]>(storageKey, [], {
+        deep: true,
+        listenToStorageChanges: true,
+        serializer: {
+            read: (raw: string): number[] => {
+                try {
+                    const parsed: unknown = JSON.parse(raw);
+                    if (!Array.isArray(parsed)) return [];
+                    const isValidArray = parsed.every((w): w is number => typeof w === 'number' && w > 0);
+                    if (!isValidArray) return [];
+                    return parsed.map((w) => Math.max(minPaneWidth, Math.min(maxPaneWidth, w)));
+                } catch {
+                    return [];
+                }
+            },
+            write: (value: number[]): string => {
+                return JSON.stringify(value);
+            },
+        },
+    });
 
     const canAddPane = computed(() => panes.value.length < maxPanes);
     const newWindowTooltip = computed(() =>
@@ -196,54 +218,14 @@ export function useMultiPane(
         return Math.max(minPaneWidth, Math.min(maxPaneWidth, width));
     }
 
-    /**
-     * Restore widths from localStorage
-     */
-    function restoreWidths() {
-        if (typeof window === 'undefined') return;
-        try {
-            const saved = localStorage.getItem(storageKey);
-            if (!saved) return;
-
-            const parsed: unknown = JSON.parse(saved);
-            if (!Array.isArray(parsed)) {
-                if (import.meta.dev) {
-                    console.warn(
-                        '[useMultiPane] Invalid stored widths format, ignoring'
-                    );
-                }
-                return;
-            }
-
-            // Validate each width
-            const valid = parsed.every((w) => typeof w === 'number' && w > 0);
-            if (!valid) {
-                if (import.meta.dev) {
-                    console.warn(
-                        '[useMultiPane] Invalid stored width values, ignoring'
-                    );
-                }
-                return;
-            }
-
-            paneWidths.value = (parsed as number[]).map((w) => clampWidth(w));
-        } catch (e) {
-            console.warn('[useMultiPane] Failed to restore widths:', e);
-            // On error, fall back to percentage-based widths by not setting paneWidths
-            // getPaneWidth will return percentage when paneWidths is empty
-        }
-    }
+    // restoreWidths removed - useLocalStorage handles restoration automatically
 
     /**
-     * Persist widths to localStorage
+     * Persist widths to localStorage (now handled by useLocalStorage reactivity)
      */
     function persistWidths() {
-        if (typeof window === 'undefined') return;
-        try {
-            localStorage.setItem(storageKey, JSON.stringify(paneWidths.value));
-        } catch (e) {
-            console.warn('[useMultiPane] Failed to persist widths:', e);
-        }
+        // useLocalStorage automatically persists on change, but we trigger reactivity
+        paneWidths.value = [...paneWidths.value];
     }
 
     /**
@@ -804,13 +786,7 @@ export function useMultiPane(
         }
     });
 
-    // Initialize widths on mount (client-side only)
-    if (typeof window !== 'undefined') {
-        // Use nextTick to ensure DOM is ready
-        void nextTick(() => {
-            restoreWidths();
-        });
-    }
+    // Width restoration removed - useLocalStorage handles it automatically
 
     return api;
 }

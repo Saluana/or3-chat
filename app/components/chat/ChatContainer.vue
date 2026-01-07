@@ -39,6 +39,7 @@
                             :message="item"
                             :thread-id="props.threadId"
                             @retry="onRetry"
+                            @continue="onContinue"
                             @branch="onBranch"
                             @edited="onEdited"
                             @begin-edit="onBeginEdit(item.id)"
@@ -82,7 +83,7 @@
                 </div>
                 <lazy-chat-input-dropper
                     :loading="loading"
-                    :streaming="loading"
+                    :streaming="streamingActive"
                     :container-width="containerWidth"
                     :thread-id="currentThreadId"
                     :pane-id="paneId"
@@ -106,6 +107,7 @@ import {
     computed,
     watch,
     ref,
+    reactive,
     type Ref,
     type CSSProperties,
     onBeforeUnmount,
@@ -125,7 +127,7 @@ import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
-import { useToast } from '#imports';
+import { useToast, useHooks } from '#imports';
 import { MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
 import type {
     ChatInstance,
@@ -286,6 +288,13 @@ const messages = computed<UiChatMessage[]>(
 );
 
 const loading = computed(() => chat.value?.loading?.value || false);
+const workflowRunning = computed(() => {
+    for (const wf of workflowStates.values()) {
+        if (wf && wf.executionState === 'running') return true;
+    }
+    return false;
+});
+const streamingActive = computed(() => loading.value || workflowRunning.value);
 
 // Tail streaming now provided directly by useChat composable
 // `useChat` returns many refs; unwrap common ones so computed values expose plain objects/primitives
@@ -339,10 +348,56 @@ const streamingMessage = computed<UiChatMessage | null>(() => {
 const stableMessages = computed<UiChatMessage[]>(() => messages.value);
 
 // Combine stable messages and streaming message for Or3Scroll
+// Reactive bridge: track workflow states by message id
+const workflowStates = reactive(new Map<string, any>());
+
+// Seed workflow state map from loaded messages so reloads show correct status
+watch(
+    () => messages.value,
+    (list) => {
+        if (!Array.isArray(list)) return;
+        for (const msg of list) {
+            const wf = (msg as any).workflowState;
+            if (!wf) continue;
+            const existing = workflowStates.get(msg.id);
+            const existingVersion = existing?.version ?? -1;
+            const nextVersion = wf.version ?? 0;
+            if (!existing || nextVersion > existingVersion) {
+                workflowStates.set(msg.id, wf);
+            }
+        }
+    },
+    { immediate: true }
+);
+
+function deriveWorkflowText(wf: any): string {
+    if (!wf) return '';
+    // Only return finalOutput - never show intermediate node outputs
+    // The result box is controlled by WorkflowChatMessage using workflowState.finalOutput directly
+    if (wf.finalOutput) return wf.finalOutput;
+    return '';
+}
+
+function mergeWorkflowState(msg: UiChatMessage) {
+    const wf = workflowStates.get(msg.id);
+    if (!wf) return msg;
+    const version = wf.version ?? 0; // Depend on version for reactivity
+    const workflowText = deriveWorkflowText(wf);
+    const pending = wf.executionState === 'running';
+    return {
+        ...msg,
+        isWorkflow: true,
+        workflowState: wf,
+        text: workflowText, // never fall back to original message content
+        pending,
+        _wfVersion: version,
+    } as UiChatMessage & { _wfVersion: number };
+}
+
 const allMessages = computed(() => {
-    const list = [...stableMessages.value];
+    const list = stableMessages.value.map(mergeWorkflowState);
     if (streamingMessage.value) {
-        list.push(streamingMessage.value);
+        list.push(mergeWorkflowState(streamingMessage.value));
     }
     return list;
 });
@@ -565,6 +620,12 @@ function onRetry(messageId: string) {
     nextTick(() => scroller.value?.refreshMeasurements?.());
 }
 
+function onContinue(messageId: string) {
+    if (!chat.value || chat.value?.loading?.value) return;
+    chat.value.continueMessage?.(messageId, model.value);
+    nextTick(() => scroller.value?.refreshMeasurements?.());
+}
+
 function onBranch(newThreadId: string) {
     if (newThreadId) emit('thread-selected', newThreadId);
 }
@@ -602,6 +663,15 @@ function onStopStream() {
     } catch (e) {
         if (import.meta.dev) {
             console.warn('[ChatContainer] abort failed', e);
+        }
+    }
+    try {
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('workflow:stop'));
+        }
+    } catch (e) {
+        if (import.meta.dev) {
+            console.warn('[ChatContainer] workflow stop dispatch failed', e);
         }
     }
 }
@@ -642,7 +712,21 @@ const innerInputContainerProps = useThemeOverrides({
     isNuxtUI: false,
 });
 
+const hooks = useHooks();
+const cleanupWorkflowHook = hooks.on(
+    'workflow.execution:action:state_update',
+    (payload: { messageId: string; state: any }) => {
+        // Only set if not already the same reference (avoid unnecessary reactivity triggers)
+        const existing = workflowStates.get(payload.messageId);
+        if (existing !== payload.state) {
+            workflowStates.set(payload.messageId, payload.state);
+        }
+        // If same reference, Vue reactivity will pick up internal state changes via version
+    }
+);
+
 onBeforeUnmount(() => {
+    cleanupWorkflowHook();
     try {
         chat.value?.clear?.();
     } catch {}

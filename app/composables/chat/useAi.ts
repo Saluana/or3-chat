@@ -24,7 +24,11 @@ import type {
 import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
-import { buildParts, trimOrMessagesImages } from '~/utils/chat/messages';
+import {
+    buildParts,
+    deriveMessageContent,
+    trimOrMessagesImages,
+} from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import { openRouterStream } from '../../utils/chat/openrouterStream';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
@@ -43,6 +47,7 @@ import { useUserApiKey } from '#imports';
 import { useActivePrompt } from '#imports';
 import { getDefaultPromptId } from '#imports';
 import { useHooks } from '#imports';
+import { consumeWorkflowHandlingFlag } from '~/plugins/workflow-slash-commands.client';
 // settings/model store are provided elsewhere at runtime; keep dynamic access guards
 import type {
     ChatSettings,
@@ -99,6 +104,7 @@ export function useChat(
     const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
     const historyLoadedFor = ref<string | null>(null);
+    const cleanupFns: Array<() => void> = [];
 
     if (import.meta.dev) {
         if (state.value.openrouterKey && apiKey.value) {
@@ -221,6 +227,114 @@ export function useChat(
         }
         return true;
     }
+
+    async function applyWorkflowResultToMessages(
+        messageId: string,
+        finalOutput: string
+    ) {
+        if (!messageId || !finalOutput) return;
+        let updated = false;
+
+        const rawIdx = rawMessages.value.findIndex((m) => m.id === messageId);
+        const existingRaw = rawIdx !== -1 ? rawMessages.value[rawIdx] : null;
+        if (existingRaw) {
+            const next: ChatMessage = {
+                ...existingRaw,
+                role: existingRaw.role,
+                content: finalOutput,
+            };
+            rawMessages.value.splice(rawIdx, 1, next);
+            updated = true;
+        }
+
+        const uiIdx = messages.value.findIndex((m) => m.id === messageId);
+        const existingUi = uiIdx !== -1 ? messages.value[uiIdx] : null;
+        if (existingUi) {
+            const next: UiChatMessage = { ...existingUi, text: finalOutput };
+            messages.value.splice(uiIdx, 1, next);
+            updated = true;
+        }
+
+        if (!updated && threadIdRef.value) {
+            try {
+                const row = await db.messages.get(messageId);
+                if (row && row.thread_id === threadIdRef.value) {
+                    const data =
+                        (row.data as Record<string, unknown> | null) || null;
+                    const content =
+                        deriveMessageContent({
+                            content: (
+                                row as {
+                                    content?: string | ContentPart[] | null;
+                                }
+                            ).content,
+                            data,
+                        }) || finalOutput;
+                    const chatMsg: ChatMessage = {
+                        role: row.role as ChatMessage['role'],
+                        content,
+                        id: row.id,
+                        stream_id: row.stream_id ?? undefined,
+                        file_hashes: row.file_hashes ?? undefined,
+                        reasoning_text:
+                            data &&
+                            typeof data === 'object' &&
+                            typeof (data as { reasoning_text?: unknown })
+                                .reasoning_text === 'string'
+                                ? (data as { reasoning_text: string })
+                                      .reasoning_text
+                                : null,
+                        data: data || null,
+                        index:
+                            typeof row.index === 'number'
+                                ? row.index
+                                : typeof row.index === 'string'
+                                ? Number(row.index) || null
+                                : null,
+                        created_at:
+                            typeof row.created_at === 'number'
+                                ? row.created_at
+                                : null,
+                    };
+                    rawMessages.value.push(chatMsg);
+                    messages.value.push(
+                        ensureUiMessage({
+                            ...chatMsg,
+                            data,
+                        })
+                    );
+                }
+            } catch {
+                /* intentionally empty */
+            }
+        }
+    }
+
+    cleanupFns.push(
+        hooks.on(
+            'workflow.execution:action:state_update',
+            (payload: {
+                messageId: string;
+                state?: { executionState?: string; finalOutput?: string };
+            }) => {
+                const state = payload.state || {};
+                const executionState = state.executionState;
+                const isDone =
+                    executionState &&
+                    executionState !== 'running' &&
+                    executionState !== 'idle';
+                const finalOutput =
+                    typeof state.finalOutput === 'string'
+                        ? state.finalOutput
+                        : '';
+                if (!isDone || !finalOutput) return;
+                void applyWorkflowResultToMessages(
+                    payload.messageId,
+                    finalOutput
+                );
+            }
+        )
+    );
 
     async function ensureHistorySynced() {
         if (threadIdRef.value && historyLoadedFor.value !== threadIdRef.value) {
@@ -465,9 +579,11 @@ export function useChat(
                 }
                 // blob: object URL -> fetch and encode
                 if (url.startsWith('blob:')) {
-                    const resp = await fetch(url);
-                    if (resp.ok) {
-                        const blob = await resp.blob();
+                    // Use $fetch for blob
+                    try {
+                        const blob = await $fetch<Blob>(url, {
+                            responseType: 'blob',
+                        });
                         url = await new Promise<string>((resolve, reject) => {
                             const fr = new FileReader();
                             fr.onerror = () =>
@@ -478,6 +594,8 @@ export function useChat(
                             fr.readAsDataURL(blob);
                         });
                         return { ...f, url };
+                    } catch {
+                        // ignore fetch error
                     }
                 }
             } catch {
@@ -541,7 +659,9 @@ export function useChat(
             thread_id: threadIdRef.value,
             role: 'user',
             data: { content: outgoing, attachments: files ?? [] },
-            file_hashes: file_hashes.length ? file_hashes.join(',') : undefined,
+            file_hashes: file_hashes.length
+                ? serializeFileHashes(file_hashes)
+                : undefined,
         });
         const parts: ContentPart[] = buildParts(
             outgoing,
@@ -704,6 +824,7 @@ export function useChat(
                 orMessages as Parameters<typeof trimOrMessagesImages>[0],
                 5
             );
+            if (orMessages.length === 0) return;
 
             const hasImageInput = modelInputMessages.some((m) =>
                 Array.isArray(m.content)
@@ -782,6 +903,42 @@ export function useChat(
                 if (Array.isArray(candidate)) {
                     orMessages = candidate;
                 }
+            }
+
+            // Check if a workflow is handling this request - skip AI call
+            if (consumeWorkflowHandlingFlag()) {
+                if (import.meta.dev) {
+                    console.log(
+                        '[useAi] Workflow is handling request, skipping AI call'
+                    );
+                }
+                // Seed UI with assistant placeholder so workflow state can render immediately
+                const workflowAssistant: ChatMessage = {
+                    role: 'assistant',
+                    content: '',
+                    id: assistantDbMsg.id,
+                    stream_id: newStreamId,
+                    reasoning_text: null,
+                };
+                recordRawMessage(workflowAssistant);
+                rawMessages.value.push(workflowAssistant);
+                const uiAssistant = ensureUiMessage(workflowAssistant);
+                uiAssistant.pending = true;
+                messages.value.push(uiAssistant);
+                loading.value = false;
+                abortController.value = null;
+                return;
+            }
+
+            // Also skip if messages array is empty (e.g., workflow returned empty)
+            if (orMessages.length === 0) {
+                if (import.meta.dev) {
+                    console.log(
+                        '[useAi] No messages to send, skipping AI call'
+                    );
+                }
+                loading.value = false;
+                return;
             }
 
             while (continueLoop && loopIteration < MAX_TOOL_ITERATIONS) {
@@ -907,8 +1064,10 @@ export function useChat(
                                     blob = dataUrlToBlob(ev.url);
                                 else if (/^https?:/.test(ev.url)) {
                                     try {
-                                        const r = await fetch(ev.url);
-                                        if (r.ok) blob = await r.blob();
+                                        // Use $fetch with responseType: 'blob'
+                                        blob = await $fetch<Blob>(ev.url, {
+                                            responseType: 'blob',
+                                        });
                                     } catch {
                                         /* intentionally empty */
                                     }
@@ -1208,6 +1367,45 @@ export function useChat(
                         /* intentionally empty */
                     }
                     tailAssistant.value = null;
+                } else if (
+                    tailAssistant.value?.id &&
+                    tailAssistant.value.text
+                ) {
+                    tailAssistant.value.pending = false;
+                    tailAssistant.value.error = 'stream_interrupted';
+                    const rawIdx = rawMessages.value.findIndex(
+                        (m) => m.id === tailAssistant.value!.id
+                    );
+                    if (rawIdx >= 0) {
+                        const existingRaw = rawMessages.value[rawIdx];
+                        if (existingRaw) {
+                            rawMessages.value[rawIdx] = {
+                                ...existingRaw,
+                                error: 'stream_interrupted',
+                            };
+                        }
+                    }
+                    try {
+                        const existing = (await db.messages.get(
+                            tailAssistant.value.id
+                        )) as StoredMessage | undefined;
+                        const baseData =
+                            existing?.data && typeof existing.data === 'object'
+                                ? (existing.data as Record<string, unknown>)
+                                : {};
+                        await db.messages.update(tailAssistant.value.id, {
+                            data: {
+                                ...baseData,
+                                content: tailAssistant.value.text,
+                                reasoning_text:
+                                    tailAssistant.value.reasoning_text ?? null,
+                            },
+                            error: 'stream_interrupted',
+                            updated_at: nowSec(),
+                        });
+                    } catch {
+                        /* intentionally empty */
+                    }
                 } else if (tailAssistant.value?.pending) {
                     tailAssistant.value.pending = false;
                 }
@@ -1315,18 +1513,6 @@ export function useChat(
                     dbCount: dbMessages.length,
                     memoryCount: rawMessages.value.length,
                 });
-                const toContent = (m: StoredMessage) => {
-                    if (
-                        m.data &&
-                        typeof m.data === 'object' &&
-                        'content' in m.data &&
-                        typeof (m.data as { content?: unknown }).content ===
-                            'string'
-                    ) {
-                        return (m.data as { content: string }).content;
-                    }
-                    return typeof m.content === 'string' ? m.content : '';
-                };
                 const toReasoning = (m: StoredMessage) => {
                     if (
                         m.data &&
@@ -1342,6 +1528,11 @@ export function useChat(
                         ? m.reasoning_text
                         : null;
                 };
+                const toContent = (m: StoredMessage) =>
+                    deriveMessageContent({
+                        content: m.content,
+                        data: m.data,
+                    });
                 rawMessages.value = dbMessages.map(
                     (m): ChatMessage => ({
                         role: m.role as ChatMessage['role'],
@@ -1351,6 +1542,7 @@ export function useChat(
                         file_hashes: m.file_hashes ?? undefined,
                         reasoning_text: toReasoning(m),
                         data: m.data || null,
+                        error: m.error ?? null,
                         index:
                             typeof m.index === 'number'
                                 ? m.index
@@ -1376,6 +1568,7 @@ export function useChat(
                         stream_id: m.stream_id ?? undefined,
                         file_hashes: m.file_hashes ?? undefined,
                         reasoning_text: toReasoning(m),
+                        error: m.error ?? null,
                         data: m.data
                             ? {
                                   ...m.data,
@@ -1451,6 +1644,606 @@ export function useChat(
         }
     }
 
+    async function continueMessage(messageId: string, modelOverride?: string) {
+        if (loading.value || !threadIdRef.value) return;
+        if (!apiKey.value) return;
+        try {
+            const target = (await db.messages.get(messageId)) as
+                | StoredMessage
+                | undefined;
+            if (
+                !target ||
+                target.thread_id !== threadIdRef.value ||
+                target.role !== 'assistant'
+            )
+                return;
+
+            const inMemoryText =
+                tailAssistant.value?.id === target.id
+                    ? tailAssistant.value.text
+                    : '';
+            const existingText =
+                inMemoryText ||
+                deriveMessageContent({
+                    content: (
+                        target as {
+                            content?: string | ContentPart[] | null;
+                        }
+                    ).content,
+                    data: target.data,
+                });
+            if (!existingText) return;
+
+            const DexieMod = (await import('dexie')).default;
+            const all = await db.messages
+                .where('[thread_id+index]')
+                .between(
+                    [threadIdRef.value, DexieMod.minKey],
+                    [threadIdRef.value, target.index]
+                )
+                .filter((m: Message) => !m.deleted)
+                .toArray();
+            all.sort((a, b) => (a.index || 0) - (b.index || 0));
+
+            const toReasoning = (m: StoredMessage) => {
+                if (
+                    m.data &&
+                    typeof m.data === 'object' &&
+                    'reasoning_text' in m.data &&
+                    typeof (m.data as { reasoning_text?: unknown })
+                        .reasoning_text === 'string'
+                ) {
+                    return (m.data as { reasoning_text: string })
+                        .reasoning_text;
+                }
+                return typeof m.reasoning_text === 'string'
+                    ? m.reasoning_text
+                    : null;
+            };
+            const toContent = (m: StoredMessage) => {
+                if (m.id === target.id) return existingText;
+                return deriveMessageContent({
+                    content: (
+                        m as {
+                            content?: string | ContentPart[] | null;
+                        }
+                    ).content,
+                    data: m.data,
+                });
+            };
+
+            const baseMessages: ChatMessage[] = all.map((m): ChatMessage => {
+                const storedMsg: StoredMessage = {
+                    ...m,
+                    data:
+                        m.data && typeof m.data === 'object'
+                            ? (m.data as StoredMessage['data'])
+                            : null,
+                };
+                const rawData = storedMsg.data;
+                const data: Record<string, unknown> | null = rawData
+                    ? (rawData as Record<string, unknown>)
+                    : null;
+                const name =
+                    data &&
+                    typeof (data as { tool_name?: unknown }).tool_name ===
+                        'string'
+                        ? ((data as { tool_name: string }).tool_name as string)
+                        : undefined;
+                const toolCallId =
+                    data &&
+                    typeof (data as { tool_call_id?: unknown }).tool_call_id ===
+                        'string'
+                        ? ((data as { tool_call_id: string })
+                              .tool_call_id as string)
+                        : undefined;
+                return {
+                    role: m.role as ChatMessage['role'],
+                    content: toContent(storedMsg),
+                    id: m.id,
+                    stream_id: m.stream_id ?? undefined,
+                    file_hashes: m.file_hashes ?? undefined,
+                    reasoning_text: toReasoning(storedMsg),
+                    data,
+                    name,
+                    tool_call_id: toolCallId,
+                    error: m.error ?? null,
+                    index:
+                        typeof m.index === 'number'
+                            ? m.index
+                            : typeof m.index === 'string'
+                            ? Number(m.index) || null
+                            : null,
+                    created_at:
+                        typeof m.created_at === 'number' ? m.created_at : null,
+                };
+            });
+
+            const CONTINUE_TAIL_CHARS = 1200;
+            const tailSnippet = existingText.slice(-CONTINUE_TAIL_CHARS);
+            const continuationText = tailSnippet
+                ? [
+                      'You are a text recovery engine. Your only task is to continue the text stream seamlessly.',
+                      '',
+                      'CONTEXT (the previous assistant output ends exactly here):',
+                      '<<CONTEXT>>',
+                      tailSnippet,
+                      '<<END CONTEXT>>',
+                      '',
+                      'INSTRUCTIONS:',
+                      '1. Continue immediately from the last character in the context.',
+                      '2. Assume the context ends at a valid character boundary.',
+                      '3. Do not extend or retype the final word unless it is clearly incomplete.',
+                      '4. Decide whether the next character should be punctuation, a space, or a letter, and start with that.',
+                      '5. If a sentence should end, emit the punctuation first, then continue.',
+                      '6. Do not repeat any of the context.',
+                      '7. Do not add any conversational filler or meta commentary.',
+                      '8. Start your response with ">>" and then the continuation.',
+                      'Examples:',
+                      'A) Context ends with: "the" -> Response: ">> dog walked..."',
+                      'B) Context ends with: "revolu" -> Response: ">>tion..."',
+                      'C) Context ends with: "data warehouses" -> Response: ">>. Organizations..."',
+                  ].join('\n')
+                : 'Please continue your previous response from where you left off.';
+            baseMessages.push({
+                role: 'user',
+                content: [
+                    {
+                        type: 'text',
+                        text: continuationText,
+                    },
+                ],
+                id: `continue-${newId()}`,
+            });
+
+            const threadSystemText = await getSystemPromptContent();
+            let finalSystem: string | null = null;
+            try {
+                const { settings } = useAiSettings();
+                const settingsValue = settings.value as
+                    | ChatSettings
+                    | undefined;
+                const master = settingsValue?.masterSystemPrompt ?? '';
+                finalSystem = composeSystemPrompt(
+                    master,
+                    threadSystemText || null
+                );
+            } catch {
+                finalSystem = (threadSystemText || '').trim() || null;
+            }
+            const continueSystemPrefix = [
+                'First and foremost, you are a text autocomplete engine.',
+                'You will be given the end of a text stream.',
+                'Output only the exact continuation with matching tone, voice, and formatting.',
+                'Never repeat the provided context.',
+                'Never add commentary, apologies, or meta statements.',
+                'Assume the context ends at a valid character boundary.',
+                'Do not extend or retype the final word unless it is clearly incomplete.',
+                'Decide whether the very next character should be punctuation, a space, or a letter.',
+                'If a sentence should end, start with the correct punctuation (e.g. ".", "?", "!") before continuing.',
+            ].join(' ');
+            if (finalSystem && finalSystem.trim()) {
+                finalSystem = `${continueSystemPrefix}\n\n${finalSystem.trim()}`;
+            } else {
+                finalSystem = continueSystemPrefix;
+            }
+            if (finalSystem && finalSystem.trim()) {
+                baseMessages.unshift({
+                    role: 'system',
+                    content: finalSystem,
+                    id: `system-${newId()}`,
+                });
+            }
+
+            const effectiveMessages = await hooks.applyFilters(
+                'ai.chat.messages:filter:input',
+                baseMessages
+            );
+
+            const sanitizedEffectiveMessages = (
+                Array.isArray(effectiveMessages) ? effectiveMessages : []
+            ).filter(shouldKeepAssistantMessage);
+
+            const isModelMessage = (
+                m: ChatMessage
+            ): m is ChatMessage & { role: 'user' | 'assistant' | 'system' } =>
+                m.role !== 'tool';
+
+            const modelInputMessages: ModelInputMessage[] =
+                sanitizedEffectiveMessages.filter(isModelMessage).map(
+                    (m): ModelInputMessage => ({
+                        role: m.role,
+                        content: m.content,
+                        id: m.id,
+                        file_hashes: m.file_hashes,
+                        name: m.name,
+                        tool_call_id: m.tool_call_id,
+                    })
+                );
+
+            const { buildOpenRouterMessages } = await import(
+                '~/core/auth/openrouter-build'
+            );
+            let orMessages: OpenRouterMessage[] = await buildOpenRouterMessages(
+                modelInputMessages,
+                {
+                    maxImageInputs: 16,
+                    imageInclusionPolicy: 'all',
+                    debug: false,
+                }
+            );
+            trimOrMessagesImages(
+                orMessages as Parameters<typeof trimOrMessagesImages>[0],
+                5
+            );
+
+            const filteredMessages = await hooks.applyFilters(
+                'ai.chat.messages:filter:before_send',
+                { messages: orMessages }
+            );
+
+            if (
+                typeof filteredMessages === 'object' &&
+                'messages' in filteredMessages
+            ) {
+                const candidate = (
+                    filteredMessages as {
+                        messages?: OpenRouterMessage[];
+                    }
+                ).messages;
+                if (Array.isArray(candidate)) {
+                    orMessages = candidate;
+                }
+            }
+
+            const hasImageInput = modelInputMessages.some((m) =>
+                Array.isArray(m.content)
+                    ? m.content.some((p) => {
+                          const part = p as {
+                              type?: string;
+                              mediaType?: string;
+                          };
+                          if (
+                              part.type === 'image' ||
+                              part.type === 'image_url'
+                          )
+                              return true;
+                          if (part.mediaType)
+                              return /image\//.test(part.mediaType);
+                          return false;
+                      })
+                    : false
+            );
+            const modelId =
+                (await hooks.applyFilters(
+                    'ai.chat.model:filter:select',
+                    modelOverride || DEFAULT_AI_MODEL
+                )) ||
+                modelOverride ||
+                DEFAULT_AI_MODEL;
+            const modelImageHint = /image|vision|flash/i.test(modelId);
+            const modalities =
+                hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
+
+            streamAcc.reset();
+            const newStreamId = newId();
+            streamId.value = newStreamId;
+            loading.value = true;
+            aborted.value = false;
+            abortController.value = new AbortController();
+
+            const existingReasoning = toReasoning(target);
+            const existingHashes = target.file_hashes
+                ? parseHashes(target.file_hashes)
+                : [];
+            let existingUiIndex = messages.value.findIndex(
+                (m) => m.id === target.id
+            );
+            let existingUi: UiChatMessage | null = null;
+            if (existingUiIndex >= 0) {
+                existingUi = messages.value[existingUiIndex] ?? null;
+                messages.value.splice(existingUiIndex, 1);
+                messages.value = [...messages.value];
+            }
+
+            const current =
+                (tailAssistant.value && tailAssistant.value.id === target.id
+                    ? tailAssistant.value
+                    : existingUi) ||
+                ensureUiMessage({
+                    role: 'assistant',
+                    content: existingText,
+                    id: target.id,
+                    stream_id: target.stream_id ?? undefined,
+                    reasoning_text: existingReasoning,
+                    file_hashes: target.file_hashes ?? undefined,
+                    error: null,
+                });
+            current.text = existingText;
+            current.reasoning_text = existingReasoning;
+            current.pending = true;
+            current.error = null;
+            if (existingHashes.length) current.file_hashes = existingHashes;
+            tailAssistant.value = current;
+
+            if (existingText) {
+                streamAcc.append(existingText, { kind: 'text' });
+            }
+            if (existingReasoning) {
+                streamAcc.append(existingReasoning, { kind: 'reasoning' });
+            }
+
+            const assistantFileHashes = existingHashes.slice();
+            const persistAssistant = makeAssistantPersister(
+                target,
+                assistantFileHashes
+            );
+
+            const stream = openRouterStream({
+                apiKey: apiKey.value,
+                model: modelId,
+                orMessages: orMessages as Parameters<
+                    typeof openRouterStream
+                >[0]['orMessages'],
+                modalities,
+                signal: abortController.value.signal,
+            });
+
+            let chunkIndex = 0;
+            let stripPrefixPending = true;
+            let prefixBuffer = '';
+            const CONTINUATION_PREFIX = '>>';
+            let boundarySpacingApplied = false;
+            const needsBoundarySpace = (prev: string, next: string) => {
+                if (!prev || !next) return false;
+                if (/\s$/.test(prev) || /^\s/.test(next)) return false;
+                const last = prev.slice(-1);
+                const first = next[0];
+                const noSpaceAfter = new Set([
+                    '(',
+                    '[',
+                    '{',
+                    '<',
+                    '«',
+                    '“',
+                    '‘',
+                    '"',
+                    "'",
+                    '`',
+                    '/',
+                    '\\',
+                    '-',
+                    '–',
+                    '—',
+                ]);
+                const noSpaceBefore = new Set([
+                    ',',
+                    '.',
+                    '…',
+                    ';',
+                    ':',
+                    '!',
+                    '?',
+                    '%',
+                    ')',
+                    ']',
+                    '}',
+                    '>',
+                    '»',
+                    '”',
+                    '’',
+                    '"',
+                    "'",
+                    '`',
+                ]);
+                if (noSpaceAfter.has(last)) return false;
+                if (!first || noSpaceBefore.has(first)) return false;
+                const isWordChar = (c: string) => /[\p{L}\p{N}]/u.test(c);
+                const isClosePunct = /[)\]}>"'»”’]/.test(last);
+                const isSentencePunct = /[.!?;:…]/.test(last);
+                if (isWordChar(last) && isWordChar(first)) return true;
+                if ((isSentencePunct || isClosePunct) && isWordChar(first))
+                    return true;
+                return false;
+            };
+            const applyBoundarySpacing = (prev: string, next: string) => {
+                if (boundarySpacingApplied) return next;
+                boundarySpacingApplied = true;
+                return needsBoundarySpace(prev, next) ? ` ${next}` : next;
+            };
+            const consumeContinuationDelta = (delta: string) => {
+                if (!stripPrefixPending) return delta;
+                prefixBuffer += delta;
+                if (prefixBuffer.length < CONTINUATION_PREFIX.length) return '';
+                if (prefixBuffer.startsWith(CONTINUATION_PREFIX)) {
+                    prefixBuffer = prefixBuffer.slice(
+                        CONTINUATION_PREFIX.length
+                    );
+                }
+                stripPrefixPending = false;
+                const out = prefixBuffer;
+                prefixBuffer = '';
+                return out;
+            };
+            const WRITE_INTERVAL_MS = 500;
+            let lastPersistAt = 0;
+
+            try {
+                for await (const ev of stream) {
+                    if (ev.type === 'reasoning') {
+                        if (current.reasoning_text === null)
+                            current.reasoning_text = ev.text;
+                        else current.reasoning_text += ev.text;
+                        streamAcc.append(ev.text, { kind: 'reasoning' });
+                    } else if (ev.type === 'text') {
+                        if (current.pending) current.pending = false;
+                        const rawDelta = consumeContinuationDelta(ev.text);
+                        if (!rawDelta) continue;
+                        const delta = applyBoundarySpacing(
+                            current.text,
+                            rawDelta
+                        );
+                        if (!delta) continue;
+                        streamAcc.append(delta, { kind: 'text' });
+                        current.text += delta;
+                        chunkIndex++;
+                    } else if (ev.type === 'image') {
+                        if (current.pending) current.pending = false;
+                        const placeholder = `![generated image](${ev.url})`;
+                        const already = current.text.includes(placeholder);
+                        if (!already) {
+                            current.text +=
+                                (current.text ? '\n\n' : '') + placeholder;
+                        }
+                        if (assistantFileHashes.length < 6) {
+                            let blob: Blob | null = null;
+                            if (ev.url.startsWith('data:image/'))
+                                blob = dataUrlToBlob(ev.url);
+                            else if (/^https?:/.test(ev.url)) {
+                                try {
+                                    blob = await $fetch<Blob>(ev.url, {
+                                        responseType: 'blob',
+                                    });
+                                } catch {
+                                    /* intentionally empty */
+                                }
+                            }
+                            if (blob) {
+                                try {
+                                    const meta = await createOrRefFile(
+                                        blob,
+                                        'gen-image'
+                                    );
+                                    assistantFileHashes.push(meta.hash);
+                                    const serialized = await persistAssistant({
+                                        reasoning:
+                                            current.reasoning_text ?? null,
+                                    });
+                                    current.file_hashes =
+                                        serialized?.split(',') ?? [];
+                                } catch {
+                                    /* intentionally empty */
+                                }
+                            }
+                        }
+                    }
+
+                    const now = Date.now();
+                    const shouldPersist =
+                        now - lastPersistAt >= WRITE_INTERVAL_MS ||
+                        chunkIndex % 50 === 0;
+                    if (shouldPersist) {
+                        await persistAssistant({
+                            content: current.text,
+                            reasoning: current.reasoning_text ?? null,
+                            toolCalls: current.toolCalls ?? undefined,
+                        });
+                        if (assistantFileHashes.length) {
+                            current.file_hashes = assistantFileHashes;
+                        }
+                        lastPersistAt = now;
+                    }
+                }
+
+                if (current.pending) current.pending = false;
+                await persistAssistant({
+                    content: current.text,
+                    reasoning: current.reasoning_text ?? null,
+                    toolCalls: current.toolCalls ?? null,
+                });
+                await db.messages.update(messageId, {
+                    error: null,
+                    updated_at: nowSec(),
+                });
+                current.error = null;
+                const rawIdx = rawMessages.value.findIndex(
+                    (m) => m.id === messageId
+                );
+                if (rawIdx >= 0) {
+                    const existingRaw = rawMessages.value[rawIdx];
+                    if (existingRaw) {
+                        rawMessages.value[rawIdx] = {
+                            ...existingRaw,
+                            role: existingRaw.role,
+                            content: current.text,
+                            reasoning_text: current.reasoning_text ?? null,
+                            error: null,
+                        };
+                    }
+                }
+                streamAcc.finalize();
+            } catch (streamError) {
+                const e =
+                    streamError instanceof Error
+                        ? streamError
+                        : new Error(String(streamError));
+                streamAcc.finalize({ error: e });
+                if (tailAssistant.value.text) {
+                    await persistAssistant({
+                        content: tailAssistant.value.text,
+                        reasoning: tailAssistant.value.reasoning_text ?? null,
+                        toolCalls: tailAssistant.value.toolCalls ?? null,
+                    });
+                    tailAssistant.value.error = 'stream_interrupted';
+                }
+                const rawIdx = rawMessages.value.findIndex(
+                    (m) => m.id === messageId
+                );
+                if (rawIdx >= 0) {
+                    const existingRaw = rawMessages.value[rawIdx];
+                    if (existingRaw) {
+                        rawMessages.value[rawIdx] = {
+                            ...existingRaw,
+                            role: existingRaw.role,
+                            content:
+                                tailAssistant.value.text || existingRaw.content,
+                            reasoning_text:
+                                tailAssistant.value.reasoning_text ??
+                                existingRaw.reasoning_text,
+                            error: 'stream_interrupted',
+                        };
+                    }
+                }
+                await db.messages.update(messageId, {
+                    error: 'stream_interrupted',
+                    updated_at: nowSec(),
+                });
+                reportError(e, {
+                    code: 'ERR_STREAM_FAILURE',
+                    tags: {
+                        domain: 'chat',
+                        threadId: threadIdRef.value || '',
+                        streamId: streamId.value || '',
+                        modelId,
+                        stage: 'continue',
+                    },
+                    toast: true,
+                });
+            } finally {
+                loading.value = false;
+                if (tailAssistant.value.pending) {
+                    tailAssistant.value.pending = false;
+                }
+                abortController.value = null;
+                setTimeout(() => {
+                    if (!loading.value && streamState.finalized) resetStream();
+                }, 0);
+            }
+        } catch (e) {
+            reportError(
+                e instanceof Error
+                    ? e
+                    : err('ERR_INTERNAL', '[continueMessage] failed', {
+                          tags: { domain: 'chat', op: 'continueMessage' },
+                      }),
+                {
+                    code: 'ERR_INTERNAL',
+                    tags: { domain: 'chat', op: 'continueMessage' },
+                }
+            );
+        }
+    }
+
     function clear() {
         // CRITICAL: Abort any active stream before clearing to prevent memory leaks
         if (abortController.value) {
@@ -1467,6 +2260,17 @@ export function useChat(
             }
             streamAcc.finalize({ aborted: true });
             abortController.value = null;
+        }
+
+        // Clean up any registered hooks to avoid leaking listeners across threads
+        if (cleanupFns.length) {
+            for (const dispose of cleanupFns.splice(0, cleanupFns.length)) {
+                try {
+                    dispose();
+                } catch {
+                    /* intentionally empty */
+                }
+            }
         }
 
         rawMessages.value = [];
@@ -1512,6 +2316,7 @@ export function useChat(
         sendMessage,
         send: sendMessage,
         retryMessage,
+        continueMessage,
         loading,
         threadId: threadIdRef,
         streamId,

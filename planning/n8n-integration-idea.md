@@ -1,0 +1,6 @@
+High-Level Implementation Plan
+Plugin Setup (app/plugins/n8n.client.ts): Create a Nuxt plugin that stores the n8n API Key and provides a method to fetch your active n8n workflows (via GET /api/v1/workflows).
+Suggestion Bridge: Modify app/plugins/WorkflowSlashCommands/suggestions.ts to call both the local DB and the new n8n plugin. You could display them in the same popover with a small n8n icon or prefix.
+n8n TipTap Node: Add a new n8n node type in slashCommandExtension.ts. It would look just like the current workflow tag but serialize as an n8n trigger.
+Execution Handler: In workflow-slash-commands.client.ts, update the message interceptor so that if an n8n node is detected, it hits an n8n Webhook URL (with the user's prompt as the payload) instead of instantiating the local OpenRouterExecutionAdapter.
+Simplified UI: n8n workflows don't usually stream tokens, so you'd just use a "Waiting for n8n..." version of the WorkflowExecutionStatus.vue component to show a spinner and then render the final JSON/Markdown result.
