@@ -23,6 +23,11 @@ export const chatOverrides = {
         class: 'flex items-center justify-center bg-info/20 text-[var(--md-on-surface)]/90 hover:bg-[var(--md-info-hover)]/30 active:bg-[var(--md-info)]/80',
     },
     /* --- Chat Input --- */
+    'button#chat.send': {
+        variant: 'solid',
+        color: 'primary',
+        class: 'theme-btn flex items-center justify-center bg-primary hover:bg-[var(--md-primary-hover)]! active:bg-[var(--md-primary-active)]! disabled:bg-primary! disabled:opacity-40! aria-disabled:bg-primary! aria-disabled:opacity-40! text-white dark:text-black',
+    },
     'div#chat.editor': {
         class: 'font-[IBM_Plex_Sans] text-[16px]',
     },

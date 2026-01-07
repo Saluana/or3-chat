@@ -336,7 +336,13 @@ import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { computed } from 'vue';
 import { isMobile, state } from '~/state/global';
-import { useToast, useUserApiKey, useOpenRouterAuth, useModelStore, useAiSettings } from '#imports';
+import {
+    useToast,
+    useUserApiKey,
+    useOpenRouterAuth,
+    useModelStore,
+    useAiSettings,
+} from '#imports';
 import {
     useComposerActions,
     type ComposerActionEntry,
@@ -368,7 +374,10 @@ const webSearchEnabled = ref<boolean>(false);
 const LAST_MODEL_KEY = 'last_selected_model';
 
 // Use VueUse's useLocalStorage for persisted model selection
-const persistedModel = useLocalStorage<string>(LAST_MODEL_KEY, 'openai/gpt-oss-120b');
+const persistedModel = useLocalStorage<string>(
+    LAST_MODEL_KEY,
+    'openai/gpt-oss-120b'
+);
 
 const suppressPersist = ref(false);
 
@@ -384,9 +393,7 @@ onMounted(async () => {
         if (!props.threadId) {
             const set = (aiSettings as any)?.value;
             const fixed =
-                set?.defaultModelMode === 'fixed'
-                    ? set?.fixedModelId
-                    : null;
+                set?.defaultModelMode === 'fixed' ? set?.fixedModelId : null;
             if (fixed) {
                 suppressPersist.value = true; // don't clobber last_selected_model on initial display
                 selectedModel.value = fixed;
@@ -583,6 +590,7 @@ const sendButtonProps = computed(() => {
         square: true,
         size: 'sm' as const,
         color: 'primary' as const,
+        variant: 'solid' as const,
         class: 'theme-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center',
         ...(overrides.value as any),
     };
@@ -860,7 +868,11 @@ const handlePaste = async (event: ClipboardEvent) => {
     }
 };
 
-const { files: selectedFiles, open, reset: resetFileDialog } = useFileDialog({
+const {
+    files: selectedFiles,
+    open,
+    reset: resetFileDialog,
+} = useFileDialog({
     accept: 'image/*,application/pdf',
     multiple: true,
 });
@@ -949,15 +961,24 @@ const { isOverDropZone } = useDropZone(dropZoneRef, {
     onDrop: onDropZoneDrop,
     dataTypes: (types) => {
         // Accept images and PDFs
-        return types.some(t => t.startsWith('image/') || t === 'application/pdf' || t === 'Files');
-    }
+        return types.some(
+            (t) =>
+                t.startsWith('image/') ||
+                t === 'application/pdf' ||
+                t === 'Files'
+        );
+    },
 });
 
 // Use isOverDropZone directly for UI state instead of isDragging for drop zone
 // Keep isDragging for backward compatibility with other parts
-watch(isOverDropZone, (v) => {
-    isDragging.value = v;
-}, { immediate: true });
+watch(
+    isOverDropZone,
+    (v) => {
+        isDragging.value = v;
+    },
+    { immediate: true }
+);
 
 // Legacy handlers kept as no-ops since useDropZone handles everything
 const handleDrop = (event: DragEvent) => {

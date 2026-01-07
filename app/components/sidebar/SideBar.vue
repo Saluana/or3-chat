@@ -67,6 +67,7 @@
             <div class="space-y-4">
                 <UInput
                     v-model="renameTitle"
+                    class="w-full"
                     :placeholder="
                         isRenamingDoc ? 'Document title' : 'Thread title'
                     "
@@ -699,7 +700,11 @@ let subProjects: { unsubscribe: () => void } | null = null;
 
 // Calculate list height using specific element IDs for accuracy
 import { inject, type Ref } from 'vue';
-import { useResizeObserver, useEventListener, useDebounceFn } from '@vueuse/core';
+import {
+    useResizeObserver,
+    useEventListener,
+    useDebounceFn,
+} from '@vueuse/core';
 
 // Inject header height at setup level
 const topHeaderHeightInjected = inject<Ref<number>>('topHeaderHeight');
@@ -723,7 +728,9 @@ const recomputeListHeight = useDebounceFn(() => {
 }, 50);
 
 // Ref for observed header element
-const sideNavHeaderElementRef = computed(() => sideNavContentRef.value?.headerElement ?? null);
+const sideNavHeaderElementRef = computed(
+    () => sideNavContentRef.value?.headerElement ?? null
+);
 
 // Setup resize observer on sidebar header element (VueUse handles cleanup)
 useResizeObserver(sideNavHeaderElementRef, () => {
@@ -737,7 +744,6 @@ useEventListener(window, 'resize', recomputeListHeight);
 if (topHeaderHeightInjected) {
     watch(topHeaderHeightInjected, recomputeListHeight);
 }
-
 
 onMounted(async () => {
     await nextTick();
