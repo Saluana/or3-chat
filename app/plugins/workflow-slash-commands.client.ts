@@ -15,11 +15,11 @@ import type {
     ToolCallEventWithNode,
     HITLRequest,
     HITLResponse,
-} from '@or3/workflow-core';
-import { modelRegistry } from '@or3/workflow-core';
+} from 'or3-workflow-core';
+import { modelRegistry } from 'or3-workflow-core';
 import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type { WorkflowExecutionController } from './WorkflowSlashCommands/executeWorkflow';
-import type { Attachment } from '@or3/workflow-core';
+import type { Attachment } from 'or3-workflow-core';
 import { createWorkflowStreamAccumulator } from '~/composables/chat/useWorkflowStreamAccumulator';
 import { nowSec } from '~/db/util';
 import { reportError } from '~/utils/errors';
@@ -138,7 +138,7 @@ function extractImageUrl(part: unknown): string | null {
  * by flattening multimodal content parts into a single string.
  */
 function toChatHistoryMessage(
-    msg: import('@or3/workflow-core').ChatMessage
+    msg: import('or3-workflow-core').ChatMessage
 ): ChatHistoryMessage {
     let content = '';
     if (typeof msg.content === 'string') {
@@ -938,7 +938,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         conversationHistory?: Awaited<
             ReturnType<ExecutionModule['getConversationHistory']>
         >;
-        resumeFrom?: import('@or3/workflow-core').ResumeFromOptions;
+        resumeFrom?: import('or3-workflow-core').ResumeFromOptions;
     }) {
         const {
             workflowPost,
@@ -1502,7 +1502,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                         ? resumeNodeOutputs[data.lastActiveNodeId]
                         : undefined),
                 finalNodeId: data.finalNodeId || undefined,
-            } satisfies import('@or3/workflow-core').ResumeFromOptions;
+            } satisfies import('or3-workflow-core').ResumeFromOptions;
 
             const conversationHistory = await execMod.getConversationHistory(
                 assistantContext.threadId || ''

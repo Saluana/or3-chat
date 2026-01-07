@@ -10,7 +10,7 @@ import {
     type ModelTokenizer,
     type ModelInstructType,
     type ModelPerRequestLimits,
-} from '@or3/workflow-core';
+} from 'or3-workflow-core';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 

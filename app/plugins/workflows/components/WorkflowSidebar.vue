@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import type { WorkflowEditor } from '@or3/workflow-core';
-import { NodePalette, NodeInspector } from '@or3/workflow-vue';
+import type { WorkflowEditor } from 'or3-workflow-core';
+import { NodePalette, NodeInspector } from 'or3-workflow-vue';
 import type { TabsItem } from '#ui/types';
 import {
     useSidebarMultiPane,

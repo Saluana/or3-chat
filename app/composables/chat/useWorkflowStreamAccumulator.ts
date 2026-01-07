@@ -10,8 +10,8 @@ import type {
     UiWorkflowState,
 } from '~/utils/chat/workflow-types';
 import { deriveStartNodeId } from '~/utils/chat/workflow-types';
-import type { ToolCallEventWithNode } from '@or3/workflow-core';
-import type { Attachment } from '@or3/workflow-core';
+import type { ToolCallEventWithNode } from 'or3-workflow-core';
+import type { Attachment } from 'or3-workflow-core';
 
 const SUBFLOW_SCOPE_PREFIX = 'sf:';
 const SUBFLOW_SCOPE_SEPARATOR = '|';

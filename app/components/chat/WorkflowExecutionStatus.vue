@@ -417,7 +417,7 @@ import {
     MERGE_BRANCH_ID,
     MERGE_BRANCH_LABEL,
 } from '~/utils/chat/workflow-types';
-import { modelRegistry } from '@or3/workflow-core';
+import { modelRegistry } from 'or3-workflow-core';
 import { useIcon } from '~/composables/useIcon';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';

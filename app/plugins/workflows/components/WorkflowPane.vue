@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
 import { useElementSize } from '@vueuse/core';
-import { WorkflowCanvas, ValidationOverlay } from '@or3/workflow-vue';
-import '@or3/workflow-vue/style.css';
+import { WorkflowCanvas, ValidationOverlay } from 'or3-workflow-vue';
+import 'or3-workflow-vue/style.css';
 import { useIcon } from '#imports';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';

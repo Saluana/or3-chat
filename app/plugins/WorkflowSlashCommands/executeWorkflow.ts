@@ -10,7 +10,7 @@ import {
     createSubflowDefinition,
     isSubflowNodeData,
     modelRegistry,
-} from '@or3/workflow-core';
+} from 'or3-workflow-core';
 import type {
     WorkflowData,
     ExecutionCallbacks,
@@ -20,7 +20,7 @@ import type {
     HITLRequest,
     HITLResponse,
     Attachment,
-} from '@or3/workflow-core';
+} from 'or3-workflow-core';
 import { deriveMessageContent } from '~/utils/chat/messages';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { listWorkflowsWithMeta } from './useWorkflowSlashCommands';
@@ -654,7 +654,7 @@ export function executeWorkflow(
 
         // Dynamically import to avoid SSR issues
         const { OpenRouterExecutionAdapter } = await import(
-            '@or3/workflow-core'
+            'or3-workflow-core'
         );
         const { OpenRouter } = await import('@openrouter/sdk');
 

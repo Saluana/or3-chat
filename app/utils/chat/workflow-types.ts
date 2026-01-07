@@ -8,7 +8,7 @@
  * @module workflow-types
  */
 
-import type { Attachment } from '@or3/workflow-core';
+import type { Attachment } from 'or3-workflow-core';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Status Types

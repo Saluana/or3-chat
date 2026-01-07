@@ -2,7 +2,7 @@ import {
     WorkflowEditor,
     StarterKit,
     type WorkflowData,
-} from '@or3/workflow-core';
+} from 'or3-workflow-core';
 
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 

@@ -13,7 +13,7 @@ import '@vue-flow/core/dist/style.css';
 import '@vue-flow/core/dist/theme-default.css';
 
 // Workflow component styles
-import '@or3/workflow-vue/style.css';
+import 'or3-workflow-vue/style.css';
 
 // Theme bridge - maps or3-chat theme variables to workflow-vue variables
 import './workflows/styles/workflow-theme-bridge.css';

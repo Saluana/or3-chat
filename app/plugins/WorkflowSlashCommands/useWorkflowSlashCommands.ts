@@ -4,7 +4,7 @@
  * Provides functions to search and retrieve workflows for the slash command feature.
  */
 
-import type { WorkflowData } from '@or3/workflow-core';
+import type { WorkflowData } from 'or3-workflow-core';
 
 // ─────────────────────────────────────────────────────────────
 // Types

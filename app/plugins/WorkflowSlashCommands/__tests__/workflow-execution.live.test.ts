@@ -1,6 +1,6 @@
 /* @vitest-environment node */
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
-import type { WorkflowData } from '@or3/workflow-core';
+import type { WorkflowData } from 'or3-workflow-core';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 
 vi.mock('../useWorkflowSlashCommands', () => ({

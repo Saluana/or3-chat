@@ -178,7 +178,7 @@ import {
     type WorkflowData,
     type ExecutionCallbacks,
     validateWorkflow,
-} from '@or3/workflow-core';
+} from 'or3-workflow-core';
 import { OpenRouter } from '@openrouter/sdk';
 import { db } from '~/db';
 import { nowSec, newId } from '~/db/util';
