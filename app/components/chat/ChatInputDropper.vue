@@ -12,6 +12,7 @@
         ]"
         :data-theme-target="mainContainerProps?.['data-theme-target']"
         :data-theme-matches="mainContainerProps?.['data-theme-matches']"
+        @click="handleContainerClick"
     >
         <div class="chat-input-inner-container flex flex-col gap-3.5 m-3.5">
             <!-- Main Input Area -->
@@ -991,6 +992,41 @@ const onDragOver = (event: DragEvent) => {
 
 const onDragLeave = (event: DragEvent) => {
     // useDropZone handles this
+};
+
+/**
+ * Focus the editor when clicking on non-interactive areas of the container.
+ * This makes the entire chat input container feel clickable.
+ */
+const handleContainerClick = (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (!target) return;
+
+    // List of interactive elements that should NOT trigger focus
+    const interactiveTags = ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT', 'A', 'LABEL'];
+    const interactiveRoles = ['button', 'link', 'menuitem', 'option', 'tab', 'textbox', 'combobox', 'listbox'];
+
+    // Check if the clicked element or any of its ancestors is interactive
+    let el: HTMLElement | null = target;
+    while (el && el !== dropZoneRef.value) {
+        // Check tag name
+        if (interactiveTags.includes(el.tagName)) return;
+        // Check role attribute
+        const role = el.getAttribute('role');
+        if (role && interactiveRoles.includes(role)) return;
+        // Check if it's a TipTap/ProseMirror editor content (already handles its own focus)
+        if (el.classList.contains('ProseMirror') || el.classList.contains('tiptap')) return;
+        // Check contenteditable
+        if (el.isContentEditable) return;
+        // Check for click handlers via data attributes (some UI libraries use these)
+        if (el.hasAttribute('data-radix-collection-item')) return;
+        el = el.parentElement;
+    }
+
+    // Focus the editor
+    if (editor.value) {
+        editor.value.commands.focus('end');
+    }
 };
 
 const removeImage = (index: number) => {

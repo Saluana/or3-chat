@@ -14,21 +14,12 @@
     >
         <div v-show="!collapsed">
             <slot name="sidebar-header">
-                <div id="header-content" class="flex items-center space-x-2">
-                    <div
-                        class="text-[14px] pb-1 flex items-end justify-center tracking-wide"
-                    >
-                        <div
-                            class="text-[20px] flex items-end font-bold font-ps2 header-title retro-header-title"
-                        >
-                            <div>Or</div>
-                            <div class="text-[17px]">3</div>
-                        </div>
-                        <span
-                            class="text-[18px] pb-[1.5px] -ml-0.5 font-vt323 font-bold text-primary"
-                            >.chat</span
-                        >
-                    </div>
+                <div id="header-content" class="flex items-center px-[6px]">
+                    <img
+                        src="/logos/logo-svg.svg"
+                        alt="Or3.chat"
+                        class="h-7 w-auto"
+                    />
                 </div>
             </slot>
         </div>
@@ -48,8 +39,6 @@
 
 <script setup lang="ts">
 import {
-    defineProps,
-    defineEmits,
     computed,
     type StyleValue,
     type ComputedRef,

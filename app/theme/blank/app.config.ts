@@ -50,7 +50,7 @@ export default {
                         'flex items-center! hover:bg-[var(--md-primary)]/5 active:bg-[var(--md-primary)]/10 justify-start!',
                     ghost: 'font-base',
                     outline:
-                        'border-[color:var(--md-border-color)] border-[length:var(--md-border-width)] ring-0! hover:shadow hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
+                        'border-[color:var(--md-border-color)] border-[length:var(--md-border-width)] ring-0! hover:shadow hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! dark:text-[var(--md-on-surface)]',
                 },
                 color: {
                     primary: 'text-[color:var(--md-on-primary)]',

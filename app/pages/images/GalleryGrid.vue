@@ -328,7 +328,7 @@ defineExpose({ ensureUrl });
                     size="sm"
                     color="primary"
                     square
-                    class="absolute! z-11 top-2 left-2 flex items-center justify-center"
+                    class="absolute! z-11 top-2 left-2 flex items-center justify-center backdrop-blur"
                     :aria-pressed="isSelected(m.hash)"
                     role="checkbox"
                     :aria-checked="isSelected(m.hash)"

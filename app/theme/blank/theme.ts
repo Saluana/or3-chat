@@ -30,7 +30,7 @@ export default defineTheme({
         primaryTint: '#2A8FD6',
         primaryShade: '#064F89',
         onPrimary: '#ffffff',
-        primaryContainer: '#2C638B',
+        primaryContainer: '#1d1f20ff',
         onPrimaryContainer: '#002020',
         primaryBorder: '#0A5D99',
         primaryHover: '#0A7FD1',

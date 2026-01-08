@@ -1,3 +1,5 @@
+const galleryButtons = 'bg-white/10! backdrop-blur-md! hover:bg-white/20! active:bg-white/30! flex items-center justify-center';
+
 export const dashboardOverrides = {
     'button.image-viewer': {
         color: 'on-surface' as const,
@@ -8,6 +10,12 @@ export const dashboardOverrides = {
         ui: {
             base: 'ml-0! border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]!',
         },
+    },
+    'button#images.gallery.download': {
+        class: galleryButtons,
+    },
+    'button#images.gallery.copy': {
+        class: galleryButtons,
     },
 };
 export const dashboardStyles = {
