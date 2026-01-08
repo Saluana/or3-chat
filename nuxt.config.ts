@@ -3,6 +3,15 @@ import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
 import { resolve } from 'path';
 
 export default defineNuxtConfig({
+    app: {
+        head: {
+            link: [
+                { rel: 'icon', type: 'image/svg+xml', href: '/logos/icon-logo-svg.svg' },
+                { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico', sizes: '32x32' },
+                { rel: 'apple-touch-icon', sizes: '192x192', href: '/logos/logo-192.png' },
+            ],
+        },
+    },
     alias: {
         types: resolve(__dirname, './types'),
         '~/types': resolve(__dirname, './types'),
