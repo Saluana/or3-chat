@@ -104,11 +104,12 @@
                                 "
                                 :model-value="
                                     (overrides.colors?.enabled ?? false) &&
-                                    String((overrides.colors as any)?.[color.key] || '').startsWith('#')
-                                        ? (overrides.colors as any)[color.key]
+                                    String(overrides.colors?.[color.key as ColorKey] || '').startsWith('#')
+                                        ? overrides.colors[color.key as ColorKey]
                                         : undefined
                                 "
-                                @update:model-value="(c: string | undefined) => { if (c) set({ colors: { [color.key]: c } } as any); }"
+                                @update:model-value="(c: string | undefined) => { if (c) set({ colors: { [color.key as ColorKey]: c } }); }"
+                                :aria-label="`${color.label} color picker`"
                                 class="scale-60 origin-left shrink-0"
                             />
                             <!-- Hex input + copy button row (inline both mobile & desktop) -->
@@ -120,8 +121,8 @@
                                     class="flex-1 sm:w-24 h-8"
                                     type="text"
                                     :placeholder="'#RRGGBB'"
-                                    :model-value="(localHex as any)[color.key]"
-                                    @update:model-value="(v: any) => { (localHex as any)[color.key] = String(v ?? ''); onHexInput(color.key as any); }"
+                                    :model-value="localHex[color.key as ColorKey]"
+                                    @update:model-value="(v: any) => { localHex[color.key as ColorKey] = String(v ?? ''); onHexInput(color.key as ColorKey); }"
                                     :disabled="
                                         !(overrides.colors?.enabled ?? false)
                                     "
@@ -132,11 +133,11 @@
                                     class="shrink-0"
                                     :disabled="
                                         !(overrides.colors?.enabled ?? false) ||
-                                        !String((overrides.colors as any)?.[color.key] || '').startsWith('#')
+                                        !String(overrides.colors?.[color.key as ColorKey] || '').startsWith('#')
                                     "
                                     :aria-label="`Copy ${color.label}`"
                                     :title="`Copy ${color.label}`"
-                                    @click="copyColor(color.key as any)"
+                                    @click="copyColor(color.key as ColorKey)"
                                 />
                             </div>
                         </div>
@@ -378,7 +379,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch, onBeforeUnmount, ref, computed } from 'vue';
+import { reactive, watch, onBeforeUnmount, onMounted, ref, computed } from 'vue';
 import { createOrRefFile } from '~/db/files';
 import { getFileBlob } from '~/db/files';
 // Import new user overrides composable
@@ -388,6 +389,24 @@ import type { Ref } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { isBrowser } from '~/utils/env';
 import { useDebounceFn, useClipboard } from '@vueuse/core';
+
+// Define color key types for type safety
+type ColorKey = 
+  | 'primary' | 'onPrimary' | 'primaryContainer' | 'onPrimaryContainer'
+  | 'secondary' | 'onSecondary' | 'secondaryContainer' | 'onSecondaryContainer'
+  | 'tertiary' | 'onTertiary' | 'tertiaryContainer' | 'onTertiaryContainer'
+  | 'error' | 'onError' | 'errorContainer' | 'onErrorContainer'
+  | 'surface' | 'onSurface' | 'surfaceVariant' | 'onSurfaceVariant'
+  | 'inverseSurface' | 'inverseOnSurface' | 'outline' | 'outlineVariant'
+  | 'success' | 'warning';
+
+// Allowed image types for security
+const ALLOWED_IMAGE_TYPES = [
+    'image/png',
+    'image/jpeg',
+    'image/webp',
+    'image/gif',
+] as const;
 
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides as Ref<UserThemeOverrides>; // active mode overrides
@@ -685,7 +704,8 @@ const local = reactive({
 });
 
 // Local hex color text boxes (so user can type partial values without reverting)
-const localHex = reactive({
+type LocalHexKeys = ColorKey | 'contentBg1Color' | 'contentBg2Color' | 'sidebarBgColor';
+const localHex: Record<LocalHexKeys, string> = reactive({
     contentBg1Color: String(
         overrides.value.backgrounds?.content?.base?.color || ''
     ).startsWith('#')
@@ -942,14 +962,19 @@ function applyPreset(
 
 // Cache of resolved object URLs for internal-file tokens
 const internalUrlCache = new Map<string, string>();
+
 async function resolveInternalPath(v: string | null): Promise<string | null> {
     if (!v) return null;
     if (!v.startsWith('internal-file://')) return v;
     const hash = v.slice('internal-file://'.length);
     if (internalUrlCache.has(hash)) return internalUrlCache.get(hash)!;
+    
+    // Check if component is unmounting
+    if (abortController.value?.signal.aborted) return null;
+    
     try {
         const blob = await getFileBlob(hash);
-        if (!blob) return null;
+        if (!blob || abortController.value?.signal.aborted) return null;
         const u = URL.createObjectURL(blob);
         internalUrlCache.set(hash, u);
         registerObjectUrl(u);
@@ -1013,39 +1038,59 @@ const contentBg1PreviewStyle = computed(() => {
     const fit = !!overrides.value.backgrounds?.content?.base?.fit;
     const repeatEnabled =
         overrides.value.backgrounds?.content?.base?.repeat === 'repeat' && !fit;
+    const sizePx = overrides.value.backgrounds?.content?.base?.sizePx || 240;
+    
     return {
         backgroundImage: resolvedContentBg1.value
             ? `url(${resolvedContentBg1.value})`
             : 'none',
         backgroundRepeat: repeatEnabled ? 'repeat' : 'no-repeat',
-        backgroundSize: repeatEnabled ? '32px 32px' : fit ? 'cover' : 'contain',
+        backgroundSize: fit 
+            ? 'cover' 
+            : repeatEnabled 
+                ? '32px 32px'
+                : 'contain',
         backgroundPosition: 'center',
     } as const;
 });
+
 const contentBg2PreviewStyle = computed(() => {
     const fit = !!overrides.value.backgrounds?.content?.overlay?.fit;
     const repeatEnabled =
         overrides.value.backgrounds?.content?.overlay?.repeat === 'repeat' &&
         !fit;
+    const sizePx = overrides.value.backgrounds?.content?.overlay?.sizePx || 240;
+    
     return {
         backgroundImage: resolvedContentBg2.value
             ? `url(${resolvedContentBg2.value})`
             : 'none',
         backgroundRepeat: repeatEnabled ? 'repeat' : 'no-repeat',
-        backgroundSize: repeatEnabled ? '32px 32px' : fit ? 'cover' : 'contain',
+        backgroundSize: fit 
+            ? 'cover' 
+            : repeatEnabled 
+                ? '32px 32px'
+                : 'contain',
         backgroundPosition: 'center',
     } as const;
 });
+
 const sidebarBgPreviewStyle = computed(() => {
     const fit = !!overrides.value.backgrounds?.sidebar?.fit;
     const repeatEnabled =
         overrides.value.backgrounds?.sidebar?.repeat === 'repeat' && !fit;
+    const sizePx = overrides.value.backgrounds?.sidebar?.sizePx || 240;
+    
     return {
         backgroundImage: resolvedSidebarBg.value
             ? `url(${resolvedSidebarBg.value})`
             : 'none',
         backgroundRepeat: repeatEnabled ? 'repeat' : 'no-repeat',
-        backgroundSize: repeatEnabled ? '32px 32px' : fit ? 'cover' : 'contain',
+        backgroundSize: fit 
+            ? 'cover' 
+            : repeatEnabled 
+                ? '32px 32px'
+                : 'contain',
         backgroundPosition: 'center',
     } as const;
 });
@@ -1067,66 +1112,28 @@ function isPresetActive(
 
 // Object URL lifecycle tracking
 const objectUrls = new Set<string>();
+const abortController = ref<AbortController | null>(null);
+
 function registerObjectUrl(u: string) {
     objectUrls.add(u);
 }
+
 function revokeAll() {
     objectUrls.forEach((u) => URL.revokeObjectURL(u));
     objectUrls.clear();
-    // activeTimers cleanup removed as useDebounceFn handles its own execution flow, 
-    // and cancellation on unmount is implicitly handled by component destruction preventing new calls.
-    // If we wanted explicit cancellation we'd track the debounced fns.
-    fileInputs.contentBg1 = null;
-    fileInputs.contentBg2 = null;
-    fileInputs.sidebarBg = null;
 }
-onBeforeUnmount(revokeAll);
+
+onMounted(() => {
+    abortController.value = new AbortController();
+});
+
+onBeforeUnmount(() => {
+    abortController.value?.abort();
+    revokeAll();
+});
 
 // Minimal notify (console only for now; integrate with existing toast system later)
 const liveStatus = ref<HTMLElement | null>(null);
-// Drag & file input state for drop zones
-const dragOver = reactive({
-    contentBg1: false,
-    contentBg2: false,
-    sidebarBg: false,
-});
-const fileInputs = reactive<Record<string, HTMLInputElement | null>>({
-    contentBg1: null,
-    contentBg2: null,
-    sidebarBg: null,
-});
-
-function openFile(which: 'contentBg1' | 'contentBg2' | 'sidebarBg') {
-    const el = fileInputs[which];
-    if (el) el.click();
-}
-function onDragEnter(
-    _e: DragEvent,
-    which: 'contentBg1' | 'contentBg2' | 'sidebarBg'
-) {
-    dragOver[which] = true;
-}
-function onDragOver(_e: DragEvent) {
-    /* keep default prevented in template */
-}
-function onDragLeave(
-    _e: DragEvent,
-    which: 'contentBg1' | 'contentBg2' | 'sidebarBg'
-) {
-    dragOver[which] = false;
-}
-async function onDrop(
-    e: DragEvent,
-    which: 'contentBg1' | 'contentBg2' | 'sidebarBg'
-) {
-    dragOver[which] = false;
-    const file = e.dataTransfer?.files?.[0];
-    if (!file) return;
-    await onUpload(
-        { target: { files: [file], value: '' } } as any as Event,
-        which
-    );
-}
 
 function notify(title: string, description?: string) {
     console.warn('[theme-settings]', title, description || '');
@@ -1137,57 +1144,46 @@ function notify(title: string, description?: string) {
     }
 }
 
-async function onUpload(
-    ev: Event,
-    which: 'contentBg1' | 'contentBg2' | 'sidebarBg'
-) {
-    const input = ev.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    try {
-        if (!file.type.startsWith('image/')) {
-            notify('Invalid image type');
-            return;
-        }
-        if (file.size > 2 * 1024 * 1024) {
-            notify('Image too large', 'Max 2MB');
-            return;
-        }
-        // Persist via file store (dedup by content hash)
-        const meta = await createOrRefFile(file, file.name || 'upload');
-        // Store as synthetic scheme so we can resolve later
-        const token = `internal-file://${meta.hash}`;
-        if (which === 'contentBg1')
-            set({ backgrounds: { content: { base: { url: token } } } });
-        else if (which === 'contentBg2')
-            set({ backgrounds: { content: { overlay: { url: token } } } });
-        else if (which === 'sidebarBg')
-            set({ backgrounds: { sidebar: { url: token } } });
-        notify('Background image saved', meta.hash.slice(0, 8));
-    } catch (e: any) {
-        notify('Upload failed', e?.message || 'unknown error');
-    } finally {
-        if (input) input.value = '';
-    }
+/**
+ * Validate image file magic number for security
+ */
+function validateImageMagicNumber(header: Uint8Array): boolean {
+    const isPNG = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47;
+    const isJPEG = header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF;
+    const isWebP = header[8] === 0x57 && header[9] === 0x45 && header[10] === 0x42 && header[11] === 0x50;
+    const isGIF = header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46;
+    return isPNG || isJPEG || isWebP || isGIF;
 }
 
 /**
  * Handle file upload from BackgroundLayerEditor component
  * This takes a File directly rather than Event (for component integration)
+ * Includes strict validation for security
  */
 async function handleLayerUpload(
     file: File,
     which: 'contentBg1' | 'contentBg2' | 'sidebarBg'
 ) {
     try {
-        if (!file.type.startsWith('image/')) {
-            notify('Invalid image type');
+        // Strict MIME type check
+        if (!ALLOWED_IMAGE_TYPES.includes(file.type as any)) {
+            notify('Invalid image type', `Only PNG, JPEG, WebP, GIF allowed. Got: ${file.type}`);
             return;
         }
+        
+        // Size check
         if (file.size > 2 * 1024 * 1024) {
             notify('Image too large', 'Max 2MB');
             return;
         }
+        
+        // Magic number validation to prevent file type spoofing
+        const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+        if (!validateImageMagicNumber(header)) {
+            notify('File format mismatch', 'File header does not match declared MIME type');
+            return;
+        }
+        
         // Persist via file store (dedup by content hash)
         const meta = await createOrRefFile(file, file.name || 'upload');
         // Store as synthetic scheme so we can resolve later
@@ -1274,7 +1270,7 @@ function isValidHex(v: string) {
 function ensureHash(v: string) {
     return v.startsWith('#') ? v : `#${v}`;
 }
-function onHexInput(key: keyof typeof localHex) {
+function onHexInput(key: LocalHexKeys) {
     const raw = localHex[key];
     if (!raw) return; // allow clearing without committing
     const candidate = ensureHash(raw.trim());
@@ -1297,14 +1293,15 @@ function onHexInput(key: keyof typeof localHex) {
                 backgrounds: { sidebar: { color: candidate.toLowerCase() } },
             });
         } else {
-            // All other keys are palette colors - map directly
-            set({ colors: { [key]: candidate.toLowerCase() } } as any);
+            // All other keys are palette colors - map directly (type-safe now)
+            set({ colors: { [key as ColorKey]: candidate.toLowerCase() } });
         }
     }
 }
+
 const { copy: copyToClipboard } = useClipboard({ legacy: true });
 
-async function copyColor(key: keyof typeof localHex) {
+async function copyColor(key: LocalHexKeys) {
     let val = '';
     // Map to override paths
     if (key === 'contentBg1Color') {
@@ -1316,8 +1313,8 @@ async function copyColor(key: keyof typeof localHex) {
     } else if (key === 'sidebarBgColor') {
         val = String(overrides.value.backgrounds?.sidebar?.color || '');
     } else {
-        // All other keys are palette colors
-        val = (overrides.value.colors as any)?.[key] || '';
+        // All other keys are palette colors (type-safe)
+        val = overrides.value.colors?.[key as ColorKey] || '';
     }
 
     if (!val || !val.startsWith('#')) return;
