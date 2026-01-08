@@ -141,6 +141,7 @@
                 </div>
             </div>
             <div
+                ref="paneContainerRef"
                 :class="[
                     showTopOffset ? 'pt-[46px]' : 'pt-0',
                     ' h-full flex flex-row gap-0 items-stretch w-full pane-container',
@@ -231,7 +232,7 @@ import type {
     ThreadEntity,
     DocumentEntity,
 } from '~/core/hooks/hook-types';
-import { useMagicKeys, whenever, useEventListener } from '@vueuse/core';
+import { useMagicKeys, whenever, useEventListener, useResizeObserver, useDebounceFn } from '@vueuse/core';
 import {
     type Component,
     computed,
@@ -301,6 +302,7 @@ const {
     getPaneWidth,
     handleResize,
     persistPaneWidths,
+    recalculateWidthsForContainer,
     paneWidths,
 } = useMultiPane({
     initialThreadId: props.initialThreadId,
@@ -313,6 +315,22 @@ const {
 // Store min/max for use in keyboard handlers
 const minPaneWidth = 280;
 const maxPaneWidth = 2000;
+
+// Pane container ref for resize observation
+const paneContainerRef = ref<HTMLElement | null>(null);
+
+// Observe container size changes (sidebar toggle, window resize)
+const debouncedRecalculate = useDebounceFn((width: number) => {
+    if (width > 0 && panes.value.length > 1) {
+        recalculateWidthsForContainer(width);
+    }
+}, 100);
+
+useResizeObserver(paneContainerRef, (entries) => {
+    const entry = entries[0];
+    if (!entry) return;
+    debouncedRecalculate(entry.contentRect.width);
+});
 
 function useButtonThemeProps(
     identifier: string,
@@ -425,17 +443,15 @@ function onPaneResizeEnd() {
         pendingResizeFrame = null;
     }
 
-    // Apply any remaining accumulated delta
-    if (accumulatedDeltaX !== 0 && resizeStartWidths.length > 0) {
-        const lastIndex = resizeStartWidths.length - 2; // last valid resize index
-        if (lastIndex >= 0) {
-            handleResize(lastIndex, accumulatedDeltaX, false);
-        }
+    // Apply any remaining accumulated delta to the CORRECT pane
+    if (paneIndexAtEnd !== null && accumulatedDeltaX !== 0) {
+        handleResize(paneIndexAtEnd, accumulatedDeltaX, false);
     }
 
     // Persist the final widths when drag completes
     persistPaneWidths();
     accumulatedDeltaX = 0;
+    resizeStartWidths = [];
 }
 
 // Use VueUse's useEventListener for pointermove/pointerup during resize

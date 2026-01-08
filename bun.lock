@@ -39,6 +39,7 @@
       },
       "devDependencies": {
         "@eslint/js": "^9.39.1",
+        "@iconify-json/carbon": "^1.2.15",
         "@iconify-json/pixelarticons": "^1.2.2",
         "@iconify-json/tabler": "^1.2.23",
         "@playwright/test": "^1.57.0",
@@ -395,6 +396,8 @@
     "@humanwhocodes/module-importer": ["@humanwhocodes/module-importer@1.0.1", "", {}, "sha512-bxveV4V8v5Yb4ncFTT3rPSgZBOpCkjfK0y4oVVVJwIuDVBRMDXrPyXRL988i5ap9m9bnyEEjWfm5WkBmtffLfA=="],
 
     "@humanwhocodes/retry": ["@humanwhocodes/retry@0.4.3", "", {}, "sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ=="],
+
+    "@iconify-json/carbon": ["@iconify-json/carbon@1.2.15", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-9tW0nZY5QtKkMhuYzW09BM1345SyXNuA+gx2ub0j/fnfHOD5XVimMJ/D76H3tTez25NJbPYCLIQoFhvJc1HVBQ=="],
 
     "@iconify-json/pixelarticons": ["@iconify-json/pixelarticons@1.2.2", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-BAAzqfT0XKUc/a8MgTxOH1aSm44InW9abUIQ1qu5dBntKlYuJP/dN0JfK4WEpUS78T/7HP8w9v1nSQjENLyjFg=="],
 

@@ -88,6 +88,7 @@ export interface UseMultiPaneApi {
         persist?: boolean
     ) => void;
     persistPaneWidths: () => void;
+    recalculateWidthsForContainer: (newContainerWidth: number) => void;
     paneWidths: Ref<number[]>;
 }
 
@@ -260,12 +261,49 @@ export function useMultiPane(
         if (!container) return;
 
         const totalWidth = container.clientWidth;
-        const paneCount = panes.value.length;
-        const equalWidth = Math.floor(totalWidth / paneCount);
+        recalculateWidthsForContainer(totalWidth);
+    }
 
-        paneWidths.value = new Array<number>(paneCount).fill(
-            clampWidth(equalWidth)
+    /**
+     * Recalculate pane widths proportionally when container size changes.
+     * This MUST be called when sidebar is toggled or window is resized.
+     */
+    function recalculateWidthsForContainer(newContainerWidth: number) {
+        const paneCount = panes.value.length;
+        if (paneCount <= 1) return; // Single pane is always 100%
+
+        if (
+            paneWidths.value.length !== paneCount ||
+            paneWidths.value.reduce((sum, w) => sum + w, 0) <= 0
+        ) {
+            // Mismatch or invalid - initialize equal widths
+            const equalWidth = Math.floor(newContainerWidth / paneCount);
+            paneWidths.value = new Array<number>(paneCount).fill(
+                clampWidth(equalWidth)
+            );
+            return;
+        }
+
+        const currentTotal = paneWidths.value.reduce((sum, w) => sum + w, 0);
+
+        // Scale proportionally
+        const scale = newContainerWidth / currentTotal;
+        const scaled = paneWidths.value.map((w) =>
+            clampWidth(Math.round(w * scale))
         );
+
+        // Correct rounding drift on last pane
+        const newTotal = scaled.reduce((sum, w) => sum + w, 0);
+        const drift = newContainerWidth - newTotal;
+        if (drift !== 0 && scaled.length > 0) {
+            const lastIdx = scaled.length - 1;
+            const lastVal = scaled[lastIdx];
+            if (lastVal !== undefined) {
+                scaled[lastIdx] = clampWidth(lastVal + drift);
+            }
+        }
+
+        paneWidths.value = scaled;
     }
 
     /**
@@ -298,23 +336,26 @@ export function useMultiPane(
         const currentWidth = paneWidths.value[paneIndex];
         const nextWidth = paneWidths.value[paneIndex + 1];
 
-        if (currentWidth !== undefined && nextWidth !== undefined) {
-            const newCurrentWidth = clampWidth(currentWidth + deltaX);
-            const actualDelta = newCurrentWidth - currentWidth;
-            const newNextWidth = clampWidth(nextWidth - actualDelta);
+        // Defensive: verify values are valid numbers
+        if (typeof currentWidth !== 'number' || typeof nextWidth !== 'number') {
+            return;
+        }
 
-            // Only update if both constraints satisfied
-            if (
-                newCurrentWidth >= minPaneWidth &&
-                newNextWidth >= minPaneWidth
-            ) {
-                paneWidths.value[paneIndex] = newCurrentWidth;
-                paneWidths.value[paneIndex + 1] = newNextWidth;
+        const newCurrentWidth = clampWidth(currentWidth + deltaX);
+        const actualDelta = newCurrentWidth - currentWidth;
+        const newNextWidth = clampWidth(nextWidth - actualDelta);
 
-                // Only persist when explicitly requested (e.g., on drag end or keyboard resize)
-                if (persist) {
-                    persistWidths();
-                }
+        // Only update if both constraints satisfied
+        if (newCurrentWidth >= minPaneWidth && newNextWidth >= minPaneWidth) {
+            // Use immutable update for proper reactivity
+            const updated = [...paneWidths.value];
+            updated[paneIndex] = newCurrentWidth;
+            updated[paneIndex + 1] = newNextWidth;
+            paneWidths.value = updated;
+
+            // Only persist when explicitly requested (e.g., on drag end or keyboard resize)
+            if (persist) {
+                persistWidths();
             }
         }
     }
@@ -768,6 +809,7 @@ export function useMultiPane(
         getPaneWidth,
         handleResize,
         persistPaneWidths: persistWidths,
+        recalculateWidthsForContainer,
         paneWidths,
     };
 

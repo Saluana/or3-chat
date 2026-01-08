@@ -263,4 +263,66 @@ describe('useMultiPane - Width Management', () => {
         expect(paneWidths.value[0]).toBe(280);
         expect(paneWidths.value[1]).toBe(920);
     });
+
+    it('recalculates widths proportionally when container resizes (equal widths)', () => {
+        const { addPane, paneWidths, recalculateWidthsForContainer } = useMultiPane({
+            loadMessagesFor: async () => [],
+        });
+
+        addPane();
+        paneWidths.value = [600, 600]; // Total: 1200
+
+        // Container shrinks to 900px
+        recalculateWidthsForContainer(900);
+
+        // Should maintain 50/50 ratio
+        expect(paneWidths.value[0]).toBe(450);
+        expect(paneWidths.value[1]).toBe(450);
+    });
+
+    it('recalculates widths proportionally when container resizes (unequal widths)', () => {
+        const { addPane, paneWidths, recalculateWidthsForContainer } = useMultiPane({
+            loadMessagesFor: async () => [],
+        });
+
+        addPane();
+        paneWidths.value = [400, 800]; // Total: 1200, ratio 1:2
+
+        // Container grows to 1500px
+        recalculateWidthsForContainer(1500);
+
+        // Should maintain 1:2 ratio (500:1000)
+        expect(paneWidths.value[0]).toBe(500);
+        expect(paneWidths.value[1]).toBe(1000);
+    });
+
+    it('recalculates handles container shrink below minimum width gracefully', () => {
+        const { addPane, paneWidths, recalculateWidthsForContainer } = useMultiPane({
+            loadMessagesFor: async () => [],
+            minPaneWidth: 280,
+        });
+
+        addPane();
+        paneWidths.value = [600, 600]; // Total: 1200
+
+        // Container shrinks to 500px (each pane would be 250px, below min of 280)
+        recalculateWidthsForContainer(500);
+
+        // Both should clamp to minimum
+        expect(paneWidths.value[0]).toBe(280);
+        expect(paneWidths.value[1]).toBe(280);
+    });
+
+    it('does not recalculate widths for single pane', () => {
+        const { paneWidths, recalculateWidthsForContainer } = useMultiPane({
+            loadMessagesFor: async () => [],
+        });
+
+        // Only 1 pane - should not modify widths
+        paneWidths.value = [800];
+        recalculateWidthsForContainer(1000);
+
+        // Single pane always uses 100%, so array should remain unchanged
+        expect(paneWidths.value).toEqual([800]);
+    });
 });
