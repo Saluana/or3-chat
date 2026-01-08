@@ -27,10 +27,19 @@ export const ALLOWED_IMAGE_TYPES = [
  * Validate image file magic number for security
  */
 export function validateImageMagicNumber(header: Uint8Array): boolean {
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
     const isPNG = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47;
+    
+    // JPEG: FF D8 FF
     const isJPEG = header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF;
-    const isWebP = header[8] === 0x57 && header[9] === 0x45 && header[10] === 0x42 && header[11] === 0x50;
+    
+    // WebP: RIFF ... WEBP (RIFF at 0-3, WEBP at 8-11)
+    const isWebP = header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46 &&
+                   header[8] === 0x57 && header[9] === 0x45 && header[10] === 0x42 && header[11] === 0x50;
+    
+    // GIF: GIF87a or GIF89a
     const isGIF = header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46;
+    
     return isPNG || isJPEG || isWebP || isGIF;
 }
 

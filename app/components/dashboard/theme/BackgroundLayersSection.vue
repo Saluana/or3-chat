@@ -96,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
+import { reactive, computed, ref, watch, onBeforeUnmount } from 'vue';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useDebounceFn } from '@vueuse/core';
@@ -280,7 +280,8 @@ function applyPreset(which: 'contentBg1' | 'contentBg2' | 'sidebarBg', src: stri
 // Cache of resolved object URLs for internal-file tokens
 const internalUrlCache = new Map<string, string>();
 const objectUrls = new Set<string>();
-const abortController = ref<AbortController | null>(null);
+// Initialize immediately to avoid null checks
+const abortController = ref<AbortController>(new AbortController());
 
 function registerObjectUrl(u: string) {
     objectUrls.add(u);
@@ -297,11 +298,12 @@ async function resolveInternalPath(v: string | null): Promise<string | null> {
     const hash = v.slice('internal-file://'.length);
     if (internalUrlCache.has(hash)) return internalUrlCache.get(hash)!;
     
-    if (abortController.value?.signal.aborted) return null;
+    // Check if aborted (no null check needed now)
+    if (abortController.value.signal.aborted) return null;
     
     try {
         const blob = await getFileBlob(hash);
-        if (!blob || abortController.value?.signal.aborted) return null;
+        if (!blob || abortController.value.signal.aborted) return null;
         const u = URL.createObjectURL(blob);
         internalUrlCache.set(hash, u);
         registerObjectUrl(u);
@@ -445,13 +447,9 @@ async function handleLayerUpload(file: File, which: 'contentBg1' | 'contentBg2' 
     }
 }
 
-// Lifecycle
-onMounted(() => {
-    abortController.value = new AbortController();
-});
-
+// Lifecycle - abort pending operations on unmount
 onBeforeUnmount(() => {
-    abortController.value?.abort();
+    abortController.value.abort();
     revokeAll();
 });
 
