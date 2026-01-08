@@ -192,8 +192,6 @@ watch(
 
 onBeforeUnmount(() => {
     editor.value?.destroy();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (scheduleSave as any).cancel();
 });
 
 const promptTitleInputProps = computed(() => {
