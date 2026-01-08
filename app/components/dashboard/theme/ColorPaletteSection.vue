@@ -69,7 +69,7 @@
                                 type="text"
                                 :placeholder="'#RRGGBB'"
                                 :model-value="localHex[color.key as ColorKey]"
-                                @update:model-value="(v: any) => { localHex[color.key as ColorKey] = String(v ?? ''); onHexInput(color.key as ColorKey); }"
+                                @update:model-value="(v: string | undefined) => { localHex[color.key as ColorKey] = String(v ?? ''); onHexInput(color.key as ColorKey); }"
                                 :disabled="
                                     !(overrides.colors?.enabled ?? false)
                                 "
@@ -297,11 +297,11 @@ function togglePaletteOverrides() {
             ['warning', '--md-extended-color-warning-color'],
         ];
 
-        const initialColors: any = { enabled: true };
+        const initialColors: Partial<Record<ColorKey, string>> & { enabled: boolean } = { enabled: true };
         for (const [key, cssVar] of colorMap) {
             const color = getCurrentThemeColor(cssVar);
             if (color) {
-                initialColors[key] = color;
+                initialColors[key as ColorKey] = color;
             }
         }
 

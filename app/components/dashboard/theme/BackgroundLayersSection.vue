@@ -405,8 +405,12 @@ const sidebarBgPreviewStyle = computed(() => {
 // File upload handler with security validation
 async function handleLayerUpload(file: File, which: 'contentBg1' | 'contentBg2' | 'sidebarBg') {
     try {
-        // Strict MIME type check
-        if (!ALLOWED_IMAGE_TYPES.includes(file.type as any)) {
+        // Strict MIME type check - type predicate for const array
+        const isAllowedType = (type: string): type is typeof ALLOWED_IMAGE_TYPES[number] => {
+            return ALLOWED_IMAGE_TYPES.some(allowed => allowed === type);
+        };
+        
+        if (!isAllowedType(file.type)) {
             console.error('[BackgroundLayersSection] Invalid image type:', file.type);
             return;
         }
