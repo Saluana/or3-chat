@@ -102,7 +102,7 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useDebounceFn } from '@vueuse/core';
 import { isBrowser } from '~/utils/env';
 import { createOrRefFile, getFileBlob } from '~/db/files';
-import { ALLOWED_IMAGE_TYPES, validateImageMagicNumber } from './types';
+import { isAllowedImageType, validateImageMagicNumber } from './types';
 import type { BackgroundPreset } from './types';
 
 const themeApi = useUserThemeOverrides();
@@ -407,12 +407,8 @@ const sidebarBgPreviewStyle = computed(() => {
 // File upload handler with security validation
 async function handleLayerUpload(file: File, which: 'contentBg1' | 'contentBg2' | 'sidebarBg') {
     try {
-        // Strict MIME type check - type predicate for const array
-        const isAllowedType = (type: string): type is typeof ALLOWED_IMAGE_TYPES[number] => {
-            return ALLOWED_IMAGE_TYPES.some(allowed => allowed === type);
-        };
-        
-        if (!isAllowedType(file.type)) {
+        // Strict MIME type check using shared utility
+        if (!isAllowedImageType(file.type)) {
             console.error('[BackgroundLayersSection] Invalid image type:', file.type);
             return;
         }

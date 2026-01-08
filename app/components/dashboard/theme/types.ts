@@ -24,9 +24,19 @@ export const ALLOWED_IMAGE_TYPES = [
 ] as const;
 
 /**
+ * Type predicate for checking if a MIME type is in the allowed list
+ */
+export function isAllowedImageType(type: string): type is typeof ALLOWED_IMAGE_TYPES[number] {
+    return ALLOWED_IMAGE_TYPES.some(allowed => allowed === type);
+}
+
+/**
  * Validate image file magic number for security
  */
 export function validateImageMagicNumber(header: Uint8Array): boolean {
+    // Ensure we have enough bytes to check
+    if (header.length < 12) return false;
+    
     // PNG: 89 50 4E 47 0D 0A 1A 0A
     const isPNG = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47;
     
