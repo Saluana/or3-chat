@@ -123,19 +123,24 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
         if (map.size <= options.maxUrls && totalBytes <= options.maxBytes) {
             return [];
         }
-        const entries = Array.from(map.entries());
-        entries.sort((a, b) => {
-            const pinDiff = (a[1].pin || 0) - (b[1].pin || 0);
-            if (pinDiff !== 0) return pinDiff;
-            return a[1].lastAccess - b[1].lastAccess;
-        });
+        // Optimization: filter unpinned entries first, then sort
+        // This is O(k) where k = unpinned count, rather than O(n) sorting all entries
+        const unpinned: [string, CacheEntry][] = [];
+        for (const [key, entry] of map) {
+            if (entry.pin <= 0) {
+                unpinned.push([key, entry]);
+            }
+        }
+        // Sort only unpinned entries by LRU
+        unpinned.sort((a, b) => a[1].lastAccess - b[1].lastAccess);
+
         const removed: string[] = [];
-        for (const [key] of entries) {
+        for (const [key] of unpinned) {
             if (map.size <= options.maxUrls && totalBytes <= options.maxBytes) {
                 break;
             }
             const entry = map.get(key);
-            if (!entry || entry.pin > 0) continue;
+            if (!entry) continue;
             remove(key);
             evictions++;
             removed.push(key);

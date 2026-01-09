@@ -12,8 +12,8 @@
             Color Palette
         </h2>
         <p class="supporting-text">
-            Override Material Design 3 colors for this mode. Toggle off to
-            use theme defaults.
+            Override Material Design 3 colors for this mode. Toggle off to use
+            theme defaults.
         </p>
         <label class="flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -46,13 +46,11 @@
                     >
                         <UColorPicker
                             v-bind="paletteColorPickerProps"
-                            :disabled="
-                                !(overrides.colors?.enabled ?? false)
-                            "
+                            :disabled="!(overrides.colors?.enabled ?? false)"
                             :model-value="
                                 (overrides.colors?.enabled ?? false) &&
                                 String(overrides.colors?.[color.key as ColorKey] || '').startsWith('#')
-                                    ? overrides.colors[color.key as ColorKey]
+                                    ? overrides.colors?.[color.key as ColorKey]
                                     : undefined
                             "
                             @update:model-value="(c: string | undefined) => { if (c) set({ colors: { [color.key as ColorKey]: c } }); }"
@@ -60,16 +58,14 @@
                             class="scale-60 origin-left shrink-0"
                         />
                         <!-- Hex input + copy button row -->
-                        <div
-                            class="flex items-center gap-2 w-full sm:w-auto"
-                        >
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
                             <UInput
                                 v-bind="hexInputProps"
                                 class="flex-1 sm:w-24 h-8"
                                 type="text"
                                 :placeholder="'#RRGGBB'"
                                 :model-value="localHex[color.key as ColorKey]"
-                                @update:model-value="(v: string | undefined) => { localHex[color.key as ColorKey] = String(v ?? ''); onHexInput(color.key as ColorKey); }"
+                                @update:model-value="(v) => { localHex[color.key as ColorKey] = String(v ?? ''); onHexInput(color.key as ColorKey); }"
                                 :disabled="
                                     !(overrides.colors?.enabled ?? false)
                                 "
@@ -173,32 +169,112 @@ const colorGroups = [
 
 // Local hex inputs
 const localHex: Record<ColorKey, string> = reactive({
-    primary: String(overrides.value.colors?.primary || '').startsWith('#') ? String(overrides.value.colors?.primary) : '',
-    onPrimary: String(overrides.value.colors?.onPrimary || '').startsWith('#') ? String(overrides.value.colors?.onPrimary) : '',
-    primaryContainer: String(overrides.value.colors?.primaryContainer || '').startsWith('#') ? String(overrides.value.colors?.primaryContainer) : '',
-    onPrimaryContainer: String(overrides.value.colors?.onPrimaryContainer || '').startsWith('#') ? String(overrides.value.colors?.onPrimaryContainer) : '',
-    secondary: String(overrides.value.colors?.secondary || '').startsWith('#') ? String(overrides.value.colors?.secondary) : '',
-    onSecondary: String(overrides.value.colors?.onSecondary || '').startsWith('#') ? String(overrides.value.colors?.onSecondary) : '',
-    secondaryContainer: String(overrides.value.colors?.secondaryContainer || '').startsWith('#') ? String(overrides.value.colors?.secondaryContainer) : '',
-    onSecondaryContainer: String(overrides.value.colors?.onSecondaryContainer || '').startsWith('#') ? String(overrides.value.colors?.onSecondaryContainer) : '',
-    tertiary: String(overrides.value.colors?.tertiary || '').startsWith('#') ? String(overrides.value.colors?.tertiary) : '',
-    onTertiary: String(overrides.value.colors?.onTertiary || '').startsWith('#') ? String(overrides.value.colors?.onTertiary) : '',
-    tertiaryContainer: String(overrides.value.colors?.tertiaryContainer || '').startsWith('#') ? String(overrides.value.colors?.tertiaryContainer) : '',
-    onTertiaryContainer: String(overrides.value.colors?.onTertiaryContainer || '').startsWith('#') ? String(overrides.value.colors?.onTertiaryContainer) : '',
-    error: String(overrides.value.colors?.error || '').startsWith('#') ? String(overrides.value.colors?.error) : '',
-    onError: String(overrides.value.colors?.onError || '').startsWith('#') ? String(overrides.value.colors?.onError) : '',
-    errorContainer: String(overrides.value.colors?.errorContainer || '').startsWith('#') ? String(overrides.value.colors?.errorContainer) : '',
-    onErrorContainer: String(overrides.value.colors?.onErrorContainer || '').startsWith('#') ? String(overrides.value.colors?.onErrorContainer) : '',
-    surface: String(overrides.value.colors?.surface || '').startsWith('#') ? String(overrides.value.colors?.surface) : '',
-    onSurface: String(overrides.value.colors?.onSurface || '').startsWith('#') ? String(overrides.value.colors?.onSurface) : '',
-    surfaceVariant: String(overrides.value.colors?.surfaceVariant || '').startsWith('#') ? String(overrides.value.colors?.surfaceVariant) : '',
-    onSurfaceVariant: String(overrides.value.colors?.onSurfaceVariant || '').startsWith('#') ? String(overrides.value.colors?.onSurfaceVariant) : '',
-    inverseSurface: String(overrides.value.colors?.inverseSurface || '').startsWith('#') ? String(overrides.value.colors?.inverseSurface) : '',
-    inverseOnSurface: String(overrides.value.colors?.inverseOnSurface || '').startsWith('#') ? String(overrides.value.colors?.inverseOnSurface) : '',
-    outline: String(overrides.value.colors?.outline || '').startsWith('#') ? String(overrides.value.colors?.outline) : '',
-    outlineVariant: String(overrides.value.colors?.outlineVariant || '').startsWith('#') ? String(overrides.value.colors?.outlineVariant) : '',
-    success: String(overrides.value.colors?.success || '').startsWith('#') ? String(overrides.value.colors?.success) : '',
-    warning: String(overrides.value.colors?.warning || '').startsWith('#') ? String(overrides.value.colors?.warning) : '',
+    primary: String(overrides.value.colors?.primary || '').startsWith('#')
+        ? String(overrides.value.colors?.primary)
+        : '',
+    onPrimary: String(overrides.value.colors?.onPrimary || '').startsWith('#')
+        ? String(overrides.value.colors?.onPrimary)
+        : '',
+    primaryContainer: String(
+        overrides.value.colors?.primaryContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.primaryContainer)
+        : '',
+    onPrimaryContainer: String(
+        overrides.value.colors?.onPrimaryContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.onPrimaryContainer)
+        : '',
+    secondary: String(overrides.value.colors?.secondary || '').startsWith('#')
+        ? String(overrides.value.colors?.secondary)
+        : '',
+    onSecondary: String(overrides.value.colors?.onSecondary || '').startsWith(
+        '#'
+    )
+        ? String(overrides.value.colors?.onSecondary)
+        : '',
+    secondaryContainer: String(
+        overrides.value.colors?.secondaryContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.secondaryContainer)
+        : '',
+    onSecondaryContainer: String(
+        overrides.value.colors?.onSecondaryContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.onSecondaryContainer)
+        : '',
+    tertiary: String(overrides.value.colors?.tertiary || '').startsWith('#')
+        ? String(overrides.value.colors?.tertiary)
+        : '',
+    onTertiary: String(overrides.value.colors?.onTertiary || '').startsWith('#')
+        ? String(overrides.value.colors?.onTertiary)
+        : '',
+    tertiaryContainer: String(
+        overrides.value.colors?.tertiaryContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.tertiaryContainer)
+        : '',
+    onTertiaryContainer: String(
+        overrides.value.colors?.onTertiaryContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.onTertiaryContainer)
+        : '',
+    error: String(overrides.value.colors?.error || '').startsWith('#')
+        ? String(overrides.value.colors?.error)
+        : '',
+    onError: String(overrides.value.colors?.onError || '').startsWith('#')
+        ? String(overrides.value.colors?.onError)
+        : '',
+    errorContainer: String(
+        overrides.value.colors?.errorContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.errorContainer)
+        : '',
+    onErrorContainer: String(
+        overrides.value.colors?.onErrorContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.onErrorContainer)
+        : '',
+    surface: String(overrides.value.colors?.surface || '').startsWith('#')
+        ? String(overrides.value.colors?.surface)
+        : '',
+    onSurface: String(overrides.value.colors?.onSurface || '').startsWith('#')
+        ? String(overrides.value.colors?.onSurface)
+        : '',
+    surfaceVariant: String(
+        overrides.value.colors?.surfaceVariant || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.surfaceVariant)
+        : '',
+    onSurfaceVariant: String(
+        overrides.value.colors?.onSurfaceVariant || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.onSurfaceVariant)
+        : '',
+    inverseSurface: String(
+        overrides.value.colors?.inverseSurface || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.inverseSurface)
+        : '',
+    inverseOnSurface: String(
+        overrides.value.colors?.inverseOnSurface || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.inverseOnSurface)
+        : '',
+    outline: String(overrides.value.colors?.outline || '').startsWith('#')
+        ? String(overrides.value.colors?.outline)
+        : '',
+    outlineVariant: String(
+        overrides.value.colors?.outlineVariant || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.outlineVariant)
+        : '',
+    success: String(overrides.value.colors?.success || '').startsWith('#')
+        ? String(overrides.value.colors?.success)
+        : '',
+    warning: String(overrides.value.colors?.warning || '').startsWith('#')
+        ? String(overrides.value.colors?.warning)
+        : '',
 });
 
 // Theme overrides for UI components
@@ -297,7 +373,9 @@ function togglePaletteOverrides() {
             ['warning', '--md-extended-color-warning-color'],
         ];
 
-        const initialColors: Partial<Record<ColorKey, string>> & { enabled: boolean } = { enabled: true };
+        const initialColors: Partial<Record<ColorKey, string>> & {
+            enabled: boolean;
+        } = { enabled: true };
         for (const [key, cssVar] of colorMap) {
             const color = getCurrentThemeColor(cssVar);
             if (color) {
@@ -314,7 +392,9 @@ function togglePaletteOverrides() {
 
 // Hex handling
 function isValidHex(v: string) {
-    return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(v);
+    return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(
+        v
+    );
 }
 
 function ensureHash(v: string) {

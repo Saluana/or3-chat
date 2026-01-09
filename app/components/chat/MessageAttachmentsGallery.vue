@@ -84,17 +84,12 @@ import { reactive, watch, onBeforeUnmount } from 'vue';
 import { getFileBlob, getFileMeta } from '~/db/files';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { FileMeta } from '../../../types/chat-internal';
+import {
+    useThumbnailUrlCache,
+    type ThumbState,
+} from '~/composables/core/useThumbnailUrlCache';
 
-interface ThumbState {
-    status: 'loading' | 'ready' | 'error';
-    url?: string;
-}
-
-interface GlobalThumbCache {
-    cache: Map<string, ThumbState>;
-    inflight: Map<string, Promise<void>>;
-    refCounts: Map<string, number>;
-}
+type LocalThumbState = ThumbState | { status: 'loading' };
 
 const props = defineProps<{ hashes: string[] }>();
 defineEmits<{ (e: 'collapse'): void }>();
@@ -113,88 +108,38 @@ const attachmentItemProps = useThemeOverrides({
     isNuxtUI: false,
 });
 
-// Reuse global caches so virtualization doesn't thrash
-type GlobalWithThumbCache = typeof globalThis & {
-    __or3ThumbCache?: GlobalThumbCache;
-};
+// Shared object URL cache across chat surfaces
+const thumbUrlCache = useThumbnailUrlCache({ graceMs: 30000 });
 
-const globalCache: GlobalThumbCache = (
-    (globalThis as GlobalWithThumbCache).__or3ThumbCache ??= {
-        cache: new Map<string, ThumbState>(),
-        inflight: new Map<string, Promise<void>>(),
-        refCounts: new Map<string, number>(),
-    }
-);
-
-const cache = globalCache.cache;
-const inflight = globalCache.inflight;
-const thumbRefCounts = globalCache.refCounts;
-
-const thumbs = reactive<Record<string, ThumbState>>({});
+const thumbs = reactive<Record<string, LocalThumbState>>({});
 const meta = reactive<Record<string, FileMeta>>({});
 const fileNames = reactive<Record<string, string>>({});
 
-function retainThumb(hash: string) {
-    const prev = thumbRefCounts.get(hash) || 0;
-    thumbRefCounts.set(hash, prev + 1);
-}
-function releaseThumb(hash: string) {
-    const prev = thumbRefCounts.get(hash) || 0;
-    if (prev <= 1) {
-        thumbRefCounts.delete(hash);
-        const state = cache.get(hash);
-        if (state?.url) {
-            try {
-                URL.revokeObjectURL(state.url);
-            } catch {}
-        }
-        cache.delete(hash);
-        inflight.delete(hash);
-        delete thumbs[hash];
-    } else {
-        thumbRefCounts.set(hash, prev - 1);
-    }
-}
-
 async function ensure(h: string) {
     if (thumbs[h] && thumbs[h].status === 'ready') return;
-    const cached = cache.get(h);
+    const cached = thumbUrlCache.get(h);
     if (cached) {
         thumbs[h] = cached;
         return;
     }
-    if (inflight.has(h)) {
-        await inflight.get(h);
-        const after = cache.get(h);
-        if (after) thumbs[h] = after;
-        return;
-    }
+
     thumbs[h] = { status: 'loading' };
-    const p = (async () => {
-        try {
-            const [blob, m] = await Promise.all([
-                getFileBlob(h),
-                getFileMeta(h).catch(() => undefined),
-            ]);
-            if (m) {
-                meta[h] = m;
-                if (m.name) fileNames[h] = m.name;
-            }
-            if (!blob) throw new Error('missing');
-            const url = URL.createObjectURL(blob);
-            const ready: ThumbState = { status: 'ready', url };
-            cache.set(h, ready);
-            thumbs[h] = ready;
-        } catch {
-            const err: ThumbState = { status: 'error' };
-            cache.set(h, err);
-            thumbs[h] = err;
-        } finally {
-            inflight.delete(h);
+    const state = await thumbUrlCache.ensure(h, async () => {
+        const [blob, m] = await Promise.all([
+            getFileBlob(h),
+            getFileMeta(h).catch(() => undefined),
+        ]);
+        if (m) {
+            meta[h] = m;
+            if (m.name) fileNames[h] = m.name;
         }
-    })();
-    inflight.set(h, p);
-    await p;
+        return blob;
+    });
+    if (state) {
+        thumbs[h] = state;
+    } else {
+        thumbs[h] = { status: 'error' };
+    }
 }
 
 // Track current hashes and manage ref counting/object URL cleanup
@@ -208,14 +153,14 @@ watch(
         for (const h of next) {
             if (!currentHashes.has(h)) {
                 await ensure(h);
-                const state = cache.get(h);
+                const state = thumbUrlCache.get(h);
                 if (state?.status === 'ready' && state.url) {
                     if (!isComponentActive) {
-                        retainThumb(h);
-                        releaseThumb(h);
+                        thumbUrlCache.retain(h);
+                        thumbUrlCache.release(h);
                         return;
                     }
-                    retainThumb(h);
+                    thumbUrlCache.retain(h);
                     currentHashes.add(h);
                 }
             }
@@ -223,7 +168,8 @@ watch(
         for (const h of Array.from(currentHashes)) {
             if (!next.has(h)) {
                 currentHashes.delete(h);
-                releaseThumb(h);
+                thumbUrlCache.release(h);
+                delete thumbs[h];
             }
         }
     },
@@ -232,7 +178,10 @@ watch(
 
 onBeforeUnmount(() => {
     isComponentActive = false;
-    for (const h of currentHashes) releaseThumb(h);
+    for (const h of currentHashes) {
+        thumbUrlCache.release(h);
+        delete thumbs[h];
+    }
     currentHashes.clear();
 });
 defineExpose({ thumbs });

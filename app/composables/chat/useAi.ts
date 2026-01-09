@@ -23,6 +23,7 @@ import type {
 } from '~/utils/chat/types';
 import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
+import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import {
     buildParts,
@@ -552,51 +553,41 @@ export function useChat(
         if (online === true) model = model + ':online';
 
         file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
+
+        // Helper: convert a Blob to a data URL (used only for API preparation)
+        const blobToDataUrl = (blob: Blob): Promise<string> =>
+            new Promise((resolve, reject) => {
+                const fr = new FileReader();
+                fr.onerror = () =>
+                    reject(fr.error ?? new Error('FileReader error'));
+                fr.onload = () => resolve(fr.result as string);
+                fr.readAsDataURL(blob);
+            });
+
+        // UI path: verify blob exists, return hash reference without Base64 conversion
+        // This keeps UI state lean - Base64 conversion happens just-in-time for API
         const normalizeFileUrl = async (f: { type: string; url: string }) => {
             if (typeof FileReader === 'undefined') return f; // SSR safeguard
             const mime = f.type || '';
-            // Only hydrate images; leave other files (e.g., PDFs) untouched for now.
+            // Only process images; leave other files (e.g., PDFs) untouched for now.
             if (!mime.startsWith('image/')) return f;
             let url = f.url || '';
+            // Already a data URL - pass through (for pasted images not yet stored)
             if (url.startsWith('data:image/')) return { ...f, url };
             try {
-                // Local hash -> load from Dexie
+                // Local hash -> verify blob exists, return hash reference
                 if (!/^https?:|^data:|^blob:/i.test(url)) {
                     const { getFileBlob } = await import('~/db/files');
                     const blob = await getFileBlob(url);
                     if (blob) {
-                        url = await new Promise<string>((resolve, reject) => {
-                            const fr = new FileReader();
-                            fr.onerror = () =>
-                                reject(
-                                    fr.error ?? new Error('FileReader error')
-                                );
-                            fr.onload = () => resolve(fr.result as string);
-                            fr.readAsDataURL(blob);
-                        });
-                        return { ...f, url };
+                        // Return hash reference - verified blob exists
+                        // UI will use createObjectURL when needed, API will convert later
+                        return { ...f, url, _verified: true };
                     }
                 }
-                // blob: object URL -> fetch and encode
+                // blob: object URL - pass through (already efficient)
                 if (url.startsWith('blob:')) {
-                    // Use $fetch for blob
-                    try {
-                        const blob = await $fetch<Blob>(url, {
-                            responseType: 'blob',
-                        });
-                        url = await new Promise<string>((resolve, reject) => {
-                            const fr = new FileReader();
-                            fr.onerror = () =>
-                                reject(
-                                    fr.error ?? new Error('FileReader error')
-                                );
-                            fr.onload = () => resolve(fr.result as string);
-                            fr.readAsDataURL(blob);
-                        });
-                        return { ...f, url };
-                    } catch {
-                        // ignore fetch error
-                    }
+                    return { ...f, url, _verified: true };
                 }
             } catch {
                 // fall through to original url
@@ -604,10 +595,84 @@ export function useChat(
             return { ...f, url };
         };
 
-        const hydratedFiles = await Promise.all(
-            Array.isArray(files) ? files.map(normalizeFileUrl) : []
-        );
+        // API path: convert hash references and blob URLs to Base64 for model input
+        // This is called just-in-time before buildOpenRouterMessages
+        const prepareFilesForModel = async (
+            files: Array<{ type: string; url: string }>
+        ): Promise<ContentPart[]> => {
+            const parts: ContentPart[] = [];
+            for (const f of files) {
+                if (!f.url) continue;
+                const mime = f.type || '';
 
+                try {
+                    // Hash reference -> load from IndexedDB and convert to Base64
+                    if (!/^https?:|^data:|^blob:/i.test(f.url)) {
+                        const { getFileMeta, getFileBlob } = await import(
+                            '~/db/files'
+                        );
+                        const blob = await getFileBlob(f.url);
+                        if (!blob) continue;
+
+                        const dataUrl = await blobToDataUrl(blob);
+                        if (mime.startsWith('image/')) {
+                            parts.push({
+                                type: 'image',
+                                image: dataUrl,
+                                mediaType: mime,
+                            });
+                        } else if (mime === 'application/pdf') {
+                            const meta = await getFileMeta(f.url).catch(
+                                () => null
+                            );
+                            parts.push({
+                                type: 'file',
+                                data: dataUrl,
+                                mediaType: mime,
+                                name: meta?.name || 'document.pdf',
+                            });
+                        }
+                        continue;
+                    }
+
+                    // blob: URL -> fetch and convert to Base64
+                    if (f.url.startsWith('blob:')) {
+                        try {
+                            const blob = await $fetch<Blob>(f.url, {
+                                responseType: 'blob',
+                            });
+                            const dataUrl = await blobToDataUrl(blob);
+                            if (mime.startsWith('image/')) {
+                                parts.push({
+                                    type: 'image',
+                                    image: dataUrl,
+                                    mediaType: mime,
+                                });
+                            }
+                        } catch {
+                            // ignore fetch error
+                        }
+                        continue;
+                    }
+
+                    // Already Base64 data URL -> use directly
+                    if (f.url.startsWith('data:')) {
+                        if (mime.startsWith('image/')) {
+                            parts.push({
+                                type: 'image',
+                                image: f.url,
+                                mediaType: mime,
+                            });
+                        }
+                    }
+                } catch {
+                    // Skip files that fail to convert
+                }
+            }
+            return parts;
+        };
+
+        // Convert hash to ContentPart for context injection (just-in-time for API)
         const hashToContentPart = async (
             hash: string
         ): Promise<ContentPart | null> => {
@@ -619,17 +684,7 @@ export function useChat(
                 // Only include images/PDFs to avoid bloating text-only contexts
                 const mime = meta?.mime_type || blob.type || '';
                 if (mime === 'application/pdf') {
-                    const dataUrl = await new Promise<string>(
-                        (resolve, reject) => {
-                            const fr = new FileReader();
-                            fr.onerror = () =>
-                                reject(
-                                    fr.error ?? new Error('FileReader error')
-                                );
-                            fr.onload = () => resolve(fr.result as string);
-                            fr.readAsDataURL(blob);
-                        }
-                    );
+                    const dataUrl = await blobToDataUrl(blob);
                     return {
                         type: 'file',
                         data: dataUrl,
@@ -638,13 +693,7 @@ export function useChat(
                     };
                 }
                 if (!mime.startsWith('image/')) return null;
-                const dataUrl = await new Promise<string>((resolve, reject) => {
-                    const fr = new FileReader();
-                    fr.onerror = () =>
-                        reject(fr.error ?? new Error('FileReader error'));
-                    fr.onload = () => resolve(fr.result as string);
-                    fr.readAsDataURL(blob);
-                });
+                const dataUrl = await blobToDataUrl(blob);
                 return {
                     type: 'image',
                     image: dataUrl,
@@ -654,6 +703,11 @@ export function useChat(
                 return null;
             }
         };
+
+        // Verify files exist (no Base64 conversion - that happens in buildOpenRouterMessages)
+        const hydratedFiles = await Promise.all(
+            Array.isArray(files) ? files.map(normalizeFileUrl) : []
+        );
 
         const userDbMsg = await tx.appendMessage({
             thread_id: threadIdRef.value,
@@ -1052,12 +1106,7 @@ export function useChat(
                             current.text += delta;
                         } else if (ev.type === 'image') {
                             if (current.pending) current.pending = false;
-                            const placeholder = `![generated image](${ev.url})`;
-                            const already = current.text.includes(placeholder);
-                            if (!already) {
-                                current.text +=
-                                    (current.text ? '\n\n' : '') + placeholder;
-                            }
+                            // Store image first, then use hash placeholder (not Base64)
                             if (assistantFileHashes.length < 6) {
                                 let blob: Blob | null = null;
                                 if (ev.url.startsWith('data:image/'))
@@ -1079,8 +1128,18 @@ export function useChat(
                                             'gen-image'
                                         );
                                         assistantFileHashes.push(meta.hash);
+                                        // Use valid 1x1 transparent pixel and store hash in alt text to eliminate console errors
+                                        const placeholder = `![file-hash:${meta.hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`;
+                                        const already =
+                                            current.text.includes(placeholder);
+                                        if (!already) {
+                                            current.text +=
+                                                (current.text ? '\n\n' : '') +
+                                                placeholder;
+                                        }
                                         const serialized =
                                             await persistAssistant({
+                                                content: current.text,
                                                 reasoning:
                                                     current.reasoning_text ??
                                                     null,
@@ -1089,6 +1148,16 @@ export function useChat(
                                             serialized?.split(',') ?? [];
                                     } catch {
                                         /* intentionally empty */
+                                    }
+                                } else {
+                                    // Fallback: couldn't convert to blob, use URL directly
+                                    const placeholder = `![generated image](${ev.url})`;
+                                    const already =
+                                        current.text.includes(placeholder);
+                                    if (!already) {
+                                        current.text +=
+                                            (current.text ? '\n\n' : '') +
+                                            placeholder;
                                     }
                                 }
                             }
@@ -2089,12 +2158,7 @@ export function useChat(
                         chunkIndex++;
                     } else if (ev.type === 'image') {
                         if (current.pending) current.pending = false;
-                        const placeholder = `![generated image](${ev.url})`;
-                        const already = current.text.includes(placeholder);
-                        if (!already) {
-                            current.text +=
-                                (current.text ? '\n\n' : '') + placeholder;
-                        }
+                        // Store image first, then use hash placeholder (not Base64)
                         if (assistantFileHashes.length < 6) {
                             let blob: Blob | null = null;
                             if (ev.url.startsWith('data:image/'))
@@ -2115,7 +2179,17 @@ export function useChat(
                                         'gen-image'
                                     );
                                     assistantFileHashes.push(meta.hash);
+                                    // Use valid 1x1 transparent pixel and store hash in alt text to eliminate console errors
+                                    const placeholder = `![file-hash:${meta.hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`;
+                                    const already =
+                                        current.text.includes(placeholder);
+                                    if (!already) {
+                                        current.text +=
+                                            (current.text ? '\n\n' : '') +
+                                            placeholder;
+                                    }
                                     const serialized = await persistAssistant({
+                                        content: current.text,
                                         reasoning:
                                             current.reasoning_text ?? null,
                                     });
@@ -2123,6 +2197,16 @@ export function useChat(
                                         serialized?.split(',') ?? [];
                                 } catch {
                                     /* intentionally empty */
+                                }
+                            } else {
+                                // Fallback: couldn't convert to blob, use URL directly
+                                const placeholder = `![generated image](${ev.url})`;
+                                const already =
+                                    current.text.includes(placeholder);
+                                if (!already) {
+                                    current.text +=
+                                        (current.text ? '\n\n' : '') +
+                                        placeholder;
                                 }
                             }
                         }

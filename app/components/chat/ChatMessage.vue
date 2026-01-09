@@ -21,299 +21,324 @@
             <!-- Attachments bar (above message content) -->
             <div
                 v-if="props.message.role === 'user' && hashList.length"
-            class="attachments-bar mb-3"
-        >
-            <!-- Collapsed: show compact row of thumbnails -->
-            <div
-                v-if="!expanded"
-                class="attachments-row flex flex-wrap gap-2.5"
+                class="attachments-bar mb-3"
             >
-                <button
-                    v-for="(hash, idx) in displayedHashes"
-                    :key="hash"
-                    type="button"
-                    class="attachment-item flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer shadow-sm backdrop-blur-sm"
-                    @click="toggleExpanded"
-                    :aria-label="'View attachment ' + (idx + 1)"
-                >
-                    <!-- PDF thumbnail -->
-                    <template v-if="pdfMeta[hash]">
-                        <div
-                            class="attachment-icon w-10 h-10 flex items-center justify-center bg-red-500/30 rounded-lg border border-red-400/30"
-                        >
-                            <span
-                                class="text-[11px] font-bold text-red-200 tracking-wide"
-                                >PDF</span
-                            >
-                        </div>
-                        <div
-                            class="attachment-info flex flex-col min-w-0 gap-0.5"
-                        >
-                            <span
-                                class="attachment-name text-[13px] font-medium truncate max-w-[140px] leading-tight"
-                            >
-                                {{ getAttachmentName(hash) }}
-                            </span>
-                            <span class="attachment-type text-[11px] opacity-50"
-                                >Document</span
-                            >
-                        </div>
-                    </template>
-                    <!-- Image thumbnail -->
-                    <template v-else-if="thumbnails[hash]?.status === 'ready'">
-                        <img
-                            :src="thumbnails[hash]?.url"
-                            :alt="'Attachment ' + (idx + 1)"
-                            class="attachment-thumb w-10 h-10 object-cover rounded-lg"
-                            draggable="false"
-                        />
-                        <div
-                            class="attachment-info flex flex-col min-w-0 gap-0.5"
-                        >
-                            <span
-                                class="attachment-name text-[13px] font-medium truncate max-w-[140px] leading-tight"
-                            >
-                                Image {{ idx + 1 }}
-                            </span>
-                            <span class="attachment-type text-[11px] opacity-50"
-                                >Image</span
-                            >
-                        </div>
-                    </template>
-                    <!-- Loading state -->
-                    <template
-                        v-else-if="thumbnails[hash]?.status === 'loading'"
-                    >
-                        <div
-                            class="attachment-icon w-10 h-10 flex items-center justify-center bg-white/10 rounded-lg animate-pulse"
-                        >
-                            <span class="text-xs opacity-40">···</span>
-                        </div>
-                        <div
-                            class="attachment-info flex flex-col min-w-0 gap-0.5"
-                        >
-                            <span
-                                class="attachment-name text-[13px] font-medium opacity-40"
-                                >Loading...</span
-                            >
-                        </div>
-                    </template>
-                    <!-- Error state -->
-                    <template v-else>
-                        <div
-                            class="attachment-icon w-10 h-10 flex items-center justify-center bg-white/10 rounded-lg"
-                        >
-                            <span class="text-xs opacity-40">?</span>
-                        </div>
-                        <div
-                            class="attachment-info flex flex-col min-w-0 gap-0.5"
-                        >
-                            <span
-                                class="attachment-name text-[13px] font-medium opacity-40"
-                                >File</span
-                            >
-                        </div>
-                    </template>
-                </button>
-                <!-- Show more indicator if there are hidden attachments -->
-                <button
-                    v-if="hashList.length > maxDisplayedThumbs"
-                    type="button"
-                    class="attachment-more flex items-center justify-center px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer text-[13px] font-medium shadow-sm backdrop-blur-sm"
-                    @click="toggleExpanded"
-                >
-                    +{{ hashList.length - maxDisplayedThumbs }} more
-                </button>
-            </div>
-        </div>
-
-        <div
-            v-if="!editing"
-            :class="[
-                'loading-wrapper',
-                `cm-content-${roleVariant}`,
-                innerClass,
-            ]"
-            ref="contentEl"
-        >
-            <!-- Retro loader extracted to component -->
-            <LoadingGenerating
-                v-if="
-                    props.message.role === 'assistant' &&
-                    props.message.pending &&
-                    !hasContent &&
-                    !props.message.reasoning_text
-                "
-                class="loading-generating animate-in"
-            />
-            <div
-                class="reasoning-accordion-wrapper"
-                v-if="
-                    props.message.role === 'assistant' &&
-                    props.message.reasoning_text
-                "
-            >
-                <LazyChatReasoningAccordion
-                    class="reasoning-accordion"
-                    hydrate-on-visible
-                    :content="props.message.reasoning_text"
-                    :streaming="isStreamingReasoning as boolean"
-                    :pending="props.message.pending === true"
-                />
-            </div>
-
-            <!-- Tool Call Indicators -->
-            <ChatToolCallIndicator
-                v-if="
-                    props.message.role === 'assistant' &&
-                    Array.isArray(props.message.toolCalls) &&
-                    props.message.toolCalls.length > 0
-                "
-                :tool-calls="props.message.toolCalls"
-            />
-
-            <div
-                v-if="hasContent"
-                :class="[
-                    'message-body min-w-0 max-w-full overflow-x-hidden',
-                    `cm-body-${roleVariant}`,
-                ]"
-            >
+                <!-- Collapsed: show compact row of thumbnails -->
                 <div
-                    v-if="props.message.role === 'user'"
-                    :class="['whitespace-pre-wrap relative', 'cm-text-user']"
+                    v-if="!expanded"
+                    class="attachments-row flex flex-wrap gap-2.5"
                 >
-                    <div
-                        :class="{
-                            'line-clamp-6 overflow-hidden':
-                                isUserMessageCollapsed && shouldCollapse,
-                        }"
-                    >
-                        {{ props.message.text }}
-                    </div>
                     <button
-                        v-if="shouldCollapse"
-                        @click="toggleUserMessage"
-                        class="mt-2 text-sm underline hover:no-underline opacity-80 hover:opacity-100 transition-opacity"
+                        v-for="(hash, idx) in displayedHashes"
+                        :key="hash"
+                        type="button"
+                        class="attachment-item flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer shadow-sm backdrop-blur-sm"
+                        @click="toggleExpanded"
+                        :aria-label="'View attachment ' + (idx + 1)"
                     >
-                        {{ isUserMessageCollapsed ? 'Read more' : 'Show less' }}
+                        <!-- PDF thumbnail -->
+                        <template v-if="pdfMeta[hash]">
+                            <div
+                                class="attachment-icon w-10 h-10 flex items-center justify-center bg-red-500/30 rounded-lg border border-red-400/30"
+                            >
+                                <span
+                                    class="text-[11px] font-bold text-red-200 tracking-wide"
+                                    >PDF</span
+                                >
+                            </div>
+                            <div
+                                class="attachment-info flex flex-col min-w-0 gap-0.5"
+                            >
+                                <span
+                                    class="attachment-name text-[13px] font-medium truncate max-w-[140px] leading-tight"
+                                >
+                                    {{ getAttachmentName(hash) }}
+                                </span>
+                                <span
+                                    class="attachment-type text-[11px] opacity-50"
+                                    >Document</span
+                                >
+                            </div>
+                        </template>
+                        <!-- Image thumbnail -->
+                        <template
+                            v-else-if="thumbnails[hash]?.status === 'ready'"
+                        >
+                            <img
+                                :src="thumbnails[hash]?.url"
+                                :alt="'Attachment ' + (idx + 1)"
+                                class="attachment-thumb w-10 h-10 object-cover rounded-lg"
+                                draggable="false"
+                            />
+                            <div
+                                class="attachment-info flex flex-col min-w-0 gap-0.5"
+                            >
+                                <span
+                                    class="attachment-name text-[13px] font-medium truncate max-w-[140px] leading-tight"
+                                >
+                                    Image {{ idx + 1 }}
+                                </span>
+                                <span
+                                    class="attachment-type text-[11px] opacity-50"
+                                    >Image</span
+                                >
+                            </div>
+                        </template>
+                        <!-- Loading state -->
+                        <template
+                            v-else-if="thumbnails[hash]?.status === 'loading'"
+                        >
+                            <div
+                                class="attachment-icon w-10 h-10 flex items-center justify-center bg-white/10 rounded-lg animate-pulse"
+                            >
+                                <span class="text-xs opacity-40">···</span>
+                            </div>
+                            <div
+                                class="attachment-info flex flex-col min-w-0 gap-0.5"
+                            >
+                                <span
+                                    class="attachment-name text-[13px] font-medium opacity-40"
+                                    >Loading...</span
+                                >
+                            </div>
+                        </template>
+                        <!-- Error state -->
+                        <template v-else>
+                            <div
+                                class="attachment-icon w-10 h-10 flex items-center justify-center bg-white/10 rounded-lg"
+                            >
+                                <span class="text-xs opacity-40">?</span>
+                            </div>
+                            <div
+                                class="attachment-info flex flex-col min-w-0 gap-0.5"
+                            >
+                                <span
+                                    class="attachment-name text-[13px] font-medium opacity-40"
+                                    >File</span
+                                >
+                            </div>
+                        </template>
+                    </button>
+                    <!-- Show more indicator if there are hidden attachments -->
+                    <button
+                        v-if="hashList.length > maxDisplayedThumbs"
+                        type="button"
+                        class="attachment-more flex items-center justify-center px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer text-[13px] font-medium shadow-sm backdrop-blur-sm"
+                        @click="toggleExpanded"
+                    >
+                        +{{ hashList.length - maxDisplayedThumbs }} more
                     </button>
                 </div>
-                <StreamMarkdown
-                    :key="props.message.id"
-                    v-else
-                    :content="processedAssistantMarkdown"
-                    :shiki-theme="currentShikiTheme"
-                    :class="[streamMdClasses, 'cm-markdown-assistant']"
-                    :allowed-image-prefixes="['data:image/', 'blob:']"
-                    code-block-show-line-numbers
-                    class="[&>p:first-child]:mt-0 [&>p:last-child]:mb-0 prose-headings:first:mt-5!"
-                />
-                <!-- legacy rendered html path removed -->
             </div>
-        </div>
-        <!-- Editing surface -->
-        <div
-            v-else
-            :class="['w-full', `cm-editor-${roleVariant}`]"
-            ref="editorRoot"
-        >
-            <LazyChatMessageEditor
-                hydrate-on-interaction="focus"
-                v-model="draft"
-                :autofocus="true"
-                :focus-delay="120"
-            />
-            <div class="cm-editor-actions flex w-full justify-end gap-2 mt-2">
-                <UButton
-                    v-bind="saveEditButtonProps"
-                    @click="saveEdit"
-                    :loading="saving"
-                    >Save</UButton
-                >
-                <UButton
-                    v-bind="cancelEditButtonProps"
-                    @click="wrappedCancelEdit"
-                    >Cancel</UButton
-                >
-            </div>
-        </div>
 
-        <!-- Expanded grid -->
-        <MessageAttachmentsGallery
-            v-if="hashList.length && expanded"
-            :hashes="hashList"
-            @collapse="toggleExpanded"
-        />
-
-        <!-- Action buttons: overlap bubble border half outside -->
-        <div
-            v-if="!editing"
-            :class="[
-                'absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap',
-                `cm-actions-${roleVariant}`,
-            ]"
-        >
-            <UButtonGroup
-                class="bg-[var(--md-surface)] rounded-[var(--md-border-radius)] cm-action-group"
+            <div
+                v-if="!editing"
+                :class="[
+                    'loading-wrapper',
+                    `cm-content-${roleVariant}`,
+                    innerClass,
+                ]"
+                ref="contentEl"
             >
-                <UTooltip :delay-duration="500" text="Copy" :teleport="true">
-                    <UButton
-                        v-bind="copyButtonProps"
-                        @click="copyMessage"
-                    ></UButton>
-                </UTooltip>
-                <UTooltip
-                    :delay-duration="500"
-                    text="Retry"
-                    :popper="{ strategy: 'fixed' }"
-                    :teleport="true"
+                <!-- Retro loader extracted to component -->
+                <LoadingGenerating
+                    v-if="
+                        props.message.role === 'assistant' &&
+                        props.message.pending &&
+                        !hasContent &&
+                        !props.message.reasoning_text
+                    "
+                    class="loading-generating animate-in"
+                />
+                <div
+                    class="reasoning-accordion-wrapper"
+                    v-if="
+                        props.message.role === 'assistant' &&
+                        props.message.reasoning_text
+                    "
+                >
+                    <LazyChatReasoningAccordion
+                        class="reasoning-accordion"
+                        hydrate-on-visible
+                        :content="props.message.reasoning_text"
+                        :streaming="isStreamingReasoning as boolean"
+                        :pending="props.message.pending === true"
+                    />
+                </div>
+
+                <!-- Tool Call Indicators -->
+                <ChatToolCallIndicator
+                    v-if="
+                        props.message.role === 'assistant' &&
+                        Array.isArray(props.message.toolCalls) &&
+                        props.message.toolCalls.length > 0
+                    "
+                    :tool-calls="props.message.toolCalls"
+                />
+
+                <div
+                    v-if="hasContent"
+                    :class="[
+                        'message-body min-w-0 max-w-full overflow-x-hidden',
+                        `cm-body-${roleVariant}`,
+                    ]"
+                >
+                    <div
+                        v-if="props.message.role === 'user'"
+                        :class="[
+                            'whitespace-pre-wrap relative',
+                            'cm-text-user',
+                        ]"
+                    >
+                        <div
+                            :class="{
+                                'line-clamp-6 overflow-hidden':
+                                    isUserMessageCollapsed && shouldCollapse,
+                            }"
+                        >
+                            {{ props.message.text }}
+                        </div>
+                        <button
+                            v-if="shouldCollapse"
+                            @click="toggleUserMessage"
+                            class="mt-2 text-sm underline hover:no-underline opacity-80 hover:opacity-100 transition-opacity"
+                        >
+                            {{
+                                isUserMessageCollapsed
+                                    ? 'Read more'
+                                    : 'Show less'
+                            }}
+                        </button>
+                    </div>
+                    <StreamMarkdown
+                        :key="props.message.id"
+                        v-else
+                        :content="processedAssistantMarkdown"
+                        :shiki-theme="currentShikiTheme"
+                        :class="[streamMdClasses, 'cm-markdown-assistant']"
+                        :allowed-image-prefixes="['data:image/', 'blob:']"
+                        code-block-show-line-numbers
+                        class="[&>p:first-child]:mt-0 [&>p:last-child]:mb-0 prose-headings:first:mt-5!"
+                    />
+                    <!-- legacy rendered html path removed -->
+                </div>
+            </div>
+            <!-- Editing surface -->
+            <div
+                v-else
+                :class="['w-full', `cm-editor-${roleVariant}`]"
+                ref="editorRoot"
+            >
+                <LazyChatMessageEditor
+                    hydrate-on-interaction="focus"
+                    v-model="draft"
+                    :autofocus="true"
+                    :focus-delay="120"
+                />
+                <div
+                    class="cm-editor-actions flex w-full justify-end gap-2 mt-2"
                 >
                     <UButton
-                        v-bind="retryButtonProps"
-                        @click="onRetry"
-                    ></UButton>
-                </UTooltip>
-                <UTooltip
-                    v-if="showContinueButton"
-                    :delay-duration="500"
-                    text="Continue"
-                    :popper="{ strategy: 'fixed' }"
-                    :teleport="true"
+                        v-bind="saveEditButtonProps"
+                        @click="saveEdit"
+                        :loading="saving"
+                        >Save</UButton
+                    >
+                    <UButton
+                        v-bind="cancelEditButtonProps"
+                        @click="wrappedCancelEdit"
+                        >Cancel</UButton
+                    >
+                </div>
+            </div>
+
+            <!-- Expanded grid -->
+            <MessageAttachmentsGallery
+                v-if="hashList.length && expanded"
+                :hashes="hashList"
+                @collapse="toggleExpanded"
+            />
+
+            <!-- Action buttons: overlap bubble border half outside -->
+            <div
+                v-if="!editing"
+                :class="[
+                    'absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap',
+                    `cm-actions-${roleVariant}`,
+                ]"
+            >
+                <UButtonGroup
+                    class="bg-[var(--md-surface)] rounded-[var(--md-border-radius)] cm-action-group"
                 >
-                    <UButton
-                        v-bind="continueButtonProps"
-                        @click="onContinue"
-                    ></UButton>
-                </UTooltip>
-                <UTooltip :delay-duration="500" text="Branch" :teleport="true">
-                    <UButton
-                        v-bind="branchButtonProps"
-                        @click="onBranch"
-                    ></UButton>
-                </UTooltip>
-                <UTooltip :delay-duration="500" text="Edit" :teleport="true">
-                    <UButton
-                        v-bind="editButtonProps"
-                        @click="wrappedBeginEdit"
-                    ></UButton>
-                </UTooltip>
-                <!-- Dynamically registered plugin actions -->
-                <template v-for="action in extraActions" :key="action.id">
                     <UTooltip
                         :delay-duration="500"
-                        :text="action.tooltip"
+                        text="Copy"
                         :teleport="true"
                     >
                         <UButton
-                            v-bind="pluginActionButtonProps"
-                            :icon="action.icon"
-                            @click="() => runExtraAction(action)"
+                            v-bind="copyButtonProps"
+                            @click="copyMessage"
                         ></UButton>
                     </UTooltip>
-                </template>
-            </UButtonGroup>
-        </div>
+                    <UTooltip
+                        :delay-duration="500"
+                        text="Retry"
+                        :popper="{ strategy: 'fixed' }"
+                        :teleport="true"
+                    >
+                        <UButton
+                            v-bind="retryButtonProps"
+                            @click="onRetry"
+                        ></UButton>
+                    </UTooltip>
+                    <UTooltip
+                        v-if="showContinueButton"
+                        :delay-duration="500"
+                        text="Continue"
+                        :popper="{ strategy: 'fixed' }"
+                        :teleport="true"
+                    >
+                        <UButton
+                            v-bind="continueButtonProps"
+                            @click="onContinue"
+                        ></UButton>
+                    </UTooltip>
+                    <UTooltip
+                        :delay-duration="500"
+                        text="Branch"
+                        :teleport="true"
+                    >
+                        <UButton
+                            v-bind="branchButtonProps"
+                            @click="onBranch"
+                        ></UButton>
+                    </UTooltip>
+                    <UTooltip
+                        :delay-duration="500"
+                        text="Edit"
+                        :teleport="true"
+                    >
+                        <UButton
+                            v-bind="editButtonProps"
+                            @click="wrappedBeginEdit"
+                        ></UButton>
+                    </UTooltip>
+                    <!-- Dynamically registered plugin actions -->
+                    <template v-for="action in extraActions" :key="action.id">
+                        <UTooltip
+                            :delay-duration="500"
+                            :text="action.tooltip"
+                            :teleport="true"
+                        >
+                            <UButton
+                                v-bind="pluginActionButtonProps"
+                                :icon="action.icon"
+                                @click="() => runExtraAction(action)"
+                            ></UButton>
+                        </UTooltip>
+                    </template>
+                </UButtonGroup>
+            </div>
         </template>
     </div>
 </template>
@@ -344,6 +369,11 @@ import { useNuxtApp } from '#app';
 import { useRafFn, useClipboard } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
+import {
+    useThumbnailUrlCache,
+    type ThumbState,
+} from '~/composables/core/useThumbnailUrlCache';
 
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };
@@ -561,20 +591,16 @@ const hashList = computed<string[]>(() =>
 const assistantMarkdown = computed(() =>
     props.message.role === 'assistant' ? props.message.text || '' : ''
 );
-const FILE_HASH_IMG_RE = /!\[[^\]]*]\(file-hash:([a-f0-9]{6,})\)/gi;
+// Regex to match legacy file-hash image markdown syntax
+const FILE_HASH_IMG_RE = /!\[[^\]]*]\(file-hash:([a-f0-9-]{6,})\)/gi;
 const processedAssistantMarkdown = computed(() => {
     if (props.message.role !== 'assistant') return '';
-    return (assistantMarkdown.value || '').replace(
+    // Transform file-hash: URLs to use a placeholder image with hash in alt attribute
+    // This avoids browser console errors from trying to load invalid file-hash: URLs
+    // The hydrateInlineImages function will replace these with actual blob URLs
+    return assistantMarkdown.value.replace(
         FILE_HASH_IMG_RE,
-        (_m, h) => {
-            // If we have the image ready in cache, render it immediately to prevent flash on remount
-            const state = thumbnails[h];
-            if (state?.status === 'ready' && state.url) {
-                return `<img src="${state.url}" alt="generated image" class="retro-inline-image-placeholder inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)]" data-file-hash="${h}" loading="eager" />`;
-            }
-            // Otherwise render placeholder for hydration
-            return `<span class=\"or3-img-ph retro-inline-image-placeholder inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)] opacity-60\" data-file-hash=\"${h}\" aria-label=\"generated image\"></span>`;
-        }
+        (_, hash) => `![file-hash:${hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`
     );
 });
 
@@ -675,12 +701,9 @@ async function saveEdit() {
 
 // (hashList defined earlier)
 
-// Compact thumb preview support (attachments gallery handles full grid). Reuse global caches.
-interface ThumbState {
-    status: 'loading' | 'ready' | 'error';
-    url?: string;
-}
-const thumbnails = reactive<Record<string, ThumbState>>({});
+// Compact thumb preview support (attachments gallery handles full grid).
+type LocalThumbState = ThumbState | { status: 'loading' };
+const thumbnails = reactive<Record<string, LocalThumbState>>({});
 // PDF meta (name/kind) for hashes that are PDFs so we show placeholder instead of broken image
 const pdfMeta = reactive<Record<string, { name?: string; kind: string }>>({});
 const safePdfName = computed(() => {
@@ -726,58 +749,10 @@ function getAttachmentName(hash: string): string {
     return 'Document';
 }
 
-// Module-level caches for thumbnails
-const thumbCache = new Map<string, ThumbState>();
-const thumbLoadPromises = new Map<string, Promise<void>>();
-const thumbRefCounts = new Map<string, number>();
-const thumbCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-function retainThumb(hash: string) {
-    // Cancel any pending cleanup for this hash
-    if (thumbCleanupTimers.has(hash)) {
-        clearTimeout(thumbCleanupTimers.get(hash)!);
-        thumbCleanupTimers.delete(hash);
-    }
-    const prev = thumbRefCounts.get(hash) || 0;
-    thumbRefCounts.set(hash, prev + 1);
-}
-
-function releaseThumb(hash: string) {
-    const prev = thumbRefCounts.get(hash) || 0;
-    if (prev <= 1) {
-        thumbRefCounts.set(hash, 0); // Mark as 0 but don't delete yet
-
-        // Schedule cleanup with a grace period (e.g. 30 seconds)
-        // This allows scrolling back up without re-fetching from DB
-        if (!thumbCleanupTimers.has(hash)) {
-            const timer = setTimeout(() => {
-                thumbCleanupTimers.delete(hash);
-                // Double check ref count is still 0
-                if ((thumbRefCounts.get(hash) || 0) > 0) return;
-
-                thumbRefCounts.delete(hash);
-                const state = thumbCache.get(hash);
-                if (state?.url) {
-                    try {
-                        URL.revokeObjectURL(state.url);
-                    } catch (e: unknown) {
-                        if (import.meta.dev) {
-                            console.warn(
-                                '[ChatMessage] Failed to revoke object URL',
-                                e
-                            );
-                        }
-                    }
-                }
-                thumbCache.delete(hash);
-                thumbLoadPromises.delete(hash);
-            }, 30000); // 30s grace period
-            thumbCleanupTimers.set(hash, timer);
-        }
-    } else {
-        thumbRefCounts.set(hash, prev - 1);
-    }
-}
+// Shared thumbnail object URL cache (global singleton with ref-count + grace cleanup)
+const thumbUrlCache = useThumbnailUrlCache({ graceMs: 30000 });
+const retainThumb = thumbUrlCache.retain;
+const releaseThumb = thumbUrlCache.release;
 
 // Per-message persistent UI state stored directly on the message object to
 // survive virtualization recycling without external maps.
@@ -797,50 +772,42 @@ async function ensureThumb(h: string) {
         return;
     }
     if (thumbnails[h] && thumbnails[h].status === 'ready') return;
-    const cached = thumbCache.get(h);
+    const cached = thumbUrlCache.get(h);
     if (cached) {
         thumbnails[h] = cached;
         return;
     }
-    if (thumbLoadPromises.has(h)) {
-        await thumbLoadPromises.get(h);
-        const after = thumbCache.get(h);
-        if (after) thumbnails[h] = after;
-        return;
-    }
     thumbnails[h] = { status: 'loading' };
-    const p = (async () => {
-        try {
+
+    try {
+        const state = await thumbUrlCache.ensure(h, async () => {
             const [blob, meta] = await Promise.all([
                 (await import('~/db/files')).getFileBlob(h),
                 getFileMeta(h).catch(() => undefined),
             ]);
+
             if (meta && meta.kind === 'pdf') {
                 pdfMeta[h] = { name: meta.name, kind: meta.kind };
-                // Remove the temporary loading state since we won't have an image thumb
-                delete thumbnails[h];
-                return;
+                return null;
             }
-            if (!blob) throw new Error('missing');
+            if (!blob) return null;
             if (blob.type === 'application/pdf') {
                 pdfMeta[h] = { name: meta?.name, kind: 'pdf' };
-                delete thumbnails[h];
-                return;
+                return null;
             }
-            const url = URL.createObjectURL(blob);
-            const ready: ThumbState = { status: 'ready', url };
-            thumbCache.set(h, ready);
-            thumbnails[h] = ready;
-        } catch {
-            const err: ThumbState = { status: 'error' };
-            thumbCache.set(h, err);
-            thumbnails[h] = err;
-        } finally {
-            thumbLoadPromises.delete(h);
+            return blob;
+        });
+
+        if (state) {
+            thumbnails[h] = state;
+        } else {
+            // PDF or intentionally skipped
+            delete thumbnails[h];
         }
-    })();
-    thumbLoadPromises.set(h, p);
-    await p;
+    } catch {
+        const errState: ThumbState = { status: 'error' };
+        thumbnails[h] = errState;
+    }
 }
 
 // Track current hashes used by this message for ref counting.
@@ -852,20 +819,34 @@ watch(
     hashList,
     async (list) => {
         const nextSet = new Set(list);
-        // Additions
+        // Additions - identify new hashes to load
+        const newHashes: string[] = [];
         for (const h of nextSet) {
             if (!currentHashes.has(h)) {
                 // Pre-warm local reactive state from global cache immediately to prevent flash
                 if (!thumbnails[h]) {
-                    const cached = thumbCache.get(h);
+                    const cached = thumbUrlCache.get(h);
                     if (cached) {
                         thumbnails[h] = cached;
                     } else {
                         thumbnails[h] = { status: 'loading' };
+                        newHashes.push(h);
                     }
+                } else if (thumbnails[h].status === 'loading') {
+                    newHashes.push(h);
                 }
-                await ensureThumb(h);
-                const state = thumbCache.get(h);
+            }
+        }
+
+        // Load all new thumbnails in parallel for faster loading
+        if (newHashes.length > 0) {
+            await Promise.all(newHashes.map((h) => ensureThumb(h)));
+        }
+
+        // Register successfully loaded thumbnails
+        for (const h of nextSet) {
+            if (!currentHashes.has(h)) {
+                const state = thumbUrlCache.get(h);
                 if (state?.status === 'ready') {
                     if (!isComponentActive) {
                         retainThumb(h);
@@ -877,6 +858,7 @@ watch(
                 }
             }
         }
+
         // Removals
         for (const h of Array.from(currentHashes)) {
             if (!nextSet.has(h)) {
@@ -894,7 +876,7 @@ onBeforeUnmount(() => {
     for (const h of currentHashes) releaseThumb(h);
     currentHashes.clear();
 });
-// Inline image hydration: replace <span data-file-hash> markers with <img> once ready
+// Inline image hydration: replace placeholder <img> src once ready
 const contentEl = ref<HTMLElement | null>(null);
 async function hydrateInlineImages() {
     // Only hydrate assistant messages (users have inline images stripped).
@@ -902,21 +884,54 @@ async function hydrateInlineImages() {
     await nextTick();
     const root = contentEl.value;
     if (!root) return;
-    const spans = root.querySelectorAll(
-        'span.or3-img-ph[data-file-hash]:not([data-hydrated])'
+
+    // Prefer the new alt-based markers; keep src selectors for backward compatibility
+    // with older persisted messages that may still contain invalid src values.
+    const images = root.querySelectorAll(
+        'img[alt^="file-hash:"], img[src^="file-hash:"], img[src^="blob:file-hash/"]'
     );
-    spans.forEach((span) => {
-        const hash = span.getAttribute('data-file-hash') || '';
-        if (!hash) return;
-        const state = thumbCache.get(hash) || thumbnails[hash];
-        if (state && state.status === 'ready' && state.url) {
-            const img = document.createElement('img');
-            img.setAttribute('data-file-hash', hash);
-            img.setAttribute('data-hydrated', 'true');
+
+    images.forEach((imgEl) => {
+        const img = imgEl as HTMLImageElement;
+        const src = img.getAttribute('src') || '';
+        const alt = img.getAttribute('alt') || '';
+
+        // handle file-hash:uuid in src (legacy/blob) OR in alt (current)
+        let hash = '';
+        if (src.startsWith('file-hash:') || src.startsWith('blob:file-hash/')) {
+            hash = src.replace(/^.*file-hash[:/]/, '');
+        } else if (alt.startsWith('file-hash:')) {
+            hash = alt.replace('file-hash:', '');
+        }
+
+        // Skip if already hydrated (sometimes src changes but base src attr remains?)
+        if (img.dataset.hydrated === 'true') return;
+
+        const state = thumbnails[hash];
+        if (state?.status === 'ready' && state.url) {
             img.src = state.url;
-            img.alt = 'generated image';
-            img.className = span.className.replace('opacity-60', '');
-            span.replaceWith(img);
+            img.dataset.hydrated = 'true';
+            img.dataset.fileHash = hash;
+            // distinct class for loaded images vs placeholders
+            img.classList.remove(
+                'or3-img-ph',
+                'w-[120px]',
+                'h-[120px]',
+                'bg-[var(--md-surface-container-lowest)]',
+                'opacity-60'
+            );
+            img.classList.add('retro-inline-image-placeholder', 'inline-block');
+        } else if (!img.classList.contains('or3-img-ph')) {
+            // Apply placeholder styles while waiting
+            img.classList.add(
+                'or3-img-ph',
+                'retro-inline-image-placeholder',
+                'inline-block',
+                'w-[120px]',
+                'h-[120px]',
+                'bg-[var(--md-surface-container-lowest)]',
+                'opacity-60'
+            );
         }
     });
 }
@@ -949,7 +964,12 @@ watchEffect(() => {
     void assistantMarkdown.value;
     void hashList.value.length;
     void Object.keys(thumbnails)
-        .map((h) => thumbnails[h]?.status + (thumbnails[h]?.url || ''))
+        .map((h) => {
+            const st = thumbnails[h];
+            return st?.status === 'ready'
+                ? `ready:${st.url ?? ''}`
+                : st?.status;
+        })
         .join('|');
     rafHydrate.resume();
 });
@@ -1013,14 +1033,15 @@ const { copy: copyToClipboard } = useClipboard({ legacy: true });
 function copyMessage() {
     copyToClipboard(props.message.text || '')
         .then(() => {
-             useToast().add({
+            useToast().add({
                 title: 'Message copied',
-                description: 'The message content has been copied to your clipboard.',
+                description:
+                    'The message content has been copied to your clipboard.',
                 duration: 2000,
             });
         })
         .catch(() => {
-             useToast().add({
+            useToast().add({
                 title: 'Copy failed',
                 description: 'Could not copy message to clipboard.',
                 color: 'error',

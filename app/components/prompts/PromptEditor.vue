@@ -191,7 +191,9 @@ watch(
 );
 
 onBeforeUnmount(() => {
-    scheduleSave.cancel?.();
+    // vueuse's useDebounceFn returns a callable with a cancel() method
+    const cancel = (scheduleSave as unknown as { cancel?: () => void }).cancel;
+    cancel?.();
     editor.value?.destroy();
 });
 

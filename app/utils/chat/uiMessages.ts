@@ -4,6 +4,7 @@ import {
     isWorkflowMessageData,
     type UiWorkflowState,
 } from '~/utils/chat/workflow-types';
+import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
 
 interface ContentPartLike {
     type?: string;
@@ -170,8 +171,10 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
             // Only take up to the number we still need to avoid duplication.
             const missing = candidate.slice(0, needed);
             if (missing.length) {
+                // Use transparent placeholder image with hash in alt to avoid browser errors
                 const placeholders = missing.map(
-                    (h) => `![generated image](file-hash:${h})`
+                    (h) =>
+                        `![file-hash:${h}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`
                 );
                 text += (text ? '\n\n' : '') + placeholders.join('\n\n');
                 if (import.meta.dev) {
@@ -214,7 +217,7 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         error:
             raw.error ??
             (raw.data && typeof raw.data === 'object'
-                ? ((raw.data as { error?: string | null }).error ?? null)
+                ? (raw.data as { error?: string | null }).error ?? null
                 : null),
         isWorkflow,
         workflowState,
