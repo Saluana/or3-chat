@@ -98,7 +98,7 @@
 
             <!-- Node List -->
             <div
-                v-for="nodeId in props.workflowState.executionOrder"
+                v-for="nodeId in (props.workflowState.executionOrder || [])"
                 :key="nodeId"
                 class="node-item"
             >
@@ -681,9 +681,11 @@ const statusText = computed(() => {
     if (hasPendingHitl.value) {
         return pendingHitlStatusText.value;
     }
+    const state = props.workflowState.executionState;
+    if (!state) return 'Unknown';
     return (
-        props.workflowState.executionState.charAt(0).toUpperCase() +
-        props.workflowState.executionState.slice(1)
+        state.charAt(0).toUpperCase() +
+        state.slice(1)
     );
 });
 
@@ -896,7 +898,7 @@ const pendingHitlContextLabel = computed(() => {
 function hasBranches(nodeId: string): boolean {
     if (!props.workflowState.branches) return false;
     // Check if any branch key starts with nodeId + ':'
-    return Object.keys(props.workflowState.branches).some((k) =>
+    return Object.keys(props.workflowState.branches || {}).some((k) =>
         k.startsWith(nodeId + ':')
     );
 }

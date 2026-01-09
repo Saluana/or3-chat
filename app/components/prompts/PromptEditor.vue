@@ -134,7 +134,7 @@ function onTitleChange() {
 }
 
 function emitContent() {
-    if (!editor.value) return;
+    if (!editor.value || editor.value.isDestroyed) return;
     pendingContent.value = editor.value.getJSON();
     scheduleSave();
 }
@@ -191,6 +191,7 @@ watch(
 );
 
 onBeforeUnmount(() => {
+    scheduleSave.cancel?.();
     editor.value?.destroy();
 });
 

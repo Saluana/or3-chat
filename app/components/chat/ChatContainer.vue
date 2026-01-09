@@ -395,6 +395,7 @@ function mergeWorkflowState(msg: UiChatMessage) {
 }
 
 const allMessages = computed(() => {
+    if (!chat.value) return [];
     const list = stableMessages.value.map(mergeWorkflowState);
     if (streamingMessage.value) {
         list.push(mergeWorkflowState(streamingMessage.value));

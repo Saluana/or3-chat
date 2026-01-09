@@ -32,17 +32,21 @@ vi.mock('streamdown-vue', () => ({
     useShikiHighlighter: vi.fn().mockResolvedValue(undefined),
 }));
 
+import { defineComponent } from 'vue';
+
 // Mock StreamMarkdown component
-const StreamMarkdown = {
+const StreamMarkdown = defineComponent({
+    name: 'StreamMarkdown',
     template: '<div class="stream-markdown">{{ content }}</div>',
     props: ['content', 'shikiTheme'],
-};
+});
 
 // Mock UIcon component
-const UIcon = {
+const UIcon = defineComponent({
+    name: 'UIcon',
     template: '<div class="u-icon" :data-name="name"></div>',
     props: ['name'],
-};
+});
 
 describe('WorkflowExecutionStatus', () => {
     const mockState: UiWorkflowState = {

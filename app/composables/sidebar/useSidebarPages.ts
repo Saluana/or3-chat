@@ -175,7 +175,7 @@ function normalizeSidebarPageDef(def: SidebarPageDef): RegisteredSidebarPage {
                 ? defineAsyncComponent({
                       loader: def.component,
                       timeout: 15000,
-                      suspensible: true,
+                      suspensible: false,
                       onError(error, retry, fail, attempts) {
                           if (attempts <= 2) retry();
                           else fail();

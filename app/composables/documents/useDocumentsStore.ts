@@ -53,7 +53,8 @@ export async function flush(id: string) {
     if (!st.pendingTitle && !st.pendingContent) return; // nothing to persist
 
     // Cancel any pending debounced save
-    if (st.debouncedSave && typeof st.debouncedSave.cancel === 'function') {
+    // Cancel any pending debounced save
+    if (st.debouncedSave?.cancel) {
         st.debouncedSave.cancel();
     }
 
@@ -197,79 +198,9 @@ export async function releaseDocument(
     const st = documentsMap.get(id);
     if (!st) return;
     // Cancel any pending debounced save
-    // Note: useDebounceFn doesn't expose a per-argument cancel easily if shared,
-    // but here we are using a shared debounce function.
-    // However, the original code had a per-document timer.
-    // To replicate per-document cancellation correctly with a shared debounce function is tricky if we don't track it.
-    // Actually, VueUse's useDebounceFn is a single timer. If we call it for doc A then doc B, doc A's call might be cancelled if maxWait isn't used or if not independent.
-    // Wait, useDebounceFn creates ONE debounced function. If we want independent debounces per document, we need to store the debounced function on the document state?
-    // The previous implementation used a map of states, each with a timer.
-    // So 'scheduleSave' was global but operated on specific ID's timer.
-
-    // Let's correct this. We need per-document debouncing if we want them independent.
-    // The previous code: `st.timer = setTimeout(...)`. This IS per-document.
-    
-    // So we should probably NOT use a single global `debouncedFlush`.
-    // Instead each document state should perhaps hold its own debounced save function?
-    // Or we stick to the plan which says: "create debouncedFlush = useDebounceFn((id) => flush(id), 750)"
-    // If we use a single debounced function, saving Doc A then immediately Doc B would cancel Doc A's save if the debounce is global!
-    // That seems like a regression.
-    
-    // Ah, checking the plan: "create debouncedFlush = useDebounceFn((id) => flush(id), 750); remove timer on state."
-    // This implies a SINGLE debounced function.
-    // If I type in Doc A, then click Doc B and type, Doc A's save might be lost if I don't flush it explicitly?
-    // `releaseDocument` calls `flush(id)`.
-    
-    // If I switch documents, `releaseDocument` is called.
-    
-    // But if I have two docs open side-by-side (multi-pane)?
-    // Writing in A, then writing in B quickly.
-    // Global debounce will delay A, then B comes in and cancels A's timer `useDebounceFn` usually cancels previous invocation.
-    
-    // To be safe and match "exact behavior", we should probably have per-doc debounce.
-    // BUT the requirement/plan explicitly said: `create debouncedFlush = useDebounceFn((id) => flush(id), 750)`
-    // I should follow the plan, but if it causes a bug (REGRESSION), I need to be careful.
-    // Multi-pane IS a feature.
-    
-    // Actually, `useSidebarSearch` used a single debounce because there is only one search query.
-    // `useDocumentsStore` manages MANY documents.
-    
-    // Let's look at `useDebounceFn` docs or behavior. "Debounce execution of a function."
-    // It does not key by argument.
-    
-    // Use `createDebounceFn`? No.
-    
-    // Alternative: We can attach a `debouncedSave` to the `DocState` when creating it.
-    
-    // Let's refine the implementation to be SAFE for multi-pane.
-    // I will add `debouncedSave` to `DocState` instead of `timer`.
-    
-    // Wait, I can't deviate from the plan too much without checking, but the goal is "preserve exact behavior".
-    // Global debounce definitely changes behavior for concurrent edits in multi-pane.
-    
-    // Let's add `debouncedSave` to `DocState`.
-    
-    // Correct approach for `useDocumentsStore.ts`:
-    // 1. Add `debouncedSave?: DebouncedFn<void>` to DocState.
-    // 2. In `ensure(id)`, initialize it: `st.debouncedSave = useDebounceFn(() => flush(id), 750)`.
-    // 3. In `scheduleSave(id)`, call `st.debouncedSave()`.
-    // 4. In `flush`, cancel `st.debouncedSave`? `useDebounceFn` doesn't pass the cancel method easily?
-    // Actually `useDebounceFn` returns the function with `.cancel()`.
-    
-    // Let's verify `useDebounceFn` return type. It returns the debounced function which has `.cancel()`.
-    
-    // So:
-    // interface DocState { ... debouncedSave?: Function & { cancel: () => void } }
-    
-    // This seems safer.
-    
-    // BUT for this specific tool call, I am editing the file text.
-    // I will stick to what creates independent timers to match original behavior.
-    
-    // Wait, the previous code used `setTimeout` stored on the state.
-    // If I use `useDebounceFn`, I should store the result on the state.
-    
-    // Let's try to do this cleanly.
+    if (st.debouncedSave?.cancel) {
+        st.debouncedSave.cancel();
+    }
 
     if (shouldFlush) {
         try {
@@ -298,7 +229,7 @@ export async function releaseDocument(
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
         for (const [, st] of documentsMap) {
-            if (st.debouncedSave && typeof st.debouncedSave.cancel === 'function') {
+            if (st.debouncedSave?.cancel) {
                 st.debouncedSave.cancel();
             }
         }

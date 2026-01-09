@@ -166,7 +166,7 @@
             <ChatToolCallIndicator
                 v-if="
                     props.message.role === 'assistant' &&
-                    props.message.toolCalls &&
+                    Array.isArray(props.message.toolCalls) &&
                     props.message.toolCalls.length > 0
                 "
                 :tool-calls="props.message.toolCalls"
@@ -855,6 +855,15 @@ watch(
         // Additions
         for (const h of nextSet) {
             if (!currentHashes.has(h)) {
+                // Pre-warm local reactive state from global cache immediately to prevent flash
+                if (!thumbnails[h]) {
+                    const cached = thumbCache.get(h);
+                    if (cached) {
+                        thumbnails[h] = cached;
+                    } else {
+                        thumbnails[h] = { status: 'loading' };
+                    }
+                }
                 await ensureThumb(h);
                 const state = thumbCache.get(h);
                 if (state?.status === 'ready') {
