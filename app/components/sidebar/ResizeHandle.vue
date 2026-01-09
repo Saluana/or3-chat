@@ -10,7 +10,7 @@
         indicator-height="h-24"
         indicator-width="w-1.5"
         indicator-active-class="bg-[var(--md-primary)]/70"
-        indicator-idle-class="bg-[var(--md-outline-variant)]/70"
+        indicator-idle-class="bg-[var(--md-outline-variant)]/20"
         class="resize-handle-layer hidden md:block"
         @resize-start="emit('resize-start', $event)"
         @resize-keydown="emit('resize-keydown', $event)"

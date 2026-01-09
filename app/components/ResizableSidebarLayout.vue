@@ -454,7 +454,7 @@ const toggleAria = computed(() =>
 /* Sidebar background size support */
 :root {
     /* fallback value if not set */
-    --app-sidebar-bg-size: 240px;
+    --app-sidebar-bg-1-size: 240px;
 }
 .dark .content-bg {
     background-color: var(
@@ -526,14 +526,14 @@ aside::before {
     inset: 0;
     pointer-events: none;
     background-image: var(--app-sidebar-bg-1, none);
-    background-repeat: var(--app-sidebar-bg-repeat, repeat);
+    background-repeat: var(--app-sidebar-bg-1-repeat, repeat);
     background-position: top left;
     background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);
     opacity: var(--app-sidebar-bg-1-opacity, var(--sidebar-rep-opacity));
     z-index: 0;
     background-color: var(--app-sidebar-bg-color, var(--md-surface-variant));
-    background-size: var(--app-sidebar-bg-size, 240px)
-        var(--app-sidebar-bg-size, 240px);
+    background-size: var(--app-sidebar-bg-1-size, 240px)
+        var(--app-sidebar-bg-1-size, 240px);
 }
 
 aside {

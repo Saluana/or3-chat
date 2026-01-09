@@ -87,7 +87,7 @@
             @update:size-px="(v: number) => { local.sidebarBgSizePx = v; commitSize('sidebarBgSizePx', v); }"
             @update:repeat="(v: 'repeat' | 'no-repeat') => set({ backgrounds: { sidebar: { repeat: v } } })"
             @update:fit="(v: boolean) => set({ backgrounds: { sidebar: { fit: v } } })"
-            @update:color="(c: string) => set({ backgrounds: { sidebar: { color: c } } } })"
+            @update:color="(c: string) => set({ backgrounds: { sidebar: { color: c } } })"
             @upload="(file: File) => handleLayerUpload(file, 'sidebarBg')"
             @remove="removeLayer('sidebarBg')"
             @apply-preset="(src: string, opacity: number) => applyPreset('sidebarBg', src, opacity)"
