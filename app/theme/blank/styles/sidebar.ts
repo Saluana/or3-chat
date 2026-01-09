@@ -137,11 +137,6 @@ export const sidebarCssSelectors = {
             backgroundColor: 'var(--md-surface)',
         },
     },
-    '#bottom-nav': {
-        style: {
-            backgroundColor: 'var(--md-surface)',
-        },
-    },
     '.sidebar-section-heading': {
         style: {
             fontFamily:
