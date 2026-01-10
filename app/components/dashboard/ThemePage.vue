@@ -6,25 +6,25 @@
     >
         <!-- Accessible live region for status updates -->
         <p ref="liveStatus" class="sr-only" aria-live="polite"></p>
-        
+
         <!-- Mode Toggle -->
         <DashboardThemeModeToggle />
-        
+
         <!-- Color Palette Overrides -->
         <DashboardThemeColorPaletteSection />
-        
+
         <!-- Custom Background Colors Master Toggle -->
         <DashboardThemeCustomBackgroundToggle />
-        
+
         <!-- Typography -->
         <DashboardThemeTypographySection />
-        
+
         <!-- Background Layers (Content 1, Content 2, Sidebar) -->
         <DashboardThemeBackgroundLayersSection />
-        
+
         <!-- Accessibility -->
         <DashboardThemeAccessibilitySection />
-        
+
         <!-- Reset -->
         <DashboardThemeResetSection />
     </div>
