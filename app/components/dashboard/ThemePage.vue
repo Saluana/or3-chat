@@ -8,7 +8,7 @@
         <p ref="liveStatus" class="sr-only" aria-live="polite"></p>
         
         <!-- Mode Toggle -->
-        <DashboardThemeThemeModeToggle />
+        <DashboardThemeModeToggle />
         
         <!-- Color Palette Overrides -->
         <DashboardThemeColorPaletteSection />
