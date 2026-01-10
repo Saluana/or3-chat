@@ -46,8 +46,6 @@
                                 :is="activePageComponent"
                                 :key="`keepalive-${activePageId}`"
                                 v-bind="activePageProps"
-                                @vue:mounted="onPageMounted"
-                                @vue:unmounted="onPageUnmounted"
                                 v-on="forwardedEvents"
                             />
                             <component
@@ -56,8 +54,6 @@
                                 :is="activePageComponent"
                                 :key="`no-keepalive-${activePageId}`"
                                 v-bind="activePageProps"
-                                @vue:mounted="onPageMounted"
-                                @vue:unmounted="onPageUnmounted"
                                 v-on="forwardedEvents"
                             />
                         </KeepAlive>
@@ -131,7 +127,6 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import SidebarHomePage from '~/components/sidebar/SidebarHomePage.vue';
 import type { Post, Project } from '~/db';
-import type { Document } from '~/db/documents';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarSections';
@@ -352,20 +347,8 @@ const forwardedEvents = computed(() => {
     return events;
 });
 
-// Page lifecycle handlers
-function onPageMounted(vnode: any) {
-    // Could be used for analytics or cleanup
-}
-
-function onPageUnmounted(vnode: any) {
-    // Could be used for cleanup
-}
-
 // Refs for parent component access
 const sideNavHeaderRef = ref<InstanceType<typeof SideNavHeader> | null>(null);
-const containerRef = ref<HTMLElement | null>(null);
-const scrollAreaRef = ref<HTMLElement | null>(null);
-const bottomNavRef = ref<HTMLElement | null>(null);
 
 // Expose focusSearchInput to parent components
 function focusSearchInput() {
