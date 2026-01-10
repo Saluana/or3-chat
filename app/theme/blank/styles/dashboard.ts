@@ -1,4 +1,10 @@
 const galleryButtons = 'bg-white/10! backdrop-blur-md! hover:bg-white/20! active:bg-white/30! flex items-center justify-center';
+const destructiveOutlineButton = {
+    color: 'neutral' as const,
+    ui: {
+        base: 'text-[var(--md-error)] border-[color:var(--md-error)]/40 hover:bg-[var(--md-error)]/10 active:bg-[var(--md-error)]/15',
+    },
+};
 
 export const dashboardOverrides = {
     'button.image-viewer': {
@@ -17,6 +23,8 @@ export const dashboardOverrides = {
     'button#images.gallery.copy': {
         class: galleryButtons,
     },
+    'button#images.delete': destructiveOutlineButton,
+    'button#images.delete-selection': destructiveOutlineButton,
 };
 export const dashboardStyles = {
     '.dashboard-plugin-icon-label': {

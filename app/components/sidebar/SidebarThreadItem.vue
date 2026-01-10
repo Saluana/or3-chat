@@ -49,7 +49,7 @@
                     >
                     <UButton
                         v-bind="deleteButtonProps"
-                        class="w-full justify-start text-error-500"
+                        class="w-full justify-start text-[var(--md-error)] hover:bg-[var(--md-error)]/10 active:bg-[var(--md-error)]/15"
                         @click="emit('delete', thread)"
                         >Delete</UButton
                     >
@@ -126,7 +126,7 @@ const deleteButtonProps = computed(() => {
         isNuxtUI: true,
     });
     return {
-        color: 'error' as const,
+        color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
         icon: useIcon('ui.trash').value,

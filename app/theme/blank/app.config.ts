@@ -58,6 +58,7 @@ export default {
                         'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
                     'on-surface':
                         'bg-[var(--md-surface)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
+                    error: 'bg-[var(--md-error)] text-[var(--md-on-error)] hover:bg-[var(--md-error-hover)] active:bg-[var(--md-error-active)]',
                 },
                 // Override size variant so padding wins over defaults
                 size: {

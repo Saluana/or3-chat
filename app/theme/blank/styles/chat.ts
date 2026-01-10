@@ -28,6 +28,10 @@ export const chatOverrides = {
         color: 'primary',
         class: 'theme-btn flex items-center justify-center bg-primary hover:bg-[var(--md-primary-hover)]! active:bg-[var(--md-primary-active)]! disabled:bg-primary! disabled:opacity-40! aria-disabled:bg-primary! aria-disabled:opacity-40! text-white! ',
     },
+    'button#chat.stop': {
+        variant: 'solid',
+        color: 'error',
+    },
     'div#chat.editor': {
         class: 'font-[IBM_Plex_Sans] text-[16px]',
     },

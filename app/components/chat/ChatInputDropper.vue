@@ -606,7 +606,8 @@ const stopButtonProps = useButtonOverrides(
         square: true,
         size: 'sm',
         color: 'error',
-        class: 'theme-btn text-white dark:text-black flex items-center justify-center',
+        variant: 'solid',
+        class: 'theme-btn flex items-center justify-center text-[var(--md-on-error)] bg-[var(--md-error)]! hover:bg-[var(--md-error-hover)]! active:bg-[var(--md-error-active)]!',
     }
 );
 

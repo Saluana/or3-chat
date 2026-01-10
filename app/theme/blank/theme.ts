@@ -66,6 +66,8 @@ export default defineTheme({
         success: '#51cf66',
         warning: '#ffa94d',
         error: '#ff6b6b',
+        errorHover: '#ff8787',
+        errorActive: '#ff4d4d',
         info: '#E8F1F8',
         infoHover: '#DCEAF4',
         infoActive: '#C6DDEE',
@@ -180,6 +182,7 @@ export default defineTheme({
         ...chatCssSelectors,
         ...dashboardStyles,
         ...documentsStyles,
+        /*
         '.theme-btn': {
             style: {
                 border: 'var(--md-border-width) solid var(--md-border-color)',
@@ -198,7 +201,7 @@ export default defineTheme({
             style: {
                 backgroundColor: 'var(--md-surface-active)',
             },
-        },
+        },*/
         '#top-nav .theme-btn': {
             style: {
                 border: 'none !important',
