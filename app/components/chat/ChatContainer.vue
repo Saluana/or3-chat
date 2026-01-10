@@ -108,6 +108,7 @@ import {
     watch,
     ref,
     reactive,
+    isRef,
     type Ref,
     type CSSProperties,
     onBeforeUnmount,
@@ -136,13 +137,13 @@ import type {
     StreamState,
 } from '../../../types/chat-internal';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
+import type { UiWorkflowState } from '~/utils/chat/workflow-types';
 // Removed onMounted/watchEffect (unused)
 
 // Debug utilities removed per request.
 
 const model = ref('openai/gpt-oss-120b');
 const pendingPromptId = ref<string | null>(null);
-//yoooolo
 // Resize (Req 3.4): useElementSize -> reactive width
 const containerRoot: Ref<HTMLElement | null> = ref(null);
 const { width: containerWidth } = useElementSize(containerRoot);
@@ -299,9 +300,7 @@ const streamingActive = computed(() => loading.value || workflowRunning.value);
 // Tail streaming now provided directly by useChat composable
 // `useChat` returns many refs; unwrap common ones so computed values expose plain objects/primitives
 function unwrapRef<T>(refOrValue: T | Ref<T>): T {
-    return refOrValue && typeof refOrValue === 'object' && 'value' in refOrValue
-        ? (refOrValue as Ref<T>).value
-        : (refOrValue as T);
+    return isRef(refOrValue) ? refOrValue.value : refOrValue;
 }
 
 const streamId = computed(() => unwrapRef(chat.value?.streamId));
@@ -349,7 +348,20 @@ const stableMessages = computed<UiChatMessage[]>(() => messages.value);
 
 // Combine stable messages and streaming message for Or3Scroll
 // Reactive bridge: track workflow states by message id
-const workflowStates = reactive(new Map<string, any>());
+function isUiWorkflowState(v: unknown): v is UiWorkflowState {
+    if (v === null || typeof v !== 'object' || Array.isArray(v)) return false;
+    const r = v as Record<string, unknown>;
+    if (typeof r.workflowId !== 'string') return false;
+    if (typeof r.workflowName !== 'string') return false;
+    if (typeof r.executionState !== 'string') return false;
+    if (!Array.isArray(r.executionOrder)) return false;
+    if (r.currentNodeId !== null && typeof r.currentNodeId !== 'string')
+        return false;
+    if (typeof r.nodeStates !== 'object' || r.nodeStates === null) return false;
+    return true;
+}
+
+const workflowStates = reactive(new Map<string, UiWorkflowState>());
 
 // Seed workflow state map from loaded messages so reloads show correct status
 watch(
@@ -357,8 +369,8 @@ watch(
     (list) => {
         if (!Array.isArray(list)) return;
         for (const msg of list) {
-            const wf = (msg as any).workflowState;
-            if (!wf) continue;
+            const wf = msg.workflowState;
+            if (!isUiWorkflowState(wf)) continue;
             const existing = workflowStates.get(msg.id);
             const existingVersion = existing?.version ?? -1;
             const nextVersion = wf.version ?? 0;
@@ -370,7 +382,7 @@ watch(
     { immediate: true }
 );
 
-function deriveWorkflowText(wf: any): string {
+function deriveWorkflowText(wf: UiWorkflowState): string {
     if (!wf) return '';
     // Only return finalOutput - never show intermediate node outputs
     // The result box is controlled by WorkflowChatMessage using workflowState.finalOutput directly
@@ -391,7 +403,7 @@ function mergeWorkflowState(msg: UiChatMessage) {
         text: workflowText, // never fall back to original message content
         pending,
         _wfVersion: version,
-    } as UiChatMessage & { _wfVersion: number };
+    };
 }
 
 const allMessages = computed(() => {
@@ -716,7 +728,8 @@ const innerInputContainerProps = useThemeOverrides({
 const hooks = useHooks();
 const cleanupWorkflowHook = hooks.on(
     'workflow.execution:action:state_update',
-    (payload: { messageId: string; state: any }) => {
+    (payload: { messageId: string; state: unknown }) => {
+        if (!isUiWorkflowState(payload.state)) return;
         // Only set if not already the same reference (avoid unnecessary reactivity triggers)
         const existing = workflowStates.get(payload.messageId);
         if (existing !== payload.state) {

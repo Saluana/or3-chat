@@ -2,6 +2,7 @@
 // Type mapping between SDK types and internal OR3 types
 
 import type { Model as SDKModel } from '@openrouter/sdk/models';
+import { z } from 'zod';
 
 // Define the OpenRouterModel interface here to avoid circular imports
 // This is the canonical snake_case representation matching the OpenRouter REST API
@@ -37,6 +38,52 @@ export interface OpenRouterModel {
     per_request_limits?: Record<string, unknown>;
     supported_parameters?: string[];
 }
+
+export const openRouterModelSchema = z
+    .object({
+        id: z.string(),
+        name: z.string(),
+        description: z.string().optional(),
+        created: z.number().optional(),
+        architecture: z
+            .object({
+                input_modalities: z.array(z.string()).optional(),
+                output_modalities: z.array(z.string()).optional(),
+                tokenizer: z.string().optional(),
+                instruct_type: z.string().optional(),
+            })
+            .passthrough()
+            .optional(),
+        top_provider: z
+            .object({
+                is_moderated: z.boolean().optional(),
+                context_length: z.number().optional(),
+                max_completion_tokens: z.number().optional(),
+            })
+            .passthrough()
+            .optional(),
+        pricing: z
+            .object({
+                prompt: z.string().optional(),
+                completion: z.string().optional(),
+                image: z.string().optional(),
+                request: z.string().optional(),
+                web_search: z.string().optional(),
+                internal_reasoning: z.string().optional(),
+                input_cache_read: z.string().optional(),
+                input_cache_write: z.string().optional(),
+            })
+            .passthrough()
+            .optional(),
+        canonical_slug: z.string().optional(),
+        context_length: z.number().optional(),
+        hugging_face_id: z.string().optional(),
+        per_request_limits: z.record(z.string(), z.unknown()).optional(),
+        supported_parameters: z.array(z.string()).optional(),
+    })
+    .passthrough();
+
+export const openRouterModelListSchema = z.array(openRouterModelSchema);
 
 /**
  * Convert SDK Model type to our internal OpenRouterModel type.

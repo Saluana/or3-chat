@@ -6,6 +6,8 @@ import modelsService, {
     type PriceBucket,
 } from '~/core/auth/models-service';
 
+import { openRouterModelListSchema } from '~~/shared/openrouter/types';
+
 // Module-level in-flight promise for deduping parallel fetches across composable instances
 let inFlight: Promise<OpenRouterModel[]> | null = null;
 
@@ -72,19 +74,20 @@ export function useModelStore() {
             if (!raw || typeof raw !== 'string') return null;
             try {
                 const parsed: unknown = JSON.parse(raw);
-                if (!Array.isArray(parsed)) return null;
-                catalog.value = parsed as OpenRouterModel[];
+                const validated = openRouterModelListSchema.safeParse(parsed);
+                if (!validated.success) return null;
+                catalog.value = validated.data;
                 lastLoadedAt.value = updatedAtMs;
                 if (import.meta.dev)
                     console.debug(
                         '[models-cache] dexie hit — hydrated catalog from cache',
                         {
                             updatedAtMs,
-                            count: parsed.length,
+                            count: validated.data.length,
                         }
                     );
                 // Removed dexie source console.log
-                return parsed as OpenRouterModel[];
+                return validated.data;
             } catch (parseErr) {
                 console.warn(
                     '[models-cache] JSON parse failed; deleting corrupt record',
@@ -93,7 +96,9 @@ export function useModelStore() {
                 // best-effort cleanup
                 try {
                     await kv.delete(MODELS_CACHE_KEY);
-                } catch { /* intentionally empty */ }
+                } catch {
+                    /* intentionally empty */
+                }
                 return null;
             }
         } catch (e) {
@@ -187,18 +192,35 @@ export function useModelStore() {
                     try {
                         const rec = await kv.get(MODELS_CACHE_KEY);
                         const raw = rec?.value;
-                        const updatedAtMs = rec?.updated_at ? rec.updated_at * 1000 : 0;
+                        const updatedAtMs = rec?.updated_at
+                            ? rec.updated_at * 1000
+                            : 0;
                         const staleness = Date.now() - updatedAtMs;
-                        
-                        if (raw && typeof raw === 'string' && staleness < MAX_STALE_AGE_MS) {
+
+                        if (
+                            raw &&
+                            typeof raw === 'string' &&
+                            staleness < MAX_STALE_AGE_MS
+                        ) {
                             try {
                                 const parsed: unknown = JSON.parse(raw);
-                                if (Array.isArray(parsed) && parsed.length) {
+                                const validated =
+                                    openRouterModelListSchema.safeParse(parsed);
+                                if (
+                                    validated.success &&
+                                    validated.data.length
+                                ) {
                                     console.warn(
                                         '[models-cache] network failed; serving stale cached models',
-                                        { count: parsed.length, staleDays: Math.floor(staleness / (24 * 60 * 60 * 1000)) }
+                                        {
+                                            count: validated.data.length,
+                                            staleDays: Math.floor(
+                                                staleness /
+                                                    (24 * 60 * 60 * 1000)
+                                            ),
+                                        }
                                     );
-                                    return parsed as OpenRouterModel[];
+                                    return validated.data;
                                 }
                             } catch {
                                 // corrupted; best-effort delete
@@ -206,13 +228,18 @@ export function useModelStore() {
                                     await kv.delete(MODELS_CACHE_KEY);
                                 } catch (deleteErr: unknown) {
                                     if (import.meta.dev) {
-                                        console.warn('[models-cache] failed to delete corrupt record', deleteErr);
+                                        console.warn(
+                                            '[models-cache] failed to delete corrupt record',
+                                            deleteErr
+                                        );
                                     }
                                 }
                             }
                         } else if (staleness >= MAX_STALE_AGE_MS) {
                             if (import.meta.dev) {
-                                console.warn('[models-cache] stale cache too old, not serving');
+                                console.warn(
+                                    '[models-cache] stale cache too old, not serving'
+                                );
                             }
                         }
                     } catch (e) {
@@ -270,11 +297,8 @@ export function useModelStore() {
             const raw = record?.value;
             if (raw && typeof raw === 'string') {
                 const parsed: unknown = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                    favoriteModels.value = parsed as OpenRouterModel[];
-                } else {
-                    favoriteModels.value = [];
-                }
+                const validated = openRouterModelListSchema.safeParse(parsed);
+                favoriteModels.value = validated.success ? validated.data : [];
             } else {
                 favoriteModels.value = [];
             }

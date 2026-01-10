@@ -10,7 +10,7 @@
             v-if="editor"
             v-bind="editorProps"
             :class="['tiptap-editor fade-in', editorProps?.class ?? '']"
-            :editor="editor as Editor"
+            :editor="(editor as any)"
         />
     </div>
 </template>
@@ -48,8 +48,7 @@ const editorProps = useThemeOverrides({
     isNuxtUI: false,
 });
 
-const editor = ref<any>(null);
-let destroy: (() => void) | null = null;
+const editor = ref<Editor | null>(null);
 // Prevent feedback loop when emitting updates -> watcher -> setContent -> update
 let internalUpdate = false;
 let lastEmitted = '';
@@ -61,17 +60,32 @@ const emitModelValue = useDebounceFn((val: string): void => {
 async function init() {
     const extensions = [StarterKit.configure({ codeBlock: {} }), Markdown];
 
+    function hasGetMarkdown(v: unknown): v is { getMarkdown: () => string } {
+        if (v === null || typeof v !== 'object') return false;
+        if (!('getMarkdown' in v)) return false;
+        const fn = (v as Record<string, unknown>).getMarkdown;
+        return typeof fn === 'function';
+    }
+
     const instance = new Editor({
         extensions,
         content: props.modelValue,
         onUpdate: ({ editor: e }) => {
-            // @ts-ignore
-            emitModelValue(e?.storage?.markdown?.getMarkdown());
+            const storage: unknown = e.storage;
+            if (
+                storage &&
+                typeof storage === 'object' &&
+                'markdown' in storage
+            ) {
+                const markdown = (storage as Record<string, unknown>).markdown;
+                if (hasGetMarkdown(markdown)) {
+                    emitModelValue(markdown.getMarkdown());
+                }
+            }
         },
     });
 
     editor.value = instance;
-    destroy = () => instance.destroy();
 
     await nextTick();
     if (props.autofocus) {
@@ -92,7 +106,9 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-    destroy && destroy();
+    try {
+        editor.value?.destroy();
+    } catch {}
 });
 
 watch(

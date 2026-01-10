@@ -95,7 +95,7 @@ function sync() {
 /**
  * Register a new composer action.
  * Freezes the action object to prevent mutations and updates the reactive list.
- * 
+ *
  * @param action - The composer action to register
  */
 export function registerComposerAction(action: ComposerAction) {
@@ -112,7 +112,7 @@ export function registerComposerAction(action: ComposerAction) {
 /**
  * Unregister a composer action by ID.
  * Removes the action from the registry and updates the reactive list.
- * 
+ *
  * @param id - The ID of the action to unregister
  */
 export function unregisterComposerAction(id: string) {
@@ -122,7 +122,7 @@ export function unregisterComposerAction(id: string) {
 /**
  * Composable for accessing composer actions with context-aware filtering.
  * Returns a reactive list of actions filtered by visibility and computed disabled state.
- * 
+ *
  * @param context - Function that returns the current composer action context
  * @returns ComputedRef containing filtered and sorted composer action entries
  */
@@ -147,7 +147,7 @@ export function useComposerActions(
 /**
  * Get a list of all registered composer action IDs.
  * Useful for debugging and registry inspection.
- * 
+ *
  * @returns Array of registered composer action IDs
  */
 export function listRegisteredComposerActionIds(): string[] {

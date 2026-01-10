@@ -1377,6 +1377,7 @@ export function useChat(
                         console.warn('[useChat] abort hook failed', e);
                     }
                 }
+                // Only delete if there's no text; otherwise preserve with 'stopped' status
                 if (tailAssistant.value?.id && !tailAssistant.value.text) {
                     try {
                         await db.messages.delete(tailAssistant.value.id);
@@ -1392,8 +1393,68 @@ export function useChat(
                             );
                         }
                     }
+                    tailAssistant.value = null;
+                } else if (
+                    tailAssistant.value?.id &&
+                    tailAssistant.value.text
+                ) {
+                    // Preserve partial message with 'stopped' status for continue functionality
+                    tailAssistant.value.pending = false;
+                    tailAssistant.value.error = 'stopped';
+
+                    // Add to messages array if not already there (flush before nulling)
+                    if (
+                        !messages.value.find(
+                            (m) => m.id === tailAssistant.value!.id
+                        )
+                    ) {
+                        messages.value.push(tailAssistant.value);
+                    } else {
+                        // Update existing message in array
+                        const msgIdx = messages.value.findIndex(
+                            (m) => m.id === tailAssistant.value!.id
+                        );
+                        if (msgIdx >= 0) {
+                            messages.value[msgIdx] = { ...tailAssistant.value };
+                        }
+                    }
+
+                    const rawIdx = rawMessages.value.findIndex(
+                        (m) => m.id === tailAssistant.value!.id
+                    );
+                    if (rawIdx >= 0) {
+                        const existingRaw = rawMessages.value[rawIdx];
+                        if (existingRaw) {
+                            rawMessages.value[rawIdx] = {
+                                ...existingRaw,
+                                content: tailAssistant.value.text,
+                                error: 'stopped',
+                            };
+                        }
+                    }
+                    try {
+                        const existing = (await db.messages.get(
+                            tailAssistant.value.id
+                        )) as StoredMessage | undefined;
+                        const baseData =
+                            existing?.data && typeof existing.data === 'object'
+                                ? (existing.data as Record<string, unknown>)
+                                : {};
+                        await db.messages.update(tailAssistant.value.id, {
+                            data: {
+                                ...baseData,
+                                content: tailAssistant.value.text,
+                                reasoning_text:
+                                    tailAssistant.value.reasoning_text ?? null,
+                            },
+                            error: 'stopped',
+                            updated_at: nowSec(),
+                        });
+                    } catch {
+                        /* intentionally empty */
+                    }
+                    tailAssistant.value = null;
                 }
-                tailAssistant.value = null;
             } else {
                 const lastUser = [...messages.value]
                     .reverse()

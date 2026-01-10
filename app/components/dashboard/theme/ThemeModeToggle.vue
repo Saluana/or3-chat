@@ -32,21 +32,53 @@
                 <UButton
                     v-bind="themeModeButtonProps"
                     aria-label="Reset current theme mode"
-                    @click="onResetCurrent"
+                    @click="showResetModal = true"
                     :title="'Reset ' + activeMode + ' profile'"
                     >Reset {{ activeMode }}</UButton
                 >
             </div>
         </div>
         <p class="text-xs opacity-70">
-            Each mode stores its own backgrounds & colors. Use Reset (mode)
-            for just this profile or Reset All below for both.
+            Each mode stores its own backgrounds & colors. Use Reset (mode) for
+            just this profile or Reset All below for both.
         </p>
+
+        <!-- Reset confirmation modal -->
+        <UModal
+            v-model:open="showResetModal"
+            title="Reset Theme"
+            :ui="{ content: 'z-[20]' }"
+        >
+            <template #body>
+                <p class="text-sm">
+                    Reset <strong>{{ activeMode }}</strong> theme settings to
+                    defaults?
+                </p>
+            </template>
+            <template #footer>
+                <div class="flex justify-end gap-2">
+                    <UButton
+                        variant="ghost"
+                        color="neutral"
+                        @click="showResetModal = false"
+                    >
+                        Cancel
+                    </UButton>
+                    <UButton
+                        variant="solid"
+                        color="error"
+                        @click="confirmReset"
+                    >
+                        Reset
+                    </UButton>
+                </div>
+            </template>
+        </UModal>
     </section>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
@@ -54,6 +86,8 @@ const themeApi = useUserThemeOverrides();
 const activeMode = themeApi.activeMode;
 const switchMode = themeApi.switchMode;
 const reset = themeApi.reset;
+
+const showResetModal = ref(false);
 
 const themeModeButtonProps = computed(() => {
     const overrides = useThemeOverrides({
@@ -70,10 +104,9 @@ const themeModeButtonProps = computed(() => {
     };
 });
 
-function onResetCurrent() {
-    if (confirm(`Reset ${activeMode.value} theme settings to defaults?`)) {
-        reset();
-    }
+function confirmReset() {
+    reset();
+    showResetModal.value = false;
 }
 </script>
 

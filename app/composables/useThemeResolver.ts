@@ -31,7 +31,7 @@ import type { ComputedRef, ComponentPublicInstance } from 'vue';
 import type { ResolveParams } from '../theme/_shared/runtime-resolver';
 
 /** Resolved theme override props - can contain any component props */
-type OverrideProps = Record<string, unknown>;
+export type OverrideProps = Record<string, unknown>;
 
 interface ComponentOverrideCache {
     theme: string;
@@ -109,7 +109,7 @@ export function useThemeResolver(): UseThemeResolverReturn {
         const resolver = theme.getResolver(currentTheme);
 
         if (!resolver) {
-            if (process.dev) {
+            if (import.meta.dev || (process as any).dev) {
                 console.warn(
                     `[useThemeResolver] No resolver found for theme "${currentTheme}"`
                 );

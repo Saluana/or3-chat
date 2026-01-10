@@ -147,8 +147,10 @@ function toChatHistoryMessage(
         content = msg.content
             .map((part) => {
                 if (part.type === 'text') return part.text;
-                if (part.type === 'image_url') return `[Image: ${part.imageUrl.url}]`;
-                if (part.type === 'file') return `[File: ${part.file.filename}]`;
+                if (part.type === 'image_url')
+                    return `[Image: ${part.imageUrl.url}]`;
+                if (part.type === 'file')
+                    return `[File: ${part.file.filename}]`;
                 return '';
             })
             .join(' ');
@@ -159,7 +161,6 @@ function toChatHistoryMessage(
         content,
     };
 }
-
 
 type FilePartCandidate = {
     data?: unknown;
@@ -270,17 +271,19 @@ function extractImageAttachments(
             });
             fileIndex += 1;
         }
-
     }
 
     if (import.meta.dev && attachments.length > 0) {
-        console.log('[workflow-slash] Extracted attachments:', attachments.map(a => ({
-            id: a.id,
-            type: a.type,
-            mimeType: a.mimeType,
-            name: a.name,
-            urlLength: a.url?.length || 0,
-        })));
+        console.log(
+            '[workflow-slash] Extracted attachments:',
+            attachments.map((a) => ({
+                id: a.id,
+                type: a.type,
+                mimeType: a.mimeType,
+                name: a.name,
+                urlLength: a.url?.length || 0,
+            }))
+        );
     }
 
     return attachments;
@@ -305,7 +308,9 @@ async function normalizeAttachmentUrl(
     if (typeof Blob !== 'undefined' && value instanceof Blob) {
         return blobToDataUrl(value, mimeType || value.type);
     }
-    const toArrayBuffer = (input: ArrayBuffer | SharedArrayBuffer): ArrayBuffer => {
+    const toArrayBuffer = (
+        input: ArrayBuffer | SharedArrayBuffer
+    ): ArrayBuffer => {
         if (input instanceof ArrayBuffer) return input;
         if (
             typeof SharedArrayBuffer !== 'undefined' &&
@@ -321,7 +326,10 @@ async function normalizeAttachmentUrl(
         const buffer = toArrayBuffer(value);
         return blobToDataUrl(new Blob([buffer], { type: mimeType }), mimeType);
     }
-    if (typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer) {
+    if (
+        typeof SharedArrayBuffer !== 'undefined' &&
+        value instanceof SharedArrayBuffer
+    ) {
         const buffer = toArrayBuffer(value);
         return blobToDataUrl(new Blob([buffer], { type: mimeType }), mimeType);
     }
@@ -329,7 +337,10 @@ async function normalizeAttachmentUrl(
         const view = value as ArrayBufferView;
         const source = view.buffer;
         const buffer = toArrayBuffer(source);
-        const slice = buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
+        const slice = buffer.slice(
+            view.byteOffset,
+            view.byteOffset + view.byteLength
+        );
         return blobToDataUrl(new Blob([slice], { type: mimeType }), mimeType);
     }
     return null;
@@ -355,7 +366,6 @@ function inheritAttachmentsFromMessages(
     }
     return collected;
 }
-
 
 function buildAttachmentUrl(attachment: Attachment): string | null {
     if (attachment.url) return attachment.url;
@@ -417,7 +427,11 @@ function collectWorkflowModelIds(workflow: unknown): {
                         branch.model.trim()
                     ) {
                         modelIds.push(branch.model.trim());
-                    } else if (!parentModel && branch && typeof branch === 'object') {
+                    } else if (
+                        !parentModel &&
+                        branch &&
+                        typeof branch === 'object'
+                    ) {
                         hasMissingModel = true;
                     }
                 }
@@ -437,7 +451,9 @@ async function shouldGenerateCaption(
     attachments: Attachment[] | undefined
 ): Promise<boolean> {
     if (!attachments || attachments.length === 0) return false;
-    const images = attachments.filter((attachment) => attachment.type === 'image');
+    const images = attachments.filter(
+        (attachment) => attachment.type === 'image'
+    );
     if (!images.length) return false;
 
     const { modelIds, hasMissingModel } = collectWorkflowModelIds(workflow);
@@ -496,7 +512,9 @@ async function generateImageCaption(
     attachments: Attachment[],
     apiKey: string
 ): Promise<string | null> {
-    const images = attachments.filter((attachment) => attachment.type === 'image');
+    const images = attachments.filter(
+        (attachment) => attachment.type === 'image'
+    );
     if (!images.length) return null;
 
     const modelId = pickCaptionModelId();
@@ -511,7 +529,10 @@ async function generateImageCaption(
                 imageUrl: { url },
             };
         })
-        .filter(Boolean) as Array<{ type: 'image_url'; imageUrl: { url: string } }>;
+        .filter(Boolean) as Array<{
+        type: 'image_url';
+        imageUrl: { url: string };
+    }>;
 
     if (!parts.length) return null;
 
@@ -763,13 +784,12 @@ export default defineNuxtPlugin((nuxtApp) => {
     let executionModule: ExecutionModule | null = null;
     let extensionRegistered = false;
 
-    // Provide stop function globally
-    nuxtApp.provide('workflowSlash', {
+    const workflowSlash = {
         stop: stopWorkflowExecution,
         isExecuting: isWorkflowExecuting,
         retry: retryWorkflowMessage,
         respondHitl: respondToHitlRequest,
-    });
+    };
 
     // Listen for stop-stream event to stop workflow execution (with cleanup to avoid leaks in HMR)
     const stopAbort = new AbortController();
@@ -958,7 +978,10 @@ export default defineNuxtPlugin((nuxtApp) => {
         const accumulator = createWorkflowStreamAccumulator();
         accumulator.setWorkflowInfo(workflowPost.id, workflowPost.title);
         const displayPrompt = prompt;
-        const basePrompt = prompt && prompt.trim().length > 0 ? prompt.trim() : 'Execute workflow';
+        const basePrompt =
+            prompt && prompt.trim().length > 0
+                ? prompt.trim()
+                : 'Execute workflow';
         let executionPrompt = basePrompt;
 
         if (attachments && attachments.length > 0) {
@@ -1265,9 +1288,8 @@ export default defineNuxtPlugin((nuxtApp) => {
                 accumulator.finalize({
                     result: {
                         ...result,
-                        sessionMessages: result.sessionMessages?.map(
-                            toChatHistoryMessage
-                        ),
+                        sessionMessages:
+                            result.sessionMessages?.map(toChatHistoryMessage),
                     },
                 });
                 emitStateUpdate();
@@ -1310,7 +1332,11 @@ export default defineNuxtPlugin((nuxtApp) => {
             console.log(
                 '[workflow-slash] Attachments for execution:',
                 attachments?.length || 0,
-                attachments?.map(a => ({ type: a.type, mimeType: a.mimeType, name: a.name })) || []
+                attachments?.map((a) => ({
+                    type: a.type,
+                    mimeType: a.mimeType,
+                    name: a.name,
+                })) || []
             );
         }
 
@@ -1359,9 +1385,10 @@ export default defineNuxtPlugin((nuxtApp) => {
                     result: result
                         ? {
                               ...result,
-                              sessionMessages: result.sessionMessages?.map(
-                                  toChatHistoryMessage
-                              ),
+                              sessionMessages:
+                                  result.sessionMessages?.map(
+                                      toChatHistoryMessage
+                                  ),
                           }
                         : undefined,
                     error: result?.error || undefined,
@@ -1643,7 +1670,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                           .map((p) => p.text)
                           .join('')
                     : '';
-            
+
             let attachments = extractImageAttachments(
                 lastUser.content,
                 nowSec()
@@ -1665,32 +1692,31 @@ export default defineNuxtPlugin((nuxtApp) => {
                 const mapped = await Promise.all(
                     (sdkAttachments as SDKAttachmentPayload[]).map(
                         async (a, i): Promise<Attachment | null> => {
-                        const mimeType =
-                            a.contentType ||
-                            a.mediaType ||
-                            a.mimeType ||
-                            'application/octet-stream';
-                        const type: Attachment['type'] = mimeType.startsWith(
-                            'image/'
-                        )
-                            ? 'image'
-                            : 'file';
-                        // Support various Vercel/Internal URL properties
-                        const raw = a.url || a.content || a.data;
-                        const url = await normalizeAttachmentUrl(
-                            raw,
-                            mimeType
-                        );
+                            const mimeType =
+                                a.contentType ||
+                                a.mediaType ||
+                                a.mimeType ||
+                                'application/octet-stream';
+                            const type: Attachment['type'] =
+                                mimeType.startsWith('image/')
+                                    ? 'image'
+                                    : 'file';
+                            // Support various Vercel/Internal URL properties
+                            const raw = a.url || a.content || a.data;
+                            const url = await normalizeAttachmentUrl(
+                                raw,
+                                mimeType
+                            );
 
-                        if (!url) return null;
-                        return {
-                            id: `att-sdk-${timestamp}-${i}`,
-                            type,
-                            url,
-                            name: a.name || `file-${i}`,
-                            mimeType,
-                        } satisfies Attachment;
-                    }
+                            if (!url) return null;
+                            return {
+                                id: `att-sdk-${timestamp}-${i}`,
+                                type,
+                                url,
+                                name: a.name || `file-${i}`,
+                                mimeType,
+                            } satisfies Attachment;
+                        }
                     )
                 );
 
@@ -1818,7 +1844,6 @@ export default defineNuxtPlugin((nuxtApp) => {
                 return { messages };
             }
 
-
             // Log workflow structure for debugging
             console.log('[workflow-slash] Workflow structure:', {
                 id: workflowPost.id,
@@ -1873,4 +1898,10 @@ export default defineNuxtPlugin((nuxtApp) => {
             return { messages: [] };
         }
     );
+
+    return {
+        provide: {
+            workflowSlash,
+        },
+    };
 });

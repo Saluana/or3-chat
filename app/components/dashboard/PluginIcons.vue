@@ -53,13 +53,11 @@ const props = defineProps<{
     label: string;
     size?: number; // square icon box size (default 64)
     radius?: number; // corner radius override
-    retro?: boolean; // enable retro shell (default true)
 }>();
 
 const size = computed(() => props.size ?? 64);
 const cornerRadius = computed(() => `${props.radius ?? 14}px`);
 const iconPadding = computed(() => Math.round(size.value * 0.18));
-const retro = computed(() => props.retro !== false);
 
 // Theme overrides for the plugin icon button
 const iconButtonProps = computed(() => {

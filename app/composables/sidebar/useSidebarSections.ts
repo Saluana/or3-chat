@@ -65,8 +65,7 @@ export type ChromeActionColor =
     | 'warning'
     | 'error'
     | 'info'
-    | 'inverse-primary'
-    | (string & {});
+    | 'inverse-primary';
 
 /**
  * Interface defining a sidebar footer action button.
@@ -126,7 +125,7 @@ export interface SidebarFooterActionEntry {
 /**
  * Register a new sidebar section.
  * Adds the section to the global registry for reactive access.
- * 
+ *
  * @param section - The sidebar section to register
  */
 export function registerSidebarSection(section: SidebarSection) {
@@ -136,7 +135,7 @@ export function registerSidebarSection(section: SidebarSection) {
 /**
  * Unregister a sidebar section by ID.
  * Removes the section from the global registry.
- * 
+ *
  * @param id - The ID of the section to unregister
  */
 export function unregisterSidebarSection(id: string) {
@@ -146,7 +145,7 @@ export function unregisterSidebarSection(id: string) {
 /**
  * Register a new sidebar footer action.
  * Adds the action to the global registry for reactive access.
- * 
+ *
  * @param action - The footer action to register
  */
 export function registerSidebarFooterAction(action: SidebarFooterAction) {
@@ -156,7 +155,7 @@ export function registerSidebarFooterAction(action: SidebarFooterAction) {
 /**
  * Unregister a sidebar footer action by ID.
  * Removes the action from the global registry.
- * 
+ *
  * @param id - The ID of the action to unregister
  */
 export function unregisterSidebarFooterAction(id: string) {
@@ -166,7 +165,7 @@ export function unregisterSidebarFooterAction(id: string) {
 /**
  * Composable for accessing sidebar sections organized by placement.
  * Returns reactive groups of sections sorted by their order property.
- * 
+ *
  * @returns ComputedRef containing sections grouped by placement (top, main, bottom)
  */
 export function useSidebarSections() {
@@ -196,7 +195,7 @@ export function useSidebarSections() {
 /**
  * Composable for accessing sidebar footer actions with context-aware filtering.
  * Returns a reactive list of actions filtered by visibility and computed disabled state.
- * 
+ *
  * @param context - Function that returns the current footer action context
  * @returns ComputedRef containing filtered and sorted footer action entries
  */
@@ -222,7 +221,7 @@ export function useSidebarFooterActions(
 /**
  * Get a list of all registered sidebar section IDs.
  * Useful for debugging and registry inspection.
- * 
+ *
  * @returns Array of registered section IDs
  */
 export function listRegisteredSidebarSectionIds(): string[] {
@@ -232,7 +231,7 @@ export function listRegisteredSidebarSectionIds(): string[] {
 /**
  * Get a list of all registered sidebar footer action IDs.
  * Useful for debugging and registry inspection.
- * 
+ *
  * @returns Array of registered footer action IDs
  */
 export function listRegisteredSidebarFooterActionIds(): string[] {

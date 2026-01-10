@@ -158,7 +158,7 @@ function sync() {
 }
 
 export function registerDashboardPlugin(plugin: DashboardPlugin) {
-    if (process.dev && registry.has(plugin.id)) {
+    if ((import.meta.dev || (process as any).dev) && registry.has(plugin.id)) {
          
         console.warn(
             `[dashboard] Overwriting existing plugin id "${plugin.id}"`
@@ -279,9 +279,10 @@ type AsyncComponentLoader = () => Promise<{ default?: Component } | Component>;
 
 function isAsyncLoader(comp: unknown): comp is AsyncComponentLoader {
     if (typeof comp !== 'function') return false;
-    // Check if it's a Vue component with render or setup
-    const fn = comp as { render?: unknown; setup?: unknown };
-    return !fn.render && !fn.setup;
+    // Async factory = 0-arity function without Vue component internals
+    // Check for __vccOpts (Vite HMR marker) and length === 0 (factory pattern)
+    const fn = comp as Function & { __vccOpts?: unknown; render?: unknown; setup?: unknown };
+    return fn.length === 0 && !fn.__vccOpts && !fn.render && !fn.setup;
 }
 
 export async function resolveDashboardPluginPageComponent(
@@ -300,7 +301,7 @@ export async function resolveDashboardPluginPageComponent(
         const loaded = await comp();
         // Handle both { default: Component } and direct Component returns
         comp = (typeof loaded === 'object' && 'default' in loaded ? loaded.default : loaded) as Component;
-        if (process.dev && typeof comp !== 'object') {
+        if ((import.meta.dev || (process as any).dev) && typeof comp !== 'object') {
              
             console.warn(
                 `[dashboard] Async page loader for ${pluginId}:${pageId} returned non-component`,

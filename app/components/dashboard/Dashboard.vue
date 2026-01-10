@@ -318,7 +318,11 @@ const landingPageButtonProps = computed(() => {
     return overrides.value;
 });
 
-const pluginIconSize = computed(() => (isMobile.value ? 52 : 74));
+// SSR-safe: default to desktop size during server render to avoid hydration mismatch
+const pluginIconSize = computed(() => {
+    if (import.meta.server) return 74;
+    return isMobile.value ? 52 : 74;
+});
 </script>
 
 <style scoped>

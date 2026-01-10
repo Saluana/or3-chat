@@ -190,7 +190,7 @@ function copyResult() {
             });
         })
         .catch(() => {
-             toast.add({
+            toast.add({
                 title: 'Copy failed',
                 color: 'error',
             });
@@ -199,9 +199,7 @@ function copyResult() {
 
 async function retryFromHere() {
     if (!canRetry.value) return;
-    const svc = (nuxtApp as any)?.$workflowSlash as
-        | { retry?: (id: string) => Promise<boolean> }
-        | undefined;
+    const svc = nuxtApp.$workflowSlash;
     if (!svc?.retry) return;
     const ok = await svc.retry(props.message.id);
     if (ok) {

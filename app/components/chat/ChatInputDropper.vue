@@ -25,8 +25,9 @@
                 >
                     <!-- TipTap Editor -->
                     <EditorContent
+                        v-if="editor"
                         class="chat-input-editor prosemirror-host"
-                        :editor="editor as Editor"
+                        :editor="(editor as any)"
                         :data-theme-target="editorProps?.['data-theme-target']"
                         :data-theme-matches="
                             editorProps?.['data-theme-matches']
@@ -113,7 +114,7 @@
                     >
                         <UButton
                             v-bind="composerActionButtonProps"
-                            :color="(entry.action.color || 'neutral') as any"
+                            :color="entry.action.color || 'neutral'"
                             :square="!entry.action.label"
                             :disabled="entry.disabled"
                             :aria-label="
@@ -185,7 +186,7 @@
             <!-- Images -->
             <div
                 v-for="(image, index) in uploadedImages.filter(
-                    (att: any) => att.kind === 'image'
+                    (att) => att.kind === 'image'
                 )"
                 :key="'img-' + index"
                 class="chat-input-attachment-image-container relative group aspect-square"
@@ -210,7 +211,7 @@
             <!-- PDFs -->
             <div
                 v-for="(pdf, index) in uploadedImages.filter(
-                    (att: any) => att.kind === 'pdf'
+                    (att) => att.kind === 'pdf'
                 )"
                 :key="'pdf-' + index"
                 :class="[
@@ -332,7 +333,7 @@ import { reportError, err } from '~/utils/errors';
 import { validateFile, persistAttachment } from './file-upload-utils';
 import type { FileMeta } from '~/db/schema';
 import { Editor, EditorContent } from '@tiptap/vue-3';
-import { Extension } from '@tiptap/core';
+import { Extension, Node } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { computed } from 'vue';
@@ -350,6 +351,7 @@ import {
     type ComposerActionContext,
 } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useButtonOverrides } from '~/composables/useTypedThemeOverrides';
 import { useIcon } from '~/composables/useIcon';
 import { useFileDialog, useDropZone, useLocalStorage } from '@vueuse/core';
 
@@ -392,7 +394,7 @@ onMounted(async () => {
         }
         // If this is a brand-new chat (no threadId), honor fixed default from AI settings for initial display
         if (!props.threadId) {
-            const set = (aiSettings as any)?.value;
+            const set = aiSettings.value;
             const fixed =
                 set?.defaultModelMode === 'fixed' ? set?.fixedModelId : null;
             if (fixed) {
@@ -426,7 +428,7 @@ onMounted(async () => {
         });
 
         // Collect extensions (plugins can augment via hooks)
-        let extensions = [
+        let extensions: Array<Extension | Node> = [
             enterToSend,
             Placeholder.configure({
                 // Use a placeholder:
@@ -458,7 +460,15 @@ onMounted(async () => {
                 'ui.chat.editor:filter:extensions',
                 extensions
             );
-            if (Array.isArray(filtered)) extensions = filtered as any;
+            if (Array.isArray(filtered)) {
+                const next: Array<Extension | Node> = [];
+                for (const item of filtered) {
+                    // Accept both Extension and Node types (WorkflowNode is a Node)
+                    if (item instanceof Extension || item instanceof Node)
+                        next.push(item);
+                }
+                if (next.length) extensions = next;
+            }
         } catch {}
 
         editor.value = new Editor({
@@ -499,7 +509,7 @@ watch(
     (tid) => {
         if (tid) return; // only when there is no thread yet (new chat)
         try {
-            const set: any = (aiSettings as any)?.value;
+            const set = aiSettings.value;
             if (set?.defaultModelMode === 'fixed' && set?.fixedModelId) {
                 suppressPersist.value = true;
                 selectedModel.value = set.fixedModelId;
@@ -559,7 +569,7 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const editor = ref<Editor | null>(null);
 
 const composerActionContext = (): ComposerActionContext => ({
-    editor: (editor.value ?? null) as Editor | null,
+    editor: editor.value as any,
     threadId: props.threadId ?? null,
     paneId: props.paneId ?? null,
     isStreaming: !!props.streaming,
@@ -579,90 +589,59 @@ async function handleComposerAction(entry: ComposerActionEntry) {
 }
 
 // Theme overrides for buttons
-const sendButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'chat',
-        identifier: 'chat.send',
-        isNuxtUI: true,
-    });
-
-    return {
+const sendButtonProps = useButtonOverrides(
+    { component: 'button', context: 'chat', identifier: 'chat.send' },
+    {
         square: true,
-        size: 'sm' as const,
-        color: 'primary' as const,
-        variant: 'solid' as const,
+        size: 'sm',
+        color: 'primary',
+        variant: 'solid',
         class: 'theme-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center',
-        ...(overrides.value as any),
-    };
-});
+    }
+);
 
-const stopButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'chat',
-        identifier: 'chat.stop',
-        isNuxtUI: true,
-    });
-
-    return {
+const stopButtonProps = useButtonOverrides(
+    { component: 'button', context: 'chat', identifier: 'chat.stop' },
+    {
         square: true,
-        size: 'sm' as const,
-        color: 'error' as const,
+        size: 'sm',
+        color: 'error',
         class: 'theme-btn text-white dark:text-black flex items-center justify-center',
-        ...(overrides.value as any),
-    };
-});
+    }
+);
 
-const attachButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'chat',
-        identifier: 'chat.attach',
-        isNuxtUI: true,
-    });
-
-    return {
+const attachButtonProps = useButtonOverrides(
+    { component: 'button', context: 'chat', identifier: 'chat.attach' },
+    {
         square: true,
-        size: 'sm' as const,
-        color: 'info' as const,
+        size: 'sm',
+        color: 'info',
         class: 'theme-btn text-black dark:text-white flex items-center justify-center',
-        ...(overrides.value as any),
-    };
-});
+    }
+);
 
-const settingsButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'chat',
-        identifier: 'chat.settings',
-        isNuxtUI: true,
-    });
-
-    return {
+const settingsButtonProps = useButtonOverrides(
+    { component: 'button', context: 'chat', identifier: 'chat.settings' },
+    {
         square: true,
-        size: 'sm' as const,
-        color: 'info' as const,
-        ...(overrides.value as any),
-    };
-});
+        size: 'sm',
+        color: 'info',
+    }
+);
 
-const composerActionButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
+const composerActionButtonProps = useButtonOverrides(
+    {
         component: 'button',
         context: 'chat',
         identifier: 'chat.composer-action',
-        isNuxtUI: true,
-    });
-
-    return {
-        size: 'sm' as const,
-        variant: 'ghost' as const,
+    },
+    {
+        size: 'sm',
+        variant: 'ghost',
         class: 'theme-btn pointer-events-auto flex items-center gap-1',
         ui: { base: 'theme-btn' },
-        ...(overrides.value as any),
-    };
-});
+    }
+);
 
 const mainContainerProps = computed(() => {
     const overrides = useThemeOverrides({
@@ -733,8 +712,10 @@ const attachmentRemoveBtnProps = computed(() => {
         icon: iconClose.value,
         class: 'chat-input-attachment-remove-btn flex items-center justify-center absolute top-1 right-1 h-[22px] w-[22px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white bg-[var(--md-error)]/85 hover:bg-[var(--md-error)]',
     };
-    const overrideValue = (overrides.value as Record<string, any>) || {};
-    const mergedClass = [fallback.class, overrideValue.class]
+    const overrideValue = (overrides.value as Record<string, unknown>) || {};
+    const overrideClass =
+        typeof overrideValue.class === 'string' ? overrideValue.class : '';
+    const mergedClass = [fallback.class, overrideClass]
         .filter(Boolean)
         .join(' ');
     return {
@@ -932,7 +913,7 @@ async function processAttachment(file: File, name?: string) {
     };
     attachments.value.push(attachment);
     emit('image-add', attachment);
-    await persistAttachment(attachment as any);
+    await persistAttachment(attachment);
 }
 
 const processFiles = async (files: FileList | null) => {
@@ -1003,8 +984,24 @@ const handleContainerClick = (event: MouseEvent) => {
     if (!target) return;
 
     // List of interactive elements that should NOT trigger focus
-    const interactiveTags = ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT', 'A', 'LABEL'];
-    const interactiveRoles = ['button', 'link', 'menuitem', 'option', 'tab', 'textbox', 'combobox', 'listbox'];
+    const interactiveTags = [
+        'BUTTON',
+        'INPUT',
+        'TEXTAREA',
+        'SELECT',
+        'A',
+        'LABEL',
+    ];
+    const interactiveRoles = [
+        'button',
+        'link',
+        'menuitem',
+        'option',
+        'tab',
+        'textbox',
+        'combobox',
+        'listbox',
+    ];
 
     // Check if the clicked element or any of its ancestors is interactive
     let el: HTMLElement | null = target;
@@ -1015,7 +1012,11 @@ const handleContainerClick = (event: MouseEvent) => {
         const role = el.getAttribute('role');
         if (role && interactiveRoles.includes(role)) return;
         // Check if it's a TipTap/ProseMirror editor content (already handles its own focus)
-        if (el.classList.contains('ProseMirror') || el.classList.contains('tiptap')) return;
+        if (
+            el.classList.contains('ProseMirror') ||
+            el.classList.contains('tiptap')
+        )
+            return;
         // Check contenteditable
         if (el.isContentEditable) return;
         // Check for click handlers via data attributes (some UI libraries use these)

@@ -11,29 +11,82 @@
         >
             Reset
         </h2>
-        <UButton
-            v-bind="resetAllButtonProps"
-            class="px-3 py-2 text-xs"
-            @click="onResetAll"
+        <div class="flex flex-wrap gap-2">
+            <UButton
+                v-bind="resetButtonProps"
+                class="px-3 py-2 text-xs"
+                @click="openResetModal('light')"
+            >
+                Reset Light Mode
+            </UButton>
+            <UButton
+                v-bind="resetButtonProps"
+                class="px-3 py-2 text-xs"
+                @click="openResetModal('dark')"
+            >
+                Reset Dark Mode
+            </UButton>
+            <UButton
+                v-bind="resetButtonProps"
+                variant="subtle"
+                class="px-3 py-2 text-xs opacity-70 hover:opacity-100"
+                @click="openResetModal('all')"
+            >
+                Reset All
+            </UButton>
+        </div>
+
+        <!-- Reset confirmation modal -->
+        <UModal
+            v-model:open="showResetModal"
+            :title="modalTitle"
+            :ui="{ content: 'z-[20]' }"
         >
-            Reset All
-        </UButton>
+            <template #body>
+                <p class="text-sm">
+                    Reset <strong>{{ modalTargetLabel }}</strong> theme settings
+                    to defaults?
+                </p>
+                <p class="text-xs opacity-70 mt-2">This cannot be undone.</p>
+            </template>
+            <template #footer>
+                <div class="flex justify-end gap-2">
+                    <UButton
+                        variant="ghost"
+                        color="neutral"
+                        @click="showResetModal = false"
+                    >
+                        Cancel
+                    </UButton>
+                    <UButton
+                        variant="solid"
+                        color="error"
+                        @click="confirmReset"
+                    >
+                        Reset {{ modalActionLabel }}
+                    </UButton>
+                </div>
+            </template>
+        </UModal>
     </section>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const themeApi = useUserThemeOverrides();
-const resetAll = themeApi.resetAll;
 
-const resetAllButtonProps = computed(() => {
+type ResetTarget = 'light' | 'dark' | 'all';
+const showResetModal = ref(false);
+const resetTarget = ref<ResetTarget>('all');
+
+const resetButtonProps = computed(() => {
     const overrides = useThemeOverrides({
         component: 'button',
         context: 'dashboard',
-        identifier: 'dashboard.theme.reset-all',
+        identifier: 'dashboard.theme.reset',
         isNuxtUI: true,
     });
     return {
@@ -44,11 +97,34 @@ const resetAllButtonProps = computed(() => {
     };
 });
 
-function onResetAll() {
-    if (confirm('Reset BOTH light and dark theme settings to defaults?')) {
-        resetAll();
+const modalTitle = computed(() => {
+    if (resetTarget.value === 'all') return 'Reset All Themes';
+    return `Reset ${resetTarget.value === 'light' ? 'Light' : 'Dark'} Theme`;
+});
+
+const modalTargetLabel = computed(() => {
+    if (resetTarget.value === 'all') return 'BOTH light and dark';
+    return resetTarget.value === 'light' ? 'LIGHT mode' : 'DARK mode';
+});
+
+const modalActionLabel = computed(() => {
+    if (resetTarget.value === 'all') return 'All';
+    return resetTarget.value === 'light' ? 'Light' : 'Dark';
+});
+
+const openResetModal = (target: ResetTarget) => {
+    resetTarget.value = target;
+    showResetModal.value = true;
+};
+
+const confirmReset = () => {
+    if (resetTarget.value === 'all') {
+        themeApi.resetAll();
+    } else {
+        themeApi.reset(resetTarget.value as 'light' | 'dark');
     }
-}
+    showResetModal.value = false;
+};
 </script>
 
 <style scoped>

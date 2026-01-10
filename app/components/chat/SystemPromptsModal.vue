@@ -393,7 +393,7 @@ const newPromptButtonProps = computed(() => {
     return {
         size: 'sm' as const,
         color: 'primary' as const,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -409,7 +409,7 @@ const clearActiveButtonProps = computed(() => {
         size: 'sm' as const,
         color: 'neutral' as const,
         variant: 'outline' as const,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -423,7 +423,7 @@ const selectButtonProps = computed(() => {
 
     return {
         size: 'sm' as const,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -444,15 +444,15 @@ const searchInputProps = computed(() => {
         identifier: 'modal.prompt-search',
         isNuxtUI: true,
     });
-    const overrideValue = (overrides.value as any) || {};
+    const overrideValue = (overrides.value as Record<string, unknown>) || {};
     const baseClass = 'w-full';
-    const mergedClass = [baseClass, overrideValue.class]
-        .filter(Boolean)
-        .join(' ');
+    const overrideClass =
+        typeof overrideValue.class === 'string' ? overrideValue.class : '';
+    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
 
     return {
         size: 'sm' as const,
-        ...(overrides.value as any),
+        ...overrideValue,
         class: mergedClass,
     };
 });
@@ -464,11 +464,11 @@ const moreActionsButtonProps = computed(() => {
         identifier: 'modal.prompt-more-actions',
         isNuxtUI: true,
     });
-    const overrideValue = (overrides.value as any) || {};
+    const overrideValue = (overrides.value as Record<string, unknown>) || {};
     const baseClass = 'flex items-center justify-center';
-    const mergedClass = [baseClass, overrideValue.class]
-        .filter(Boolean)
-        .join(' ');
+    const overrideClass =
+        typeof overrideValue.class === 'string' ? overrideValue.class : '';
+    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
     return {
         size: 'sm' as const,
         variant: 'outline' as const,
@@ -487,12 +487,12 @@ const editPromptButtonProps = computed(() => {
         identifier: 'modal.prompt-action-edit',
         isNuxtUI: true,
     });
-    const overrideValue = (overrides.value as any) || {};
+    const overrideValue = (overrides.value as Record<string, unknown>) || {};
     const baseClass =
         'text-left w-full justify-start px-3 py-1.5 hover:bg-primary/10 gap-2 text-[var(--md-on-surface)]';
-    const mergedClass = [baseClass, overrideValue.class]
-        .filter(Boolean)
-        .join(' ');
+    const overrideClass =
+        typeof overrideValue.class === 'string' ? overrideValue.class : '';
+    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
     return {
         variant: 'ghost' as const,
         size: 'sm' as const,
@@ -511,12 +511,12 @@ const deletePromptButtonProps = computed(() => {
         identifier: 'modal.prompt-action-delete',
         isNuxtUI: true,
     });
-    const overrideValue = (overrides.value as any) || {};
+    const overrideValue = (overrides.value as Record<string, unknown>) || {};
     const baseClass =
         'text-left w-full justify-start px-3 py-1.5 hover:bg-error/10 text-error gap-2';
-    const mergedClass = [baseClass, overrideValue.class]
-        .filter(Boolean)
-        .join(' ');
+    const overrideClass =
+        typeof overrideValue.class === 'string' ? overrideValue.class : '';
+    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
     return {
         variant: 'ghost' as const,
         size: 'sm' as const,
@@ -530,16 +530,27 @@ const deletePromptButtonProps = computed(() => {
 });
 
 // Extract plain text from TipTap JSON recursively
-function extractText(node: any): string {
+type TipTapJsonNode = {
+    type?: unknown;
+    text?: unknown;
+    content?: unknown;
+} & Record<string, unknown>;
+
+function isTipTapJsonNode(v: unknown): v is TipTapJsonNode {
+    return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+function extractText(node: unknown): string {
     if (!node) return '';
     if (typeof node === 'string') return node;
     if (Array.isArray(node)) return node.map(extractText).join('');
-    const type = node.type;
+    if (!isTipTapJsonNode(node)) return '';
+    const type = typeof node.type === 'string' ? node.type : '';
     let acc = '';
     if (type === 'text') {
-        acc += node.text || '';
+        acc += typeof node.text === 'string' ? node.text : '';
     }
-    if (node.content && Array.isArray(node.content)) {
+    if (Array.isArray(node.content)) {
         const inner = node.content.map(extractText).join('');
         acc += inner;
     }
@@ -558,11 +569,13 @@ function extractText(node: any): string {
     return acc;
 }
 
-function contentToText(content: any): string {
+function contentToText(content: unknown): string {
     if (!content) return '';
     if (typeof content === 'string') return content;
+    if (!isTipTapJsonNode(content)) return '';
     // TipTap root usually { type: 'doc', content: [...] }
-    if (content.type === 'doc' && Array.isArray(content.content)) {
+    const type = typeof content.type === 'string' ? content.type : '';
+    if (type === 'doc' && Array.isArray(content.content)) {
         return extractText(content)
             .replace(/\n{2,}/g, '\n')
             .trim();

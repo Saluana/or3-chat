@@ -4,10 +4,7 @@
         :data-context="depth > 0 ? 'subflow' : 'workflow'"
     >
         <!-- Header -->
-        <div
-            :class="headerClasses"
-            @click="toggleCollapse"
-        >
+        <div :class="headerClasses" @click="toggleCollapse">
             <div class="flex items-center gap-2">
                 <UIcon
                     :name="statusIcon"
@@ -50,7 +47,9 @@
                 v-if="hasAttachments"
                 class="rounded border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-2 space-y-2"
             >
-                <div class="text-[11px] font-semibold uppercase tracking-wide opacity-70">
+                <div
+                    class="text-[11px] font-semibold uppercase tracking-wide opacity-70"
+                >
                     Attachments
                 </div>
                 <div class="flex flex-wrap gap-2">
@@ -74,10 +73,18 @@
                         class="w-12 h-12 rounded-md overflow-hidden border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] flex flex-col items-center justify-center gap-0.5 p-1"
                         :title="attachment.name"
                     >
-                        <span class="text-[8px] font-bold uppercase tracking-wide bg-black text-white px-1 py-0.5 rounded">
-                            {{ attachment.mimeType === 'application/pdf' ? 'PDF' : 'FILE' }}
+                        <span
+                            class="text-[8px] font-bold uppercase tracking-wide bg-black text-white px-1 py-0.5 rounded"
+                        >
+                            {{
+                                attachment.mimeType === 'application/pdf'
+                                    ? 'PDF'
+                                    : 'FILE'
+                            }}
                         </span>
-                        <span class="text-[7px] text-center line-clamp-2 leading-tight opacity-70">
+                        <span
+                            class="text-[7px] text-center line-clamp-2 leading-tight opacity-70"
+                        >
                             {{ attachment.name }}
                         </span>
                     </div>
@@ -87,7 +94,9 @@
                     v-if="imageCaption"
                     class="rounded border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-2"
                 >
-                    <div class="text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                    <div
+                        class="text-[10px] font-semibold uppercase tracking-wide opacity-70"
+                    >
                         Auto caption
                     </div>
                     <div class="text-xs whitespace-pre-wrap">
@@ -98,7 +107,7 @@
 
             <!-- Node List -->
             <div
-                v-for="nodeId in (props.workflowState.executionOrder || [])"
+                v-for="nodeId in props.workflowState.executionOrder || []"
                 :key="nodeId"
                 class="node-item"
             >
@@ -122,7 +131,8 @@
                             v-if="getNodeAttachmentBadge(nodeId)"
                             class="text-[10px] font-semibold px-2 py-0.5 rounded-full"
                             :class="
-                                getNodeAttachmentBadge(nodeId)?.variant === 'image'
+                                getNodeAttachmentBadge(nodeId)?.variant ===
+                                'image'
                                     ? 'bg-[var(--md-extended-color-info-color-container)] text-[var(--md-extended-color-info-on-color-container)]'
                                     : 'bg-[var(--md-surface-container-high)] text-[var(--md-on-surface-variant)]'
                             "
@@ -195,9 +205,7 @@
                                                 class="mt-1 text-xs font-mono whitespace-pre-wrap bg-[var(--md-surface)] text-[var(--md-on-surface)] p-2 rounded border border-[var(--md-outline-variant)] max-h-32 overflow-y-auto"
                                             >
                                                 {{
-                                                    getHitlInputDisplay(
-                                                        request
-                                                    )
+                                                    getHitlInputDisplay(request)
                                                 }}
                                             </div>
                                         </div>
@@ -330,7 +338,9 @@
                                             <UIcon
                                                 :name="getToolStatusIcon(tool)"
                                                 class="w-3 h-3 shrink-0"
-                                                :class="getToolStatusColor(tool)"
+                                                :class="
+                                                    getToolStatusColor(tool)
+                                                "
                                             />
                                             <span
                                                 class="font-medium truncate"
@@ -386,10 +396,7 @@
                             </div>
                         </div>
 
-                        <div
-                            v-if="getNodeSubflowState(nodeId)"
-                            class="mt-3"
-                        >
+                        <div v-if="getNodeSubflowState(nodeId)" class="mt-3">
                             <WorkflowExecutionStatus
                                 :workflow-state="
                                     getNodeSubflowState(nodeId)!
@@ -464,16 +471,10 @@ const contentClasses = computed(() =>
     depth.value > 0 ? 'p-2 space-y-2' : 'p-3 space-y-2'
 );
 const headerTextClass = computed(() =>
-    [
-        'font-medium',
-        depth.value > 0 ? 'text-xs' : 'text-sm',
-    ].join(' ')
+    ['font-medium', depth.value > 0 ? 'text-xs' : 'text-sm'].join(' ')
 );
 const statusTextClass = computed(() =>
-    [
-        depth.value > 0 ? 'text-[10px]' : 'text-xs',
-        'opacity-70',
-    ].join(' ')
+    [depth.value > 0 ? 'text-[10px]' : 'text-xs', 'opacity-70'].join(' ')
 );
 
 function buildAttachmentUrl(attachment: {
@@ -501,8 +502,11 @@ const imageAttachments = computed(() => {
                 name: attachment.name || 'Image',
             };
         })
-        .filter((attachment): attachment is { id: string; url: string; name: string } =>
-            Boolean(attachment)
+        .filter(
+            (
+                attachment
+            ): attachment is { id: string; url: string; name: string } =>
+                Boolean(attachment)
         );
 });
 
@@ -517,9 +521,10 @@ const fileAttachments = computed(() => {
         }));
 });
 
-const hasAttachments = computed(() => imageAttachments.value.length > 0 || fileAttachments.value.length > 0);
+const hasAttachments = computed(
+    () => imageAttachments.value.length > 0 || fileAttachments.value.length > 0
+);
 const imageCaption = computed(() => props.workflowState.imageCaption || '');
-
 
 type PendingHitlEntry = {
     request: HitlRequestState;
@@ -683,10 +688,7 @@ const statusText = computed(() => {
     }
     const state = props.workflowState.executionState;
     if (!state) return 'Unknown';
-    return (
-        state.charAt(0).toUpperCase() +
-        state.slice(1)
-    );
+    return state.charAt(0).toUpperCase() + state.slice(1);
 });
 
 // Node Helpers
@@ -720,9 +722,9 @@ function nodeSupportsImages(modelId?: string): boolean {
     }
 }
 
-function getNodeAttachmentBadge(nodeId: string):
-    | { label: string; variant: 'image' | 'caption' }
-    | null {
+function getNodeAttachmentBadge(
+    nodeId: string
+): { label: string; variant: 'image' | 'caption' } | null {
     if (!hasAttachments.value) return null;
     const modelId = getNodeModelId(nodeId);
     if (!modelId) return null;
@@ -819,7 +821,9 @@ function getNodeHitlRequests(nodeId: string): HitlRequestState[] {
 function getNodePendingHitlCount(nodeId: string): number {
     const localCount = getNodeHitlRequests(nodeId).length;
     const subflowState = getNodeSubflowState(nodeId);
-    const nestedCount = subflowState ? collectPendingHitl(subflowState).length : 0;
+    const nestedCount = subflowState
+        ? collectPendingHitl(subflowState).length
+        : 0;
     return localCount + nestedCount;
 }
 
@@ -1048,18 +1052,20 @@ function getHitlActions(request: HitlRequestState): HitlActionDescriptor[] {
     }
 
     const options: HitlActionDescriptor[] = request.options?.length
-        ? request.options.map((option): HitlActionDescriptor => ({
-              key: `${request.id}-${option.id}`,
-              label:
-                  option.action === 'approve'
-                      ? 'Review & Approve'
-                      : option.action === 'reject'
-                      ? 'Reject & Stop'
-                      : option.label,
-              action: option.action,
-              primary: option.action === 'approve',
-              requiresInput: option.action === 'custom',
-          }))
+        ? request.options.map(
+              (option): HitlActionDescriptor => ({
+                  key: `${request.id}-${option.id}`,
+                  label:
+                      option.action === 'approve'
+                          ? 'Review & Approve'
+                          : option.action === 'reject'
+                          ? 'Reject & Stop'
+                          : option.label,
+                  action: option.action,
+                  primary: option.action === 'approve',
+                  requiresInput: option.action === 'custom',
+              })
+          )
         : [
               {
                   key: `${request.id}-approve`,
@@ -1112,15 +1118,7 @@ function handleHitlAction(
     label: string,
     requiresInput?: boolean
 ) {
-    const workflowSlash = (nuxtApp as any).$workflowSlash as
-        | {
-              respondHitl?: (
-                  requestId: string,
-                  action: HitlAction,
-                  data?: string | Record<string, unknown>
-              ) => boolean;
-          }
-        | undefined;
+    const workflowSlash = nuxtApp.$workflowSlash;
 
     if (!workflowSlash?.respondHitl) return;
 
@@ -1130,6 +1128,7 @@ function handleHitlAction(
         action === 'modify' ||
         action === 'custom'
     ) {
+        if (typeof window === 'undefined') return;
         const defaultValue =
             request.mode === 'review'
                 ? request.context?.output

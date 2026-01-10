@@ -449,10 +449,20 @@ onBeforeUnmount(() => {
     revokeAll();
 });
 
-// Sync local sliders when overrides change
+// Sync local sliders when overrides change (targeted updates only)
+// Note: We rely on the existing specific watchers (L351-360) for URL changes.
+// This provides a fallback sync for slider values when the data structure changes.
 watch(
-    overrides,
-    (o) => {
+    () => [
+        overrides.value.backgrounds?.content?.base?.opacity,
+        overrides.value.backgrounds?.content?.overlay?.opacity,
+        overrides.value.backgrounds?.sidebar?.opacity,
+        overrides.value.backgrounds?.content?.base?.sizePx,
+        overrides.value.backgrounds?.content?.overlay?.sizePx,
+        overrides.value.backgrounds?.sidebar?.sizePx,
+    ],
+    () => {
+        const o = overrides.value;
         if (!o) return;
         local.contentBg1Opacity = o.backgrounds?.content?.base?.opacity || 0;
         local.contentBg2Opacity = o.backgrounds?.content?.overlay?.opacity || 0;
@@ -460,7 +470,6 @@ watch(
         local.contentBg1SizePx = o.backgrounds?.content?.base?.sizePx || 240;
         local.contentBg2SizePx = o.backgrounds?.content?.overlay?.sizePx || 240;
         local.sidebarBgSizePx = o.backgrounds?.sidebar?.sizePx || 240;
-    },
-    { deep: true }
+    }
 );
 </script>
