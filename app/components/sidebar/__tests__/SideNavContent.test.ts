@@ -6,7 +6,7 @@ import {
     mockSidebarComposables,
     setupSidebarTestEnvironment,
 } from '../../../../tests/utils/sidebar-test-helpers';
-import { provideSidebarEnvironment } from '~/composables/sidebar/useSidebarEnvironment';
+import { provideSidebarEnvironment } from '../../../composables/sidebar/useSidebarEnvironment';
 
 // Setup test environment
 setupSidebarTestEnvironment();

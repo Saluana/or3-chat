@@ -88,11 +88,11 @@
 
                         <!-- Plugin actions -->
                         <div
-                            v-if="extraActions.value.length > 0"
+                            v-if="extraActions.length > 0"
                             class="my-1 border-t border-[color:var(--md-border-color)]/30"
                         />
                         <template
-                            v-for="action in extraActions.value"
+                            v-for="action in extraActions"
                             :key="action.id"
                         >
                             <UButton
@@ -114,12 +114,20 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
-import RetroGlassBtn from '~/components/ui/RetroGlassBtn.vue';
+import { db } from '~/db';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
-import { useThreadHistoryActions } from '~/composables/threads/useThreadHistoryActions';
-import { useDocumentHistoryActions } from '~/composables/documents/useDocumentHistoryActions';
+import {
+    useThreadHistoryActions,
+    type ThreadHistoryAction,
+} from '~/composables/threads/useThreadHistoryActions';
+import {
+    useDocumentHistoryActions,
+    type DocumentHistoryAction,
+} from '~/composables/documents/useDocumentHistoryActions';
+
+type ExtraAction = ThreadHistoryAction | DocumentHistoryAction;
 
 const props = defineProps<{
     item: UnifiedSidebarItem;
@@ -144,55 +152,90 @@ const iconEdit = useIcon('ui.edit');
 const iconTrash = useIcon('ui.trash');
 const iconFolder = useIcon('sidebar.new_folder');
 
-import { useElementHover } from '@vueuse/core';
-const el = ref<HTMLElement | null>(null); // I need to bind ref="el" to the button
-const groupHover = useElementHover(el);
+const threadActions = useThreadHistoryActions();
+const documentActions = useDocumentHistoryActions();
+
+// Theme overrides
+const threadIconOverrides = useThemeOverrides({
+    component: 'div',
+    context: 'sidebar',
+    identifier: 'sidebar.unified-item.icon.thread',
+    isNuxtUI: false,
+});
+
+const documentIconOverrides = useThemeOverrides({
+    component: 'div',
+    context: 'sidebar',
+    identifier: 'sidebar.unified-item.icon.document',
+    isNuxtUI: false,
+});
+
+const triggerOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.unified-item.trigger',
+    isNuxtUI: true,
+});
+
+const actionButtonOverridesMap = {
+    rename: useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.unified-item.rename',
+        isNuxtUI: true,
+    }),
+    delete: useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.unified-item.delete',
+        isNuxtUI: true,
+    }),
+    'add-to-project': useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.unified-item.add-to-project',
+        isNuxtUI: true,
+    }),
+    extra: useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.unified-item.extra',
+        isNuxtUI: true,
+    }),
+};
 
 // Theme overrides for icon container
 const iconContainerProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'div',
-        context: 'sidebar',
-        identifier: `sidebar.unified-item.icon.${props.item.type}`,
-        isNuxtUI: false,
-    });
+    const overrides =
+        props.item.type === 'thread'
+            ? threadIconOverrides.value
+            : documentIconOverrides.value;
     return {
         class:
             props.item.type === 'thread'
                 ? 'bg-primary/15 text-primary'
                 : 'bg-[color:var(--md-secondary)]/15 text-[color:var(--md-secondary)]',
-        ...overrides.value,
+        ...overrides,
     };
 });
 
 // Theme overrides for the popover trigger button
-const actionTriggerProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.unified-item.trigger',
-        isNuxtUI: true,
-    });
-    return {
-        variant: 'ghost' as const,
-        color: 'primary' as const,
-        size: 'xs' as const,
-        icon: iconMore.value,
-        ariaLabel: 'Open actions',
-        square: true,
-        class: 'flex items-center justify-center',
-        ...(overrides.value as any),
-    };
-});
+const actionTriggerProps = computed(() => ({
+    variant: 'ghost' as const,
+    color: 'primary' as const,
+    size: 'xs' as const,
+    icon: iconMore.value,
+    ariaLabel: 'Open actions',
+    square: true,
+    class: 'flex items-center justify-center',
+    ...(triggerOverrides.value as any),
+}));
 
 // Theme overrides function for action buttons
 const actionButtonProps = (id: string) => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: `sidebar.unified-item.${id}`,
-        isNuxtUI: true,
-    });
+    const overrides =
+        actionButtonOverridesMap[id as keyof typeof actionButtonOverridesMap]
+            ?.value || {};
 
     let icon = iconMore;
     if (id === 'rename') icon = iconEdit;
@@ -204,23 +247,24 @@ const actionButtonProps = (id: string) => {
         variant: 'popover' as const,
         size: 'sm' as const,
         icon: icon.value,
-        ...(overrides.value as any),
+        ...(overrides as any),
     };
 };
 
-// Plugin actions
-const extraActions = computed(() => {
-    return props.item.type === 'thread'
-        ? useThreadHistoryActions()
-        : useDocumentHistoryActions();
-});
+const extraActions = computed<readonly ExtraAction[]>(() =>
+    props.item.type === 'thread' ? threadActions.value : documentActions.value
+);
 
-async function runExtraAction(action: any) {
+async function runExtraAction(action: ExtraAction) {
     try {
         if (props.item.type === 'thread') {
-            await action.handler({ thread: props.item });
+            const thread = await db.threads.get(props.item.id);
+            if (!thread) return;
+            await (action as ThreadHistoryAction).handler({ document: thread });
         } else {
-            await action.handler({ doc: props.item });
+            const doc = await db.posts.get(props.item.id);
+            if (!doc) return;
+            await (action as DocumentHistoryAction).handler({ document: doc });
         }
     } catch (e: any) {
         console.error('[SidebarUnifiedItem] Plugin action error', action.id, e);

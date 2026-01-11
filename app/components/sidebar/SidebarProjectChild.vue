@@ -99,35 +99,33 @@ const emit = defineEmits<{
 }>();
 
 // Theme overrides for project child action buttons
-const renameButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.project-entry-rename',
-        isNuxtUI: true,
-    });
-    return {
-        color: 'neutral' as const,
-        variant: 'popover' as const,
-        size: 'sm' as const,
-        icon: iconEdit.value,
-        ...(overrides.value as any),
-    };
+const renameOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.project-entry-rename',
+    isNuxtUI: true,
 });
 
-const removeButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.project-entry-remove',
-        isNuxtUI: true,
-    });
-    return {
-        color: 'neutral' as const,
-        variant: 'popover' as const,
-        size: 'sm' as const,
-        icon: iconTrash.value,
-        ...(overrides.value as any),
-    };
+const renameButtonProps = computed(() => ({
+    color: 'neutral' as const,
+    variant: 'popover' as const,
+    size: 'sm' as const,
+    icon: iconEdit.value,
+    ...(renameOverrides.value as any),
+}));
+
+const removeOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.project-entry-remove',
+    isNuxtUI: true,
 });
+
+const removeButtonProps = computed(() => ({
+    color: 'neutral' as const,
+    variant: 'popover' as const,
+    size: 'sm' as const,
+    icon: iconTrash.value,
+    ...(removeOverrides.value as any),
+}));
 </script>

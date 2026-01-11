@@ -67,7 +67,8 @@ import { ref, computed, watch } from 'vue';
 import { Or3Scroll } from 'or3-scroll';
 import 'or3-scroll/style.css';
 import { usePaginatedSidebarItems } from '~/composables/sidebar/usePaginatedSidebarItems';
-import { computeTimeGroup, getTimeGroupLabel, type TimeGroup } from '~/utils/sidebar/sidebarTimeUtils';
+import { computeTimeGroup, getTimeGroupLabel } from '~/utils/sidebar/sidebarTimeUtils';
+import type { TimeGroup } from '~/utils/sidebar/sidebarTimeUtils';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import SidebarTimeGroup from './SidebarTimeGroup.vue';
 import SidebarEmptyState from './SidebarEmptyState.vue';
@@ -127,7 +128,7 @@ function toggleGroup(group: TimeGroup) {
 // Group items by time period (each group becomes a single item in Or3Scroll)
 const groupedItemsList = computed(() => {
     const groups = new Map<TimeGroup, UnifiedSidebarItem[]>();
-    
+
     for (const item of items.value) {
         const group = computeTimeGroup(item.updatedAt);
         if (!groups.has(group)) {
@@ -135,7 +136,7 @@ const groupedItemsList = computed(() => {
         }
         groups.get(group)!.push(item);
     }
-    
+
     return Array.from(groups.entries()).map(([groupKey, groupItems]) => ({
         key: `time-group-${groupKey}`,
         type: 'time-group' as const,

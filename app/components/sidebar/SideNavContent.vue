@@ -186,17 +186,10 @@ const emit = defineEmits([
     'add-document-to-project-root',
     'sidebar-footer-action',
 ]);
-
 // Get multi-pane API from the instance initialised in PageShell
 const multiPaneApiRef = shallowRef<ReturnType<typeof useMultiPane> | null>(
-    (globalThis as any).__or3MultiPaneApi ?? null
+    import.meta.client ? ((globalThis as any).__or3MultiPaneApi ?? null) : null
 );
-
-if (!multiPaneApiRef.value && import.meta.dev) {
-    console.warn(
-        '[SideNavContent] Waiting for __or3MultiPaneApi initialization'
-    );
-}
 
 const sidebarMultiPaneApi = multiPaneApiRef.value
     ? createSidebarMultiPaneApi(multiPaneApiRef.value)
@@ -219,20 +212,19 @@ const activeDocumentIdsRef = computed(() => props.activeDocumentIds);
 const footerActionsRef = computed(() => props.sidebarFooterActions);
 
 // Footer action button theme props
-const footerActionButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.footer-action',
-        isNuxtUI: true,
-    });
-    return {
-        size: 'xs' as const,
-        variant: 'ghost' as const,
-        class: 'pointer-events-auto',
-        ...(overrides.value as any),
-    };
+const footerActionOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.footer-action',
+    isNuxtUI: true,
 });
+
+const footerActionButtonProps = computed(() => ({
+    size: 'xs' as const,
+    variant: 'ghost' as const,
+    class: 'pointer-events-auto',
+    ...(footerActionOverrides.value as any),
+}));
 
 // Create environment for child components
 const environment: SidebarEnvironment = {

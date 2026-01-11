@@ -59,10 +59,10 @@ describe('SideNavContentCollapsed', () => {
         const wrapper = mount(SideNavContentCollapsed, {
             global: {
                 stubs: {
-                    UIcon: true,
+                    UIcon: { template: '<span><slot /></span>' },
                     UButton: { template: '<button><slot /></button>' },
                     UTooltip: { template: '<div><slot /></div>' },
-                    SideBottomNav: true,
+                    SideBottomNav: { template: '<nav />' },
                     ClientOnly: { template: '<div><slot /></div>' },
                 },
             },
@@ -120,14 +120,14 @@ describe('SideNavContentCollapsed', () => {
         const wrapper = mount(SideNavContentCollapsed, {
             global: {
                 stubs: {
-                    UIcon: true,
+                    UIcon: { template: '<span><slot /></span>' },
                     UButton: {
                         template:
                             '<button @click="$emit(\'click\')"><slot /></button>',
                         emits: ['click'],
                     },
                     UTooltip: { template: '<div><slot /></div>' },
-                    SideBottomNav: true,
+                    SideBottomNav: { template: '<nav />' },
                     ClientOnly: { template: '<div><slot /></div>' },
                 },
             },
@@ -149,14 +149,14 @@ describe('SideNavContentCollapsed', () => {
         const wrapper = mount(SideNavContentCollapsed, {
             global: {
                 stubs: {
-                    UIcon: true,
+                    UIcon: { template: '<span><slot /></span>' },
                     UButton: {
                         template:
                             '<button @click="$emit(\'click\')"><slot /></button>',
                         emits: ['click'],
                     },
                     UTooltip: { template: '<div><slot /></div>' },
-                    SideBottomNav: true,
+                    SideBottomNav: { template: '<nav />' },
                     ClientOnly: { template: '<div><slot /></div>' },
                 },
             },

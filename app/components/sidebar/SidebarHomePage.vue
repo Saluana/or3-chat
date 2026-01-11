@@ -6,8 +6,8 @@
                 ref="scrollAreaRef"
                 :items="combinedItems"
                 :item-key="(item) => item.key"
-                :estimate-height="56"
-                :overscan="512"
+                :estimate-height="40"
+                :overscan="180"
                 :maintain-bottom="false"
                 class="flex-1 min-h-0 sidebar-scroll"
             >
@@ -21,6 +21,12 @@
                     <!-- Custom Main Sections -->
                     <component
                         v-else-if="item.type === 'custom-main'"
+                        :is="item.component"
+                    />
+
+                    <!-- Custom Bottom Sections -->
+                    <component
+                        v-else-if="item.type === 'custom-bottom'"
                         :is="item.component"
                     />
 
@@ -189,20 +195,22 @@ import type { Component } from 'vue';
 defineOptions({
     name: 'sidebar-home',
 });
-import type { Post, Project } from '~/db';
+import type { Post, Project, Thread } from '~/db';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { Or3Scroll } from 'or3-scroll';
 import { usePaginatedSidebarItems } from '~/composables/sidebar/usePaginatedSidebarItems';
 import {
     computeTimeGroup,
     getTimeGroupLabel,
-    type TimeGroup,
 } from '~/utils/sidebar/sidebarTimeUtils';
+import type { TimeGroup } from '~/utils/sidebar/sidebarTimeUtils';
 import SidebarProjectsSection from './SidebarProjectsSection.vue';
 import SidebarTimeGroup from './SidebarTimeGroup.vue';
 import SidebarPageLink from './SidebarPageLink.vue';
 import SidebarEmptyState from './SidebarEmptyState.vue';
 import { useIcon } from '~/composables/useIcon';
+import type { UnifiedSidebarItem } from '~/types/sidebar';
+import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarSections';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 
@@ -216,7 +224,7 @@ interface SidebarPageProps {
 const props = defineProps<
     {
         activeThread?: string;
-        items: any[];
+        items: Thread[];
         projects: SidebarProject[];
         expandedProjects: string[];
         docs: Post[];
@@ -226,13 +234,13 @@ const props = defineProps<
             chats: boolean;
             docs: boolean;
         };
-        displayThreads: any[];
+        displayThreads: Thread[];
         displayProjects: SidebarProject[];
         displayDocuments?: Post[];
         sidebarQuery: string;
         activeDocumentIds: string[];
         activeThreadIds: string[];
-        sidebarFooterActions: any[];
+        sidebarFooterActions: SidebarFooterActionEntry[];
         resolvedSidebarSections: {
             top: { id: string; component: Component }[];
             main: { id: string; component: Component }[];
@@ -379,7 +387,7 @@ const combinedItems = computed(() => {
         });
     }
 
-    // Time-grouped items (each group is now a single item with its children inside)
+    // Time-grouped items (each group is a single item with its children inside)
     for (const [groupKey, groupItems] of groupedItems.value) {
         result.push({
             key: `time-group-${groupKey}`,
