@@ -47,7 +47,6 @@
         <UModal
             v-model:open="showResetModal"
             title="Reset Theme"
-            :content="{ 'aria-describedby': undefined }"
             :ui="{ content: 'z-[20]' }"
         >
             <template #body>
@@ -90,20 +89,19 @@ const reset = themeApi.reset;
 
 const showResetModal = ref(false);
 
-const themeModeButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.mode',
-        isNuxtUI: true,
-    });
-    return {
-        size: 'sm' as const,
-        variant: 'outline' as const,
-        color: 'on-surface' as const,
-        ...(overrides.value as any),
-    };
+const themeModeOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'dashboard',
+    identifier: 'dashboard.theme.mode',
+    isNuxtUI: true,
 });
+
+const themeModeButtonProps = computed(() => ({
+    size: 'sm' as const,
+    variant: 'outline' as const,
+    color: 'on-surface' as const,
+    ...(themeModeOverrides.value as any),
+}));
 
 function confirmReset() {
     reset();

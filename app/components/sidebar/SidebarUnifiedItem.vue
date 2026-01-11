@@ -155,21 +155,6 @@ const iconFolder = useIcon('sidebar.new_folder');
 const threadActions = useThreadHistoryActions();
 const documentActions = useDocumentHistoryActions();
 
-// Theme overrides
-const threadIconOverrides = useThemeOverrides({
-    component: 'div',
-    context: 'sidebar',
-    identifier: 'sidebar.unified-item.icon.thread',
-    isNuxtUI: false,
-});
-
-const documentIconOverrides = useThemeOverrides({
-    component: 'div',
-    context: 'sidebar',
-    identifier: 'sidebar.unified-item.icon.document',
-    isNuxtUI: false,
-});
-
 const triggerOverrides = useThemeOverrides({
     component: 'button',
     context: 'sidebar',
@@ -204,21 +189,6 @@ const actionButtonOverridesMap = {
     }),
 };
 
-// Theme overrides for icon container
-const iconContainerProps = computed(() => {
-    const overrides =
-        props.item.type === 'thread'
-            ? threadIconOverrides.value
-            : documentIconOverrides.value;
-    return {
-        class:
-            props.item.type === 'thread'
-                ? 'bg-primary/15 text-primary'
-                : 'bg-[color:var(--md-secondary)]/15 text-[color:var(--md-secondary)]',
-        ...overrides,
-    };
-});
-
 // Theme overrides for the popover trigger button
 const actionTriggerProps = computed(() => ({
     variant: 'ghost' as const,
@@ -228,14 +198,14 @@ const actionTriggerProps = computed(() => ({
     ariaLabel: 'Open actions',
     square: true,
     class: 'flex items-center justify-center',
-    ...(triggerOverrides.value as any),
+    ...triggerOverrides.value,
 }));
 
 // Theme overrides function for action buttons
-const actionButtonProps = (id: string) => {
-    const overrides =
-        actionButtonOverridesMap[id as keyof typeof actionButtonOverridesMap]
-            ?.value || {};
+type ActionButtonId = keyof typeof actionButtonOverridesMap;
+
+const actionButtonProps = (id: ActionButtonId) => {
+    const overrides = actionButtonOverridesMap[id].value;
 
     let icon = iconMore;
     if (id === 'rename') icon = iconEdit;
@@ -247,7 +217,7 @@ const actionButtonProps = (id: string) => {
         variant: 'popover' as const,
         size: 'sm' as const,
         icon: icon.value,
-        ...(overrides as any),
+        ...overrides,
     };
 };
 
@@ -266,7 +236,7 @@ async function runExtraAction(action: ExtraAction) {
             if (!doc) return;
             await (action as DocumentHistoryAction).handler({ document: doc });
         }
-    } catch (e: any) {
+    } catch (e: unknown) {
         console.error('[SidebarUnifiedItem] Plugin action error', action.id, e);
     }
 }

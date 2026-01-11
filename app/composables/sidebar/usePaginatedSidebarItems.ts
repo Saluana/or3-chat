@@ -43,6 +43,7 @@ export function usePaginatedSidebarItems(options: {
     const loading = ref(false);
     const targetCount = ref(PAGE_SIZE);
     let subscription: Subscription | null = null;
+    let subscriptionToken = 0;
 
     const filterType = options.type || 'all';
     const searchQuery = options.query;
@@ -105,16 +106,19 @@ export function usePaginatedSidebarItems(options: {
     }
 
     function startSubscription() {
+        const token = ++subscriptionToken;
         const shouldShowLoading = items.value.length === 0;
         if (shouldShowLoading) loading.value = true;
         subscription?.unsubscribe();
         subscription = liveQuery(() => fetchItems(targetCount.value)).subscribe({
             next: (result) => {
+                if (token !== subscriptionToken) return;
                 items.value = result.items;
                 hasMore.value = result.hasMore;
                 loading.value = false;
             },
             error: (error) => {
+                if (token !== subscriptionToken) return;
                 console.error(
                     '[usePaginatedSidebarItems] liveQuery error:',
                     error
@@ -127,7 +131,7 @@ export function usePaginatedSidebarItems(options: {
     /**
      * Load next page of items
      */
-    async function loadMore() {
+    function loadMore() {
         if (loading.value || !hasMore.value) return;
         targetCount.value += PAGE_SIZE;
         startSubscription();
@@ -136,7 +140,7 @@ export function usePaginatedSidebarItems(options: {
     /**
      * Reset pagination state and reload from start
      */
-    async function reset() {
+    function reset() {
         hasMore.value = true;
         targetCount.value = PAGE_SIZE;
         startSubscription();

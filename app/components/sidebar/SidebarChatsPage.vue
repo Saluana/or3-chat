@@ -61,9 +61,9 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'new-chat'): void;
     (e: 'select-thread', id: string): void;
-    (e: 'rename-thread', thread: any): void;
-    (e: 'delete-thread', thread: any): void;
-    (e: 'add-to-project', thread: any): void;
+    (e: 'rename-thread', thread: UnifiedSidebarItem): void;
+    (e: 'delete-thread', thread: UnifiedSidebarItem): void;
+    (e: 'add-to-project', thread: UnifiedSidebarItem): void;
 }>();
 
 const iconBack = useIcon('ui.chevron.left');

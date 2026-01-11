@@ -200,7 +200,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, watch } from 'vue';
+import { ref, computed, reactive, watch, onUnmounted } from 'vue';
 import type { Component } from 'vue';
 
 // Component name for KeepAlive matching
@@ -227,6 +227,13 @@ import type { UnifiedSidebarItem } from '~/types/sidebar';
 import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarSections';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
+type SidebarCombinedItem =
+    | { key: string; type: 'custom-top' | 'custom-main' | 'custom-bottom'; component: Component }
+    | { key: string; type: 'page-link'; label: string; description: string; icon: string; pageId: string; class?: string }
+    | { key: string; type: 'projects' }
+    | { key: string; type: 'empty-state' }
+    | { key: string; type: 'time-group-header'; label: string; groupKey: TimeGroup }
+    | { key: string; type: 'time-group-item'; item: UnifiedSidebarItem; groupKey: TimeGroup };
 
 interface SidebarPageProps {
     pageId: string;
@@ -288,7 +295,7 @@ const emit = defineEmits([
     'update:expandedProjects',
 ]);
 
-const scrollAreaRef = ref<any>(null);
+const scrollAreaRef = ref<InstanceType<typeof Or3Scroll> | null>(null);
 const bottomNavRef = ref<HTMLElement | null>(null);
 
 // Project state
@@ -297,6 +304,7 @@ const projectsCollapsed = ref(false);
 // Time grouping state
 const collapsedGroups = reactive(new Set<string>());
 const collapsingGroups = reactive(new Set<string>()); // Groups that are animating out
+const pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
 
 const COLLAPSE_ANIMATION_DURATION = 200; // ms
 
@@ -308,10 +316,12 @@ function toggleGroup(groupKey: string) {
         // Collapsing: add to collapsing first (triggers exit animation)
         collapsingGroups.add(groupKey);
         // After animation, actually collapse
-        setTimeout(() => {
+        const timeoutId = setTimeout(() => {
             collapsingGroups.delete(groupKey);
             collapsedGroups.add(groupKey);
+            pendingTimeouts.delete(timeoutId);
         }, COLLAPSE_ANIMATION_DURATION);
+        pendingTimeouts.add(timeoutId);
     }
 }
 
@@ -336,7 +346,7 @@ const allActiveIds = computed(() => [
 
 // Group items by time
 const groupedItems = computed(() => {
-    const groups = new Map<TimeGroup, any[]>();
+    const groups = new Map<TimeGroup, UnifiedSidebarItem[]>();
 
     for (const item of items.value) {
         const groupKey = computeTimeGroup(item.updatedAt);
@@ -356,7 +366,7 @@ const isCompletelyEmpty = computed(
 
 // Build combined items list for Or3Scroll
 const combinedItems = computed(() => {
-    const result: any[] = [];
+    const result: SidebarCombinedItem[] = [];
 
     // Custom top sections
     for (const section of props.resolvedSidebarSections.top) {
@@ -444,22 +454,22 @@ const combinedItems = computed(() => {
     return result;
 });
 
-function onItemSelected(item: any) {
+function onItemSelected(item: UnifiedSidebarItem) {
     if (item.type === 'thread') emit('select-thread', item.id);
     else emit('select-document', item.id);
 }
 
-function onItemRename(item: any) {
+function onItemRename(item: UnifiedSidebarItem) {
     if (item.type === 'thread') emit('rename-thread', item);
     else emit('rename-document', item);
 }
 
-function onItemDelete(item: any) {
+function onItemDelete(item: UnifiedSidebarItem) {
     if (item.type === 'thread') emit('delete-thread', item);
     else emit('delete-document', item);
 }
 
-function onItemAddToProject(item: any) {
+function onItemAddToProject(item: UnifiedSidebarItem) {
     if (item.type === 'thread') emit('add-thread-to-project', item);
     else emit('add-document-to-project-from-list', item);
 }
@@ -468,5 +478,10 @@ function onItemAddToProject(item: any) {
 defineExpose({
     scrollAreaRef,
     bottomNavRef,
+});
+
+onUnmounted(() => {
+    pendingTimeouts.forEach(clearTimeout);
+    pendingTimeouts.clear();
 });
 </script>

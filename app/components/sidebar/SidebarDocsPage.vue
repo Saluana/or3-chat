@@ -61,9 +61,9 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'new-document'): void;
     (e: 'select-document', id: string): void;
-    (e: 'rename-document', doc: any): void;
-    (e: 'delete-document', doc: any): void;
-    (e: 'add-document-to-project', doc: any): void;
+    (e: 'rename-document', doc: UnifiedSidebarItem): void;
+    (e: 'delete-document', doc: UnifiedSidebarItem): void;
+    (e: 'add-document-to-project', doc: UnifiedSidebarItem): void;
 }>();
 
 const iconBack = useIcon('ui.chevron.left');

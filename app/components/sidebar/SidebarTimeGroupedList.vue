@@ -75,10 +75,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onUnmounted } from 'vue';
 import { Or3Scroll } from 'or3-scroll';
 import 'or3-scroll/style.css';
 import { usePaginatedSidebarItems } from '~/composables/sidebar/usePaginatedSidebarItems';
+import { useSidebarEnvironment } from '~/composables/sidebar/useSidebarEnvironment';
 import { computeTimeGroup, getTimeGroupLabel, formatTimeDisplay } from '~/utils/sidebar/sidebarTimeUtils';
 import type { TimeGroup } from '~/utils/sidebar/sidebarTimeUtils';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
@@ -123,11 +124,12 @@ const resolvedEmptyDescription = computed(() => {
 });
 
 // Watch query for reset
-watch(query, () => reset());
+watch(query, () => void reset());
 
 // Local state for collapsed groups
 const collapsedGroups = ref(new Set<TimeGroup>());
 const collapsingGroups = ref(new Set<TimeGroup>()); // Groups animating out
+const pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
 
 const COLLAPSE_ANIMATION_DURATION = 200;
 
@@ -140,18 +142,23 @@ function toggleGroup(group: TimeGroup) {
         // Collapsing: trigger exit animation first
         collapsingGroups.value.add(group);
         collapsingGroups.value = new Set(collapsingGroups.value);
-        setTimeout(() => {
+        const timeoutId = setTimeout(() => {
             collapsingGroups.value.delete(group);
             collapsingGroups.value = new Set(collapsingGroups.value);
             collapsedGroups.value.add(group);
             collapsedGroups.value = new Set(collapsedGroups.value);
+            pendingTimeouts.delete(timeoutId);
         }, COLLAPSE_ANIMATION_DURATION);
+        pendingTimeouts.add(timeoutId);
     }
 }
 
 // Flattened items list for true per-item virtualization
 const groupedItemsList = computed(() => {
-    const result: any[] = [];
+    const result: Array<
+        | { key: string; type: 'time-group-header'; label: string; groupKey: TimeGroup }
+        | { key: string; type: 'time-group-item'; item: UnifiedSidebarItem; groupKey: TimeGroup }
+    > = [];
     const groups = new Map<TimeGroup, UnifiedSidebarItem[]>();
 
     for (const item of items.value) {
@@ -187,5 +194,10 @@ const groupedItemsList = computed(() => {
 
 // Expose reset for parent (e.g. search changes or switch page)
 defineExpose({ reset });
+
+onUnmounted(() => {
+    pendingTimeouts.forEach(clearTimeout);
+    pendingTimeouts.clear();
+});
 
 </script>

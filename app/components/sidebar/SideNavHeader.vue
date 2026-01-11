@@ -306,6 +306,24 @@ import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import { useIcon } from '~/composables/useIcon';
+import type { Project } from '~/db';
+import type { ProjectEntry, ProjectEntryKind } from '~/utils/projects/normalizeProjectData';
+import type { UnifiedSidebarItem } from '~/types/sidebar';
+
+type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
+type RenameTarget =
+    | UnifiedSidebarItem
+    | { id: string; title?: string; kind?: 'chat' | 'doc' }
+    | { projectId: string; entryId: string; kind: ProjectEntryKind }
+    | { docId: string };
+type AddToProjectRequest = {
+    threadId: string | null;
+    documentId: string | null;
+    mode: 'select' | 'create';
+    selectedProjectId: string | null;
+    newProjectName: string;
+    newProjectDescription: string;
+};
 
 const iconEdit = useIcon('ui.edit');
 const iconFolder = useIcon('sidebar.folder');
@@ -322,7 +340,7 @@ const props = defineProps<{
         chats: boolean;
         docs: boolean;
     };
-    projects: any[];
+    projects: SidebarProject[];
 }>();
 
 const emit = defineEmits<{
@@ -330,26 +348,33 @@ const emit = defineEmits<{
     (e: 'update:activeSections', value: typeof props.activeSections): void;
     (e: 'new-chat'): void;
     (e: 'new-document', initial?: { title?: string }): void;
-    (e: 'open-rename', target: any): void;
+    (e: 'open-rename', target: RenameTarget): void;
     (e: 'open-rename-project', projectId: string): void;
-    (e: 'add-to-project', thread: any): void;
-    (e: 'add-document-to-project', doc: any): void;
+    (e: 'add-to-project', payload: UnifiedSidebarItem | AddToProjectRequest): void;
+    (e: 'add-document-to-project', payload: UnifiedSidebarItem): void;
 }>();
 
 const { createProject: createProjectCrud, renameProject: renameProjectCrud } =
     useProjectsCrud();
 
 // Theme overrides for interactive elements
-const searchInputProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'input',
-        context: 'sidebar',
-        identifier: 'sidebar.search',
-        isNuxtUI: true,
-    });
+const searchInputOverrides = useThemeOverrides({
+    component: 'input',
+    context: 'sidebar',
+    identifier: 'sidebar.search',
+    isNuxtUI: true,
+});
 
+const searchClearButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.search-clear',
+    isNuxtUI: true,
+});
+
+const searchInputProps = computed(() => {
     // Merge theme UI with component-specific UI
-    const themeUi = (overrides.value as any)?.ui || {};
+    const themeUi = (searchInputOverrides.value as any)?.ui || {};
     const componentUi = {
         base: 'rounded-[18px] border border-[color:var(--md-border-color)]/80 bg-[color:var(--md-surface)]/85 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] placeholder:text-[color:var(--md-on-surface-variant)]/70 focus:border-[color:var(--md-primary)]/40 focus:ring-2 focus:ring-[color:var(--md-primary)]/10',
 
@@ -363,24 +388,18 @@ const searchInputProps = computed(() => {
         size: 'md' as const,
         variant: 'outline' as const,
         placeholder: 'Search...',
-        ...(overrides.value as any),
+        ...(searchInputOverrides.value as any),
         ui: mergedUi,
     };
 });
 
 const searchClearButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.search-clear',
-        isNuxtUI: true,
-    });
     return {
         color: 'neutral' as const,
         variant: 'subtle' as const,
         size: 'xs' as const,
         icon: iconClose.value,
-        ...(overrides.value as any),
+        ...(searchClearButtonOverrides.value as any),
     };
 });
 
@@ -451,7 +470,7 @@ const renameModalProps = createSidebarModalProps('sidebar.rename', {
     ui: { footer: 'justify-end' },
 });
 
-async function openRename(target: any) {
+async function openRename(target: RenameTarget) {
     emit('open-rename', target);
 }
 
@@ -567,11 +586,11 @@ const addToProjectModalProps = createSidebarModalProps(
     }
 );
 
-function openAddToProject(thread: any) {
+function openAddToProject(thread: UnifiedSidebarItem) {
     emit('add-to-project', thread);
 }
 
-function openAddDocumentToProject(doc: any) {
+function openAddDocumentToProject(doc: UnifiedSidebarItem) {
     emit('add-document-to-project', doc);
 }
 

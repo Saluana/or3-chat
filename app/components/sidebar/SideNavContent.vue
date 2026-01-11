@@ -107,7 +107,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, shallowRef, type Component } from 'vue';
+import { ref, computed, type Component } from 'vue';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import {
@@ -187,12 +187,16 @@ const emit = defineEmits([
     'sidebar-footer-action',
 ]);
 // Get multi-pane API from the instance initialised in PageShell
-const multiPaneApiRef = shallowRef<ReturnType<typeof useMultiPane> | null>(
-    import.meta.client ? ((globalThis as any).__or3MultiPaneApi ?? null) : null
-);
+type MultiPaneGlobals = typeof globalThis & {
+    __or3MultiPaneApi?: ReturnType<typeof useMultiPane> | null;
+};
 
-const sidebarMultiPaneApi = multiPaneApiRef.value
-    ? createSidebarMultiPaneApi(multiPaneApiRef.value)
+const multiPaneApi = import.meta.client
+    ? (globalThis as MultiPaneGlobals).__or3MultiPaneApi ?? null
+    : null;
+
+const sidebarMultiPaneApi = multiPaneApi
+    ? createSidebarMultiPaneApi(multiPaneApi)
     : null;
 
 // Get active page state
@@ -281,7 +285,10 @@ const activePageComponent = computed(() => {
 const keepAliveInclude = computed(() =>
     listSidebarPages.value
         .filter((page) => page.keepAlive)
-        .map((page) => page.id)
+        .map((page) => {
+            const componentName = (page.component as { name?: string })?.name;
+            return componentName ?? page.id;
+        })
 );
 
 // Props to pass to active page
@@ -311,10 +318,7 @@ const activePageProps = computed(() => {
 
 // Forward events from active page to parent
 const forwardedEvents = computed(() => {
-    const events: Record<string, (payload: any) => void> = {};
-
-    // Forward all existing events
-    const eventNames = [
+    const forwardedEventNames = [
         'new-chat',
         'new-document',
         'new-project',
@@ -338,10 +342,14 @@ const forwardedEvents = computed(() => {
         'add-document-to-project-from-list',
         'add-document-to-project-root',
         'sidebar-footer-action',
-    ];
+    ] as const;
 
-    eventNames.forEach((eventName) => {
-        events[eventName] = (payload: any) => emit(eventName as any, payload);
+    type ForwardedEventName = (typeof forwardedEventNames)[number];
+    const events: Record<ForwardedEventName, (payload?: unknown) => void> =
+        {} as Record<ForwardedEventName, (payload?: unknown) => void>;
+
+    forwardedEventNames.forEach((eventName) => {
+        events[eventName] = (payload?: unknown) => emit(eventName, payload);
     });
 
     return events;

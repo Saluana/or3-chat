@@ -88,7 +88,6 @@ const iconTrash = useIcon('ui.trash');
 
 defineProps<{
     child: ProjectEntry;
-    parentId: string;
     active?: boolean;
 }>();
 

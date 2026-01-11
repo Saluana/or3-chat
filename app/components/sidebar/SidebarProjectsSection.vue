@@ -52,13 +52,11 @@
                                         v-for="child in project.data"
                                         :key="`${project.id}:${child.id}`"
                                         :child="child"
-                                        :parent-id="project.id"
                                         :active="isProjectChildActive(child)"
                                         @select="
                                             () =>
                                                 onProjectChildSelect(
-                                                    child,
-                                                    project.id
+                                                    child
                                                 )
                                         "
                                         @rename="
@@ -104,14 +102,18 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
+import type { Project } from '~/db';
+import type { ProjectEntry, ProjectEntryKind } from '~/utils/projects/normalizeProjectData';
 import SidebarProjectRoot from './SidebarProjectRoot.vue';
 import SidebarProjectChild from './SidebarProjectChild.vue';
 import SidebarGroupHeader from './SidebarGroupHeader.vue';
 import { useIcon } from '~/composables/useIcon';
 
+type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
+type ProjectEntryPayload = { projectId: string; entryId: string; kind: ProjectEntryKind };
+
 const props = defineProps<{
-    projects: any[];
+    projects: SidebarProject[];
     collapsed: boolean;
     expandedProjects: string[];
     activeThreadIds: string[];
@@ -126,8 +128,8 @@ const emit = defineEmits<{
     (e: 'add-document-to-project-root', id: string): void;
     (e: 'rename-project', id: string): void;
     (e: 'delete-project', id: string): void;
-    (e: 'rename-entry', payload: any): void;
-    (e: 'remove-from-project', payload: any): void;
+    (e: 'rename-entry', payload: ProjectEntryPayload): void;
+    (e: 'remove-from-project', payload: ProjectEntryPayload): void;
     (e: 'select-thread', id: string): void;
     (e: 'select-document', id: string): void;
     (e: 'update:expandedProjects', value: string[]): void;
@@ -145,14 +147,14 @@ function toggleProjectExpand(id: string) {
     emit('update:expandedProjects', Array.from(next));
 }
 
-function isProjectChildActive(child: any) {
+function isProjectChildActive(child: ProjectEntry) {
     if (child.kind === 'chat') {
         return props.activeThreadIds.includes(child.id);
     }
     return props.activeDocumentIds.includes(child.id);
 }
 
-function onProjectChildSelect(child: any, projectId: string) {
+function onProjectChildSelect(child: ProjectEntry) {
     if (child.kind === 'chat') {
         emit('select-thread', child.id);
     } else {
