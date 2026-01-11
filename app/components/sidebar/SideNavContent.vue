@@ -163,6 +163,7 @@ const emit = defineEmits([
     'update:active-document-ids',
     'new-chat',
     'new-document',
+    'new-project',
     'open-rename',
     'open-rename-project',
     'add-to-project',
@@ -324,6 +325,7 @@ const forwardedEvents = computed(() => {
     const eventNames = [
         'new-chat',
         'new-document',
+        'new-project',
         'update:expandedProjects',
         'add-chat-to-project',
         'add-document-to-project',

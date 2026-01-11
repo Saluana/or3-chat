@@ -1,7 +1,7 @@
 <template>
     <div id="side-nav-content-header" class="px-3 pt-2 border-b border-[color:var(--md-border-color)]/10 pb-2">
         <div class="flex w-full items-center gap-2">
-            <div class="relative flex-1">
+            <div class="relative flex-1 pr-2">
                 <UInput
                     ref="searchInputWrapper"
                     v-model="sidebarQuery"
@@ -351,7 +351,7 @@ const searchInputProps = computed(() => {
     // Merge theme UI with component-specific UI
     const themeUi = (overrides.value as any)?.ui || {};
     const componentUi = {
-        base: 'rounded-[18px] border border-[color:var(--md-border-color)]/40 bg-[color:var(--md-surface)]/85 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] placeholder:text-[color:var(--md-on-surface-variant)]/70 focus:border-[color:var(--md-primary)]/40 focus:ring-2 focus:ring-[color:var(--md-primary)]/10',
+        base: 'rounded-[18px] border border-[color:var(--md-border-color)]/80 bg-[color:var(--md-surface)]/85 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] placeholder:text-[color:var(--md-on-surface-variant)]/70 focus:border-[color:var(--md-primary)]/40 focus:ring-2 focus:ring-[color:var(--md-primary)]/10',
 
         trailing: 'pr-1',
     };

@@ -34,6 +34,7 @@
             @update:expanded-projects="expandedProjects = $event"
             @new-chat="onNewChat"
             @new-document="openCreateDocumentModal"
+            @new-project="openCreateProject"
             @open-rename="openRename"
             @open-rename-project="openRenameProject"
             @add-to-project="openAddToProject"

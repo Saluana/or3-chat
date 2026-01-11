@@ -86,7 +86,8 @@
                         v-else-if="item.type === 'empty-state'"
                         icon="lucide:ghost"
                         title="No activity yet"
-                        description="Start a chat or create a document to see it appear here."
+                        description="Kick things off with a project, or jump straight into a chat or document."
+                        actions-layout="column"
                         class="mx-1"
                         style="width: calc(100% - 8px);"
                     >
@@ -94,18 +95,29 @@
                             <UButton
                                 size="sm"
                                 variant="ghost"
-                                class="bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
-                                @click="emit('new-chat')"
+                                class="w-full justify-center whitespace-nowrap truncate text-[12px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                                title="Create your first project"
+                                @click="emit('new-project')"
                             >
-                                New chat
+                                Create your first project
                             </UButton>
                             <UButton
                                 size="sm"
                                 variant="ghost"
-                                class="bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                                class="w-full justify-center whitespace-nowrap truncate text-[12px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                                title="Start a new chat"
+                                @click="emit('new-chat')"
+                            >
+                                Start a new chat
+                            </UButton>
+                            <UButton
+                                size="sm"
+                                variant="ghost"
+                                class="w-full justify-center whitespace-nowrap truncate text-[12px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                                title="Create a document"
                                 @click="emit('new-document')"
                             >
-                                New doc
+                                Create a document
                             </UButton>
                         </template>
                     </SidebarEmptyState>
@@ -232,6 +244,7 @@ const props = defineProps<
 const emit = defineEmits([
     'new-chat',
     'new-document',
+    'new-project',
     'add-chat-to-project',
     'add-document-to-project',
     'add-document-to-project-root',
@@ -305,6 +318,9 @@ const groupedItems = computed(() => {
 });
 
 const showEmptyState = computed(() => !loading.value && items.value.length === 0);
+const isCompletelyEmpty = computed(
+    () => showEmptyState.value && props.displayProjects.length === 0
+);
 
 // Build combined items list for Or3Scroll
 const combinedItems = computed(() => {
@@ -349,7 +365,7 @@ const combinedItems = computed(() => {
     );
 
     // Projects section (single item that renders the whole section)
-    if (props.activeSections.projects) {
+    if (props.activeSections.projects && !isCompletelyEmpty.value) {
         result.push({
             key: 'projects-section',
             type: 'projects',
