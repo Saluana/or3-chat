@@ -179,6 +179,7 @@ html {
 .sidebar-scroll.or3-scroll {
 	scrollbar-width: thin;
 	scrollbar-color: transparent transparent;
+	scrollbar-gutter: stable;
 	transition: scrollbar-color 0.2s ease;
 }
 

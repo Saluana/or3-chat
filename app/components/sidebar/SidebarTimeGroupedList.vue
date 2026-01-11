@@ -1,33 +1,27 @@
 <template>
-    <div class="flex-1 flex flex-col min-h-0 relative">
+    <div class="flex-1 flex flex-col min-h-0 relative px-2">
         <ClientOnly>
             <Or3Scroll
                 ref="scroller"
-                :items="flatItems"
+                :items="groupedItemsList"
                 :item-key="(item) => item.key"
-                :estimate-height="56"
+                :estimate-height="200"
                 :overscan="512"
-                class="flex-1 min-h-0"
+                class="flex-1 min-h-0 sidebar-scroll"
                 @reach-bottom="loadMore"
             >
                 <template #default="{ item }">
-                    <!-- Section Header -->
-                    <SidebarGroupHeader
-                        v-if="item.type === 'header'"
+                    <!-- Time Group (with animated collapse/expand) -->
+                    <SidebarTimeGroup
                         :label="item.label"
+                        :group-key="item.groupKey"
                         :collapsed="collapsedGroups.has(item.groupKey)"
+                        :items="item.items"
+                        :active-ids="activeIds"
                         @toggle="toggleGroup(item.groupKey)"
-                    />
-
-                    <!-- Unified Item -->
-                    <SidebarUnifiedItem
-                        v-else
-                        :item="item"
-                        :active="isActive(item)"
-                        :time-display="formatTime(item.updatedAt, item.groupKey)"
-                        @select="(id) => emit('select', item)"
-                        @rename="(i) => emit('rename', i)"
-                        @delete="(i) => emit('delete', i)"
+                        @select-item="(i) => emit('select', i)"
+                        @rename-item="(i) => emit('rename', i)"
+                        @delete-item="(i) => emit('delete', i)"
                         @add-to-project="(i) => emit('add-to-project', i)"
                     />
                 </template>
@@ -67,14 +61,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Or3Scroll } from 'or3-scroll';
 import 'or3-scroll/style.css';
 import { usePaginatedSidebarItems } from '~/composables/sidebar/usePaginatedSidebarItems';
-import { computeTimeGroup, getTimeGroupLabel, formatTimeDisplay, type TimeGroup } from '~/utils/sidebar/sidebarTimeUtils';
-import type { UnifiedSidebarItem, FlatSidebarItem } from '~/types/sidebar';
-import SidebarGroupHeader from './SidebarGroupHeader.vue';
-import SidebarUnifiedItem from './SidebarUnifiedItem.vue';
+import { computeTimeGroup, getTimeGroupLabel, type TimeGroup } from '~/utils/sidebar/sidebarTimeUtils';
+import type { UnifiedSidebarItem } from '~/types/sidebar';
+import SidebarTimeGroup from './SidebarTimeGroup.vue';
 
 const props = defineProps<{
     activeIds: string[];
@@ -101,7 +94,6 @@ const { items, hasMore, loading, loadMore, reset } = usePaginatedSidebarItems({
 });
 
 // Watch query for reset
-import { watch } from 'vue';
 watch(query, () => reset());
 
 // Local state for collapsed groups
@@ -113,47 +105,30 @@ function toggleGroup(group: TimeGroup) {
     } else {
         collapsedGroups.value.add(group);
     }
-    // Forces re-trigger of computed flatItems
+    // Forces re-trigger of computed
     collapsedGroups.value = new Set(collapsedGroups.value);
 }
 
-// Flatten items and interleave headers
-const flatItems = computed<FlatSidebarItem[]>(() => {
-    const list: FlatSidebarItem[] = [];
-    let currentGroup: TimeGroup | null = null;
-
+// Group items by time period (each group becomes a single item in Or3Scroll)
+const groupedItemsList = computed(() => {
+    const groups = new Map<TimeGroup, UnifiedSidebarItem[]>();
+    
     for (const item of items.value) {
         const group = computeTimeGroup(item.updatedAt);
-        
-        if (group !== currentGroup) {
-            currentGroup = group;
-            list.push({
-                type: 'header',
-                key: `header-${group}`,
-                label: getTimeGroupLabel(group),
-                groupKey: group
-            });
+        if (!groups.has(group)) {
+            groups.set(group, []);
         }
-
-        if (!collapsedGroups.value.has(group)) {
-            list.push({
-                ...item,
-                key: `${item.type}-${item.id}`,
-                groupKey: group
-            });
-        }
+        groups.get(group)!.push(item);
     }
-
-    return list;
+    
+    return Array.from(groups.entries()).map(([groupKey, groupItems]) => ({
+        key: `time-group-${groupKey}`,
+        type: 'time-group' as const,
+        label: getTimeGroupLabel(groupKey),
+        groupKey,
+        items: groupItems,
+    }));
 });
-
-function isActive(item: UnifiedSidebarItem) {
-    return props.activeIds.includes(item.id);
-}
-
-function formatTime(ts: number, group: TimeGroup) {
-    return formatTimeDisplay(ts, group);
-}
 
 // Expose reset for parent (e.g. search changes or switch page)
 defineExpose({ reset });
