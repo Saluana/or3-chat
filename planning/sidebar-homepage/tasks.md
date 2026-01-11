@@ -10,27 +10,25 @@ This task list covers the full implementation of the sidebar homepage rework, or
 
 ### 1.1 Time Grouping Utilities
 - [ ] Create `app/utils/sidebar/sidebarTimeUtils.ts`
-  - [ ] Implement `computeTimeGroup(timestamp: number): TimeGroup`
+  - [ ] Implement `computeTimeGroup(timestamp: number): TimeGroup` (5 groups: today, yesterday, earlierThisWeek, thisMonth, older)
   - [ ] Implement `formatTimeDisplay(timestamp: number, group: TimeGroup): string`
   - [ ] Implement `getTimeGroupLabel(group: TimeGroup): string`
   - [ ] Add helper functions: `getStartOfDay()`, `getStartOfWeek()`, `getStartOfMonth()`
-  - [ ] Write unit tests for time utilities
   - **Requirements: 2.1**
 
 ### 1.2 Unified Item Type
-- [ ] Create `app/types/sidebar.ts` additions
-  - [ ] Define `UnifiedSidebarItem` interface
-  - [ ] Define `TimeGroup` type union
-  - [ ] Add type conversion functions `threadToUnified()`, `documentToUnified()`
+- [ ] Add to `app/types/sidebar.ts`
+  - [ ] Define `UnifiedSidebarItem` interface (id, type, title, updatedAt, forked?, postType?)
+  - [ ] Define `TimeGroup` type union (5 groups, no 'recentlyOpened')
+  - [ ] Add `threadToUnified()` and `docToUnified()` transform functions
   - **Requirements: 2.1, 3.1, 4.1**
 
-### 1.3 Pagination Composable
+### 1.3 Pagination Composable (Local State)
 - [ ] Create `app/composables/sidebar/usePaginatedSidebarItems.ts`
-  - [ ] Implement cursor-based pagination state
-  - [ ] Implement `loadMore()` function
-  - [ ] Implement `reset()` function for search/filter changes
-  - [ ] Add reactive `hasMore` and `loading` flags
-  - [ ] Write unit tests for pagination logic
+  - [ ] Use `shallowRef` for items array
+  - [ ] Implement `loadMore()` with cursor-based pagination
+  - [ ] Implement `reset()` for search/filter changes
+  - [ ] No SidebarEnvironment extension needed - purely local state
   - **Requirements: 7.1, 7.2**
 
 ---
@@ -40,30 +38,42 @@ This task list covers the full implementation of the sidebar homepage rework, or
 ### 2.1 Section Header Component
 - [ ] Create `app/components/sidebar/SidebarGroupHeader.vue`
   - [ ] Implement collapsible header with label
-  - [ ] Add chevron icon indicating expand/collapse state
-  - [ ] Add click handler to emit toggle event
-  - [ ] Style with consistent sidebar theming
-  - **Requirements: 2.2**
+  - [ ] Use `useIcon()` for chevron icon (right collapsed, down expanded)
+  - [ ] **44px minimum height** for touch target
+  - [ ] Hover/active states for interactivity feedback
+  - **Requirements: 2.2, UX-3**
 
 ### 2.2 Unified Item Component
 - [ ] Create `app/components/sidebar/SidebarUnifiedItem.vue`
-  - [ ] Implement layout with icon, title, subtitle, time, actions
-  - [ ] Add computed `iconConfig` for thread vs document styling
-  - [ ] Implement hover-reveal for actions menu (desktop)
-  - [ ] Always show actions on mobile
-  - [ ] Add theme override integration
+  - [ ] Use `useIcon()` for all icons (sidebar.chat, sidebar.note, ui.more, etc.)
+  - [ ] Use `useThemeOverrides()` for icon container and action buttons
+  - [ ] Use `usePopoverKeyboard()` for keyboard accessibility
+  - [ ] Integrate `useThreadHistoryActions()` / `useDocumentHistoryActions()` for plugin actions
+  - [ ] Show "Chat" or document type as subtitle (no model name)
+  - [ ] **Action button: 16px visual, 40px+ hit area** via padding
+  - [ ] **Mobile layout:** stacked title/time when <280px width
+  - [ ] **Mobile:** action button always visible (no hover-only)
   - [ ] Emit: `select`, `rename`, `delete`, `add-to-project`
-  - **Requirements: 3.1, 3.2, 4.1, 4.2**
+  - **Requirements: 3.1, 3.2, 4.1, 4.2, UX-1, UX-2**
 
 ### 2.3 Time-Grouped List Component
 - [ ] Create `app/components/sidebar/SidebarTimeGroupedList.vue`
-  - [ ] Replace virtua with `or3-scroll` import
-  - [ ] Implement `flattenedItems` computed that interleaves headers with items
-  - [ ] Implement `collapsedGroups` Set for tracking collapsed sections
-  - [ ] Connect to pagination composable
-  - [ ] Handle `reachBottom` event for loading more
-  - [ ] Implement item selection highlighting
-  - **Requirements: 2.1, 2.2, 5.1, 5.2**
+  - [ ] Import and use `Or3Scroll` (replaces virtua)
+  - [ ] Use `usePaginatedSidebarItems()` composable
+  - [ ] Local `collapsedGroups` Set for section collapse state
+  - [ ] Connect `@reachBottom` to pagination
+  - [ ] Render `SidebarGroupHeader` and `SidebarUnifiedItem`
+  - [ ] **Empty state:** show message + CTA when no items
+  - [ ] **Loading state:** skeleton items during pagination
+  - [ ] **Hide empty groups:** don't show "Today" header if no items
+  - **Requirements: 2.1, 2.2, 5.1, 5.2, UX-5, UX-7**
+
+### 2.4 Navigation Segmented Control
+- [ ] Create navigation component or add to SidebarHomePage
+  - [ ] Three segments: All / Chats / Docs
+  - [ ] Clear active state indication
+  - [ ] Compact single-row layout
+  - **Requirements: 1.1, UX-4**
 
 ---
 

@@ -47,8 +47,7 @@ This rework aims to:
 **Acceptance Criteria:**
 - WHEN on the homepage THEN threads and documents SHALL be mixed together in a single list
 - WHEN displaying items THEN they SHALL be sorted by `updated_at` (or `last_message_at` for threads) descending
-- WHEN an item was accessed within 24 hours THEN it SHALL appear under "Recently Opened" section
-- WHEN an item was accessed today but not in last 24 hours THEN it SHALL appear under "Today" section
+- WHEN an item was accessed today THEN it SHALL appear under "Today" section
 - WHEN an item was accessed yesterday THEN it SHALL appear under "Yesterday" section
 - WHEN an item was accessed earlier this week THEN it SHALL appear under "Earlier This Week" section
 - WHEN an item was accessed this month THEN it SHALL appear under "This Month" section
@@ -73,8 +72,8 @@ This rework aims to:
 **Acceptance Criteria:**
 - WHEN displaying a thread item THEN it SHALL show a chat icon on the left side
 - WHEN displaying a thread item THEN it SHALL show the thread title
-- WHEN displaying a thread item THEN it SHALL show the last-used model name below the title
-- WHEN displaying a thread item in "Today" or "Recently Opened" THEN it SHALL show the time (e.g., "2:14 PM")
+- WHEN displaying a thread item THEN it SHALL show "Chat" as the subtitle
+- WHEN displaying a thread item in "Today" THEN it SHALL show the time (e.g., "2:14 PM")
 - WHEN displaying a thread item in "Yesterday" THEN it SHALL show the time (e.g., "5:32 PM")
 - WHEN displaying a thread item in "Earlier This Week" THEN it SHALL show the day name (e.g., "Monday")
 - WHEN displaying a thread item in "This Month" or older THEN it SHALL show the date (e.g., "Jan 5")

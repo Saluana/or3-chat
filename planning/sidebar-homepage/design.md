@@ -10,9 +10,41 @@ This document details the technical implementation for the sidebar homepage rewo
 
 ---
 
+## UI/UX Requirements
+
+### Touch Targets
+- **Minimum touch target:** 44x44px (WCAG/Apple HIG)
+- Item row height: 56px (meets requirement)
+- Action button: 16x16 visual, **40x40+ hit area** via padding
+- Section headers: 44px height
+
+### Mobile Layout (<280px width)
+Switch to stacked layout to prevent truncation:
+```
+Desktop:                        Mobile:
+┌─────────────────────────┐    ┌──────────────────┐
+│ [icon] Title    2:14 PM │    │ [icon] Title [•] │
+│        Chat      [•••]  │    │        2:14 PM   │
+└─────────────────────────┘    └──────────────────┘
+```
+
+### Required States
+- **Empty state:** Per-page empty message with CTA
+- **Loading state:** Skeleton items during pagination
+- **Search no-results:** "No results for '[query]'"
+- **Active item:** Auto-scroll into view when opened externally
+
+### Navigation Pattern
+Use segmented control instead of separate buttons:
+```
+[ All ] [ Chats ] [ Docs ]
+```
+
+---
+
 ## Architecture
 
-### High-Level Component Flow
+> See [architecture.md](./architecture.md) for detailed diagrams.
 
 ```mermaid
 graph TD
@@ -75,6 +107,9 @@ function navigateToDocs() {
 Replaces `SidebarVirtualList` for the homepage. Uses `or3-scroll` and groups items by time.
 
 ```typescript
+import { useIcon } from '~/composables/useIcon';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+
 interface TimeGroupedListProps {
   items: UnifiedSidebarItem[];
   activeThreadIds: string[];
@@ -87,15 +122,13 @@ interface UnifiedSidebarItem {
   title: string;
   updatedAt: number; // timestamp in seconds
   // Thread-specific
-  lastModel?: string;
   forked?: boolean;
-  // Document-specific
+  // Document-specific  
   postType?: string;
 }
 
-// Time groups calculation
+// Time groups - simplified, no "recentlyOpened" (requires session tracking)
 type TimeGroup = 
-  | 'recentlyOpened' // Within 24 hours
   | 'today'
   | 'yesterday'
   | 'earlierThisWeek'
@@ -104,18 +137,27 @@ type TimeGroup =
 
 function computeTimeGroup(timestamp: number): TimeGroup {
   const now = Date.now() / 1000;
-  const diff = now - timestamp;
-  const today = getStartOfDay(now);
-  const yesterday = today - 86400;
+  const todayStart = getStartOfDay(now);
+  const yesterdayStart = todayStart - 86400;
   const weekStart = getStartOfWeek(now);
   const monthStart = getStartOfMonth(now);
   
-  if (diff < 86400) return 'recentlyOpened';
-  if (timestamp >= today) return 'today';
-  if (timestamp >= yesterday) return 'yesterday';
+  if (timestamp >= todayStart) return 'today';
+  if (timestamp >= yesterdayStart) return 'yesterday';
   if (timestamp >= weekStart) return 'earlierThisWeek';
   if (timestamp >= monthStart) return 'thisMonth';
   return 'older';
+}
+
+// Local state - no SidebarEnvironment extension needed
+const collapsedGroups = ref<Set<TimeGroup>>(new Set());
+
+function toggleGroup(group: TimeGroup) {
+  if (collapsedGroups.value.has(group)) {
+    collapsedGroups.value.delete(group);
+  } else {
+    collapsedGroups.value.add(group);
+  }
 }
 ```
 
@@ -130,6 +172,7 @@ function computeTimeGroup(timestamp: number): TimeGroup {
       :estimate-height="56"
       :overscan="200"
       class="flex-1"
+      @reachBottom="loadMore"
     >
       <template #default="{ item }">
         <!-- Section Header -->
@@ -161,34 +204,64 @@ function computeTimeGroup(timestamp: number): TimeGroup {
 ### 3. SidebarUnifiedItem.vue (New Component)
 
 A single component that renders both thread and document items with consistent layout.
+Follows existing patterns: `useThemeOverrides`, `useIcon`, `usePopoverKeyboard`, plugin actions.
 
 ```typescript
+import { useIcon } from '~/composables/useIcon';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
+
 interface UnifiedItemProps {
   item: UnifiedSidebarItem;
   active: boolean;
   timeDisplay: string; // "2:14 PM" | "Monday" | "Jan 5"
 }
 
-// Icon configuration
-const iconConfig = computed(() => {
-  if (props.item.type === 'thread') {
-    return {
-      name: 'lucide:message-square',
-      bgClass: 'bg-primary/15',
-    };
-  }
+const { handlePopoverTriggerKey } = usePopoverKeyboard();
+
+// Icons via useIcon (themeable)
+const iconChat = useIcon('sidebar.chat');
+const iconNote = useIcon('sidebar.note');
+const iconMore = useIcon('ui.more');
+const iconEdit = useIcon('ui.edit');
+const iconTrash = useIcon('ui.trash');
+const iconFolder = useIcon('sidebar.new_folder');
+
+// Theme overrides for icon container
+const iconContainerProps = computed(() => {
+  const overrides = useThemeOverrides({
+    component: 'div',
+    context: 'sidebar',
+    identifier: `sidebar.unified-item.icon.${props.item.type}`,
+    isNuxtUI: false,
+  });
   return {
-    name: 'lucide:file-text',
-    bgClass: 'bg-secondary/15', // or different color
+    class: props.item.type === 'thread' ? 'bg-primary/15' : 'bg-[var(--md-secondary)]/15',
+    ...overrides.value,
   };
 });
 
-// Subtitle (model for threads, type for docs)
-const subtitle = computed(() => {
-  if (props.item.type === 'thread') {
-    return props.item.lastModel || 'Default model';
-  }
-  return props.item.postType || 'Document';
+// Theme overrides for action buttons (reuse existing pattern)
+const actionButtonProps = computed(() => {
+  const overrides = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: `sidebar.unified-item.action`,
+    isNuxtUI: true,
+  });
+  return {
+    color: 'neutral' as const,
+    variant: 'popover' as const,
+    size: 'sm' as const,
+    ...overrides.value,
+  };
+});
+
+// Plugin actions - reuse existing composables
+const extraActions = computed(() => {
+  return props.item.type === 'thread'
+    ? useThreadHistoryActions()
+    : useDocumentHistoryActions();
 });
 ```
 
@@ -200,12 +273,15 @@ const subtitle = computed(() => {
     :class="{ 'active-element bg-primary/25 ring-1 ring-primary/50': active }"
     @click="emit('select', item.id)"
   >
-    <!-- Icon with background -->
+    <!-- Icon with background (themeable) -->
     <div 
       class="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center"
-      :class="iconConfig.bgClass"
+      v-bind="iconContainerProps"
     >
-      <UIcon :name="iconConfig.name" class="w-4 h-4" />
+      <UIcon 
+        :name="item.type === 'thread' ? iconChat : iconNote" 
+        class="w-4 h-4" 
+      />
     </div>
     
     <!-- Content -->
@@ -215,17 +291,38 @@ const subtitle = computed(() => {
         <span class="shrink-0 text-xs opacity-60">{{ timeDisplay }}</span>
       </div>
       <div class="flex items-center justify-between gap-2">
-        <span class="text-xs opacity-50 truncate">{{ subtitle }}</span>
-        <!-- Actions - show on hover (desktop) or always (mobile) -->
-        <UPopover>
+        <span class="text-xs opacity-50 truncate">
+          {{ item.type === 'thread' ? 'Chat' : (item.postType || 'Document') }}
+        </span>
+        <!-- Actions with keyboard accessibility -->
+        <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
           <span 
-            class="opacity-0 group-hover:opacity-100 md:opacity-0 
-                   transition-opacity cursor-pointer p-1"
+            class="opacity-0 group-hover:opacity-100 transition-opacity p-1"
+            role="button"
+            tabindex="0"
             @click.stop
+            @keydown="handlePopoverTriggerKey"
+            :aria-label="item.type === 'thread' ? 'Thread actions' : 'Document actions'"
           >
-            <UIcon name="lucide:more-horizontal" class="w-4 h-4" />
+            <UIcon :name="iconMore" class="w-4 h-4 opacity-70" />
           </span>
-          <!-- popover content with rename/delete/add-to-project -->
+          <template #content>
+            <div class="p-1 w-44 space-y-1">
+              <UButton v-bind="actionButtonProps" :icon="iconEdit" class="w-full"
+                @click="emit('rename', item)">Rename</UButton>
+              <UButton v-bind="actionButtonProps" :icon="iconFolder" class="w-full justify-start"
+                @click="emit('add-to-project', item)">Add to project</UButton>
+              <UButton v-bind="actionButtonProps" :icon="iconTrash" 
+                class="w-full justify-start text-[var(--md-error)]"
+                @click="emit('delete', item)">Delete</UButton>
+              <!-- Plugin actions -->
+              <template v-for="action in extraActions" :key="action.id">
+                <UButton v-bind="actionButtonProps" :icon="action.icon" 
+                  class="w-full justify-start"
+                  @click="runExtraAction(action)">{{ action.label }}</UButton>
+              </template>
+            </div>
+          </template>
         </UPopover>
       </div>
     </div>
@@ -304,59 +401,73 @@ const searchPlaceholder = computed(() => {
 
 ### Paginated Loading Strategy
 
-Instead of loading all threads/documents at once, implement cursor-based pagination:
+Local state composable - no `SidebarEnvironment` extension needed.
+DB layer already validates via Zod schemas - no redundant validation.
 
 ```typescript
-// New composable: usePaginatedSidebarItems
-interface PaginatedItemsState {
-  items: UnifiedSidebarItem[];
-  hasMore: boolean;
-  loading: boolean;
-  cursor: number | null; // timestamp of last loaded item
-}
+// usePaginatedSidebarItems.ts - local to sidebar, not global
+const PAGE_SIZE = 50;
 
-async function loadMore() {
-  if (state.loading || !state.hasMore) return;
-  
-  state.loading = true;
-  const newItems = await fetchItemsBefore(state.cursor, PAGE_SIZE);
-  
-  if (newItems.length < PAGE_SIZE) {
-    state.hasMore = false;
+export function usePaginatedSidebarItems() {
+  const items = shallowRef<UnifiedSidebarItem[]>([]);
+  const hasMore = ref(true);
+  const loading = ref(false);
+  const cursor = ref<number | null>(null);
+
+  async function loadMore() {
+    if (loading.value || !hasMore.value) return;
+    
+    loading.value = true;
+    try {
+      const newItems = await fetchItemsBefore(cursor.value, PAGE_SIZE);
+      
+      if (newItems.length < PAGE_SIZE) {
+        hasMore.value = false;
+      }
+      
+      items.value = [...items.value, ...newItems];
+      cursor.value = newItems[newItems.length - 1]?.updatedAt ?? null;
+    } finally {
+      loading.value = false;
+    }
   }
-  
-  state.items.push(...newItems);
-  state.cursor = newItems[newItems.length - 1]?.updatedAt ?? null;
-  state.loading = false;
+
+  function reset() {
+    items.value = [];
+    hasMore.value = true;
+    cursor.value = null;
+  }
+
+  return { items, hasMore, loading, loadMore, reset };
 }
 
-// Database queries
-async function fetchItemsBefore(cursor: number | null, limit: number) {
-  const threads = await db.threads
-    .where('updated_at')
-    .below(cursor ?? Infinity)
-    .reverse()
-    .limit(limit / 2)
-    .toArray();
-    
-  const docs = await db.posts
-    .where('updated_at')
-    .below(cursor ?? Infinity)
-    .reverse()
-    .limit(limit / 2)
-    .toArray();
-    
-  return mergeAndSort([...threads, ...docs]);
+// Transform functions - db layer already validated, just map fields
+function threadToUnified(t: Thread): UnifiedSidebarItem {
+  return {
+    id: t.id,
+    type: 'thread',
+    title: t.title || 'New Thread',
+    updatedAt: t.last_message_at ?? t.updated_at,
+    forked: t.forked,
+  };
+}
+
+function docToUnified(d: Post): UnifiedSidebarItem {
+  return {
+    id: d.id,
+    type: 'document',
+    title: d.title,
+    updatedAt: d.updated_at,
+    postType: d.postType,
+  };
 }
 ```
 
 ### Or3Scroll Integration
 
 ```typescript
-// Watch for scroll-to-bottom to trigger pagination
-function onReachBottom() {
-  loadMore();
-}
+// In SidebarTimeGroupedList.vue - connect to Or3Scroll events
+<Or3Scroll @reachBottom="loadMore" ... />
 ```
 
 ---
