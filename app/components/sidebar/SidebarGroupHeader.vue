@@ -4,12 +4,12 @@
         style="width: calc(100% - 8px);"
         @click="emit('toggle')"
     >
-        <span class="text-[11px] font-bold uppercase tracking-wider text-[color:var(--md-on-surface-variant)] group-hover:text-[color:var(--md-on-surface)] transition-colors">
+        <span class="text-[12px] font-semibold text-[color:var(--md-on-surface-variant)]/80 group-hover:text-[color:var(--md-on-surface)] transition-colors">
             {{ label }}
         </span>
         <UIcon
             :name="iconChevronRight"
-            class="w-4 h-4 text-[color:var(--md-on-surface-variant)] group-hover:text-[color:var(--md-on-surface)] transition-all duration-200"
+            class="w-4 h-4 text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-on-surface)] transition-all duration-200"
             :class="!collapsed ? 'rotate-90' : ''"
         />
     </button>

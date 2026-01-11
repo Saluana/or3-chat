@@ -10,8 +10,9 @@
                     class="w-full"
                     @keydown.escape.prevent.stop="onEscapeClear"
                 >
-                    <template v-if="sidebarQuery.length > 0" #trailing>
+                    <template #trailing>
                         <UButton
+                            v-if="sidebarQuery.length > 0"
                             v-bind="searchClearButtonProps"
                             class="flex items-center justify-center p-0"
                             aria-label="Clear input"
@@ -349,11 +350,16 @@ const searchInputProps = computed(() => {
 
     // Merge theme UI with component-specific UI
     const themeUi = (overrides.value as any)?.ui || {};
-    const componentUi = { leadingIcon: 'h-[20px] w-[20px]' };
+    const componentUi = {
+        base: 'rounded-[18px] border border-[color:var(--md-border-color)]/40 bg-[color:var(--md-surface)]/85 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] placeholder:text-[color:var(--md-on-surface-variant)]/70 focus:border-[color:var(--md-primary)]/40 focus:ring-2 focus:ring-[color:var(--md-primary)]/10',
+
+        trailing: 'pr-1',
+    };
     const mergedUi = { ...themeUi, ...componentUi };
 
     return {
-        icon: iconSearch.value,
+        leadingIcon: iconSearch.value,
+        trailing: false,
         size: 'md' as const,
         variant: 'outline' as const,
         placeholder: 'Search...',
@@ -376,6 +382,12 @@ const searchClearButtonProps = computed(() => {
         icon: iconClose.value,
         ...(overrides.value as any),
     };
+});
+
+const shortcutHint = computed(() => {
+    if (!process.client || typeof navigator === 'undefined') return '⌘K';
+    const isApple = /(Mac|iPhone|iPad|iPod)/i.test(navigator.platform);
+    return isApple ? '⌘K' : 'Ctrl K';
 });
 
 const sidebarProjectSelectOverrides = useThemeOverrides({

@@ -1,5 +1,5 @@
 <template>
-    <div class="space-y-1">
+    <div class="mt-3 space-y-2">
         <SidebarGroupHeader 
             label="Projects" 
             :collapsed="collapsed" 
@@ -12,7 +12,7 @@
             :class="collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'"
         >
             <div class="overflow-hidden min-h-0">
-                <div class="space-y-0.5">
+                <div v-if="projects.length > 0" class="space-y-0.5">
                     <div
                         v-for="project in projects"
                         :key="project.id"
@@ -51,6 +51,18 @@
                         </div>
                     </div>
                 </div>
+                <div
+                    v-else
+                    class="mx-1 rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)]/50 bg-[color:var(--md-surface-variant)]/25 px-3 py-3"
+                >
+                    <div class="flex items-center gap-2 text-[12px] font-semibold text-[color:var(--md-on-surface-variant)]">
+                        <UIcon :name="iconFolder" class="w-4 h-4" />
+                        No projects yet
+                    </div>
+                    <p class="mt-1 text-[11px] text-[color:var(--md-on-surface-variant)]/80">
+                        Create a project to organize chats and documents.
+                    </p>
+                </div>
             </div>
         </div>
     </div>
@@ -62,6 +74,7 @@ import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import SidebarProjectRoot from './SidebarProjectRoot.vue';
 import SidebarProjectChild from './SidebarProjectChild.vue';
 import SidebarGroupHeader from './SidebarGroupHeader.vue';
+import { useIcon } from '~/composables/useIcon';
 
 const props = defineProps<{
     projects: any[];
@@ -70,6 +83,8 @@ const props = defineProps<{
     activeThreadIds: string[];
     activeDocumentIds: string[];
 }>();
+
+const iconFolder = useIcon('sidebar.new_folder');
 
 const emit = defineEmits<{
     (e: 'toggle-collapse'): void;

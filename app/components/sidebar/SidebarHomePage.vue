@@ -24,6 +24,16 @@
                         :is="item.component"
                     />
 
+                    <!-- Page links -->
+                    <SidebarPageLink
+                        v-else-if="item.type === 'page-link'"
+                        :label="item.label"
+                        :description="item.description"
+                        :icon="item.icon"
+                        :class="item.class"
+                        @select="setActivePage(item.pageId)"
+                    />
+
                     <!-- Projects Section -->
                     <SidebarProjectsSection
                         v-else-if="item.type === 'projects'"
@@ -70,6 +80,35 @@
                         @delete-item="onItemDelete"
                         @add-to-project="onItemAddToProject"
                     />
+
+                    <!-- Empty State -->
+                    <SidebarEmptyState
+                        v-else-if="item.type === 'empty-state'"
+                        icon="lucide:ghost"
+                        title="No activity yet"
+                        description="Start a chat or create a document to see it appear here."
+                        class="mx-1"
+                        style="width: calc(100% - 8px);"
+                    >
+                        <template #actions>
+                            <UButton
+                                size="sm"
+                                variant="ghost"
+                                class="bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                                @click="emit('new-chat')"
+                            >
+                                New chat
+                            </UButton>
+                            <UButton
+                                size="sm"
+                                variant="ghost"
+                                class="bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                                @click="emit('new-document')"
+                            >
+                                New doc
+                            </UButton>
+                        </template>
+                    </SidebarEmptyState>
                 </template>
             </Or3Scroll>
 
@@ -149,6 +188,9 @@ import {
 } from '~/utils/sidebar/sidebarTimeUtils';
 import SidebarProjectsSection from './SidebarProjectsSection.vue';
 import SidebarTimeGroup from './SidebarTimeGroup.vue';
+import SidebarPageLink from './SidebarPageLink.vue';
+import SidebarEmptyState from './SidebarEmptyState.vue';
+import { useIcon } from '~/composables/useIcon';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 
@@ -188,6 +230,8 @@ const props = defineProps<
 >();
 
 const emit = defineEmits([
+    'new-chat',
+    'new-document',
     'add-chat-to-project',
     'add-document-to-project',
     'add-document-to-project-root',
@@ -229,6 +273,9 @@ function toggleGroup(groupKey: string) {
 // Paginated items
 const { items, loading, loadMore } = usePaginatedSidebarItems();
 
+const iconChats = useIcon('sidebar.page.messages');
+const iconDocs = useIcon('sidebar.note');
+
 // Initial load
 onMounted(() => {
     loadMore();
@@ -255,6 +302,8 @@ const groupedItems = computed(() => {
     return groups;
 });
 
+const showEmptyState = computed(() => !loading.value && items.value.length === 0);
+
 // Build combined items list for Or3Scroll
 const combinedItems = computed(() => {
     const result: any[] = [];
@@ -277,11 +326,38 @@ const combinedItems = computed(() => {
         });
     }
 
+    result.push(
+        {
+            key: 'page-link-chats',
+            type: 'page-link',
+            label: 'Chats',
+            description: 'Jump into your conversation history.',
+            icon: iconChats.value,
+            pageId: 'sidebar-chats',
+        },
+        {
+            key: 'page-link-docs',
+            type: 'page-link',
+            label: 'Documents',
+            description: 'Open and manage your docs.',
+            icon: iconDocs.value,
+            pageId: 'sidebar-docs',
+            class: 'mb-3',
+        }
+    );
+
     // Projects section (single item that renders the whole section)
     if (props.activeSections.projects) {
         result.push({
             key: 'projects-section',
             type: 'projects',
+        });
+    }
+
+    if (showEmptyState.value) {
+        result.push({
+            key: 'home-empty-state',
+            type: 'empty-state',
         });
     }
 

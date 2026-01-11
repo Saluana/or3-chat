@@ -1,5 +1,5 @@
 <template>
-    <div class="space-y-0.5">
+    <div class="mt-3 space-y-1">
         <SidebarGroupHeader 
             :label="label" 
             :collapsed="collapsed" 

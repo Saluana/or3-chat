@@ -1,6 +1,6 @@
 <template>
     <div class="h-full flex flex-col min-h-0">
-        <div class="px-3 py-2 flex items-center shrink-0">
+        <div class="px-3 py-2 flex items-center justify-between shrink-0">
             <UButton
                 variant="ghost"
                 color="neutral"
@@ -11,6 +11,18 @@
             >
                 Home
             </UButton>
+            <UTooltip :delay-duration="0" text="New document">
+                <UButton
+                    variant="ghost"
+                    color="neutral"
+                    size="sm"
+                    :icon="iconNewDoc"
+                    class="bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                    @click="emit('new-document')"
+                >
+                    New document
+                </UButton>
+            </UTooltip>
         </div>
         
         <SidebarTimeGroupedList
@@ -18,6 +30,7 @@
             :active-ids="activeDocumentIds ?? []"
             type="document"
             empty-message="No documents yet"
+            empty-description="Create a document to keep your work organized."
             empty-icon="lucide:file-text"
             cta-label="Create a document"
             @select="onSelect"
@@ -54,6 +67,7 @@ const emit = defineEmits<{
 }>();
 
 const iconBack = useIcon('ui.chevron.left');
+const iconNewDoc = useIcon('sidebar.new_note');
 const { setActivePage } = useActiveSidebarPage();
 
 function goBack() {

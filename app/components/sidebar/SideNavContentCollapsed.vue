@@ -355,8 +355,13 @@ const orderedPages = computed(() => {
     const pages = listSidebarPages.value.slice();
     if (!pages.length) return [];
 
-    // Filter out the default page as it should not appear in collapsed nav
-    const filtered = pages.filter((page) => page.id !== DEFAULT_PAGE_ID);
+    // Filter out the default and inline pages as they are rendered in the home scroll
+    const hiddenPages = new Set([
+        DEFAULT_PAGE_ID,
+        'sidebar-chats',
+        'sidebar-docs',
+    ]);
+    const filtered = pages.filter((page) => !hiddenPages.has(page.id));
 
     // Sort by order (default 200) so custom pages appear under built-in controls
     return filtered.sort((a, b) => (a.order ?? 200) - (b.order ?? 200));

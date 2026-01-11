@@ -323,6 +323,8 @@ const forwardedEvents = computed(() => {
 
     // Forward all existing events
     const eventNames = [
+        'new-chat',
+        'new-document',
         'add-chat-to-project',
         'add-document-to-project',
         'rename-project',

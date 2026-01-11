@@ -40,22 +40,23 @@
             </div>
             
             <!-- Empty state (absolute overlay) -->
-            <div v-if="!loading && items.length === 0" class="absolute inset-0 flex items-center justify-center p-8">
-                <div class="text-center">
-                    <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[var(--md-surface-variant)] mb-4">
-                        <UIcon :name="emptyIcon ?? 'lucide:layout-list'" class="w-6 h-6 opacity-40" />
-                    </div>
-                    <p class="text-sm font-medium text-[color:var(--md-on-surface-variant)]">{{ emptyMessage }}</p>
-                    <UButton 
-                        v-if="ctaLabel"
-                        size="sm" 
-                        variant="ghost" 
-                        class="mt-3" 
-                        @click="emit('cta')"
-                    >
-                        {{ ctaLabel }}
-                    </UButton>
-                </div>
+            <div v-if="!loading && items.length === 0" class="absolute inset-0">
+                <SidebarEmptyState
+                    :icon="emptyIcon ?? 'lucide:layout-list'"
+                    :title="emptyMessage || 'Nothing here yet'"
+                    :description="resolvedEmptyDescription"
+                >
+                    <template v-if="ctaLabel" #actions>
+                        <UButton
+                            size="sm"
+                            variant="ghost"
+                            class="bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                            @click="emit('cta')"
+                        >
+                            {{ ctaLabel }}
+                        </UButton>
+                    </template>
+                </SidebarEmptyState>
             </div>
         </ClientOnly>
     </div>
@@ -69,11 +70,13 @@ import { usePaginatedSidebarItems } from '~/composables/sidebar/usePaginatedSide
 import { computeTimeGroup, getTimeGroupLabel, type TimeGroup } from '~/utils/sidebar/sidebarTimeUtils';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import SidebarTimeGroup from './SidebarTimeGroup.vue';
+import SidebarEmptyState from './SidebarEmptyState.vue';
 
 const props = defineProps<{
     activeIds: string[];
     type?: 'all' | 'thread' | 'document';
     emptyMessage?: string;
+    emptyDescription?: string;
     emptyIcon?: string;
     ctaLabel?: string;
 }>();
@@ -92,6 +95,17 @@ const query = getSidebarQuery();
 const { items, hasMore, loading, loadMore, reset } = usePaginatedSidebarItems({
     type: props.type || 'all',
     query
+});
+
+const resolvedEmptyDescription = computed(() => {
+    if (props.emptyDescription) return props.emptyDescription;
+    if (props.type === 'thread') {
+        return 'Start a new chat to see it show up here.';
+    }
+    if (props.type === 'document') {
+        return 'Create a document to start organizing your work.';
+    }
+    return 'Start something new to populate this list.';
 });
 
 // Watch query for reset
