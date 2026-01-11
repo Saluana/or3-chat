@@ -25,6 +25,7 @@ export default defineConfig({
         globals: true,
         include: [
             'app/**/__tests__/**/*.test.ts',
+            'server/**/__tests__/**/*.test.ts',
             'scripts/__tests__/**/*.test.ts',
             'tests/unit/**/*.test.ts',
         ],

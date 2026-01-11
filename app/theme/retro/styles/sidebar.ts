@@ -96,8 +96,16 @@ export const sidebarOverrides = {
         class: 'hover:bg-[var(--md-success)]/15! active:bg-[var(--md-success)]/25',
     },
 
+    // SSR Auth button (Clerk sign-in/account) - PRIMARY CTA
+    // Uses subtle primary tint to draw attention as main action
+    'button#sidebar.bottom-nav.auth': {
+        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-[var(--md-primary)]/8 border-[length:var(--md-border-width)] border-[color:var(--md-primary)]/30 rounded-[var(--md-border-radius)] text-[var(--md-primary)] hover:bg-[var(--md-primary)]/15! hover:border-[color:var(--md-primary)]/50! active:bg-[var(--md-primary)]/25!',
+        variant: 'soft',
+    },
+
+    // Dashboard button - SECONDARY action (neutral styling)
     'button#sidebar.bottom-nav.dashboard': {
-        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] hover:bg-[var(--md-info-hover)]! active:bg-[var(--md-info-active)]! ',
+        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)]/70 hover:bg-[var(--md-surface-hover)]! hover:text-[var(--md-on-surface)]! active:bg-[var(--md-surface-active)]!',
         variant: 'soft',
     },
 

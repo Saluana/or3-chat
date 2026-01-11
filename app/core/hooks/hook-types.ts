@@ -398,6 +398,44 @@ export interface KvEntry {
     clock: number;
 }
 
+// ============================================================================
+// AUTH TYPES
+// ============================================================================
+
+/** Auth permission model. */
+export type Permission =
+    | 'workspace.read'
+    | 'workspace.write'
+    | 'workspace.settings.manage'
+    | 'users.manage'
+    | 'plugins.manage'
+    | 'admin.access';
+
+/** Workspace membership role. */
+export type WorkspaceRole = 'owner' | 'editor';
+
+/** Authorization decision returned by can(). */
+export interface AccessDecision {
+    allowed: boolean;
+    permission: Permission;
+    reason?: 'unauthenticated' | 'forbidden' | 'unknown-permission';
+    userId?: string;
+    workspaceId?: string;
+    role?: WorkspaceRole;
+    resource?: { kind: string; id?: string };
+}
+
+/** Server-side session context resolved from auth provider. */
+export interface SessionContext {
+    authenticated: boolean;
+    provider?: string;
+    providerUserId?: string;
+    user?: { id: string; email?: string; displayName?: string };
+    workspace?: { id: string; name: string };
+    role?: WorkspaceRole;
+    expiresAt?: string;
+}
+
 // Generic DB op payloads
 export interface DbCreatePayload<T = unknown> {
     entity: T;
@@ -634,6 +672,14 @@ export type CoreHookPayloadMap = {
     'workflow.execution:action:complete': [
         { messageId: string; workflowId: string; finalOutput?: string }
     ];
+
+    // Auth hooks
+    'auth.access:filter:decision': [
+        AccessDecision,
+        { session: SessionContext | null }
+    ];
+    'auth.user:action:created': [{ userId: string; provider: string }];
+    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];
 };
 
 // Derived payloads for DB action hooks

@@ -2,13 +2,29 @@
 import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
 import { resolve } from 'path';
 
+// SSR auth is gated by environment variable to preserve static builds
+const isSsrAuthEnabled = process.env.SSR_AUTH_ENABLED === 'true';
+
 export default defineNuxtConfig({
     app: {
         head: {
             link: [
-                { rel: 'icon', type: 'image/svg+xml', href: '/logos/icon-logo-svg.svg' },
-                { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico', sizes: '32x32' },
-                { rel: 'apple-touch-icon', sizes: '192x192', href: '/logos/logo-192.png' },
+                {
+                    rel: 'icon',
+                    type: 'image/svg+xml',
+                    href: '/logos/icon-logo-svg.svg',
+                },
+                {
+                    rel: 'icon',
+                    type: 'image/x-icon',
+                    href: '/favicon.ico',
+                    sizes: '32x32',
+                },
+                {
+                    rel: 'apple-touch-icon',
+                    sizes: '192x192',
+                    href: '/logos/logo-192.png',
+                },
             ],
         },
     },
@@ -19,8 +35,20 @@ export default defineNuxtConfig({
     },
     compatibilityDate: '2025-07-15',
     runtimeConfig: {
-        // Server-only env variables
+        // Server-only env variables (auto-mapped from NUXT_*)
         openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
+        clerkSecretKey: '', // Auto-mapped from NUXT_CLERK_SECRET_KEY
+        auth: {
+            enabled: isSsrAuthEnabled,
+            provider: process.env.AUTH_PROVIDER || 'clerk',
+        },
+        public: {
+            // Single source of truth for client gating.
+            // Avoid inferring enablement from presence of publishable keys.
+            ssrAuthEnabled: isSsrAuthEnabled,
+            // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+            clerkPublishableKey: '',
+        },
     },
     experimental: {
         defaults: {
@@ -41,7 +69,13 @@ export default defineNuxtConfig({
             enabled: true,
         },
     },
-    modules: ['@nuxt/ui', '@nuxt/fonts', '@vite-pwa/nuxt'],
+    modules: [
+        '@nuxt/ui',
+        '@nuxt/fonts',
+        '@vite-pwa/nuxt',
+        // Only include Clerk when SSR auth is enabled to preserve static builds
+        ...(isSsrAuthEnabled ? ['@clerk/nuxt'] : []),
+    ],
     // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
     srcDir: 'app',
     // Load Tailwind + theme variables globally
