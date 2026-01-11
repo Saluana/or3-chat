@@ -15,7 +15,7 @@
                 class="project-icon shrink-0 w-4 h-4 text-[color:var(--md-on-surface-variant)] group-hover:text-[color:var(--md-on-surface)] transition-colors"
                 active-class="text-[color:var(--md-primary)]"
             />
-            <span class="project-label truncate text-start flex-1 min-w-0 text-[13px] font-medium text-[color:var(--md-on-surface)] group-hover:text-[color:var(--md-on-surface)]">{{
+            <span class="project-label truncate text-start flex-1 min-w-0 text-[13px] font-normal text-[color:var(--md-on-surface)] group-hover:text-[color:var(--md-on-surface)]">{{
                 project.name
             }}</span>
             <span
@@ -24,7 +24,7 @@
                 <div class="project-quick-actions flex items-center gap-1">
                     <!-- Quick add buttons (appear on hover) -->
                     <button
-                        class="project-add-btn cursor-pointer sm:opacity-0 sm:group-hover/project-root:opacity-100 transition-opacity inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] text-[color:var(--md-on-surface-variant)]"
+                        class="project-add-btn cursor-pointer sm:opacity-0 sm:group-hover/project-root:opacity-100 transition-opacity inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius)] text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
                         @click.stop="emit('add-chat')"
                         aria-label="Add chat to project"
                     >
@@ -34,7 +34,7 @@
                         />
                     </button>
                     <button
-                        class="project-add-btn cursor-pointer sm:opacity-0 sm:group-hover/project-root:opacity-100 transition-opacity inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] text-[color:var(--md-on-surface-variant)]"
+                        class="project-add-btn cursor-pointer sm:opacity-0 sm:group-hover/project-root:opacity-100 transition-opacity inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius)] text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
                         @click.stop="emit('add-document')"
                         aria-label="Add document to project"
                     >
@@ -51,7 +51,7 @@
                         }"
                     >
                         <button
-                            class="project-actions-menu inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] cursor-pointer text-[color:var(--md-on-surface-variant)]"
+                            class="project-actions-menu inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius)] cursor-pointer text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
                             @click.stop
                             aria-label="Project actions"
                         >

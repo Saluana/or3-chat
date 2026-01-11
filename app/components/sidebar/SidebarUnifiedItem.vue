@@ -31,16 +31,16 @@
             {{ item.title || 'Untitled' }}
         </span>
         
-        <!-- Time Label (hide on hover, show action button instead) -->
+        <!-- Time Label (desktop only - hide on hover, show action button instead) -->
         <span 
-            class="shrink-0 text-[10px] opacity-60 font-medium transition-opacity group-hover:opacity-0"
+            class="hidden sm:inline-block shrink-0 text-[10px] opacity-40 font-medium transition-opacity group-hover:opacity-0"
             :class="active ? 'text-[color:var(--md-primary)]/70' : 'text-[color:var(--md-on-surface-variant)]'"
         >
             {{ timeDisplay }}
         </span>
         
-        <!-- Action Button (appears on hover, positioned over time) -->
-        <div class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <!-- Action Button (always visible on mobile, hover-reveal on desktop) -->
+        <div class="absolute right-2 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
             <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
                 <UButton
                     v-bind="actionTriggerProps"
