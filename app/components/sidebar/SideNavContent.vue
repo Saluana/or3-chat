@@ -327,6 +327,7 @@ const forwardedEvents = computed(() => {
         'new-document',
         'new-project',
         'update:expandedProjects',
+        'add-to-project',
         'add-chat-to-project',
         'add-document-to-project',
         'rename-project',
