@@ -5,7 +5,7 @@
         tabindex="0"
         class="w-full flex items-center gap-3 px-3 min-h-[56px] group relative transition-colors duration-200 rounded-[var(--md-border-radius)] mx-1"
         :class="{
-            'bg-[color:var(--md-secondary-container)] text-[color:var(--md-on-secondary-container)]': active,
+            'bg-[color:var(--md-primary)]/12 text-[color:var(--md-primary)]': active,
             'text-[color:var(--md-on-surface)] hover:bg-[var(--md-surface-hover)]': !active
         }"
         style="width: calc(100% - 8px);"
@@ -17,7 +17,7 @@
         <div 
             class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
             :class="{
-                 'text-[color:var(--md-on-secondary-container)]': active,
+                 'text-[color:var(--md-primary)]': active,
                  'text-[color:var(--md-on-surface-variant)]': !active
             }"
         >
@@ -33,7 +33,7 @@
             <div class="flex items-center justify-between gap-2">
                 <span 
                     class="truncate text-sm font-medium leading-tight"
-                    :class="active ? 'text-[color:var(--md-on-secondary-container)]' : 'text-[color:var(--md-on-surface)]'"
+                    :class="active ? 'text-[color:var(--md-primary)]' : 'text-[color:var(--md-on-surface)]'"
                 >
                     {{ item.title || 'Untitled' }}
                 </span>
@@ -41,7 +41,7 @@
                 <!-- Time Label (Desktop) -->
                 <span 
                     class="hidden sm:inline-block shrink-0 text-[11px] font-medium"
-                    :class="active ? 'text-[color:var(--md-on-secondary-container)]/70' : 'text-[color:var(--md-on-surface-variant)]'"
+                    :class="active ? 'text-[color:var(--md-primary)]/70' : 'text-[color:var(--md-on-surface-variant)]'"
                 >
                     {{ timeDisplay }}
                 </span>
@@ -51,14 +51,14 @@
                 <div class="flex items-center gap-2 min-w-0">
                     <span 
                         class="text-[11px] truncate"
-                        :class="active ? 'text-[color:var(--md-on-secondary-container)]/60' : 'text-[color:var(--md-on-surface-variant)]'"
+                        :class="active ? 'text-[color:var(--md-primary)]/60' : 'text-[color:var(--md-on-surface-variant)]'"
                     >
                         {{ item.type === 'thread' ? 'Chat' : (item.postType || 'Document') }}
                     </span>
                     <!-- Mobile Time -->
                     <span 
                         class="sm:hidden text-[11px]"
-                        :class="active ? 'text-[color:var(--md-on-secondary-container)]/60' : 'text-[color:var(--md-on-surface-variant)]'"
+                        :class="active ? 'text-[color:var(--md-primary)]/60' : 'text-[color:var(--md-on-surface-variant)]'"
                     >
                         • {{ timeDisplay }}
                     </span>
