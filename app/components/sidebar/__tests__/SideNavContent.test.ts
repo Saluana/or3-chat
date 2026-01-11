@@ -100,7 +100,7 @@ describe('SideNavContent', () => {
                 },
                 global: {
                     stubs: {
-                            ClientOnly: { template: '<div><slot /></div>' },
+                        ClientOnly: { template: '<div><slot /></div>' },
                         UIcon: true,
                         UButton: true,
                         UTooltip: true,
@@ -142,7 +142,7 @@ describe('SideNavContent', () => {
                 },
                 global: {
                     stubs: {
-                            ClientOnly: { template: '<div><slot /></div>' },
+                        ClientOnly: { template: '<div><slot /></div>' },
                         UIcon: true,
                         UButton: true,
                         UTooltip: true,
@@ -184,7 +184,7 @@ describe('SideNavContent', () => {
                 },
                 global: {
                     stubs: {
-                            ClientOnly: { template: '<div><slot /></div>' },
+                        ClientOnly: { template: '<div><slot /></div>' },
                         UIcon: true,
                         UButton: true,
                         UTooltip: true,
