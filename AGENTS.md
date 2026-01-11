@@ -25,9 +25,9 @@ When you need to find “the right place” for something (theme engine, hooks, 
 
 Treat docmap as an index of:
 
-* Concepts (what the system does)
-* Primary entry points (key composables, plugins, utilities)
-* Related files and patterns (what to copy)
+-   Concepts (what the system does)
+-   Primary entry points (key composables, plugins, utilities)
+-   Related files and patterns (what to copy)
 
 If you are asked to implement something unfamiliar, do this sequence:
 
@@ -51,13 +51,13 @@ When a user asks for a new feature or change:
 
 OR3 Chat is a **local-first** Nuxt 4 app with a layered extension strategy:
 
-* **Composables** provide feature APIs to UI and plugins.
-* **Hook engine** provides WordPress-style actions/filters with TypeScript inference and diagnostics.
-* **Registries** allow plugins to add UI and functionality (sidebar pages, dashboard tiles, pane apps, post types, chat actions).
-* **Runtime theme system** compiles theme definitions at runtime and resolves styles/props dynamically via a resolver and a `v-theme` directive.
-* **Documents/posts** are structured content types with editor integrations.
-* **Search** is local and index-driven.
-* **Workspaces/backups** support export/import of local state.
+-   **Composables** provide feature APIs to UI and plugins.
+-   **Hook engine** provides WordPress-style actions/filters with TypeScript inference and diagnostics.
+-   **Registries** allow plugins to add UI and functionality (sidebar pages, dashboard tiles, pane apps, post types, chat actions).
+-   **Runtime theme system** compiles theme definitions at runtime and resolves styles/props dynamically via a resolver and a `v-theme` directive.
+-   **Documents/posts** are structured content types with editor integrations.
+-   **Search** is local and index-driven.
+-   **Workspaces/backups** support export/import of local state.
 
 ### Mermaid: system overview
 
@@ -88,12 +88,12 @@ Key idea: **most cross-cutting features should be implemented as a combination o
 
 The hooks system is a lightweight engine that supports:
 
-* **Actions**: side effects, no return value required.
-* **Filters**: transform values, must return the next value in the chain.
-* **Priorities**: lower priority runs earlier; ordering is deterministic.
-* **Async support**: handlers can return promises.
-* **Wildcards**: subscribe to “families” of hooks.
-* **Diagnostics**: timing and error counts are recorded.
+-   **Actions**: side effects, no return value required.
+-   **Filters**: transform values, must return the next value in the chain.
+-   **Priorities**: lower priority runs earlier; ordering is deterministic.
+-   **Async support**: handlers can return promises.
+-   **Wildcards**: subscribe to “families” of hooks.
+-   **Diagnostics**: timing and error counts are recorded.
 
 There is also a **Typed Hook Engine** wrapper that preserves runtime behavior but gives full TypeScript inference. The typed wrapper infers callback signatures from hook type maps and even infers whether a hook is an action or filter by naming convention (contains `:filter:`).
 
@@ -105,14 +105,14 @@ Hook keys encode intent. A common convention looks like:
 
 Examples:
 
-* `ui.chat.message:filter:outgoing`
-* `ai.chat.send:action:before`
-* `ui.pane.active:action`
+-   `ui.chat.message:filter:outgoing`
+-   `ai.chat.send:action:before`
+-   `ui.pane.active:action`
 
 The exact vocabulary matters less than consistency. When you add new hooks:
 
-* Keep names short and structured.
-* Prefer “filter:input / filter:output” and “action:before / action:after” phases.
+-   Keep names short and structured.
+-   Prefer “filter:input / filter:output” and “action:before / action:after” phases.
 
 ### Mermaid: filter execution pipeline
 
@@ -154,12 +154,12 @@ sequenceDiagram
 
 ## 3.1 How to use hooks correctly
 
-* Use `useHooks()` anywhere inside app code. It returns the app-wide typed hook engine.
-* Prefer `hooks.on(name, fn, opts?)` if you want auto “kind inference”.
-* Prefer `addFilter/addAction` when you want explicit intent.
-* When writing filters, always return the transformed value. Returning `undefined` will propagate as the next value.
-* Use wildcards to build observability tools, devtools, analytics, or cross-cutting behaviors.
-* Use diagnostics to identify slow plugins or hot-path regressions.
+-   Use `useHooks()` anywhere inside app code. It returns the app-wide typed hook engine.
+-   Prefer `hooks.on(name, fn, opts?)` if you want auto “kind inference”.
+-   Prefer `addFilter/addAction` when you want explicit intent.
+-   When writing filters, always return the transformed value. Returning `undefined` will propagate as the next value.
+-   Use wildcards to build observability tools, devtools, analytics, or cross-cutting behaviors.
+-   Use diagnostics to identify slow plugins or hot-path regressions.
 
 ## 3.2 Vue lifecycle safety
 
@@ -182,13 +182,13 @@ You should treat new hooks as part of public API. Once shipped, removing them be
 
 OR3’s theme system is not “just CSS”. It is a runtime engine that:
 
-* Defines themes as typed objects (DSL).
-* Compiles theme rules at runtime into efficient lookup structures.
-* Resolves styles/props per component/context using a resolver.
-* Applies results through:
+-   Defines themes as typed objects (DSL).
+-   Compiles theme rules at runtime into efficient lookup structures.
+-   Resolves styles/props per component/context using a resolver.
+-   Applies results through:
 
-  * CSS variables for tokens (color, spacing, typography)
-  * Merged props/classes via a theme directive
+    -   CSS variables for tokens (color, spacing, typography)
+    -   Merged props/classes via a theme directive
 
 This gives the project “CSS-like specificity” but with controllable resolution, caching, and composable integration.
 
@@ -198,23 +198,23 @@ Think of it as 4 layers:
 
 1. **Definition Layer**
 
-   * Theme is defined as a typed object.
-   * Includes token palettes and override rules.
+    - Theme is defined as a typed object.
+    - Includes token palettes and override rules.
 
 2. **Compilation Layer**
 
-   * Runtime compilation converts user-friendly rules into optimized indices.
-   * Specificity is calculated and rules are sorted so resolution is fast.
+    - Runtime compilation converts user-friendly rules into optimized indices.
+    - Specificity is calculated and rules are sorted so resolution is fast.
 
 3. **Resolution Layer**
 
-   * A resolver matches “component identity + context + state” to compiled rules.
-   * Returns merged props/classes/styles.
+    - A resolver matches “component identity + context + state” to compiled rules.
+    - Returns merged props/classes/styles.
 
 4. **Application Layer**
 
-   * CSS variables get injected or updated.
-   * A theme directive attaches context metadata and asks the resolver for merges.
+    - CSS variables get injected or updated.
+    - A theme directive attaches context metadata and asks the resolver for merges.
 
 ### Mermaid: theme pipeline
 
@@ -231,43 +231,43 @@ flowchart LR
 
 Overrides typically target:
 
-* Component/tag identity (like “button”)
-* Context zones (sidebar, chat, dashboard)
-* IDs (a specific button instance)
-* State (hover, active, focus)
+-   Component/tag identity (like “button”)
+-   Context zones (sidebar, chat, dashboard)
+-   IDs (a specific button instance)
+-   State (hover, active, focus)
 
 The directive is responsible for:
 
-* discovering context (often via DOM ancestry or explicit markers)
-* supplying the resolver with the component’s identity metadata
+-   discovering context (often via DOM ancestry or explicit markers)
+-   supplying the resolver with the component’s identity metadata
 
 ## 4.3 Performance constraints (important)
 
 Theme resolution happens a lot. That means:
 
-* The resolver must be fast.
-* Caching is essential (memoization or LRU patterns).
-* Avoid expensive DOM scanning inside hot render paths.
-* Budgeted DOM operations are used for selector-based styling of non-component elements.
+-   The resolver must be fast.
+-   Caching is essential (memoization or LRU patterns).
+-   Avoid expensive DOM scanning inside hot render paths.
+-   Budgeted DOM operations are used for selector-based styling of non-component elements.
 
 If you add any new theme capability, you must consider:
 
-* How often it runs
-* Whether it can be memoized
-* Whether it can run in a worker (only if it never touches DOM)
-* Whether it should be chunked by time budget
+-   How often it runs
+-   Whether it can be memoized
+-   Whether it can run in a worker (only if it never touches DOM)
+-   Whether it should be chunked by time budget
 
 ## 4.4 SSR implications for theming
 
 Server rendering cannot rely on DOM traversal. Therefore:
 
-* Client-only theme directive work should be a no-op on server.
-* Initial SSR HTML should render safely with baseline variables and then hydrate theme on client.
+-   Client-only theme directive work should be a no-op on server.
+-   Initial SSR HTML should render safely with baseline variables and then hydrate theme on client.
 
 If you add SSR features, keep in mind:
 
-* Theme compilation can occur on client.
-* Server can emit default theme variables if needed, but do not introduce server-only theme logic unless there is a real need.
+-   Theme compilation can occur on client.
+-   Server can emit default theme variables if needed, but do not introduce server-only theme logic unless there is a real need.
 
 ---
 
@@ -277,9 +277,9 @@ OR3 uses “plugins” in a practical sense: code that registers capabilities in
 
 The extension points are implemented via:
 
-* Hook engine (actions/filters)
-* Registries (lists of plugin-provided UI/features)
-* Typed APIs and doc pages describing how to extend
+-   Hook engine (actions/filters)
+-   Registries (lists of plugin-provided UI/features)
+-   Typed APIs and doc pages describing how to extend
 
 Importantly: “plugin” does not necessarily mean a separate package. It can be a local module, a Nuxt plugin, or an externally loaded bundle, as long as it registers correctly.
 
@@ -325,13 +325,13 @@ When adding SSR-only capabilities (auth, sync, notifications, admin dashboard), 
 
 Instead, follow this adapter pattern:
 
-* Define a **provider interface** (TypeScript).
-* Provide a default implementation (one chosen provider).
-* Allow alternate providers by registration:
+-   Define a **provider interface** (TypeScript).
+-   Provide a default implementation (one chosen provider).
+-   Allow alternate providers by registration:
 
-  * via registry (preferred)
-  * or via injected Nuxt plugin
-  * and optionally via hooks (for transforms and policy checks)
+    -   via registry (preferred)
+    -   or via injected Nuxt plugin
+    -   and optionally via hooks (for transforms and policy checks)
 
 A good extensible feature has:
 
@@ -346,15 +346,15 @@ A good extensible feature has:
 
 OR3 is designed as an “AI workspace”, so multi-pane is core:
 
-* The UI can show multiple panes.
-* Each pane hosts a tool: chat thread, document, dashboard item, plugin app.
-* Panes must not tightly couple to specific feature modules.
+-   The UI can show multiple panes.
+-   Each pane hosts a tool: chat thread, document, dashboard item, plugin app.
+-   Panes must not tightly couple to specific feature modules.
 
 When adding new features:
 
-* Make them embeddable in a pane.
-* Add navigation via sidebar registration.
-* Use hooks to connect cross-pane events without direct imports.
+-   Make them embeddable in a pane.
+-   Add navigation via sidebar registration.
+-   Use hooks to connect cross-pane events without direct imports.
 
 ### Mermaid: multi-pane routing
 
@@ -402,9 +402,9 @@ flowchart TB
 
 Chat-related changes should almost always be implemented using:
 
-* hooks (filter outgoing/incoming, modify payload, observe stream)
-* editor extension hooks (extend TipTap, add nodes)
-* registry of message actions (UI actions available per message)
+-   hooks (filter outgoing/incoming, modify payload, observe stream)
+-   editor extension hooks (extend TipTap, add nodes)
+-   registry of message actions (UI actions available per message)
 
 Avoid directly modifying chat components unless you are introducing a new extension point.
 
@@ -415,16 +415,16 @@ Avoid directly modifying chat components unless you are introducing a new extens
 Documents are treated as first-class workspace objects, not just chat messages.
 Typical characteristics:
 
-* Stored locally (like everything else).
-* Editable in a rich editor (TipTap).
-* Convertible from chat output (for “promote to document” workflows).
-* Extendable by plugins (custom post types, custom editor nodes).
+-   Stored locally (like everything else).
+-   Editable in a rich editor (TipTap).
+-   Convertible from chat output (for “promote to document” workflows).
+-   Extendable by plugins (custom post types, custom editor nodes).
 
 When adding a new document capability:
 
-* Prefer registering a new post type over adding a one-off doc format.
-* Use hooks to integrate: indexing, linking, notifications, workflow triggers.
-* Keep storage and UI decoupled (composable APIs for reading/writing).
+-   Prefer registering a new post type over adding a one-off doc format.
+-   Use hooks to integrate: indexing, linking, notifications, workflow triggers.
+-   Keep storage and UI decoupled (composable APIs for reading/writing).
 
 ### Mermaid: document lifecycle
 
@@ -453,15 +453,15 @@ sequenceDiagram
 
 Even before SSR sync exists, the local-first architecture usually includes:
 
-* Workspace export/import.
-* Backup streaming to files.
-* Progress tracking and hook events for plugins.
+-   Workspace export/import.
+-   Backup streaming to files.
+-   Progress tracking and hook events for plugins.
 
 If you are adding server sync later, build it as an add-on layer:
 
-* Keep Dexie as the local source of truth.
-* Sync engine should subscribe to DB events and hook events.
-* Do not bake provider logic into the DB layer.
+-   Keep Dexie as the local source of truth.
+-   Sync engine should subscribe to DB events and hook events.
+-   Do not bake provider logic into the DB layer.
 
 ---
 
@@ -472,9 +472,9 @@ The DB is for persistence and relational queries. The search index is for fast t
 
 When you add new content types:
 
-* Ensure they can be indexed.
-* Add a hook after persistence that plugins can subscribe to for indexing.
-* Avoid reindexing everything on every change; do incremental updates if possible.
+-   Ensure they can be indexed.
+-   Add a hook after persistence that plugins can subscribe to for indexing.
+-   Avoid reindexing everything on every change; do incremental updates if possible.
 
 ---
 
@@ -482,16 +482,16 @@ When you add new content types:
 
 Workflows are multi-step executions that:
 
-* often show node states (pending, active, complete)
-* may run tool calls
-* may emit intermediate outputs
-* should be observable via hooks
-* should be able to produce notifications
+-   often show node states (pending, active, complete)
+-   may run tool calls
+-   may emit intermediate outputs
+-   should be observable via hooks
+-   should be able to produce notifications
 
 If you add SSR notifications later:
 
-* Do not hard-code “notification UI” into workflow logic.
-* Instead: workflow emits events, notification system subscribes.
+-   Do not hard-code “notification UI” into workflow logic.
+-   Instead: workflow emits events, notification system subscribes.
 
 ---
 
@@ -503,10 +503,10 @@ You are operating in a repo that already has a strong client-first plugin archit
 
 Design target:
 
-* Multi-user with roles and access controls.
-* Admin-configurable guest access.
-* Bring-your-own provider (Firebase Auth, Supabase Auth, Clerk, custom JWT).
-* Keep OpenRouter PKCE auth for static builds, but add real server auth for SSR.
+-   Multi-user with roles and access controls.
+-   Admin-configurable guest access.
+-   Bring-your-own provider (Firebase Auth, Supabase Auth, Clerk, custom JWT).
+-   Keep OpenRouter PKCE auth for static builds, but add real server auth for SSR.
 
 Correct architecture:
 
@@ -515,96 +515,103 @@ Correct architecture:
 3. Use a registry to select provider at runtime/config.
 4. Use hooks for policy checks:
 
-   * `auth.session:filter:resolve`
-   * `auth.access:filter:can`
-   * `auth.user:action:created`
+    - `auth.session:filter:resolve`
+    - `auth.access:filter:can`
+    - `auth.user:action:created`
+
 5. Expose minimal stable objects to the rest of the app:
 
-   * `useSession()`
-   * `requireUser()` on server routes
-   * `can(permission, resource)` universal helper
+    - `useSession()`
+    - `requireUser()` on server routes
+    - `can(permission, resource)` universal helper
 
 ### 12.2 DB sync (Dexie to server)
 
 Design target:
 
-* Last-writer-wins default.
-* Exclude blobs from primary sync and use object storage later.
-* Extensible DB adapters (Convex first, others later).
+-   Last-writer-wins default.
+-   Exclude blobs from primary sync and use object storage later.
+-   Extensible DB adapters (Convex first, others later).
 
 Correct architecture:
 
 1. Define a `SyncProvider` interface with:
 
-   * push(local changes)
-   * pull(remote changes)
-   * reconcile(conflicts)
-   * checkpoints and cursors
+    - push(local changes)
+    - pull(remote changes)
+    - reconcile(conflicts)
+    - checkpoints and cursors
+
 2. Sync engine lives as a service module:
 
-   * listens to local DB change events
-   * emits hooks for lifecycle and conflicts
+    - listens to local DB change events
+    - emits hooks for lifecycle and conflicts
+
 3. Plugins can subscribe:
 
-   * conflict notifications
-   * custom merge strategies
-   * selective table syncing
+    - conflict notifications
+    - custom merge strategies
+    - selective table syncing
 
 ### 12.3 Notifications (in-app hub + extensible)
 
 Design target:
 
-* A notification UI hub that can show:
+-   A notification UI hub that can show:
 
-  * new AI message in another thread
-  * background workflow completion
-  * sync conflicts
-  * plugin-generated notifications with actions
-* Storage should work:
+    -   new AI message in another thread
+    -   background workflow completion
+    -   sync conflicts
+    -   plugin-generated notifications with actions
 
-  * with sync (preferred)
-  * without sync (Dexie local)
+-   Storage should work:
+
+    -   with sync (preferred)
+    -   without sync (Dexie local)
 
 Correct architecture:
 
 1. Define a `Notification` type with:
 
-   * id, kind, title, body, timestamp
-   * read/unread
-   * deep link target (thread, document, custom route)
-   * actions (buttons) that trigger code or navigation
+    - id, kind, title, body, timestamp
+    - read/unread
+    - deep link target (thread, document, custom route)
+    - actions (buttons) that trigger code or navigation
+
 2. Notification engine:
 
-   * stores in local DB (and syncs if enabled)
-   * exposes hooks:
+    - stores in local DB (and syncs if enabled)
+    - exposes hooks:
 
-     * `notify:action:push`
-     * `notify:filter:render`
-     * `notify:action:clicked`
+        - `notify:action:push`
+        - `notify:filter:render`
+        - `notify:action:clicked`
+
 3. Plugins register notification kinds and renderers via registry.
 
 ### 12.4 Admin dashboard (WordPress-like, SSR-only area)
 
 Design target:
 
-* Manage users/roles and access rules
-* Manage plugin installs and updates
-* Possibly connect to a marketplace or load zipped bundles
-* Owner/editor access only
+-   Manage users/roles and access rules
+-   Manage plugin installs and updates
+-   Possibly connect to a marketplace or load zipped bundles
+-   Owner/editor access only
 
 Correct architecture:
 
 1. Keep it a separate SSR route area with its own layout.
 2. Reuse the same typed registry approach:
 
-   * “Admin pages registry”
-   * “Admin widgets registry”
+    - “Admin pages registry”
+    - “Admin widgets registry”
+
 3. Every admin capability must go through server authorization checks, not just UI controls.
 4. Plugin management must have:
 
-   * install source abstraction (marketplace vs zip)
-   * manifest format
-   * hooks around install/uninstall/update events
+    - install source abstraction (marketplace vs zip)
+    - manifest format
+    - hooks around install/uninstall/update events
 
 ---
 
@@ -615,8 +622,9 @@ Correct architecture:
 1. Create a small composable API that the UI and plugins use.
 2. Add hooks at:
 
-   * input boundary (filters)
-   * lifecycle boundaries (actions)
+    - input boundary (filters)
+    - lifecycle boundaries (actions)
+
 3. Add a registry if multiple providers or UI additions are expected.
 4. Add docs and update docmap if required.
 
@@ -629,9 +637,9 @@ Correct architecture:
 
 ## 13.3 Add new hook keys or registry items
 
-* Keep names consistent.
-* Ensure type inference is preserved.
-* Update the hook catalog and docs.
+-   Keep names consistent.
+-   Ensure type inference is preserved.
+-   Update the hook catalog and docs.
 
 ---
 
@@ -639,23 +647,23 @@ Correct architecture:
 
 1. **Importing browser-only modules in SSR code paths**
 
-   * Fix: move into `.client.ts`, or dynamic import inside `process.client` guards.
+    - Fix: move into `.client.ts`, or dynamic import inside `process.client` guards.
 
 2. **Bypassing hooks and registries**
 
-   * Fix: add an extension point instead of hard-coding.
+    - Fix: add an extension point instead of hard-coding.
 
 3. **Filters that do not return**
 
-   * Fix: always return the transformed value.
+    - Fix: always return the transformed value.
 
 4. **Adding heavy dependencies to global startup**
 
-   * Fix: dynamic import, lazy-load on demand, preload via hooks if needed.
+    - Fix: dynamic import, lazy-load on demand, preload via hooks if needed.
 
 5. **Duplicating state sources**
 
-   * Fix: define a single source of truth and bridge reactivity with composables.
+    - Fix: define a single source of truth and bridge reactivity with composables.
 
 ---
 
@@ -665,11 +673,12 @@ When asked to implement or plan a change:
 
 1. Give a short architecture plan that maps to:
 
-   * new types
-   * new hooks
-   * new registries
-   * new composables
-   * new server routes (SSR-only features)
+    - new types
+    - new hooks
+    - new registries
+    - new composables
+    - new server routes (SSR-only features)
+
 2. Provide a file-by-file change list.
 3. Provide code diffs or full code blocks, respecting existing patterns.
 4. Call out SSR/client boundaries explicitly.
@@ -681,6 +690,20 @@ Your guiding principle: **extend the platform, not just the feature**.
 
 ## Repo grounding used to write this prompt (for this chat)
 
-* Hook engine concepts, typed wrapper, wildcards, diagnostics, and the hook catalog are documented in the repo docs and types.   
-* Hook type primitives and the engine surface area are summarized in the exported types docs. 
-* The existence and intent of `docmap.json` as the navigation index is reflected by its presence and by doc entries referencing hook/theme/plugin areas. 
+-   Hook engine concepts, typed wrapper, wildcards, diagnostics, and the hook catalog are documented in the repo docs and types.
+-   Hook type primitives and the engine surface area are summarized in the exported types docs.
+-   The existence and intent of `docmap.json` as the navigation index is reflected by its presence and by doc entries referencing hook/theme/plugin areas.
+
+---
+
+# IMPORTANT
+
+# MCP SERVERS
+
+### context7 MCP server
+
+If you get stuck and do not understand how to use something like Nuxt 4, Nuxt UI, Dexie, tailwind 4, ZOD v4, TipTap, convex, auth providers etc.. you must use the context7 MCP server to get the documentation.
+
+### playwright MCP server
+
+If you need to test frontend functionality or components, get console output, or run end-to-end tests, you must use the playwright MCP server
