@@ -8,6 +8,7 @@
                 :item-key="(item) => item.key"
                 :estimate-height="56"
                 :overscan="512"
+                :maintain-bottom="false"
                 class="flex-1 min-h-0 sidebar-scroll"
             >
                 <template #default="{ item }">
