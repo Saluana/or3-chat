@@ -1,15 +1,19 @@
 <template>
     <div class="mt-3 space-y-2">
-        <SidebarGroupHeader 
-            label="Projects" 
-            :collapsed="collapsed" 
-            @toggle="emit('toggle-collapse')" 
+        <SidebarGroupHeader
+            label="Projects"
+            :collapsed="collapsed"
+            @toggle="emit('toggle-collapse')"
         />
-        
+
         <!-- Grid-based height animation for smooth collapse/expand -->
-        <div 
+        <div
             class="grid transition-[grid-template-rows,opacity] duration-300 ease-out"
-            :class="collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'"
+            :class="
+                collapsed
+                    ? 'grid-rows-[0fr] opacity-0'
+                    : 'grid-rows-[1fr] opacity-100'
+            "
         >
             <div class="overflow-hidden min-h-0">
                 <div v-if="projects.length > 0" class="space-y-0.5">
@@ -31,22 +35,46 @@
                         />
 
                         <!-- Nested grid animation for project children -->
-                        <div 
+                        <div
                             v-if="project.data.length > 0"
                             class="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
-                            :class="expandedProjectsSet.has(project.id) ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'"
+                            :class="
+                                expandedProjectsSet.has(project.id)
+                                    ? 'grid-rows-[1fr] opacity-100'
+                                    : 'grid-rows-[0fr] opacity-0'
+                            "
                         >
                             <div class="overflow-hidden min-h-0">
-                                <div class="pl-4 pb-2 space-y-1">
+                                <div
+                                    class="ml-5 border-l-2 border-[color:var(--md-primary-tint)]/60 space-y-1"
+                                >
                                     <SidebarProjectChild
                                         v-for="child in project.data"
                                         :key="`${project.id}:${child.id}`"
                                         :child="child"
                                         :parent-id="project.id"
                                         :active="isProjectChildActive(child)"
-                                        @select="() => onProjectChildSelect(child, project.id)"
-                                        @rename="emit('rename-entry', { projectId: project.id, entryId: child.id, kind: child.kind })"
-                                        @remove="emit('remove-from-project', { projectId: project.id, entryId: child.id, kind: child.kind })"
+                                        @select="
+                                            () =>
+                                                onProjectChildSelect(
+                                                    child,
+                                                    project.id
+                                                )
+                                        "
+                                        @rename="
+                                            emit('rename-entry', {
+                                                projectId: project.id,
+                                                entryId: child.id,
+                                                kind: child.kind,
+                                            })
+                                        "
+                                        @remove="
+                                            emit('remove-from-project', {
+                                                projectId: project.id,
+                                                entryId: child.id,
+                                                kind: child.kind,
+                                            })
+                                        "
                                     />
                                 </div>
                             </div>
@@ -57,11 +85,15 @@
                     v-else
                     class="mx-1 rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)]/50 bg-[color:var(--md-surface-variant)]/25 px-3 py-3"
                 >
-                    <div class="flex items-center gap-2 text-[12px] font-semibold text-[color:var(--md-on-surface-variant)]">
+                    <div
+                        class="flex items-center gap-2 text-[12px] font-semibold text-[color:var(--md-on-surface-variant)]"
+                    >
                         <UIcon :name="iconFolder" class="w-4 h-4" />
                         No projects yet
                     </div>
-                    <p class="mt-1 text-[11px] text-[color:var(--md-on-surface-variant)]/80">
+                    <p
+                        class="mt-1 text-[11px] text-[color:var(--md-on-surface-variant)]/80"
+                    >
                         Create a project to organize chats and documents.
                     </p>
                 </div>

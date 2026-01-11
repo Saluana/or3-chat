@@ -12,10 +12,10 @@
         >
             <UIcon
                 :name="expanded ? iconExpand : iconCollapse"
-                class="project-icon shrink-0 w-4 h-4 text-[color:var(--md-on-surface-variant)] group-hover:text-[color:var(--md-on-surface)] transition-colors"
+                class="project-icon shrink-0 w-[18px] h-[18px] text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-on-surface)]/80 transition-colors"
                 active-class="text-[color:var(--md-primary)]"
             />
-            <span class="project-label truncate text-start flex-1 min-w-0 text-[13px] font-normal text-[color:var(--md-on-surface)] group-hover:text-[color:var(--md-on-surface)]">{{
+            <span class="project-label truncate text-start flex-1 min-w-0 text-sm font-normal text-[color:var(--md-on-surface)] group-hover:text-[color:var(--md-on-surface)]">{{
                 project.name
             }}</span>
             <span

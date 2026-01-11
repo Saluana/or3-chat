@@ -3,45 +3,60 @@
         ref="el"
         role="button"
         tabindex="0"
-        class="w-full flex items-center gap-2 px-3 py-2.5 group relative transition-colors duration-200 rounded-[var(--md-border-radius)] cursor-pointer"
+        class="w-full group flex items-center gap-2 px-3 py-2.5 group relative transition-colors duration-200 rounded-[var(--md-border-radius)] cursor-pointer"
         :class="{
-            'bg-[color:var(--md-primary)]/12 text-[color:var(--md-primary)]': active,
-            'text-[color:var(--md-on-surface)] hover:bg-[var(--md-surface-hover)]': !active
+            'bg-[color:var(--md-primary)]/12 text-[color:var(--md-primary)]':
+                active,
+            'text-[color:var(--md-on-surface)] hover:bg-[var(--md-surface-hover)]':
+                !active,
         }"
-        style="width: calc(100% - 8px);"
+        style="width: calc(100% - 8px)"
         @click="emit('select', item.id)"
         @keydown.enter="emit('select', item.id)"
         @keydown.space="emit('select', item.id)"
     >
         <!-- Icon -->
-        <UIcon 
-            :name="item.type === 'thread' ? iconChat : iconNote" 
-            class="w-5 h-5 shrink-0 transition-colors"
+        <UIcon
+            :name="item.type === 'thread' ? iconChat : iconNote"
+            class="w-[18px] h-[18px] shrink-0 transition-colors"
             :class="{
                 'text-[color:var(--md-primary)]': active,
-                'text-[color:var(--md-on-surface-variant)]': !active
+                'text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-on-surface)]/80':
+                    !active,
             }"
         />
-        
+
         <!-- Title -->
-        <span 
+        <span
             class="flex-1 truncate text-sm font-normal leading-tight"
-            :class="active ? 'text-[color:var(--md-primary)]' : 'text-[color:var(--md-on-surface)]'"
+            :class="
+                active
+                    ? 'text-[color:var(--md-primary)]'
+                    : 'text-[color:var(--md-on-surface)]'
+            "
         >
             {{ item.title || 'Untitled' }}
         </span>
-        
+
         <!-- Time Label (desktop only - hide on hover, show action button instead) -->
-        <span 
+        <span
             class="hidden sm:inline-block shrink-0 text-[10px] opacity-40 font-medium transition-opacity group-hover:opacity-0"
-            :class="active ? 'text-[color:var(--md-primary)]/70' : 'text-[color:var(--md-on-surface-variant)]'"
+            :class="
+                active
+                    ? 'text-[color:var(--md-primary)]/70'
+                    : 'text-[color:var(--md-on-surface-variant)]'
+            "
         >
             {{ timeDisplay }}
         </span>
-        
+
         <!-- Action Button (always visible on mobile, hover-reveal on desktop) -->
-        <div class="absolute right-2 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-            <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
+        <div
+            class="absolute right-2 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+        >
+            <UPopover
+                :content="{ side: 'right', align: 'start', sideOffset: 6 }"
+            >
                 <UButton
                     v-bind="actionTriggerProps"
                     @click.stop
@@ -70,10 +85,16 @@
                         >
                             Delete
                         </UButton>
-                        
+
                         <!-- Plugin actions -->
-                        <div v-if="extraActions.value.length > 0" class="my-1 border-t border-[color:var(--md-border-color)]/30" />
-                        <template v-for="action in extraActions.value" :key="action.id">
+                        <div
+                            v-if="extraActions.value.length > 0"
+                            class="my-1 border-t border-[color:var(--md-border-color)]/30"
+                        />
+                        <template
+                            v-for="action in extraActions.value"
+                            :key="action.id"
+                        >
                             <UButton
                                 v-bind="actionButtonProps('extra')"
                                 :icon="action.icon"
@@ -136,7 +157,10 @@ const iconContainerProps = computed(() => {
         isNuxtUI: false,
     });
     return {
-        class: props.item.type === 'thread' ? 'bg-primary/15 text-primary' : 'bg-[color:var(--md-secondary)]/15 text-[color:var(--md-secondary)]',
+        class:
+            props.item.type === 'thread'
+                ? 'bg-primary/15 text-primary'
+                : 'bg-[color:var(--md-secondary)]/15 text-[color:var(--md-secondary)]',
         ...overrides.value,
     };
 });
@@ -169,7 +193,7 @@ const actionButtonProps = (id: string) => {
         identifier: `sidebar.unified-item.${id}`,
         isNuxtUI: true,
     });
-    
+
     let icon = iconMore;
     if (id === 'rename') icon = iconEdit;
     if (id === 'delete') icon = iconTrash;

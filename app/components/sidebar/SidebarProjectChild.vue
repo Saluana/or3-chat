@@ -16,14 +16,14 @@
         >
             <UIcon
                 :name="child.kind === 'doc' ? iconNote : iconChat"
-                class="project-child-icon shrink-0 size-4"
+                class="project-child-icon shrink-0 w-[18px] h-[18px]"
                 :class="{
                     'text-[color:var(--md-primary)] opacity-100': active,
-                    'text-[color:var(--md-on-surface-variant)] opacity-70 group-hover:opacity-100': !active
+                    'text-[color:var(--md-on-surface-variant)] opacity-70 group-hover:opacity-80': !active
                 }"
             />
             <span
-                class="project-child-label truncate text-start flex-1 min-w-0 text-[13px] font-normal"
+                class="project-child-label truncate text-start flex-1 min-w-0 text-sm font-normal"
                 >{{ child.name || '(untitled)' }}</span
             >
             <span
