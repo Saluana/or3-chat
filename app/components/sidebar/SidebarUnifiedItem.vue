@@ -3,7 +3,7 @@
         ref="el"
         role="button"
         tabindex="0"
-        class="w-full group flex items-center gap-2 px-3 py-2.5 group relative transition-colors duration-200 rounded-[var(--md-border-radius)] cursor-pointer"
+        class="w-full group flex items-center gap-2 px-3 py-2.5 group relative transition-colors duration-200 rounded-[var(--md-border-radius)] cursor-pointer animate-sidebar-item-enter"
         :class="{
             'bg-[color:var(--md-primary)]/12 text-[color:var(--md-primary)]':
                 active,

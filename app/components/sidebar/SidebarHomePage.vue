@@ -7,7 +7,7 @@
                 :items="combinedItems"
                 :item-key="(item) => item.key"
                 :estimate-height="40"
-                :overscan="180"
+                :overscan="240"
                 :maintain-bottom="false"
                 class="flex-1 min-h-0 sidebar-scroll"
             >
@@ -72,19 +72,31 @@
                         @select-document="(id) => emit('select-document', id)"
                     />
 
-                    <!-- Time Group (with animated collapse/expand) -->
-                    <SidebarTimeGroup
-                        v-else-if="item.type === 'time-group'"
+                    <!-- Time Group Header -->
+                    <SidebarGroupHeader
+                        v-else-if="item.type === 'time-group-header'"
+                        class="mt-3"
                         :label="item.label"
-                        :group-key="item.groupKey"
                         :collapsed="collapsedGroups.has(item.groupKey)"
-                        :items="item.items"
-                        :active-ids="allActiveIds"
                         @toggle="toggleGroup(item.groupKey)"
-                        @select-item="onItemSelected"
-                        @rename-item="onItemRename"
-                        @delete-item="onItemDelete"
-                        @add-to-project="onItemAddToProject"
+                    />
+
+                    <!-- Unified Item -->
+                    <SidebarUnifiedItem
+                        v-else-if="item.type === 'time-group-item'"
+                        :item="item.item"
+                        :active="allActiveIds.includes(item.item.id)"
+                        :time-display="
+                            formatTimeDisplay(item.item.updatedAt, item.groupKey)
+                        "
+                        :class="[
+                            'mb-0.5',
+                            collapsingGroups.has(item.groupKey) && 'is-exiting'
+                        ]"
+                        @select="() => onItemSelected(item.item)"
+                        @rename="() => onItemRename(item.item)"
+                        @delete="() => onItemDelete(item.item)"
+                        @add-to-project="() => onItemAddToProject(item.item)"
                     />
 
                     <!-- Empty State -->
@@ -202,12 +214,14 @@ import { usePaginatedSidebarItems } from '~/composables/sidebar/usePaginatedSide
 import {
     computeTimeGroup,
     getTimeGroupLabel,
+    formatTimeDisplay,
 } from '~/utils/sidebar/sidebarTimeUtils';
 import type { TimeGroup } from '~/utils/sidebar/sidebarTimeUtils';
 import SidebarProjectsSection from './SidebarProjectsSection.vue';
-import SidebarTimeGroup from './SidebarTimeGroup.vue';
 import SidebarPageLink from './SidebarPageLink.vue';
 import SidebarEmptyState from './SidebarEmptyState.vue';
+import SidebarGroupHeader from './SidebarGroupHeader.vue';
+import SidebarUnifiedItem from './SidebarUnifiedItem.vue';
 import { useIcon } from '~/composables/useIcon';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarSections';
@@ -282,12 +296,22 @@ const projectsCollapsed = ref(false);
 
 // Time grouping state
 const collapsedGroups = reactive(new Set<string>());
+const collapsingGroups = reactive(new Set<string>()); // Groups that are animating out
+
+const COLLAPSE_ANIMATION_DURATION = 200; // ms
 
 function toggleGroup(groupKey: string) {
     if (collapsedGroups.has(groupKey)) {
+        // Expanding: just remove from collapsed
         collapsedGroups.delete(groupKey);
     } else {
-        collapsedGroups.add(groupKey);
+        // Collapsing: add to collapsing first (triggers exit animation)
+        collapsingGroups.add(groupKey);
+        // After animation, actually collapse
+        setTimeout(() => {
+            collapsingGroups.delete(groupKey);
+            collapsedGroups.add(groupKey);
+        }, COLLAPSE_ANIMATION_DURATION);
     }
 }
 
@@ -387,15 +411,25 @@ const combinedItems = computed(() => {
         });
     }
 
-    // Time-grouped items (each group is a single item with its children inside)
+    // Time-grouped items (flattened for true per-item virtualization)
     for (const [groupKey, groupItems] of groupedItems.value) {
         result.push({
-            key: `time-group-${groupKey}`,
-            type: 'time-group',
+            key: `time-group-header-${groupKey}`,
+            type: 'time-group-header',
             label: getTimeGroupLabel(groupKey),
             groupKey,
-            items: groupItems,
         });
+
+        if (!collapsedGroups.has(groupKey)) {
+            for (const item of groupItems) {
+                result.push({
+                    key: `time-group-item-${item.id}`,
+                    type: 'time-group-item',
+                    item,
+                    groupKey,
+                });
+            }
+        }
     }
 
     // Custom bottom sections
