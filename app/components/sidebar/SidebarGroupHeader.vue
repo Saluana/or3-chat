@@ -1,6 +1,6 @@
 <template>
     <button
-        class="w-full h-11 flex items-center justify-between px-4 hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] transition-colors group rounded-[var(--md-border-radius)] mx-1"
+        class="w-full h-11 flex items-center justify-between px-4 hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] transition-colors group rounded-[var(--md-border-radius)] mx-1 cursor-pointer"
         style="width: calc(100% - 8px);"
         @click="emit('toggle')"
     >
@@ -8,8 +8,9 @@
             {{ label }}
         </span>
         <UIcon
-            :name="collapsed ? iconChevronRight : iconChevronDown"
-            class="w-4 h-4 text-[color:var(--md-on-surface-variant)] group-hover:text-[color:var(--md-on-surface)] transition-colors"
+            :name="iconChevronRight"
+            class="w-4 h-4 text-[color:var(--md-on-surface-variant)] group-hover:text-[color:var(--md-on-surface)] transition-all duration-200"
+            :class="!collapsed ? 'rotate-90' : ''"
         />
     </button>
 </template>
@@ -27,5 +28,4 @@ const emit = defineEmits<{
 }>();
 
 const iconChevronRight = useIcon('ui.chevron.right');
-const iconChevronDown = useIcon('ui.chevron.down');
 </script>

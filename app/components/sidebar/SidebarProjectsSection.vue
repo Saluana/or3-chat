@@ -6,43 +6,53 @@
             @toggle="emit('toggle-collapse')" 
         />
         
-        <Transition name="section-expand">
-            <div v-if="!collapsed" class="space-y-0.5">
-                <div
-                    v-for="project in projects"
-                    :key="project.id"
-                    class="project-group-container mb-0.5 rounded-[var(--md-border-radius)] overflow-hidden"
-                >
-                    <SidebarProjectRoot
-                        :project="project"
-                        :expanded="expandedProjectsSet.has(project.id)"
-                        @toggle-expand="toggleProjectExpand(project.id)"
-                        @add-chat="emit('add-chat-to-project', project.id)"
-                        @add-document="emit('add-document-to-project', project.id)"
-                        @rename="emit('rename-project', project.id)"
-                        @delete="emit('delete-project', project.id)"
-                    />
+        <!-- Grid-based height animation for smooth collapse/expand -->
+        <div 
+            class="grid transition-[grid-template-rows,opacity] duration-300 ease-out"
+            :class="collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'"
+        >
+            <div class="overflow-hidden min-h-0">
+                <div class="space-y-0.5">
+                    <div
+                        v-for="project in projects"
+                        :key="project.id"
+                        class="project-group-container mb-0.5 rounded-[var(--md-border-radius)] overflow-hidden"
+                    >
+                        <SidebarProjectRoot
+                            :project="project"
+                            :expanded="expandedProjectsSet.has(project.id)"
+                            @toggle-expand="toggleProjectExpand(project.id)"
+                            @add-chat="emit('add-chat-to-project', project.id)"
+                            @add-document="emit('add-document-to-project', project.id)"
+                            @rename="emit('rename-project', project.id)"
+                            @delete="emit('delete-project', project.id)"
+                        />
 
-                    <Transition name="project-expand">
-                        <div
-                            v-if="project.data.length > 0 && expandedProjectsSet.has(project.id)"
-                            class="pl-4 pb-2 space-y-1"
+                        <!-- Nested grid animation for project children -->
+                        <div 
+                            v-if="project.data.length > 0"
+                            class="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+                            :class="expandedProjectsSet.has(project.id) ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'"
                         >
-                            <SidebarProjectChild
-                                v-for="child in project.data"
-                                :key="`${project.id}:${child.id}`"
-                                :child="child"
-                                :parent-id="project.id"
-                                :active="isProjectChildActive(child)"
-                                @select="() => onProjectChildSelect(child, project.id)"
-                                @rename="emit('rename-entry', { projectId: project.id, entryId: child.id, kind: child.kind })"
-                                @remove="emit('remove-from-project', { projectId: project.id, entryId: child.id, kind: child.kind })"
-                            />
+                            <div class="overflow-hidden min-h-0">
+                                <div class="pl-4 pb-2 space-y-1">
+                                    <SidebarProjectChild
+                                        v-for="child in project.data"
+                                        :key="`${project.id}:${child.id}`"
+                                        :child="child"
+                                        :parent-id="project.id"
+                                        :active="isProjectChildActive(child)"
+                                        @select="() => onProjectChildSelect(child, project.id)"
+                                        @rename="emit('rename-entry', { projectId: project.id, entryId: child.id, kind: child.kind })"
+                                        @remove="emit('remove-from-project', { projectId: project.id, entryId: child.id, kind: child.kind })"
+                                    />
+                                </div>
+                            </div>
                         </div>
-                    </Transition>
+                    </div>
                 </div>
             </div>
-        </Transition>
+        </div>
     </div>
 </template>
 
@@ -101,22 +111,3 @@ function onProjectChildSelect(child: any, projectId: string) {
     }
 }
 </script>
-
-<style scoped>
-.section-expand-enter-active,
-.section-expand-leave-active,
-.project-expand-enter-active,
-.project-expand-leave-active {
-    transition: all 0.2s ease-out;
-    max-height: 1000px;
-}
-
-.section-expand-enter-from,
-.section-expand-leave-to,
-.project-expand-enter-from,
-.project-expand-leave-to {
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-}
-</style>
