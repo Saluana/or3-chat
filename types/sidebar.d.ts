@@ -60,10 +60,33 @@ export type SidebarItem = ThreadItem | DocumentItem | ProjectItem;
  */
 export type RenameTarget = ThreadItem | DocumentItem | ProjectItem;
 
+// ============================================================================
+// Unified Sidebar Types (New)
+// ============================================================================
+
 /**
- * Type for delete operations (can be thread, document, or project)
+ * Unified item for both threads and documents in the new sidebar
  */
-export type DeleteTarget = ThreadItem | DocumentItem | ProjectItem;
+export interface UnifiedSidebarItem {
+    id: string;
+    type: 'thread' | 'document';
+    title: string;
+    updatedAt: number; // timestamp in seconds
+    forked?: boolean;      // thread only
+    postType?: string;     // document only
+}
+
+/**
+ * Time groups for the unified timeline
+ */
+export type TimeGroup = 'today' | 'yesterday' | 'earlierThisWeek' | 'thisMonth' | 'older';
+
+/**
+ * Type for list items in the new virtualized scroller
+ */
+export type FlatSidebarItem = 
+    | { type: 'header'; key: string; label: string; groupKey: TimeGroup }
+    | (UnifiedSidebarItem & { key: string; groupKey: TimeGroup });
 
 // ============================================================================
 // Type Guards

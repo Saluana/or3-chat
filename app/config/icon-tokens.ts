@@ -82,6 +82,7 @@ export const DEFAULT_ICONS = {
     'ui.chart': 'pixelarticons:chart-bar',
     'ui.shield': 'pixelarticons:shield',
     'ui.chevron.left': 'pixelarticons:chevron-left',
+    'ui.chevron.right': 'pixelarticons:chevron-right',
     'ui.chevron.down': 'pixelarticons:chevron-down',
     'ui.wait': 'pixelarticons:hourglass',
     'ui.minus': 'pixelarticons:minus',

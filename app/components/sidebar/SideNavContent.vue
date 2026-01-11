@@ -34,7 +34,7 @@
             <div
                 id="nav-scroll-area"
                 ref="scrollAreaRef"
-                class="flex-1 min-h-0 h-full px-2 flex flex-col gap-3 overflow-hidden"
+                class="flex-1 min-h-0 flex flex-col overflow-hidden"
             >
                 <!-- Dynamic page renderer -->
                 <Suspense>
@@ -308,9 +308,11 @@ const activePageProps = computed(() => {
         };
     }
 
-    // For other pages, pass minimal props + page controls
+    // For chats/docs pages, pass required IDs
     return {
         ...pageControlProps,
+        activeThreadIds: props.activeThreadIds,
+        activeDocumentIds: props.activeDocumentIds,
     };
 });
 

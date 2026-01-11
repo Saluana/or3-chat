@@ -1,6 +1,6 @@
 <template>
-    <div id="side-nav-content-header" class="px-2 pt-2 flex flex-col space-y-2">
-        <div class="flex w-full items-center gap-2 mb-1">
+    <div id="side-nav-content-header" class="px-3 pt-2 border-b border-[color:var(--md-border-color)]/10 pb-2">
+        <div class="flex w-full items-center gap-2">
             <div class="relative flex-1">
                 <UInput
                     ref="searchInputWrapper"
@@ -20,46 +20,7 @@
                     </template>
                 </UInput>
             </div>
-            <UPopover :content="{ side: 'bottom', align: 'end' }">
-                <UButton
-                    v-bind="filterButtonProps"
-                    aria-label="Filter sections"
-                    class="filter-trigger flex items-center justify-center h-[40px] w-[40px] rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/5 backdrop-blur"
-                />
-                <template #content>
-                    <div class="space-y-2 min-w-[140px]">
-                        <div
-                            class="px-2 pb-1 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
-                        >
-                            <span
-                                class="text-xs font-medium text-[color:var(--md-on-surface)]/60 tracking-wide"
-                            >
-                                Toggle sections
-                            </span>
-                        </div>
-                        <div class="space-y-1">
-                            <UButton
-                                v-for="item in filterItems"
-                                :key="item.key"
-                                v-bind="filterItemButtonProps"
-                                :leading-icon="
-                                    activeSections[item.key]
-                                        ? iconView
-                                        : iconViewOff
-                                "
-                                @click="toggleSection(item.key)"
-                            >
-                                {{ item.label }}
-                            </UButton>
-                        </div>
-                    </div>
-                </template>
-            </UPopover>
         </div>
-
-        <div
-            class="border-b-3 border-primary/50 pb-2 sidenav-header-separator"
-        ></div>
 
         <!-- Rename modal -->
         <UModal
@@ -345,8 +306,6 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import { useIcon } from '~/composables/useIcon';
 
-const iconView = useIcon('ui.view');
-const iconViewOff = useIcon('ui.view_off');
 const iconEdit = useIcon('ui.edit');
 const iconFolder = useIcon('sidebar.folder');
 const iconLoading = useIcon('ui.loading');
@@ -419,39 +378,6 @@ const searchClearButtonProps = computed(() => {
     };
 });
 
-const filterButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.filter',
-        isNuxtUI: true,
-    });
-    return {
-        size: 'md' as const,
-        color: 'neutral' as const,
-        variant: 'ghost' as const,
-        icon: iconFilter.value,
-        square: true,
-        ...(overrides.value as any),
-    };
-});
-
-const filterItemButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.filter-item',
-        isNuxtUI: true,
-    });
-    return {
-        color: 'neutral' as const,
-        variant: 'ghost' as const,
-        size: 'sm' as const,
-        block: true,
-        ...(overrides.value as any),
-    };
-});
-
 const sidebarProjectSelectOverrides = useThemeOverrides({
     component: 'selectmenu',
     context: 'sidebar',
@@ -477,20 +403,6 @@ const sidebarFormFieldProps = useThemeOverrides({
     context: 'sidebar',
     isNuxtUI: true,
 });
-
-// Section visibility (multi-select) defaults to all on
-const filterItems = [
-    { label: 'Projects', key: 'projects' as const },
-    { label: 'Chats', key: 'chats' as const },
-    { label: 'Docs', key: 'docs' as const },
-] as const;
-
-const activeSections = computed(() => props.activeSections);
-
-function toggleSection(v: 'projects' | 'chats' | 'docs') {
-    const next = { ...props.activeSections, [v]: !props.activeSections[v] };
-    emit('update:activeSections', next);
-}
 
 // Direct focus support for external callers
 const searchInputWrapper = ref<any | null>(null);

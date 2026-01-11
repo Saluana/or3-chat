@@ -9,26 +9,26 @@ This task list covers the full implementation of the sidebar homepage rework, or
 ## Phase 1: Utility Layer & Infrastructure
 
 ### 1.1 Time Grouping Utilities
-- [ ] Create `app/utils/sidebar/sidebarTimeUtils.ts`
-  - [ ] Implement `computeTimeGroup(timestamp: number): TimeGroup` (5 groups: today, yesterday, earlierThisWeek, thisMonth, older)
-  - [ ] Implement `formatTimeDisplay(timestamp: number, group: TimeGroup): string`
-  - [ ] Implement `getTimeGroupLabel(group: TimeGroup): string`
-  - [ ] Add helper functions: `getStartOfDay()`, `getStartOfWeek()`, `getStartOfMonth()`
+- [x] Create `app/utils/sidebar/sidebarTimeUtils.ts`
+  - [x] Implement `computeTimeGroup(timestamp: number): TimeGroup` (5 groups: today, yesterday, earlierThisWeek, thisMonth, older)
+  - [x] Implement `formatTimeDisplay(timestamp: number, group: TimeGroup): string`
+  - [x] Implement `getTimeGroupLabel(group: TimeGroup): string`
+  - [x] Add helper functions: `getStartOfDay()`, `getStartOfWeek()`, `getStartOfMonth()`
   - **Requirements: 2.1**
 
 ### 1.2 Unified Item Type
-- [ ] Add to `app/types/sidebar.ts`
-  - [ ] Define `UnifiedSidebarItem` interface (id, type, title, updatedAt, forked?, postType?)
-  - [ ] Define `TimeGroup` type union (5 groups, no 'recentlyOpened')
-  - [ ] Add `threadToUnified()` and `docToUnified()` transform functions
+- [x] Add to `app/types/sidebar.ts`
+  - [x] Define `UnifiedSidebarItem` interface (id, type, title, updatedAt, forked?, postType?)
+  - [x] Define `TimeGroup` type union (5 groups, no 'recentlyOpened')
+  - [x] Add `threadToUnified()` and `docToUnified()` transform functions
   - **Requirements: 2.1, 3.1, 4.1**
 
 ### 1.3 Pagination Composable (Local State)
-- [ ] Create `app/composables/sidebar/usePaginatedSidebarItems.ts`
-  - [ ] Use `shallowRef` for items array
-  - [ ] Implement `loadMore()` with cursor-based pagination
-  - [ ] Implement `reset()` for search/filter changes
-  - [ ] No SidebarEnvironment extension needed - purely local state
+- [x] Create `app/composables/sidebar/usePaginatedSidebarItems.ts`
+  - [x] Use `shallowRef` for items array
+  - [x] Implement `loadMore()` with cursor-based pagination
+  - [x] Implement `reset()` for search/filter changes
+  - [x] No SidebarEnvironment extension needed - purely local state
   - **Requirements: 7.1, 7.2**
 
 ---
@@ -36,43 +36,43 @@ This task list covers the full implementation of the sidebar homepage rework, or
 ## Phase 2: Core UI Components
 
 ### 2.1 Section Header Component
-- [ ] Create `app/components/sidebar/SidebarGroupHeader.vue`
-  - [ ] Implement collapsible header with label
-  - [ ] Use `useIcon()` for chevron icon (right collapsed, down expanded)
-  - [ ] **44px minimum height** for touch target
-  - [ ] Hover/active states for interactivity feedback
+- [x] Create `app/components/sidebar/SidebarGroupHeader.vue`
+  - [x] Implement collapsible header with label
+  - [x] Use `useIcon()` for chevron icon (right collapsed, down expanded)
+  - [x] **44px minimum height** for touch target
+  - [x] Hover/active states for interactivity feedback
   - **Requirements: 2.2, UX-3**
 
 ### 2.2 Unified Item Component
-- [ ] Create `app/components/sidebar/SidebarUnifiedItem.vue`
-  - [ ] Use `useIcon()` for all icons (sidebar.chat, sidebar.note, ui.more, etc.)
-  - [ ] Use `useThemeOverrides()` for icon container and action buttons
-  - [ ] Use `usePopoverKeyboard()` for keyboard accessibility
-  - [ ] Integrate `useThreadHistoryActions()` / `useDocumentHistoryActions()` for plugin actions
-  - [ ] Show "Chat" or document type as subtitle (no model name)
-  - [ ] **Action button: 16px visual, 40px+ hit area** via padding
-  - [ ] **Mobile layout:** stacked title/time when <280px width
-  - [ ] **Mobile:** action button always visible (no hover-only)
-  - [ ] Emit: `select`, `rename`, `delete`, `add-to-project`
+- [x] Create `app/components/sidebar/SidebarUnifiedItem.vue`
+  - [x] Use `useIcon()` for all icons (sidebar.chat, sidebar.note, ui.more, etc.)
+  - [x] Use `useThemeOverrides()` for icon container and action buttons
+  - [x] Use `usePopoverKeyboard()` for keyboard accessibility
+  - [x] Integrate `useThreadHistoryActions()` / `useDocumentHistoryActions()` for plugin actions
+  - [x] Show "Chat" or document type as subtitle (no model name)
+  - [x] **Action button: 16px visual, 40px+ hit area** via padding
+  - [x] **Mobile layout:** stacked title/time when <280px width
+  - [x] **Mobile:** action button always visible (no hover-only)
+  - [x] Emit: `select`, `rename`, `delete`, `add-to-project`
   - **Requirements: 3.1, 3.2, 4.1, 4.2, UX-1, UX-2**
 
 ### 2.3 Time-Grouped List Component
-- [ ] Create `app/components/sidebar/SidebarTimeGroupedList.vue`
-  - [ ] Import and use `Or3Scroll` (replaces virtua)
-  - [ ] Use `usePaginatedSidebarItems()` composable
-  - [ ] Local `collapsedGroups` Set for section collapse state
-  - [ ] Connect `@reachBottom` to pagination
-  - [ ] Render `SidebarGroupHeader` and `SidebarUnifiedItem`
-  - [ ] **Empty state:** show message + CTA when no items
-  - [ ] **Loading state:** skeleton items during pagination
-  - [ ] **Hide empty groups:** don't show "Today" header if no items
+- [x] Create `app/components/sidebar/SidebarTimeGroupedList.vue`
+  - [x] Import and use `Or3Scroll` (replaces virtua)
+  - [x] Use `usePaginatedSidebarItems()` composable
+  - [x] Local `collapsedGroups` Set for section collapse state
+  - [x] Connect `@reachBottom` to pagination
+  - [x] Render `SidebarGroupHeader` and `SidebarUnifiedItem`
+  - [x] **Empty state:** show message + CTA when no items
+  - [x] **Loading state:** skeleton items during pagination
+  - [x] **Hide empty groups:** don't show "Today" header if no items
   - **Requirements: 2.1, 2.2, 5.1, 5.2, UX-5, UX-7**
 
 ### 2.4 Navigation Segmented Control
-- [ ] Create navigation component or add to SidebarHomePage
-  - [ ] Three segments: All / Chats / Docs
-  - [ ] Clear active state indication
-  - [ ] Compact single-row layout
+- [x] Create navigation component or add to SidebarHomePage
+  - [x] Three segments: All / Chats / Docs
+  - [x] Clear active state indication
+  - [x] Compact single-row layout
   - **Requirements: 1.1, UX-4**
 
 ---
@@ -80,35 +80,35 @@ This task list covers the full implementation of the sidebar homepage rework, or
 ## Phase 3: Page Components
 
 ### 3.1 Homepage Redesign
-- [ ] Modify `app/components/sidebar/SidebarHomePage.vue`
-  - [ ] Add "Chats" and "Docs" navigation buttons at top
-  - [ ] Remove direct `SidebarVirtualList` usage
-  - [ ] Add `SidebarProjectSection` for projects
-  - [ ] Add `SidebarTimeGroupedList` for unified items
-  - [ ] Connect page navigation via `useSidebarPageControls()`
+- [x] Modify `app/components/sidebar/SidebarHomePage.vue`
+  - [x] Add "Chats" and "Docs" navigation buttons at top
+  - [x] Remove direct `SidebarVirtualList` usage
+  - [x] Add `SidebarProjectSection` for projects
+  - [x] Add `SidebarTimeGroupedList` for unified items
+  - [x] Connect page navigation via `useSidebarPageControls()`
   - **Requirements: 1.1, 8.1**
 
 ### 3.2 Chats-Only Page
-- [ ] Create `app/components/sidebar/SidebarChatsPage.vue`
-  - [ ] Define as sidebar page with `usesDefaultHeader: true`
-  - [ ] Display only thread items with time grouping
-  - [ ] Add back button to return to homepage
-  - [ ] Connect search to chats-only scope
+- [x] Create `app/components/sidebar/SidebarChatsPage.vue`
+  - [x] Define as sidebar page with `usesDefaultHeader: true`
+  - [x] Display only thread items with time grouping
+  - [x] Add back button to return to homepage
+  - [x] Connect search to chats-only scope
   - **Requirements: 1.1, 6.1**
 
 ### 3.3 Documents-Only Page
-- [ ] Create `app/components/sidebar/SidebarDocsPage.vue`
-  - [ ] Define as sidebar page with `usesDefaultHeader: true`
-  - [ ] Display only document items with time grouping
-  - [ ] Add back button to return to homepage
-  - [ ] Connect search to docs-only scope
+- [x] Create `app/components/sidebar/SidebarDocsPage.vue`
+  - [x] Define as sidebar page with `usesDefaultHeader: true`
+  - [x] Display only document items with time grouping
+  - [x] Add back button to return to homepage
+  - [x] Connect search to docs-only scope
   - **Requirements: 1.1, 6.1**
 
 ### 3.4 Page Registration
-- [ ] Modify `app/composables/sidebar/useSidebarPages.ts`
-  - [ ] Register `sidebar-chats` page definition
-  - [ ] Register `sidebar-docs` page definition
-  - [ ] Ensure proper KeepAlive handling
+- [x] Modify `app/composables/sidebar/useSidebarPages.ts`
+  - [x] Register `sidebar-chats` page definition
+  - [x] Register `sidebar-docs` page definition
+  - [x] Ensure proper KeepAlive handling
   - **Requirements: 1.1**
 
 ---
@@ -116,18 +116,18 @@ This task list covers the full implementation of the sidebar homepage rework, or
 ## Phase 4: Header & Search Updates
 
 ### 4.1 Header Simplification
-- [ ] Modify `app/components/sidebar/SideNavHeader.vue`
-  - [ ] Remove filter button and related code
-  - [ ] Add `activePage` prop to determine search scope
-  - [ ] Update search placeholder based on active page
-  - [ ] Clean up unused filter-related state
+- [x] Modify `app/components/sidebar/SideNavHeader.vue`
+  - [x] Remove filter button and related code
+  - [x] Add `activePage` prop to determine search scope
+  - [x] Update search placeholder based on active page
+  - [x] Clean up unused filter-related state
   - **Requirements: 1.2, 6.1**
 
 ### 4.2 Context-Aware Search
-- [ ] Create/modify search composable
-  - [ ] Implement search scope determination based on active page
-  - [ ] Implement relevance-based sorting for homepage search
-  - [ ] Add debouncing (300ms)
+- [x] Create/modify search composable
+  - [x] Implement search scope determination based on active page
+  - [x] Implement relevance-based sorting for homepage search
+  - [x] Add debouncing (300ms)
   - **Requirements: 6.1**
 
 ---
@@ -135,19 +135,19 @@ This task list covers the full implementation of the sidebar homepage rework, or
 ## Phase 5: Integration & Data Flow
 
 ### 5.1 Wire Up Homepage
-- [ ] Connect `SidebarHomePage` to pagination composable
-- [ ] Merge threads and documents into unified list
-- [ ] Sort by `updated_at` / `last_message_at`
-- [ ] Pass correct props to `SidebarTimeGroupedList`
+- [x] Connect `SidebarHomePage` to pagination composable
+- [x] Merge threads and documents into unified list
+- [x] Sort by `updated_at` / `last_message_at`
+- [x] Pass correct props to `SidebarTimeGroupedList`
 - **Requirements: 2.1, 7.1**
 
 ### 5.2 Event Handling
-- [ ] Forward all item events to parent components
-  - [ ] `select-thread` / `select-document`
-  - [ ] `rename-thread` / `rename-document`
-  - [ ] `delete-thread` / `delete-document`
-  - [ ] `add-thread-to-project` / `add-document-to-project`
-- [ ] Ensure SideNavContent receives and handles all events
+- [x] Forward all item events to parent components
+  - [x] `select-thread` / `select-document`
+  - [x] `rename-thread` / `rename-document`
+  - [x] `delete-thread` / `delete-document`
+  - [x] `add-thread-to-project` / `add-document-to-project`
+- [x] Ensure SideNavContent receives and handles all events
 - **Requirements: 3.1, 4.1**
 
 ### 5.3 Active State Management
