@@ -82,20 +82,19 @@ type ResetTarget = 'light' | 'dark' | 'all';
 const showResetModal = ref(false);
 const resetTarget = ref<ResetTarget>('all');
 
-const resetButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.reset',
-        isNuxtUI: true,
-    });
-    return {
-        size: 'sm' as const,
-        variant: 'outline' as const,
-        color: 'on-surface' as const,
-        ...(overrides.value as any),
-    };
+const resetOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'dashboard',
+    identifier: 'dashboard.theme.reset',
+    isNuxtUI: true,
 });
+
+const resetButtonProps = computed(() => ({
+    size: 'sm' as const,
+    variant: 'outline' as const,
+    color: 'on-surface' as const,
+    ...(resetOverrides.value as any),
+}));
 
 const modalTitle = computed(() => {
     if (resetTarget.value === 'all') return 'Reset All Themes';

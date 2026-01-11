@@ -55,6 +55,8 @@ const imageViewerModalProps = computed(() => {
             : '';
     const overrideUi =
         (overrideValue.ui as Record<string, unknown> | undefined) || {};
+    const overrideContent =
+        (overrideValue.content as Record<string, unknown> | undefined) || {};
 
     const mergedUi = { ...baseUi, ...overrideUi };
     const rest = Object.fromEntries(
@@ -66,6 +68,10 @@ const imageViewerModalProps = computed(() => {
     const result: Record<string, unknown> = {
         ...rest,
         ui: mergedUi,
+        content: {
+            'aria-describedby': undefined,
+            ...overrideContent,
+        },
     };
 
     const mergedClass = [overrideClass].filter(Boolean).join(' ');

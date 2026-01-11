@@ -2,6 +2,14 @@
 import { vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
 
+// Polyfill ResizeObserver for jsdom
+class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+}
+(globalThis as any).ResizeObserver = ResizeObserver;
+
 // Mock errors utility globally for all tests
 vi.mock('~/utils/errors', () => ({
     reportError: vi.fn(),
@@ -122,5 +130,35 @@ vi.mock('virtua/vue', () => {
     return {
         VList: Base,
         Virtualizer: Base,
+    };
+});
+
+vi.mock('or3-scroll', () => {
+    const Base = defineComponent({
+        name: 'MockOr3Scroll',
+        props: {
+            items: { type: Array, default: () => [] },
+            itemKey: { type: Function },
+        },
+        setup(props, { slots }) {
+            return () =>
+                h(
+                    'div',
+                    { class: 'mock-or3-scroll' },
+                    [
+                        slots.header ? slots.header() : null,
+                        ...(props.items as unknown[]).map(
+                            (item: unknown, index: number) =>
+                                slots.default
+                                    ? slots.default({ item, index })
+                                    : null
+                        ),
+                        slots.footer ? slots.footer() : null,
+                    ]
+                );
+        },
+    });
+    return {
+        Or3Scroll: Base,
     };
 });

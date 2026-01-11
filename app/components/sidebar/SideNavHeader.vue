@@ -1,7 +1,7 @@
 <template>
-    <div id="side-nav-content-header" class="px-2 pt-2 flex flex-col space-y-2">
-        <div class="flex w-full items-center gap-2 mb-1">
-            <div class="relative flex-1">
+    <div id="side-nav-content-header" class="px-3 pt-2 border-b border-[color:var(--md-border-color)]/10 pb-2">
+        <div class="flex w-full items-center gap-2">
+            <div class="relative flex-1 pr-2">
                 <UInput
                     ref="searchInputWrapper"
                     v-model="sidebarQuery"
@@ -10,8 +10,9 @@
                     class="w-full"
                     @keydown.escape.prevent.stop="onEscapeClear"
                 >
-                    <template v-if="sidebarQuery.length > 0" #trailing>
+                    <template #trailing>
                         <UButton
+                            v-if="sidebarQuery.length > 0"
                             v-bind="searchClearButtonProps"
                             class="flex items-center justify-center p-0"
                             aria-label="Clear input"
@@ -20,46 +21,7 @@
                     </template>
                 </UInput>
             </div>
-            <UPopover :content="{ side: 'bottom', align: 'end' }">
-                <UButton
-                    v-bind="filterButtonProps"
-                    aria-label="Filter sections"
-                    class="filter-trigger flex items-center justify-center h-[40px] w-[40px] rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/5 backdrop-blur"
-                />
-                <template #content>
-                    <div class="space-y-2 min-w-[140px]">
-                        <div
-                            class="px-2 pb-1 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
-                        >
-                            <span
-                                class="text-xs font-medium text-[color:var(--md-on-surface)]/60 tracking-wide"
-                            >
-                                Toggle sections
-                            </span>
-                        </div>
-                        <div class="space-y-1">
-                            <UButton
-                                v-for="item in filterItems"
-                                :key="item.key"
-                                v-bind="filterItemButtonProps"
-                                :leading-icon="
-                                    activeSections[item.key]
-                                        ? iconView
-                                        : iconViewOff
-                                "
-                                @click="toggleSection(item.key)"
-                            >
-                                {{ item.label }}
-                            </UButton>
-                        </div>
-                    </div>
-                </template>
-            </UPopover>
         </div>
-
-        <div
-            class="border-b-3 border-primary/50 pb-2 sidenav-header-separator"
-        ></div>
 
         <!-- Rename modal -->
         <UModal
@@ -344,9 +306,25 @@ import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import { useIcon } from '~/composables/useIcon';
+import type { Project } from '~/db';
+import type { ProjectEntry, ProjectEntryKind } from '~/utils/projects/normalizeProjectData';
+import type { UnifiedSidebarItem } from '~/types/sidebar';
 
-const iconView = useIcon('ui.view');
-const iconViewOff = useIcon('ui.view_off');
+type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
+type RenameTarget =
+    | UnifiedSidebarItem
+    | { id: string; title?: string; kind?: 'chat' | 'doc' }
+    | { projectId: string; entryId: string; kind: ProjectEntryKind }
+    | { docId: string };
+type AddToProjectRequest = {
+    threadId: string | null;
+    documentId: string | null;
+    mode: 'select' | 'create';
+    selectedProjectId: string | null;
+    newProjectName: string;
+    newProjectDescription: string;
+};
+
 const iconEdit = useIcon('ui.edit');
 const iconFolder = useIcon('sidebar.folder');
 const iconLoading = useIcon('ui.loading');
@@ -362,7 +340,7 @@ const props = defineProps<{
         chats: boolean;
         docs: boolean;
     };
-    projects: any[];
+    projects: SidebarProject[];
 }>();
 
 const emit = defineEmits<{
@@ -370,86 +348,65 @@ const emit = defineEmits<{
     (e: 'update:activeSections', value: typeof props.activeSections): void;
     (e: 'new-chat'): void;
     (e: 'new-document', initial?: { title?: string }): void;
-    (e: 'open-rename', target: any): void;
+    (e: 'open-rename', target: RenameTarget): void;
     (e: 'open-rename-project', projectId: string): void;
-    (e: 'add-to-project', thread: any): void;
-    (e: 'add-document-to-project', doc: any): void;
+    (e: 'add-to-project', payload: UnifiedSidebarItem | AddToProjectRequest): void;
+    (e: 'add-document-to-project', payload: UnifiedSidebarItem): void;
 }>();
 
 const { createProject: createProjectCrud, renameProject: renameProjectCrud } =
     useProjectsCrud();
 
 // Theme overrides for interactive elements
-const searchInputProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'input',
-        context: 'sidebar',
-        identifier: 'sidebar.search',
-        isNuxtUI: true,
-    });
+const searchInputOverrides = useThemeOverrides({
+    component: 'input',
+    context: 'sidebar',
+    identifier: 'sidebar.search',
+    isNuxtUI: true,
+});
 
+const searchClearButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.search-clear',
+    isNuxtUI: true,
+});
+
+const searchInputProps = computed(() => {
     // Merge theme UI with component-specific UI
-    const themeUi = (overrides.value as any)?.ui || {};
-    const componentUi = { leadingIcon: 'h-[20px] w-[20px]' };
+    const themeUi = (searchInputOverrides.value as any)?.ui || {};
+    const componentUi = {
+        base: 'rounded-[18px] border border-[color:var(--md-border-color)]/80 bg-[color:var(--md-surface)]/85 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] placeholder:text-[color:var(--md-on-surface-variant)]/70 focus:border-[color:var(--md-primary)]/40 focus:ring-2 focus:ring-[color:var(--md-primary)]/10',
+
+        trailing: 'pr-1',
+    };
     const mergedUi = { ...themeUi, ...componentUi };
 
     return {
-        icon: iconSearch.value,
+        leadingIcon: iconSearch.value,
+        trailing: false,
         size: 'md' as const,
         variant: 'outline' as const,
         placeholder: 'Search...',
-        ...(overrides.value as any),
+        ...(searchInputOverrides.value as any),
         ui: mergedUi,
     };
 });
 
 const searchClearButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.search-clear',
-        isNuxtUI: true,
-    });
     return {
         color: 'neutral' as const,
         variant: 'subtle' as const,
         size: 'xs' as const,
         icon: iconClose.value,
-        ...(overrides.value as any),
+        ...(searchClearButtonOverrides.value as any),
     };
 });
 
-const filterButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.filter',
-        isNuxtUI: true,
-    });
-    return {
-        size: 'md' as const,
-        color: 'neutral' as const,
-        variant: 'ghost' as const,
-        icon: iconFilter.value,
-        square: true,
-        ...(overrides.value as any),
-    };
-});
-
-const filterItemButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.filter-item',
-        isNuxtUI: true,
-    });
-    return {
-        color: 'neutral' as const,
-        variant: 'ghost' as const,
-        size: 'sm' as const,
-        block: true,
-        ...(overrides.value as any),
-    };
+const shortcutHint = computed(() => {
+    if (!process.client || typeof navigator === 'undefined') return '⌘K';
+    const isApple = /(Mac|iPhone|iPad|iPod)/i.test(navigator.platform);
+    return isApple ? '⌘K' : 'Ctrl K';
 });
 
 const sidebarProjectSelectOverrides = useThemeOverrides({
@@ -477,20 +434,6 @@ const sidebarFormFieldProps = useThemeOverrides({
     context: 'sidebar',
     isNuxtUI: true,
 });
-
-// Section visibility (multi-select) defaults to all on
-const filterItems = [
-    { label: 'Projects', key: 'projects' as const },
-    { label: 'Chats', key: 'chats' as const },
-    { label: 'Docs', key: 'docs' as const },
-] as const;
-
-const activeSections = computed(() => props.activeSections);
-
-function toggleSection(v: 'projects' | 'chats' | 'docs') {
-    const next = { ...props.activeSections, [v]: !props.activeSections[v] };
-    emit('update:activeSections', next);
-}
 
 // Direct focus support for external callers
 const searchInputWrapper = ref<any | null>(null);
@@ -527,7 +470,7 @@ const renameModalProps = createSidebarModalProps('sidebar.rename', {
     ui: { footer: 'justify-end' },
 });
 
-async function openRename(target: any) {
+async function openRename(target: RenameTarget) {
     emit('open-rename', target);
 }
 
@@ -643,11 +586,11 @@ const addToProjectModalProps = createSidebarModalProps(
     }
 );
 
-function openAddToProject(thread: any) {
+function openAddToProject(thread: UnifiedSidebarItem) {
     emit('add-to-project', thread);
 }
 
-function openAddDocumentToProject(doc: any) {
+function openAddDocumentToProject(doc: UnifiedSidebarItem) {
     emit('add-document-to-project', doc);
 }
 

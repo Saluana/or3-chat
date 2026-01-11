@@ -12,21 +12,45 @@ export default defineNuxtPlugin(() => {
     const { registerSidebarPage } = useSidebarPages();
     const icon = useIcon('sidebar.page.messages');
 
-    // Register the home page with the sidebar pages registry
-    const unregister = registerSidebarPage({
+    // Register the home page
+    const unregisterHome = registerSidebarPage({
         id: 'sidebar-home',
         label: 'Home',
         icon: icon.value,
         order: 0,
-        keepAlive: true, // Keep home page alive for better UX
+        keepAlive: true,
         usesDefaultHeader: true,
         component: () => import('~/components/sidebar/SidebarHomePage.vue'),
+    });
+
+    // Register Chats-only page
+    const unregisterChats = registerSidebarPage({
+        id: 'sidebar-chats',
+        label: 'Chats',
+        icon: useIcon('sidebar.page.messages').value,
+        order: 10,
+        keepAlive: true,
+        usesDefaultHeader: true,
+        component: () => import('~/components/sidebar/SidebarChatsPage.vue'),
+    });
+
+    // Register Docs-only page
+    const unregisterDocs = registerSidebarPage({
+        id: 'sidebar-docs',
+        label: 'Docs',
+        icon: useIcon('sidebar.note').value,
+        order: 20,
+        keepAlive: true,
+        usesDefaultHeader: true,
+        component: () => import('~/components/sidebar/SidebarDocsPage.vue'),
     });
 
     // Handle HMR cleanup
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
-            unregister();
+            unregisterHome();
+            unregisterChats();
+            unregisterDocs();
         });
     }
 });

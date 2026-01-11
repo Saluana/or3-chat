@@ -399,13 +399,20 @@ export async function buildOpenRouterMessages(
             if (looksLocal) {
                 try {
                     const { getFileMeta } = await import('~/db/files');
-                    const meta = (await getFileMeta(img.hash).catch(
-                        () => null
-                    )) as { mime?: string } | null;
+                    const meta = await getFileMeta(img.hash).catch(() => null);
+                    const metaMime =
+                        typeof meta?.mime_type === 'string'
+                            ? meta.mime_type
+                            : typeof (meta as { mime?: string } | null)?.mime ===
+                              'string'
+                            ? (meta as { mime?: string }).mime
+                            : typeof (meta as { mimeType?: string } | null)
+                                  ?.mimeType === 'string'
+                            ? (meta as { mimeType?: string }).mimeType
+                            : null;
                     if (
-                        meta &&
-                        typeof meta.mime === 'string' &&
-                        meta.mime.startsWith('image/')
+                        meta?.kind === 'image' ||
+                        (metaMime && metaMime.startsWith('image/'))
                     ) {
                         isImage = true;
                     }

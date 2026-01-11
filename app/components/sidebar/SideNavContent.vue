@@ -34,29 +34,22 @@
             <div
                 id="nav-scroll-area"
                 ref="scrollAreaRef"
-                class="flex-1 min-h-0 h-full px-2 flex flex-col gap-3 overflow-hidden"
+                class="flex-1 min-h-0 flex flex-col overflow-hidden"
             >
                 <!-- Dynamic page renderer -->
                 <Suspense>
                     <template #default>
-                        <KeepAlive include="sidebar-home">
-                            <component
-                                id="page-keepalive"
-                                v-if="activePageDef?.keepAlive"
-                                :is="activePageComponent"
-                                :key="`keepalive-${activePageId}`"
-                                v-bind="activePageProps"
-                                v-on="forwardedEvents"
-                            />
-                            <component
-                                id="page-no-keepalive"
-                                v-else
-                                :is="activePageComponent"
-                                :key="`no-keepalive-${activePageId}`"
-                                v-bind="activePageProps"
-                                v-on="forwardedEvents"
-                            />
-                        </KeepAlive>
+                        <div class="flex-1 min-h-0 flex flex-col">
+                            <KeepAlive :include="keepAliveInclude">
+                                <component
+                                    id="page-keepalive"
+                                    :is="activePageComponent"
+                                    :key="activePageId"
+                                    v-bind="activePageProps"
+                                    v-on="forwardedEvents"
+                                />
+                            </KeepAlive>
+                        </div>
                     </template>
                     <template #fallback>
                         <div
@@ -114,8 +107,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, shallowRef, type Component } from 'vue';
+import { ref, computed, type Component } from 'vue';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
+import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import {
     provideSidebarEnvironment,
     createSidebarMultiPaneApi,
@@ -164,11 +158,12 @@ const props = defineProps<{
 const emit = defineEmits([
     'update:sidebar-query',
     'update:active-sections',
-    'update:expanded-projects',
+    'update:expandedProjects',
     'update:active-thread-ids',
     'update:active-document-ids',
     'new-chat',
     'new-document',
+    'new-project',
     'open-rename',
     'open-rename-project',
     'add-to-project',
@@ -191,25 +186,23 @@ const emit = defineEmits([
     'add-document-to-project-root',
     'sidebar-footer-action',
 ]);
-
 // Get multi-pane API from the instance initialised in PageShell
-const multiPaneApiRef = shallowRef<ReturnType<typeof useMultiPane> | null>(
-    (globalThis as any).__or3MultiPaneApi ?? null
-);
+type MultiPaneGlobals = typeof globalThis & {
+    __or3MultiPaneApi?: ReturnType<typeof useMultiPane> | null;
+};
 
-if (!multiPaneApiRef.value && import.meta.dev) {
-    console.warn(
-        '[SideNavContent] Waiting for __or3MultiPaneApi initialization'
-    );
-}
+const multiPaneApi = import.meta.client
+    ? (globalThis as MultiPaneGlobals).__or3MultiPaneApi ?? null
+    : null;
 
-const sidebarMultiPaneApi = multiPaneApiRef.value
-    ? createSidebarMultiPaneApi(multiPaneApiRef.value)
+const sidebarMultiPaneApi = multiPaneApi
+    ? createSidebarMultiPaneApi(multiPaneApi)
     : null;
 
 // Get active page state
 const { activePageId, activePageDef, setActivePage, resetToDefault } =
     useActiveSidebarPage();
+const { listSidebarPages } = useSidebarPages();
 
 const projectsRef = computed(() => props.projects);
 const threadsRef = computed(() => props.displayThreads);
@@ -223,20 +216,19 @@ const activeDocumentIdsRef = computed(() => props.activeDocumentIds);
 const footerActionsRef = computed(() => props.sidebarFooterActions);
 
 // Footer action button theme props
-const footerActionButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.footer-action',
-        isNuxtUI: true,
-    });
-    return {
-        size: 'xs' as const,
-        variant: 'ghost' as const,
-        class: 'pointer-events-auto',
-        ...(overrides.value as any),
-    };
+const footerActionOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.footer-action',
+    isNuxtUI: true,
 });
+
+const footerActionButtonProps = computed(() => ({
+    size: 'xs' as const,
+    variant: 'ghost' as const,
+    class: 'pointer-events-auto',
+    ...(footerActionOverrides.value as any),
+}));
 
 // Create environment for child components
 const environment: SidebarEnvironment = {
@@ -261,8 +253,7 @@ const environment: SidebarEnvironment = {
     getActiveSections: () => activeSectionsRef,
     setActiveSections: (sections) => emit('update:active-sections', sections),
     getExpandedProjects: () => expandedProjectsRef,
-    setExpandedProjects: (projects) =>
-        emit('update:expanded-projects', projects),
+    setExpandedProjects: (projects) => emit('update:expandedProjects', projects),
     getActiveThreadIds: () => activeThreadIdsRef,
     setActiveThreadIds: (ids) => emit('update:active-thread-ids', ids),
     getActiveDocumentIds: () => activeDocumentIdsRef,
@@ -291,6 +282,15 @@ const activePageComponent = computed(() => {
     return activePageDef.value?.component || SidebarHomePage;
 });
 
+const keepAliveInclude = computed(() =>
+    listSidebarPages.value
+        .filter((page) => page.keepAlive)
+        .map((page) => {
+            const componentName = (page.component as { name?: string })?.name;
+            return componentName ?? page.id;
+        })
+);
+
 // Props to pass to active page
 const activePageProps = computed(() => {
     const pageControlProps = {
@@ -308,18 +308,22 @@ const activePageProps = computed(() => {
         };
     }
 
-    // For other pages, pass minimal props + page controls
+    // For chats/docs pages, pass required IDs
     return {
         ...pageControlProps,
+        activeThreadIds: props.activeThreadIds,
+        activeDocumentIds: props.activeDocumentIds,
     };
 });
 
 // Forward events from active page to parent
 const forwardedEvents = computed(() => {
-    const events: Record<string, (payload: any) => void> = {};
-
-    // Forward all existing events
-    const eventNames = [
+    const forwardedEventNames = [
+        'new-chat',
+        'new-document',
+        'new-project',
+        'update:expandedProjects',
+        'add-to-project',
         'add-chat-to-project',
         'add-document-to-project',
         'rename-project',
@@ -338,10 +342,14 @@ const forwardedEvents = computed(() => {
         'add-document-to-project-from-list',
         'add-document-to-project-root',
         'sidebar-footer-action',
-    ];
+    ] as const;
 
-    eventNames.forEach((eventName) => {
-        events[eventName] = (payload: any) => emit(eventName as any, payload);
+    type ForwardedEventName = (typeof forwardedEventNames)[number];
+    const events: Record<ForwardedEventName, (payload?: unknown) => void> =
+        {} as Record<ForwardedEventName, (payload?: unknown) => void>;
+
+    forwardedEventNames.forEach((eventName) => {
+        events[eventName] = (payload?: unknown) => emit(eventName, payload);
     });
 
     return events;

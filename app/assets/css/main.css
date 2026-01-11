@@ -28,26 +28,25 @@
 /* Font setup: body uses VT323, headings use Press Start 2P */
 :root {
 	/* Dynamic current font choices (updated by theme settings) */
-	--app-font-sans-current: var(
-		--font-sans,
-		"VT323",
-		ui-sans-serif,
-		system-ui,
-		sans-serif
-	);
-	--app-font-heading-current: var(
-		--font-heading,
-		"Press Start 2P",
-		ui-sans-serif,
-		system-ui,
-		sans-serif
-	);
-    --ui-radius: 3px;
+	--app-font-sans-current: var(--font-sans,
+			"VT323",
+			ui-sans-serif,
+			system-ui,
+			sans-serif);
+	--app-font-heading-current: var(--font-heading,
+			"Press Start 2P",
+			ui-sans-serif,
+			system-ui,
+			sans-serif);
+	--ui-radius: 3px;
 
 	/* Theme customization variables (defaults mirror shipped design) */
-	--app-font-size-root: 20px; /* base font size */
-	--app-font-weight-root: 400; /* base font weight */
-	--app-icon-size-base: 20px; /* default icon font size */
+	--app-font-size-root: 20px;
+	/* base font size */
+	--app-font-weight-root: 400;
+	/* base font weight */
+	--app-icon-size-base: 20px;
+	/* default icon font size */
 	/* Content background layer 1 */
 	--app-content-bg-1: none;
 	--app-content-bg-1-opacity: 1;
@@ -63,45 +62,42 @@
 }
 
 .font-ps2 {
-	font-family: var(
-		--font-heading,
-		"Press Start 2P",
-		ui-sans-serif,
-		system-ui,
-		sans-serif
-	) !important;
+	font-family: var(--font-heading,
+			"Press Start 2P",
+			ui-sans-serif,
+			system-ui,
+			sans-serif) !important;
 }
 
 .font-vt323 {
-	font-family: var(
-		--font-sans,
-		"VT323",
-		ui-sans-serif,
-		system-ui,
-		sans-serif
-	) !important;
+	font-family: var(--font-sans,
+			"VT323",
+			ui-sans-serif,
+			system-ui,
+			sans-serif) !important;
 }
 
-html, body {
-        font-family: var(--app-font-sans-current, var(--font-sans)) !important;
-    font-size: var(--app-font-size-root, 20px);
-    font-weight: var(--app-font-weight-root, 400);
-    height: 100%;
-    min-height: 100%;
-    overscroll-behavior: none;
+html,
+body {
+	font-family: var(--app-font-sans-current, var(--font-sans)) !important;
+	font-size: var(--app-font-size-root, 20px);
+	font-weight: var(--app-font-weight-root, 400);
+	height: 100%;
+	min-height: 100%;
+	overscroll-behavior: none;
 }
 
 body {
-        overflow: hidden;
-    background-color: var(--md-surface);
-    touch-action: pan-y;
+	overflow: hidden;
+	background-color: var(--md-surface);
+	touch-action: pan-y;
 }
 
 html,
 body,
 #__nuxt,
-#__nuxt > div {
-        height: 100%;
+#__nuxt>div {
+	height: 100%;
 }
 
 /* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
@@ -112,19 +108,30 @@ body,
 
 /* Hide scrollbar but keep scrolling (WebKit + Firefox) */
 .scrollbar-hidden {
-	scrollbar-width: none; /* Firefox */
-	-ms-overflow-style: none; /* IE/Edge legacy */
+	scrollbar-width: none;
+	/* Firefox */
+	-ms-overflow-style: none;
+	/* IE/Edge legacy */
 }
+
 .scrollbar-hidden::-webkit-scrollbar {
 	width: 0;
 	height: 0;
 }
 
-h1, h2, h3, h4, h5, h6, .font-heading {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.font-heading {
 	font-family: var(--app-font-heading-current, var(--font-heading)) !important;
 }
 
-.iconify, .nui-icon, .ui-icon {
+.iconify,
+.nui-icon,
+.ui-icon {
 	font-size: var(--app-icon-size-base, 20px);
 	line-height: 1;
 }
@@ -146,38 +153,70 @@ html {
 	width: 8px;
 	height: 8px;
 }
+
 *::-webkit-scrollbar-track {
 	background: transparent;
 	border-radius: 9999px;
 }
+
 *::-webkit-scrollbar-thumb {
 	background: var(--md-primary);
 	border-radius: 9999px;
-	border: 2px solid transparent; /* creates padding so the thumb appears thinner */
+	border: 2px solid transparent;
+	/* creates padding so the thumb appears thinner */
 	background-clip: padding-box;
 }
+
 *::-webkit-scrollbar-thumb:hover {
 	background: color-mix(in oklab, var(--md-primary) 85%, black);
 }
-*::-webkit-scrollbar-corner { background: transparent; }
+
+*::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+/* Sidebar scrollbar: auto-hide (only visible on hover) */
+.sidebar-scroll.or3-scroll {
+	scrollbar-width: thin;
+	scrollbar-color: transparent transparent;
+	scrollbar-gutter: stable;
+	transition: scrollbar-color 0.2s ease;
+}
+
+.sidebar-scroll.or3-scroll:hover {
+	scrollbar-color: var(--md-primary) transparent;
+}
+
+.sidebar-scroll.or3-scroll::-webkit-scrollbar-thumb {
+	background: transparent;
+	transition: background 0.2s ease;
+}
+
+.sidebar-scroll.or3-scroll:hover::-webkit-scrollbar-thumb {
+	background: var(--md-primary);
+}
+
+.sidebar-scroll.or3-scroll:hover::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--md-primary) 85%, black);
+}
 
 /* Hardcoded header pattern repeating horizontally */
 .header-pattern-flipped {
-    background-color: var(--md-surface-variant);
-    background-image: var(--app-header-gradient, none);
-    rotate: 180deg;
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
+	background-color: var(--md-surface-variant);
+	background-image: var(--app-header-gradient, none);
+	rotate: 180deg;
+	background-repeat: repeat-x;
+	background-position: left center;
+	background-size: auto 100%;
 }
 
 /* Hardcoded header pattern repeating horizontally */
 .header-pattern {
-    background-color: var(--md-surface-variant);
-    background-image: var(--app-header-gradient, none);
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
+	background-color: var(--md-surface-variant);
+	background-image: var(--app-header-gradient, none);
+	background-repeat: repeat-x;
+	background-position: left center;
+	background-size: auto 100%;
 }
 
 /* Typography plugin sets its own strong color; ensure dark mode bold text uses on-surface token */
@@ -187,11 +226,51 @@ html {
 }
 
 .hljs {
-	background: transparent !important; /* override highlight.js default bg so it works in dark mode */
+	background: transparent !important;
+	/* override highlight.js default bg so it works in dark mode */
 }
 
 .center-it {
 	display: flex;
 	justify-content: center;
 	align-items: center;
+}
+
+/* Sidebar item entry animation (fade + subtle slide) */
+@keyframes sidebar-item-enter {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.animate-sidebar-item-enter {
+	animation: sidebar-item-enter 200ms ease-out both;
+}
+
+/* Sidebar item exit animation (for collapse) */
+@keyframes sidebar-item-exit {
+	from {
+		opacity: 1;
+		max-height: 60px;
+		margin-bottom: 2px;
+	}
+
+	to {
+		opacity: 0;
+		max-height: 0;
+		margin-bottom: 0;
+		padding-top: 0;
+		padding-bottom: 0;
+	}
+}
+
+.is-exiting {
+	animation: sidebar-item-exit 200ms ease-out forwards;
+	overflow: hidden;
 }

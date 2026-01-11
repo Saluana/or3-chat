@@ -6,14 +6,13 @@ import {
     mockSidebarComposables,
     setupSidebarTestEnvironment,
 } from '../../../../tests/utils/sidebar-test-helpers';
-import { provideSidebarEnvironment } from '~/composables/sidebar/useSidebarEnvironment';
 
 // Setup test environment
 setupSidebarTestEnvironment();
 mockSidebarComposables();
 
-// Mock the environment
-const mockEnvironment = createMockSidebarEnvironment();
+// Mock the environment (used by mocked composables)
+createMockSidebarEnvironment();
 
 // Minimal stubs for child components (focus is resize logic wiring)
 vi.mock('~/components/sidebar/SidebarVirtualList.vue', () => ({
@@ -64,14 +63,8 @@ describe('SideNavContent', () => {
                 resolvedSidebarSections: { top: [], main: [], bottom: [] },
             },
             global: {
-                plugins: [
-                    {
-                        install(app: any) {
-                            provideSidebarEnvironment(mockEnvironment);
-                        },
-                    },
-                ],
                 stubs: {
+                    ClientOnly: { template: '<div><slot /></div>' },
                     UIcon: true,
                     UButton: true,
                     UTooltip: true,
@@ -106,14 +99,8 @@ describe('SideNavContent', () => {
                     resolvedSidebarSections: { top: [], main: [], bottom: [] },
                 },
                 global: {
-                    plugins: [
-                        {
-                            install(app: any) {
-                                provideSidebarEnvironment(mockEnvironment);
-                            },
-                        },
-                    ],
                     stubs: {
+                        ClientOnly: { template: '<div><slot /></div>' },
                         UIcon: true,
                         UButton: true,
                         UTooltip: true,
@@ -154,14 +141,8 @@ describe('SideNavContent', () => {
                     resolvedSidebarSections: { top: [], main: [], bottom: [] },
                 },
                 global: {
-                    plugins: [
-                        {
-                            install(app: any) {
-                                provideSidebarEnvironment(mockEnvironment);
-                            },
-                        },
-                    ],
                     stubs: {
+                        ClientOnly: { template: '<div><slot /></div>' },
                         UIcon: true,
                         UButton: true,
                         UTooltip: true,
@@ -202,14 +183,8 @@ describe('SideNavContent', () => {
                     resolvedSidebarSections: { top: [], main: [], bottom: [] },
                 },
                 global: {
-                    plugins: [
-                        {
-                            install(app: any) {
-                                provideSidebarEnvironment(mockEnvironment);
-                            },
-                        },
-                    ],
                     stubs: {
+                        ClientOnly: { template: '<div><slot /></div>' },
                         UIcon: true,
                         UButton: true,
                         UTooltip: true,
