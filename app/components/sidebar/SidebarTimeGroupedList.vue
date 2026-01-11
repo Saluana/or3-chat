@@ -148,6 +148,4 @@ const groupedItemsList = computed(() => {
 // Expose reset for parent (e.g. search changes or switch page)
 defineExpose({ reset });
 
-// Initial load
-loadMore();
 </script>

@@ -109,6 +109,7 @@
                                     >
                                     <UButton
                                         v-bind="removeEntryButtonProps"
+                                        class="whitespace-nowrap"
                                         @click.stop.prevent="
                                             emit('removeFromProject', {
                                                 projectId: item.parentId!,

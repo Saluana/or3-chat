@@ -31,6 +31,7 @@
             :resolved-sidebar-sections="resolvedSidebarSections"
             @update:sidebar-query="sidebarQuery = $event"
             @update:active-sections="activeSections = $event"
+            @update:expanded-projects="expandedProjects = $event"
             @new-chat="onNewChat"
             @new-document="openCreateDocumentModal"
             @open-rename="openRename"

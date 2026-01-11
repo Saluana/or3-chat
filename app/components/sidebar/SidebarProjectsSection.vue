@@ -23,7 +23,9 @@
                             :expanded="expandedProjectsSet.has(project.id)"
                             @toggle-expand="toggleProjectExpand(project.id)"
                             @add-chat="emit('add-chat-to-project', project.id)"
-                            @add-document="emit('add-document-to-project', project.id)"
+                            @add-document="
+                                emit('add-document-to-project-root', project.id)
+                            "
                             @rename="emit('rename-project', project.id)"
                             @delete="emit('delete-project', project.id)"
                         />
@@ -89,7 +91,7 @@ const iconFolder = useIcon('sidebar.new_folder');
 const emit = defineEmits<{
     (e: 'toggle-collapse'): void;
     (e: 'add-chat-to-project', id: string): void;
-    (e: 'add-document-to-project', id: string): void;
+    (e: 'add-document-to-project-root', id: string): void;
     (e: 'rename-project', id: string): void;
     (e: 'delete-project', id: string): void;
     (e: 'rename-entry', payload: any): void;
@@ -112,14 +114,14 @@ function toggleProjectExpand(id: string) {
 }
 
 function isProjectChildActive(child: any) {
-    if (child.kind === 'thread') {
+    if (child.kind === 'chat') {
         return props.activeThreadIds.includes(child.id);
     }
     return props.activeDocumentIds.includes(child.id);
 }
 
 function onProjectChildSelect(child: any, projectId: string) {
-    if (child.kind === 'thread') {
+    if (child.kind === 'chat') {
         emit('select-thread', child.id);
     } else {
         emit('select-document', child.id);

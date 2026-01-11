@@ -5,6 +5,7 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 type BaseModalProps = {
     class?: string;
     ui?: Record<string, unknown>;
+    content?: Record<string, unknown>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -32,12 +33,22 @@ export function createSidebarModalProps(
         const overrideUi = isRecord(overrideValue.ui)
             ? overrideValue.ui
             : undefined;
+        const overrideContent = isRecord(overrideValue.content)
+            ? overrideValue.content
+            : undefined;
 
         const rest = Object.fromEntries(
             Object.entries(overrideValue).filter(
-                ([key]) => key !== 'class' && key !== 'ui'
+                ([key]) => key !== 'class' && key !== 'ui' && key !== 'content'
             )
         );
+
+        const baseContent = isRecord(base.content) ? base.content : undefined;
+        const mergedContent: Record<string, unknown> = {
+            'aria-describedby': undefined,
+            ...(baseContent ?? {}),
+            ...(overrideContent ?? {}),
+        };
 
         const mergedUiSource: Record<string, unknown> = {
             ...(base.ui ?? {}),
@@ -47,6 +58,8 @@ export function createSidebarModalProps(
         const result: Record<string, unknown> = {
             ...rest,
         };
+
+        result.content = mergedContent;
 
         if (Object.keys(mergedUiSource).length > 0) {
             result.ui = mergedUiSource;

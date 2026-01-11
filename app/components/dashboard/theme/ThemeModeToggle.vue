@@ -47,6 +47,7 @@
         <UModal
             v-model:open="showResetModal"
             title="Reset Theme"
+            :content="{ 'aria-describedby': undefined }"
             :ui="{ content: 'z-[20]' }"
         >
             <template #body>

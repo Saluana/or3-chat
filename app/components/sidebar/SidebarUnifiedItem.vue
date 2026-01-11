@@ -3,7 +3,7 @@
         ref="el"
         role="button"
         tabindex="0"
-        class="w-full flex items-center gap-3 px-3 min-h-[56px] group relative transition-colors duration-200 rounded-[var(--md-border-radius)] mx-1"
+        class="w-full flex items-center gap-3 px-3 min-h-[56px] group relative transition-colors duration-200 rounded-[var(--md-border-radius)] cursor-pointer"
         :class="{
             'bg-[color:var(--md-primary)]/12 text-[color:var(--md-primary)]': active,
             'text-[color:var(--md-on-surface)] hover:bg-[var(--md-surface-hover)]': !active
@@ -40,7 +40,7 @@
                 
                 <!-- Time Label (Desktop) -->
                 <span 
-                    class="hidden sm:inline-block shrink-0 text-[11px] font-medium"
+                    class="hidden sm:inline-block shrink-0 text-[8px] opacity-60 font-medium"
                     :class="active ? 'text-[color:var(--md-primary)]/70' : 'text-[color:var(--md-on-surface-variant)]'"
                 >
                     {{ timeDisplay }}
@@ -50,14 +50,14 @@
             <div class="flex items-center justify-between gap-2 mt-0.5 h-4">
                 <div class="flex items-center gap-2 min-w-0">
                     <span 
-                        class="text-[11px] truncate"
+                        class="text-[10px] truncate opacity-60"
                         :class="active ? 'text-[color:var(--md-primary)]/60' : 'text-[color:var(--md-on-surface-variant)]'"
                     >
                         {{ item.type === 'thread' ? 'Chat' : (item.postType || 'Document') }}
                     </span>
                     <!-- Mobile Time -->
                     <span 
-                        class="sm:hidden text-[11px]"
+                        class="sm:hidden text-[8px] opacity-60"
                         :class="active ? 'text-[color:var(--md-primary)]/60' : 'text-[color:var(--md-on-surface-variant)]'"
                     >
                         • {{ timeDisplay }}

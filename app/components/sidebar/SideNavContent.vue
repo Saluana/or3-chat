@@ -158,7 +158,7 @@ const props = defineProps<{
 const emit = defineEmits([
     'update:sidebar-query',
     'update:active-sections',
-    'update:expanded-projects',
+    'update:expandedProjects',
     'update:active-thread-ids',
     'update:active-document-ids',
     'new-chat',
@@ -256,8 +256,7 @@ const environment: SidebarEnvironment = {
     getActiveSections: () => activeSectionsRef,
     setActiveSections: (sections) => emit('update:active-sections', sections),
     getExpandedProjects: () => expandedProjectsRef,
-    setExpandedProjects: (projects) =>
-        emit('update:expanded-projects', projects),
+    setExpandedProjects: (projects) => emit('update:expandedProjects', projects),
     getActiveThreadIds: () => activeThreadIdsRef,
     setActiveThreadIds: (ids) => emit('update:active-thread-ids', ids),
     getActiveDocumentIds: () => activeDocumentIdsRef,
@@ -325,6 +324,7 @@ const forwardedEvents = computed(() => {
     const eventNames = [
         'new-chat',
         'new-document',
+        'update:expandedProjects',
         'add-chat-to-project',
         'add-document-to-project',
         'rename-project',

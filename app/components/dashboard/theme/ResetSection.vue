@@ -40,6 +40,7 @@
         <UModal
             v-model:open="showResetModal"
             :title="modalTitle"
+            :content="{ 'aria-describedby': undefined }"
             :ui="{ content: 'z-[20]' }"
         >
             <template #body>

@@ -1,7 +1,7 @@
 <template>
     <div class="w-full h-full flex items-center justify-center px-4 py-8">
         <div
-            class="w-full max-w-[380px] rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)]/60 bg-[color:var(--md-surface)]/80 backdrop-blur-sm px-5 py-6 text-center shadow-[0_8px_22px_rgba(15,23,42,0.08)]"
+            class="w-full max-w-[380px] px-5 py-6 text-center"
         >
             <div
                 class="mx-auto w-12 h-12 rounded-full bg-[color:var(--md-primary)]/12 text-[color:var(--md-primary)] flex items-center justify-center"

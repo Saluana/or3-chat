@@ -51,8 +51,8 @@
                         @add-chat-to-project="
                             (id) => emit('add-chat-to-project', id)
                         "
-                        @add-document-to-project="
-                            (id) => emit('add-document-to-project', id)
+                        @add-document-to-project-root="
+                            (id) => emit('add-document-to-project-root', id)
                         "
                         @rename-project="(id) => emit('rename-project', id)"
                         @delete-project="(id) => emit('delete-project', id)"
@@ -170,7 +170,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue';
+import { ref, computed, reactive, watch } from 'vue';
 import type { Component } from 'vue';
 
 // Component name for KeepAlive matching
@@ -271,14 +271,16 @@ function toggleGroup(groupKey: string) {
 }
 
 // Paginated items
-const { items, loading, loadMore } = usePaginatedSidebarItems();
+const sidebarQuery = computed(() => props.sidebarQuery.trim());
+const { items, loading, reset } = usePaginatedSidebarItems({
+    query: sidebarQuery,
+});
 
 const iconChats = useIcon('sidebar.page.messages');
 const iconDocs = useIcon('sidebar.note');
 
-// Initial load
-onMounted(() => {
-    loadMore();
+watch(sidebarQuery, () => {
+    void reset();
 });
 
 // All active IDs for highlighting

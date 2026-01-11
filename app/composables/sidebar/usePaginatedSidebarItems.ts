@@ -1,4 +1,5 @@
-import { ref, shallowRef, type Ref } from 'vue';
+import { ref, shallowRef, type Ref, onMounted, onUnmounted } from 'vue';
+import { liveQuery, type Subscription } from 'dexie';
 import { db, type Thread, type Post } from '~/db';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 
@@ -40,44 +41,52 @@ export function usePaginatedSidebarItems(options: {
     const items = shallowRef<UnifiedSidebarItem[]>([]);
     const hasMore = ref(true);
     const loading = ref(false);
-    const cursor = ref<number | null>(null);
+    const targetCount = ref(PAGE_SIZE);
+    let subscription: Subscription | null = null;
 
     const filterType = options.type || 'all';
     const searchQuery = options.query;
 
     /**
-     * Fetch items older than the current cursor
+     * Fetch the latest items up to a target count
      */
-    async function fetchItemsBefore(timestamp: number | null, limit: number): Promise<UnifiedSidebarItem[]> {
-        const ts = timestamp ?? Infinity;
+    async function fetchItems(
+        limit: number
+    ): Promise<{ items: UnifiedSidebarItem[]; hasMore: boolean }> {
         const query = searchQuery?.value?.toLowerCase() || '';
+        const batchLimit = limit + 1;
         
         let threadsBatch: Thread[] = [];
         let docsBatch: Post[] = [];
 
         // Fetch threads if requested
         if (filterType === 'all' || filterType === 'thread') {
-            let threadCollection = db.threads
-                .where('updated_at')
-                .below(ts);
-            
-            threadsBatch = await threadCollection
+            threadsBatch = await db.threads
+                .orderBy('updated_at')
                 .reverse()
-                .filter(t => !t.deleted && (query === '' || !!t.title?.toLowerCase().includes(query)))
-                .limit(limit)
+                .filter(
+                    (t) =>
+                        !t.deleted &&
+                        (query === '' ||
+                            !!t.title?.toLowerCase().includes(query))
+                )
+                .limit(batchLimit)
                 .toArray();
         }
 
         // Fetch docs if requested
         if (filterType === 'all' || filterType === 'document') {
-            let docCollection = db.posts
-                .where('postType')
-                .equals('doc');
-            
-            docsBatch = await docCollection
-                .and(p => p.updated_at < ts && !p.deleted && (query === '' || !!p.title?.toLowerCase().includes(query)))
+            docsBatch = await db.posts
+                .orderBy('updated_at')
                 .reverse()
-                .limit(limit)
+                .filter(
+                    (p) =>
+                        p.postType === 'doc' &&
+                        !p.deleted &&
+                        (query === '' ||
+                            !!p.title?.toLowerCase().includes(query))
+                )
+                .limit(batchLimit)
                 .toArray();
         }
 
@@ -89,8 +98,30 @@ export function usePaginatedSidebarItems(options: {
 
         unified.sort((a, b) => b.updatedAt - a.updatedAt);
 
+        const hasMore = unified.length > limit;
+
         // Take top N
-        return unified.slice(0, limit);
+        return { items: unified.slice(0, limit), hasMore };
+    }
+
+    function startSubscription() {
+        const shouldShowLoading = items.value.length === 0;
+        if (shouldShowLoading) loading.value = true;
+        subscription?.unsubscribe();
+        subscription = liveQuery(() => fetchItems(targetCount.value)).subscribe({
+            next: (result) => {
+                items.value = result.items;
+                hasMore.value = result.hasMore;
+                loading.value = false;
+            },
+            error: (error) => {
+                console.error(
+                    '[usePaginatedSidebarItems] liveQuery error:',
+                    error
+                );
+                loading.value = false;
+            },
+        });
     }
 
     /**
@@ -98,38 +129,26 @@ export function usePaginatedSidebarItems(options: {
      */
     async function loadMore() {
         if (loading.value || !hasMore.value) return;
-
-        loading.value = true;
-        try {
-            const nextBatch = await fetchItemsBefore(cursor.value, PAGE_SIZE);
-            
-            if (nextBatch.length < PAGE_SIZE) {
-                hasMore.value = false;
-            }
-
-            if (nextBatch.length > 0) {
-                items.value = [...items.value, ...nextBatch];
-                const lastItem = nextBatch[nextBatch.length - 1];
-                if (lastItem) cursor.value = lastItem.updatedAt;
-            } else {
-                hasMore.value = false;
-            }
-        } catch (error) {
-            console.error('[usePaginatedSidebarItems] Error loading items:', error);
-        } finally {
-            loading.value = false;
-        }
+        targetCount.value += PAGE_SIZE;
+        startSubscription();
     }
 
     /**
      * Reset pagination state and reload from start
      */
     async function reset() {
-        items.value = [];
         hasMore.value = true;
-        cursor.value = null;
-        await loadMore();
+        targetCount.value = PAGE_SIZE;
+        startSubscription();
     }
+
+    onMounted(() => {
+        startSubscription();
+    });
+
+    onUnmounted(() => {
+        subscription?.unsubscribe();
+    });
 
     return {
         items,
