@@ -209,7 +209,7 @@ defineOptions({
 });
 import type { Post, Project, Thread } from '~/db';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
-import { Or3Scroll } from 'or3-scroll';
+import { Or3Scroll, type Or3ScrollRef } from 'or3-scroll';
 import { usePaginatedSidebarItems } from '~/composables/sidebar/usePaginatedSidebarItems';
 import {
     computeTimeGroup,
@@ -295,7 +295,7 @@ const emit = defineEmits([
     'update:expandedProjects',
 ]);
 
-const scrollAreaRef = ref<InstanceType<typeof Or3Scroll> | null>(null);
+const scrollAreaRef = ref<Or3ScrollRef | null>(null);
 const bottomNavRef = ref<HTMLElement | null>(null);
 
 // Project state

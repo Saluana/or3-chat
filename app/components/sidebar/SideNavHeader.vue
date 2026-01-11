@@ -320,7 +320,7 @@ type AddToProjectRequest = {
     threadId: string | null;
     documentId: string | null;
     mode: 'select' | 'create';
-    selectedProjectId: string | null;
+    selectedProjectId: string | null | undefined;
     newProjectName: string;
     newProjectDescription: string;
 };
@@ -331,7 +331,6 @@ const iconLoading = useIcon('ui.loading');
 const iconNote = useIcon('sidebar.note');
 const iconSearch = useIcon('sidebar.search');
 const iconClose = useIcon('ui.close');
-const iconFilter = useIcon('ui.filter');
 
 const props = defineProps<{
     sidebarQuery: string;
@@ -403,12 +402,6 @@ const searchClearButtonProps = computed(() => {
     };
 });
 
-const shortcutHint = computed(() => {
-    if (!process.client || typeof navigator === 'undefined') return '⌘K';
-    const isApple = /(Mac|iPhone|iPad|iPod)/i.test(navigator.platform);
-    return isApple ? '⌘K' : 'Ctrl K';
-});
-
 const sidebarProjectSelectOverrides = useThemeOverrides({
     component: 'selectmenu',
     context: 'sidebar',
@@ -470,15 +463,12 @@ const renameModalProps = createSidebarModalProps('sidebar.rename', {
     ui: { footer: 'justify-end' },
 });
 
-async function openRename(target: RenameTarget) {
-    emit('open-rename', target);
-}
-
 async function saveRename() {
+    if (!renameId.value) return;
     emit('open-rename', {
         id: renameId.value,
         title: renameTitle.value,
-        kind: renameMetaKind.value,
+        kind: renameMetaKind.value ?? undefined,
     });
     showRenameModal.value = false;
     renameId.value = null;
@@ -497,10 +487,6 @@ const renameProjectModalProps = createSidebarModalProps(
         ui: { footer: 'justify-end' },
     }
 );
-
-async function openRenameProject(projectId: string) {
-    emit('open-rename-project', projectId);
-}
 
 async function saveRenameProject() {
     if (!renameProjectId.value) return;
@@ -532,11 +518,6 @@ const createProjectModalProps = createSidebarModalProps(
     }
 );
 
-function openCreateProject() {
-    showCreateProjectModal.value = true;
-    createProjectState.value = { name: '', description: '' };
-    createProjectErrors.value = {};
-}
 function closeCreateProject() {
     showCreateProjectModal.value = false;
 }
@@ -569,7 +550,7 @@ const addToProjectThreadId = ref<string | null>(null);
 // Support documents
 const addToProjectDocumentId = ref<string | null>(null);
 const addMode = ref<'select' | 'create'>('select');
-const selectedProjectId = ref<string | null>(null);
+const selectedProjectId = ref<string | undefined>(undefined);
 const newProjectName = ref('');
 const newProjectDescription = ref('');
 const addingToProject = ref(false);
@@ -625,11 +606,6 @@ const createDocumentModalProps = createSidebarModalProps(
     }
 );
 
-function openCreateDocumentModal() {
-    showCreateDocumentModal.value = true;
-    newDocumentState.value = { title: '' };
-    newDocumentErrors.value = {};
-}
 function closeCreateDocumentModal() {
     showCreateDocumentModal.value = false;
 }
