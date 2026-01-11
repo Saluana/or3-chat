@@ -39,24 +39,17 @@
                 <!-- Dynamic page renderer -->
                 <Suspense>
                     <template #default>
-                        <KeepAlive include="sidebar-home">
-                            <component
-                                id="page-keepalive"
-                                v-if="activePageDef?.keepAlive"
-                                :is="activePageComponent"
-                                :key="`keepalive-${activePageId}`"
-                                v-bind="activePageProps"
-                                v-on="forwardedEvents"
-                            />
-                            <component
-                                id="page-no-keepalive"
-                                v-else
-                                :is="activePageComponent"
-                                :key="`no-keepalive-${activePageId}`"
-                                v-bind="activePageProps"
-                                v-on="forwardedEvents"
-                            />
-                        </KeepAlive>
+                        <div class="flex-1 min-h-0 flex flex-col">
+                            <KeepAlive :include="keepAliveInclude">
+                                <component
+                                    id="page-keepalive"
+                                    :is="activePageComponent"
+                                    :key="activePageId"
+                                    v-bind="activePageProps"
+                                    v-on="forwardedEvents"
+                                />
+                            </KeepAlive>
+                        </div>
                     </template>
                     <template #fallback>
                         <div
@@ -116,6 +109,7 @@
 <script setup lang="ts">
 import { ref, computed, shallowRef, type Component } from 'vue';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
+import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import {
     provideSidebarEnvironment,
     createSidebarMultiPaneApi,
@@ -210,6 +204,7 @@ const sidebarMultiPaneApi = multiPaneApiRef.value
 // Get active page state
 const { activePageId, activePageDef, setActivePage, resetToDefault } =
     useActiveSidebarPage();
+const { listSidebarPages } = useSidebarPages();
 
 const projectsRef = computed(() => props.projects);
 const threadsRef = computed(() => props.displayThreads);
@@ -290,6 +285,12 @@ provideSidebarPageControls(injectedPageControls);
 const activePageComponent = computed(() => {
     return activePageDef.value?.component || SidebarHomePage;
 });
+
+const keepAliveInclude = computed(() =>
+    listSidebarPages.value
+        .filter((page) => page.keepAlive)
+        .map((page) => page.id)
+);
 
 // Props to pass to active page
 const activePageProps = computed(() => {

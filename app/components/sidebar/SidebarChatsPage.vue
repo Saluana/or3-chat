@@ -36,6 +36,11 @@ import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import SidebarTimeGroupedList from './SidebarTimeGroupedList.vue';
 
+// Component name for KeepAlive matching
+defineOptions({
+    name: 'sidebar-chats',
+});
+
 const props = defineProps<{
     activeThreadIds?: string[];
 }>();

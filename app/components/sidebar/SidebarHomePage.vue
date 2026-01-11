@@ -130,8 +130,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue';
+import { ref, computed, reactive, onMounted } from 'vue';
 import type { Component } from 'vue';
+
+// Component name for KeepAlive matching
+defineOptions({
+    name: 'sidebar-home',
+});
 import type { Post, Project } from '~/db';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { Or3Scroll } from 'or3-scroll';
@@ -139,12 +144,10 @@ import { usePaginatedSidebarItems } from '~/composables/sidebar/usePaginatedSide
 import {
     computeTimeGroup,
     getTimeGroupLabel,
-    formatTimeDisplay,
     type TimeGroup,
 } from '~/utils/sidebar/sidebarTimeUtils';
 import SidebarProjectsSection from './SidebarProjectsSection.vue';
 import SidebarTimeGroup from './SidebarTimeGroup.vue';
-import SidebarUnifiedItem from './SidebarUnifiedItem.vue';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 
@@ -223,10 +226,9 @@ function toggleGroup(groupKey: string) {
 }
 
 // Paginated items
-const { items, loading, hasMore, loadMore, reset } = usePaginatedSidebarItems();
+const { items, loading, loadMore } = usePaginatedSidebarItems();
 
 // Initial load
-import { onMounted } from 'vue';
 onMounted(() => {
     loadMore();
 });
@@ -236,14 +238,6 @@ const allActiveIds = computed(() => [
     ...props.activeThreadIds,
     ...props.activeDocumentIds,
 ]);
-
-function isActive(item: any) {
-    return allActiveIds.value.includes(item.id);
-}
-
-function formatTime(updatedAt: number, groupKey: TimeGroup) {
-    return formatTimeDisplay(updatedAt, groupKey);
-}
 
 // Group items by time
 const groupedItems = computed(() => {
