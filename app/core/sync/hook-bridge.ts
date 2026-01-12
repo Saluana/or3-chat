@@ -33,6 +33,8 @@ export class HookBridge {
     private db: Or3DB;
     private deviceId: string;
     private syncTransactions = new WeakMap<Transaction, boolean>();
+    private captureEnabled = true;
+    private hooksInstalled = false;
 
     constructor(db: Or3DB) {
         this.db = db;
@@ -43,31 +45,47 @@ export class HookBridge {
      * Start capturing writes to synced tables
      */
     start(): void {
+        if (this.hooksInstalled) {
+            this.captureEnabled = true;
+            return;
+        }
+
         const tableNames = SYNCED_TABLES as unknown as string[];
         for (const tableName of tableNames) {
             const table = this.db.table(tableName);
+            if (!table) {
+                console.warn(`[HookBridge] Skipping unknown table: ${tableName}`);
+                continue;
+            }
 
             // Hook: Creating (insert)
             table.hook('creating', (primKey, obj, transaction) => {
-                if (this.syncTransactions.get(transaction)) return;
+                if (!this.captureEnabled || this.syncTransactions.get(transaction)) return;
                 this.captureWrite(transaction, tableName, 'put', primKey, obj);
             });
 
             // Hook: Updating (modify)
             table.hook('updating', (modifications, primKey, obj, transaction) => {
-                if (this.syncTransactions.get(transaction)) return;
+                if (!this.captureEnabled || this.syncTransactions.get(transaction)) return;
                 const merged = { ...obj, ...modifications };
                 this.captureWrite(transaction, tableName, 'put', primKey, merged);
             });
 
             // Hook: Deleting
             table.hook('deleting', (primKey, obj, transaction) => {
-                if (this.syncTransactions.get(transaction)) return;
+                if (!this.captureEnabled || this.syncTransactions.get(transaction)) return;
                 this.captureWrite(transaction, tableName, 'delete', primKey, obj);
             });
-            // Note: Dexie hooks cannot be removed once added. We use captureEnabled
-            // flag to control whether writes are captured.
         }
+        this.hooksInstalled = true;
+        this.captureEnabled = true;
+    }
+
+    /**
+     * Stop capturing writes
+     */
+    stop(): void {
+        this.captureEnabled = false;
     }
 
     /**

@@ -182,7 +182,11 @@ export class FileTransferQueue {
         } catch (error) {
             const attempts = transfer.attempts + 1;
             const failed = attempts >= this.maxAttempts;
-            const message = error instanceof Error ? error.message : String(error);
+            const message = error instanceof Error 
+                ? error.message 
+                : typeof error === 'object' && error !== null && 'message' in error
+                    ? String((error as { message: unknown }).message)
+                    : String(error);
             await this.updateTransfer(transfer.id, {
                 state: failed ? 'failed' : 'queued',
                 attempts,
@@ -418,7 +422,7 @@ export class FileTransferQueue {
             }
         }
 
-        const blob = new Blob(chunks);
+        const blob = new Blob(chunks as BlobPart[]);
         return { blob, bytesTotal: contentLength || blob.size };
     }
 

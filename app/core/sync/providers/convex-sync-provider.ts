@@ -16,7 +16,7 @@ import type {
     PushResult,
     PendingOp,
 } from '~~/shared/sync/types';
-import { PullResponseSchema, SyncChangeSchema } from '~~/shared/sync/schemas';
+import { PullResponseSchema, SyncChangeSchema, PushResultSchema } from '~~/shared/sync/schemas';
 import { z } from 'zod';
 import type { Id } from '~~/convex/_generated/dataModel';
 
@@ -148,10 +148,18 @@ export function createConvexSyncProvider(): SyncProvider {
                 })),
             });
 
-            return {
+            // Validate response for consistency with pull()
+            const parsed = PushResultSchema.safeParse({
                 results: result.results,
                 serverVersion: result.serverVersion,
-            };
+            });
+
+            if (!parsed.success) {
+                console.error('[convex-sync] Invalid push response:', parsed.error);
+                throw new Error(`Invalid push response: ${parsed.error.message}`);
+            }
+
+            return parsed.data;
         },
 
         async updateCursor(scope: SyncScope, deviceId: string, version: number): Promise<void> {

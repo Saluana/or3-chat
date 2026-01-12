@@ -4,7 +4,9 @@ export type MemoryTable<T extends Record<string, unknown>> = {
     __rows: Map<string, T>;
     get: (id: string) => Promise<T | undefined>;
     put: (row: T) => Promise<void>;
+    add: (row: T) => Promise<string>;
     update: (id: string, patch: Partial<T>) => Promise<number>;
+    hook: (event: string, callback: Function) => void;
 };
 
 export function createMemoryTable<T extends Record<string, unknown>>(
@@ -12,10 +14,20 @@ export function createMemoryTable<T extends Record<string, unknown>>(
     initial: T[] = []
 ): MemoryTable<T> {
     const rows = new Map<string, T>();
+    const hooks = new Map<string, Function[]>();
+
     for (const row of initial) {
         const key = String(row[pkField]);
         rows.set(key, { ...row });
     }
+
+    const triggerHooks = (event: string, ...args: any[]) => {
+        const h = hooks.get(event) || [];
+        for (const cb of h) {
+            cb(...args);
+        }
+    };
+
     return {
         __rows: rows,
         async get(id: string) {
@@ -25,11 +37,33 @@ export function createMemoryTable<T extends Record<string, unknown>>(
             const key = String(row[pkField]);
             rows.set(key, { ...row });
         },
+        async add(row: T) {
+            const key = String(row[pkField] ?? crypto.randomUUID());
+            const newRow = { ...row, [pkField]: key } as T;
+            
+            // Mock transaction for HookBridge
+            const tx = {
+                table: (name: string) => {
+                    // This is a bit of a hack but needed for HookBridge to find pending_ops/tombstones
+                    // when called inside a hook. We'll rely on global mock DB for this.
+                    return (global as any).__MOCK_DB__?.table(name);
+                }
+            };
+
+            triggerHooks('creating', key, newRow, tx);
+            rows.set(key, newRow);
+            return key;
+        },
         async update(id: string, patch: Partial<T>) {
             const existing = rows.get(id);
             if (!existing) return 0;
-            rows.set(id, { ...existing, ...patch });
+            const updated = { ...existing, ...patch };
+            rows.set(id, updated);
             return 1;
+        },
+        hook(event: string, callback: Function) {
+            if (!hooks.has(event)) hooks.set(event, []);
+            hooks.get(event)!.push(callback);
         },
     };
 }
@@ -86,16 +120,22 @@ export function createPendingOpsTable(initial: PendingOp[] = []) {
 }
 
 export function createMockDb<T extends Record<string, unknown>>(tables: T) {
-    return {
+    const db = {
         ...tables,
         name: 'mock-db',
         table(name: string) {
-            return (tables as Record<string, unknown>)[name] ?? null;
+            return (tables as Record<string, any>)[name] ?? null;
         },
         async transaction(mode: string, tableNames: string[], callback: (tx: any) => Promise<any>) {
-            // Fake transaction just calls the callback with a mock transaction object
-            const tx = { mode, tableNames };
+            const tx = {
+                mode,
+                tableNames,
+                table: (name: string) => db.table(name),
+            };
             return callback(tx);
         },
     };
+    // Expose globally for the 'add' hook hack
+    (global as any).__MOCK_DB__ = db;
+    return db;
 }
