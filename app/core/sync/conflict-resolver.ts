@@ -33,15 +33,23 @@ export class ConflictResolver {
      * Apply a batch of remote changes
      */
     async applyChanges(changes: SyncChange[]): Promise<ApplyResult> {
-        const hookBridge = getHookBridge(this.db);
         const result: ApplyResult = {
             applied: 0,
             skipped: 0,
             conflicts: 0,
         };
 
-        // Apply with capture suppression to avoid re-syncing
-        await hookBridge.withRemoteSuppression(async () => {
+        if (changes.length === 0) return result;
+
+        // Collect unique table names for the transaction
+        const tableNames = Array.from(new Set(changes.map((c) => c.tableName)));
+        const tables = [...tableNames, 'tombstones'];
+
+        // Apply in a single transaction for atomicity and performance
+        await this.db.transaction('rw', tables, async (tx) => {
+            // Mark this specific transaction as a sync transaction
+            getHookBridge(this.db).markSyncTransaction(tx);
+
             for (const change of changes) {
                 const changeResult = await this.applyChange(change);
                 result.applied += changeResult.applied ? 1 : 0;

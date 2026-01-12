@@ -8,7 +8,7 @@ const hookState = vi.hoisted(() => ({
 }));
 
 const hookBridgeState = vi.hoisted(() => ({
-    withRemoteSuppression: vi.fn(async <T>(fn: () => Promise<T>) => fn()),
+    markSyncTransaction: vi.fn(),
 }));
 
 vi.mock('~/core/hooks/useHooks', () => ({
@@ -19,7 +19,7 @@ vi.mock('~/core/hooks/useHooks', () => ({
 
 vi.mock('~/core/sync/hook-bridge', () => ({
     getHookBridge: () => ({
-        withRemoteSuppression: hookBridgeState.withRemoteSuppression,
+        markSyncTransaction: hookBridgeState.markSyncTransaction,
     }),
 }));
 
@@ -66,7 +66,7 @@ function buildChange({
 describe('ConflictResolver', () => {
     beforeEach(() => {
         hookState.doAction.mockClear();
-        hookBridgeState.withRemoteSuppression.mockClear();
+        hookBridgeState.markSyncTransaction.mockClear();
     });
 
     it('applies remote put when local record is missing', async () => {

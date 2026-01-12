@@ -22,7 +22,7 @@ const hookState = vi.hoisted(() => ({
 }));
 
 const hookBridgeState = vi.hoisted(() => ({
-    withRemoteSuppression: vi.fn(async <T>(fn: () => Promise<T>) => fn()),
+    markSyncTransaction: vi.fn(),
 }));
 
 vi.mock('~/core/hooks/useHooks', () => ({
@@ -33,7 +33,7 @@ vi.mock('~/core/hooks/useHooks', () => ({
 
 vi.mock('~/core/sync/hook-bridge', () => ({
     getHookBridge: () => ({
-        withRemoteSuppression: hookBridgeState.withRemoteSuppression,
+        markSyncTransaction: hookBridgeState.markSyncTransaction,
     }),
 }));
 
@@ -133,7 +133,7 @@ function createPendingOp(overrides: Partial<PendingOp> = {}): PendingOp {
 describe('sync push/pull flow', () => {
     beforeEach(() => {
         hookState.doAction.mockClear();
-        hookBridgeState.withRemoteSuppression.mockClear();
+        hookBridgeState.markSyncTransaction.mockClear();
     });
 
     it('pushes pending ops and applies pulled changes to another db', async () => {

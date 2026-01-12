@@ -240,6 +240,8 @@ export default defineSchema({
         id: v.string(),
         name: v.string(), // Key name
         value: v.optional(v.string()),
+        deleted: v.boolean(),
+        deleted_at: v.optional(v.number()),
         created_at: v.number(),
         updated_at: v.number(),
         clock: v.number(),

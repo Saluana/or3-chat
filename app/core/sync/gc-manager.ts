@@ -6,6 +6,7 @@
 import type { Or3DB } from '~/db/client';
 import type { SyncProvider, SyncScope } from '~~/shared/sync/types';
 import { nowSec } from '~/db/util';
+import { useHooks } from '~/core/hooks/useHooks';
 
 const DEFAULT_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 const DEFAULT_INTERVAL_MS = 10 * 60 * 1000;
@@ -133,6 +134,9 @@ export class GcManager {
             }
         } catch (error) {
             console.error('[GcManager] GC failed:', error);
+            void useHooks().doAction('sync.gc:action:error', {
+                error: error instanceof Error ? error.message : String(error),
+            });
         } finally {
             this.running = false;
         }

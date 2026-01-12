@@ -32,8 +32,7 @@ const PK_FIELDS: Record<string, string> = {
 export class HookBridge {
     private db: Or3DB;
     private deviceId: string;
-    private captureEnabled = true;
-    private hookCleanups: Array<() => void> = [];
+    private syncTransactions = new WeakMap<Transaction, boolean>();
 
     constructor(db: Or3DB) {
         this.db = db;
@@ -44,56 +43,38 @@ export class HookBridge {
      * Start capturing writes to synced tables
      */
     start(): void {
-        this.captureEnabled = true;
-        if (this.hookCleanups.length) return;
-        for (const tableName of SYNCED_TABLES) {
+        const tableNames = SYNCED_TABLES as unknown as string[];
+        for (const tableName of tableNames) {
             const table = this.db.table(tableName);
 
             // Hook: Creating (insert)
             table.hook('creating', (primKey, obj, transaction) => {
-                if (!this.captureEnabled) return;
+                if (this.syncTransactions.get(transaction)) return;
                 this.captureWrite(transaction, tableName, 'put', primKey, obj);
             });
 
             // Hook: Updating (modify)
             table.hook('updating', (modifications, primKey, obj, transaction) => {
-                if (!this.captureEnabled) return;
+                if (this.syncTransactions.get(transaction)) return;
                 const merged = { ...obj, ...modifications };
                 this.captureWrite(transaction, tableName, 'put', primKey, merged);
             });
 
             // Hook: Deleting
             table.hook('deleting', (primKey, obj, transaction) => {
-                if (!this.captureEnabled) return;
+                if (this.syncTransactions.get(transaction)) return;
                 this.captureWrite(transaction, tableName, 'delete', primKey, obj);
             });
-
-            // Store cleanup function (hooks can't be easily removed in Dexie)
-            this.hookCleanups.push(() => {
-                // Dexie doesn't support removing hooks, but we can disable capture
-            });
+            // Note: Dexie hooks cannot be removed once added. We use captureEnabled
+            // flag to control whether writes are captured.
         }
     }
 
     /**
-     * Stop the bridge
+     * Mark a transaction as initiated by sync (suppresses capture)
      */
-    stop(): void {
-        // Disable capture (hooks remain but won't enqueue)
-        this.captureEnabled = false;
-    }
-
-    /**
-     * Run a function with capture disabled (for applying remote changes)
-     */
-    async withRemoteSuppression<T>(fn: () => Promise<T>): Promise<T> {
-        const previous = this.captureEnabled;
-        this.captureEnabled = false;
-        try {
-            return await fn();
-        } finally {
-            this.captureEnabled = previous;
-        }
+    markSyncTransaction(tx: Transaction): void {
+        this.syncTransactions.set(tx, true);
     }
 
     /**

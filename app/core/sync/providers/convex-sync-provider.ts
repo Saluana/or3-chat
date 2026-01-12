@@ -16,6 +16,8 @@ import type {
     PushResult,
     PendingOp,
 } from '~~/shared/sync/types';
+import { PullResponseSchema, SyncChangeSchema } from '~~/shared/sync/schemas';
+import { z } from 'zod';
 import type { Id } from '~~/convex/_generated/dataModel';
 
 /** Tables to sync */
@@ -42,16 +44,17 @@ export function createConvexSyncProvider(): SyncProvider {
             onChanges: (changes: SyncChange[]) => void
         ): Promise<() => void> {
             const tablesToWatch = tables.length > 0 ? tables : SYNCED_TABLES;
-            const unsubscribes: Array<() => void> = [];
-
-            // Track the last seen version per subscription
             let lastVersion = 0;
             let unwatch: (() => void) | null = null;
+            let disposed = false;
 
             const subscribeWithCursor = (cursor: number) => {
+                if (disposed) return;
                 if (unwatch) {
                     unwatch();
+                    unwatch = null;
                 }
+
                 // Subscribe to watchChanges query
                 // Note: Convex reactive queries re-run when data changes
                 unwatch = convex.onUpdate(
@@ -62,33 +65,46 @@ export function createConvexSyncProvider(): SyncProvider {
                         limit: 100,
                     },
                     (result) => {
-                        const filtered = tables.length > 0
-                            ? result.changes.filter((c) => tables.includes(c.tableName))
-                            : result.changes;
+                        if (disposed) return;
 
-                        if (filtered.length > 0) {
-                            onChanges(filtered);
-                        }
+                        try {
+                            const safeChanges = z.array(SyncChangeSchema).safeParse(result.changes);
+                            if (!safeChanges.success) {
+                                console.error('[convex-sync] Invalid watch changes:', safeChanges.error);
+                                return;
+                            }
 
-                        if (result.latestVersion > lastVersion) {
-                            lastVersion = result.latestVersion;
-                            subscribeWithCursor(lastVersion);
+                            const changes = safeChanges.data;
+                            const filtered = tables.length > 0
+                                ? changes.filter((c) => tables.includes(c.tableName))
+                                : changes;
+
+                            if (filtered.length > 0) {
+                                onChanges(filtered);
+                            }
+
+                            if (result.latestVersion > lastVersion) {
+                                lastVersion = result.latestVersion;
+                                subscribeWithCursor(lastVersion);
+                            }
+                        } catch (error) {
+                            console.error('[convex-sync] onChanges error:', error);
                         }
                     }
                 );
             };
 
             subscribeWithCursor(lastVersion);
-            unsubscribes.push(() => {
+
+            // Store cleanup
+            const key = `${scope.workspaceId}:${tablesToWatch.join(',')}`;
+            const cleanup = () => {
+                disposed = true;
                 if (unwatch) {
                     unwatch();
                     unwatch = null;
                 }
-            });
-
-            // Store cleanup
-            const key = `${scope.workspaceId}:${tablesToWatch.join(',')}`;
-            const cleanup = () => unsubscribes.forEach((fn) => fn());
+            };
             subscriptions.set(key, cleanup);
 
             return cleanup;
@@ -102,11 +118,19 @@ export function createConvexSyncProvider(): SyncProvider {
                 tables: request.tables,
             });
 
-            return {
+            // Validate response to catch malformed server data
+            const parsed = PullResponseSchema.safeParse({
                 changes: result.changes,
                 nextCursor: result.nextCursor,
                 hasMore: result.hasMore,
-            };
+            });
+
+            if (!parsed.success) {
+                console.error('[convex-sync] Invalid pull response:', parsed.error);
+                throw new Error(`Invalid pull response: ${parsed.error.message}`);
+            }
+
+            return parsed.data;
         },
 
         async push(batch: PushBatch): Promise<PushResult> {

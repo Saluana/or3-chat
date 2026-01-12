@@ -139,11 +139,15 @@ export default defineNuxtPlugin(async () => {
     const { data: sessionData } = useSessionContext();
     watch(
         () => sessionData.value?.session,
-        async (session) => {
+        (session) => {
             if (session?.authenticated && session.workspace?.id) {
-                await startSyncEngine(session.workspace.id);
+                void startSyncEngine(session.workspace.id).catch((error) => {
+                    console.error('[convex-sync] Failed to start sync engine:', error);
+                });
             } else {
-                await stopSyncEngine();
+                void stopSyncEngine().catch((error) => {
+                    console.error('[convex-sync] Failed to stop sync engine:', error);
+                });
             }
         },
         { immediate: true }

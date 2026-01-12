@@ -175,6 +175,8 @@ export class SubscriptionManager {
             });
 
             while (hasMore) {
+                if (this.status === 'disconnected') break;
+
                 const response = await this.provider.pull({
                     scope: this.scope,
                     cursor,
@@ -258,7 +260,10 @@ export class SubscriptionManager {
         if (!pendingOps.length) return;
 
         const hookBridge = getHookBridge(this.db);
-        await hookBridge.withRemoteSuppression(async () => {
+        const tableNames = Array.from(new Set(pendingOps.map((op) => op.tableName)));
+
+        await this.db.transaction('rw', tableNames, async (tx) => {
+            hookBridge.markSyncTransaction(tx);
             for (const op of pendingOps) {
                 const table = this.db.table(op.tableName);
                 if (!table) continue;
@@ -278,6 +283,8 @@ export class SubscriptionManager {
         const tombstones = new Map<string, Tombstone>();
 
         while (hasMore) {
+            if (this.status === 'disconnected') break;
+
             const response = await this.provider.pull({
                 scope: this.scope,
                 cursor,
@@ -434,26 +441,26 @@ export class SubscriptionManager {
         const hookBridge = getHookBridge(this.db);
         const tables = this.config.tables;
 
-        await hookBridge.withRemoteSuppression(async () => {
-            const tableRefs = tables.map((name) => this.db.table(name));
-            await this.db.transaction('rw', [...tableRefs, this.db.tombstones], async () => {
-                for (const tableName of tables) {
-                    await this.db.table(tableName).clear();
-                }
+        const tableRefs = tables.map((name) => this.db.table(name));
+        await this.db.transaction('rw', [...tableRefs, this.db.tombstones], async (tx) => {
+            hookBridge.markSyncTransaction(tx);
 
-                for (const tableName of tables) {
-                    const rows = Array.from(staged.tables.get(tableName)?.values() ?? []);
-                    if (rows.length) {
-                        await this.db.table(tableName).bulkPut(rows);
-                    }
-                }
+            for (const tableName of tables) {
+                await this.db.table(tableName).clear();
+            }
 
-                await this.db.tombstones.clear();
-                const tombstoneRows = Array.from(staged.tombstones.values());
-                if (tombstoneRows.length) {
-                    await this.db.tombstones.bulkPut(tombstoneRows);
+            for (const tableName of tables) {
+                const rows = Array.from(staged.tables.get(tableName)?.values() ?? []);
+                if (rows.length) {
+                    await this.db.table(tableName).bulkPut(rows);
                 }
-            });
+            }
+
+            await this.db.tombstones.clear();
+            const tombstoneRows = Array.from(staged.tombstones.values());
+            if (tombstoneRows.length) {
+                await this.db.tombstones.bulkPut(tombstoneRows);
+            }
         });
     }
 

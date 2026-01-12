@@ -88,8 +88,14 @@ export function createPendingOpsTable(initial: PendingOp[] = []) {
 export function createMockDb<T extends Record<string, unknown>>(tables: T) {
     return {
         ...tables,
+        name: 'mock-db',
         table(name: string) {
             return (tables as Record<string, unknown>)[name] ?? null;
+        },
+        async transaction(mode: string, tableNames: string[], callback: (tx: any) => Promise<any>) {
+            // Fake transaction just calls the callback with a mock transaction object
+            const tx = { mode, tableNames };
+            return callback(tx);
         },
     };
 }
