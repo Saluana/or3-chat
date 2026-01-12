@@ -2,7 +2,7 @@ import Dexie from 'dexie';
 import { db } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { newId, nowSec, parseOrThrow } from './util';
+import { newId, nowSec, parseOrThrow, nextClock } from './util';
 import {
     MessageCreateSchema,
     MessageSchema,
@@ -57,7 +57,10 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
     }
     // Apply defaults (id/clock/timestamps) then validate fully
     const prepared = parseOrThrow(MessageCreateSchema, filtered);
-    const value = parseOrThrow(MessageSchema, prepared);
+    const value = parseOrThrow(MessageSchema, {
+        ...prepared,
+        clock: nextClock(prepared.clock),
+    });
     await hooks.doAction('db.messages.create:action:before', {
         entity: toMessageEntity(value),
         tableName: 'messages',
@@ -81,17 +84,26 @@ export async function upsertMessage(value: Message): Promise<void> {
         value
     );
     const validated = parseOrThrow(MessageSchema, filtered);
+    const existing = await dbTry(() => db.messages.get(validated.id), {
+        op: 'read',
+        entity: 'messages',
+        action: 'get',
+    });
+    const next = {
+        ...validated,
+        clock: nextClock(existing?.clock ?? validated.clock),
+    };
     await hooks.doAction('db.messages.upsert:action:before', {
-        entity: toMessageEntity(validated),
+        entity: toMessageEntity(next),
         tableName: 'messages',
     });
     await dbTry(
-        () => db.messages.put(validated),
+        () => db.messages.put(next),
         { op: 'write', entity: 'messages', action: 'upsert' },
         { rethrow: true }
     );
     await hooks.doAction('db.messages.upsert:action:after', {
-        entity: toMessageEntity(validated),
+        entity: toMessageEntity(next),
         tableName: 'messages',
     });
 }
@@ -145,7 +157,12 @@ export async function softDeleteMessage(id: string): Promise<void> {
         });
         await dbTry(
             () =>
-                db.messages.put({ ...m, deleted: true, updated_at: nowSec() }),
+                db.messages.put({
+                    ...m,
+                    deleted: true,
+                    updated_at: nowSec(),
+                    clock: nextClock(m.clock),
+                }),
             { op: 'write', entity: 'messages', action: 'softDelete' }
         );
         await hooks.doAction('db.messages.delete:action:soft:after', {
@@ -203,7 +220,10 @@ export async function appendMessage(input: MessageCreate): Promise<Message> {
                 .last();
             value.index = last ? last.index + 1000 : 1000;
         }
-        const finalized = parseOrThrow(MessageSchema, value);
+        const finalized = parseOrThrow(MessageSchema, {
+            ...value,
+            clock: nextClock(value.clock),
+        });
         await db.messages.put(finalized);
         const t = await db.threads.get(value.thread_id);
         if (t) {
@@ -212,6 +232,7 @@ export async function appendMessage(input: MessageCreate): Promise<Message> {
                 ...t,
                 last_message_at: now,
                 updated_at: now,
+                clock: nextClock(t.clock),
             });
         }
         await hooks.doAction('db.messages.append:action:after', finalized);
@@ -242,6 +263,7 @@ export async function moveMessage(
             thread_id: toThreadId,
             index: nextIdx,
             updated_at: nowSec(),
+            clock: nextClock(m.clock),
         });
 
         const now = nowSec();
@@ -251,6 +273,7 @@ export async function moveMessage(
                 ...t,
                 last_message_at: now,
                 updated_at: now,
+                clock: nextClock(t.clock),
             });
         await hooks.doAction('db.messages.move:action:after', {
             messageId,
@@ -284,6 +307,7 @@ export async function copyMessage(
             index: nextIdx,
             created_at: nowSec(),
             updated_at: nowSec(),
+            clock: nextClock(),
         });
 
         const now = nowSec();
@@ -293,6 +317,7 @@ export async function copyMessage(
                 ...t,
                 last_message_at: now,
                 updated_at: now,
+                clock: nextClock(t.clock),
             });
         await hooks.doAction('db.messages.copy:action:after', {
             from: messageId,
@@ -339,7 +364,10 @@ export async function insertMessageAfter(
             after,
             value,
         });
-        const finalized = parseOrThrow(MessageSchema, value);
+        const finalized = parseOrThrow(MessageSchema, {
+            ...value,
+            clock: nextClock(value.clock),
+        });
         await db.messages.put(finalized);
         const t = await db.threads.get(after.thread_id);
         if (t) {
@@ -348,6 +376,7 @@ export async function insertMessageAfter(
                 ...t,
                 last_message_at: now,
                 updated_at: now,
+                clock: nextClock(t.clock),
             });
         }
         await hooks.doAction('db.messages.insertAfter:action:after', finalized);
@@ -380,6 +409,7 @@ export async function normalizeThreadIndexes(
                     ...m,
                     index: idx,
                     updated_at: nowSec(),
+                    clock: nextClock(m.clock),
                 });
             }
             idx += step;

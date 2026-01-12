@@ -1,6 +1,6 @@
 import Dexie from 'dexie';
 import { db } from './client';
-import { newId, nowSec } from './util';
+import { newId, nowSec, nextClock } from './util';
 import type { Thread, Message } from './schema';
 import { useHooks } from '../core/hooks/useHooks';
 import type {
@@ -145,6 +145,7 @@ export async function forkThread({
             last_message_at: null,
             // Preserve some flags; ensure forked boolean set
             forked: true,
+            clock: nextClock(),
         } as Thread;
 
         const beforePayload: BranchForkBeforePayload = {
@@ -176,12 +177,14 @@ export async function forkThread({
                     id: newId(),
                     thread_id: forkId,
                     index: i++, // normalize sequential indexes starting at 0
+                    clock: nextClock(),
                 });
             }
             await db.threads.put({
                 ...fork,
                 last_message_at: anchor.created_at,
                 updated_at: nowSec(),
+                clock: nextClock(fork.clock),
             });
         }
 

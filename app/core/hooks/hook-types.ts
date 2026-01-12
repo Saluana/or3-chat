@@ -436,6 +436,35 @@ export interface SessionContext {
     expiresAt?: string;
 }
 
+// ============================================================================
+// SYNC TYPES
+// ============================================================================
+
+/** Sync scope for workspace-scoped operations. */
+export interface SyncScopePayload {
+    workspaceId: string;
+    projectId?: string;
+}
+
+/** Sync pending operation payload for hooks. */
+export interface SyncPendingOpPayload {
+    id: string;
+    tableName: string;
+    operation: 'put' | 'delete';
+    pk: string;
+    payload?: unknown;
+    stamp: {
+        deviceId: string;
+        opId: string;
+        hlc: string;
+        clock: number;
+    };
+    createdAt: number;
+    attempts: number;
+    nextAttemptAt?: number;
+    status: 'pending' | 'syncing' | 'failed';
+}
+
 // Generic DB op payloads
 export interface DbCreatePayload<T = unknown> {
     entity: T;
@@ -680,6 +709,65 @@ export type CoreHookPayloadMap = {
     ];
     'auth.user:action:created': [{ userId: string; provider: string }];
     'auth.workspace:action:created': [{ workspaceId: string; userId: string }];
+
+    // Sync hooks
+    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];
+    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];
+    'sync.push:action:after': [
+        { scope: SyncScopePayload; successCount: number; failCount: number }
+    ];
+    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];
+    'sync.bootstrap:action:progress': [
+        {
+            scope: SyncScopePayload;
+            cursor: number;
+            pulledCount: number;
+            hasMore: boolean;
+        }
+    ];
+    'sync.bootstrap:action:complete': [
+        { scope: SyncScopePayload; cursor: number; totalPulled: number }
+    ];
+    'sync.pull:action:received': [
+        { scope: SyncScopePayload; changeCount: number }
+    ];
+    'sync.pull:action:applied': [
+        {
+            scope: SyncScopePayload;
+            applied: number;
+            skipped: number;
+            conflicts: number;
+        }
+    ];
+    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];
+    'sync.pull:action:after': [
+        { scope: SyncScopePayload; count: number; cursor: number }
+    ];
+    'sync.subscription:action:statusChange': [
+        {
+            scope: SyncScopePayload;
+            previousStatus: string;
+            status: string;
+        }
+    ];
+    'sync.conflict:action:detected': [
+        {
+            tableName: string;
+            pk: string;
+            local: unknown;
+            remote: unknown;
+            winner: 'local' | 'remote';
+        }
+    ];
+    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown }];
+    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];
+    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];
+    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];
+    'sync.rescan:action:progress': [{ scope: SyncScopePayload; progress: number }];
+    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];
+    'sync.stats:action': [
+        { pendingCount: number; cursor: number; lastSyncAt: number }
+    ];
 };
 
 // Derived payloads for DB action hooks

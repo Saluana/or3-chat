@@ -121,7 +121,7 @@ import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import type { ChatMessage } from '~/utils/chat/types';
 import { db } from '~/db';
 import { state } from '~/state/global';
-import { nowSec, newId } from '~/db/util';
+import { nowSec, newId, nextClock } from '~/db/util';
 import { useHooks } from '~/core/hooks/useHooks';
 import { deriveMessageContent } from '~/utils/chat/messages';
 
@@ -246,7 +246,7 @@ async function ensureApiKey(): Promise<void> {
             value: key,
             created_at: now,
             updated_at: now,
-            clock: 0,
+            clock: nextClock(),
         });
     } catch {
         /* intentionally empty */
@@ -512,7 +512,7 @@ const testDefinitions: TestDefinition[] = [
                 value: 'sk-test-123',
                 created_at: now,
                 updated_at: now,
-                clock: 0,
+                clock: nextClock(),
             });
             ctx.log('Seeded Dexie kv table with openrouter_api_key');
             const chat = useChat([]);
@@ -1504,6 +1504,7 @@ const testDefinitions: TestDefinition[] = [
                 created_at: now,
                 updated_at: now,
                 deleted: false,
+                clock: nextClock(),
                 meta: '[]',
             });
 
@@ -1517,7 +1518,7 @@ const testDefinitions: TestDefinition[] = [
                 status: 'ready',
                 deleted: false,
                 pinned: false,
-                clock: 0,
+                clock: nextClock(),
                 forked: false,
                 system_prompt_id: promptId,
             });

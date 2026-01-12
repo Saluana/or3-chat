@@ -181,7 +181,7 @@ import {
 } from 'or3-workflow-core';
 import { OpenRouter } from '@openrouter/sdk';
 import { db } from '~/db';
-import { nowSec, newId } from '~/db/util';
+import { nowSec, newId, nextClock } from '~/db/util';
 
 // --- Types ---
 
@@ -283,7 +283,7 @@ async function ensureApiKey(): Promise<string | null> {
             value: key,
             created_at: now,
             updated_at: now,
-            clock: 0,
+            clock: nextClock(),
         });
     } catch {
         /* intentionally empty */

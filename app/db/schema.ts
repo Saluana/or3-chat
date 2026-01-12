@@ -79,6 +79,8 @@ export const MessageSchema = z.object({
     deleted: z.boolean().default(false),
     thread_id: z.string(),
     index: z.number().int(),
+    // HLC-derived ordering key for deterministic ordering when index collides
+    order_key: z.string().optional(),
     clock: z.number().int(),
     stream_id: z.string().nullable().optional(),
     // JSON serialized array of file content hashes (md5) or null/undefined when absent.
@@ -100,6 +102,7 @@ export const PostSchema = z.object({
     created_at: z.number().int(),
     updated_at: z.number().int(),
     deleted: z.boolean().default(false),
+    clock: z.number().int().default(0),
     meta: z.union([
         z.string(),
         z.object({

@@ -1,7 +1,6 @@
 import { db } from './client';
 import { useHooks } from '../core/hooks/useHooks';
-import { parseOrThrow } from './util';
-import { nowSec } from './util';
+import { parseOrThrow, nowSec, nextClock } from './util';
 import { FileMetaCreateSchema, FileMetaSchema, type FileMeta } from './schema';
 import { computeFileHash } from '../utils/hash';
 import { reportError, err } from '../utils/errors';
@@ -88,6 +87,7 @@ async function changeRefCount(hash: string, delta: number) {
             ...meta,
             ref_count: Math.max(0, meta.ref_count + delta),
             updated_at: nowSec(),
+            clock: nextClock(meta.clock),
         };
         await db.file_meta.put(next);
         const hooks = useHooks();
@@ -165,9 +165,10 @@ export async function createOrRefFile(
         applyFileEntityToMeta(baseCreate, filteredEntity)
     );
     const meta = parseOrThrow(FileMetaSchema, prepared);
+    const seededMeta = { ...meta, clock: nextClock(meta.clock) };
 
     let actionPayload: DbCreatePayload<FileEntity> = {
-        entity: toFileEntity(meta),
+        entity: toFileEntity(seededMeta),
         tableName: FILE_TABLE,
     };
 
@@ -176,7 +177,7 @@ export async function createOrRefFile(
         await hooks.doAction('db.files.create:action:before', actionPayload);
         const mergedMeta = parseOrThrow(
             FileMetaSchema,
-            applyFileEntityToMeta(meta, actionPayload.entity)
+            applyFileEntityToMeta(seededMeta, actionPayload.entity)
         );
         // Parallel writes for ~20% faster file creation
         await Promise.all([
@@ -235,6 +236,7 @@ export async function softDeleteFile(hash: string): Promise<void> {
             ...meta,
             deleted: true,
             updated_at: nowSec(),
+            clock: nextClock(meta.clock),
         });
         await hooks.doAction('db.files.delete:action:soft:after', payload);
     });
@@ -257,6 +259,7 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
                 ...meta,
                 deleted: true,
                 updated_at: nowSec(),
+                clock: nextClock(meta.clock),
             });
             await hooks.doAction('db.files.delete:action:soft:after', payload);
         }
@@ -281,6 +284,7 @@ export async function restoreMany(hashes: string[]): Promise<void> {
                 ...meta,
                 deleted: false,
                 updated_at: nowSec(),
+                clock: nextClock(meta.clock),
             } as FileMeta;
             await db.file_meta.put(updatedMeta);
             await hooks.doAction(

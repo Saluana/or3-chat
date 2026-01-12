@@ -108,6 +108,7 @@ vi.mock('../util', () => ({
         () => `doc-${Date.now()}-${Math.random().toString(36).slice(2)}`
     ),
     nowSec: vi.fn(() => Math.floor(Date.now() / 1000)),
+    nextClock: vi.fn((clock?: number) => (clock ?? 0) + 1),
 }));
 
 import { createDocument, updateDocument } from '../documents';

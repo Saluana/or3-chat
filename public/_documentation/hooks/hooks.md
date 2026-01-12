@@ -79,3 +79,17 @@ Diagnostics live under `_diagnostics` with per-hook timing arrays and error coun
 -   `hook-types.ts` — Type system describing hook names and payloads.
 -   `typed-hooks.ts` — Zero-cost typed wrapper around this engine.
 -   `useHookEffect` — Vue composable for lifecycle-aware subscriptions.
+
+---
+
+## Sync hook keys
+
+High-signal sync hooks used by the DB sync layer:
+
+-   `sync.bootstrap:action:start`
+-   `sync.bootstrap:action:progress`
+-   `sync.bootstrap:action:complete`
+-   `sync.pull:action:received`
+-   `sync.pull:action:applied`
+-   `sync.pull:action:error`
+-   `sync.subscription:action:statusChange`

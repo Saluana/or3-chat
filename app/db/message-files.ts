@@ -3,7 +3,7 @@ import type { FileMeta } from './schema';
 import { parseFileHashes, serializeFileHashes } from './files-util';
 import { createOrRefFile, derefFile, getFileMeta } from './files';
 import { useHooks } from '../core/hooks/useHooks';
-import { nowSec } from './util';
+import { nowSec, nextClock } from './util';
 
 /** Discriminated union for adding files to messages */
 export type AddableFile =
@@ -63,6 +63,7 @@ export async function addFilesToMessage(
                 ...msg,
                 file_hashes: serialized,
                 updated_at: nowSec(),
+                clock: nextClock(msg.clock),
             });
         }
     );
@@ -83,6 +84,7 @@ export async function removeFileFromMessage(
             ...msg,
             file_hashes: serializeFileHashes(next),
             updated_at: nowSec(),
+            clock: nextClock(msg.clock),
         });
         await derefFile(hash);
     });

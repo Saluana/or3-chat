@@ -1,6 +1,6 @@
 import { db } from './client';
 import type { FileMeta } from './schema';
-import { nowSec } from './util';
+import { nowSec, nextClock } from './util';
 
 // List image FileMeta records, newest first, with simple paging.
 // Filters: deleted !== true AND kind === 'image'.
@@ -47,5 +47,10 @@ export async function updateFileName(
 ): Promise<void> {
     const meta = await db.file_meta.get(hash);
     if (!meta) return;
-    await db.file_meta.put({ ...meta, name, updated_at: nowSec() });
+    await db.file_meta.put({
+        ...meta,
+        name,
+        updated_at: nowSec(),
+        clock: nextClock(meta.clock),
+    });
 }

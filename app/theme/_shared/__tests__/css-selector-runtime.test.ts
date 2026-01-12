@@ -322,6 +322,9 @@ describe('CSS Selector Runtime', () => {
 
             applyThemeClasses('theme2', theme2Selectors);
 
+            // Wait for chunked processing to complete
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
             expect(el1.classList.contains('theme1-class')).toBe(false);
             expect(el1.classList.contains('theme2-class')).toBe(true);
             expect(el2.classList.contains('theme1-class')).toBe(false);

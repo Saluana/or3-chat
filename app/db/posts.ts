@@ -1,7 +1,7 @@
 import { db } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { nowSec, parseOrThrow } from './util';
+import { nowSec, parseOrThrow, nextClock } from './util';
 import {
     PostSchema,
     PostCreateSchema,
@@ -63,20 +63,21 @@ export async function createPost(input: PostCreate): Promise<Post> {
     }
     const prepared = parseOrThrow(PostCreateSchema, filtered);
     const value = parseOrThrow(PostSchema, prepared);
+    const next = { ...value, clock: nextClock(value.clock) };
     await hooks.doAction('db.posts.create:action:before', {
-        entity: toPostEntity(value),
+        entity: toPostEntity(next),
         tableName: 'posts',
     });
     await dbTry(
-        () => db.posts.put(value),
+        () => db.posts.put(next),
         { op: 'write', entity: 'posts', action: 'create' },
         { rethrow: true }
     );
     await hooks.doAction('db.posts.create:action:after', {
-        entity: toPostEntity(value),
+        entity: toPostEntity(next),
         tableName: 'posts',
     });
-    return value;
+    return next;
 }
 
 export async function upsertPost(value: Post): Promise<void> {
@@ -93,17 +94,26 @@ export async function upsertPost(value: Post): Promise<void> {
         mutable.meta = normalizeMeta(mutable.meta);
     }
     const validated = parseOrThrow(PostSchema, filtered);
+    const existing = await dbTry(() => db.posts.get(validated.id), {
+        op: 'read',
+        entity: 'posts',
+        action: 'get',
+    });
+    const next = {
+        ...validated,
+        clock: nextClock(existing?.clock ?? validated.clock),
+    };
     await hooks.doAction('db.posts.upsert:action:before', {
-        entity: toPostEntity(validated),
+        entity: toPostEntity(next),
         tableName: 'posts',
     });
     await dbTry(
-        () => db.posts.put(validated),
+        () => db.posts.put(next),
         { op: 'write', entity: 'posts', action: 'upsert' },
         { rethrow: true }
     );
     await hooks.doAction('db.posts.upsert:action:after', {
-        entity: toPostEntity(validated),
+        entity: toPostEntity(next),
         tableName: 'posts',
     });
 }
@@ -156,7 +166,12 @@ export async function softDeletePost(id: string): Promise<void> {
             id: p.id,
             tableName: 'posts',
         });
-        await db.posts.put({ ...p, deleted: true, updated_at: nowSec() });
+        await db.posts.put({
+            ...p,
+            deleted: true,
+            updated_at: nowSec(),
+            clock: nextClock(p.clock),
+        });
         await hooks.doAction('db.posts.delete:action:soft:after', {
             entity: toPostEntity(p),
             id: p.id,

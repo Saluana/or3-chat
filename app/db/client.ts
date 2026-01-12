@@ -8,6 +8,7 @@ import type {
     FileMeta,
     Post,
 } from './schema';
+import type { PendingOp, Tombstone, SyncState, SyncRun } from '~~/shared/sync/types';
 
 export interface FileBlobRow {
     hash: string; // primary key
@@ -25,8 +26,14 @@ export class Or3DB extends Dexie {
     file_blobs!: Table<FileBlobRow, string>; // hash as primary key -> Blob
     posts!: Table<Post, string>;
 
-    constructor() {
-        super('or3-db');
+    // Sync tables (added in v7)
+    pending_ops!: Table<PendingOp, string>;
+    tombstones!: Table<Tombstone, string>;
+    sync_state!: Table<SyncState, string>;
+    sync_runs!: Table<SyncRun, string>;
+
+    constructor(name = 'or3-db') {
+        super(name);
         // Simplified schema: collapse historical migrations into a single
         // version to avoid full-table upgrade passes (which previously
         // loaded entire tables into memory via toArray()). Since there are
@@ -47,7 +54,49 @@ export class Or3DB extends Dexie {
             file_blobs: 'hash',
             posts: 'id, title, postType, deleted, created_at, updated_at',
         });
+
+        // Version 7: Add sync tables and order_key for deterministic message ordering
+        this.version(7)
+            .stores({
+                // Add order_key to messages index for deterministic ordering
+                messages:
+                    'id, [thread_id+index+order_key], [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at, data.type, [data.type+data.executionState]',
+
+                // Sync outbox - pending operations waiting to be pushed
+                pending_ops: 'id, tableName, status, createdAt, [tableName+pk]',
+
+                // Tombstones - track deleted records to prevent resurrection
+                tombstones: 'id, [tableName+pk], deletedAt',
+
+                // Sync state - persisted cursor and device info
+                sync_state: 'id',
+
+                // Sync runs - telemetry for debugging
+                sync_runs: 'id, startedAt, status',
+            })
+            .upgrade((tx) => {
+                // Migrate existing messages to have order_key
+                // Use hlc-like timestamp for existing messages
+                return tx
+                    .table('messages')
+                    .toCollection()
+                    .modify((msg) => {
+                        if (!msg.order_key) {
+                            // Generate order_key from created_at for existing messages
+                            // Format: timestamp:random for uniqueness
+                            msg.order_key = `${msg.created_at}:${msg.id.slice(0, 8)}`;
+                        }
+                    });
+            });
     }
 }
 
 export const db = new Or3DB();
+
+/**
+ * Create a workspace-specific database instance
+ * Used in SSR mode where each workspace has isolated data
+ */
+export function createWorkspaceDb(workspaceId: string): Or3DB {
+    return new Or3DB(`or3-db-${workspaceId}`);
+}

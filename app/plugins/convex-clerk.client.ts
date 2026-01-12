@@ -12,9 +12,7 @@
  *
  * The plugin only runs on the client side (.client.ts suffix).
  */
-import { useAuth } from '#imports';
-
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin(async () => {
     const runtimeConfig = useRuntimeConfig();
 
     // Skip if SSR auth is disabled (Clerk module won't be loaded)
@@ -22,19 +20,35 @@ export default defineNuxtPlugin(() => {
         return;
     }
 
+    // Skip if Convex isn't configured (prevents startup crash).
+    if (!runtimeConfig.public.convex?.url) {
+        return;
+    }
+
     // Get the Convex client instance from convex-nuxt
-    const convex = useConvexClient();
+    let convex: ReturnType<typeof useConvexClient>;
+    try {
+        convex = useConvexClient();
+    } catch {
+        return;
+    }
 
     // Get Clerk's useAuth composable (auto-imported when @clerk/nuxt is loaded)
-    let auth: ReturnType<typeof useAuth>;
+    let useAuth: (() => { getToken: { value: (options?: unknown) => Promise<string | null> } }) | undefined;
     try {
-        auth = useAuth();
+        const imports = (await import('#imports')) as { useAuth?: typeof useAuth };
+        useAuth = imports.useAuth;
     } catch {
+        return;
+    }
+
+    if (!useAuth) {
         console.warn(
             '[convex-clerk] Clerk useAuth not available, skipping auth integration'
         );
         return;
     }
+    const auth = useAuth();
 
     // Define the token fetcher for Convex
     // This is called whenever Convex needs to authenticate a request

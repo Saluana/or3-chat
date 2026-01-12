@@ -1,7 +1,7 @@
 import { db } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { newId, nowSec, parseOrThrow } from './util';
+import { newId, nowSec, parseOrThrow, nextClock } from './util';
 import {
     ThreadCreateSchema,
     ThreadSchema,
@@ -18,7 +18,10 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
     // Apply create-time defaults (id/clock/timestamps, etc.)
     const prepared = parseOrThrow(ThreadCreateSchema, filtered);
     // Validate against full schema so required defaults (status/pinned/etc.) are present
-    const value = parseOrThrow(ThreadSchema, prepared);
+    const value = parseOrThrow(ThreadSchema, {
+        ...prepared,
+        clock: nextClock(prepared.clock),
+    });
     await hooks.doAction('db.threads.create:action:before', {
         entity: value,
         tableName: 'threads',
@@ -41,18 +44,27 @@ export async function upsertThread(value: Thread): Promise<void> {
         'db.threads.upsert:filter:input',
         value
     );
+    const validated = parseOrThrow(ThreadSchema, filtered);
+    const existing = await dbTry(() => db.threads.get(validated.id), {
+        op: 'read',
+        entity: 'threads',
+        action: 'get',
+    });
+    const next = {
+        ...validated,
+        clock: nextClock(existing?.clock ?? validated.clock),
+    };
     await hooks.doAction('db.threads.upsert:action:before', {
-        entity: filtered,
+        entity: next,
         tableName: 'threads',
     });
-    parseOrThrow(ThreadSchema, filtered);
     await dbTry(
-        () => db.threads.put(filtered),
+        () => db.threads.put(next),
         { op: 'write', entity: 'threads', action: 'upsert' },
         { rethrow: true }
     );
     await hooks.doAction('db.threads.upsert:action:after', {
-        entity: filtered,
+        entity: next,
         tableName: 'threads',
     });
 }
@@ -121,6 +133,7 @@ export async function softDeleteThread(id: string): Promise<void> {
             ...t,
             deleted: true,
             updated_at: nowSec(),
+            clock: nextClock(t.clock),
         });
         await hooks.doAction('db.threads.delete:action:soft:after', {
             entity: t,
@@ -177,6 +190,7 @@ export async function forkThread(
             created_at: now,
             updated_at: now,
             last_message_at: null,
+            clock: nextClock(),
             ...overrides,
         });
         await hooks.doAction('db.threads.fork:action:before', {
@@ -210,6 +224,7 @@ export async function forkThread(
                             ...m,
                             id: newId(),
                             thread_id: forkId,
+                            clock: nextClock(),
                         }),
                     {
                         op: 'write',
@@ -226,6 +241,7 @@ export async function forkThread(
                             ...fork,
                             last_message_at: now,
                             updated_at: now,
+                            clock: nextClock(fork.clock),
                         }),
                     {
                         op: 'write',
@@ -257,6 +273,7 @@ export async function updateThreadSystemPrompt(
             ...thread,
             system_prompt_id: promptId,
             updated_at: nowSec(),
+            clock: nextClock(thread.clock),
         };
         await hooks.doAction('db.threads.updateSystemPrompt:action:before', {
             thread,

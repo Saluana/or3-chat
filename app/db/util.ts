@@ -16,6 +16,9 @@ export function parseOrThrow<TSchema extends ZodTypeAny>(
 /** Returns current Unix timestamp in seconds */
 export const nowSec = (): number => Math.floor(Date.now() / 1000);
 
+/** Increment a record clock for LWW conflict resolution */
+export const nextClock = (clock?: number): number => (clock ?? 0) + 1;
+
 /**
  * Generate a unique identifier string.
  * Prefers Web Crypto API (UUID v4) when available, falls back to timestamp-based ID.

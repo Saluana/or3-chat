@@ -1,6 +1,6 @@
 import { db } from './client';
 import { dbTry } from './dbTry';
-import { newId, nowSec } from './util';
+import { newId, nowSec, nextClock } from './util';
 import { useHooks } from '../core/hooks/useHooks';
 import type {
     DbCreatePayload,
@@ -34,6 +34,7 @@ export interface DocumentRow {
     created_at: number; // seconds
     updated_at: number; // seconds
     deleted: boolean;
+    clock?: number;
 }
 
 /** Public facing record with content already parsed. */
@@ -72,6 +73,7 @@ function documentEntityToRow(
             created_at: entity.created_at ?? nowSec(),
             updated_at: entity.updated_at ?? nowSec(),
             deleted: false,
+            clock: base?.clock ?? 0,
         } as DocumentRow);
 
     return {
@@ -83,6 +85,7 @@ function documentEntityToRow(
         updated_at: entity.updated_at ?? fallback.updated_at,
         postType: 'doc',
         deleted: fallback.deleted,
+        clock: fallback.clock,
     };
 }
 
@@ -197,6 +200,7 @@ export async function createDocument(
         created_at: nowSec(),
         updated_at: nowSec(),
         deleted: false,
+        clock: nextClock(),
     };
     const filteredEntity = await hooks.applyFilters(
         'db.documents.create:filter:input',
@@ -219,6 +223,7 @@ export async function createDocument(
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
         meta: '',
+        clock: persistedRow.clock ?? 0,
     };
     await dbTry(
         () => db.posts.put(postRow),
@@ -251,6 +256,7 @@ export async function getDocument(
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted: row.deleted,
+        clock: row.clock ?? 0,
     };
     const filteredEntity = await hooks.applyFilters(
         'db.documents.get:filter:output',
@@ -310,6 +316,7 @@ export async function updateDocument(
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
+        clock: existing.clock ?? 0,
     };
     const updatedRow: DocumentRow = {
         id: existingRow.id,
@@ -328,6 +335,7 @@ export async function updateDocument(
         created_at: existingRow.created_at,
         updated_at: nowSec(),
         deleted: existingRow.deleted,
+        clock: nextClock(existingRow.clock),
     };
 
     const basePayload = buildDocumentUpdatePayload(
@@ -359,6 +367,7 @@ export async function updateDocument(
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
         meta: '',
+        clock: persistedRow.clock ?? 0,
     };
     await dbTry(
         () => db.posts.put(postRow),
@@ -390,6 +399,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
+        clock: existing.clock ?? 0,
     };
     const payload: DbDeletePayload<DocumentEntity> = {
         entity: toDocumentEntity(existingRow),
@@ -401,6 +411,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         ...existingRow,
         deleted: true,
         updated_at: nowSec(),
+        clock: nextClock(existingRow.clock),
     };
     // Convert to Post type for db.posts.put
     const postRow: Post = {
@@ -412,6 +423,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         updated_at: updatedRow.updated_at,
         deleted: updatedRow.deleted,
         meta: '',
+        clock: updatedRow.clock ?? 0,
     };
     await dbTry(
         () => db.posts.put(postRow),
@@ -437,6 +449,7 @@ export async function hardDeleteDocument(id: string): Promise<void> {
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
+        clock: existing.clock ?? 0,
     };
     const payload: DbDeletePayload<DocumentEntity> = {
         entity: toDocumentEntity(existingRow),

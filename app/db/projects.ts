@@ -1,7 +1,7 @@
 import { db } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { parseOrThrow, nowSec } from './util';
+import { parseOrThrow, nowSec, nextClock } from './util';
 import { ProjectSchema, type Project } from './schema';
 
 export async function createProject(input: Project): Promise<Project> {
@@ -10,21 +10,22 @@ export async function createProject(input: Project): Promise<Project> {
         'db.projects.create:filter:input',
         input
     );
+    const value = parseOrThrow(ProjectSchema, filtered);
+    const next = { ...value, clock: nextClock(value.clock) };
     await hooks.doAction('db.projects.create:action:before', {
-        entity: filtered,
+        entity: next,
         tableName: 'projects',
     });
-    const value = parseOrThrow(ProjectSchema, filtered);
     await dbTry(
-        () => db.projects.put(value),
+        () => db.projects.put(next),
         { op: 'write', entity: 'projects', action: 'create' },
         { rethrow: true }
     );
     await hooks.doAction('db.projects.create:action:after', {
-        entity: value,
+        entity: next,
         tableName: 'projects',
     });
-    return value;
+    return next;
 }
 
 export async function upsertProject(value: Project): Promise<void> {
@@ -37,14 +38,23 @@ export async function upsertProject(value: Project): Promise<void> {
         entity: filtered,
         tableName: 'projects',
     });
-    parseOrThrow(ProjectSchema, filtered);
+    const validated = parseOrThrow(ProjectSchema, filtered);
+    const existing = await dbTry(() => db.projects.get(validated.id), {
+        op: 'read',
+        entity: 'projects',
+        action: 'get',
+    });
+    const next = {
+        ...validated,
+        clock: nextClock(existing?.clock ?? validated.clock),
+    };
     await dbTry(
-        () => db.projects.put(filtered),
+        () => db.projects.put(next),
         { op: 'write', entity: 'projects', action: 'upsert' },
         { rethrow: true }
     );
     await hooks.doAction('db.projects.upsert:action:after', {
-        entity: filtered,
+        entity: next,
         tableName: 'projects',
     });
 }
@@ -67,6 +77,7 @@ export async function softDeleteProject(id: string): Promise<void> {
             ...p,
             deleted: true,
             updated_at: nowSec(),
+            clock: nextClock(p.clock),
         });
         await hooks.doAction('db.projects.delete:action:soft:after', {
             entity: p,

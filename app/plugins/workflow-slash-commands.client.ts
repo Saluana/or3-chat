@@ -21,7 +21,7 @@ import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type { WorkflowExecutionController } from './WorkflowSlashCommands/executeWorkflow';
 import type { Attachment } from 'or3-workflow-core';
 import { createWorkflowStreamAccumulator } from '~/composables/chat/useWorkflowStreamAccumulator';
-import { nowSec } from '~/db/util';
+import { nowSec, nextClock } from '~/db/util';
 import { reportError } from '~/utils/errors';
 import {
     isWorkflowMessageData,
@@ -1081,6 +1081,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                             data,
                             pending: data.executionState === 'running',
                             updated_at: timestamp,
+                            clock: nextClock(msg.clock),
                         });
                     }
 
@@ -1097,7 +1098,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                         deleted: false,
                         thread_id: assistantContext.threadId || '',
                         index,
-                        clock: 0,
+                        clock: nextClock(),
                         stream_id: assistantContext.streamId,
                         file_hashes: null,
                     });

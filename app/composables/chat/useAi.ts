@@ -157,6 +157,22 @@ export function useChat(
         }
     }
 
+    async function updateMessageRecord(
+        id: string,
+        patch: Partial<StoredMessage>,
+        existing?: StoredMessage | null
+    ): Promise<void> {
+        const base =
+            existing ??
+            ((await db.messages.get(id)) as StoredMessage | undefined);
+        if (!base) return;
+        await upsert.message({
+            ...base,
+            ...patch,
+            updated_at: patch.updated_at ?? nowSec(),
+        });
+    }
+
     function makeAssistantPersister(
         assistantDbMsg: StoredMessage,
         assistantFileHashes: string[]
@@ -1440,16 +1456,20 @@ export function useChat(
                             existing?.data && typeof existing.data === 'object'
                                 ? (existing.data as Record<string, unknown>)
                                 : {};
-                        await db.messages.update(tailAssistant.value.id, {
-                            data: {
-                                ...baseData,
-                                content: tailAssistant.value.text,
-                                reasoning_text:
-                                    tailAssistant.value.reasoning_text ?? null,
+                        await updateMessageRecord(
+                            tailAssistant.value.id,
+                            {
+                                data: {
+                                    ...baseData,
+                                    content: tailAssistant.value.text,
+                                    reasoning_text:
+                                        tailAssistant.value.reasoning_text ??
+                                        null,
+                                },
+                                error: 'stopped',
                             },
-                            error: 'stopped',
-                            updated_at: nowSec(),
-                        });
+                            existing
+                        );
                     } catch {
                         /* intentionally empty */
                     }
@@ -1523,16 +1543,20 @@ export function useChat(
                             existing?.data && typeof existing.data === 'object'
                                 ? (existing.data as Record<string, unknown>)
                                 : {};
-                        await db.messages.update(tailAssistant.value.id, {
-                            data: {
-                                ...baseData,
-                                content: tailAssistant.value.text,
-                                reasoning_text:
-                                    tailAssistant.value.reasoning_text ?? null,
+                        await updateMessageRecord(
+                            tailAssistant.value.id,
+                            {
+                                data: {
+                                    ...baseData,
+                                    content: tailAssistant.value.text,
+                                    reasoning_text:
+                                        tailAssistant.value.reasoning_text ??
+                                        null,
+                                },
+                                error: 'stream_interrupted',
                             },
-                            error: 'stream_interrupted',
-                            updated_at: nowSec(),
-                        });
+                            existing
+                        );
                     } catch {
                         /* intentionally empty */
                     }
@@ -2296,10 +2320,7 @@ export function useChat(
                     reasoning: current.reasoning_text ?? null,
                     toolCalls: current.toolCalls ?? null,
                 });
-                await db.messages.update(messageId, {
-                    error: null,
-                    updated_at: nowSec(),
-                });
+                await updateMessageRecord(messageId, { error: null });
                 current.error = null;
                 const rawIdx = rawMessages.value.findIndex(
                     (m) => m.id === messageId
@@ -2349,9 +2370,8 @@ export function useChat(
                         };
                     }
                 }
-                await db.messages.update(messageId, {
+                await updateMessageRecord(messageId, {
                     error: 'stream_interrupted',
-                    updated_at: nowSec(),
                 });
                 reportError(e, {
                     code: 'ERR_STREAM_FAILURE',

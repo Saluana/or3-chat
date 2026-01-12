@@ -71,6 +71,18 @@ Use hierarchical strings with dots/colons to keep hooks descriptive:
 
 Wildcards are supported with `*`, e.g. `ui.*:action:after`.
 
+## Sync hook keys
+
+High-signal sync hooks used by the DB sync layer:
+
+-   `sync.bootstrap:action:start`
+-   `sync.bootstrap:action:progress`
+-   `sync.bootstrap:action:complete`
+-   `sync.pull:action:received`
+-   `sync.pull:action:applied`
+-   `sync.pull:action:error`
+-   `sync.subscription:action:statusChange`
+
 ## Examples
 
 ### Subscribe to an action (component-safe)

@@ -69,6 +69,7 @@ const nowSecState = vi.hoisted(() => ({ value: 0 }));
 
 vi.mock('../util', () => ({
     nowSec: vi.fn(() => nowSecState.value),
+    nextClock: vi.fn((clock?: number) => (clock ?? 0) + 1),
 }));
 
 import { listImageMetasPaged, updateFileName } from '../files-select';

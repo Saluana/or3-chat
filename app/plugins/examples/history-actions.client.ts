@@ -9,6 +9,7 @@ import {
 import { useToast } from '#imports';
 import { db } from '~/db';
 import type { Post } from '~/db';
+import { nowSec, nextClock } from '~/db/util';
 
 /**
  * Example plugin: History Actions
@@ -71,7 +72,12 @@ export function setupHistoryActionsExample() {
                     return;
                 }
 
-                await db.threads.update(threadId, { pinned: !row.pinned });
+                await db.threads.put({
+                    ...row,
+                    pinned: !row.pinned,
+                    updated_at: nowSec(),
+                    clock: nextClock(row.clock),
+                });
 
                 toast.add({
                     title: 'Pinned',

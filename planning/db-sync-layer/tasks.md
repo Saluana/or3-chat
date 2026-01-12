@@ -32,11 +32,11 @@ date: 2026-01-11
     - [ ] Create `getNextServerVersion` atomic increment helper
 
 ### 3. Client-Side Sync Types
-- [ ] **3.1 Define shared types** (Requirements: 3.3)
-    - [ ] Create `SyncScope`, `ChangeStamp`, `PendingOp` types
-    - [ ] Create `SyncChange`, `PullRequest`, `PullResponse` types
-    - [ ] Create `PushBatch`, `PushResult` types
-    - [ ] Create `SyncProvider` interface
+- [x] **3.1 Define shared types** (Requirements: 3.3)
+    - [x] Create `SyncScope`, `ChangeStamp`, `PendingOp` types
+    - [x] Create `SyncChange`, `PullRequest`, `PullResponse` types
+    - [x] Create `PushBatch`, `PushResult` types
+    - [x] Create `SyncProvider` interface
 - [ ] **3.2 Create Zod schemas for validation** (Requirements: 3.3)
     - [ ] Define schemas for all sync types
     - [ ] Export for both client and server use
@@ -54,18 +54,18 @@ date: 2026-01-11
 - [ ] **4.3 Add deterministic message ordering**
     - [ ] Add `order_key` to message schema (HLC-derived)
     - [ ] Update Dexie index to `[thread_id+index+order_key]`
-- [ ] **4.3 Ensure clock increments on all write paths**
-    - [ ] Increment `clock` on create/update/delete for threads, messages, projects, posts, kv, file_meta
+- [x] **4.4 Ensure clock increments on all write paths**
+    - [x] Increment `clock` on create/update/delete for threads, messages, projects, posts, kv, file_meta
     - [ ] Add tests to confirm `clock` advances on every mutation
-- [ ] **4.2 Create table interfaces** (Requirements: 3.1)
-    - [ ] Define `Tombstone` interface
-    - [ ] Define `SyncState` interface
-    - [ ] Define `SyncRun` interface
+- [x] **4.5 Create table interfaces** (Requirements: 3.1)
+    - [x] Define `Tombstone` interface
+    - [x] Define `SyncState` interface
+    - [x] Define `SyncRun` interface
 
 ### 5. SyncProvider Implementation
-- [ ] **5.1 Create provider registry** (Requirements: 8.1)
-    - [ ] Create `sync-provider-registry.ts`
-    - [ ] Implement `registerSyncProvider()` and `getActiveSyncProvider()`
+- [x] **5.1 Create provider registry** (Requirements: 8.1)
+    - [x] Create `sync-provider-registry.ts`
+    - [x] Implement `registerSyncProvider()` and `getActiveSyncProvider()`
 - [ ] **5.2 Implement Convex provider** (Requirements: 8.2)
     - [ ] Create `convex-sync-provider.ts`
     - [ ] Set `mode: 'direct'` and required auth template metadata
@@ -78,47 +78,47 @@ date: 2026-01-11
     - [ ] Route gateway providers through SSR endpoints for push/pull
 
 ### 6. HookBridge (Change Capture)
-- [ ] **6.1 Create HookBridge class** (Requirements: 3.1, 3.3)
-    - [ ] Capture writes using Dexie table hooks for atomic outbox writes
-    - [ ] Generate ChangeStamp with deviceId, opId, hlc, clock
-    - [ ] Add remote-write suppression to avoid sync loops
-- [ ] **6.2 Implement HLC generation** (Requirements: 3.3)
-    - [ ] Create hybrid logical clock utility
-    - [ ] Ensure monotonic timestamps
+- [x] **6.1 Create HookBridge class** (Requirements: 3.1, 3.3)
+    - [x] Capture writes using Dexie table hooks for atomic outbox writes
+    - [x] Generate ChangeStamp with deviceId, opId, hlc, clock
+    - [x] Add remote-write suppression to avoid sync loops
+- [x] **6.2 Implement HLC generation** (Requirements: 3.3)
+    - [x] Create hybrid logical clock utility
+    - [x] Ensure monotonic timestamps
 
 ### 7. OutboxManager (Push Loop)
-- [ ] **7.1 Implement OutboxManager class** (Requirements: 3.2, 4.1)
-    - [ ] Create flush loop with configurable interval
-    - [ ] Batch pending ops respecting max batch size
-    - [ ] Mark ops as 'syncing' during push
-- [ ] **7.2 Implement retry logic** (Requirements: 4.1, 4.2)
-    - [ ] Exponential backoff: [250, 1000, 3000, 5000]ms
-    - [ ] Track attempts per op
-    - [ ] Move to 'failed' after max attempts
-- [ ] **7.3 Implement queue management** (Requirements: 3.2)
-    - [ ] Track queue byte size
-    - [ ] Coalesce updates to same record
-    - [ ] Emit `sync.queue:action:full` when at capacity
+- [x] **7.1 Implement OutboxManager class** (Requirements: 3.2, 4.1)
+    - [x] Create flush loop with configurable interval
+    - [x] Batch pending ops respecting max batch size
+    - [x] Mark ops as 'syncing' during push
+- [x] **7.2 Implement retry logic** (Requirements: 4.1, 4.2)
+    - [x] Exponential backoff: [250, 1000, 3000, 5000]ms
+    - [x] Track attempts per op
+    - [x] Move to 'failed' after max attempts
+- [x] **7.3 Implement queue management** (Requirements: 3.2)
+    - [x] Track queue byte size
+    - [x] Coalesce updates to same record
+    - [x] Emit `sync.queue:action:full` when at capacity
 
 ### 8. Pull/Subscribe Loop
-- [ ] **8.1 Create subscription manager** (Requirements: 5.1)
-    - [ ] Subscribe to Convex reactive queries per table
-    - [ ] Route changes to ConflictResolver
-    - [ ] Handle subscription errors gracefully
-- [ ] **8.2 Implement CursorManager** (Requirements: 5.2)
-    - [ ] Persist cursor in sync_state table
-    - [ ] Drive bootstrap pull on cold start
-    - [ ] Detect cursor expiry scenarios
-    - [ ] Keep a single `server_version` cursor per workspace (no per-table cursors)
+- [x] **8.1 Create subscription manager** (Requirements: 5.1)
+    - [x] Subscribe to Convex reactive queries per table
+    - [x] Route changes to ConflictResolver
+    - [x] Handle subscription errors gracefully
+- [x] **8.2 Implement CursorManager** (Requirements: 5.2)
+    - [x] Persist cursor in sync_state table
+    - [x] Drive bootstrap pull on cold start
+    - [x] Detect cursor expiry scenarios
+    - [x] Keep a single `server_version` cursor per workspace (no per-table cursors)
 
 ### 9. ConflictResolver
-- [ ] **9.1 Implement LWW conflict resolution** (Requirements: 6.1)
-    - [ ] Compare clock values
-    - [ ] Use HLC for tie-breaking
-    - [ ] Apply winning version to Dexie
-- [ ] **9.2 Emit conflict hooks** (Requirements: 6.2)
-    - [ ] Call `sync.conflict:action:detected` hook with details
-    - [ ] Include local, remote, and winner info
+- [x] **9.1 Implement LWW conflict resolution** (Requirements: 6.1)
+    - [x] Compare clock values
+    - [x] Use HLC for tie-breaking
+    - [x] Apply winning version to Dexie
+- [x] **9.2 Emit conflict hooks** (Requirements: 6.2)
+    - [x] Call `sync.conflict:action:detected` hook with details
+    - [x] Include local, remote, and winner info
 
 ### 10. Tombstones and GC
 - [ ] **10.1 Implement tombstone tracking** (Requirements: 7.1, 7.2)
@@ -162,15 +162,51 @@ date: 2026-01-11
     - [ ] Define payload types for each hook
 
 ### 14. Testing
-- [ ] **14.1 Unit tests** (Requirements: all)
-    - [ ] ChangeStamp/HLC generation
-    - [ ] Conflict resolution matrix
-    - [ ] Outbox coalescing
-    - [ ] Retry backoff
-- [ ] **14.2 Integration tests**
-    - [ ] Push flow with mock provider
-    - [ ] Pull flow with mock provider
-    - [ ] Conflict scenarios
+- [x] **14.1 Unit tests** (Requirements: all)
+    - [x] ChangeStamp/HLC generation
+    - [x] Conflict resolution matrix
+    - [x] Outbox coalescing
+    - [x] Retry backoff
+- [x] **14.2 Integration tests**
+    - [x] Push flow with mock provider
+    - [x] Pull flow with mock provider
+    - [x] Conflict scenarios
 - [ ] **14.3 E2E tests**
     - [ ] Multi-device sync
     - [ ] Offline recovery
+
+---
+
+## Recommended Implementation Order
+
+> **Note:** Phases are grouped by dependency, not by number. Complete each group before moving to the next.
+
+### Group 1: Client Sync Infrastructure ✅
+- [x] **3.1** Shared sync types
+- [x] **6** HookBridge (change capture)
+- [x] **7** OutboxManager (push loop)
+- [x] **9** ConflictResolver (LWW resolution)
+- [x] **5.1** Provider registry
+- [x] **14.1-14.2** Unit & integration tests
+
+### Group 2: Pull/Subscribe (Current)
+- [/] **8** Pull/Subscribe Loop (CursorManager + SubscriptionManager)
+
+### Group 3: Dexie Schema Migration
+- [ ] **4.1-4.3** Add sync tables to Dexie (pending_ops, tombstones, sync_state, sync_runs)
+- [ ] **4.4** Clock increment tests
+
+### Group 4: Convex Backend
+- [ ] **2** Convex schema and functions
+- [ ] **5.2** Convex provider implementation
+- [ ] **3.2** Zod validation schemas (optional)
+
+### Group 5: Integration & Recovery
+- [ ] **10** Tombstones and GC
+- [ ] **11** Bootstrap and rescan flows
+- [ ] **12** Sync plugin integration
+- [ ] **13** Hook type additions
+- [ ] **5.3** Gateway provider support (optional)
+
+### Group 6: E2E Validation
+- [ ] **14.3** E2E tests (multi-device, offline recovery)

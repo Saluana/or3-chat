@@ -1,7 +1,7 @@
 import { db } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { parseOrThrow, nowSec } from './util';
+import { parseOrThrow, nowSec, nextClock } from './util';
 import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
 
 export async function createKv(input: KvCreate): Promise<Kv> {
@@ -107,7 +107,7 @@ export async function setKvByName(
         value,
         created_at: existing?.created_at ?? now,
         updated_at: now,
-        clock: (existing?.clock ?? 0) + 1,
+        clock: nextClock(existing?.clock),
     };
     const filtered = await hooks.applyFilters(
         'db.kv.upsertByName:filter:input',

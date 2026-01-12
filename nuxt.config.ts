@@ -5,7 +5,19 @@ import { resolve } from 'path';
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = process.env.SSR_AUTH_ENABLED === 'true';
 
+// Convex client URL (required for convex-vue/convex-nuxt)
+// Nuxt does not automatically expose VITE_* vars, so we map it explicitly.
+const convexUrl =
+    process.env.NUXT_PUBLIC_CONVEX_URL || process.env.VITE_CONVEX_URL || '';
+
 export default defineNuxtConfig({
+    // convex-nuxt module options (mirrors into runtimeConfig.public.convex)
+    convex: {
+        url: convexUrl,
+        // Avoid crashing the whole app when Convex isn't configured.
+        // Call sites can decide whether to require Convex.
+        manualInit: !convexUrl,
+    },
     app: {
         head: {
             link: [
@@ -73,8 +85,9 @@ export default defineNuxtConfig({
         '@nuxt/ui',
         '@nuxt/fonts',
         '@vite-pwa/nuxt',
+        'convex-nuxt',
         // Only include Clerk when SSR auth is enabled to preserve static builds
-        ...(isSsrAuthEnabled ? ['@clerk/nuxt', 'convex-nuxt'] : []),
+        ...(isSsrAuthEnabled ? ['@clerk/nuxt'] : []),
     ],
     // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
     srcDir: 'app',

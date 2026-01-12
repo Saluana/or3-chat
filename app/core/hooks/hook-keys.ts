@@ -31,7 +31,26 @@ export type KnownHookKey =
     | 'ui.pane.doc:action:saved'
     | 'ui.pane.msg:action:sent'
     | 'ui.pane.msg:action:received'
-    | 'files.attach:filter:input';
+    | 'files.attach:filter:input'
+    | 'sync.bootstrap:action:start'
+    | 'sync.bootstrap:action:progress'
+    | 'sync.bootstrap:action:complete'
+    | 'sync.pull:action:received'
+    | 'sync.pull:action:applied'
+    | 'sync.pull:action:error'
+    | 'sync.pull:action:after'
+    | 'sync.subscription:action:statusChange'
+    | 'sync.conflict:action:detected'
+    | 'sync.op:action:captured'
+    | 'sync.push:action:before'
+    | 'sync.push:action:after'
+    | 'sync.error:action'
+    | 'sync.retry:action'
+    | 'sync.queue:action:full'
+    | 'sync.rescan:action:starting'
+    | 'sync.rescan:action:progress'
+    | 'sync.rescan:action:completed'
+    | 'sync.stats:action';
 
 // Families for DB hooks as template literal types (broad coverage without listing all)
 export type DbFamily =
