@@ -465,6 +465,50 @@ export interface SyncPendingOpPayload {
     status: 'pending' | 'syncing' | 'failed';
 }
 
+// ============================================================================
+// STORAGE TYPES
+// ============================================================================
+
+export interface StorageFileUploadBeforePayload {
+    hash: string;
+    workspace_id: string;
+    size_bytes: number;
+}
+
+export interface StorageFileUploadAfterPayload {
+    hash: string;
+    workspace_id: string;
+    storage_id: string;
+}
+
+export interface StorageFileDownloadBeforePayload {
+    hash: string;
+    workspace_id: string;
+}
+
+export interface StorageFileDownloadAfterPayload {
+    hash: string;
+    workspace_id: string;
+    size_bytes: number;
+}
+
+export interface StorageFileUrlOptionsPayload {
+    hash: string;
+    expiry_ms: number;
+    disposition?: string;
+}
+
+export interface StorageFileUploadPolicyPayload {
+    hash: string;
+    mime_type: string;
+    size_bytes: number;
+}
+
+export interface StorageFileGcPayload {
+    deleted_count: number;
+    workspace_id: string;
+}
+
 // Generic DB op payloads
 export interface DbCreatePayload<T = unknown> {
     entity: T;
@@ -709,6 +753,15 @@ export type CoreHookPayloadMap = {
     ];
     'auth.user:action:created': [{ userId: string; provider: string }];
     'auth.workspace:action:created': [{ workspaceId: string; userId: string }];
+
+    // Storage hooks
+    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];
+    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];
+    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];
+    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];
+    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];
+    'storage.files.upload:filter:policy': [StorageFileUploadPolicyPayload | false];
+    'storage.files.gc:action:run': [StorageFileGcPayload];
 
     // Sync hooks
     'sync.op:action:captured': [{ op: SyncPendingOpPayload }];

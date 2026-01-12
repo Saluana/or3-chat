@@ -9,6 +9,7 @@ import type {
     Post,
 } from './schema';
 import type { PendingOp, Tombstone, SyncState, SyncRun } from '~~/shared/sync/types';
+import type { FileTransfer } from '~~/shared/storage/types';
 
 export interface FileBlobRow {
     hash: string; // primary key
@@ -25,6 +26,7 @@ export class Or3DB extends Dexie {
     file_meta!: Table<FileMeta, string>; // hash as primary key
     file_blobs!: Table<FileBlobRow, string>; // hash as primary key -> Blob
     posts!: Table<Post, string>;
+    file_transfers!: Table<FileTransfer, string>;
 
     // Sync tables (added in v7)
     pending_ops!: Table<PendingOp, string>;
@@ -88,6 +90,12 @@ export class Or3DB extends Dexie {
                         }
                     });
             });
+
+        // Version 8: Add file transfer queue table (local-only transfer state)
+        this.version(8).stores({
+            file_transfers:
+                'id, hash, direction, state, workspace_id, created_at, updated_at, [hash+direction], [state+created_at]',
+        });
     }
 }
 

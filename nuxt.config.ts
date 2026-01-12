@@ -58,6 +58,9 @@ export default defineNuxtConfig({
             // Single source of truth for client gating.
             // Avoid inferring enablement from presence of publishable keys.
             ssrAuthEnabled: isSsrAuthEnabled,
+            storage: {
+                provider: process.env.NUXT_PUBLIC_STORAGE_PROVIDER || 'convex',
+            },
             // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
             clerkPublishableKey: '',
         },

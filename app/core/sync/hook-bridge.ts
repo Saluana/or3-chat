@@ -107,12 +107,24 @@ export class HookBridge {
             }
         }
 
+        let payloadForSync = payload;
+        if (
+            tableName === 'file_meta' &&
+            operation === 'put' &&
+            payload &&
+            typeof payload === 'object'
+        ) {
+            const sanitized = { ...(payload as Record<string, unknown>) };
+            delete sanitized.ref_count;
+            payloadForSync = sanitized;
+        }
+
         const pendingOp: PendingOp = {
             id: crypto.randomUUID(),
             tableName,
             operation,
             pk,
-            payload: operation === 'put' ? payload : undefined,
+            payload: operation === 'put' ? payloadForSync : undefined,
             stamp,
             createdAt: Date.now(),
             attempts: 0,

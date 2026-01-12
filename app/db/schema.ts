@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { newId, nowSec } from './util';
+import { isValidHash } from '~/utils/hash';
 
 export const ProjectSchema = z.object({
     id: z.string(),
@@ -83,7 +84,7 @@ export const MessageSchema = z.object({
     order_key: z.string().optional(),
     clock: z.number().int(),
     stream_id: z.string().nullable().optional(),
-    // JSON serialized array of file content hashes (md5) or null/undefined when absent.
+    // JSON serialized array of file content hashes (sha256/md5) or null/undefined when absent.
     // Kept as a string to avoid bloating indexed row size & allow lazy parsing.
     file_hashes: z.string().nullable().optional(),
 });
@@ -204,7 +205,7 @@ export type AttachmentCreate = z.infer<typeof AttachmentCreateSchema>;
 // file meta (metadata only; binary stored separately in file_blobs table)
 export const FileMetaSchema = z.object({
     // Use hash as both primary key and lookup value for simplicity
-    hash: z.string(), // md5 hex lowercase
+    hash: z.string().refine(isValidHash, 'Invalid file hash format'),
     name: z.string(),
     mime_type: z.string(),
     kind: z.enum(['image', 'pdf']).default('image'),
@@ -213,6 +214,8 @@ export const FileMetaSchema = z.object({
     height: z.number().int().optional(),
     page_count: z.number().int().optional(),
     ref_count: z.number().int().default(0),
+    storage_provider_id: z.string().optional(),
+    storage_id: z.string().optional(),
     created_at: z.number().int(),
     updated_at: z.number().int(),
     deleted: z.boolean().default(false),

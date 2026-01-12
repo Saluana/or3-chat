@@ -215,7 +215,7 @@ export default defineSchema({
      */
     file_meta: defineTable({
         workspace_id: v.id('workspaces'),
-        hash: v.string(), // MD5 hex, used as PK on Dexie side
+        hash: v.string(), // sha256:<hex> or md5:<hex>
         name: v.string(),
         mime_type: v.string(),
         kind: v.union(v.literal('image'), v.literal('pdf')),
@@ -225,12 +225,15 @@ export default defineSchema({
         page_count: v.optional(v.number()),
         ref_count: v.number(), // Derived locally, synced as hint
         storage_id: v.optional(v.id('_storage')), // Convex storage reference
+        storage_provider_id: v.optional(v.string()),
         deleted: v.boolean(),
         deleted_at: v.optional(v.number()),
         created_at: v.number(),
         updated_at: v.number(),
         clock: v.number(),
-    }).index('by_workspace_hash', ['workspace_id', 'hash']),
+    })
+        .index('by_workspace_hash', ['workspace_id', 'hash'])
+        .index('by_workspace_deleted', ['workspace_id', 'deleted']),
 
     /**
      * KV store - key-value pairs for user preferences

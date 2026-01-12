@@ -9,6 +9,7 @@
  */
 
 import type * as sync from "../sync.js";
+import type * as storage from "../storage.js";
 import type * as users from "../users.js";
 
 import type {
@@ -19,6 +20,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   sync: typeof sync;
+  storage: typeof storage;
   users: typeof users;
 }>;
 
