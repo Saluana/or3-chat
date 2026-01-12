@@ -87,11 +87,12 @@ date: 2026-01-11
     - [x] Implement `generateUploadUrl` mutation
     - [x] Implement `commitUpload` mutation
     - [x] Implement `getFileUrl` query
-- [ ] **6.2 Implement sync functions** (Requirements: 2.1, 2.3)
-    - [ ] Create `convex/sync.ts`
-    - [ ] Implement `syncThread` mutation
-    - [ ] Implement `syncMessage` mutation
-    - [ ] Implement conflict resolution logic
+- [x] **6.2 Implement sync functions** (Requirements: 2.1, 2.3)
+    - [x] Create `convex/sync.ts`
+    - [x] Implement `push` mutation (batch write with idempotency)
+    - [x] Implement `pull` query (cursor-based fetch)
+    - [x] Implement `watchChanges` query (reactive subscriptions)
+    - [x] Implement LWW conflict resolution in `applyOpToTable`
 
 ### 7. Hook Integration
 - [x] **7.1 Add storage hooks to hook-types.ts** (Requirements: 9.1, 9.2)
@@ -110,23 +111,23 @@ date: 2026-01-11
     - [x] Call hooks on sync operations
 
 ### 8. Sync Engine
-- [ ] **8.1 Implement sync outbox** (Requirements: 2.1)
-    - [ ] Create sync outbox table in Dexie
-    - [ ] Queue local writes for sync
-    - [ ] Process outbox in background
-- [ ] **8.2 Implement reactive subscriptions** (Requirements: 2.1)
-    - [ ] Set up Convex Vue integration
-    - [ ] Subscribe to remote changes
-    - [ ] Merge remote changes into local DB
-- [ ] **8.3 Implement conflict resolution** (Requirements: 2.3)
-    - [ ] Compare clock values
-    - [ ] Apply last-write-wins strategy
-    - [ ] Emit conflict detection hooks
+- [x] **8.1 Implement sync outbox** (Requirements: 2.1)
+    - [x] Create pending_ops table in Dexie (via HookBridge)
+    - [x] Queue local writes for sync via Dexie hooks
+    - [x] Process outbox in background (OutboxManager)
+- [x] **8.2 Implement reactive subscriptions** (Requirements: 2.1)
+    - [x] Set up Convex Vue integration (convex-sync-provider.ts)
+    - [x] Subscribe to remote changes (SubscriptionManager)
+    - [x] Merge remote changes into local DB (ConflictResolver)
+- [x] **8.3 Implement conflict resolution** (Requirements: 2.3)
+    - [x] Compare clock values (LWW strategy)
+    - [x] Apply last-write-wins strategy
+    - [x] Emit conflict detection hooks
 
 ### 9. Delete and GC
-- [ ] **9.1 Extend soft delete for remote** (Requirements: 7.1, 7.2)
-    - [ ] Sync deleted flag to Convex
-    - [ ] Store `deletedAt` timestamp
+- [x] **9.1 Extend soft delete for remote** (Requirements: 7.1, 7.2)
+    - [x] Sync deleted flag to Convex (via HookBridge delete capture)
+    - [x] Store `deletedAt` timestamp (tombstones table)
 - [x] **9.2 Implement GC logic** (Requirements: 7.2, 7.3)
     - [x] Query eligible files (ref_count=0, deleted=true, age > retention)
     - [x] Delete from Convex storage
