@@ -189,7 +189,10 @@ This document defines requirements for the **database synchronization layer** in
 
 - WHEN a sync run completes THEN stats SHALL be written to `sync_runs` table.
 - WHEN viewing dev overlay THEN sync state SHALL be visible.
-2.3 As a developer, I want local data isolated per workspace without adding `workspaceId` to every row.
 
-- WHEN a workspace is active THEN the client SHALL open a workspace-specific Dexie DB (`or3-db-${workspaceId}`).
-- WHEN switching workspaces THEN the client SHALL switch DB instances without mutating existing rows.
+2.3 As a developer, I want local data isolated per workspace using workspace_id fields.
+
+- WHEN in SSR mode THEN all synced records SHALL include a `workspace_id` field.
+- WHEN in static mode THEN `workspace_id` SHALL be null (not used).
+- WHEN syncing data THEN the client SHALL use a single Dexie DB (`or3-db`) with workspace_id filtering.
+- WHEN switching workspaces THEN queries SHALL filter by the active workspace_id.

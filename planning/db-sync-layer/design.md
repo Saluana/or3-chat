@@ -73,34 +73,64 @@ graph TB
 
 ---
 
+## Feature Detection
+
+The sync layer is **optional** and only activates when OR3-Cloud is enabled. All sync code must check runtime config before executing:
+
+```typescript
+// app/config/or3-cloud.ts
+export const useOr3CloudConfig = () => {
+    const config = useRuntimeConfig();
+    return {
+        enabled: config.public.or3CloudEnabled ?? false,
+        syncEnabled: config.public.syncEnabled ?? false,
+        authProvider: config.public.authProvider ?? 'openrouter', // 'clerk' in SSR
+    };
+};
+```
+
 ## Core Components
 
 ### 1. Sync Plugin (`app/plugins/convex-sync.client.ts`)
 
-Bootstrap sync engine on authenticated session:
+Bootstrap sync engine on authenticated session with feature detection:
 
 ```typescript
 export default defineNuxtPlugin(async () => {
-    // Only run on client, only when SSR auth enabled
+    // Only run on client
     if (import.meta.server) return;
+
+    // Check if OR3-Cloud sync is enabled
+    const { enabled, syncEnabled } = useOr3CloudConfig();
+    if (!enabled || !syncEnabled) {
+        console.log('[sync] OR3-Cloud sync disabled, skipping initialization');
+        return;
+    }
 
     const { session } = useSessionContext();
     const provider = getActiveSyncProvider();
     const tokenBroker = useAuthTokenBroker();
+    
+    let currentEngine: SyncEngine | null = null;
 
     watch(session, async (s) => {
+        // Clean up old engine before starting new one
+        if (currentEngine) {
+            await currentEngine.stop();
+            currentEngine = null;
+        }
+        
         if (s?.authenticated && s.workspace) {
-            const db = useWorkspaceDb(s.workspace.id); // or3-db-${workspaceId}
+            // Use single DB with workspace_id field (Option A)
+            const db = useDb(); // or3-db (single DB for all workspaces)
             if (provider.mode === 'direct' && provider.auth) {
                 await tokenBroker.ensureProviderToken(provider.auth);
             }
-            await syncEngine.start({
+            currentEngine = await syncEngine.start({
                 workspaceId: s.workspace.id,
                 provider,
                 db,
             });
-        } else {
-            await syncEngine.stop();
         }
     }, { immediate: true });
 });
@@ -508,9 +538,20 @@ export const push = mutation({
         })),
     },
     handler: async (ctx, args) => {
-        // Verify workspace membership
+        // Verify user authentication
         const identity = await ctx.auth.getUserIdentity();
         if (!identity) throw new Error("Unauthorized");
+        
+        // Verify workspace membership (SECURITY: Critical check)
+        const membership = await ctx.db
+            .query("workspaceMembers")
+            .withIndex("by_user", (q: any) => q.eq("user_id", identity.subject))
+            .filter((q: any) => q.eq(q.field("workspace_id"), args.workspace_id))
+            .first();
+        
+        if (!membership) {
+            throw new Error("Access denied: not a workspace member");
+        }
         
         const results: Array<{
             opId: string;
@@ -758,9 +799,13 @@ export class Or3DB extends Dexie {
 }
 ```
 
-Note:
-- In SSR mode, instantiate `Or3DB` per workspace (`or3-db-${workspaceId}`) and pass the instance into the sync engine.
-- Add `order_key` to `messages` and include it in the compound index (`[thread_id+index+order_key]`) for deterministic ordering.
+**Schema updates for sync (v7):**
+- Use single DB `or3-db` for all workspaces in SSR mode (workspace_id field per row)
+- Add `workspace_id` field to all synced tables (threads, messages, projects, posts, kv, file_meta) - nullable, defaults to null in static builds
+- Add `order_key` to `messages` table with compound index `[thread_id+index+order_key]` for deterministic ordering
+- Add `deleted_at` field to all synced tables for tombstone tracking
+- Add `hlc` field to all synced tables to store Hybrid Logical Clock for tie-breaking
+- Sync tables: `pending_ops`, `tombstones`, `sync_state`, `sync_runs`
 
 ### Change log retention
 
@@ -771,7 +816,7 @@ To bound `change_log` growth, track the minimum `server_version` seen by active 
 
 ### HookBridge (Capture Mutations)
 
-Capture must be atomic and must not loop on remote-applied writes. The capture layer should use Dexie table hooks so the outbox write runs inside the same transaction as the original write, and it should be suppressed when applying remote changes.
+Capture must be atomic and must not loop on remote-applied writes. **Important:** Dexie hooks cannot write to other tables within the same transaction. Instead, we buffer operations during hooks and flush to `pending_ops` after the transaction commits.
 
 If a message payload is missing `order_key`, derive it from the same HLC used for the PendingOp to keep ordering deterministic.
 
@@ -781,6 +826,7 @@ If a message payload is missing `order_key`, derive it from the same HLC used fo
 export class HookBridge {
     private deviceId: string;
     private captureEnabled = true;
+    private opBuffer: Array<{ tableName: string; operation: 'put' | 'delete'; pk: string; payload: unknown }> = [];
 
     constructor(private db: Or3DB) {
         this.deviceId = this.getOrCreateDeviceId();
@@ -790,31 +836,51 @@ export class HookBridge {
         const tables = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'];
 
         for (const tableName of tables) {
-            this.db.table(tableName).hook('creating', (pk, obj, tx) => {
+            // Use 'updated' hook which fires AFTER transaction commits
+            this.db.table(tableName).hook('updated', (mods, pk, obj, tx) => {
                 if (!this.captureEnabled) return;
-                this.enqueueOp(tx, tableName, 'put', pk, obj);
+                // Buffer the operation for async processing
+                this.opBuffer.push({
+                    tableName,
+                    operation: 'put',
+                    pk,
+                    payload: { ...obj, ...mods },
+                });
+                // Flush buffer asynchronously after this microtask
+                queueMicrotask(() => this.flushBuffer());
             });
-            this.db.table(tableName).hook('updating', (mods, pk, obj, tx) => {
+            
+            this.db.table(tableName).hook('created', (pk, obj, tx) => {
                 if (!this.captureEnabled) return;
-                const merged = { ...obj, ...mods };
-                this.enqueueOp(tx, tableName, 'put', pk, merged);
+                this.opBuffer.push({
+                    tableName,
+                    operation: 'put',
+                    pk,
+                    payload: obj,
+                });
+                queueMicrotask(() => this.flushBuffer());
             });
-            this.db.table(tableName).hook('deleting', (pk, obj, tx) => {
+            
+            this.db.table(tableName).hook('deleted', (pk, obj, tx) => {
                 if (!this.captureEnabled) return;
-                this.enqueueOp(tx, tableName, 'delete', pk, obj);
+                this.opBuffer.push({
+                    tableName,
+                    operation: 'delete',
+                    pk,
+                    payload: obj,
+                });
+                queueMicrotask(() => this.flushBuffer());
             });
         }
     }
-
-    withRemoteSuppression<T>(fn: () => Promise<T>): Promise<T> {
-        this.captureEnabled = false;
-        return fn().finally(() => {
-            this.captureEnabled = true;
-        });
-    }
-
-    private enqueueOp(tx: Dexie.Transaction, tableName: string, operation: 'put' | 'delete', pk: string, payload: unknown) {
-        const op: PendingOp = {
+    
+    private async flushBuffer() {
+        if (this.opBuffer.length === 0) return;
+        
+        const opsToFlush = [...this.opBuffer];
+        this.opBuffer = [];
+        
+        const pendingOps = opsToFlush.map(({ tableName, operation, pk, payload }) => ({
             id: crypto.randomUUID(),
             tableName,
             operation,
@@ -828,11 +894,35 @@ export class HookBridge {
             },
             createdAt: Date.now(),
             attempts: 0,
-            status: 'pending',
-        };
+            status: 'pending' as const,
+        }));
+        
+        await this.db.pending_ops.bulkAdd(pendingOps);
+        
+        for (const op of pendingOps) {
+            useHooks().doAction('sync.op:action:captured', { op });
+        }
+    }
 
-        tx.table('pending_ops').add(op);
-        useHooks().doAction('sync.op:action:captured', { op });
+    withRemoteSuppression<T>(fn: () => Promise<T>): Promise<T> {
+        this.captureEnabled = false;
+        return fn().finally(() => {
+            this.captureEnabled = true;
+        });
+    }
+
+    private generateHLC(): string {
+        // Hybrid logical clock: timestamp + counter for same-ms events
+        const now = Date.now();
+        return `${now}-${Math.random().toString(36).substr(2, 9)}`;
+    }
+    
+    private getOrCreateDeviceId(): string {
+        const stored = localStorage.getItem('or3-device-id');
+        if (stored) return stored;
+        const id = crypto.randomUUID();
+        localStorage.setItem('or3-device-id', id);
+        return id;
     }
 }
 ```
@@ -928,32 +1018,58 @@ export class OutboxManager {
         }
     }
 }
+
+// Outbox coalescing helper
+function coalesceOps(ops: PendingOp[]): PendingOp[] {
+    const map = new Map<string, PendingOp>();
+    
+    for (const op of ops) {
+        const key = `${op.tableName}:${op.pk}`;
+        const existing = map.get(key);
+        
+        if (!existing) {
+            map.set(key, op);
+        } else {
+            // Keep the latest operation based on createdAt
+            if (op.createdAt > existing.createdAt) {
+                map.set(key, op);
+            }
+        }
+    }
+    
+    return Array.from(map.values());
+}
 ```
 
-Outbox coalescing (required):
-- Combine multiple pending ops for the same `{ tableName, pk }` to the latest operation before push.
-- Emit `sync.queue:action:full` if pending ops exceed the configured max.
+Outbox coalescing automatically combines multiple pending ops for the same `{ tableName, pk }` to the latest operation before push, reducing bandwidth and preventing duplicate work.
 
 ### ConflictResolver (Apply Remote Changes)
+
+Handles LWW conflict resolution with atomic clock increments and message index collision handling.
 
 ```typescript
 // app/core/sync/conflict-resolver.ts
 
 export class ConflictResolver {
+    constructor(private db: Or3DB) {}
+    
     async apply(change: SyncChange): Promise<void> {
         const { tableName, pk, op, payload, stamp } = change;
         
         // Get local record
-        const table = db.table(tableName);
+        const table = this.db.table(tableName);
         const local = await table.get(pk);
         
         if (op === 'delete') {
             if (local && !local.deleted) {
-                // Apply tombstone
+                // Apply tombstone with atomic clock increment
+                const nextClock = (local.clock ?? 0) + 1;
                 await table.put({
                     ...local,
                     deleted: true,
-                    deletedAt: Date.now(),
+                    deleted_at: Date.now(),
+                    clock: nextClock,
+                    updated_at: Date.now(),
                 });
             }
             return;
@@ -965,12 +1081,25 @@ export class ConflictResolver {
             const remoteClock = stamp.clock;
             
             if (remoteClock > localClock) {
-                // Remote wins
-                await table.put({ ...payload, id: pk });
+                // Remote wins - apply with incremented clock
+                const nextClock = remoteClock + 1;
+                await table.put({ 
+                    ...payload, 
+                    id: pk,
+                    clock: nextClock,
+                    updated_at: Date.now(),
+                });
             } else if (remoteClock === localClock) {
-                // Tie-break on HLC/opId (requires storing or deriving local stamp)
-                if (shouldAcceptRemote(stamp, local)) {
-                    await table.put({ ...payload, id: pk });
+                // Tie-break on HLC lexicographically
+                if (stamp.hlc > (local.hlc || '')) {
+                    const nextClock = remoteClock + 1;
+                    await table.put({ 
+                        ...payload, 
+                        id: pk,
+                        clock: nextClock,
+                        hlc: stamp.hlc,
+                        updated_at: Date.now(),
+                    });
                 }
                 // Emit conflict for observability
                 useHooks().doAction('sync.conflict:action:detected', {
@@ -978,20 +1107,143 @@ export class ConflictResolver {
                     pk,
                     local,
                     remote: payload,
-                    winner: 'remote',
+                    winner: stamp.hlc > (local.hlc || '') ? 'remote' : 'local',
                 });
             }
             // else: local wins, no-op
         } else {
-            // New record
-            await table.put({ ...payload, id: pk });
+            // New record - ensure clock is set
+            await table.put({ 
+                ...payload, 
+                id: pk,
+                clock: stamp.clock,
+                hlc: stamp.hlc,
+                created_at: payload.created_at || Date.now(),
+                updated_at: Date.now(),
+            });
+        }
+        
+        // Special handling for messages with index collisions
+        if (tableName === 'messages') {
+            await this.resolveMessageIndexCollision(payload as any, stamp);
+        }
+    }
+    
+    private async resolveMessageIndexCollision(message: any, stamp: ChangeStamp): Promise<void> {
+        // Check if another message exists at the same (thread_id, index)
+        const collision = await this.db.messages
+            .where('[thread_id+index]')
+            .equals([message.thread_id, message.index])
+            .and(msg => msg.id !== message.id)
+            .first();
+        
+        if (!collision) return;
+        
+        // Resolve collision using clock then order_key
+        const messageClock = stamp.clock;
+        const collisionClock = collision.clock ?? 0;
+        
+        if (messageClock > collisionClock) {
+            // Incoming message wins - delete collision
+            await this.db.messages.delete(collision.id);
+            useHooks().doAction('sync.conflict:action:detected', {
+                tableName: 'messages',
+                pk: collision.id,
+                local: collision,
+                remote: message,
+                winner: 'remote',
+            });
+        } else if (messageClock === collisionClock) {
+            // Tie-break on order_key lexicographically
+            const messageOrderKey = message.order_key || stamp.hlc;
+            const collisionOrderKey = collision.order_key || collision.hlc || '';
+            
+            if (messageOrderKey > collisionOrderKey) {
+                // Incoming message wins
+                await this.db.messages.delete(collision.id);
+                useHooks().doAction('sync.conflict:action:detected', {
+                    tableName: 'messages',
+                    pk: collision.id,
+                    local: collision,
+                    remote: message,
+                    winner: 'remote',
+                });
+            } else {
+                // Local wins - delete incoming (already applied, so remove it)
+                await this.db.messages.delete(message.id);
+                useHooks().doAction('sync.conflict:action:detected', {
+                    tableName: 'messages',
+                    pk: message.id,
+                    local: collision,
+                    remote: message,
+                    winner: 'local',
+                });
+            }
+        }
+        // else: collision wins, delete incoming message
+        else {
+            await this.db.messages.delete(message.id);
         }
     }
 }
 ```
 
-Message ordering note:
-- When multiple devices insert messages at the same index, stabilize ordering using a stored `order_key` derived from the operation HLC and include it in sync payloads.
+**Message ordering strategy:**
+- When multiple devices insert messages at the same `(thread_id, index)`, the conflict resolver compares `clock` values first (LWW).
+- If clocks are equal, it compares `order_key` lexicographically (derived from HLC).
+- The losing message is deleted and a conflict event is emitted for observability.
+- All writes include atomic clock increments to ensure monotonicity.
+
+---
+
+### CursorManager (Track Sync Progress)
+
+Manages the sync cursor to avoid re-downloading the entire change log on each startup.
+
+```typescript
+// app/core/sync/cursor-manager.ts
+
+export class CursorManager {
+    constructor(private db: Or3DB) {}
+    
+    async load(scope: SyncScope): Promise<number> {
+        const state = await this.db.sync_state.get(`cursor:${scope.workspaceId}`);
+        return state?.cursor ?? 0;
+    }
+    
+    async save(scope: SyncScope, cursor: number): Promise<void> {
+        await this.db.sync_state.put({
+            id: `cursor:${scope.workspaceId}`,
+            cursor,
+            tableName: 'global',
+            updated_at: Date.now(),
+        });
+    }
+    
+    async updateDeviceCursor(scope: SyncScope, deviceId: string, version: number): Promise<void> {
+        // Periodically report this device's cursor to enable GC on the server
+        await this.db.sync_state.put({
+            id: `device:${scope.workspaceId}:${deviceId}`,
+            cursor: version,
+            tableName: 'device_cursor',
+            updated_at: Date.now(),
+        });
+    }
+}
+```
+
+**Usage in sync engine:**
+```typescript
+// On startup
+const cursor = await cursorManager.load(scope);
+await pullEngine.bootstrap(cursor);
+
+// After successful pull
+await cursorManager.save(scope, newCursor);
+
+// Periodically (every 5 minutes)
+await cursorManager.updateDeviceCursor(scope, deviceId, currentCursor);
+```
 
 ---
 
