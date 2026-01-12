@@ -2,55 +2,66 @@
 
 **Date:** 2026-01-12  
 **Reviewer:** Code Review Agent  
-**Status:** ❌ FAILED - Not Ready for Implementation
+**Status:** ⚠️ Needs Clarification & Technical Fixes
+
+## Important Context
+
+**OR3-Cloud features (SSR auth, sync, storage) are OPTIONAL.** The app must function as:
+- **Static build** (default): Local-first, no sync, OpenRouter PKCE auth only
+- **SSR build** (optional): Enables Clerk auth, workspace sync, multi-user features
+
+The db-sync-layer design is for **optional SSR mode only**. These features should be toggleable and not break static builds.
 
 ## Executive Summary
 
-The db-sync-layer documentation contains **multiple blocking issues** that must be resolved before implementation:
+The db-sync-layer documentation has several **technical issues** that need fixing before implementation:
 
-1. **SSR mode is not enabled** - The entire design assumes SSR but `nuxt.config.ts` has no `ssr: true`
-2. **Auth system does not exist** - Referenced auth APIs (`AuthTokenBroker`, `useSessionContext()`, workspace membership) are not implemented
-3. **Workspace isolation strategy conflict** - Requirement 2.3 pivots to separate DBs per workspace, contradicting the Convex schema that uses `workspace_id` fields
-4. **Race conditions in clock increment** - Clock field must increment atomically but design doesn't enforce this
-5. **Message ordering is fragile** - `order_key` generation is unspecified, leading to potential index collisions
-6. **Missing dependencies** - `convex` and `convex-vue` are not in `package.json`
+1. ✅ **SSR/Auth are optional** - Design correctly assumes SSR mode, but needs runtime guards
+2. ❌ **Workspace isolation strategy conflict** - Requirement 2.3 contradicts Convex schema design
+3. ❌ **Race conditions in clock increment** - Clock field must increment atomically but design doesn't enforce this
+4. ❌ **Message ordering is fragile** - `order_key` generation is unspecified, leading to potential index collisions
+5. ❌ **Missing dependencies** - `convex` and `convex-vue` are not in `package.json` (needed for SSR mode)
+6. ❌ **Missing runtime toggles** - No clear guards to prevent SSR code from running in static builds
 
 ## Critical Issues (Must Fix Before Implementation)
 
-### 1. No SSR Mode Configured
+### 1. SSR/Auth Dependencies - Add Runtime Guards
 
-**Severity:** Blocker  
-**Location:** `nuxt.config.ts`  
-**Problem:** The entire sync design assumes SSR is enabled, but the app is currently client-only. All server routes, Convex mutations, and auth assumptions are dead code.
+**Severity:** High (Architecture)  
+**Location:** Throughout design.md  
+**Problem:** The design assumes SSR auth exists but doesn't show how to gracefully handle static builds where these features are disabled.
 
-**Fix:**
+**Context:** OR3-Cloud is optional. Auth via Clerk exists in SSR mode (`bun run dev:ssr`). Static builds use only OpenRouter PKCE.
+
+**Fix:** Add runtime feature detection and graceful degradation:
+
 ```typescript
-// nuxt.config.ts
-export default defineNuxtConfig({
-    ssr: true, // REQUIRED for SSR features
-    // ... rest
+// app/plugins/convex-sync.client.ts
+export default defineNuxtPlugin(async () => {
+    // Only run if SSR auth is enabled
+    if (!useRuntimeConfig().public.or3CloudEnabled) {
+        console.log('[sync] OR3-Cloud disabled, skipping sync initialization');
+        return;
+    }
+
+    // Only run on client, only when SSR auth enabled
+    if (import.meta.server) return;
+
+    const { session } = useSessionContext();
+    // ... rest of sync logic
 });
 ```
 
----
-
-### 2. Auth System Does Not Exist
-
-**Severity:** Blocker  
-**Location:** `design.md` lines 86-88, 1054  
-**Problem:** The design references `useSessionContext()`, `AuthTokenBroker`, and workspace membership, but the codebase only has OpenRouter PKCE (client-only, no workspace concept).
-
-**Impact:** Sync cannot start without workspace context and authorization.
-
-**Solution Options:**
-1. **Implement full SSR auth first** (recommended in planning/ssr-auth docs)
-2. **Simplify for v1**: Drop workspace isolation, sync everything to single Convex workspace per user
+**Requirements for design.md:**
+- Add "Feature Detection" section showing how to check if OR3-Cloud is enabled
+- Document `runtimeConfig.public.or3CloudEnabled` flag
+- Show graceful no-ops for all sync composables when feature is disabled
 
 ---
 
-### 3. Workspace Isolation Strategy Broken
+### 2. Workspace Isolation Strategy Conflict
 
-**Severity:** Blocker  
+**Severity:** High (Architecture)  
 **Location:** `requirements.md` lines 192-196, `design.md` line 93, Convex schema  
 **Problem:** Requirement 2.3 (late addition) proposes separate Dexie DBs per workspace (`or3-db-${workspaceId}`), but:
 - All Convex tables still have `workspace_id` fields and indexes
@@ -59,24 +70,26 @@ export default defineNuxtConfig({
 
 **Impact:** Fundamental architecture confusion. Cannot implement both strategies simultaneously.
 
-**Recommendation:** Choose one strategy:
+**Recommendation:** Choose one strategy and document it clearly:
 
-**Option A: Single DB, workspace_id per row** (recommended)
-- Simpler migration
-- Add `workspace_id` column to all Dexie tables
+**Option A: Single DB, workspace_id per row** (recommended for OR3-Cloud)
+- Simpler migration for SSR mode
+- Add `workspace_id` column to all Dexie tables (only populated in SSR mode)
 - Convex schema already correct
 - Bump Dexie version to 7
+- Static builds ignore `workspace_id` field (always null)
 
-**Option B: DB per workspace**
+**Option B: DB per workspace** (complex)
 - Remove `workspace_id` from all Convex tables
 - Requires complex Convex deployment strategy
 - No clear benefit over Option A
+- Harder to migrate between static and SSR modes
 
 ---
 
-### 4. Clock Increment Not Atomic
+### 3. Clock Increment Not Atomic
 
-**Severity:** High  
+**Severity:** High (Data Integrity)  
 **Location:** `design.md` line 827, 707-714  
 **Problem:** LWW conflict resolution depends on `clock` being a monotonic per-record version counter, but design uses incoming clock as-is: `clock: (payload as any)?.clock ?? 0`
 
@@ -95,9 +108,9 @@ await ctx.db.patch(existing._id, { ...op.payload, clock: serverClock });
 
 ---
 
-### 5. Message order_key Generation Unspecified
+### 4. Message order_key Generation Unspecified
 
-**Severity:** High  
+**Severity:** High (Data Integrity)  
 **Location:** `requirements.md` lines 122-124, `design.md` line 388, 776  
 **Problem:** Two devices insert messages at same `(thread_id, index)`. Both generate `order_key` from local HLC. Which message wins? Design doesn't specify collision resolution.
 
@@ -110,26 +123,65 @@ await ctx.db.patch(existing._id, { ...op.payload, clock: serverClock });
 
 ---
 
-### 6. Missing Convex Dependencies
+### 5. Missing Convex Dependencies (SSR Mode Only)
 
 **Severity:** Medium  
 **Location:** `package.json`, `tasks.md` line 10  
-**Problem:** `convex` and `convex-vue` are referenced but not installed.
+**Problem:** `convex` and `convex-vue` are referenced but not installed. These are only needed for SSR mode with sync enabled.
 
-**Fix:**
+**Fix:** Document that these are optional dependencies for SSR mode:
 ```bash
+# Only needed if deploying with OR3-Cloud sync enabled
 npm install --legacy-peer-deps convex convex-vue
+```
+
+**Recommendation:** Make these peer dependencies or document as optional in tasks.md.
+
+---
+
+### 6. Missing Runtime Feature Toggles
+
+**Severity:** Medium (Architecture)  
+**Location:** Throughout design  
+**Problem:** No clear mechanism shown for detecting if OR3-Cloud features are enabled at runtime.
+
+**Fix:** Add to design.md:
+
+```typescript
+// app/config/or3-cloud.ts
+export const useOr3CloudConfig = () => {
+    const config = useRuntimeConfig();
+    return {
+        enabled: config.public.or3CloudEnabled ?? false,
+        syncEnabled: config.public.syncEnabled ?? false,
+        authProvider: config.public.authProvider ?? 'openrouter', // 'clerk' in SSR
+    };
+};
+
+// Usage in sync plugin
+export default defineNuxtPlugin(() => {
+    const { enabled, syncEnabled } = useOr3CloudConfig();
+    
+    if (!enabled || !syncEnabled) {
+        console.log('[sync] OR3-Cloud sync disabled');
+        return;
+    }
+    
+    // Initialize sync engine...
+});
 ```
 
 ---
 
-## High Priority Issues
+## High Priority Issues (Technical Fixes)
 
 ### 7. Security: No Workspace Membership Check
 
-**Severity:** High (Security)  
+**Severity:** High (Security) - **SSR Mode Only**  
 **Location:** `design.md` lines 512-513  
 **Problem:** Convex `push` mutation verifies user identity but doesn't check workspace membership. Any authenticated user can push to any workspace.
+
+**Note:** This only applies when sync is enabled in SSR mode.
 
 **Fix:**
 ```typescript
@@ -147,22 +199,28 @@ if (!membership) {
 
 ---
 
-### 8. Missing Schema Fields
+### 8. Missing Schema Fields (For Sync Support)
 
 **Severity:** High  
 **Location:** `app/db/schema.ts`  
-**Problem:** Dexie schemas missing `order_key` and `deleted_at` fields that Convex has.
+**Problem:** Dexie schemas missing `order_key` and `deleted_at` fields that Convex has. These fields should be optional and only used when sync is enabled.
 
 **Fix:**
 ```typescript
 export const MessageSchema = z.object({
     // ... existing fields ...
-    order_key: z.string(),
-    deleted_at: z.number().int().nullable().optional(),
+    order_key: z.string().optional(), // Only used with sync
+    deleted_at: z.number().int().nullable().optional(), // Only used with sync
+    workspace_id: z.string().nullable().optional(), // Only used in SSR mode
 });
 ```
 
 Apply to all schemas: threads, messages, projects, posts, kv, file_meta.
+
+**Important:** These fields should gracefully degrade:
+- In static builds: always null/undefined
+- In SSR builds without sync: always null/undefined  
+- In SSR builds with sync: populated by sync engine
 
 ---
 
@@ -309,36 +367,92 @@ const debouncedOnChanges = debounce(onChanges, 100);
 
 Before implementing this design:
 
-- [ ] **Enable SSR mode** (`ssr: true` in `nuxt.config.ts`)
-- [ ] **Implement or stub auth system** (session, workspace membership, token broker)
-- [ ] **Resolve workspace isolation strategy** (Option A recommended)
-- [ ] **Add missing schema fields** (order_key, deleted_at)
-- [ ] **Install Convex dependencies**
-- [ ] **Implement atomic clock increment**
-- [ ] **Add message collision resolution**
-- [ ] **Implement coalesceOps function**
-- [ ] **Fix HookBridge transaction safety**
-- [ ] **Add workspace membership authorization**
-- [ ] **Add subscription cleanup**
-- [ ] **Add debounce to subscriptions**
+### Architecture & Design
+- [ ] **Add runtime feature detection** (or3CloudEnabled, syncEnabled flags)
+- [ ] **Resolve workspace isolation strategy** (Option A: single DB + workspace_id recommended)
+- [ ] **Document SSR vs Static build differences** clearly in design.md
+- [ ] **Add graceful degradation patterns** for when OR3-Cloud is disabled
+
+### Schema & Types
+- [ ] **Add optional schema fields** (order_key, deleted_at, workspace_id - all nullable)
+- [ ] **Bump Dexie version** if adding new fields
+- [ ] **Ensure backward compatibility** with existing local data
+
+### Core Sync Features (SSR Mode Only)
+- [ ] **Implement atomic clock increment** in all write paths
+- [ ] **Add message collision resolution** with proper LWW + order_key handling
+- [ ] **Implement coalesceOps function** for outbox optimization
+- [ ] **Fix HookBridge transaction safety** (buffer then flush)
+- [ ] **Add workspace membership authorization** in Convex mutations
+- [ ] **Add subscription cleanup** on workspace/session changes
+- [ ] **Add debounce to subscriptions** to prevent UI thrashing
+
+### Optional Dependencies (SSR Mode Only)
+- [ ] **Install Convex dependencies** only when deploying with sync
+- [ ] **Document optional deps** in package.json or separate install script
+- [ ] **Guard Convex imports** to not break static builds
+
+### Testing
 - [ ] **Write critical tests** (clock, conflicts, outbox, retry)
+- [ ] **Test static build still works** without OR3-Cloud
+- [ ] **Test SSR build** with sync enabled
+- [ ] **Test SSR build** with sync disabled
 
 ---
 
 ## Recommendation
 
-**Status: NOT READY FOR IMPLEMENTATION**
+**Status: NEEDS ARCHITECTURE UPDATES & TECHNICAL FIXES**
 
-The documentation has strong foundations but contains multiple blocking issues and architectural conflicts. Recommend:
+The documentation has solid foundations and correctly designs for optional SSR features. However, it needs clarification and technical fixes:
 
-1. **Rewrite design.md** to resolve workspace isolation strategy
-2. **Create auth system stub** or defer auth-dependent features to v2
-3. **Enable SSR mode** as prerequisite
-4. **Add missing implementations** (coalesceOps, cursor loading, etc.)
-5. **Fix transaction safety issues**
-6. **Add comprehensive tests** before starting implementation
+### Immediate Actions Needed:
 
-**Estimated remediation time:** 2-3 days of documentation cleanup and architecture decisions before implementation can begin.
+1. **Clarify OR3-Cloud as Optional** throughout all docs
+   - Add "Feature Toggle" section to design.md
+   - Show runtime detection patterns
+   - Document graceful degradation when disabled
+
+2. **Resolve Workspace Isolation Strategy**
+   - Choose between Option A (single DB + workspace_id) or Option B (DB per workspace)
+   - Document migration path from static to SSR builds
+   - Show how workspace_id remains null in static builds
+
+3. **Fix Technical Issues**
+   - Atomic clock increment
+   - Message order_key collision handling
+   - HookBridge transaction safety
+   - Workspace membership security checks
+
+4. **Add Missing Implementations**
+   - coalesceOps function
+   - Cursor persistence loading
+   - Subscription cleanup
+   - Runtime feature detection helpers
+
+5. **Test Coverage**
+   - Sync engine unit tests
+   - Static vs SSR integration tests
+   - Migration tests (static → SSR mode)
+
+**Estimated remediation time:** 1-2 days of documentation updates + proper technical fixes before implementation can begin.
+
+---
+
+## Summary for Static vs SSR Builds
+
+| Feature | Static Build | SSR Build (No Sync) | SSR Build (With Sync) |
+|---------|--------------|---------------------|----------------------|
+| Local Dexie | ✅ Yes | ✅ Yes | ✅ Yes |
+| OpenRouter Auth | ✅ PKCE | ✅ PKCE | ✅ PKCE + Clerk |
+| Clerk Auth | ❌ No | ✅ Optional | ✅ Yes |
+| Workspace Isolation | ❌ N/A | ✅ Yes (per user) | ✅ Yes (multi-user) |
+| DB Sync | ❌ No | ❌ No | ✅ Yes (Convex) |
+| `workspace_id` field | null | null | populated |
+| `order_key` field | null | null | populated |
+| Convex deps | ❌ Not needed | ❌ Not needed | ✅ Required |
+
+
 
 ---
 
@@ -380,4 +494,15 @@ describe('Sync authorization', () => {
 
 ---
 
-**Next Steps:** Address critical issues above, then proceed with implementation.
+## Revision History
+
+**2026-01-12 (Updated):** Corrected understanding based on user feedback. OR3-Cloud features (SSR auth via Clerk, sync, storage) are **optional** and toggleable. The app supports both static and SSR builds. Auth via Clerk exists and can be enabled with `bun run dev:ssr`. Updated review to focus on:
+1. Proper feature detection and runtime toggles
+2. Technical fixes (clock increment, message ordering, transaction safety)
+3. Clear documentation of static vs SSR build differences
+
+Original review incorrectly treated SSR features as "missing" rather than "optional."
+
+---
+
+**Next Steps:** Address technical issues and architecture clarifications above, then proceed with implementation.
