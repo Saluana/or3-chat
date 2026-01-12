@@ -5,13 +5,22 @@
  * Client-only plugin that starts/stops sync based on session state.
  */
 import { createConvexSyncProvider } from '~/core/sync/providers/convex-sync-provider';
-import { registerSyncProvider, getActiveSyncProvider } from '~/core/sync/sync-provider-registry';
+import { createGatewaySyncProvider } from '~/core/sync/providers/gateway-sync-provider';
+import {
+    registerSyncProvider,
+    getActiveSyncProvider,
+    getSyncProvider,
+} from '~/core/sync/sync-provider-registry';
 import { getHookBridge } from '~/core/sync/hook-bridge';
 import { OutboxManager } from '~/core/sync/outbox-manager';
-import { ConflictResolver } from '~/core/sync/conflict-resolver';
-import { getDeviceId } from '~/core/sync/hlc';
+import { createSubscriptionManager } from '~/core/sync/subscription-manager';
+import { GcManager } from '~/core/sync/gc-manager';
 import { createWorkspaceDb, type Or3DB } from '~/db/client';
+import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useAuthTokenBroker } from '~/composables/auth/useAuthTokenBroker.client';
+import { watch } from 'vue';
 import type { SyncProvider, SyncScope } from '~~/shared/sync/types';
+import { useConvexClient } from 'convex-vue';
 
 /** Sync engine state */
 interface SyncEngineState {
@@ -20,8 +29,8 @@ interface SyncEngineState {
     scope: SyncScope;
     hookBridge: ReturnType<typeof getHookBridge>;
     outboxManager: OutboxManager;
-    conflictResolver: ConflictResolver;
-    unsubscribe: (() => void) | null;
+    subscriptionManager: ReturnType<typeof createSubscriptionManager>;
+    gcManager: GcManager;
 }
 
 let engineState: SyncEngineState | null = null;
@@ -47,39 +56,34 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
         return;
     }
 
-    const scope: SyncScope = { workspaceId };
-    const deviceId = getDeviceId();
+    const resolvedProvider = await ensureProviderAuth(provider);
+    if (!resolvedProvider) {
+        console.error('[convex-sync] Provider auth unavailable');
+        return;
+    }
 
+    const scope: SyncScope = { workspaceId };
     // Initialize components
     const hookBridge = getHookBridge(db);
     hookBridge.start();
 
-    const outboxManager = new OutboxManager(db, provider, scope);
+    const outboxManager = new OutboxManager(db, resolvedProvider, scope);
     outboxManager.start();
 
-    const conflictResolver = new ConflictResolver(db);
+    const subscriptionManager = createSubscriptionManager(db, resolvedProvider, scope);
+    await subscriptionManager.start();
 
-    // Subscribe to remote changes
-    const unsubscribe = await provider.subscribe(scope, [], async (changes) => {
-        console.log('[convex-sync] Received', changes.length, 'remote changes');
-        const result = await conflictResolver.applyChanges(changes);
-        console.log('[convex-sync] Applied:', result.applied, 'conflicts:', result.conflicts);
-
-        // Update device cursor
-        if (changes.length > 0) {
-            const latestVersion = Math.max(...changes.map((c) => c.serverVersion));
-            await provider.updateCursor(scope, deviceId, latestVersion);
-        }
-    });
+    const gcManager = new GcManager(db, resolvedProvider, scope);
+    gcManager.start();
 
     engineState = {
         db,
-        provider,
+        provider: resolvedProvider,
         scope,
         hookBridge,
         outboxManager,
-        conflictResolver,
-        unsubscribe,
+        subscriptionManager,
+        gcManager,
     };
 
     console.log('[convex-sync] Sync engine started');
@@ -96,11 +100,8 @@ async function stopSyncEngine(): Promise<void> {
     // Stop outbox
     engineState.outboxManager.stop();
     engineState.hookBridge.stop();
-
-    // Unsubscribe from remote changes
-    if (engineState.unsubscribe) {
-        engineState.unsubscribe();
-    }
+    await engineState.subscriptionManager.stop();
+    engineState.gcManager.stop();
 
     // Dispose provider
     await engineState.provider.dispose();
@@ -126,6 +127,8 @@ export default defineNuxtPlugin(async () => {
     try {
         const convexProvider = createConvexSyncProvider();
         registerSyncProvider(convexProvider);
+        const gatewayProvider = createGatewaySyncProvider({ id: 'convex-gateway' });
+        registerSyncProvider(gatewayProvider);
         console.log('[convex-sync] Registered Convex sync provider');
     } catch (error) {
         console.error('[convex-sync] Failed to create Convex provider:', error);
@@ -133,8 +136,20 @@ export default defineNuxtPlugin(async () => {
     }
 
     // Watch for session changes
-    // Note: This would integrate with useSessionContext() from the auth system
-    // For now, we expose start/stop functions that can be called from auth flows
+    const { data: sessionData } = useSessionContext();
+    watch(
+        () => sessionData.value?.session,
+        async (session) => {
+            if (session?.authenticated && session.workspace?.id) {
+                await startSyncEngine(session.workspace.id);
+            } else {
+                await stopSyncEngine();
+            }
+        },
+        { immediate: true }
+    );
+
+    // Expose sync control functions for advanced callers
     const nuxtApp = useNuxtApp();
 
     // Expose sync control functions
@@ -151,3 +166,35 @@ export default defineNuxtPlugin(async () => {
         });
     }
 });
+
+async function ensureProviderAuth(provider: SyncProvider): Promise<SyncProvider | null> {
+    if (provider.mode !== 'direct' || !provider.auth) {
+        return provider;
+    }
+
+    const tokenBroker = useAuthTokenBroker();
+    const token = await tokenBroker.getProviderToken(provider.auth);
+    if (!token) {
+        const gatewayFallback = getSyncProvider(`${provider.id}-gateway`);
+        if (gatewayFallback) {
+            console.warn(
+                '[convex-sync] Provider token unavailable, falling back to gateway mode'
+            );
+            return gatewayFallback;
+        }
+        return null;
+    }
+
+    if (provider.id === 'convex') {
+        try {
+            const convex = useConvexClient();
+            if (provider.auth) {
+                convex.setAuth(() => tokenBroker.getProviderToken(provider.auth!));
+            }
+        } catch (error) {
+            console.warn('[convex-sync] Failed to configure Convex auth:', error);
+        }
+    }
+
+    return provider;
+}

@@ -2,6 +2,7 @@
  * Workspace-aware session context composable.
  * Fetches the full session context including workspace info from the server.
  */
+import { useFetch } from '#imports';
 import type { SessionContext } from '~/core/hooks/hook-types';
 
 /**

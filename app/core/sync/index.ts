@@ -11,6 +11,7 @@ export * from './hlc';
 export { HookBridge, getHookBridge, _resetHookBridge } from './hook-bridge';
 export { OutboxManager, type OutboxManagerConfig } from './outbox-manager';
 export { ConflictResolver, type ApplyResult, type ChangeResult } from './conflict-resolver';
+export { GcManager, type GcManagerConfig } from './gc-manager';
 
 // Provider registry
 export {
@@ -24,3 +25,4 @@ export {
 
 // Convex provider
 export { createConvexSyncProvider } from './providers/convex-sync-provider';
+export { createGatewaySyncProvider } from './providers/gateway-sync-provider';

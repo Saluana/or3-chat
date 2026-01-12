@@ -71,7 +71,8 @@ describe('ConflictResolver', () => {
 
     it('applies remote put when local record is missing', async () => {
         const table = createMemoryTable<MessageRow>('id');
-        const db = createMockDb({ messages: table });
+        const tombstones = createMemoryTable<any>('id');
+        const db = createMockDb({ messages: table, tombstones });
         const resolver = new ConflictResolver(db as any);
 
         const change = buildChange({
@@ -94,7 +95,8 @@ describe('ConflictResolver', () => {
         const table = createMemoryTable<MessageRow>('id', [
             { id: 'm1', clock: 1, hlc: '0000000000001:0000:node' },
         ]);
-        const db = createMockDb({ messages: table });
+        const tombstones = createMemoryTable<any>('id');
+        const db = createMockDb({ messages: table, tombstones });
         const resolver = new ConflictResolver(db as any);
 
         const change = buildChange({
@@ -117,7 +119,8 @@ describe('ConflictResolver', () => {
         const table = createMemoryTable<MessageRow>('id', [
             { id: 'm1', clock: 2, hlc: '0000000000002:0001:node' },
         ]);
-        const db = createMockDb({ messages: table });
+        const tombstones = createMemoryTable<any>('id');
+        const db = createMockDb({ messages: table, tombstones });
         const resolver = new ConflictResolver(db as any);
 
         const change = buildChange({
@@ -143,7 +146,8 @@ describe('ConflictResolver', () => {
         const table = createMemoryTable<MessageRow>('id', [
             { id: 'm1', clock: 2, hlc: '0000000000002:0002:node' },
         ]);
-        const db = createMockDb({ messages: table });
+        const tombstones = createMemoryTable<any>('id');
+        const db = createMockDb({ messages: table, tombstones });
         const resolver = new ConflictResolver(db as any);
 
         const change = buildChange({

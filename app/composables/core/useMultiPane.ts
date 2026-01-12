@@ -1,15 +1,7 @@
 // Multi-pane state management composable for chat & documents
 // Keeps pane logic outside of UI components for easier testing & extension.
 
-import {
-    ref,
-    computed,
-    nextTick,
-    onScopeDispose,
-    type Ref,
-    type ComputedRef,
-    watch,
-} from 'vue';
+import { ref, computed, onScopeDispose, type Ref, type ComputedRef } from 'vue';
 import { useLocalStorage } from '@vueuse/core';
 import Dexie from 'dexie';
 import { db } from '~/db';
@@ -190,9 +182,13 @@ export function useMultiPane(
                 try {
                     const parsed: unknown = JSON.parse(raw);
                     if (!Array.isArray(parsed)) return [];
-                    const isValidArray = parsed.every((w): w is number => typeof w === 'number' && w > 0);
+                    const isValidArray = parsed.every(
+                        (w): w is number => typeof w === 'number' && w > 0
+                    );
                     if (!isValidArray) return [];
-                    return parsed.map((w) => Math.max(minPaneWidth, Math.min(maxPaneWidth, w)));
+                    return parsed.map((w) =>
+                        Math.max(minPaneWidth, Math.min(maxPaneWidth, w))
+                    );
                 } catch {
                     return [];
                 }
@@ -255,12 +251,16 @@ export function useMultiPane(
      * Initialize widths based on current container size
      */
     function initializeWidths() {
-        if (typeof document === 'undefined') return;
+        const doc = (globalThis as {
+            document?: { querySelector: (selector: string) => { clientWidth?: number } | null };
+        }).document;
+        if (!doc) return;
 
-        const container = document.querySelector('.pane-container');
+        const container = doc.querySelector('.pane-container');
         if (!container) return;
 
-        const totalWidth = container.clientWidth;
+        const totalWidth = container.clientWidth ?? 0;
+        if (!totalWidth) return;
         recalculateWidthsForContainer(totalWidth);
     }
 

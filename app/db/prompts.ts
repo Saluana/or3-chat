@@ -68,7 +68,7 @@ function promptEntityToRow(entity: PromptEntity, base?: PromptRow): PromptRow {
             created_at: nowSec(),
             updated_at: nowSec(),
             deleted: false,
-            clock: base?.clock ?? 0,
+            clock: 0,
         } as PromptRow);
 
     return {

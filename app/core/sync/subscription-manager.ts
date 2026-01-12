@@ -9,13 +9,26 @@
  * - Update cursor after each batch
  */
 import type { Or3DB } from '~/db/client';
-import type { SyncProvider, SyncScope, SyncChange } from '~~/shared/sync/types';
+import type { SyncProvider, SyncScope, SyncChange, Tombstone } from '~~/shared/sync/types';
 import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
 import { useHooks } from '~/core/hooks/useHooks';
+import { getHookBridge } from './hook-bridge';
+import { compareHLC, hlcToOrderKey } from './hlc';
+import { nowSec } from '~/db/util';
 
 /** Default tables to sync */
 const DEFAULT_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'];
+
+/** Primary key field per table */
+const PK_FIELDS: Record<string, string> = {
+    threads: 'id',
+    messages: 'id',
+    projects: 'id',
+    posts: 'id',
+    kv: 'id',
+    file_meta: 'hash',
+};
 
 /** Bootstrap pull page size */
 const BOOTSTRAP_PAGE_SIZE = 100;
@@ -29,6 +42,20 @@ export interface SubscriptionManagerConfig {
     tables?: string[];
     bootstrapPageSize?: number;
     reconnectDelays?: number[];
+}
+
+interface StagedRecord extends Record<string, unknown> {
+    clock?: number;
+    hlc?: string;
+    deleted?: boolean;
+    deleted_at?: number;
+    order_key?: string;
+}
+
+interface StagedDataset {
+    cursor: number;
+    tables: Map<string, Map<string, StagedRecord>>;
+    tombstones: Map<string, Tombstone>;
 }
 
 export class SubscriptionManager {
@@ -80,6 +107,13 @@ export class SubscriptionManager {
         try {
             // Check if bootstrap is needed
             const needsBootstrap = await this.cursorManager.isBootstrapNeeded();
+            const cursorExpired =
+                !needsBootstrap &&
+                (await this.cursorManager.isCursorPotentiallyExpired());
+
+            if (cursorExpired) {
+                await this.rescan();
+            }
 
             if (needsBootstrap) {
                 await this.bootstrap();
@@ -167,6 +201,11 @@ export class SubscriptionManager {
             // Update cursor after bootstrap
             await this.cursorManager.setCursor(cursor);
             await this.cursorManager.markSyncComplete();
+            await this.provider.updateCursor(
+                this.scope,
+                this.cursorManager.getDeviceId(),
+                cursor
+            );
 
             await useHooks().doAction('sync.bootstrap:action:complete', {
                 scope: this.scope,
@@ -176,6 +215,246 @@ export class SubscriptionManager {
         } finally {
             this.isBootstrapping = false;
         }
+    }
+
+    /**
+     * Perform a full rescan when cursor is expired
+     */
+    private async rescan(): Promise<void> {
+        this.isBootstrapping = true;
+
+        try {
+            await useHooks().doAction('sync.rescan:action:starting', {
+                scope: this.scope,
+            });
+            await this.cursorManager.reset();
+
+            const staged = await this.buildStagedDataset();
+            await this.applyStagedDataset(staged);
+
+            await this.cursorManager.setCursor(staged.cursor);
+            await this.cursorManager.markSyncComplete();
+            await this.provider.updateCursor(
+                this.scope,
+                this.cursorManager.getDeviceId(),
+                staged.cursor
+            );
+
+            await this.reapplyPendingOps();
+
+            await useHooks().doAction('sync.rescan:action:completed', {
+                scope: this.scope,
+            });
+        } finally {
+            this.isBootstrapping = false;
+        }
+    }
+
+    private async reapplyPendingOps(): Promise<void> {
+        const pendingOps = await this.db.pending_ops
+            .where('status')
+            .equals('pending')
+            .toArray();
+        if (!pendingOps.length) return;
+
+        const hookBridge = getHookBridge(this.db);
+        await hookBridge.withRemoteSuppression(async () => {
+            for (const op of pendingOps) {
+                const table = this.db.table(op.tableName);
+                if (!table) continue;
+                if (op.operation === 'put' && op.payload) {
+                    await table.put(op.payload as Record<string, unknown>);
+                } else if (op.operation === 'delete') {
+                    await table.delete(op.pk);
+                }
+            }
+        });
+    }
+
+    private async buildStagedDataset(): Promise<StagedDataset> {
+        let cursor = 0;
+        let hasMore = true;
+        const tables = new Map<string, Map<string, StagedRecord>>();
+        const tombstones = new Map<string, Tombstone>();
+
+        while (hasMore) {
+            const response = await this.provider.pull({
+                scope: this.scope,
+                cursor,
+                limit: this.config.bootstrapPageSize,
+                tables: this.config.tables,
+            });
+
+            if (response.changes.length) {
+                for (const change of response.changes) {
+                    this.applyChangeToStage(tables, tombstones, change);
+                }
+            }
+
+            cursor = response.nextCursor;
+            hasMore = response.hasMore;
+        }
+
+        return { cursor, tables, tombstones };
+    }
+
+    private applyChangeToStage(
+        tables: Map<string, Map<string, StagedRecord>>,
+        tombstones: Map<string, Tombstone>,
+        change: SyncChange
+    ): void {
+        const tableName = change.tableName;
+        const table = tables.get(tableName) ?? new Map<string, StagedRecord>();
+        if (!tables.has(tableName)) {
+            tables.set(tableName, table);
+        }
+
+        const pk = change.pk;
+        const pkField = PK_FIELDS[tableName] ?? 'id';
+        const tombstoneId = `${tableName}:${pk}`;
+        const existing = table.get(pk);
+        const tombstone = tombstones.get(tombstoneId);
+
+        if (change.op === 'delete') {
+            if (tombstone && tombstone.clock >= change.stamp.clock) {
+                return;
+            }
+            const deletedAt =
+                typeof (change.payload as { deleted_at?: number })?.deleted_at === 'number'
+                    ? ((change.payload as { deleted_at?: number }).deleted_at as number)
+                    : nowSec();
+            if (!existing) {
+                this.updateStagedTombstone(
+                    tombstones,
+                    tableName,
+                    pk,
+                    change.stamp.clock,
+                    deletedAt
+                );
+                return;
+            }
+
+            if (existing.deleted) {
+                this.updateStagedTombstone(
+                    tombstones,
+                    tableName,
+                    pk,
+                    change.stamp.clock,
+                    deletedAt
+                );
+                return;
+            }
+
+            const localClock = existing.clock ?? 0;
+            if (
+                change.stamp.clock > localClock ||
+                (change.stamp.clock === localClock &&
+                    compareHLC(change.stamp.hlc, existing.hlc ?? '') > 0)
+            ) {
+                table.set(pk, {
+                    ...existing,
+                    deleted: true,
+                    deleted_at: deletedAt,
+                    clock: change.stamp.clock,
+                    hlc: change.stamp.hlc,
+                });
+                this.updateStagedTombstone(
+                    tombstones,
+                    tableName,
+                    pk,
+                    change.stamp.clock,
+                    deletedAt
+                );
+            }
+
+            return;
+        }
+
+        const payload = (change.payload ?? {}) as Record<string, unknown>;
+        const record: StagedRecord = {
+            ...payload,
+            [pkField]: pk,
+            clock: change.stamp.clock,
+            hlc: change.stamp.hlc,
+        };
+
+        if (tableName === 'messages' && !record.order_key) {
+            record.order_key = hlcToOrderKey(change.stamp.hlc);
+        }
+
+        if (tombstone && tombstone.clock >= change.stamp.clock) {
+            return;
+        }
+
+        if (!existing) {
+            table.set(pk, record);
+            if (tombstone && tombstone.clock < change.stamp.clock) {
+                tombstones.delete(tombstoneId);
+            }
+            return;
+        }
+
+        const localClock = existing.clock ?? 0;
+        if (
+            change.stamp.clock > localClock ||
+            (change.stamp.clock === localClock &&
+                compareHLC(change.stamp.hlc, existing.hlc ?? '') > 0)
+        ) {
+            table.set(pk, record);
+            if (tombstone && tombstone.clock < change.stamp.clock) {
+                tombstones.delete(tombstoneId);
+            }
+        }
+    }
+
+    private updateStagedTombstone(
+        tombstones: Map<string, Tombstone>,
+        tableName: string,
+        pk: string,
+        clock: number,
+        deletedAt?: number
+    ): void {
+        const id = `${tableName}:${pk}`;
+        const existing = tombstones.get(id);
+        if (existing && existing.clock >= clock) {
+            return;
+        }
+
+        tombstones.set(id, {
+            id,
+            tableName,
+            pk,
+            deletedAt: deletedAt ?? nowSec(),
+            clock,
+            syncedAt: nowSec(),
+        });
+    }
+
+    private async applyStagedDataset(staged: StagedDataset): Promise<void> {
+        const hookBridge = getHookBridge(this.db);
+        const tables = this.config.tables;
+
+        await hookBridge.withRemoteSuppression(async () => {
+            const tableRefs = tables.map((name) => this.db.table(name));
+            await this.db.transaction('rw', [...tableRefs, this.db.tombstones], async () => {
+                for (const tableName of tables) {
+                    await this.db.table(tableName).clear();
+                }
+
+                for (const tableName of tables) {
+                    const rows = Array.from(staged.tables.get(tableName)?.values() ?? []);
+                    if (rows.length) {
+                        await this.db.table(tableName).bulkPut(rows);
+                    }
+                }
+
+                await this.db.tombstones.clear();
+                const tombstoneRows = Array.from(staged.tombstones.values());
+                if (tombstoneRows.length) {
+                    await this.db.tombstones.bulkPut(tombstoneRows);
+                }
+            });
+        });
     }
 
     /**
@@ -212,6 +491,11 @@ export class SubscriptionManager {
             }
 
             await this.cursorManager.markSyncComplete();
+            await this.provider.updateCursor(
+                this.scope,
+                this.cursorManager.getDeviceId(),
+                maxVersion
+            );
 
             await useHooks().doAction('sync.pull:action:applied', {
                 scope: this.scope,

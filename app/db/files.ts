@@ -336,7 +336,7 @@ async function blobImageSize(
     blob: Blob
 ): Promise<{ width: number; height: number } | undefined> {
     return new Promise((resolve) => {
-        const img = new Image();
+        const img = new (globalThis as any).Image();
         let resolved = false;
 
         // Timeout to prevent hung operations from malformed images

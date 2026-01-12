@@ -55,8 +55,17 @@ async function yieldToMain(): Promise<void> {
         return (sched as { yield: () => Promise<void> }).yield();
     }
     // requestIdleCallback for browsers that support it
-    if (typeof requestIdleCallback !== 'undefined') {
-        return new Promise((resolve) => requestIdleCallback(() => resolve()));
+    if (
+        typeof globalThis !== 'undefined' &&
+        'requestIdleCallback' in globalThis
+    ) {
+        return new Promise((resolve) =>
+            (
+                globalThis as unknown as {
+                    requestIdleCallback: (cb: () => void) => void;
+                }
+            ).requestIdleCallback(() => resolve())
+        );
     }
     // Fallback to setTimeout
     return new Promise((resolve) => setTimeout(resolve, 0));

@@ -7,7 +7,7 @@
  * - Emits conflict hooks for observability
  */
 import type { Or3DB } from '~/db/client';
-import type { SyncChange } from '~~/shared/sync/types';
+import type { SyncChange, Tombstone } from '~~/shared/sync/types';
 import type { Table } from 'dexie';
 import { compareHLC } from './hlc';
 import { getHookBridge } from './hook-bridge';
@@ -88,11 +88,13 @@ export class ConflictResolver {
         stamp: { clock: number; hlc: string }
     ): Promise<ChangeResult> {
         if (!local) {
+            await this.writeTombstone(tableName, pk, stamp.clock);
             // Already gone or never existed
             return { applied: false, skipped: true, isConflict: false };
         }
 
         if (local.deleted) {
+            await this.writeTombstone(tableName, pk, stamp.clock);
             // Already deleted
             return { applied: false, skipped: true, isConflict: false };
         }
@@ -108,6 +110,7 @@ export class ConflictResolver {
                 clock: stamp.clock,
                 hlc: stamp.hlc,
             });
+            await this.writeTombstone(tableName, pk, stamp.clock);
             return { applied: true, skipped: false, isConflict: false };
         } else if (stamp.clock === localClock) {
             // Tie-break with HLC
@@ -119,6 +122,7 @@ export class ConflictResolver {
                     clock: stamp.clock,
                     hlc: stamp.hlc,
                 });
+                await this.writeTombstone(tableName, pk, stamp.clock);
                 await useHooks().doAction('sync.conflict:action:detected', {
                     tableName,
                     pk,
@@ -156,10 +160,17 @@ export class ConflictResolver {
     ): Promise<ChangeResult> {
         const remoteClock = stamp.clock;
         const remotePayload = (payload ?? {}) as Record<string, unknown>;
+        const tombstone = await this.getTombstone(tableName, pk);
+        if (tombstone && tombstone.clock >= remoteClock) {
+            return { applied: false, skipped: true, isConflict: false };
+        }
 
         if (!local) {
             // New record - just insert
             await table.put({ ...remotePayload, id: pk, clock: stamp.clock, hlc: stamp.hlc });
+            if (tombstone && tombstone.clock < remoteClock) {
+                await this.clearTombstone(tableName, pk);
+            }
             return { applied: true, skipped: false, isConflict: false };
         }
 
@@ -168,12 +179,18 @@ export class ConflictResolver {
         if (remoteClock > localClock) {
             // Remote wins - update
             await table.put({ ...remotePayload, id: pk, clock: stamp.clock, hlc: stamp.hlc });
+            if (tombstone && tombstone.clock < remoteClock) {
+                await this.clearTombstone(tableName, pk);
+            }
             return { applied: true, skipped: false, isConflict: false };
         } else if (remoteClock === localClock) {
             // Tie-break with HLC
             const localHlc = local.hlc ?? '';
             if (compareHLC(stamp.hlc, localHlc) > 0) {
                 await table.put({ ...remotePayload, id: pk, clock: stamp.clock, hlc: stamp.hlc });
+                if (tombstone && tombstone.clock < remoteClock) {
+                    await this.clearTombstone(tableName, pk);
+                }
                 await useHooks().doAction('sync.conflict:action:detected', {
                     tableName,
                     pk,
@@ -196,6 +213,43 @@ export class ConflictResolver {
 
         // Local wins (local clock higher)
         return { applied: false, skipped: true, isConflict: false };
+    }
+
+    private async getTombstone(
+        tableName: string,
+        pk: string
+    ): Promise<Tombstone | undefined> {
+        const id = `${tableName}:${pk}`;
+        const row = await this.db.table('tombstones').get(id);
+        return row as Tombstone | undefined;
+    }
+
+    private async writeTombstone(
+        tableName: string,
+        pk: string,
+        clock: number
+    ): Promise<void> {
+        const id = `${tableName}:${pk}`;
+        const existing = (await this.db.table('tombstones').get(id)) as
+            | Tombstone
+            | undefined;
+        if (existing && existing.clock >= clock) {
+            return;
+        }
+        const tombstone: Tombstone = {
+            id,
+            tableName,
+            pk,
+            deletedAt: nowSec(),
+            clock,
+            syncedAt: nowSec(),
+        };
+        await this.db.table('tombstones').put(tombstone);
+    }
+
+    private async clearTombstone(tableName: string, pk: string): Promise<void> {
+        const id = `${tableName}:${pk}`;
+        await this.db.table('tombstones').delete(id);
     }
 }
 

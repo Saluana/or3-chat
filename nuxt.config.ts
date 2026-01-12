@@ -355,9 +355,14 @@ export default defineNuxtConfig({
             '~/composables',
             // Scan all composables within subdirectories
             '~/composables/**',
-            // Core directory for auth and other utilities
+            // Core directory for auth and other utilities (excluding sync which uses barrel exports)
             '~/core',
-            '~/core/**',
+            '~/core/auth',
+            '~/core/auth/**',
+            '~/core/hooks',
+            '~/core/hooks/**',
+            '~/core/theme',
+            '~/core/theme/**',
         ],
     },
     vite: {

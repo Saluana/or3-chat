@@ -11,9 +11,10 @@
  */
 import { type Transaction } from 'dexie';
 import { generateHLC, getDeviceId, hlcToOrderKey } from './hlc';
-import type { PendingOp, ChangeStamp } from '~~/shared/sync/types';
+import type { PendingOp, ChangeStamp, Tombstone } from '~~/shared/sync/types';
 import type { Or3DB } from '~/db/client';
 import { useHooks } from '~/core/hooks/useHooks';
+import { nowSec } from '~/db/util';
 
 /** Tables that should be captured for sync */
 const SYNCED_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'] as const;
@@ -139,6 +140,17 @@ export class HookBridge {
 
         // Enqueue in same transaction for atomicity
         transaction.table('pending_ops').add(pendingOp);
+
+        if (operation === 'delete') {
+            const tombstone: Tombstone = {
+                id: `${tableName}:${pk}`,
+                tableName,
+                pk,
+                deletedAt: nowSec(),
+                clock: stamp.clock,
+            };
+            transaction.table('tombstones').put(tombstone);
+        }
         void useHooks().doAction('sync.op:action:captured', { op: pendingOp });
     }
 

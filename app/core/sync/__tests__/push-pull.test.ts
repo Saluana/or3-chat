@@ -160,7 +160,8 @@ describe('sync push/pull flow', () => {
         expect(pull.nextCursor).toBeGreaterThan(0);
 
         const messages = createMemoryTable<MessageRow>('id');
-        const dbB = createMockDb({ messages });
+        const tombstones = createMemoryTable<any>('id');
+        const dbB = createMockDb({ messages, tombstones });
         const resolver = new ConflictResolver(dbB as any);
 
         await resolver.applyChanges(pull.changes);
@@ -191,7 +192,8 @@ describe('sync push/pull flow', () => {
         const messages = createMemoryTable<MessageRow>('id', [
             { id: 'm1', clock: 2, hlc: '0000000000002:0002:node' },
         ]);
-        const db = createMockDb({ messages });
+        const tombstones = createMemoryTable<any>('id');
+        const db = createMockDb({ messages, tombstones });
         const resolver = new ConflictResolver(db as any);
 
         const pull = await provider.pull({

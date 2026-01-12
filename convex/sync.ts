@@ -55,6 +55,53 @@ const TABLE_INDEX_MAP: Record<string, { table: string; indexName: string; pkFiel
 };
 
 /**
+ * Upsert tombstone for delete operations
+ */
+async function upsertTombstone(
+    ctx: MutationCtx,
+    workspaceId: Id<'workspaces'>,
+    op: {
+        table_name: string;
+        pk: string;
+        clock: number;
+    },
+    serverVersion: number,
+    deletedAt: number
+): Promise<void> {
+    const existing = await ctx.db
+        .query('tombstones')
+        .withIndex('by_workspace_table_pk', (q) =>
+            q.eq('workspace_id', workspaceId)
+                .eq('table_name', op.table_name)
+                .eq('pk', op.pk)
+        )
+        .first();
+
+    if (existing && (existing.clock ?? 0) >= op.clock) {
+        return;
+    }
+
+    if (existing) {
+        await ctx.db.patch(existing._id, {
+            deleted_at: deletedAt,
+            clock: op.clock,
+            server_version: serverVersion,
+        });
+        return;
+    }
+
+    await ctx.db.insert('tombstones', {
+        workspace_id: workspaceId,
+        table_name: op.table_name,
+        pk: op.pk,
+        deleted_at: deletedAt,
+        clock: op.clock,
+        server_version: serverVersion,
+        created_at: nowSec(),
+    });
+}
+
+/**
  * Apply a single operation to the appropriate data table
  * Implements LWW (Last-Write-Wins) conflict resolution
  */
@@ -89,8 +136,8 @@ async function applyOpToTable(
     const existing = await (ctx.db.query(table as any) as any)
         .withIndex(indexName, (q: { eq: (field: string, value: unknown) => unknown }) =>
             pkField === 'hash'
-                ? q.eq('workspace_id', workspaceId).eq('hash', op.pk)
-                : q.eq('workspace_id', workspaceId).eq('id', op.pk)
+                ? (q as any).eq('workspace_id', workspaceId).eq('hash', op.pk)
+                : (q as any).eq('workspace_id', workspaceId).eq('id', op.pk)
         )
         .first();
 
@@ -247,6 +294,14 @@ export const push = mutation({
                     op_id: op.op_id,
                     created_at: nowSec(),
                 });
+
+                if (op.operation === 'delete') {
+                    const deletedAt =
+                        typeof (op.payload as { deleted_at?: number })?.deleted_at === 'number'
+                            ? ((op.payload as { deleted_at?: number }).deleted_at as number)
+                            : nowSec();
+                    await upsertTombstone(ctx, args.workspace_id, op, serverVersion, deletedAt);
+                }
 
                 results.push({ opId: op.op_id, success: true, serverVersion });
             } catch (error) {
@@ -417,5 +472,87 @@ export const getServerVersion = query({
             .first();
 
         return counter?.value ?? 0;
+    },
+});
+
+/**
+ * GC tombstones older than retention window and below min cursor
+ */
+export const gcTombstones = mutation({
+    args: {
+        workspace_id: v.id('workspaces'),
+        retention_seconds: v.number(),
+    },
+    handler: async (ctx, args) => {
+        await verifyWorkspaceMembership(ctx, args.workspace_id);
+
+        const cursors = await ctx.db
+            .query('device_cursors')
+            .withIndex('by_workspace_version', (q) => q.eq('workspace_id', args.workspace_id))
+            .collect();
+
+        const minCursor =
+            cursors.length > 0
+                ? Math.min(...cursors.map((c) => c.last_seen_version))
+                : 0;
+        const cutoff = nowSec() - args.retention_seconds;
+
+        const candidates = await ctx.db
+            .query('tombstones')
+            .withIndex('by_workspace_version', (q) =>
+                q.eq('workspace_id', args.workspace_id).lt('server_version', minCursor)
+            )
+            .collect();
+
+        let purged = 0;
+        for (const row of candidates) {
+            if ((row.deleted_at ?? 0) < cutoff) {
+                await ctx.db.delete(row._id);
+                purged += 1;
+            }
+        }
+
+        return { purged };
+    },
+});
+
+/**
+ * GC change_log entries below min cursor with retention window
+ */
+export const gcChangeLog = mutation({
+    args: {
+        workspace_id: v.id('workspaces'),
+        retention_seconds: v.number(),
+    },
+    handler: async (ctx, args) => {
+        await verifyWorkspaceMembership(ctx, args.workspace_id);
+
+        const cursors = await ctx.db
+            .query('device_cursors')
+            .withIndex('by_workspace_version', (q) => q.eq('workspace_id', args.workspace_id))
+            .collect();
+
+        const minCursor =
+            cursors.length > 0
+                ? Math.min(...cursors.map((c) => c.last_seen_version))
+                : 0;
+        const cutoff = nowSec() - args.retention_seconds;
+
+        const candidates = await ctx.db
+            .query('change_log')
+            .withIndex('by_workspace_version', (q) =>
+                q.eq('workspace_id', args.workspace_id).lt('server_version', minCursor)
+            )
+            .collect();
+
+        let purged = 0;
+        for (const row of candidates) {
+            if ((row.created_at ?? 0) < cutoff) {
+                await ctx.db.delete(row._id);
+                purged += 1;
+            }
+        }
+
+        return { purged };
     },
 });

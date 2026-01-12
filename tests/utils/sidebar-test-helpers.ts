@@ -74,6 +74,7 @@ export function createMockPost(overrides: Partial<Post> = {}): Post {
         deleted: false,
         meta: null,
         file_hashes: null,
+        clock: 0,
         ...overrides,
     };
 }

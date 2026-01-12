@@ -138,6 +138,20 @@ export function createConvexSyncProvider(): SyncProvider {
             });
         },
 
+        async gcTombstones(scope: SyncScope, retentionSeconds: number): Promise<void> {
+            await convex.mutation(api.sync.gcTombstones, {
+                workspace_id: scope.workspaceId as Id<'workspaces'>,
+                retention_seconds: retentionSeconds,
+            });
+        },
+
+        async gcChangeLog(scope: SyncScope, retentionSeconds: number): Promise<void> {
+            await convex.mutation(api.sync.gcChangeLog, {
+                workspace_id: scope.workspaceId as Id<'workspaces'>,
+                retention_seconds: retentionSeconds,
+            });
+        },
+
         async dispose(): Promise<void> {
             // Clean up all subscriptions
             subscriptions.forEach((cleanup) => cleanup());

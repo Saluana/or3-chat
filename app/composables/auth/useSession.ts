@@ -5,6 +5,7 @@
  */
 import { computed } from 'vue';
 import type { ComputedRef } from 'vue';
+import { useRuntimeConfig } from '#imports';
 import { useSessionContext } from './useSessionContext';
 
 interface SessionState {

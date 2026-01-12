@@ -15,16 +15,20 @@ export async function createKv(input: KvCreate): Promise<Kv> {
         tableName: 'kv',
     });
     const value = parseOrThrow(KvCreateSchema, filtered);
+    const next = {
+        ...value,
+        clock: nextClock(value.clock),
+    };
     await dbTry(
-        () => db.kv.put(value),
+        () => db.kv.put(next),
         { op: 'write', entity: 'kv', action: 'create' },
         { rethrow: true }
     );
     await hooks.doAction('db.kv.create:action:after', {
-        entity: value,
+        entity: next,
         tableName: 'kv',
     });
-    return value;
+    return next;
 }
 
 export async function upsertKv(value: Kv): Promise<void> {
@@ -37,14 +41,23 @@ export async function upsertKv(value: Kv): Promise<void> {
         entity: filtered,
         tableName: 'kv',
     });
-    parseOrThrow(KvSchema, filtered);
+    const validated = parseOrThrow(KvSchema, filtered);
+    const existing = await dbTry(() => db.kv.get(validated.id), {
+        op: 'read',
+        entity: 'kv',
+        action: 'get',
+    });
+    const next = {
+        ...validated,
+        clock: nextClock(existing?.clock ?? validated.clock),
+    };
     await dbTry(
-        () => db.kv.put(filtered),
+        () => db.kv.put(next),
         { op: 'write', entity: 'kv', action: 'upsert' },
         { rethrow: true }
     );
     await hooks.doAction('db.kv.upsert:action:after', {
-        entity: filtered,
+        entity: next,
         tableName: 'kv',
     });
 }

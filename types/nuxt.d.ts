@@ -6,20 +6,24 @@ declare module '#app' {
             set: (name: string) => void;
             toggle: () => void;
             get: () => string;
-            system: () => 'light' | 'dark';
+            system: () => string;
             current: import('vue').Ref<string>;
 
             // Refined theme system API (theme variants)
             activeTheme: import('vue').Ref<string>;
+            resolversVersion: import('vue').Ref<number>;
             setActiveTheme: (themeName: string) => Promise<void>;
             getResolver: (
                 themeName: string
             ) =>
                 | import('~/theme/_shared/runtime-resolver').RuntimeResolver
                 | null;
-            loadCompiledTheme: (
+            loadTheme: (
                 themeName: string
             ) => Promise<import('~/theme/_shared/types').CompiledTheme | null>;
+            getTheme: (
+                themeName: string
+            ) => import('~/theme/_shared/types').CompiledTheme | null;
         };
         $hooks: import('../app/utils/typed-hooks').TypedHookEngine;
 

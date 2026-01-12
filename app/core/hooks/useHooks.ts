@@ -1,6 +1,6 @@
-import { useNuxtApp } from '#app';
 import { createHookEngine, type HookEngine } from './hooks';
 import { createTypedHookEngine, type TypedHookEngine } from './typed-hooks';
+import { useNuxtApp } from '#app';
 
 let cached: { engine: HookEngine; typed: TypedHookEngine } | null = null;
 let fallback: { engine: HookEngine; typed: TypedHookEngine } | null = null;

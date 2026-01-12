@@ -73,7 +73,7 @@ function documentEntityToRow(
             created_at: entity.created_at ?? nowSec(),
             updated_at: entity.updated_at ?? nowSec(),
             deleted: false,
-            clock: base?.clock ?? 0,
+            clock: 0,
         } as DocumentRow);
 
     return {

@@ -87,6 +87,7 @@ export const TombstoneSchema = z.object({
     tableName: z.string(),
     pk: z.string(),
     deletedAt: z.number(),
+    clock: z.number().int().nonnegative(),
     syncedAt: z.number().optional(),
 });
 

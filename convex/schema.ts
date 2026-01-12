@@ -102,6 +102,21 @@ export default defineSchema({
         .index('by_workspace_device', ['workspace_id', 'device_id'])
         .index('by_workspace_version', ['workspace_id', 'last_seen_version']),
 
+    /**
+     * Tombstones - prevents resurrection after deletes and supports retention
+     */
+    tombstones: defineTable({
+        workspace_id: v.id('workspaces'),
+        table_name: v.string(),
+        pk: v.string(),
+        deleted_at: v.number(),
+        clock: v.number(),
+        server_version: v.number(),
+        created_at: v.number(),
+    })
+        .index('by_workspace_version', ['workspace_id', 'server_version'])
+        .index('by_workspace_table_pk', ['workspace_id', 'table_name', 'pk']),
+
     // ============================================================
     // SYNCED DATA TABLES
     // ============================================================

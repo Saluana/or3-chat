@@ -152,6 +152,16 @@ export interface SyncProvider {
     updateCursor(scope: SyncScope, deviceId: string, version: number): Promise<void>;
 
     /**
+     * GC tombstones with a retention window
+     */
+    gcTombstones?(scope: SyncScope, retentionSeconds: number): Promise<void>;
+
+    /**
+     * GC change log entries with a retention window
+     */
+    gcChangeLog?(scope: SyncScope, retentionSeconds: number): Promise<void>;
+
+    /**
      * Cleanup resources
      */
     dispose(): Promise<void>;
@@ -169,6 +179,7 @@ export interface Tombstone {
     tableName: string;
     pk: string;
     deletedAt: number;
+    clock: number;
     syncedAt?: number;
 }
 

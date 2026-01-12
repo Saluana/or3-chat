@@ -10,6 +10,7 @@
 import type { Or3DB } from '~/db/client';
 import type { SyncProvider, SyncScope, PendingOp } from '~~/shared/sync/types';
 import { useHooks } from '~/core/hooks/useHooks';
+import { nowSec } from '~/db/util';
 
 /** Default retry delays in milliseconds */
 const DEFAULT_RETRY_DELAYS = [250, 1000, 3000, 5000];
@@ -157,6 +158,9 @@ export class OutboxManager {
 
                     if (res.success) {
                         // Successfully synced - remove from outbox
+                        if (op.operation === 'delete') {
+                            await this.markTombstoneSynced(op);
+                        }
                         await this.db.pending_ops.delete(op.id);
                         successCount += 1;
                     } else {
@@ -221,7 +225,7 @@ export class OutboxManager {
             // Max retries reached - mark as failed
             const updatedOp = {
                 ...op,
-                status: 'failed',
+                status: 'failed' as const,
                 attempts,
             };
             await this.db.pending_ops.put(updatedOp);
@@ -232,13 +236,35 @@ export class OutboxManager {
             const delay = this.config.retryDelays[attempts - 1] ?? 0;
             const updatedOp = {
                 ...op,
-                status: 'pending',
+                status: 'pending' as const,
                 attempts,
                 nextAttemptAt: Date.now() + delay,
             };
             await this.db.pending_ops.put(updatedOp);
             console.warn('[OutboxManager] Op will retry:', op.stamp.opId, 'attempt', attempts);
             await hooks.doAction('sync.retry:action', { op: updatedOp, attempt: attempts });
+        }
+    }
+
+    private async markTombstoneSynced(op: PendingOp): Promise<void> {
+        const id = `${op.tableName}:${op.pk}`;
+        const existing = await this.db.tombstones.get(id);
+        const syncedAt = nowSec();
+
+        if (!existing) {
+            await this.db.tombstones.put({
+                id,
+                tableName: op.tableName,
+                pk: op.pk,
+                deletedAt: syncedAt,
+                clock: op.stamp.clock,
+                syncedAt,
+            });
+            return;
+        }
+
+        if ((existing.clock ?? 0) <= op.stamp.clock) {
+            await this.db.tombstones.update(id, { clock: op.stamp.clock, syncedAt });
         }
     }
 

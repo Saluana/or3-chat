@@ -55,12 +55,7 @@ export function err(
 }
 
 export function isAppError(v: unknown): v is AppError {
-    return (
-        !!v &&
-        typeof v === 'object' &&
-        'code' in v &&
-        'severity' in v
-    );
+    return !!v && typeof v === 'object' && 'code' in v && 'severity' in v;
 }
 
 export function asAppError(
@@ -116,7 +111,9 @@ function pushToast(error: AppError, retry?: () => void) {
                           onClick: () => {
                               try {
                                   retry();
-                              } catch { /* ignore */ }
+                              } catch {
+                                  /* ignore */
+                              }
                           },
                       },
                   ]
@@ -125,12 +122,14 @@ function pushToast(error: AppError, retry?: () => void) {
                 error.severity === 'fatal'
                     ? 'error'
                     : error.severity === 'warn'
-                    ? 'warning'
-                    : error.severity === 'info'
-                    ? 'info'
-                    : 'error',
+                      ? 'warning'
+                      : error.severity === 'info'
+                        ? 'info'
+                        : 'error',
         });
-    } catch { /* ignore */ }
+    } catch {
+        /* ignore */
+    }
 }
 
 export interface ReportOptions {
@@ -157,15 +156,20 @@ export function reportError(
         // Scrub shallow string fields
         e.message = scrubValue(e.message) as string;
         if (e.tags) {
-            for (const k in e.tags) e.tags[k] = scrubValue(e.tags[k]) as string | number | boolean | undefined;
+            for (const k in e.tags)
+                e.tags[k] = scrubValue(e.tags[k]) as
+                    | string
+                    | number
+                    | boolean
+                    | undefined;
         }
         if (shouldLog(e.code, e.message)) {
             const level =
                 e.severity === 'warn'
                     ? 'warn'
                     : e.severity === 'info'
-                    ? 'info'
-                    : 'error';
+                      ? 'info'
+                      : 'error';
             console[level]('[err]', {
                 code: e.code,
                 msg: e.message,
@@ -190,7 +194,9 @@ export function reportError(
     } catch (inner) {
         try {
             console.error('[reportError-fallback]', inner, input);
-        } catch { /* ignore */ }
+        } catch {
+            /* ignore */
+        }
         // Best effort fallback error
         return err('ERR_INTERNAL', 'Reporting failed');
     }

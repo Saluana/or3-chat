@@ -16,20 +16,20 @@ date: 2026-01-11
     - [x] Verify workspace membership in Convex functions
 
 ### 2. Provider Schema and Functions (Convex example)
-- [ ] **2.1 Create Convex schema** (Requirements: 2.1, 8.2)
-    - [ ] Define change_log table with server_version index (snake_case fields)
-    - [ ] Define threads, messages (include `order_key`), projects, posts, kv tables with workspace scope (snake_case fields)
-    - [ ] Define file_meta table (snake_case fields)
-    - [ ] Define server_version_counter table
-    - [ ] Define device_cursors table for retention
-    - [ ] Add all required indexes
-- [ ] **2.2 Implement sync functions** (Requirements: 5.1, 5.2)
-    - [ ] Implement `push` mutation with idempotency via opId
-    - [ ] Implement `pull` query with cursor-based pagination
-    - [ ] Implement `watchChanges` reactive query for subscriptions
-    - [ ] Implement `applyOpToTable` helper with LWW check
-- [ ] **2.3 Implement server version counter** (Requirements: 5.2)
-    - [ ] Create `getNextServerVersion` atomic increment helper
+- [x] **2.1 Create Convex schema** (Requirements: 2.1, 8.2)
+    - [x] Define change_log table with server_version index (snake_case fields)
+    - [x] Define threads, messages (include `order_key`), projects, posts, kv tables with workspace scope (snake_case fields)
+    - [x] Define file_meta table (snake_case fields)
+    - [x] Define server_version_counter table
+    - [x] Define device_cursors table for retention
+    - [x] Add all required indexes
+- [x] **2.2 Implement sync functions** (Requirements: 5.1, 5.2)
+    - [x] Implement `push` mutation with idempotency via opId
+    - [x] Implement `pull` query with cursor-based pagination
+    - [x] Implement `watchChanges` reactive query for subscriptions
+    - [x] Implement `applyOpToTable` helper with LWW check
+- [x] **2.3 Implement server version counter** (Requirements: 5.2)
+    - [x] Create `getNextServerVersion` atomic increment helper
 
 ### 3. Client-Side Sync Types
 - [x] **3.1 Define shared types** (Requirements: 3.3)
@@ -37,26 +37,26 @@ date: 2026-01-11
     - [x] Create `SyncChange`, `PullRequest`, `PullResponse` types
     - [x] Create `PushBatch`, `PushResult` types
     - [x] Create `SyncProvider` interface
-- [ ] **3.2 Create Zod schemas for validation** (Requirements: 3.3)
-    - [ ] Define schemas for all sync types
-    - [ ] Export for both client and server use
+- [x] **3.2 Create Zod schemas for validation** (Requirements: 3.3)
+    - [x] Define schemas for all sync types
+    - [x] Export for both client and server use
 
 ### 4. Dexie Schema Extensions
-- [ ] **4.1 Add sync tables to Dexie** (Requirements: 3.1)
-    - [ ] Add `pending_ops` table with indexes
-    - [ ] Add `tombstones` table
-    - [ ] Add `sync_state` table
-    - [ ] Add `sync_runs` table
-    - [ ] Bump Dexie version to 7 (coordinate with storage schema changes)
-- [ ] **4.2 Add workspace DB factory**
-    - [ ] Implement `useWorkspaceDb(workspaceId)` -> `or3-db-${workspaceId}`
-    - [ ] Ensure sync engine is bound to the active workspace DB
-- [ ] **4.3 Add deterministic message ordering**
-    - [ ] Add `order_key` to message schema (HLC-derived)
-    - [ ] Update Dexie index to `[thread_id+index+order_key]`
+- [x] **4.1 Add sync tables to Dexie** (Requirements: 3.1)
+    - [x] Add `pending_ops` table with indexes
+    - [x] Add `tombstones` table
+    - [x] Add `sync_state` table
+    - [x] Add `sync_runs` table
+    - [x] Bump Dexie version to 7 (coordinate with storage schema changes)
+- [x] **4.2 Add workspace DB factory**
+    - [x] Implement `useWorkspaceDb(workspaceId)` -> `or3-db-${workspaceId}`
+    - [x] Ensure sync engine is bound to the active workspace DB
+- [x] **4.3 Add deterministic message ordering**
+    - [x] Add `order_key` to message schema (HLC-derived)
+    - [x] Update Dexie index to `[thread_id+index+order_key]`
 - [x] **4.4 Ensure clock increments on all write paths**
     - [x] Increment `clock` on create/update/delete for threads, messages, projects, posts, kv, file_meta
-    - [ ] Add tests to confirm `clock` advances on every mutation
+    - [x] Add tests to confirm `clock` advances on every mutation
 - [x] **4.5 Create table interfaces** (Requirements: 3.1)
     - [x] Define `Tombstone` interface
     - [x] Define `SyncState` interface
@@ -66,16 +66,16 @@ date: 2026-01-11
 - [x] **5.1 Create provider registry** (Requirements: 8.1)
     - [x] Create `sync-provider-registry.ts`
     - [x] Implement `registerSyncProvider()` and `getActiveSyncProvider()`
-- [ ] **5.2 Implement Convex provider** (Requirements: 8.2)
-    - [ ] Create `convex-sync-provider.ts`
-    - [ ] Set `mode: 'direct'` and required auth template metadata
-    - [ ] Implement `subscribe()` using Convex reactive queries
-    - [ ] Implement `pull()` calling Convex query
-    - [ ] Implement `push()` calling Convex mutation
-    - [ ] Implement `dispose()` cleanup
- - [ ] **5.3 Add gateway provider support** (Requirements: 8.3)
-    - [ ] Allow providers to declare `mode: 'gateway'`
-    - [ ] Route gateway providers through SSR endpoints for push/pull
+- [x] **5.2 Implement Convex provider** (Requirements: 8.2)
+    - [x] Create `convex-sync-provider.ts`
+    - [x] Set `mode: 'direct'` and required auth template metadata
+    - [x] Implement `subscribe()` using Convex reactive queries
+    - [x] Implement `pull()` calling Convex query
+    - [x] Implement `push()` calling Convex mutation
+    - [x] Implement `dispose()` cleanup
+ - [x] **5.3 Add gateway provider support** (Requirements: 8.3)
+    - [x] Allow providers to declare `mode: 'gateway'`
+    - [x] Route gateway providers through SSR endpoints for push/pull
 
 ### 6. HookBridge (Change Capture)
 - [x] **6.1 Create HookBridge class** (Requirements: 3.1, 3.3)
@@ -121,45 +121,45 @@ date: 2026-01-11
     - [x] Include local, remote, and winner info
 
 ### 10. Tombstones and GC
-- [ ] **10.1 Implement tombstone tracking** (Requirements: 7.1, 7.2)
-    - [ ] Write tombstone on delete sync
-    - [ ] Check tombstones during rescan
-    - [ ] Prevent resurrection of deleted records
-- [ ] **10.2 Implement GC** (Requirements: 7.3)
-    - [ ] Query eligible tombstones (old + all devices advanced)
-    - [ ] Purge from local and remote
-    - [ ] Run during idle periods
- - [ ] **10.3 Implement change_log retention**
-    - [ ] Track `device_cursors.last_seen_version`
-    - [ ] Purge change_log entries below min cursor with retention window
+- [x] **10.1 Implement tombstone tracking** (Requirements: 7.1, 7.2)
+    - [x] Write tombstone on delete sync
+    - [x] Check tombstones during rescan
+    - [x] Prevent resurrection of deleted records
+- [x] **10.2 Implement GC** (Requirements: 7.3)
+    - [x] Query eligible tombstones (old + all devices advanced)
+    - [x] Purge from local and remote
+    - [x] Run during idle periods
+ - [x] **10.3 Implement change_log retention**
+    - [x] Track `device_cursors.last_seen_version`
+    - [x] Purge change_log entries below min cursor with retention window
 
 ### 11. Recovery and Rescan
-- [ ] **11.1 Implement bootstrap flow** (Requirements: 9.1)
-    - [ ] Paginated pull on first connection
-    - [ ] Emit progress events
-    - [ ] Complete when cursor catches up
-- [ ] **11.2 Implement rescan** (Requirements: 9.1, 9.2)
-    - [ ] Detect cursor expiry
-    - [ ] Build staged dataset
-    - [ ] Rebase pending ops
-    - [ ] Atomic swap
+- [x] **11.1 Implement bootstrap flow** (Requirements: 9.1)
+    - [x] Paginated pull on first connection
+    - [x] Emit progress events
+    - [x] Complete when cursor catches up
+- [x] **11.2 Implement rescan** (Requirements: 9.1, 9.2)
+    - [x] Detect cursor expiry
+    - [x] Build staged dataset
+    - [x] Rebase pending ops
+    - [x] Atomic swap
 
 ### 12. Sync Plugin Integration
-- [ ] **12.1 Create sync plugin** (Requirements: 1.1)
-    - [ ] Create `app/plugins/convex-sync.client.ts`
-    - [ ] Start engine on authenticated session
-    - [ ] Stop engine on sign-out
-    - [ ] Handle HMR disposal
-- [ ] **12.2 Integrate with auth system**
-    - [ ] Watch session changes
-    - [ ] Pass workspace ID to engine
-    - [ ] Respect SSR auth enabled flag
-    - [ ] Ensure direct providers acquire auth tokens via `AuthTokenBroker`
+- [x] **12.1 Create sync plugin** (Requirements: 1.1)
+    - [x] Create `app/plugins/convex-sync.client.ts`
+    - [x] Start engine on authenticated session
+    - [x] Stop engine on sign-out
+    - [x] Handle HMR disposal
+- [x] **12.2 Integrate with auth system**
+    - [x] Watch session changes
+    - [x] Pass workspace ID to engine
+    - [x] Respect SSR auth enabled flag
+    - [x] Ensure direct providers acquire auth tokens via `AuthTokenBroker`
 
 ### 13. Hook Type Additions
-- [ ] **13.1 Add sync hooks to hook-types.ts** (Requirements: 10.1)
-    - [ ] Add `sync.*` action hooks (e.g., `sync.push:action:before`)
-    - [ ] Define payload types for each hook
+- [x] **13.1 Add sync hooks to hook-types.ts** (Requirements: 10.1)
+    - [x] Add `sync.*` action hooks (e.g., `sync.push:action:before`)
+    - [x] Define payload types for each hook
 
 ### 14. Testing
 - [x] **14.1 Unit tests** (Requirements: all)
@@ -190,23 +190,23 @@ date: 2026-01-11
 - [x] **14.1-14.2** Unit & integration tests
 
 ### Group 2: Pull/Subscribe (Current)
-- [/] **8** Pull/Subscribe Loop (CursorManager + SubscriptionManager)
+- [x] **8** Pull/Subscribe Loop (CursorManager + SubscriptionManager)
 
 ### Group 3: Dexie Schema Migration
-- [ ] **4.1-4.3** Add sync tables to Dexie (pending_ops, tombstones, sync_state, sync_runs)
-- [ ] **4.4** Clock increment tests
+- [x] **4.1-4.3** Add sync tables to Dexie (pending_ops, tombstones, sync_state, sync_runs)
+- [x] **4.4** Clock increment tests
 
-### Group 4: Convex Backend
-- [ ] **2** Convex schema and functions
-- [ ] **5.2** Convex provider implementation
-- [ ] **3.2** Zod validation schemas (optional)
+### Group 4: Convex Backend ✅
+- [x] **2** Convex schema and functions
+- [x] **5.2** Convex provider implementation
+- [x] **3.2** Zod validation schemas (optional)
 
-### Group 5: Integration & Recovery
-- [ ] **10** Tombstones and GC
-- [ ] **11** Bootstrap and rescan flows
-- [ ] **12** Sync plugin integration
-- [ ] **13** Hook type additions
-- [ ] **5.3** Gateway provider support (optional)
+### Group 5: Integration & Recovery ✅
+- [x] **10** Tombstones and GC
+- [x] **11** Bootstrap and rescan flows
+- [x] **12** Sync plugin integration
+- [x] **13** Hook type additions
+- [x] **5.3** Gateway provider support (optional)
 
 ### Group 6: E2E Validation
 - [ ] **14.3** E2E tests (multi-device, offline recovery)
