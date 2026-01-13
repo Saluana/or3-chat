@@ -13,6 +13,7 @@ import { compareHLC } from './hlc';
 import { getHookBridge } from './hook-bridge';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
+import { TABLE_PAYLOAD_SCHEMAS } from '~~/shared/sync/schemas';
 
 /** Local record with clock and optional HLC */
 interface LocalRecord {
@@ -21,6 +22,16 @@ interface LocalRecord {
     deleted?: boolean;
     [key: string]: unknown;
 }
+
+/** Primary key field for each table */
+const PK_FIELDS: Record<string, string> = {
+    threads: 'id',
+    messages: 'id',
+    projects: 'id',
+    posts: 'id',
+    kv: 'id',
+    file_meta: 'hash',
+};
 
 export class ConflictResolver {
     private db: Or3DB;
@@ -167,19 +178,37 @@ export class ConflictResolver {
         stamp: { clock: number; hlc: string }
     ): Promise<ChangeResult> {
         const remoteClock = stamp.clock;
-        const remotePayload = (payload ?? {}) as Record<string, unknown>;
+        const rawPayload = (payload ?? {}) as Record<string, unknown>;
+        
+        // Validate payload using table-specific schema
+        const schema = TABLE_PAYLOAD_SCHEMAS[tableName];
+        if (schema) {
+            const result = schema.safeParse(rawPayload);
+            if (!result.success) {
+                console.error('[ConflictResolver] Invalid payload for', tableName, result.error);
+                return { applied: false, skipped: true, isConflict: false };
+            }
+        }
+        
+        const remotePayload = { ...rawPayload };
+        
+        // Handle snake_case/camelCase mapping for posts
         if (tableName === 'posts' && 'post_type' in remotePayload && !('postType' in remotePayload)) {
             remotePayload.postType = remotePayload.post_type;
             delete remotePayload.post_type;
         }
+        
         const tombstone = await this.getTombstone(tableName, pk);
         if (tombstone && tombstone.clock >= remoteClock) {
             return { applied: false, skipped: true, isConflict: false };
         }
 
+        // Get the correct primary key field for this table
+        const pkField = PK_FIELDS[tableName] ?? 'id';
+
         if (!local) {
             // New record - just insert
-            await table.put({ ...remotePayload, id: pk, clock: stamp.clock, hlc: stamp.hlc });
+            await table.put({ ...remotePayload, [pkField]: pk, clock: stamp.clock, hlc: stamp.hlc });
             if (tombstone && tombstone.clock < remoteClock) {
                 await this.clearTombstone(tableName, pk);
             }
@@ -190,7 +219,7 @@ export class ConflictResolver {
 
         if (remoteClock > localClock) {
             // Remote wins - update
-            await table.put({ ...remotePayload, id: pk, clock: stamp.clock, hlc: stamp.hlc });
+            await table.put({ ...remotePayload, [pkField]: pk, clock: stamp.clock, hlc: stamp.hlc });
             if (tombstone && tombstone.clock < remoteClock) {
                 await this.clearTombstone(tableName, pk);
             }
@@ -199,7 +228,7 @@ export class ConflictResolver {
             // Tie-break with HLC
             const localHlc = local.hlc ?? '';
             if (compareHLC(stamp.hlc, localHlc) > 0) {
-                await table.put({ ...remotePayload, id: pk, clock: stamp.clock, hlc: stamp.hlc });
+                await table.put({ ...remotePayload, [pkField]: pk, clock: stamp.clock, hlc: stamp.hlc });
                 if (tombstone && tombstone.clock < remoteClock) {
                     await this.clearTombstone(tableName, pk);
                 }

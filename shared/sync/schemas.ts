@@ -45,6 +45,102 @@ export const SyncChangeSchema = z.object({
 });
 
 // ============================================================
+// TABLE PAYLOAD SCHEMAS
+// ============================================================
+
+/**
+ * Validation schemas for incoming server payloads
+ * These use passthrough() to allow additional fields while validating required ones
+ */
+
+export const ThreadPayloadSchema = z
+    .object({
+        id: z.string(),
+        title: z.string().nullable().optional(),
+        status: z.string(),
+        deleted: z.boolean(),
+        pinned: z.boolean(),
+        created_at: z.number(),
+        updated_at: z.number(),
+        clock: z.number(),
+    })
+    .passthrough();
+
+export const MessagePayloadSchema = z
+    .object({
+        id: z.string(),
+        thread_id: z.string(),
+        role: z.string(),
+        index: z.number(),
+        order_key: z.string(),
+        deleted: z.boolean(),
+        created_at: z.number(),
+        updated_at: z.number(),
+        clock: z.number(),
+    })
+    .passthrough();
+
+export const ProjectPayloadSchema = z
+    .object({
+        id: z.string(),
+        name: z.string(),
+        deleted: z.boolean(),
+        created_at: z.number(),
+        updated_at: z.number(),
+        clock: z.number(),
+    })
+    .passthrough();
+
+export const PostPayloadSchema = z
+    .object({
+        id: z.string(),
+        title: z.string(),
+        content: z.string(),
+        postType: z.string(), // Client-side uses camelCase
+        deleted: z.boolean(),
+        created_at: z.number(),
+        updated_at: z.number(),
+        clock: z.number(),
+    })
+    .passthrough();
+
+export const FileMetaPayloadSchema = z
+    .object({
+        hash: z.string(),
+        kind: z.string().optional(),
+        mime_type: z.string().optional(),
+        size: z.number().optional(),
+        deleted: z.boolean(),
+        created_at: z.number(),
+        updated_at: z.number(),
+        clock: z.number(),
+    })
+    .passthrough();
+
+export const KvPayloadSchema = z
+    .object({
+        id: z.string(),
+        name: z.string(),
+        value: z.unknown(),
+        created_at: z.number(),
+        updated_at: z.number(),
+        clock: z.number(),
+    })
+    .passthrough();
+
+/**
+ * Map of table names to their payload schemas
+ */
+export const TABLE_PAYLOAD_SCHEMAS: Record<string, z.ZodSchema> = {
+    threads: ThreadPayloadSchema,
+    messages: MessagePayloadSchema,
+    projects: ProjectPayloadSchema,
+    posts: PostPayloadSchema,
+    file_meta: FileMetaPayloadSchema,
+    kv: KvPayloadSchema,
+};
+
+// ============================================================
 // REQUEST/RESPONSE SCHEMAS
 // ============================================================
 
