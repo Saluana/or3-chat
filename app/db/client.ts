@@ -96,15 +96,68 @@ export class Or3DB extends Dexie {
             file_transfers:
                 'id, hash, direction, state, workspace_id, created_at, updated_at, [hash+direction], [state+created_at]',
         });
+
+        // Version 9: Consolidated schema to ensure sync tables exist in all DBs
+        this.version(9).stores({
+            projects: 'id, name, clock, created_at, updated_at',
+            threads:
+                'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+            messages:
+                'id, [thread_id+index+order_key], [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at, data.type, [data.type+data.executionState]',
+            kv: 'id, &name, clock, created_at, updated_at',
+            attachments: 'id, type, name, clock, created_at, updated_at',
+            file_meta:
+                'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
+            file_blobs: 'hash',
+            posts: 'id, title, postType, deleted, created_at, updated_at',
+            pending_ops: 'id, tableName, status, createdAt, [tableName+pk]',
+            tombstones: 'id, [tableName+pk], deletedAt',
+            sync_state: 'id',
+            sync_runs: 'id, startedAt, status',
+            file_transfers:
+                'id, hash, direction, state, workspace_id, created_at, updated_at, [hash+direction], [state+created_at]',
+        });
     }
 }
 
-export const db = new Or3DB();
+const defaultDb = new Or3DB();
+const workspaceDbCache = new Map<string, Or3DB>();
+let activeWorkspaceId: string | null = null;
+
+export let db = defaultDb;
+
+export function getDefaultDb(): Or3DB {
+    return defaultDb;
+}
+
+export function getActiveWorkspaceId(): string | null {
+    return activeWorkspaceId;
+}
+
+export function getWorkspaceDb(workspaceId: string): Or3DB {
+    const existing = workspaceDbCache.get(workspaceId);
+    if (existing) return existing;
+    const created = new Or3DB(`or3-db-${workspaceId}`);
+    workspaceDbCache.set(workspaceId, created);
+    return created;
+}
+
+export function setActiveWorkspaceDb(workspaceId: string | null): Or3DB {
+    if (!workspaceId) {
+        activeWorkspaceId = null;
+        db = defaultDb;
+        return db;
+    }
+
+    activeWorkspaceId = workspaceId;
+    db = getWorkspaceDb(workspaceId);
+    return db;
+}
 
 /**
  * Create a workspace-specific database instance
  * Used in SSR mode where each workspace has isolated data
  */
 export function createWorkspaceDb(workspaceId: string): Or3DB {
-    return new Or3DB(`or3-db-${workspaceId}`);
+    return getWorkspaceDb(workspaceId);
 }

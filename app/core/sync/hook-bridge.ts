@@ -126,14 +126,20 @@ export class HookBridge {
         }
 
         let payloadForSync = payload;
-        if (
-            tableName === 'file_meta' &&
-            operation === 'put' &&
-            payload &&
-            typeof payload === 'object'
-        ) {
-            const sanitized = { ...(payload as Record<string, unknown>) };
-            delete sanitized.ref_count;
+        if (payload && typeof payload === 'object') {
+            const sanitized = Object.fromEntries(
+                Object.entries(payload as Record<string, unknown>).filter(
+                    ([key]) => !key.includes('.')
+                )
+            );
+            delete sanitized.hlc;
+            if (tableName === 'file_meta' && operation === 'put') {
+                delete sanitized.ref_count;
+            }
+            if (tableName === 'posts' && 'postType' in sanitized && !('post_type' in sanitized)) {
+                sanitized.post_type = sanitized.postType;
+                delete sanitized.postType;
+            }
             payloadForSync = sanitized;
         }
 
@@ -149,8 +155,31 @@ export class HookBridge {
             status: 'pending',
         };
 
-        // Enqueue in same transaction for atomicity
-        transaction.table('pending_ops').add(pendingOp);
+        const tableNames = transaction.storeNames ?? [];
+        const hasPendingOps = tableNames.includes('pending_ops');
+        const hasTombstones = tableNames.includes('tombstones');
+        const hasPendingOpsTable = this.db.tables.some(
+            (table) => table.name === 'pending_ops'
+        );
+        const hasTombstonesTable = this.db.tables.some(
+            (table) => table.name === 'tombstones'
+        );
+
+        if (!hasPendingOpsTable) {
+            console.warn('[HookBridge] pending_ops table missing; skipping sync capture');
+            return;
+        }
+
+        const enqueuePendingOp = () =>
+            this.db.pending_ops.add(pendingOp).catch((error) => {
+                console.error('[HookBridge] Failed to enqueue pending op', error);
+            });
+
+        if (hasPendingOps) {
+            transaction.table('pending_ops').add(pendingOp);
+        } else {
+            transaction.on('complete', enqueuePendingOp);
+        }
 
         if (operation === 'delete') {
             const tombstone: Tombstone = {
@@ -160,8 +189,21 @@ export class HookBridge {
                 deletedAt: nowSec(),
                 clock: stamp.clock,
             };
-            transaction.table('tombstones').put(tombstone);
+            if (!hasTombstonesTable) {
+                return;
+            }
+            const enqueueTombstone = () =>
+                this.db.tombstones.put(tombstone).catch((error) => {
+                    console.error('[HookBridge] Failed to enqueue tombstone', error);
+                });
+
+            if (hasTombstones) {
+                transaction.table('tombstones').put(tombstone);
+            } else {
+                transaction.on('complete', enqueueTombstone);
+            }
         }
+
         void useHooks().doAction('sync.op:action:captured', { op: pendingOp });
     }
 
