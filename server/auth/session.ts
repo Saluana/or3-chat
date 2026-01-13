@@ -7,6 +7,7 @@ import type { SessionContext } from '~/core/hooks/hook-types';
 import type { ProviderSession } from './types';
 import { getAuthProvider } from './registry';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
+import { getConvexClient, api } from '../utils/convex-client';
 
 const SESSION_CONTEXT_KEY = '__or3_session_context';
 
@@ -59,8 +60,15 @@ export async function resolveSessionContext(
         return nullSession;
     }
 
-    // TODO: Map provider session to internal user/workspace via AuthWorkspaceStore
-    // For now, return basic session context from provider
+    // Map provider session to internal user/workspace via Convex
+    const convex = getConvexClient();
+    const workspaceInfo = await convex.mutation(api.workspaces.ensure, {
+        provider: providerSession.provider,
+        provider_user_id: providerSession.user.id,
+        email: providerSession.user.email,
+        name: providerSession.user.displayName,
+    });
+
     const sessionContext: SessionContext = {
         authenticated: true,
         provider: providerSession.provider,
@@ -69,6 +77,10 @@ export async function resolveSessionContext(
             id: providerSession.user.id,
             email: providerSession.user.email,
             displayName: providerSession.user.displayName,
+        },
+        workspace: {
+            id: workspaceInfo.id,
+            name: workspaceInfo.name,
         },
         expiresAt: providerSession.expiresAt.toISOString(),
     };

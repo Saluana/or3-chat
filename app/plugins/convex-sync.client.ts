@@ -34,6 +34,7 @@ interface SyncEngineState {
 }
 
 let engineState: SyncEngineState | null = null;
+let convexClient: ReturnType<typeof useConvexClient> | null = null;
 
 /**
  * Start the sync engine for a workspace
@@ -135,6 +136,13 @@ export default defineNuxtPlugin(async () => {
         return;
     }
 
+    // Cache Convex client in plugin setup context
+    try {
+        convexClient = useConvexClient();
+    } catch {
+        convexClient = null;
+    }
+
     // Watch for session changes
     const { data: sessionData } = useSessionContext();
     watch(
@@ -190,13 +198,10 @@ async function ensureProviderAuth(provider: SyncProvider): Promise<SyncProvider 
     }
 
     if (provider.id === 'convex') {
-        try {
-            const convex = useConvexClient();
-            if (provider.auth) {
-                convex.setAuth(() => tokenBroker.getProviderToken(provider.auth!));
-            }
-        } catch (error) {
-            console.warn('[convex-sync] Failed to configure Convex auth:', error);
+        if (!convexClient) {
+            console.warn('[convex-sync] Convex client unavailable for auth');
+        } else if (provider.auth) {
+            convexClient.setAuth(() => tokenBroker.getProviderToken(provider.auth));
         }
     }
 

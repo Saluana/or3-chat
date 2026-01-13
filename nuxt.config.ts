@@ -45,6 +45,10 @@ export default defineNuxtConfig({
         '~/types': resolve(__dirname, './types'),
         '~~/shared': resolve(__dirname, './shared'),
     },
+    // Disable SSR for test pages to avoid hydration mismatches
+    routeRules: {
+        '/_tests/**': { ssr: false },
+    },
     compatibilityDate: '2025-07-15',
     runtimeConfig: {
         // Server-only env variables (auto-mapped from NUXT_*)

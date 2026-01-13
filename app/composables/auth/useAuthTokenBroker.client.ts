@@ -1,6 +1,6 @@
 /**
  * Client-side AuthTokenBroker.
- * Uses Clerk's useAuth() when available to mint provider JWTs.
+ * Uses Clerk's session when available to mint provider JWTs.
  */
 import { useRuntimeConfig } from '#imports';
 
@@ -13,30 +13,15 @@ export interface AuthTokenBroker {
     getProviderToken(input: ProviderTokenRequest): Promise<string | null>;
 }
 
-type UseAuthComposable = () => {
-    getToken: { value: (options?: { template?: string; skipCache?: boolean }) => Promise<string | null> };
-};
-
-let cachedUseAuth: UseAuthComposable | undefined;
-
-async function resolveUseAuth(): Promise<UseAuthComposable | undefined> {
-    if (cachedUseAuth !== undefined) {
-        return cachedUseAuth;
-    }
-
-    try {
-        const imports = (await import('#imports')) as { useAuth?: UseAuthComposable };
-        cachedUseAuth = imports.useAuth;
-    } catch {
-        cachedUseAuth = undefined;
-    }
-
-    return cachedUseAuth;
+// Clerk client type
+interface ClerkClient {
+    session?: {
+        getToken: (options?: { template?: string }) => Promise<string | null>;
+    } | null;
 }
 
 export function useAuthTokenBroker(): AuthTokenBroker {
     const runtimeConfig = useRuntimeConfig();
-    let auth: ReturnType<UseAuthComposable> | null = null;
 
     return {
         async getProviderToken(input) {
@@ -44,20 +29,14 @@ export function useAuthTokenBroker(): AuthTokenBroker {
                 return null;
             }
 
-            const useAuth = await resolveUseAuth();
-            if (!useAuth) {
-                return null;
-            }
-
-            if (!auth) {
-                auth = useAuth();
-            }
-
             try {
-                return await auth.getToken.value({
-                    template: input.template,
-                    skipCache: false,
-                });
+                // Access Clerk via window object (set by @clerk/nuxt)
+                const clerk = (window as unknown as { Clerk?: ClerkClient }).Clerk;
+                if (!clerk?.session) {
+                    return null;
+                }
+
+                return await clerk.session.getToken({ template: input.template });
             } catch (error) {
                 console.error('[auth-token-broker] Failed to get provider token:', error);
                 return null;

@@ -8,9 +8,10 @@
  * @module
  */
 
-import type * as sync from "../sync.js";
 import type * as storage from "../storage.js";
+import type * as sync from "../sync.js";
 import type * as users from "../users.js";
+import type * as workspaces from "../workspaces.js";
 
 import type {
   ApiFromModules,
@@ -19,9 +20,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  sync: typeof sync;
   storage: typeof storage;
+  sync: typeof sync;
   users: typeof users;
+  workspaces: typeof workspaces;
 }>;
 
 /**
