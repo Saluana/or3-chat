@@ -22,6 +22,7 @@ export default defineSchema({
     users: defineTable({
         email: v.optional(v.string()),
         display_name: v.optional(v.string()),
+        active_workspace_id: v.optional(v.id('workspaces')),
         created_at: v.number(),
     }),
 
@@ -41,6 +42,7 @@ export default defineSchema({
      */
     workspaces: defineTable({
         name: v.string(),
+        description: v.optional(v.string()),
         owner_user_id: v.id('users'),
         created_at: v.number(),
     }),
@@ -127,21 +129,21 @@ export default defineSchema({
     threads: defineTable({
         workspace_id: v.id('workspaces'),
         id: v.string(), // Dexie ID (client-generated)
-        title: v.optional(v.string()),
+        title: v.optional(v.nullable(v.string())),
         status: v.string(),
         deleted: v.boolean(),
         deleted_at: v.optional(v.number()),
         pinned: v.boolean(),
         created_at: v.number(),
         updated_at: v.number(),
-        last_message_at: v.optional(v.number()),
-        parent_thread_id: v.optional(v.string()),
-        project_id: v.optional(v.string()),
-        system_prompt_id: v.optional(v.string()),
+        last_message_at: v.optional(v.nullable(v.number())),
+        parent_thread_id: v.optional(v.nullable(v.string())),
+        project_id: v.optional(v.nullable(v.string())),
+        system_prompt_id: v.optional(v.nullable(v.string())),
         clock: v.number(),
-        anchor_message_id: v.optional(v.string()),
-        anchor_index: v.optional(v.number()),
-        branch_mode: v.optional(v.union(v.literal('reference'), v.literal('copy'))),
+        anchor_message_id: v.optional(v.nullable(v.string())),
+        anchor_index: v.optional(v.nullable(v.number())),
+        branch_mode: v.optional(v.nullable(v.union(v.literal('reference'), v.literal('copy')))),
         forked: v.boolean(),
     })
         .index('by_workspace', ['workspace_id', 'updated_at'])
@@ -159,7 +161,7 @@ export default defineSchema({
         data: v.optional(v.any()),
         index: v.number(),
         order_key: v.string(), // HLC-derived for deterministic ordering
-        file_hashes: v.optional(v.string()), // JSON array of file hashes
+        file_hashes: v.optional(v.nullable(v.string())), // JSON array of file hashes
         pending: v.optional(v.boolean()),
         deleted: v.boolean(),
         deleted_at: v.optional(v.number()),
@@ -167,7 +169,7 @@ export default defineSchema({
         created_at: v.number(),
         updated_at: v.number(),
         clock: v.number(),
-        stream_id: v.optional(v.string()),
+        stream_id: v.optional(v.nullable(v.string())),
     })
         .index('by_thread', ['workspace_id', 'thread_id', 'index', 'order_key'])
         .index('by_workspace_id', ['workspace_id', 'id']),
@@ -200,7 +202,7 @@ export default defineSchema({
         content: v.string(),
         post_type: v.string(),
         meta: v.optional(v.any()),
-        file_hashes: v.optional(v.string()),
+        file_hashes: v.optional(v.nullable(v.string())),
         deleted: v.boolean(),
         deleted_at: v.optional(v.number()),
         created_at: v.number(),
@@ -215,7 +217,7 @@ export default defineSchema({
      */
     file_meta: defineTable({
         workspace_id: v.id('workspaces'),
-        hash: v.string(), // MD5 hex, used as PK on Dexie side
+        hash: v.string(), // sha256:<hex> or md5:<hex>
         name: v.string(),
         mime_type: v.string(),
         kind: v.union(v.literal('image'), v.literal('pdf')),
@@ -225,12 +227,15 @@ export default defineSchema({
         page_count: v.optional(v.number()),
         ref_count: v.number(), // Derived locally, synced as hint
         storage_id: v.optional(v.id('_storage')), // Convex storage reference
+        storage_provider_id: v.optional(v.string()),
         deleted: v.boolean(),
         deleted_at: v.optional(v.number()),
         created_at: v.number(),
         updated_at: v.number(),
         clock: v.number(),
-    }).index('by_workspace_hash', ['workspace_id', 'hash']),
+    })
+        .index('by_workspace_hash', ['workspace_id', 'hash'])
+        .index('by_workspace_deleted', ['workspace_id', 'deleted']),
 
     /**
      * KV store - key-value pairs for user preferences

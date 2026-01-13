@@ -45,6 +45,10 @@ export default defineNuxtConfig({
         '~/types': resolve(__dirname, './types'),
         '~~/shared': resolve(__dirname, './shared'),
     },
+    // Disable SSR for test pages to avoid hydration mismatches
+    routeRules: {
+        '/_tests/**': { ssr: false },
+    },
     compatibilityDate: '2025-07-15',
     runtimeConfig: {
         // Server-only env variables (auto-mapped from NUXT_*)
@@ -58,6 +62,9 @@ export default defineNuxtConfig({
             // Single source of truth for client gating.
             // Avoid inferring enablement from presence of publishable keys.
             ssrAuthEnabled: isSsrAuthEnabled,
+            storage: {
+                provider: process.env.NUXT_PUBLIC_STORAGE_PROVIDER || 'convex',
+            },
             // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
             clerkPublishableKey: '',
         },

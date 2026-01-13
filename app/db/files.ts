@@ -125,6 +125,9 @@ export async function createOrRefFile(
             });
         }
         if (markId && hasPerf) finalizePerf(markId, 'ref', file.size);
+        if (!existing.storage_id) {
+            await enqueueUpload(hash);
+        }
         return existing;
     }
     const mime = file.type || 'application/octet-stream';
@@ -202,6 +205,7 @@ export async function createOrRefFile(
         });
     }
     if (markId && hasPerf) finalizePerf(markId, 'create', file.size);
+    await enqueueUpload(finalMeta.hash);
     return finalMeta;
 }
 
@@ -221,7 +225,31 @@ export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
 /** Get binary Blob by hash */
 export async function getFileBlob(hash: string): Promise<Blob | undefined> {
     const row = await db.file_blobs.get(hash);
-    return row?.blob;
+    if (row?.blob) return row.blob;
+    return ensureFileBlob(hash);
+}
+
+/** Ensure blob exists locally; attempt download if missing. */
+export async function ensureFileBlob(
+    hash: string
+): Promise<Blob | undefined> {
+    const row = await db.file_blobs.get(hash);
+    if (row?.blob) return row.blob;
+    if (!import.meta.client) return undefined;
+    try {
+        const { getStorageTransferQueue } = await import(
+            '~/core/storage/transfer-queue'
+        );
+        const queue = getStorageTransferQueue();
+        if (!queue) return undefined;
+        return await queue.ensureDownloadedBlob(hash);
+    } catch (error) {
+        reportError(error, {
+            silent: true,
+            tags: { domain: 'storage', stage: 'download' },
+        });
+        return undefined;
+    }
 }
 
 /** Soft delete file (mark deleted flag only) */
@@ -328,6 +356,23 @@ export function fileDeleteError(message: string, cause?: unknown) {
 
 // Export internal for testing / tasks list mapping
 export { changeRefCount };
+
+async function enqueueUpload(hash: string): Promise<void> {
+    if (!import.meta.client) return;
+    try {
+        const { getStorageTransferQueue } = await import(
+            '~/core/storage/transfer-queue'
+        );
+        const queue = getStorageTransferQueue();
+        if (!queue) return;
+        await queue.enqueue(hash, 'upload');
+    } catch (error) {
+        reportError(error, {
+            silent: true,
+            tags: { domain: 'storage', stage: 'enqueue-upload' },
+        });
+    }
+}
 
 // Lightweight image dimension extraction with timeout to prevent hung operations
 const IMAGE_SIZE_TIMEOUT_MS = 5000; // 5s timeout

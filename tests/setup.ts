@@ -14,7 +14,12 @@ class ResizeObserver {
 vi.mock('~/utils/errors', () => ({
     reportError: vi.fn(),
     err: vi.fn(
-        (_code: string, _message: string, meta: Record<string, unknown>) => meta
+        (code: string, message: string, meta?: Record<string, unknown>) => {
+            const e = new Error(message) as Error & { code: string; tags?: unknown };
+            e.code = code;
+            if (meta?.tags) e.tags = meta.tags;
+            return e;
+        }
     ),
 }));
 

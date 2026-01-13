@@ -168,6 +168,10 @@ export class ConflictResolver {
     ): Promise<ChangeResult> {
         const remoteClock = stamp.clock;
         const remotePayload = (payload ?? {}) as Record<string, unknown>;
+        if (tableName === 'posts' && 'post_type' in remotePayload && !('postType' in remotePayload)) {
+            remotePayload.postType = remotePayload.post_type;
+            delete remotePayload.post_type;
+        }
         const tombstone = await this.getTombstone(tableName, pk);
         if (tombstone && tombstone.clock >= remoteClock) {
             return { applied: false, skipped: true, isConflict: false };

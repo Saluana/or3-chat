@@ -136,12 +136,18 @@ export class OutboxManager {
                 batch.map((op) => ({ ...op, status: 'syncing' as const }))
             );
 
-            try {
-                // Push to provider
-                const result = await this.provider.push({
-                    scope: this.scope,
-                    ops: batch,
-                });
+             try {
+                 const sanitizedBatch = batch.map((op) => ({
+                     ...op,
+                     payload: this.sanitizePayload(op.tableName, op.payload),
+                 }));
+
+                 // Push to provider
+                 const result = await this.provider.push({
+                     scope: this.scope,
+                     ops: sanitizedBatch,
+                 });
+
 
                 // Process results
                 const resultsById = new Map(result.results.map((res) => [res.opId, res]));
@@ -213,10 +219,30 @@ export class OutboxManager {
         return Array.from(byKey.values()).sort((a, b) => a.createdAt - b.createdAt);
     }
 
+     private sanitizePayload(tableName: string, payload?: unknown): unknown {
+        if (!payload || typeof payload !== 'object') return payload;
+
+        const sanitized = Object.fromEntries(
+            Object.entries(payload as Record<string, unknown>).filter(
+                ([key]) => !key.includes('.')
+            )
+        );
+
+        delete sanitized.hlc;
+
+        if (tableName === 'posts' && 'postType' in sanitized && !('post_type' in sanitized)) {
+            sanitized.post_type = sanitized.postType;
+            delete sanitized.postType;
+        }
+
+        return sanitized;
+    }
+
     /**
      * Handle a failed operation
      */
     private async handleFailedOp(op: PendingOp, error?: string): Promise<void> {
+
         const hooks = useHooks();
         const attempts = op.attempts + 1;
         const maxAttempts = this.config.retryDelays.length;

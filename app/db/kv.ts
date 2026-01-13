@@ -1,4 +1,4 @@
-import { db } from './client';
+import { db, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, nextClock } from './util';
@@ -93,9 +93,9 @@ export async function getKv(id: string) {
     return hooks.applyFilters('db.kv.get:filter:output', res);
 }
 
-export async function getKvByName(name: string) {
+export async function getKvByName(name: string, targetDb: Or3DB = db) {
     const hooks = useHooks();
-    const res = await dbTry(() => db.kv.where('name').equals(name).first(), {
+    const res = await dbTry(() => targetDb.kv.where('name').equals(name).first(), {
         op: 'read',
         entity: 'kv',
         action: 'getByName',
@@ -106,11 +106,12 @@ export async function getKvByName(name: string) {
 // Convenience helpers for auth/session flows
 export async function setKvByName(
     name: string,
-    value: string | null
+    value: string | null,
+    targetDb: Or3DB = db
 ): Promise<Kv> {
     const hooks = useHooks();
     const existing = await dbTry(
-        () => db.kv.where('name').equals(name).first(),
+        () => targetDb.kv.where('name').equals(name).first(),
         { op: 'read', entity: 'kv', action: 'getByName' }
     );
     const now = nowSec();
@@ -126,14 +127,13 @@ export async function setKvByName(
         'db.kv.upsertByName:filter:input',
         record
     );
-    // Ensure filtered is a full Kv entity (type guard)
     const kvEntity: Kv =
         'id' in filtered && 'created_at' in filtered
             ? (filtered as Kv)
             : record;
     parseOrThrow(KvSchema, kvEntity);
     await dbTry(
-        () => db.kv.put(kvEntity),
+        () => targetDb.kv.put(kvEntity),
         { op: 'write', entity: 'kv', action: 'upsertByName' },
         { rethrow: true }
     );
@@ -141,20 +141,23 @@ export async function setKvByName(
     return kvEntity;
 }
 
-export async function hardDeleteKvByName(name: string): Promise<void> {
+export async function hardDeleteKvByName(
+    name: string,
+    targetDb: Or3DB = db
+): Promise<void> {
     const hooks = useHooks();
     const existing = await dbTry(
-        () => db.kv.where('name').equals(name).first(),
+        () => targetDb.kv.where('name').equals(name).first(),
         { op: 'read', entity: 'kv', action: 'getByName' }
     );
-    if (!existing) return; // nothing to do
+    if (!existing) return;
     await hooks.doAction('db.kv.deleteByName:action:hard:before', {
         entity: existing,
         id: existing.id,
         tableName: 'kv',
     });
     await dbTry(
-        () => db.kv.delete(existing.id),
+        () => targetDb.kv.delete(existing.id),
         { op: 'write', entity: 'kv', action: 'deleteByName' },
         { rethrow: true }
     );

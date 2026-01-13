@@ -471,7 +471,12 @@ export class SubscriptionManager {
         this.unsubscribe = await this.provider.subscribe(
             this.scope,
             this.config.tables,
-            (changes) => this.handleChanges(changes)
+            (changes) => {
+                this.handleChanges(changes).catch((err) => {
+                    console.error('[SubscriptionManager] handleChanges error:', err);
+                    this.handleError(err);
+                });
+            }
         );
     }
 

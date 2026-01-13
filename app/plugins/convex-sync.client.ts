@@ -15,9 +15,12 @@ import { getHookBridge } from '~/core/sync/hook-bridge';
 import { OutboxManager } from '~/core/sync/outbox-manager';
 import { createSubscriptionManager } from '~/core/sync/subscription-manager';
 import { GcManager } from '~/core/sync/gc-manager';
-import { createWorkspaceDb, type Or3DB } from '~/db/client';
+import { createWorkspaceDb, setActiveWorkspaceDb, type Or3DB } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
-import { useAuthTokenBroker } from '~/composables/auth/useAuthTokenBroker.client';
+import {
+    useAuthTokenBroker,
+    type ProviderTokenRequest,
+} from '~/composables/auth/useAuthTokenBroker.client';
 import { watch } from 'vue';
 import type { SyncProvider, SyncScope } from '~~/shared/sync/types';
 import { useConvexClient } from 'convex-vue';
@@ -34,6 +37,7 @@ interface SyncEngineState {
 }
 
 let engineState: SyncEngineState | null = null;
+let convexClient: ReturnType<typeof useConvexClient> | null = null;
 
 /**
  * Start the sync engine for a workspace
@@ -135,13 +139,22 @@ export default defineNuxtPlugin(async () => {
         return;
     }
 
+    // Cache Convex client in plugin setup context
+    try {
+        convexClient = useConvexClient();
+    } catch {
+        convexClient = null;
+    }
+
     // Watch for session changes
     const { data: sessionData } = useSessionContext();
     watch(
         () => sessionData.value?.session,
         (session) => {
-            if (session?.authenticated && session.workspace?.id) {
-                void startSyncEngine(session.workspace.id).catch((error) => {
+            const workspaceId = session?.authenticated ? session.workspace?.id ?? null : null;
+            setActiveWorkspaceDb(workspaceId);
+            if (workspaceId) {
+                void startSyncEngine(workspaceId).catch((error) => {
                     console.error('[convex-sync] Failed to start sync engine:', error);
                 });
             } else {
@@ -177,7 +190,8 @@ async function ensureProviderAuth(provider: SyncProvider): Promise<SyncProvider 
     }
 
     const tokenBroker = useAuthTokenBroker();
-    const token = await tokenBroker.getProviderToken(provider.auth);
+    const providerAuth = provider.auth as ProviderTokenRequest;
+    const token = await tokenBroker.getProviderToken(providerAuth);
     if (!token) {
         const gatewayFallback = getSyncProvider(`${provider.id}-gateway`);
         if (gatewayFallback) {
@@ -190,13 +204,10 @@ async function ensureProviderAuth(provider: SyncProvider): Promise<SyncProvider 
     }
 
     if (provider.id === 'convex') {
-        try {
-            const convex = useConvexClient();
-            if (provider.auth) {
-                convex.setAuth(() => tokenBroker.getProviderToken(provider.auth!));
-            }
-        } catch (error) {
-            console.warn('[convex-sync] Failed to configure Convex auth:', error);
+        if (!convexClient) {
+            console.warn('[convex-sync] Convex client unavailable for auth');
+        } else if (providerAuth) {
+            convexClient.setAuth(() => tokenBroker.getProviderToken(providerAuth));
         }
     }
 

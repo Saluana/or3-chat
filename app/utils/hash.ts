@@ -1,17 +1,28 @@
 import { reportError, err } from '~/utils/errors';
 /**
  * Hashing utilities for file deduplication.
- * Implements async chunked MD5 with Web Crypto fallback to spark-md5.
+ * - New files use SHA-256 with `sha256:` prefix.
+ * - Legacy MD5 hashes remain supported for reads/verification.
  *
  * Optimizations:
  * - Cached SparkMD5 module to avoid repeated dynamic imports
- * - Web Crypto threshold increased to 8MB (covers ~95% of files)
  * - Pre-allocated hex lookup table for O(n) conversion
  * - Adaptive yielding: scheduler.yield() → requestIdleCallback → setTimeout
  */
 
 const CHUNK_SIZE = 256 * 1024; // 256KB
 const WEBCRYPTO_THRESHOLD = 8 * 1024 * 1024; // 8MB - covers ~95% of files
+const SHA256_HEX_LENGTH = 64;
+const MD5_HEX_LENGTH = 32;
+const HEX_REGEX = /^[a-f0-9]+$/;
+
+export type HashAlgorithm = 'sha256' | 'md5';
+
+export interface ParsedHash {
+    algorithm: HashAlgorithm;
+    hex: string;
+    full: string;
+}
 
 type SparkMd5ArrayBuffer = {
     append(data: ArrayBuffer | ArrayBufferView): SparkMd5ArrayBuffer;
@@ -71,8 +82,85 @@ async function yieldToMain(): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/** Compute MD5 hash (hex lowercase) for a Blob using chunked reads. */
+export function parseHash(hash: string): ParsedHash | null {
+    if (!hash) return null;
+    const trimmed = hash.trim().toLowerCase();
+    if (!trimmed) return null;
+    if (trimmed.startsWith('sha256:')) {
+        const hex = trimmed.slice(7);
+        if (hex.length !== SHA256_HEX_LENGTH || !HEX_REGEX.test(hex))
+            return null;
+        return { algorithm: 'sha256', hex, full: `sha256:${hex}` };
+    }
+    if (trimmed.startsWith('md5:')) {
+        const hex = trimmed.slice(4);
+        if (hex.length !== MD5_HEX_LENGTH || !HEX_REGEX.test(hex)) return null;
+        return { algorithm: 'md5', hex, full: `md5:${hex}` };
+    }
+    if (trimmed.length === MD5_HEX_LENGTH && HEX_REGEX.test(trimmed)) {
+        return { algorithm: 'md5', hex: trimmed, full: `md5:${trimmed}` };
+    }
+    return null;
+}
+
+export function formatHash(algorithm: HashAlgorithm, hex: string): string {
+    return `${algorithm}:${hex.toLowerCase()}`;
+}
+
+export function isValidHash(hash: string): boolean {
+    return parseHash(hash) !== null;
+}
+
+/** Compute hash hex (lowercase) using the requested algorithm. */
+export async function computeHashHex(
+    blob: Blob,
+    algorithm: HashAlgorithm
+): Promise<string> {
+    if (algorithm === 'sha256') {
+        const dev = import.meta.dev;
+        const hasPerf = typeof performance !== 'undefined';
+        const markId =
+            dev && hasPerf
+                ? `hash-${Date.now()}-${Math.random().toString(36).slice(2)}`
+                : undefined;
+        if (markId && hasPerf) performance.mark(`${markId}:start`);
+        try {
+            const canUseSubtle =
+                typeof crypto !== 'undefined' &&
+                typeof crypto.subtle !== 'undefined' &&
+                typeof crypto.subtle.digest === 'function';
+            if (!canUseSubtle) {
+                throw new Error('WebCrypto unavailable for SHA-256 hashing');
+            }
+            const buf = await blob.arrayBuffer();
+            const digest = await crypto.subtle.digest('SHA-256', buf);
+            const hex = bufferToHex(new Uint8Array(digest));
+            if (markId && hasPerf)
+                finishMark(markId, blob.size, 'subtle', dev, 'sha256');
+            return hex;
+        } catch (error) {
+            if (markId && hasPerf) {
+                performance.mark(`${markId}:error`);
+                performance.measure(
+                    `hash:sha256:error:${
+                        error instanceof Error ? error.message : 'unknown'
+                    }`,
+                    `${markId}:start`
+                );
+            }
+            throw error;
+        }
+    }
+    return computeMd5Hex(blob);
+}
+
+/** Compute SHA-256 hash with prefix for new files. */
 export async function computeFileHash(blob: Blob): Promise<string> {
+    const hex = await computeHashHex(blob, 'sha256');
+    return formatHash('sha256', hex);
+}
+
+async function computeMd5Hex(blob: Blob): Promise<string> {
     const dev = import.meta.dev;
     const hasPerf = typeof performance !== 'undefined';
     const markId =
@@ -93,7 +181,7 @@ export async function computeFileHash(blob: Blob): Promise<string> {
                 const digest = await crypto.subtle.digest('MD5' as string, buf);
                 const hex = bufferToHex(new Uint8Array(digest));
                 if (markId && hasPerf)
-                    finishMark(markId, blob.size, 'subtle', dev);
+                    finishMark(markId, blob.size, 'subtle', dev, 'md5');
                 return hex;
             }
         } catch {
@@ -112,7 +200,7 @@ export async function computeFileHash(blob: Blob): Promise<string> {
             if (offset < blob.size) await yieldToMain();
         }
         const hex = hash.end();
-        if (markId && hasPerf) finishMark(markId, blob.size, 'stream', dev);
+        if (markId && hasPerf) finishMark(markId, blob.size, 'stream', dev, 'md5');
         return hex;
     } catch (error) {
         if (markId && hasPerf) {
@@ -132,17 +220,18 @@ function finishMark(
     id: string,
     size: number,
     mode: 'subtle' | 'stream',
-    dev: boolean
+    dev: boolean,
+    algo: HashAlgorithm
 ) {
     try {
         performance.mark(`${id}:end`);
         performance.measure(
-            `hash:md5:${mode}:bytes=${size}`,
+            `hash:${algo}:${mode}:bytes=${size}`,
             `${id}:start`,
             `${id}:end`
         );
         const entry = performance
-            .getEntriesByName(`hash:md5:${mode}:bytes=${size}`)
+            .getEntriesByName(`hash:${algo}:${mode}:bytes=${size}`)
             .slice(-1)[0];
         if (entry && entry.duration && entry.duration > 0) {
             if (dev) {
