@@ -180,6 +180,13 @@ export class ConflictResolver {
         const remoteClock = stamp.clock;
         const rawPayload = (payload ?? {}) as Record<string, unknown>;
         
+        // Handle snake_case/camelCase mapping BEFORE validation
+        // Convex stores post_type but Dexie/client uses postType
+        if (tableName === 'posts' && 'post_type' in rawPayload && !('postType' in rawPayload)) {
+            rawPayload.postType = rawPayload.post_type;
+            delete rawPayload.post_type;
+        }
+        
         // Validate payload using table-specific schema
         const schema = TABLE_PAYLOAD_SCHEMAS[tableName];
         if (schema) {
@@ -191,12 +198,6 @@ export class ConflictResolver {
         }
         
         const remotePayload = { ...rawPayload };
-        
-        // Handle snake_case/camelCase mapping for posts
-        if (tableName === 'posts' && 'post_type' in remotePayload && !('postType' in remotePayload)) {
-            remotePayload.postType = remotePayload.post_type;
-            delete remotePayload.post_type;
-        }
         
         const tombstone = await this.getTombstone(tableName, pk);
         if (tombstone && tombstone.clock >= remoteClock) {
