@@ -15,9 +15,22 @@ import type { PendingOp, ChangeStamp, Tombstone } from '~~/shared/sync/types';
 import type { Or3DB } from '~/db/client';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
+import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
 
 /** Tables that should be captured for sync */
 const SYNCED_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'] as const;
+
+/**
+ * KV keys that should NOT be synced.
+ * - Large caches that can be refetched
+ * - Security-sensitive data (API keys)
+ * - Device-local state
+ */
+const KV_SYNC_BLOCKLIST = [
+    'MODELS_CATALOG',           // Large cache (~500KB), refetchable from OpenRouter
+    'openrouter_api_key',       // Security: API keys should not sync to server
+    'workspace.manager.cache',  // Device-local UI cache
+] as const;
 
 /** Primary key field for each table */
 const PK_FIELDS: Record<string, string> = {
@@ -108,6 +121,14 @@ export class HookBridge {
         const pkField = PK_FIELDS[tableName] ?? 'id';
         const pk = String(primKey ?? (payload as Record<string, unknown>)?.[pkField] ?? '');
 
+        // Filter out blocked KV keys (large caches, secrets, device-local data)
+        if (tableName === 'kv') {
+            const kvName = (payload as { name?: string })?.name ?? pk.replace('kv:', '');
+            if (KV_SYNC_BLOCKLIST.includes(kvName as typeof KV_SYNC_BLOCKLIST[number])) {
+                return; // Skip this key, don't capture for sync
+            }
+        }
+
         const hlc = generateHLC();
         const baseClock = (payload as { clock?: number })?.clock ?? 0;
         const stamp: ChangeStamp = {
@@ -125,23 +146,8 @@ export class HookBridge {
             }
         }
 
-        let payloadForSync = payload;
-        if (payload && typeof payload === 'object') {
-            const sanitized = Object.fromEntries(
-                Object.entries(payload as Record<string, unknown>).filter(
-                    ([key]) => !key.includes('.')
-                )
-            );
-            delete sanitized.hlc;
-            if (tableName === 'file_meta' && operation === 'put') {
-                delete sanitized.ref_count;
-            }
-            if (tableName === 'posts' && 'postType' in sanitized && !('post_type' in sanitized)) {
-                sanitized.post_type = sanitized.postType;
-                delete sanitized.postType;
-            }
-            payloadForSync = sanitized;
-        }
+        // Use shared sanitization logic
+        const payloadForSync = sanitizePayloadForSync(tableName, payload, operation);
 
         const pendingOp: PendingOp = {
             id: crypto.randomUUID(),
@@ -173,6 +179,12 @@ export class HookBridge {
         const enqueuePendingOp = () =>
             this.db.pending_ops.add(pendingOp).catch((error) => {
                 console.error('[HookBridge] Failed to enqueue pending op', error);
+                // Emit hook for observability
+                void useHooks().doAction('sync.capture:action:failed', {
+                    tableName,
+                    pk,
+                    error: String(error),
+                });
             });
 
         if (hasPendingOps) {

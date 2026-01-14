@@ -119,6 +119,7 @@ export async function setKvByName(
         id: existing?.id ?? `kv:${name}`,
         name,
         value,
+        deleted: false,
         created_at: existing?.created_at ?? now,
         updated_at: now,
         clock: nextClock(existing?.clock),

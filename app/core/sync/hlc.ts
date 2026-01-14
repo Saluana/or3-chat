@@ -112,4 +112,5 @@ export function hlcToOrderKey(hlc: string): string {
 export function _resetHLCState(): void {
     lastTimestamp = 0;
     counter = 0;
+    nodeId = null;
 }

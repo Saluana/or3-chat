@@ -47,9 +47,12 @@ export function createConvexSyncProvider(): SyncProvider {
             let lastVersion = 0;
             let unwatch: (() => void) | null = null;
             let disposed = false;
+            let pendingResubscribe: ReturnType<typeof setTimeout> | null = null;
 
             const subscribeWithCursor = (cursor: number) => {
                 if (disposed) return;
+                
+                // Clear previous watcher
                 if (unwatch) {
                     unwatch();
                     unwatch = null;
@@ -85,7 +88,11 @@ export function createConvexSyncProvider(): SyncProvider {
 
                             if (result.latestVersion > lastVersion) {
                                 lastVersion = result.latestVersion;
-                                subscribeWithCursor(lastVersion);
+                                // Debounce re-subscribe to prevent stack overflow
+                                if (pendingResubscribe) clearTimeout(pendingResubscribe);
+                                pendingResubscribe = setTimeout(() => {
+                                    subscribeWithCursor(lastVersion);
+                                }, 0);
                             }
                         } catch (error) {
                             console.error('[convex-sync] onChanges error:', error);
@@ -100,6 +107,7 @@ export function createConvexSyncProvider(): SyncProvider {
             const key = `${scope.workspaceId}:${tablesToWatch.join(',')}`;
             const cleanup = () => {
                 disposed = true;
+                if (pendingResubscribe) clearTimeout(pendingResubscribe);
                 if (unwatch) {
                     unwatch();
                     unwatch = null;

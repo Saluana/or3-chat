@@ -74,7 +74,7 @@ export default defineSchema({
         table_name: v.string(),
         pk: v.string(), // Primary key of the record
         op: v.union(v.literal('put'), v.literal('delete')),
-        payload: v.optional(v.any()), // Full record for puts
+        payload: v.optional(v.any()), // Full record for puts. Uses v.any() intentionally for schema flexibility since table structures evolve. Runtime validation happens in ConflictResolver.applyPut() via Zod schemas.
         clock: v.number(), // Record's clock value
         hlc: v.string(), // Hybrid logical clock
         device_id: v.string(),
@@ -158,7 +158,7 @@ export default defineSchema({
         id: v.string(),
         thread_id: v.string(),
         role: v.string(),
-        data: v.optional(v.any()),
+        data: v.optional(v.any()), // Message data structure varies by role/type. Intentionally flexible to support tool calls, reasoning, etc.
         index: v.number(),
         order_key: v.string(), // HLC-derived for deterministic ordering
         file_hashes: v.optional(v.nullable(v.string())), // JSON array of file hashes
@@ -181,8 +181,8 @@ export default defineSchema({
         workspace_id: v.id('workspaces'),
         id: v.string(),
         name: v.string(),
-        description: v.optional(v.string()),
-        data: v.optional(v.any()),
+        description: v.optional(v.nullable(v.string())),
+        data: v.optional(v.any()), // Project-specific metadata/config. Intentionally flexible for extensibility.
         deleted: v.boolean(),
         deleted_at: v.optional(v.number()),
         created_at: v.number(),
@@ -201,7 +201,7 @@ export default defineSchema({
         title: v.string(),
         content: v.string(),
         post_type: v.string(),
-        meta: v.optional(v.any()),
+        meta: v.optional(v.any()), // Post metadata/frontmatter. Intentionally flexible for different post types.
         file_hashes: v.optional(v.nullable(v.string())),
         deleted: v.boolean(),
         deleted_at: v.optional(v.number()),

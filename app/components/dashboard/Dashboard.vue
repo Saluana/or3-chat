@@ -199,21 +199,6 @@ const coreItems: DashboardPlugin[] = [
             },
         ],
     },
-    {
-        id: 'core:workspace-backup',
-        icon: useIcon('dashboard.restore').value,
-        label: 'Workspace Backup',
-        order: 45,
-        pages: [
-            {
-                id: 'workspace-backup-home',
-                title: 'Workspace Backup',
-                description: 'Export and import full workspace backups.',
-                icon: useIcon('dashboard.restore').value,
-                component: () => import('./workspace/WorkspaceBackupApp.vue'),
-            },
-        ],
-    },
 ];
 
 // Register any inline pages defined on core items with the shared dashboard page registry
@@ -326,35 +311,38 @@ const pluginIconSize = computed(() => {
 </script>
 
 <style scoped>
-#dashboard-plugin-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 64px);
-    gap: 26px 28px;
-    justify-items: center;
-    justify-content: flex-start;
-    width: min(340px, 100%);
+#dashboard-grid-view {
+    display: flex;
+    justify-content: center;
 }
 
-@media (max-width: 349px) {
-    #dashboard-plugin-grid {
-        grid-template-columns: repeat(3, 64px);
-        width: min(248px, 100%);
-    }
+#dashboard-plugin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 100px);
+    gap: 20px 16px;
+    justify-content: start;
+    max-width: 100%;
+}
+
+.dashboard-plugin-icon-item {
+    width: 100px;
+    display: flex;
+    justify-content: center;
 }
 
 @media (min-width: 820px) {
     #dashboard-plugin-grid {
-        grid-template-columns: repeat(6, 86px);
-        gap: 48px 58px;
-        width: min(806px, 100%);
+        grid-template-columns: repeat(auto-fill, 120px);
+        gap: 40px 32px;
+    }
+    .dashboard-plugin-icon-item {
+        width: 120px;
     }
 }
 
 @media (min-width: 1200px) {
     #dashboard-plugin-grid {
-        grid-template-columns: repeat(7, 86px);
-        gap: 54px 70px;
-        width: min(962px, 100%);
+        gap: 48px 40px;
     }
 }
 </style>

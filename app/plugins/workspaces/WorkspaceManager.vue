@@ -21,16 +21,20 @@
                     Create
                 </UButton>
             </div>
-            <div class="grid gap-3 sm:grid-cols-2">
+            <div class="flex flex-col gap-3">
                 <UInput
                     v-model="createName"
                     placeholder="Workspace name"
                     aria-label="Workspace name"
+                    class="w-full"
                 />
-                <UInput
+                <UTextarea
                     v-model="createDescription"
-                    placeholder="Workspace description"
+                    placeholder="Workspace description (optional)"
                     aria-label="Workspace description"
+                    :rows="2"
+                    autoresize
+                    class="w-full"
                 />
             </div>
             <div class="flex flex-wrap items-center justify-between gap-3 text-xs opacity-70">
@@ -120,14 +124,15 @@
                         </div>
                     </div>
 
-                    <div v-if="editingWorkspaceId === workspace._id" class="space-y-3">
-                        <div class="grid gap-3 sm:grid-cols-2">
-                            <UInput v-model="editName" placeholder="Workspace name" />
-                            <UInput
-                                v-model="editDescription"
-                                placeholder="Workspace description"
-                            />
-                        </div>
+                    <div v-if="editingWorkspaceId === workspace._id" class="flex flex-col gap-3">
+                        <UInput v-model="editName" placeholder="Workspace name" class="w-full" />
+                        <UTextarea
+                            v-model="editDescription"
+                            placeholder="Workspace description (optional)"
+                            :rows="2"
+                            autoresize
+                            class="w-full"
+                        />
                         <div class="flex gap-2">
                             <UButton
                                 size="sm"
@@ -349,10 +354,22 @@ async function createWorkspace() {
             description: createDescription.value.trim() || undefined,
         });
         await setActiveWorkspaceMutation.mutate({ workspace_id: workspaceId });
-        await refreshNuxtData('auth-session');
-        createName.value = '';
-        createDescription.value = '';
-        toast.add({ title: 'Workspace created', description: 'Workspace is now active.' });
+        // Update cache before reload so UI shows correctly immediately after
+        cachedActiveId.value = workspaceId;
+        await saveCache([
+            ...cachedWorkspaces.value.map((ws) => ({ ...ws, is_active: false })),
+            {
+                _id: workspaceId,
+                name: createName.value.trim(),
+                description: createDescription.value.trim() || null,
+                role: 'owner',
+                created_at: Date.now() / 1000,
+                is_active: true,
+            },
+        ]);
+        toast.add({ title: 'Workspace created', description: 'Switching to new workspace...' });
+        // Full reload ensures clean Dexie DB binding and sync engine restart
+        reloadNuxtApp({ ttl: 500 });
     } catch (error) {
         toast.add({
             title: 'Failed to create workspace',
@@ -369,14 +386,16 @@ async function selectWorkspace(workspace: WorkspaceSummary) {
     selecting.value = true;
     try {
         await setActiveWorkspaceMutation.mutate({ workspace_id: workspace._id });
-        await refreshNuxtData('auth-session');
+        // Update cache before reload
         cachedActiveId.value = workspace._id;
         cachedWorkspaces.value = cachedWorkspaces.value.map((item) => ({
             ...item,
             is_active: item._id === workspace._id,
         }));
         await saveCache(cachedWorkspaces.value);
-        toast.add({ title: 'Workspace updated', description: 'Active workspace switched.' });
+        toast.add({ title: 'Workspace updated', description: 'Switching workspace...' });
+        // Full reload ensures clean Dexie DB binding and sync engine restart
+        reloadNuxtApp({ ttl: 500 });
     } catch (error) {
         toast.add({
             title: 'Failed to switch workspace',

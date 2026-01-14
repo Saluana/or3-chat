@@ -165,6 +165,7 @@ export const KvSchema = z.object({
     id: z.string(),
     name: z.string(),
     value: z.string().nullable().optional(),
+    deleted: z.boolean().default(false),
     created_at: z.number().int(),
     updated_at: z.number().int(),
     clock: z.number().int(),

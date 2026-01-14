@@ -25,6 +25,15 @@ import {
 } from '~/theme/_shared/theme-manifest';
 import { generateThemeCssVariables } from '~/theme/_shared/generate-css-variables';
 import { iconRegistry } from '~/theme/_shared/icon-registry';
+import { setKvByName } from '~/db/kv';
+
+// Helper to persist theme selection to KV for cross-device sync
+const saveThemeToKv = (themeName: string) => {
+    // Fire-and-forget - don't block theme application
+    void setKvByName('theme_selection', themeName).catch((error) => {
+        console.warn('[theme] Failed to save theme to KV:', error);
+    });
+};
 
 // Module-level variable for page:finish debouncing
 let pageFinishTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -526,6 +535,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
             activeTheme.value = fallback;
             localStorage.setItem(activeThemeStorageKey, fallback);
+            saveThemeToKv(fallback);
             writeActiveThemeCookie(fallback);
             await ensureThemeLoaded(fallback);
             iconRegistry.setActiveTheme(fallback);
@@ -553,6 +563,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
         activeTheme.value = target;
         localStorage.setItem(activeThemeStorageKey, target);
+        saveThemeToKv(target);
         writeActiveThemeCookie(target);
         iconRegistry.setActiveTheme(target);
 

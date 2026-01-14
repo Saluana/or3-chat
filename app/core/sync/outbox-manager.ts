@@ -11,6 +11,7 @@ import type { Or3DB } from '~/db/client';
 import type { SyncProvider, SyncScope, PendingOp } from '~~/shared/sync/types';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
+import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
 
 /** Default retry delays in milliseconds */
 const DEFAULT_RETRY_DELAYS = [250, 1000, 3000, 5000];
@@ -139,7 +140,7 @@ export class OutboxManager {
              try {
                  const sanitizedBatch = batch.map((op) => ({
                      ...op,
-                     payload: this.sanitizePayload(op.tableName, op.payload),
+                     payload: sanitizePayloadForSync(op.tableName, op.payload, op.operation),
                  }));
 
                  // Push to provider
@@ -217,25 +218,6 @@ export class OutboxManager {
 
         // Return in original order (by createdAt)
         return Array.from(byKey.values()).sort((a, b) => a.createdAt - b.createdAt);
-    }
-
-     private sanitizePayload(tableName: string, payload?: unknown): unknown {
-        if (!payload || typeof payload !== 'object') return payload;
-
-        const sanitized = Object.fromEntries(
-            Object.entries(payload as Record<string, unknown>).filter(
-                ([key]) => !key.includes('.')
-            )
-        );
-
-        delete sanitized.hlc;
-
-        if (tableName === 'posts' && 'postType' in sanitized && !('post_type' in sanitized)) {
-            sanitized.post_type = sanitized.postType;
-            delete sanitized.postType;
-        }
-
-        return sanitized;
     }
 
     /**

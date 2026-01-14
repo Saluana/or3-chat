@@ -132,6 +132,10 @@ async function applyOpToTable(
         typeof payload?.deleted_at === 'number' ? (payload.deleted_at as number) : undefined;
 
     // Find existing record
+    // Note: Type casts (as any) are necessary here because Convex doesn't support
+    // fully type-safe dynamic table queries. Table name is validated via TABLE_INDEX_MAP
+    // and runtime validation of payloads happens client-side in ConflictResolver.applyPut()
+    // using Zod schemas (TABLE_PAYLOAD_SCHEMAS).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const existing = await (ctx.db.query(table as any) as any)
         .withIndex(indexName, (q: { eq: (field: string, value: unknown) => unknown }) =>

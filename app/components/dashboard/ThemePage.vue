@@ -7,6 +7,9 @@
         <!-- Accessible live region for status updates -->
         <p ref="liveStatus" class="sr-only" aria-live="polite"></p>
 
+        <!-- Theme Selector -->
+        <DashboardThemeSelector />
+
         <!-- Mode Toggle -->
         <DashboardThemeModeToggle />
 
