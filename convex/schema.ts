@@ -181,7 +181,7 @@ export default defineSchema({
         workspace_id: v.id('workspaces'),
         id: v.string(),
         name: v.string(),
-        description: v.optional(v.string()),
+        description: v.optional(v.nullable(v.string())),
         data: v.optional(v.any()), // Project-specific metadata/config. Intentionally flexible for extensibility.
         deleted: v.boolean(),
         deleted_at: v.optional(v.number()),

@@ -20,6 +20,18 @@ import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
 /** Tables that should be captured for sync */
 const SYNCED_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'] as const;
 
+/**
+ * KV keys that should NOT be synced.
+ * - Large caches that can be refetched
+ * - Security-sensitive data (API keys)
+ * - Device-local state
+ */
+const KV_SYNC_BLOCKLIST = [
+    'MODELS_CATALOG',           // Large cache (~500KB), refetchable from OpenRouter
+    'openrouter_api_key',       // Security: API keys should not sync to server
+    'workspace.manager.cache',  // Device-local UI cache
+] as const;
+
 /** Primary key field for each table */
 const PK_FIELDS: Record<string, string> = {
     threads: 'id',
@@ -108,6 +120,14 @@ export class HookBridge {
     ): void {
         const pkField = PK_FIELDS[tableName] ?? 'id';
         const pk = String(primKey ?? (payload as Record<string, unknown>)?.[pkField] ?? '');
+
+        // Filter out blocked KV keys (large caches, secrets, device-local data)
+        if (tableName === 'kv') {
+            const kvName = (payload as { name?: string })?.name ?? pk.replace('kv:', '');
+            if (KV_SYNC_BLOCKLIST.includes(kvName as typeof KV_SYNC_BLOCKLIST[number])) {
+                return; // Skip this key, don't capture for sync
+            }
+        }
 
         const hlc = generateHLC();
         const baseClock = (payload as { clock?: number })?.clock ?? 0;

@@ -281,6 +281,7 @@ async function ensureApiKey(): Promise<string | null> {
             id: newId(),
             name: 'openrouter_api_key',
             value: key,
+            deleted: false,
             created_at: now,
             updated_at: now,
             clock: nextClock(),

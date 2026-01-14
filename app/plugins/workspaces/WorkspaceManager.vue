@@ -21,11 +21,12 @@
                     Create
                 </UButton>
             </div>
-            <div class="space-y-3">
+            <div class="flex flex-col gap-3">
                 <UInput
                     v-model="createName"
                     placeholder="Workspace name"
                     aria-label="Workspace name"
+                    class="w-full"
                 />
                 <UTextarea
                     v-model="createDescription"
@@ -33,6 +34,7 @@
                     aria-label="Workspace description"
                     :rows="2"
                     autoresize
+                    class="w-full"
                 />
             </div>
             <div class="flex flex-wrap items-center justify-between gap-3 text-xs opacity-70">
@@ -122,13 +124,14 @@
                         </div>
                     </div>
 
-                    <div v-if="editingWorkspaceId === workspace._id" class="space-y-3">
-                        <UInput v-model="editName" placeholder="Workspace name" />
+                    <div v-if="editingWorkspaceId === workspace._id" class="flex flex-col gap-3">
+                        <UInput v-model="editName" placeholder="Workspace name" class="w-full" />
                         <UTextarea
                             v-model="editDescription"
                             placeholder="Workspace description (optional)"
                             :rows="2"
                             autoresize
+                            class="w-full"
                         />
                         <div class="flex gap-2">
                             <UButton
