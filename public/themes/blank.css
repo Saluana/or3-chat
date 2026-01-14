@@ -227,7 +227,6 @@
 }
 
 [data-theme="blank"] .theme-btn {
-  border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius);
   display: flex;
   align-items: center;

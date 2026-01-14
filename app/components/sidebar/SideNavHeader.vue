@@ -379,7 +379,7 @@ const searchInputProps = computed(() => {
 
         trailing: 'pr-1',
     };
-    const mergedUi = { ...themeUi, ...componentUi };
+    const mergedUi = { ...componentUi, ...themeUi };
 
     return {
         leadingIcon: iconSearch.value,

@@ -16,55 +16,85 @@
 /* Wrap all retro styles in the theme selector to prevent global leakage */
 [data-theme="retro"] {
 
-/* Screen-reader only helper (follows inclusive components pattern) */
-.sr-only {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	padding: 0;
-	margin: -1px;
-	overflow: hidden;
-	clip: rect(0 0 0 0);
-	clip-path: inset(50%);
-	white-space: nowrap;
-	border: 0;
+	/* Screen-reader only helper (follows inclusive components pattern) */
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		clip-path: inset(50%);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	/* Utility class for retro shadow (used globally) */
+	.retro-shadow,
+	.theme-shadow {
+		/* Use Tailwind shadow vars so we can layer with ring utilities */
+		--tw-shadow: 2px 2px 0 var(--md-border-color);
+		--tw-shadow-colored: 2px 2px 0 var(--tw-shadow-color);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow);
+	}
+
+	.theme-btn {
+		/* Use Tailwind shadow vars so we can layer with ring utilities */
+		--tw-shadow: 2px 2px 0 var(--md-border-color);
+		--tw-shadow-colored: 2px 2px 0 var(--tw-shadow-color);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+	}
+
+	.retro-press {
+		transition: transform 80ms ease, box-shadow 80ms ease;
+	}
+
+	.retro-press:active {
+		transform: translate(2px, 2px);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			0 0 0 var(--md-border-color),
+			inset 0 2px 0 rgba(0, 0, 0, 0.25),
+			inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+	}
+
+	.retro-press:focus-visible {
+		outline: 2px solid var(--md-primary);
+		outline-offset: 2px;
+	}
+
+	.retro-press:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+
+	#top-header {
+		border-bottom: var(--md-border-width) solid var(--md-border-color);
+	}
+
+	.unified-sb-item {
+		margin-bottom: 10px;
+	}
+
+	.sb-group-header:hover {
+		background-color: transparent;
+	}
+
+	.sb-group-header-label {
+		font-family: 'Press Start 2P', 'IBM Plex Sans', sans-serif;
+		font-size: 16px;
+		font-weight: 400;
+	}
 }
 
-/* Utility class for retro shadow (used globally) */
-.retro-shadow,
-.theme-shadow {
-	/* Use Tailwind shadow vars so we can layer with ring utilities */
-	--tw-shadow: 2px 2px 0 var(--md-border-color);
-	--tw-shadow-colored: 2px 2px 0 var(--tw-shadow-color);
-	box-shadow:
-		var(--tw-ring-offset-shadow, 0 0 #0000),
-		var(--tw-ring-shadow, 0 0 #0000),
-		var(--tw-shadow);
-}
-
-.retro-press {
-	transition: transform 80ms ease, box-shadow 80ms ease;
-}
-.retro-press:active {
-	transform: translate(2px, 2px);
-	box-shadow:
-		var(--tw-ring-offset-shadow, 0 0 #0000),
-		var(--tw-ring-shadow, 0 0 #0000),
-		0 0 0 var(--md-border-color),
-		inset 0 2px 0 rgba(0, 0, 0, 0.25),
-		inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-.retro-press:focus-visible {
-	outline: 2px solid var(--md-primary);
-	outline-offset: 2px;
-}
-.retro-press:disabled {
-	opacity: 0.45;
-	cursor: not-allowed;
-}
-
-#top-header {
-	border-bottom: var(--md-border-width) solid var(--md-border-color);
-}
-
-} /* End [data-theme="retro"] */
+/* End [data-theme="retro"] */

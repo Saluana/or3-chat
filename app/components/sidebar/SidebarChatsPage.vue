@@ -6,7 +6,7 @@
                 color="neutral"
                 size="sm"
                 :icon="iconBack"
-                class="whitespace-nowrap hover:bg-[var(--md-surface-hover)]"
+                class="whitespace-nowrap hover:bg-[var(--md-surface-hover)] theme-btn"
                 @click="goBack"
             >
                 Home
@@ -17,14 +17,14 @@
                     color="neutral"
                     size="sm"
                     :icon="iconNewChat"
-                    class="bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                    class="bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15 theme-btn"
                     @click="emit('new-chat')"
                 >
                     New chat
                 </UButton>
             </UTooltip>
         </div>
-        
+
         <SidebarTimeGroupedList
             ref="list"
             :active-ids="activeThreadIds ?? []"

@@ -75,7 +75,7 @@
                     <!-- Time Group Header -->
                     <SidebarGroupHeader
                         v-else-if="item.type === 'time-group-header'"
-                        class="mt-3"
+                        class="mt-3 time-group-header"
                         :label="item.label"
                         :collapsed="collapsedGroups.has(item.groupKey)"
                         @toggle="toggleGroup(item.groupKey)"
@@ -106,7 +106,7 @@
                         title="No activity yet"
                         description="Kick things off with a project, or jump straight into a chat or document."
                         actions-layout="column"
-                        class="mx-1"
+                        class="mx-1 sb-empty-state"
                         style="width: calc(100% - 8px);"
                     >
                         <template #actions>

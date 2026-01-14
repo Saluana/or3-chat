@@ -9,7 +9,9 @@ const SidebarPopoverButtonConfig = {
 
 export const sidebarOverrides = {
     /* --- core --- */
-
+    'button#sidebar.unified-item.trigger': {
+        class: 'flex items-center justify-center shadow-none!',
+    },
     // Note: border for chat containers is applied via CSS selector below to avoid duplicate class merges
 
     /* --- Sidebar header --- */
@@ -21,12 +23,9 @@ export const sidebarOverrides = {
     'button#sidebar.filter-item': SidebarPopoverButtonConfig,
 
     'input#sidebar.search': {
-        size: 'md',
-        variant: 'outline',
-        /*
         ui: {
             base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)] text-[14px]! h-[40px]!',
-        },*/
+        },
     },
     'selectmenu#sidebar.project-select': {
         class: 'w-full',
@@ -38,11 +37,6 @@ export const sidebarOverrides = {
             itemLabel: 'text-[14px]!',
             content:
                 'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[14px]!',
-        },
-        searchInput: {
-            ui: {
-                base: 'text-[14px]! rounded-none border-x-0 border-t-0 border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]',
-            },
         },
     },
 
