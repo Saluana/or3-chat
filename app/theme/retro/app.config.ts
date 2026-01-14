@@ -59,6 +59,7 @@ export default {
                         'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
                     'on-surface':
                         'bg-[var(--md-surface)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
+                    error: 'text-[var(--md-on-error)] hover:bg-[var(--md-error-hover)] active:bg-[var(--md-error-active)]',
                 },
                 // Override size variant so padding wins over defaults
                 size: {
@@ -103,6 +104,9 @@ export default {
                     outline:
                         'text-highlighted bg-default ring-0 focus-visible:ring-1 focus-visible:ring-[color:var(--md-primary)] retro-shadow',
                 },
+                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
+                leading: { true: 'ps-10!' },
+                trailing: { true: 'pe-10!' },
                 size: {
                     sm: { base: 'h-[32px] text-[12px]!' },
                     md: { base: 'h-[40px] text-[14px]!' },

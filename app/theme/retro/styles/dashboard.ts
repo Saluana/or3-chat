@@ -1,4 +1,18 @@
+const galleryButtons =
+    'bg-white/10! backdrop-blur-md! hover:bg-white/20! active:bg-white/30! flex items-center justify-center retro-shadow';
+const destructiveOutlineButton = {
+    color: 'neutral' as const,
+    ui: {
+        base: 'text-[var(--md-error)] border-[color:var(--md-error)]/40 hover:bg-[var(--md-error)]/10 active:bg-[var(--md-error)]/15',
+    },
+};
+
 export const dashboardOverrides = {
+    'button.image-viewer': {
+        color: 'on-surface' as const,
+        variant: 'solid',
+        class: 'retro-press',
+    },
     'button#dashboard.back': {
         variant: 'basic' as const,
         ui: {
@@ -12,6 +26,14 @@ export const dashboardOverrides = {
         variant: 'solid',
         color: 'on-surface',
     },
+    'button#images.gallery.download': {
+        class: galleryButtons,
+    },
+    'button#images.gallery.copy': {
+        class: galleryButtons,
+    },
+    'button#images.delete': destructiveOutlineButton,
+    'button#images.delete-selection': destructiveOutlineButton,
 };
 export const dashboardStyles = {
     '.dashboard-plugin-icon-label': {

@@ -104,7 +104,8 @@ async function handleWorkflowImport(event: Event) {
             error.value = result.error;
         }
     } catch (e) {
-        error.value = e instanceof Error ? e.message : 'Failed to import workflow';
+        error.value =
+            e instanceof Error ? e.message : 'Failed to import workflow';
     } finally {
         input.value = '';
     }
@@ -219,7 +220,7 @@ onMounted(() => {
                     size="sm"
                     variant="ghost"
                     icon="tabler:upload"
-                    class="center-it"
+                    class="center-it theme-btn"
                     @click="openImportDialog"
                     title="Upload workflow"
                 />
@@ -227,7 +228,7 @@ onMounted(() => {
                     size="sm"
                     variant="ghost"
                     icon="tabler:plus"
-                    class="center-it"
+                    class="center-it theme-btn"
                     @click="openCreateModal"
                     :loading="isCreating"
                     title="Create workflow"
@@ -273,7 +274,7 @@ onMounted(() => {
             <div
                 v-for="workflow in workflows"
                 :key="workflow.id"
-                class="group flex items-center justify-between p-3 rounded-lg border border-(--md-outline-variant) hover:border-(--md-primary) hover:bg-(--md-surface-container) cursor-pointer transition-colors"
+                class="group flex items-center justify-between p-3 rounded-lg border-[length:var(--md-border-width)] border-[color:var(--md-outline-variant)] hover:border-[color:var(--md-primary)] hover:bg-[color:var(--md-surface-container)] backdrop-blur cursor-pointer transition-colors"
                 @click="openWorkflow(workflow.id)"
             >
                 <div class="flex flex-col gap-0.5 min-w-0 flex-1">
@@ -341,10 +342,7 @@ onMounted(() => {
             <template #body>
                 <div class="space-y-3">
                     <div class="flex items-center gap-3 text-(--md-error)">
-                        <UIcon
-                            name="tabler:alert-triangle"
-                            class="text-2xl"
-                        />
+                        <UIcon name="tabler:alert-triangle" class="text-2xl" />
                         <span class="font-medium">
                             Delete "{{ workflowToDelete?.title }}"?
                         </span>
