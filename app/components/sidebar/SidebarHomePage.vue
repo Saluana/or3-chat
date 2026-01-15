@@ -419,7 +419,7 @@ const combinedItems = computed(() => {
             type: 'page-link',
             label: 'Chats',
             class: 'mb-3',
-            description: 'Jump into your conversation history.',
+            description: 'View your conversation history.',
             icon: iconChats.value,
             pageId: 'sidebar-chats',
         },
