@@ -71,6 +71,7 @@ export default defineTheme({
         infoHover: '#DCEAF4',
         infoActive: '#C6DDEE',
         onInfo: '#000000',
+        topHeaderBg: '#F1F3F5',
 
         // Dark mode overrides
         dark: {
@@ -94,7 +95,7 @@ export default defineTheme({
             tertiaryContainer: '#554600',
             onTertiaryContainer: '#fff9c4',
 
-            surface: '#000000',
+            surface: '#1A1E23',
             surfaceHover: '#172332',
             surfaceActive: '#223344',
             onSurface: '#e2e2e6',
@@ -113,6 +114,7 @@ export default defineTheme({
             success: '#51cf66',
             warning: '#ffa94d',
             error: '#ffb3b3',
+            topHeaderBg: '#1A1E23',
         },
     },
 
@@ -120,13 +122,13 @@ export default defineTheme({
         content: {
             base: {
                 image: '/bg-repeat.v2.webp',
-                opacity: 0.055,
+                opacity: 0.065,
                 repeat: 'repeat',
                 size: '150px',
             },
             overlay: {
                 image: '/bg-repeat-2.v2.webp',
-                opacity: 0.085,
+                opacity: 0.075,
                 repeat: 'repeat',
                 size: '420px',
             },

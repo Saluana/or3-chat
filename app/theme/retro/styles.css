@@ -82,6 +82,13 @@
 		border-bottom: var(--md-border-width) solid var(--md-border-color);
 	}
 
+	#nav-header {
+		margin-bottom: 10px;
+		margin-left: 12px;
+		margin-right: 12px;
+		border-bottom: 3px solid rgba(8, 109, 184, 0.3);
+	}
+
 	.unified-sb-item {
 		margin-bottom: 10px;
 	}

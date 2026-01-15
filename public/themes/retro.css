@@ -14,7 +14,7 @@
 }
 
 [data-theme="retro"] #top-header {
-  background-color: var(--md-surface);
+  background-color: var(--md-top-header-bg);
 }
 
 [data-theme="retro"] #top-header[data-sidebar-state="collapsed"] {
@@ -74,6 +74,18 @@
 
 [data-theme="retro"] .cm-action-group {
   background-color: var(--md-surface-container-high);
+  border: var(--md-border-width) solid var(--md-border-color);
+  box-shadow: 2px 2px 0 var(--md-border-color);
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+[data-theme="retro"] .group:hover .cm-action-group {
+  opacity: 1;
+}
+
+[data-theme="retro"] .group:focus-within .cm-action-group {
+  opacity: 1;
 }
 
 [data-theme="retro"] .chat-container-root:not(:last-child) {
@@ -93,10 +105,95 @@
 [data-theme="retro"] .cm-user {
   box-shadow: 2px 2px 0 var(--md-border-color);
   border: var(--md-border-width) solid var(--md-border-color);
+  margin-bottom: 20px;
 }
 
 [data-theme="retro"] .chat-settings-switch {
   height: 32px;
+}
+
+[data-theme="retro"] #btn-collapse-attachments {
+  background-color: transparent !important;
+  color: var(--md-on-primary) !important;
+  cursor: pointer;
+}
+
+[data-theme="retro"] .tool-call-indicator {
+  background-color: var(--md-surface);
+  border-radius: var(--md-border-radius);
+  border: var(--md-border-width) solid var(--md-border-color);
+  overflow: hidden;
+  box-shadow: 2px 2px 0 var(--md-border-color);
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+[data-theme="retro"] .tool-call-indicator-details {
+  background: transparent !important;
+  border: none !important;
+}
+
+[data-theme="retro"] .tool-call-indicator-summary {
+  background: transparent !important;
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-theme="retro"] .tool-call-indicator-summary:hover {
+  background-color: var(--md-surface-hover) !important;
+}
+
+[data-theme="retro"] .tool-call-expanded-content {
+  border-top: var(--md-border-width) solid var(--md-border-color);
+  padding: 12px;
+  background-color: var(--md-surface-container-lowest);
+}
+
+[data-theme="retro"] .retro-tool-call-content {
+  background-color: var(--md-surface-container) !important;
+  border: none !important;
+  border-radius: var(--md-border-radius) !important;
+  font-family: "IBM Plex Mono", monospace !important;
+  font-size: 12px !important;
+  padding: 12px !important;
+  margin: 8px 0 !important;
+  overflow-x: auto;
+  color: var(--md-on-surface);
+}
+
+[data-theme="retro"] .tool-call-header-text {
+  color: var(--md-on-surface);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+[data-theme="retro"] .tool-call-header-text:nth-of-type(2) {
+  font-size: 10px !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: var(--md-surface-container-high);
+  color: var(--md-on-surface) !important;
+  padding: 2px 8px;
+  border-radius: var(--md-border-radius);
+  border: var(--md-border-width) solid var(--md-outline-variant);
+}
+
+[data-theme="retro"] .tool-call-indicator-summary-icon {
+  color: var(--md-primary) !important;
+  display: flex;
+  align-items: center;
+}
+
+[data-theme="retro"] .tool-call-indicator-summary-icon .iconify {
+  color: var(--md-primary) !important;
+}
+
+[data-theme="retro"] .cm-actions-user {
+  bottom: -24px !important;
 }
 
 [data-theme="retro"] .dashboard-plugin-icon-label {

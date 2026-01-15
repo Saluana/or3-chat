@@ -17,8 +17,6 @@
   background-color: var(--md-surface);
 }
 
-
-
 [data-theme="blank"] .sidebar-section-heading {
   font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   font-size: 18px;
@@ -102,7 +100,7 @@
   border-radius: var(--md-border-radius);
   border: 1px solid var(--md-border-color);
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   margin-top: 8px;
   margin-bottom: 8px;
 }
@@ -224,21 +222,6 @@
 
 [data-theme="blank"] .document-editor-shell:not(:first-child) {
   border-top: var(--md-border-width) solid var(--md-border-color) !important;
-}
-
-[data-theme="blank"] .theme-btn {
-  border-radius: var(--md-border-radius);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-[data-theme="blank"] .theme-btn:hover {
-  background-color: var(--md-surface-hover);
-}
-
-[data-theme="blank"] .theme-btn:active {
-  background-color: var(--md-surface-active);
 }
 
 [data-theme="blank"] #top-nav .theme-btn {

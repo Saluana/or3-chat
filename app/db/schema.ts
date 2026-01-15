@@ -220,6 +220,7 @@ export const FileMetaSchema = z.object({
     created_at: z.number().int(),
     updated_at: z.number().int(),
     deleted: z.boolean().default(false),
+    deleted_at: z.number().int().optional(),
     clock: z.number().int(),
 });
 export type FileMeta = z.infer<typeof FileMetaSchema>;

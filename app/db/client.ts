@@ -117,6 +117,12 @@ export class Or3DB extends Dexie {
             file_transfers:
                 'id, hash, direction, state, workspace_id, created_at, updated_at, [hash+direction], [state+created_at]',
         });
+
+        // Version 10: Add compound index for efficient workspace-scoped queue queries
+        this.version(10).stores({
+            file_transfers:
+                'id, hash, direction, state, workspace_id, created_at, updated_at, [hash+direction], [state+created_at], [state+workspace_id]',
+        });
     }
 }
 

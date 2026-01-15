@@ -20,6 +20,10 @@ const BodySchema = z.object({
     limit: z.number().optional(),
 });
 
+// Simple in-memory rate limiting (resets on server restart)
+const GC_COOLDOWN_MS = 60_000; // 1 minute cooldown
+const lastGcRunByWorkspace = new Map<string, number>();
+
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
@@ -35,6 +39,18 @@ export default defineEventHandler(async (event) => {
         kind: 'workspace',
         id: body.data.workspace_id,
     });
+
+    // Rate limit check
+    const now = Date.now();
+    const lastRun = lastGcRunByWorkspace.get(body.data.workspace_id) ?? 0;
+    if (now - lastRun < GC_COOLDOWN_MS) {
+        const waitSeconds = Math.ceil((GC_COOLDOWN_MS - (now - lastRun)) / 1000);
+        throw createError({
+            statusCode: 429,
+            statusMessage: `GC rate limited, wait ${waitSeconds} seconds`,
+        });
+    }
+    lastGcRunByWorkspace.set(body.data.workspace_id, now);
 
     const token = await getClerkProviderToken(event, 'convex');
     if (!token) {

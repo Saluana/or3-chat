@@ -124,6 +124,10 @@ export const getFileUrl = query({
         if (!file?.storage_id) return null;
 
         const url = await ctx.storage.getUrl(file.storage_id);
+        // Handle case where storage object was deleted but metadata remains
+        if (!url) {
+            return null;
+        }
         return { url };
     },
 });

@@ -260,10 +260,12 @@ export async function softDeleteFile(hash: string): Promise<void> {
         if (!meta) return;
         const payload = createFileDeletePayload(meta, hash);
         await hooks.doAction('db.files.delete:action:soft:before', payload);
+        const now = nowSec();
         await db.file_meta.put({
             ...meta,
             deleted: true,
-            updated_at: nowSec(),
+            deleted_at: now,
+            updated_at: now,
             clock: nextClock(meta.clock),
         });
         await hooks.doAction('db.files.delete:action:soft:after', payload);
@@ -283,10 +285,12 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
             if (!meta || meta.deleted) continue;
             const payload = createFileDeletePayload(meta, hash);
             await hooks.doAction('db.files.delete:action:soft:before', payload);
+            const now = nowSec();
             await db.file_meta.put({
                 ...meta,
                 deleted: true,
-                updated_at: nowSec(),
+                deleted_at: now,
+                updated_at: now,
                 clock: nextClock(meta.clock),
             });
             await hooks.doAction('db.files.delete:action:soft:after', payload);
@@ -377,11 +381,28 @@ async function enqueueUpload(hash: string): Promise<void> {
 // Lightweight image dimension extraction with timeout to prevent hung operations
 const IMAGE_SIZE_TIMEOUT_MS = 5000; // 5s timeout
 
+// Type for the image-like object we create
+interface ImageLike {
+    src: string;
+    naturalWidth: number;
+    naturalHeight: number;
+    onload: (() => void) | null;
+    onerror: (() => void) | null;
+}
+
 async function blobImageSize(
     blob: Blob
 ): Promise<{ width: number; height: number } | undefined> {
+    // Guard for non-browser environments where Image constructor is unavailable
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const g = globalThis as any;
+    if (typeof g.Image !== 'function') {
+        return undefined;
+    }
+
     return new Promise((resolve) => {
-        const img = new (globalThis as any).Image();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const img: ImageLike = new (g.Image as any)();
         let resolved = false;
 
         // Timeout to prevent hung operations from malformed images

@@ -156,7 +156,7 @@ export const sidebarCssSelectors = {
     },
     '#top-header': {
         style: {
-            backgroundColor: 'var(--md-surface)',
+            backgroundColor: 'var(--md-top-header-bg)',
         },
     },
     '#top-header[data-sidebar-state="collapsed"]': {

@@ -40,6 +40,7 @@ export class FileTransferQueue {
     private backoffMaxMs: number;
     private running = new Set<string>();
     private waiters = new Map<string, TransferWaiter[]>();
+    private abortControllers = new Map<string, AbortController>();
     private workspaceId: string | null = null;
 
     constructor(
@@ -54,7 +55,14 @@ export class FileTransferQueue {
     }
 
     setWorkspaceId(workspaceId: string | null) {
+        const previousWorkspaceId = this.workspaceId;
         this.workspaceId = workspaceId;
+
+        // Cancel in-flight transfers for the old workspace when switching
+        if (previousWorkspaceId && workspaceId !== previousWorkspaceId) {
+            this.cancelAllRunning();
+        }
+
         if (workspaceId) {
             void this.processQueue();
         }
@@ -62,6 +70,21 @@ export class FileTransferQueue {
 
     getWorkspaceId(): string | null {
         return this.workspaceId;
+    }
+
+    /** Cancel a specific transfer by ID */
+    cancelTransfer(id: string): void {
+        const controller = this.abortControllers.get(id);
+        if (controller) {
+            controller.abort();
+        }
+    }
+
+    /** Cancel all currently running transfers */
+    cancelAllRunning(): void {
+        for (const id of this.running) {
+            this.cancelTransfer(id);
+        }
     }
 
     async enqueue(
@@ -98,20 +121,31 @@ export class FileTransferQueue {
     }
 
     async waitForTransfer(id: string): Promise<void> {
-        const transfer = await this.db.file_transfers.get(id);
-        if (!transfer) {
-            throw new Error('Transfer not found');
-        }
-        if (transfer.state === 'done') return;
-        if (transfer.state === 'failed') {
-            throw new Error(transfer.last_error || 'Transfer failed');
-        }
-
-        await new Promise<void>((resolve, reject) => {
+        // Register waiter first to avoid race condition where transfer
+        // completes between state check and Promise creation
+        const waiterPromise = new Promise<void>((resolve, reject) => {
             const waiters = this.waiters.get(id) ?? [];
             waiters.push({ resolve, reject });
             this.waiters.set(id, waiters);
         });
+
+        // Check current state - if already done/failed, resolve immediately
+        const transfer = await this.db.file_transfers.get(id);
+        if (!transfer) {
+            this.resolveWaiters(id); // Clean up the just-added waiter
+            throw new Error('Transfer not found');
+        }
+        if (transfer.state === 'done') {
+            this.resolveWaiters(id);
+            return;
+        }
+        if (transfer.state === 'failed') {
+            const errorMsg = transfer.last_error || 'Transfer failed';
+            this.rejectWaiters(id, errorMsg);
+            throw new Error(errorMsg);
+        }
+
+        return waiterPromise;
     }
 
     async ensureDownloadedBlob(hash: string): Promise<Blob | undefined> {
@@ -140,19 +174,16 @@ export class FileTransferQueue {
         if (this.running.size >= this.concurrency) return;
 
         const available = this.concurrency - this.running.size;
-        const pending = await this.db.file_transfers
-            .where('state')
-            .equals('queued')
-            .toArray();
+        // Use compound index for efficient workspace-scoped queries
+        const candidates = await this.db.file_transfers
+            .where('[state+workspace_id]')
+            .equals(['queued', this.workspaceId])
+            .sortBy('created_at');
 
-        const candidates = pending
-            .filter((transfer) => transfer.workspace_id === this.workspaceId)
-            .sort((a, b) => a.created_at - b.created_at)
-            .slice(0, available);
+        const toProcess = candidates.slice(0, available);
+        if (!toProcess.length) return;
 
-        if (!candidates.length) return;
-
-        for (const transfer of candidates) {
+        for (const transfer of toProcess) {
             this.running.add(transfer.id);
             void this.processTransfer(transfer).finally(() => {
                 this.running.delete(transfer.id);
@@ -162,15 +193,18 @@ export class FileTransferQueue {
     }
 
     private async processTransfer(transfer: FileTransfer): Promise<void> {
+        const controller = new AbortController();
+        this.abortControllers.set(transfer.id, controller);
+
         await this.updateTransfer(transfer.id, {
             state: 'running',
         });
 
         try {
             if (transfer.direction === 'upload') {
-                await this.doUpload(transfer);
+                await this.doUpload(transfer, controller.signal);
             } else {
-                await this.doDownload(transfer);
+                await this.doDownload(transfer, controller.signal);
             }
 
             const latest = await this.db.file_transfers.get(transfer.id);
@@ -180,6 +214,16 @@ export class FileTransferQueue {
             });
             this.resolveWaiters(transfer.id);
         } catch (error) {
+            // Handle abort specially - don't retry aborted transfers
+            if (error instanceof Error && error.name === 'AbortError') {
+                await this.updateTransfer(transfer.id, {
+                    state: 'failed',
+                    last_error: 'Transfer cancelled',
+                });
+                this.rejectWaiters(transfer.id, 'Transfer cancelled');
+                return;
+            }
+
             const attempts = transfer.attempts + 1;
             const failed = attempts >= this.maxAttempts;
             const message = error instanceof Error 
@@ -204,10 +248,12 @@ export class FileTransferQueue {
 
             const delay = this.getBackoffDelay(attempts);
             setTimeout(() => void this.processQueue(), delay);
+        } finally {
+            this.abortControllers.delete(transfer.id);
         }
     }
 
-    private async doUpload(transfer: FileTransfer): Promise<void> {
+    private async doUpload(transfer: FileTransfer, signal: AbortSignal): Promise<void> {
         const meta = await this.db.file_meta.get(transfer.hash);
         const blobRow = await this.db.file_blobs.get(transfer.hash);
         if (!meta || !blobRow?.blob) {
@@ -265,6 +311,7 @@ export class FileTransferQueue {
             method: presign.method ?? 'POST',
             headers: presign.headers,
             body: blobRow.blob,
+            signal,
         });
 
         if (!uploadResponse.ok) {
@@ -314,7 +361,7 @@ export class FileTransferQueue {
         });
     }
 
-    private async doDownload(transfer: FileTransfer): Promise<void> {
+    private async doDownload(transfer: FileTransfer, signal: AbortSignal): Promise<void> {
         const meta = await this.db.file_meta.get(transfer.hash);
         if (!meta?.storage_id) {
             throw err(
@@ -349,6 +396,7 @@ export class FileTransferQueue {
         const response = await fetch(presign.url, {
             method: presign.method ?? 'GET',
             headers: presign.headers,
+            signal,
         });
 
         if (!response.ok) {
@@ -406,23 +454,27 @@ export class FileTransferQueue {
         }
 
         const reader = response.body.getReader();
-        const chunks: Uint8Array[] = [];
         let received = 0;
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (value) {
-                chunks.push(value);
-                received += value.length;
+        // Use a TransformStream approach to avoid double buffering
+        // Stream chunks directly into a new Response for blob conversion
+        const stream = new ReadableStream<Uint8Array>({
+            pull: async (controller) => {
+                const { done, value } = await reader.read();
+                if (done) {
+                    controller.close();
+                    return;
+                }
+                received += value.byteLength;
                 await this.updateTransfer(transferId, {
                     bytes_done: received,
                     bytes_total: contentLength || received,
                 });
-            }
-        }
+                controller.enqueue(value);
+            },
+        });
 
-        const blob = new Blob(chunks as BlobPart[]);
+        const blob = await new Response(stream).blob();
         return { blob, bytesTotal: contentLength || blob.size };
     }
 

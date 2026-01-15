@@ -51,10 +51,19 @@ class TableStub<T extends Record<string, any>> {
                         const tuple = value as [string, string];
                         return row.hash === tuple[0] && row.direction === tuple[1];
                     }
+                    if (field === '[state+workspace_id]') {
+                        const tuple = value as [string, string];
+                        return row.state === tuple[0] && row.workspace_id === tuple[1];
+                    }
                     return false;
                 });
                 return {
                     toArray: async () => matches,
+                    sortBy: async (_field: string) => {
+                        return [...matches].sort((a, b) => 
+                            (a.created_at || 0) - (b.created_at || 0)
+                        );
+                    },
                 };
             },
         };
