@@ -101,6 +101,7 @@
 
 	.unified-sb-item-active,
 	.unified-sb-item-active:hover {
+		background-color: var(--md-surface-active) !important;
 		transform: translate(2px, 2px);
 		box-shadow:
 			var(--tw-ring-offset-shadow, 0 0 #0000),
@@ -122,9 +123,9 @@
 
 	}
 
-	.unified-sb-item:active {
-							transform: translate(2px, 2px);
-		background-color: var(--md-primary-active)/25;
+	.unified-sb-item:not(.unified-sb-item-active):active {
+		transform: translate(2px, 2px);
+		background-color: var(--md-surface-active);
 		box-shadow:
 			var(--tw-ring-offset-shadow, 0 0 #0000),
 			var(--tw-ring-shadow, 0 0 #0000),
@@ -148,6 +149,11 @@
 		font-family: 'VT323', 'IBM Plex Mono', monospace;
 		font-size: 18px;
 		font-weight: 500;
+	}
+
+	.sb-item-time {
+		font-size: 12px;
+		opacity: 0.55;
 	}
 
 	.page-link-btn {

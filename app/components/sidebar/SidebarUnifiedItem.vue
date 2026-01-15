@@ -40,10 +40,10 @@
 
         <!-- Time Label (desktop only - hide on hover, show action button instead) -->
         <span
-            class="hidden sm:inline-block shrink-0 text-[10px] opacity-40 font-medium transition-opacity group-hover:opacity-0"
+            class="hidden sm:inline-block shrink-0 text-[10px] opacity-40 font-medium transition-opacity group-hover:opacity-0! sb-item-time"
             :class="
                 active
-                    ? 'text-[color:var(--md-primary)]/70'
+                    ? 'text-[color:var(--md-primary)] opacity-80! sb-item-time-active'
                     : 'text-[color:var(--md-on-surface-variant)]'
             "
         >
