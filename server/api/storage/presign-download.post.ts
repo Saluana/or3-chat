@@ -2,7 +2,7 @@
  * POST /api/storage/presign-download
  * Gateway endpoint for storage downloads.
  */
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { z } from 'zod';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
@@ -13,6 +13,11 @@ import {
     getClerkProviderToken,
     getConvexGatewayClient,
 } from '../../utils/sync/convex-gateway';
+import {
+    checkSyncRateLimit,
+    recordSyncRequest,
+} from '../../utils/sync/rate-limiter';
+import { recordDownloadStart } from '../../utils/storage/metrics';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -38,6 +43,17 @@ export default defineEventHandler(async (event) => {
         id: body.data.workspace_id,
     });
 
+    // Rate limiting
+    const rateLimitResult = checkSyncRateLimit(session.user.id, 'storage:download');
+    if (!rateLimitResult.allowed) {
+        const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
+        setResponseHeader(event, 'Retry-After', String(retryAfterSec));
+        throw createError({
+            statusCode: 429,
+            statusMessage: `Rate limit exceeded. Retry after ${retryAfterSec}s`,
+        });
+    }
+
     const token = await getClerkProviderToken(event, 'convex');
     if (!token) {
         throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
@@ -54,6 +70,9 @@ export default defineEventHandler(async (event) => {
     }
 
     const expiryMs = Math.min(body.data.expires_in_ms ?? 3600_000, 3600_000);
+
+    recordSyncRequest(session.user.id, 'storage:download');
+    recordDownloadStart();
 
     return {
         url: result.url,
