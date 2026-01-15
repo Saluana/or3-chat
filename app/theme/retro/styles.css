@@ -113,11 +113,49 @@
 		font-weight: 400;
 	}
 
+	.page-link-btn {
+		padding-top: 3px;
+		padding-bottom: 3px;
+	}
+
 	.page-link-btn:not(:last-child) {
 		margin-bottom: 12px;
 	}
 
+	.page-link-label {
+		font-size: 18px;
+		font-weight: 500;
+		text-box-trim: trim-both;  
+	}
 
+	.page-link-description {
+		font-size: 14px;
+		font-weight: 400;
+		color: var(--md-on-surface-secondary);
+		text-box-trim: trim-both;  
+	}
+
+.project-root-container {
+	height: 40px;
+}
+
+.project-group-container {
+		--tw-shadow: 2px 2px 0 var(--md-border-color);
+		--tw-shadow-colored: 2px 2px 0 var(--tw-shadow-color);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		border: var(--md-border-width) solid var(--md-border-color);
+		border-radius: 3px;
+		margin-right: 8px;
+}
+
+.project-root-container{
+	margin-bottom: 0px;
+}
 }
 
 /* End [data-theme="retro"] */

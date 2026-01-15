@@ -151,7 +151,7 @@ export default defineTheme({
     },
 
     fonts: {
-        sans: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+        sans: '"VT323", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
         heading: '"Press Start 2P", ui-sans-serif, system-ui, sans-serif',
         baseSize: '16px',
         baseWeight: '400',

@@ -2,7 +2,12 @@
  * Utility functions for sidebar time-based grouping and display.
  */
 
-export type TimeGroup = 'today' | 'yesterday' | 'earlierThisWeek' | 'thisMonth' | 'older';
+export type TimeGroup =
+    | 'today'
+    | 'yesterday'
+    | 'earlierThisWeek'
+    | 'thisMonth'
+    | 'older';
 
 /**
  * Get the start of the day for a given timestamp (in seconds)
@@ -58,11 +63,16 @@ export function computeTimeGroup(timestamp: number): TimeGroup {
  */
 export function getTimeGroupLabel(group: TimeGroup): string {
     switch (group) {
-        case 'today': return 'Today';
-        case 'yesterday': return 'Yesterday';
-        case 'earlierThisWeek': return 'Earlier this week';
-        case 'thisMonth': return 'This month';
-        case 'older': return 'Older';
+        case 'today':
+            return 'Today';
+        case 'yesterday':
+            return 'Yesterday';
+        case 'earlierThisWeek':
+            return 'This week';
+        case 'thisMonth':
+            return 'This month';
+        case 'older':
+            return 'Older';
     }
 }
 
@@ -71,15 +81,21 @@ export function getTimeGroupLabel(group: TimeGroup): string {
  */
 export function formatTimeDisplay(timestamp: number, group: TimeGroup): string {
     const date = new Date(timestamp * 1000);
-    
+
     switch (group) {
         case 'today':
         case 'yesterday':
-            return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            return date.toLocaleTimeString([], {
+                hour: 'numeric',
+                minute: '2-digit',
+            });
         case 'earlierThisWeek':
             return date.toLocaleDateString([], { weekday: 'long' });
         case 'thisMonth':
         case 'older':
-            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            return date.toLocaleDateString([], {
+                month: 'short',
+                day: 'numeric',
+            });
     }
 }

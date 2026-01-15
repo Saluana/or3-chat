@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { computeTimeGroup, getTimeGroupLabel, formatTimeDisplay } from '../sidebarTimeUtils';
+import {
+    computeTimeGroup,
+    getTimeGroupLabel,
+    formatTimeDisplay,
+} from '../sidebarTimeUtils';
 
 describe('sidebarTimeUtils', () => {
     // Mock "now" to 2024-01-19 12:00:00 (Friday)
     const now = new Date('2024-01-19T12:00:00Z').getTime();
-    
+
     beforeEach(() => {
         vi.useFakeTimers();
         vi.setSystemTime(now);
@@ -46,7 +50,7 @@ describe('sidebarTimeUtils', () => {
         it('returns correct labels', () => {
             expect(getTimeGroupLabel('today')).toBe('Today');
             expect(getTimeGroupLabel('yesterday')).toBe('Yesterday');
-            expect(getTimeGroupLabel('earlierThisWeek')).toBe('Earlier this week');
+            expect(getTimeGroupLabel('earlierThisWeek')).toBe('This week');
             expect(getTimeGroupLabel('thisMonth')).toBe('This month');
             expect(getTimeGroupLabel('older')).toBe('Older');
         });
@@ -55,12 +59,16 @@ describe('sidebarTimeUtils', () => {
     describe('formatTimeDisplay', () => {
         it('formats today as time', () => {
             const ts = new Date('2024-01-15T08:30:00Z').getTime() / 1000;
-            expect(formatTimeDisplay(ts, 'today')).toMatch(/\d{1,2}:\d{2}\s?(AM|PM)/);
+            expect(formatTimeDisplay(ts, 'today')).toMatch(
+                /\d{1,2}:\d{2}\s?(AM|PM)/
+            );
         });
 
         it('formats older as date', () => {
             const ts = new Date('2023-12-15T08:30:00Z').getTime() / 1000;
-            expect(formatTimeDisplay(ts, 'older')).toMatch(/[A-Z][a-z]{2}\s\d{1,2}/); // e.g. Dec 15
+            expect(formatTimeDisplay(ts, 'older')).toMatch(
+                /[A-Z][a-z]{2}\s\d{1,2}/
+            ); // e.g. Dec 15
         });
     });
 });

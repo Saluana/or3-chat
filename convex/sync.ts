@@ -8,10 +8,30 @@
  * - updateDeviceCursor: Track device sync progress for retention
  */
 import { v } from 'convex/values';
-import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
+import { mutation, query, internalMutation, type MutationCtx, type QueryCtx } from './_generated/server';
+import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 
 const nowSec = (): number => Math.floor(Date.now() / 1000);
+
+// ============================================================
+// CONSTANTS
+// ============================================================
+
+/** Maximum ops allowed per push batch */
+const MAX_PUSH_OPS = 100;
+
+/** Maximum limit for pull requests */
+const MAX_PULL_LIMIT = 500;
+
+/** Default batch size for GC operations */
+const DEFAULT_GC_BATCH_SIZE = 100;
+
+/** Default retention period for GC (30 days) */
+const DEFAULT_RETENTION_SECONDS = 30 * 24 * 3600;
+
+/** Delay between scheduled GC continuations (1 minute) */
+const GC_CONTINUATION_DELAY_MS = 60_000;
 
 // ============================================================
 // HELPERS
@@ -258,6 +278,11 @@ export const push = mutation({
         ),
     },
     handler: async (ctx, args) => {
+        // Validate batch size to prevent abuse
+        if (args.ops.length > MAX_PUSH_OPS) {
+            throw new Error(`Batch size ${args.ops.length} exceeds maximum of ${MAX_PUSH_OPS} ops`);
+        }
+
         // Verify workspace membership
         await verifyWorkspaceMembership(ctx, args.workspace_id);
 
@@ -396,15 +421,18 @@ export const pull = query({
     handler: async (ctx, args) => {
         await verifyWorkspaceMembership(ctx, args.workspace_id);
 
+        // Cap limit to prevent abuse
+        const limit = Math.min(args.limit, MAX_PULL_LIMIT);
+
         const rawResults = await ctx.db
             .query('change_log')
             .withIndex('by_workspace_version', (q) =>
                 q.eq('workspace_id', args.workspace_id).gt('server_version', args.cursor)
             )
             .order('asc')
-            .take(args.limit + 1);
+            .take(limit + 1);
 
-        const hasMore = rawResults.length > args.limit;
+        const hasMore = rawResults.length > limit;
         const window = hasMore ? rawResults.slice(0, -1) : rawResults;
         const changes =
             args.tables && args.tables.length > 0
@@ -503,14 +531,18 @@ export const getServerVersion = query({
 
 /**
  * GC tombstones older than retention window and below min cursor
+ * Uses batching to avoid memory issues with large datasets
  */
 export const gcTombstones = mutation({
     args: {
         workspace_id: v.id('workspaces'),
         retention_seconds: v.number(),
+        batch_size: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
         await verifyWorkspaceMembership(ctx, args.workspace_id);
+
+        const batchSize = args.batch_size ?? DEFAULT_GC_BATCH_SIZE;
 
         const cursors = await ctx.db
             .query('device_cursors')
@@ -523,35 +555,43 @@ export const gcTombstones = mutation({
                 : 0;
         const cutoff = nowSec() - args.retention_seconds;
 
+        // Use .take() instead of .collect() to avoid loading all records into memory
         const candidates = await ctx.db
             .query('tombstones')
             .withIndex('by_workspace_version', (q) =>
                 q.eq('workspace_id', args.workspace_id).lt('server_version', minCursor)
             )
-            .collect();
+            .take(batchSize + 1);
+
+        const hasMore = candidates.length > batchSize;
+        const batch = hasMore ? candidates.slice(0, -1) : candidates;
 
         let purged = 0;
-        for (const row of candidates) {
+        for (const row of batch) {
             if ((row.deleted_at ?? 0) < cutoff) {
                 await ctx.db.delete(row._id);
                 purged += 1;
             }
         }
 
-        return { purged };
+        return { purged, hasMore };
     },
 });
 
 /**
  * GC change_log entries below min cursor with retention window
+ * Uses batching to avoid memory issues with large datasets
  */
 export const gcChangeLog = mutation({
     args: {
         workspace_id: v.id('workspaces'),
         retention_seconds: v.number(),
+        batch_size: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
         await verifyWorkspaceMembership(ctx, args.workspace_id);
+
+        const batchSize = args.batch_size ?? DEFAULT_GC_BATCH_SIZE;
 
         const cursors = await ctx.db
             .query('device_cursors')
@@ -564,21 +604,147 @@ export const gcChangeLog = mutation({
                 : 0;
         const cutoff = nowSec() - args.retention_seconds;
 
+        // Use .take() instead of .collect() to avoid loading all records into memory
         const candidates = await ctx.db
             .query('change_log')
             .withIndex('by_workspace_version', (q) =>
                 q.eq('workspace_id', args.workspace_id).lt('server_version', minCursor)
             )
-            .collect();
+            .take(batchSize + 1);
+
+        const hasMore = candidates.length > batchSize;
+        const batch = hasMore ? candidates.slice(0, -1) : candidates;
 
         let purged = 0;
-        for (const row of candidates) {
+        for (const row of batch) {
             if ((row.created_at ?? 0) < cutoff) {
                 await ctx.db.delete(row._id);
                 purged += 1;
             }
         }
 
-        return { purged };
+        return { purged, hasMore };
+    },
+});
+
+// ============================================================
+// SCHEDULED GC (Internal)
+// ============================================================
+
+/**
+ * Internal mutation for scheduled GC.
+ * Runs GC for a specific workspace and schedules continuation if needed.
+ */
+export const runWorkspaceGc = internalMutation({
+    args: {
+        workspace_id: v.id('workspaces'),
+        retention_seconds: v.optional(v.number()),
+        batch_size: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const retentionSeconds = args.retention_seconds ?? DEFAULT_RETENTION_SECONDS;
+        const batchSize = args.batch_size ?? DEFAULT_GC_BATCH_SIZE;
+
+        const cursors = await ctx.db
+            .query('device_cursors')
+            .withIndex('by_workspace_version', (q) => q.eq('workspace_id', args.workspace_id))
+            .collect();
+
+        const minCursor =
+            cursors.length > 0
+                ? Math.min(...cursors.map((c) => c.last_seen_version))
+                : 0;
+        const cutoff = nowSec() - retentionSeconds;
+
+        let totalPurged = 0;
+        let hasMoreTombstones = true;
+        let hasMoreChangeLogs = true;
+
+        // GC tombstones (one batch)
+        if (hasMoreTombstones) {
+            const tombstones = await ctx.db
+                .query('tombstones')
+                .withIndex('by_workspace_version', (q) =>
+                    q.eq('workspace_id', args.workspace_id).lt('server_version', minCursor)
+                )
+                .take(batchSize + 1);
+
+            hasMoreTombstones = tombstones.length > batchSize;
+            const batch = hasMoreTombstones ? tombstones.slice(0, -1) : tombstones;
+
+            for (const row of batch) {
+                if ((row.deleted_at ?? 0) < cutoff) {
+                    await ctx.db.delete(row._id);
+                    totalPurged += 1;
+                }
+            }
+        }
+
+        // GC change_log (one batch)
+        if (hasMoreChangeLogs) {
+            const changeLogs = await ctx.db
+                .query('change_log')
+                .withIndex('by_workspace_version', (q) =>
+                    q.eq('workspace_id', args.workspace_id).lt('server_version', minCursor)
+                )
+                .take(batchSize + 1);
+
+            hasMoreChangeLogs = changeLogs.length > batchSize;
+            const batch = hasMoreChangeLogs ? changeLogs.slice(0, -1) : changeLogs;
+
+            for (const row of batch) {
+                if ((row.created_at ?? 0) < cutoff) {
+                    await ctx.db.delete(row._id);
+                    totalPurged += 1;
+                }
+            }
+        }
+
+        // Schedule continuation if there's more to process
+        if (hasMoreTombstones || hasMoreChangeLogs) {
+            await ctx.scheduler.runAfter(GC_CONTINUATION_DELAY_MS, internal.sync.runWorkspaceGc, {
+                workspace_id: args.workspace_id,
+                retention_seconds: retentionSeconds,
+                batch_size: batchSize,
+            });
+        }
+
+        return { purged: totalPurged, hasMore: hasMoreTombstones || hasMoreChangeLogs };
+    },
+});
+
+/**
+ * Scheduled GC entry point - finds workspaces with sync activity and runs GC
+ */
+export const runScheduledGc = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        // Find workspaces with recent change_log activity (last 7 days)
+        const sevenDaysAgo = nowSec() - 7 * 24 * 3600;
+
+        // Get unique workspace IDs from recent change_log entries
+        // We query a sample to find active workspaces without loading everything
+        const recentChanges = await ctx.db
+            .query('change_log')
+            .order('desc')
+            .take(1000);
+
+        const workspaceIds = new Set<Id<'workspaces'>>();
+        for (const change of recentChanges) {
+            if ((change.created_at ?? 0) >= sevenDaysAgo) {
+                workspaceIds.add(change.workspace_id);
+            }
+        }
+
+        // Schedule GC for each active workspace
+        let scheduled = 0;
+        for (const workspaceId of workspaceIds) {
+            await ctx.scheduler.runAfter(scheduled * 1000, internal.sync.runWorkspaceGc, {
+                workspace_id: workspaceId,
+            });
+            scheduled += 1;
+        }
+
+        return { workspacesScheduled: scheduled };
     },
 });

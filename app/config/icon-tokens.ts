@@ -54,7 +54,7 @@ export const DEFAULT_ICONS = {
     'sidebar.credits': 'pixelarticons:coin',
     'sidebar.project.root': 'pixelarticons:home',
     'sidebar.page.home': 'pixelarticons:home',
-    'sidebar.page.messages': 'pixelarticons:messages-square',
+    'sidebar.page.messages': 'pixelarticons:comment',
     'sidebar.page.default': 'pixelarticons:view-grid',
 
     // Common UI
