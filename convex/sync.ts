@@ -378,6 +378,8 @@ export const push = mutation({
 
         for (let i = 0; i < applyResults.length; i++) {
             const result = applyResults[i];
+            if (!result) continue;
+
             if (result.status === 'fulfilled') {
                 results.push({ ...result.value, success: true });
             } else {
@@ -563,11 +565,13 @@ export const gcTombstones = mutation({
         workspace_id: v.id('workspaces'),
         retention_seconds: v.number(),
         batch_size: v.optional(v.number()),
+        cursor: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
         await verifyWorkspaceMembership(ctx, args.workspace_id);
 
         const batchSize = args.batch_size ?? DEFAULT_GC_BATCH_SIZE;
+        const startCursor = args.cursor ?? 0;
 
         const minCursorRow = await ctx.db
             .query('device_cursors')
@@ -582,7 +586,10 @@ export const gcTombstones = mutation({
         const candidates = await ctx.db
             .query('tombstones')
             .withIndex('by_workspace_version', (q) =>
-                q.eq('workspace_id', args.workspace_id).lt('server_version', minCursor)
+                q
+                    .eq('workspace_id', args.workspace_id)
+                    .gt('server_version', startCursor)
+                    .lt('server_version', minCursor)
             )
             .take(batchSize + 1);
 
@@ -590,14 +597,16 @@ export const gcTombstones = mutation({
         const batch = hasMore ? candidates.slice(0, -1) : candidates;
 
         let purged = 0;
+        let nextCursor = startCursor;
         for (const row of batch) {
+            nextCursor = row.server_version;
             if ((row.deleted_at ?? 0) < cutoff) {
                 await ctx.db.delete(row._id);
                 purged += 1;
             }
         }
 
-        return { purged, hasMore };
+        return { purged, hasMore, nextCursor };
     },
 });
 
@@ -610,11 +619,13 @@ export const gcChangeLog = mutation({
         workspace_id: v.id('workspaces'),
         retention_seconds: v.number(),
         batch_size: v.optional(v.number()),
+        cursor: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
         await verifyWorkspaceMembership(ctx, args.workspace_id);
 
         const batchSize = args.batch_size ?? DEFAULT_GC_BATCH_SIZE;
+        const startCursor = args.cursor ?? 0;
 
         const minCursorRow = await ctx.db
             .query('device_cursors')
@@ -629,7 +640,10 @@ export const gcChangeLog = mutation({
         const candidates = await ctx.db
             .query('change_log')
             .withIndex('by_workspace_version', (q) =>
-                q.eq('workspace_id', args.workspace_id).lt('server_version', minCursor)
+                q
+                    .eq('workspace_id', args.workspace_id)
+                    .gt('server_version', startCursor)
+                    .lt('server_version', minCursor)
             )
             .take(batchSize + 1);
 
@@ -637,14 +651,16 @@ export const gcChangeLog = mutation({
         const batch = hasMore ? candidates.slice(0, -1) : candidates;
 
         let purged = 0;
+        let nextCursor = startCursor;
         for (const row of batch) {
+            nextCursor = row.server_version;
             if ((row.created_at ?? 0) < cutoff) {
                 await ctx.db.delete(row._id);
                 purged += 1;
             }
         }
 
-        return { purged, hasMore };
+        return { purged, hasMore, nextCursor };
     },
 });
 
@@ -661,10 +677,14 @@ export const runWorkspaceGc = internalMutation({
         workspace_id: v.id('workspaces'),
         retention_seconds: v.optional(v.number()),
         batch_size: v.optional(v.number()),
+        tombstone_cursor: v.optional(v.number()),
+        changelog_cursor: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
         const retentionSeconds = args.retention_seconds ?? DEFAULT_RETENTION_SECONDS;
         const batchSize = args.batch_size ?? DEFAULT_GC_BATCH_SIZE;
+        const startTombstoneCursor = args.tombstone_cursor ?? 0;
+        const startChangelogCursor = args.changelog_cursor ?? 0;
 
         const minCursorRow = await ctx.db
             .query('device_cursors')
@@ -678,13 +698,18 @@ export const runWorkspaceGc = internalMutation({
         let totalPurged = 0;
         let hasMoreTombstones = true;
         let hasMoreChangeLogs = true;
+        let nextTombstoneCursor = startTombstoneCursor;
+        let nextChangelogCursor = startChangelogCursor;
 
         // GC tombstones (one batch)
         if (hasMoreTombstones) {
             const tombstones = await ctx.db
                 .query('tombstones')
                 .withIndex('by_workspace_version', (q) =>
-                    q.eq('workspace_id', args.workspace_id).lt('server_version', minCursor)
+                    q
+                        .eq('workspace_id', args.workspace_id)
+                        .gt('server_version', startTombstoneCursor)
+                        .lt('server_version', minCursor)
                 )
                 .take(batchSize + 1);
 
@@ -692,10 +717,15 @@ export const runWorkspaceGc = internalMutation({
             const batch = hasMoreTombstones ? tombstones.slice(0, -1) : tombstones;
 
             for (const row of batch) {
+                nextTombstoneCursor = row.server_version;
                 if ((row.deleted_at ?? 0) < cutoff) {
                     await ctx.db.delete(row._id);
                     totalPurged += 1;
                 }
+            }
+
+            if (batch.length === 0) {
+                hasMoreTombstones = false;
             }
         }
 
@@ -704,7 +734,10 @@ export const runWorkspaceGc = internalMutation({
             const changeLogs = await ctx.db
                 .query('change_log')
                 .withIndex('by_workspace_version', (q) =>
-                    q.eq('workspace_id', args.workspace_id).lt('server_version', minCursor)
+                    q
+                        .eq('workspace_id', args.workspace_id)
+                        .gt('server_version', startChangelogCursor)
+                        .lt('server_version', minCursor)
                 )
                 .take(batchSize + 1);
 
@@ -712,10 +745,15 @@ export const runWorkspaceGc = internalMutation({
             const batch = hasMoreChangeLogs ? changeLogs.slice(0, -1) : changeLogs;
 
             for (const row of batch) {
+                nextChangelogCursor = row.server_version;
                 if ((row.created_at ?? 0) < cutoff) {
                     await ctx.db.delete(row._id);
                     totalPurged += 1;
                 }
+            }
+
+            if (batch.length === 0) {
+                hasMoreChangeLogs = false;
             }
         }
 
@@ -725,10 +763,17 @@ export const runWorkspaceGc = internalMutation({
                 workspace_id: args.workspace_id,
                 retention_seconds: retentionSeconds,
                 batch_size: batchSize,
+                tombstone_cursor: nextTombstoneCursor,
+                changelog_cursor: nextChangelogCursor,
             });
         }
 
-        return { purged: totalPurged, hasMore: hasMoreTombstones || hasMoreChangeLogs };
+        return {
+            purged: totalPurged,
+            hasMore: hasMoreTombstones || hasMoreChangeLogs,
+            nextTombstoneCursor,
+            nextChangelogCursor,
+        };
     },
 });
 
