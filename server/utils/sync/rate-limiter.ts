@@ -1,12 +1,20 @@
+import { LRUCache } from 'lru-cache';
+
 /**
  * Sync Rate Limiter
  *
- * In-memory sliding window rate limiter for sync operations.
+ * In-memory sliding window rate limiter for sync and storage operations.
  * Limits are per-user to prevent abuse while allowing normal usage.
  *
- * Note: This is in-memory and resets on server restart.
- * This is acceptable for soft limits - it prevents sustained abuse
- * but won't persist across deployments.
+ * Memory bounds:
+ * - Maximum 10,000 users tracked concurrently (LRU eviction)
+ * - Entries expire after 10 minutes of inactivity
+ * - Each entry stores ~100 bytes (timestamps array)
+ * - Total memory: ~1MB worst case
+ *
+ * Note: This is in-memory and resets on server restart. This is acceptable
+ * for soft limits - it prevents sustained abuse but won't persist across
+ * deployments. For distributed deployments, consider Redis.
  */
 
 export interface RateLimitConfig {
@@ -43,45 +51,25 @@ export const SYNC_RATE_LIMITS: Record<string, RateLimitConfig> = {
     'sync:cursor': { windowMs: 60_000, maxRequests: 60 },
 } as const;
 
-/** In-memory store for rate limit entries, keyed by "userId:operation" */
-const rateLimitStore = new Map<string, RateLimitEntry>();
-
-/** Last cleanup timestamp */
-let lastCleanup = Date.now();
-
-/** Cleanup interval (5 minutes) */
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
-
 /** Maximum age for entries before cleanup (10 minutes) */
 const MAX_ENTRY_AGE_MS = 10 * 60 * 1000;
+
+/**
+ * Rate limit store using LRU cache to prevent unbounded growth.
+ * Max 10k users tracked, entries expire after 10 minutes of inactivity.
+ */
+const rateLimitStore = new LRUCache<string, RateLimitEntry>({
+    max: 10_000,
+    ttl: MAX_ENTRY_AGE_MS,
+    updateAgeOnGet: false,
+    updateAgeOnHas: false,
+});
 
 /**
  * Get the rate limit key for a user and operation
  */
 function getRateLimitKey(userId: string, operation: string): string {
     return `${userId}:${operation}`;
-}
-
-/**
- * Clean up stale entries to prevent memory leaks
- */
-function cleanupStaleEntries(): void {
-    const now = Date.now();
-
-    // Only cleanup periodically
-    if (now - lastCleanup < CLEANUP_INTERVAL_MS) {
-        return;
-    }
-
-    lastCleanup = now;
-    const cutoff = now - MAX_ENTRY_AGE_MS;
-
-    for (const [key, entry] of rateLimitStore.entries()) {
-        // Remove entries where all timestamps are older than cutoff
-        if (entry.timestamps.length === 0 || entry.timestamps[entry.timestamps.length - 1]! < cutoff) {
-            rateLimitStore.delete(key);
-        }
-    }
 }
 
 /**
@@ -148,7 +136,6 @@ export function recordSyncRequest(userId: string, operation: string): void {
     let entry = rateLimitStore.get(key);
     if (!entry) {
         entry = { timestamps: [] };
-        rateLimitStore.set(key, entry);
     }
 
     // Add current request timestamp
@@ -157,8 +144,7 @@ export function recordSyncRequest(userId: string, operation: string): void {
     // Prune old timestamps outside the window
     entry.timestamps = entry.timestamps.filter((ts) => ts > windowStart);
 
-    // Periodic cleanup of stale entries
-    cleanupStaleEntries();
+    rateLimitStore.set(key, entry);
 }
 
 /**

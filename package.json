@@ -44,6 +44,7 @@
         "dexie": "^4.2.1",
         "dexie-export-import": "^4.1.4",
         "gpt-tokenizer": "^3.4.0",
+        "lru-cache": "^11.2.4",
         "nuxt": "^4.2.1",
         "or3-scroll": "0.0.3",
         "or3-workflow-core": "^0.1.1",
