@@ -51,8 +51,35 @@ export class ConflictResolver {
             // Mark this specific transaction as a sync transaction
             getHookBridge(this.db).markSyncTransaction(tx);
 
+            // Batch-fetch existing records by table
+            const existingByTable = new Map<string, Map<string, LocalRecord>>();
+            for (const tableName of tableNames) {
+                const table = this.db.table(tableName);
+                const pks = changes.filter(c => c.tableName === tableName).map(c => c.pk);
+                const records = await table.bulkGet(pks);
+                const map = new Map<string, LocalRecord>();
+                records.forEach((rec, idx) => {
+                    if (rec) map.set(pks[idx]!, rec as LocalRecord);
+                });
+                existingByTable.set(tableName, map);
+            }
+
+            // Batch-fetch tombstones
+            const tombstoneIds = changes.map(c => `${c.tableName}:${c.pk}`);
+            const tombstoneRecords = await this.db.tombstones.bulkGet(tombstoneIds);
+            const tombstonesMap = new Map<string, Tombstone>();
+            tombstoneRecords.forEach((rec, idx) => {
+                if (rec) tombstonesMap.set(tombstoneIds[idx]!, rec as Tombstone);
+            });
+
             for (const change of changes) {
-                const changeResult = await this.applyChange(change);
+                const local = existingByTable.get(change.tableName)?.get(change.pk);
+                const tombstone = tombstonesMap.get(`${change.tableName}:${change.pk}`);
+
+                const changeResult = change.op === 'delete'
+                    ? await this.applyDeleteWithLocal(change, local, tombstone)
+                    : await this.applyPutWithLocal(change, local, tombstone);
+
                 result.applied += changeResult.applied ? 1 : 0;
                 result.skipped += changeResult.skipped ? 1 : 0;
                 result.conflicts += changeResult.isConflict ? 1 : 0;
@@ -63,47 +90,24 @@ export class ConflictResolver {
     }
 
     /**
-     * Apply a single remote change
+     * Apply a delete operation with pre-fetched local state
      */
-    async applyChange(change: SyncChange): Promise<ChangeResult> {
-        const { tableName, pk, op, payload, stamp } = change;
-
-        // Get the table
-        const table = this.db.table(tableName);
-        if (!table) {
-            console.warn('[ConflictResolver] Unknown table:', tableName);
-            return { applied: false, skipped: true, isConflict: false };
-        }
-
-        // Get local record
-        const local = (await table.get(pk)) as LocalRecord | undefined;
-
-        if (op === 'delete') {
-            return this.applyDelete(table, tableName, pk, local, stamp);
-        } else {
-            return this.applyPut(table, tableName, pk, local, payload, stamp);
-        }
-    }
-
-    /**
-     * Apply a delete operation
-     */
-    private async applyDelete(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        table: Table<any, any>,
-        tableName: string,
-        pk: string,
+    private async applyDeleteWithLocal(
+        change: SyncChange,
         local: LocalRecord | undefined,
-        stamp: { clock: number; hlc: string }
+        existingTombstone: Tombstone | undefined
     ): Promise<ChangeResult> {
+        const { tableName, pk, stamp } = change;
+        const table = this.db.table(tableName);
+
         if (!local) {
-            await this.writeTombstone(tableName, pk, stamp.clock);
+            await this.writeTombstone(tableName, pk, stamp.clock, existingTombstone);
             // Already gone or never existed
             return { applied: false, skipped: true, isConflict: false };
         }
 
         if (local.deleted) {
-            await this.writeTombstone(tableName, pk, stamp.clock);
+            await this.writeTombstone(tableName, pk, stamp.clock, existingTombstone);
             // Already deleted
             return { applied: false, skipped: true, isConflict: false };
         }
@@ -119,7 +123,7 @@ export class ConflictResolver {
                 clock: stamp.clock,
                 hlc: stamp.hlc,
             });
-            await this.writeTombstone(tableName, pk, stamp.clock);
+            await this.writeTombstone(tableName, pk, stamp.clock, existingTombstone);
             return { applied: true, skipped: false, isConflict: false };
         } else if (stamp.clock === localClock) {
             // Tie-break with HLC
@@ -131,7 +135,7 @@ export class ConflictResolver {
                     clock: stamp.clock,
                     hlc: stamp.hlc,
                 });
-                await this.writeTombstone(tableName, pk, stamp.clock);
+                await this.writeTombstone(tableName, pk, stamp.clock, existingTombstone);
                 await useHooks().doAction('sync.conflict:action:detected', {
                     tableName,
                     pk,
@@ -156,17 +160,15 @@ export class ConflictResolver {
     }
 
     /**
-     * Apply a put (insert/update) operation
+     * Apply a put (insert/update) operation with pre-fetched local state
      */
-    private async applyPut(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        table: Table<any, any>,
-        tableName: string,
-        pk: string,
+    private async applyPutWithLocal(
+        change: SyncChange,
         local: LocalRecord | undefined,
-        payload: unknown,
-        stamp: { clock: number; hlc: string }
+        tombstone: Tombstone | undefined
     ): Promise<ChangeResult> {
+        const { tableName, pk, payload, stamp } = change;
+        const table = this.db.table(tableName);
         const remoteClock = stamp.clock;
 
         // Use shared normalizer for consistent snake_case/camelCase mapping and validation
@@ -178,7 +180,6 @@ export class ConflictResolver {
 
         const remotePayload = normalized.payload;
         
-        const tombstone = await this.getTombstone(tableName, pk);
         if (tombstone && tombstone.clock >= remoteClock) {
             return { applied: false, skipped: true, isConflict: false };
         }
@@ -235,27 +236,18 @@ export class ConflictResolver {
         return { applied: false, skipped: true, isConflict: false };
     }
 
-    private async getTombstone(
-        tableName: string,
-        pk: string
-    ): Promise<Tombstone | undefined> {
-        const id = `${tableName}:${pk}`;
-        const row = await this.db.table('tombstones').get(id);
-        return row as Tombstone | undefined;
-    }
-
     private async writeTombstone(
         tableName: string,
         pk: string,
-        clock: number
+        clock: number,
+        existing: Tombstone | undefined
     ): Promise<void> {
         const id = `${tableName}:${pk}`;
-        const existing = (await this.db.table('tombstones').get(id)) as
-            | Tombstone
-            | undefined;
+
         if (existing && existing.clock >= clock) {
             return;
         }
+
         const tombstone: Tombstone = {
             id,
             tableName,

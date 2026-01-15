@@ -16,6 +16,7 @@ import type { Or3DB } from '~/db/client';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
+import { getPkField } from '~~/shared/sync/table-metadata';
 
 /** Tables that should be captured for sync */
 const SYNCED_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'] as const;
@@ -31,16 +32,6 @@ const KV_SYNC_BLOCKLIST = [
     'openrouter_api_key',       // Security: API keys should not sync to server
     'workspace.manager.cache',  // Device-local UI cache
 ] as const;
-
-/** Primary key field for each table */
-const PK_FIELDS: Record<string, string> = {
-    threads: 'id',
-    messages: 'id',
-    projects: 'id',
-    posts: 'id',
-    kv: 'id',
-    file_meta: 'hash',
-};
 
 export class HookBridge {
     private db: Or3DB;
@@ -118,13 +109,17 @@ export class HookBridge {
         primKey: unknown,
         payload: unknown
     ): void {
-        const pkField = PK_FIELDS[tableName] ?? 'id';
+        const pkField = getPkField(tableName);
         const pk = String(primKey ?? (payload as Record<string, unknown>)?.[pkField] ?? '');
 
         // Filter out blocked KV keys (large caches, secrets, device-local data)
         if (tableName === 'kv') {
             const kvName = (payload as { name?: string })?.name ?? pk.replace('kv:', '');
-            if (KV_SYNC_BLOCKLIST.includes(kvName as typeof KV_SYNC_BLOCKLIST[number])) {
+
+            // Allow plugins to extend the blocklist
+            const blocklist = useHooks().applyFilters('sync.kv:blocklist', [...KV_SYNC_BLOCKLIST]);
+
+            if (blocklist.includes(kvName)) {
                 return; // Skip this key, don't capture for sync
             }
         }
@@ -185,6 +180,8 @@ export class HookBridge {
                     pk,
                     error: String(error),
                 });
+                // Rethrow to fail the transaction and prevent silent data loss
+                throw error;
             });
 
         if (hasPendingOps) {
@@ -250,4 +247,15 @@ export function _resetHookBridge(): void {
         bridge.stop();
     }
     hookBridgeInstances.clear();
+}
+
+/**
+ * Cleanup HookBridge instance for a database
+ */
+export function cleanupHookBridge(dbName: string): void {
+    const bridge = hookBridgeInstances.get(dbName);
+    if (bridge) {
+        bridge.stop();
+    }
+    hookBridgeInstances.delete(dbName);
 }

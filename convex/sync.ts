@@ -11,6 +11,7 @@ import { v } from 'convex/values';
 import { mutation, query, internalMutation, type MutationCtx, type QueryCtx } from './_generated/server';
 import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
+import { getPkField } from '../shared/sync/table-metadata';
 
 const nowSec = (): number => Math.floor(Date.now() / 1000);
 
@@ -65,13 +66,13 @@ async function getNextServerVersion(
 /**
  * Table name to index name mapping
  */
-const TABLE_INDEX_MAP: Record<string, { table: string; indexName: string; pkField: string }> = {
-    threads: { table: 'threads', indexName: 'by_workspace_id', pkField: 'id' },
-    messages: { table: 'messages', indexName: 'by_workspace_id', pkField: 'id' },
-    projects: { table: 'projects', indexName: 'by_workspace_id', pkField: 'id' },
-    posts: { table: 'posts', indexName: 'by_workspace_id', pkField: 'id' },
-    kv: { table: 'kv', indexName: 'by_workspace_id', pkField: 'id' },
-    file_meta: { table: 'file_meta', indexName: 'by_workspace_hash', pkField: 'hash' },
+const TABLE_INDEX_MAP: Record<string, { table: string; indexName: string }> = {
+    threads: { table: 'threads', indexName: 'by_workspace_id' },
+    messages: { table: 'messages', indexName: 'by_workspace_id' },
+    projects: { table: 'projects', indexName: 'by_workspace_id' },
+    posts: { table: 'posts', indexName: 'by_workspace_id' },
+    kv: { table: 'kv', indexName: 'by_workspace_id' },
+    file_meta: { table: 'file_meta', indexName: 'by_workspace_hash' },
 };
 
 /**
@@ -152,7 +153,9 @@ async function applyOpToTable(
         return;
     }
 
-    const { table, indexName, pkField } = tableInfo;
+    const { table, indexName } = tableInfo;
+    const pkField = getPkField(op.table_name);
+
     // SECURITY: Strip workspace_id and _id from payload to prevent injection attacks
     const payload = sanitizePayload(op.payload as Record<string, unknown> | undefined);
     const payloadCreatedAt =
@@ -163,10 +166,11 @@ async function applyOpToTable(
         typeof payload?.deleted_at === 'number' ? (payload.deleted_at as number) : undefined;
 
     // Find existing record
-    // Note: Type casts (as any) are necessary here because Convex doesn't support
+    // Note: Type casts (as any) are necessary because Convex doesn't support
     // fully type-safe dynamic table queries. Table name is validated via TABLE_INDEX_MAP
     // and runtime validation of payloads happens client-side in ConflictResolver.applyPut()
     // using Zod schemas (TABLE_PAYLOAD_SCHEMAS).
+    // Future: Consider a type-safe helper with switch statement for each table.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const existing = await (ctx.db.query(table as any) as any)
         .withIndex(indexName, (q: { eq: (field: string, value: unknown) => unknown }) =>
@@ -301,6 +305,12 @@ export const push = mutation({
 
         let latestVersion = 0;
 
+        // Collect all ops with their server versions first
+        const opsToApply: Array<{
+            op: typeof args.ops[0];
+            serverVersion: number
+        }> = [];
+
         for (const op of args.ops) {
             // SECURITY: Validate table_name against allowlist BEFORE any processing
             // This prevents unknown tables from polluting the change_log
@@ -329,15 +339,17 @@ export const push = mutation({
                 continue;
             }
 
-            try {
-                // Get next server version
-                const serverVersion = await getNextServerVersion(ctx, args.workspace_id);
-                latestVersion = serverVersion;
+            // Get next server version
+            const serverVersion = await getNextServerVersion(ctx, args.workspace_id);
+            latestVersion = serverVersion;
+            opsToApply.push({ op, serverVersion });
+        }
 
-                // Apply to data table
+        // Apply ops in parallel (Convex transactions are serializable)
+        const applyResults = await Promise.allSettled(
+            opsToApply.map(async ({ op, serverVersion }) => {
                 await applyOpToTable(ctx, args.workspace_id, op);
 
-                // Write to change log
                 await ctx.db.insert('change_log', {
                     workspace_id: args.workspace_id,
                     server_version: serverVersion,
@@ -360,12 +372,19 @@ export const push = mutation({
                     await upsertTombstone(ctx, args.workspace_id, op, serverVersion, deletedAt);
                 }
 
-                results.push({ opId: op.op_id, success: true, serverVersion });
-            } catch (error) {
+                return { opId: op.op_id, serverVersion };
+            })
+        );
+
+        for (let i = 0; i < applyResults.length; i++) {
+            const result = applyResults[i];
+            if (result.status === 'fulfilled') {
+                results.push({ ...result.value, success: true });
+            } else {
                 results.push({
-                    opId: op.op_id,
+                    opId: opsToApply[i]!.op.op_id,
                     success: false,
-                    error: String(error),
+                    error: String(result.reason),
                 });
             }
         }
@@ -550,15 +569,13 @@ export const gcTombstones = mutation({
 
         const batchSize = args.batch_size ?? DEFAULT_GC_BATCH_SIZE;
 
-        const cursors = await ctx.db
+        const minCursorRow = await ctx.db
             .query('device_cursors')
             .withIndex('by_workspace_version', (q) => q.eq('workspace_id', args.workspace_id))
-            .collect();
+            .order('asc')
+            .first();
 
-        const minCursor =
-            cursors.length > 0
-                ? Math.min(...cursors.map((c) => c.last_seen_version))
-                : 0;
+        const minCursor = minCursorRow?.last_seen_version ?? 0;
         const cutoff = nowSec() - args.retention_seconds;
 
         // Use .take() instead of .collect() to avoid loading all records into memory
@@ -599,15 +616,13 @@ export const gcChangeLog = mutation({
 
         const batchSize = args.batch_size ?? DEFAULT_GC_BATCH_SIZE;
 
-        const cursors = await ctx.db
+        const minCursorRow = await ctx.db
             .query('device_cursors')
             .withIndex('by_workspace_version', (q) => q.eq('workspace_id', args.workspace_id))
-            .collect();
+            .order('asc')
+            .first();
 
-        const minCursor =
-            cursors.length > 0
-                ? Math.min(...cursors.map((c) => c.last_seen_version))
-                : 0;
+        const minCursor = minCursorRow?.last_seen_version ?? 0;
         const cutoff = nowSec() - args.retention_seconds;
 
         // Use .take() instead of .collect() to avoid loading all records into memory
@@ -651,15 +666,13 @@ export const runWorkspaceGc = internalMutation({
         const retentionSeconds = args.retention_seconds ?? DEFAULT_RETENTION_SECONDS;
         const batchSize = args.batch_size ?? DEFAULT_GC_BATCH_SIZE;
 
-        const cursors = await ctx.db
+        const minCursorRow = await ctx.db
             .query('device_cursors')
             .withIndex('by_workspace_version', (q) => q.eq('workspace_id', args.workspace_id))
-            .collect();
+            .order('asc')
+            .first();
 
-        const minCursor =
-            cursors.length > 0
-                ? Math.min(...cursors.map((c) => c.last_seen_version))
-                : 0;
+        const minCursor = minCursorRow?.last_seen_version ?? 0;
         const cutoff = nowSec() - retentionSeconds;
 
         let totalPurged = 0;

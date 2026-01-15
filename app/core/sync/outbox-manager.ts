@@ -113,15 +113,17 @@ export class OutboxManager {
 
             // Coalesce and batch
             const coalesced = this.coalesceOps(pendingOps);
+            const now = Date.now();
+            const dueOps = coalesced.filter(
+                (op) => op.nextAttemptAt === undefined || op.nextAttemptAt <= now
+            );
+
+            // Mark dropped ops for deletion
             const coalescedIds = new Set(coalesced.map((op) => op.id));
             const dropped = pendingOps.filter((op) => !coalescedIds.has(op.id));
             if (dropped.length) {
                 await Promise.all(dropped.map((op) => this.db.pending_ops.delete(op.id)));
             }
-            const now = Date.now();
-            const dueOps = coalesced.filter(
-                (op) => op.nextAttemptAt === undefined || op.nextAttemptAt <= now
-            );
 
             if (!dueOps.length) return;
 

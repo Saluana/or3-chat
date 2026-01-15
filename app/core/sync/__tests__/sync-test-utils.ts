@@ -3,6 +3,7 @@ import type { PendingOp } from '~~/shared/sync/types';
 export type MemoryTable<T extends Record<string, unknown>> = {
     __rows: Map<string, T>;
     get: (id: string) => Promise<T | undefined>;
+    bulkGet: (ids: string[]) => Promise<(T | undefined)[]>;
     put: (row: T) => Promise<void>;
     add: (row: T) => Promise<string>;
     update: (id: string, patch: Partial<T>) => Promise<number>;
@@ -32,6 +33,9 @@ export function createMemoryTable<T extends Record<string, unknown>>(
         __rows: rows,
         async get(id: string) {
             return rows.get(id);
+        },
+        async bulkGet(ids: string[]) {
+            return ids.map(id => rows.get(id));
         },
         async put(row: T) {
             const key = String(row[pkField]);

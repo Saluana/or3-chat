@@ -3,7 +3,8 @@
  * Gateway endpoint for sync push.
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
-import { PushBatchSchema } from '~~/shared/sync/schemas';
+import { PushBatchSchema, TABLE_PAYLOAD_SCHEMAS } from '~~/shared/sync/schemas';
+import { toClientFormat } from '~~/shared/sync/field-mappings';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
@@ -25,6 +26,24 @@ export default defineEventHandler(async (event) => {
     const parsed = PushBatchSchema.safeParse(body);
     if (!parsed.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid push request' });
+    }
+
+    // Validate each op payload
+    for (const op of parsed.data.ops) {
+        if (op.payload) {
+            const schema = TABLE_PAYLOAD_SCHEMAS[op.tableName];
+            if (schema) {
+                // Convert to client format for validation against shared schema (which expects camelCase)
+                const normalizedPayload = toClientFormat(op.tableName, op.payload as Record<string, unknown>);
+                const result = schema.safeParse(normalizedPayload);
+                if (!result.success) {
+                    throw createError({
+                        statusCode: 400,
+                        statusMessage: `Invalid payload for ${op.tableName}: ${result.error.message}`
+                    });
+                }
+            }
+        }
     }
 
     const session = await resolveSessionContext(event);
