@@ -199,9 +199,15 @@ async function applyOpToTable(
             // else: local wins, no-op
         } else {
             // New record
+            const insertPayload: Record<string, unknown> = {
+                ...(payload ?? {}),
+            };
+            if (table === 'file_meta' && insertPayload.ref_count == null) {
+                insertPayload.ref_count = 0;
+            }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (ctx.db as any).insert(table, {
-                ...(payload ?? {}),
+                ...insertPayload,
                 workspace_id: workspaceId,
                 [pkField]: op.pk,
                 clock: op.clock,

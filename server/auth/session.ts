@@ -82,6 +82,7 @@ export async function resolveSessionContext(
             id: workspaceInfo.id,
             name: workspaceInfo.name,
         },
+        role: workspaceInfo.role,
         expiresAt: providerSession.expiresAt.toISOString(),
     };
 

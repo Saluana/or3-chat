@@ -157,6 +157,7 @@
 	}
 
 	.page-link-btn {
+		transition: all 0.2s ease-in-out;
 		padding: 12px;
 		backdrop-filter: blur(8px);
 		-webkit-backdrop-filter: blur(8px);

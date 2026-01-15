@@ -357,10 +357,22 @@ export const ensure = mutation({
         }
 
         const workspace = await ctx.db.get(workspaceId);
+        const membership = await ctx.db
+            .query('workspace_members')
+            .withIndex('by_workspace_user', (q) =>
+                q.eq('workspace_id', workspaceId).eq('user_id', userId)
+            )
+            .first();
+
+        if (!membership) {
+            throw new Error('No workspace membership found');
+        }
+
         return {
             id: workspaceId,
             name: workspace?.name ?? 'Personal Workspace',
             description: workspace?.description ?? null,
+            role: membership.role,
         };
     },
 });
