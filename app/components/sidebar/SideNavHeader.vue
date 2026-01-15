@@ -1,5 +1,8 @@
 <template>
-    <div id="side-nav-content-header" class="px-3 pt-2 border-b border-[color:var(--md-border-color)]/10 pb-2">
+    <div
+        id="side-nav-content-header"
+        class="px-3 pt-2 border-b border-[color:var(--md-border-color)]/10 pb-2"
+    >
         <div class="flex w-full items-center gap-2">
             <div class="relative flex-1 pr-2">
                 <UInput
@@ -307,7 +310,10 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import { useIcon } from '~/composables/useIcon';
 import type { Project } from '~/db';
-import type { ProjectEntry, ProjectEntryKind } from '~/utils/projects/normalizeProjectData';
+import type {
+    ProjectEntry,
+    ProjectEntryKind,
+} from '~/utils/projects/normalizeProjectData';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
@@ -349,7 +355,10 @@ const emit = defineEmits<{
     (e: 'new-document', initial?: { title?: string }): void;
     (e: 'open-rename', target: RenameTarget): void;
     (e: 'open-rename-project', projectId: string): void;
-    (e: 'add-to-project', payload: UnifiedSidebarItem | AddToProjectRequest): void;
+    (
+        e: 'add-to-project',
+        payload: UnifiedSidebarItem | AddToProjectRequest
+    ): void;
     (e: 'add-document-to-project', payload: UnifiedSidebarItem): void;
 }>();
 
@@ -376,7 +385,6 @@ const searchInputProps = computed(() => {
     const themeUi = (searchInputOverrides.value as any)?.ui || {};
     const componentUi = {
         base: 'rounded-[18px] border border-[color:var(--md-border-color)]/80 bg-[color:var(--md-surface)]/85 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] placeholder:text-[color:var(--md-on-surface-variant)]/70 focus:border-[color:var(--md-primary)]/40 focus:ring-2 focus:ring-[color:var(--md-primary)]/10',
-
         trailing: 'pr-1',
     };
     const mergedUi = { ...componentUi, ...themeUi };

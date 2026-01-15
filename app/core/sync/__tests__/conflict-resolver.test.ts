@@ -33,7 +33,31 @@ type MessageRow = {
     hlc?: string;
     deleted?: boolean;
     deleted_at?: number;
+    thread_id?: string;
+    role?: string;
+    index?: number;
+    order_key?: string;
+    created_at?: number;
+    updated_at?: number;
 };
+
+/**
+ * Build a complete message payload with all required fields
+ */
+function buildMessagePayload(partial: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        id: 'm1',
+        thread_id: 't1',
+        role: 'user',
+        index: 0,
+        order_key: '0000000000001:0000:node',
+        deleted: false,
+        created_at: 1000,
+        updated_at: 1000,
+        clock: 1,
+        ...partial,
+    };
+}
 
 function buildChange({
     pk,
@@ -80,7 +104,7 @@ describe('ConflictResolver', () => {
             op: 'put',
             clock: 1,
             hlc: '0000000000001:0000:node',
-            payload: { id: 'm1', text: 'hello' },
+            payload: buildMessagePayload({ id: 'm1', text: 'hello' }),
         });
 
         const result = await resolver.applyChanges([change]);
@@ -128,7 +152,7 @@ describe('ConflictResolver', () => {
             op: 'put',
             clock: 2,
             hlc: '0000000000002:0002:node',
-            payload: { id: 'm1', text: 'remote' },
+            payload: buildMessagePayload({ id: 'm1', text: 'remote', clock: 2 }),
         });
 
         const result = await resolver.applyChanges([change]);
@@ -155,7 +179,7 @@ describe('ConflictResolver', () => {
             op: 'put',
             clock: 2,
             hlc: '0000000000002:0001:node',
-            payload: { id: 'm1', text: 'remote' },
+            payload: buildMessagePayload({ id: 'm1', text: 'remote', clock: 2 }),
         });
 
         const result = await resolver.applyChanges([change]);

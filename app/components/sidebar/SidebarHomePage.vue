@@ -87,11 +87,14 @@
                         :item="item.item"
                         :active="allActiveIds.includes(item.item.id)"
                         :time-display="
-                            formatTimeDisplay(item.item.updatedAt, item.groupKey)
+                            formatTimeDisplay(
+                                item.item.updatedAt,
+                                item.groupKey
+                            )
                         "
                         :class="[
                             'mb-0.5',
-                            collapsingGroups.has(item.groupKey) && 'is-exiting'
+                            collapsingGroups.has(item.groupKey) && 'is-exiting',
                         ]"
                         @select="() => onItemSelected(item.item)"
                         @rename="() => onItemRename(item.item)"
@@ -107,7 +110,7 @@
                         description="Kick things off with a project, or jump straight into a chat or document."
                         actions-layout="column"
                         class="mx-1 sb-empty-state"
-                        style="width: calc(100% - 8px);"
+                        style="width: calc(100% - 8px)"
                     >
                         <template #actions>
                             <UButton
@@ -228,12 +231,34 @@ import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarS
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 type SidebarCombinedItem =
-    | { key: string; type: 'custom-top' | 'custom-main' | 'custom-bottom'; component: Component }
-    | { key: string; type: 'page-link'; label: string; description: string; icon: string; pageId: string; class?: string }
+    | {
+          key: string;
+          type: 'custom-top' | 'custom-main' | 'custom-bottom';
+          component: Component;
+      }
+    | {
+          key: string;
+          type: 'page-link';
+          label: string;
+          description: string;
+          icon: string;
+          pageId: string;
+          class?: string;
+      }
     | { key: string; type: 'projects' }
     | { key: string; type: 'empty-state' }
-    | { key: string; type: 'time-group-header'; label: string; groupKey: TimeGroup }
-    | { key: string; type: 'time-group-item'; item: UnifiedSidebarItem; groupKey: TimeGroup };
+    | {
+          key: string;
+          type: 'time-group-header';
+          label: string;
+          groupKey: TimeGroup;
+      }
+    | {
+          key: string;
+          type: 'time-group-item';
+          item: UnifiedSidebarItem;
+          groupKey: TimeGroup;
+      };
 
 interface SidebarPageProps {
     pageId: string;
@@ -359,7 +384,9 @@ const groupedItems = computed(() => {
     return groups;
 });
 
-const showEmptyState = computed(() => !loading.value && items.value.length === 0);
+const showEmptyState = computed(
+    () => !loading.value && items.value.length === 0
+);
 const isCompletelyEmpty = computed(
     () => showEmptyState.value && props.displayProjects.length === 0
 );
@@ -391,6 +418,7 @@ const combinedItems = computed(() => {
             key: 'page-link-chats',
             type: 'page-link',
             label: 'Chats',
+            class: 'mb-3',
             description: 'Jump into your conversation history.',
             icon: iconChats.value,
             pageId: 'sidebar-chats',

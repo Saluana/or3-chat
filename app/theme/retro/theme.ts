@@ -135,7 +135,7 @@ export default defineTheme({
         },
         sidebar: {
             image: '/sidebar-repeater.v2.webp',
-            opacity: 0.065,
+            opacity: 0.055,
             repeat: 'repeat',
             size: '240px',
         },

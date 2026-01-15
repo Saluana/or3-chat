@@ -1,7 +1,7 @@
 <template>
     <button
         :class="[label + '-header']"
-        class="w-full h-11 flex items-center justify-between px-4 hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] transition-colors group rounded-[var(--md-border-radius)] mx-1 cursor-pointer sb-group-header"
+        class="w-full h-11 flex items-center justify-between hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] transition-colors group rounded-[var(--md-border-radius)] mx-1 cursor-pointer sb-group-header"
         style="width: calc(100% - 8px)"
         @click="emit('toggle')"
     >

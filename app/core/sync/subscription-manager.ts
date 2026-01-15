@@ -14,8 +14,9 @@ import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
 import { useHooks } from '~/core/hooks/useHooks';
 import { getHookBridge } from './hook-bridge';
-import { compareHLC, hlcToOrderKey } from './hlc';
+import { compareHLC } from './hlc';
 import { nowSec } from '~/db/util';
+import { normalizeSyncPayloadForStaging } from './sync-payload-normalizer';
 
 /** Default tables to sync */
 const DEFAULT_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'];
@@ -259,6 +260,10 @@ export class SubscriptionManager {
             .toArray();
         if (!pendingOps.length) return;
 
+        // IMPORTANT: Sort by createdAt to ensure deterministic replay order
+        // This prevents LWW inversions when multiple ops have different clocks
+        pendingOps.sort((a, b) => a.createdAt - b.createdAt);
+
         const hookBridge = getHookBridge(this.db);
         const tableNames = Array.from(new Set(pendingOps.map((op) => op.tableName)));
 
@@ -378,16 +383,13 @@ export class SubscriptionManager {
         }
 
         const payload = (change.payload ?? {}) as Record<string, unknown>;
-        const record: StagedRecord = {
-            ...payload,
-            [pkField]: pk,
-            clock: change.stamp.clock,
-            hlc: change.stamp.hlc,
-        };
-
-        if (tableName === 'messages' && !record.order_key) {
-            record.order_key = hlcToOrderKey(change.stamp.hlc);
-        }
+        // Use shared normalizer for consistent snake_case/camelCase mapping
+        const record: StagedRecord = normalizeSyncPayloadForStaging(
+            tableName,
+            pk,
+            payload,
+            change.stamp
+        );
 
         if (tombstone && tombstone.clock >= change.stamp.clock) {
             return;

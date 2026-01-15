@@ -83,14 +83,24 @@
 	}
 
 	#nav-header {
-		margin-bottom: 10px;
+		margin-bottom: 16px;
 		margin-left: 12px;
 		margin-right: 12px;
+		padding-bottom: 0px;
+		padding-left: 0px;
+		padding-right: 3px;
 		border-bottom: 3px solid rgba(8, 109, 184, 0.3);
 	}
 
 	.unified-sb-item {
-		margin-bottom: 10px;
+		margin-bottom: 12px;
+	}
+
+	.sb-group-header {
+	    margin-top: 24px;
+		margin-bottom: 8px;
+		padding-left: 0px !important;
+		padding-right: 0px !important; 
 	}
 
 	.sb-group-header:hover {
@@ -102,6 +112,12 @@
 		font-size: 16px;
 		font-weight: 400;
 	}
+
+	.page-link-btn:not(:last-child) {
+		margin-bottom: 12px;
+	}
+
+
 }
 
 /* End [data-theme="retro"] */

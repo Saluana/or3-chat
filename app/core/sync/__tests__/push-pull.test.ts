@@ -41,7 +41,32 @@ type MessageRow = {
     id: string;
     clock: number;
     hlc?: string;
+    thread_id?: string;
+    role?: string;
+    index?: number;
+    order_key?: string;
+    deleted?: boolean;
+    created_at?: number;
+    updated_at?: number;
 };
+
+/**
+ * Build a complete message payload with all required fields
+ */
+function buildMessagePayload(partial: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        id: 'm1',
+        thread_id: 't1',
+        role: 'user',
+        index: 0,
+        order_key: '0000000000001:0000:node',
+        deleted: false,
+        created_at: 1000,
+        updated_at: 1000,
+        clock: 1,
+        ...partial,
+    };
+}
 
 class FakeSyncProvider implements SyncProvider {
     id = 'fake';
@@ -116,7 +141,7 @@ function createPendingOp(overrides: Partial<PendingOp> = {}): PendingOp {
         tableName: overrides.tableName ?? 'messages',
         operation: overrides.operation ?? 'put',
         pk: overrides.pk ?? 'm1',
-        payload: overrides.payload ?? { id: 'm1', text: 'hi' },
+        payload: overrides.payload ?? buildMessagePayload({ id: 'm1', text: 'hi' }),
         stamp: overrides.stamp ?? {
             deviceId: 'device-1',
             opId: 'op-1',
@@ -179,7 +204,7 @@ describe('sync push/pull flow', () => {
                 tableName: 'messages',
                 pk: 'm1',
                 op: 'put',
-                payload: { id: 'm1', text: 'remote' },
+                payload: buildMessagePayload({ id: 'm1', text: 'remote', clock: 2 }),
                 stamp: {
                     clock: 2,
                     hlc: '0000000000002:0001:node',

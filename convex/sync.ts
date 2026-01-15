@@ -102,6 +102,16 @@ async function upsertTombstone(
 }
 
 /**
+ * Sanitize payload to prevent workspace/id injection attacks.
+ * Strips `workspace_id` and `_id` fields that could reassign records.
+ */
+function sanitizePayload(payload: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+    if (!payload) return payload;
+    const { workspace_id, _id, ...safe } = payload;
+    return safe;
+}
+
+/**
  * Apply a single operation to the appropriate data table
  * Implements LWW (Last-Write-Wins) conflict resolution
  */
@@ -123,7 +133,8 @@ async function applyOpToTable(
     }
 
     const { table, indexName, pkField } = tableInfo;
-    const payload = op.payload as Record<string, unknown> | undefined;
+    // SECURITY: Strip workspace_id and _id from payload to prevent injection attacks
+    const payload = sanitizePayload(op.payload as Record<string, unknown> | undefined);
     const payloadCreatedAt =
         typeof payload?.created_at === 'number' ? (payload.created_at as number) : undefined;
     const payloadUpdatedAt =
@@ -260,6 +271,17 @@ export const push = mutation({
         let latestVersion = 0;
 
         for (const op of args.ops) {
+            // SECURITY: Validate table_name against allowlist BEFORE any processing
+            // This prevents unknown tables from polluting the change_log
+            if (!TABLE_INDEX_MAP[op.table_name]) {
+                results.push({
+                    opId: op.op_id,
+                    success: false,
+                    error: `Unknown table: ${op.table_name}`,
+                });
+                continue;
+            }
+
             // Check for duplicate opId (idempotency)
             const existing = await ctx.db
                 .query('change_log')
