@@ -13,7 +13,7 @@ import {
     generateHLC,
     getDeviceId,
     parseHLC,
-    _resetHLCState,
+    _resetHLC,
 } from '../hlc';
 
 const fixedUuid = '11111111-1111-1111-1111-111111111111';
@@ -36,7 +36,7 @@ describe('HLC utility', () => {
     });
 
     beforeEach(() => {
-        _resetHLCState();
+        _resetHLC();
         if (typeof localStorage !== 'undefined') {
             localStorage.clear();
         }

@@ -17,7 +17,6 @@ const SYNC_STATE_ID = 'default';
 export class CursorManager {
     private db: Or3DB;
     private deviceId: string;
-    private cachedCursor: number | null = null;
 
     constructor(db: Or3DB) {
         this.db = db;
@@ -29,21 +28,14 @@ export class CursorManager {
      * Returns 0 if no cursor exists (needs bootstrap)
      */
     async getCursor(): Promise<number> {
-        if (this.cachedCursor !== null) {
-            return this.cachedCursor;
-        }
-
         const state = await this.getState();
-        this.cachedCursor = state?.cursor ?? 0;
-        return this.cachedCursor;
+        return state?.cursor ?? 0;
     }
 
     /**
      * Set the cursor after successful pull
      */
     async setCursor(version: number): Promise<void> {
-        this.cachedCursor = version;
-
         const existing = await this.getState();
         const state: SyncState = {
             id: SYNC_STATE_ID,
@@ -102,7 +94,6 @@ export class CursorManager {
      * Reset cursor (for testing or recovery scenarios)
      */
     async reset(): Promise<void> {
-        this.cachedCursor = null;
         await this.db.table('sync_state').delete(SYNC_STATE_ID);
     }
 
@@ -117,7 +108,7 @@ export class CursorManager {
      * Invalidate cache (useful after external changes)
      */
     invalidateCache(): void {
-        this.cachedCursor = null;
+        // No-op as cache is removed
     }
 
     /**
@@ -149,4 +140,11 @@ export function getCursorManager(db: Or3DB): CursorManager {
  */
 export function _resetCursorManagers(): void {
     cursorManagerInstances.clear();
+}
+
+/**
+ * Cleanup CursorManager instance for a database
+ */
+export function cleanupCursorManager(dbName: string): void {
+    cursorManagerInstances.delete(dbName);
 }

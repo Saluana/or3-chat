@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue';
-import type { NuxtApp } from '#app';
+import { callWithNuxt, type NuxtApp } from '#app';
 import { useAppConfig, useHead } from '#imports';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
@@ -396,7 +396,8 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 }
             }
 
-            useHead(headConfig);
+            // Use callWithNuxt to preserve context through async operations
+            await callWithNuxt(nuxtApp, () => useHead(headConfig));
         }
 
         bumpResolversVersion();

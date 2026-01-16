@@ -127,9 +127,17 @@ export default defineNuxtPlugin(async () => {
         return;
     }
 
-    // Register Convex provider
+    // Get Convex client first (must be in Vue setup context where inject() works)
     try {
-        const convexProvider = createConvexSyncProvider();
+        convexClient = useConvexClient();
+    } catch (error) {
+        console.error('[convex-sync] Failed to get Convex client:', error);
+        return;
+    }
+
+    // Register Convex provider with the captured client
+    try {
+        const convexProvider = createConvexSyncProvider(convexClient);
         registerSyncProvider(convexProvider);
         const gatewayProvider = createGatewaySyncProvider({ id: 'convex-gateway' });
         registerSyncProvider(gatewayProvider);
@@ -137,13 +145,6 @@ export default defineNuxtPlugin(async () => {
     } catch (error) {
         console.error('[convex-sync] Failed to create Convex provider:', error);
         return;
-    }
-
-    // Cache Convex client in plugin setup context
-    try {
-        convexClient = useConvexClient();
-    } catch {
-        convexClient = null;
     }
 
     // Watch for session changes
