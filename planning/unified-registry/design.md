@@ -1,132 +1,237 @@
 # Unified Registry Design: `or3client`
 
-## Overview
-We propose a unified plugin system anchored by a global `or3client` object. This object acts as a central registry for all extendable parts of the application, replacing scattered `createRegistry` calls.
+## 1. Overview
+The `or3client` is a unified, strongly-typed, and hierarchical API for all client-side extensibility in the OR3 application. It replaces disparate `createRegistry` calls and standalone composables with a single discoverable entry point.
 
-The system is designed to be **discoverable**, **type-safe**, and **reactive** (Vue-compatible).
+### Vision
+- **One Import**: `const client = useOR3Client()` (or auto-imported `or3client`).
+- **Discoverability**: IntelliSense guides the developer from `client.ui` -> `sidebar` -> `sections`.
+- **Consistency**: All registries share a common interface (`register`, `unregister`, `useItems`).
+- **Reactivity**: Built on Vue's reactivity system (refs/computed) for seamless UI integration.
 
-## Architecture
+## 2. Core Architecture
 
-### The `OR3Client` Singleton
-The core of the system is the `OR3Client` class, exposed as a Nuxt plugin and a composable.
+### 2.1 The `OR3Client` Singleton
+The system is anchored by the `OR3Client` class. It is instantiated once per app context (Server Request or Client Browser).
 
 ```typescript
-// Conceptual Structure
-const or3client = {
-  ui: {
-    sidebar: {
-      sections: Registry<SidebarSection>,
-      footerActions: Registry<SidebarFooterAction>,
-      headerActions: Registry<HeaderAction>
-    },
-    chat: {
-      messageActions: Registry<ChatMessageAction>
-    },
-    // ... other UI modules
-  },
-  ai: {
-    tools: ToolRegistry // Specialized registry
-  },
-  // Generic key-value store for arbitrary plugins
-  plugins: Registry<PluginDefinition>
+export class OR3Client {
+    public readonly ui: UIClient;
+    public readonly ai: AIClient;
+    public readonly core: CoreClient;
+    public readonly plugins: PluginRegistry;
+
+    constructor() {
+        this.ui = new UIClient(this);
+        this.ai = new AIClient(this);
+        this.core = new CoreClient(this);
+        this.plugins = new PluginRegistry(this);
+    }
 }
 ```
 
-### The Generic `Registry<T>`
-All sub-registries inherit from a standard `Registry<T>` class.
+### 2.2 Generic Registry Pattern
+Most extension points are simple collections of items. They inherit from `Registry<T>`.
 
 ```typescript
-export class Registry<T extends { id: string, order?: number }> {
-  /** Register a new item. Replaces existing item with same ID. */
-  register(item: T): void;
-
-  /** Remove an item by ID. */
-  unregister(id: string): void;
-
-  /** Get a snapshot of all items (non-reactive). */
-  snapshot(): T[];
-
-  /** Get a Vue ComputedRef of items, sorted by order. */
-  useItems(): ComputedRef<T[]>;
-
-  /** Get a specific item by ID. */
-  get(id: string): T | undefined;
+export interface RegistryItem {
+    id: string;
+    order?: number;
 }
 
-**Note on HMR**: The Registry implementation must use `globalThis` or similar techniques to persist state across Hot Module Replacement (HMR) during development, ensuring that registered plugins don't disappear when files are edited.
+export class Registry<T extends RegistryItem> {
+    /**
+     * Register an item. Overwrites existing items with the same ID.
+     */
+    register(item: T): void;
+
+    /**
+     * Unregister an item by ID.
+     */
+    unregister(id: string): void;
+
+    /**
+     * Get a single item by ID.
+     */
+    get(id: string): T | undefined;
+
+    /**
+     * Get a reactive, sorted list of items.
+     */
+    useItems(): ComputedRef<T[]>;
+
+    /**
+     * Get a raw snapshot of items.
+     */
+    snapshot(): T[];
+}
 ```
 
-## API Reference
+## 3. Detailed API Reference
 
-### `or3client.ui`
-Organized by UI region.
+### 3.1 `or3client.ui`
+Manages all user interface extensions.
 
-#### `or3client.ui.sidebar`
-- **`sections`**: Custom sections in the sidebar (e.g., "Chats", "Projects").
-- **`footerActions`**: Buttons at the bottom of the sidebar (e.g., "Settings", "Profile").
-- **`headerActions`**: Actions in the sidebar header.
+#### `ui.sidebar`
+- **`sections`**: `Registry<SidebarSection>`
+    - Custom sections in the sidebar (e.g., "Chats", "Projects").
+- **`pages`**: `Registry<SidebarPage>`
+    - Full-sidebar pages (e.g., specific search views, custom tools).
+- **`footerActions`**: `Registry<SidebarFooterAction>`
+    - Icons at the bottom of the sidebar (e.g., Settings, Profile).
+- **`headerActions`**: `Registry<HeaderAction>`
+    - Icons in the top header area.
+- **`composer`**: `Registry<ComposerAction>`
+    - Actions available in the sidebar composer/input area.
 
-#### `or3client.ui.chat`
-- **`messageActions`**: Actions available on individual chat messages (e.g., "Copy", "Retry", "Create Document").
+#### `ui.dashboard`
+Replaces `useDashboardPlugins`.
+- **`plugins`**: `Registry<DashboardPlugin>`
+    - Top-level dashboard grid items.
+- **`pages`**: `DashboardPageRegistry`
+    - Sub-pages within dashboard plugins.
+- **`navigation`**: `DashboardNavigationService`
+    - Methods: `openPlugin(id)`, `openPage(pluginId, pageId)`, `goBack()`.
+    - State: `useNavigationState()`.
 
-#### `or3client.ui.editor`
-- **`toolbar`**: Buttons in the document editor toolbar.
+#### `ui.chat`
+- **`messageActions`**: `Registry<ChatMessageAction>`
+    - Actions on individual messages (Copy, Edit, Fork).
+- **`input`**: `ChatInputService`
+    - Methods: `setText(text)`, `focus()`, `attachFile(file)`.
 
-#### `or3client.ui.projects`
-- **`treeActions`**: Context menu or hover actions for project tree items.
+#### `ui.editor`
+- **`toolbar`**: `Registry<EditorToolbarButton>`
+    - Buttons in the Tiptap editor toolbar.
+- **`extensions`**: `Registry<EditorExtensionDef>`
+    - Custom Tiptap extensions.
 
-#### `or3client.ui.threads`
-- **`historyActions`**: Actions for thread history items.
+#### `ui.panes`
+Wraps `multiPaneApi`.
+- **`manager`**: `PaneManager`
+    - Methods: `split()`, `close(id)`, `addPane()`.
+    - State: `usePanes()`, `activePane`.
+- **`apps`**: `Registry<PaneAppDef>`
+    - Applications that can run inside a pane (Chat, Doc, Browser, etc.).
 
-### `or3client.ai`
-Organized by AI capability.
+#### `ui.projects`
+- **`treeActions`**: `Registry<ProjectTreeAction>`
+    - Context menu items for the project file tree.
 
-#### `or3client.ai.tools`
-A specialized registry for AI tools (formerly `tool-registry.ts`).
-- **`register(tool)`**: Registers a tool definition + handler.
-- **`execute(name, args)`**: Executes a tool with timeout and validation.
-- **`useTools()`**: Reactive list of enabled tools.
+#### `ui.toasts`
+Wraps `useToast`.
+- **`show(notification)`**: Display a notification.
 
-## Developer Experience (DX)
+### 3.2 `or3client.ai`
+Manages AI capabilities.
 
-### Auto-completion
-By typing `or3client.`, developers will see `ui`, `ai`, `plugins`.
-By typing `or3client.ui.`, they see `sidebar`, `chat`, etc.
+#### `ai.tools`
+Replaces `tool-registry.ts`.
+- **`register(tool)`**: Register a new tool.
+- **`execute(name, args)`**: Execute a tool with validation/timeout.
+- **`useTools()`**: List enabled tools.
 
-### JSDoc
-All methods will be documented.
+#### `ai.models`
+Wraps `models-service.ts` and `useModelStore`.
+- **`list()`**: Fetch available models.
+- **`active`**: Get/Set active model ID.
+- **`providers`**: Registry of custom LLM providers?
+
+#### `ai.prompts`
+- **`system`**: Registry/Service for managing system prompts.
+- **`templates`**: `Registry<PromptTemplate>` (e.g., "Fix Grammar", "Summarize").
+
+### 3.3 `or3client.core`
+Fundamental app services.
+
+#### `core.auth`
+Wraps `useUser`, `useAuth`.
+- **`user`**: Reactive user state.
+- **`login()`**: Trigger login flow.
+- **`logout()`**: Trigger logout.
+- **`tokens`**: Token management.
+
+#### `core.theme`
+Wraps `useTheme`.
+- **`current`**: Reactive current theme.
+- **`setTheme(id)`**: Change theme.
+- **`register(themeDef)`**: Register a custom theme.
+
+#### `core.hooks`
+Wraps `app/core/hooks`.
+- **`on(event, handler)`**: Subscribe to global events.
+- **`emit(event, payload)`**: Emit global events.
+
+#### `core.search`
+- **`providers`**: `Registry<SearchProvider>`
+    - Register sources for the global command palette (Cmd+K).
+
+## 4. Implementation Details
+
+### 4.1 Nuxt Plugin (`plugins/or3client.ts`)
+We inject the client into the Nuxt context.
 
 ```typescript
-/**
- * Register a generic button in the sidebar footer.
- * @param action The action definition
- */
-or3client.ui.sidebar.footerActions.register({
-  id: 'my-settings',
-  icon: 'i-heroicons-cog',
-  handler: () => navigateTo('/settings')
+export default defineNuxtPlugin((nuxtApp) => {
+    const client = new OR3Client();
+
+    // Server-side: ensure isolation per request
+    // Client-side: singleton is fine
+
+    return {
+        provide: {
+            or3client: client
+        }
+    };
 });
 ```
 
-### Type Safety
-The system uses strict TypeScript interfaces.
+### 4.2 Composable (`useOR3Client`)
+Auto-imported helper.
 
 ```typescript
-import type { SidebarSection } from '~/core/or3client/types';
+export const useOR3Client = () => {
+    const { $or3client } = useNuxtApp();
+    return $or3client;
+}
 ```
 
-## Implementation Plan
+### 4.3 Migration Strategy (Phased Rollout)
 
-1.  **Core Implementation**: Create `app/core/or3client/` structure.
-2.  **Registry Class**: Implement the generic `Registry` class (refactoring `createRegistry`).
-3.  **Client Factory**: Create `createOR3Client()` factory.
-4.  **Nuxt Plugin**: Create `plugins/or3client.ts` to inject `$or3client`.
-5.  **Migration**: Refactor existing composables (e.g., `useSidebarSections`) to be proxies for `or3client.ui.sidebar.sections`.
+**Phase 1: Proxies**
+We will keep existing composables (e.g., `useSidebarSections`) but rewrite them to call `or3client` internally.
 
-## Client vs Server
-This design focuses on the **Client** (`app/`).
-Since Nuxt runs `app/` code on both server (SSR) and client (hydration), `or3client` will be initialized in both environments.
-- **SSR**: Registries are initialized per-request (or globally if stateless).
-- **Client**: Registries are reactive and persistent (where applicable).
+*Old:*
+```typescript
+// useSidebarSections.ts
+const registry = createRegistry(...);
+export function registerSidebarSection(...) { registry.register(...) }
+```
 
-For purely server-side logic (Nitro routes), a separate `or3server` system would be needed, but is outside the scope of this UI-centric unification.
+*New:*
+```typescript
+// useSidebarSections.ts
+export function registerSidebarSection(section) {
+    useOR3Client().ui.sidebar.sections.register(section);
+}
+```
+
+**Phase 2: Deprecation**
+Add `@deprecated` tags to the old composables.
+
+**Phase 3: Direct Usage**
+Update all internal plugins to use `or3client` directly.
+
+## 5. Developer Experience
+
+### 5.1 Auto-Import
+`or3client` or `useOR3Client` will be auto-imported by Nuxt.
+
+### 5.2 Typing
+We will export all types from a central location:
+```typescript
+import type { SidebarSection, ChatMessageAction } from '~/core/or3client/types';
+```
+
+### 5.3 HMR Support
+The `Registry` class will detect if it's running in development mode and use `globalThis` to persist registered items across Hot Module Reloads, preventing items from disappearing during editing.
