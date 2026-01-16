@@ -209,16 +209,6 @@ export default defineTheme({
                 justifyContent: 'center',
             },
         },
-        '.theme-btn:hover': {
-            style: {
-                backgroundColor: 'var(--md-surface-hover)',
-            },
-        },
-        '.theme-btn:active': {
-            style: {
-                backgroundColor: 'var(--md-surface-active)',
-            },
-        },
         '#top-header .theme-btn': {
             style: {
                 minHeight: '24px',

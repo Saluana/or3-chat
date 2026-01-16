@@ -54,10 +54,7 @@
                                         :child="child"
                                         :active="isProjectChildActive(child)"
                                         @select="
-                                            () =>
-                                                onProjectChildSelect(
-                                                    child
-                                                )
+                                            () => onProjectChildSelect(child)
                                         "
                                         @rename="
                                             emit('rename-entry', {
@@ -81,16 +78,16 @@
                 </div>
                 <div
                     v-else
-                    class="mx-1 rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)]/50 bg-[color:var(--md-surface-variant)]/25 px-3 py-3"
+                    class="mx-1 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)]/25 px-3 py-3 project-empty-state"
                 >
                     <div
-                        class="flex items-center gap-2 text-[12px] font-semibold text-[color:var(--md-on-surface-variant)]"
+                        class="flex items-center gap-2 text-[16px] font-semibold text-[color:var(--md-on-surface-variant)]"
                     >
-                        <UIcon :name="iconFolder" class="w-4 h-4" />
+                        <UIcon :name="iconFolder" class="w-5 h-5" />
                         No projects yet
                     </div>
                     <p
-                        class="mt-1 text-[11px] text-[color:var(--md-on-surface-variant)]/80"
+                        class="mt-1 text-[14px] text-[color:var(--md-on-surface)]/80"
                     >
                         Create a project to organize chats and documents.
                     </p>
@@ -103,14 +100,21 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { Project } from '~/db';
-import type { ProjectEntry, ProjectEntryKind } from '~/utils/projects/normalizeProjectData';
+import type {
+    ProjectEntry,
+    ProjectEntryKind,
+} from '~/utils/projects/normalizeProjectData';
 import SidebarProjectRoot from './SidebarProjectRoot.vue';
 import SidebarProjectChild from './SidebarProjectChild.vue';
 import SidebarGroupHeader from './SidebarGroupHeader.vue';
 import { useIcon } from '~/composables/useIcon';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
-type ProjectEntryPayload = { projectId: string; entryId: string; kind: ProjectEntryKind };
+type ProjectEntryPayload = {
+    projectId: string;
+    entryId: string;
+    kind: ProjectEntryKind;
+};
 
 const props = defineProps<{
     projects: SidebarProject[];

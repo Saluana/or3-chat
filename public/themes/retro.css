@@ -255,13 +255,6 @@
   justify-content: center;
 }
 
-[data-theme="retro"] .theme-btn:hover {
-  background-color: var(--md-surface-hover);
-}
-
-[data-theme="retro"] .theme-btn:active {
-  background-color: var(--md-surface-active);
-}
 
 [data-theme="retro"] #top-header .theme-btn {
   min-height: 24px;

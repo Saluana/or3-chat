@@ -370,11 +370,15 @@
             </div>
         </template>
         <template #footer>
-            <UButton variant="ghost" @click="closeCreateDocumentModal"
+            <UButton
+                variant="ghost"
+                class="theme-btn"
+                @click="closeCreateDocumentModal"
                 >Cancel</UButton
             >
             <UButton
                 color="primary"
+                class="theme-btn"
                 :disabled="creatingDocument || !newDocumentState.title.trim()"
                 @click="submitCreateDocument"
             >
@@ -901,7 +905,7 @@ async function openRename(target: RenamePayload) {
     // Case 2: direct thread or document object
     if ('id' in target) {
         renameId.value = target.id;
-        renameTitle.value = 'title' in target ? target.title ?? '' : '';
+        renameTitle.value = 'title' in target ? (target.title ?? '') : '';
         showRenameModal.value = true;
         renameMetaKind.value =
             'postType' in target && target.postType === 'doc' ? 'doc' : 'chat';
@@ -968,8 +972,8 @@ function confirmDeleteProject(projectOrId: string | Project) {
         typeof projectOrId === 'string'
             ? projectOrId
             : projectOrId && typeof projectOrId === 'object'
-            ? projectOrId.id
-            : null;
+              ? projectOrId.id
+              : null;
     if (!id) return;
     deleteProjectId.value = id as string;
     showDeleteProjectModal.value = true;

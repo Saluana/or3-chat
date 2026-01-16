@@ -17,7 +17,7 @@
                     color="neutral"
                     size="sm"
                     :icon="iconNewChat"
-                    class="bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15 theme-btn"
+                    class="bg-[color:var(--md-primary)]/5 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 theme-btn"
                     @click="emit('new-chat')"
                 >
                     New chat

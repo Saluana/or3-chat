@@ -49,21 +49,30 @@
         </UPopover>
 
         <!-- DASHBOARD -->
-        <UButton
-            v-bind="dashboardButtonProps"
-            @click="emit('toggleDashboard')"
-            type="button"
-            aria-label="Dashboard"
+        <UTooltip
+            id="tooltip-dashboard"
+            :delay-duration="0"
+            :content="{
+                side: 'right',
+            }"
+            text="Dashboard"
         >
-            <template #default>
-                <span class="flex flex-col items-center gap-1 w-full">
-                    <UIcon class="w-[18px] h-[18px]" :name="iconDashboard" />
-                    <span class="text-[7px] uppercase tracking-wider"
-                        >Dashboard</span
-                    >
-                </span>
-            </template>
-        </UButton>
+            <UButton
+                v-bind="dashboardButtonProps"
+                @click="emit('toggleDashboard')"
+                type="button"
+                aria-label="Dashboard"
+            >
+                <template #default>
+                    <span class="flex flex-col items-center gap-1 w-full">
+                        <UIcon
+                            class="w-[24px] h-[24px]"
+                            :name="iconDashboard"
+                        />
+                    </span>
+                </template>
+            </UButton>
+        </UTooltip>
 
         <!-- Visual separator between app tools and personal section -->
         <div class="w-[40px] h-[1px] bg-[var(--md-border-color)]/50 my-1" />
