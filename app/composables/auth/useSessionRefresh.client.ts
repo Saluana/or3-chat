@@ -1,0 +1,47 @@
+import { useAuthTokenBroker } from './useAuthTokenBroker.client';
+
+/**
+ * Periodically refresh the session token to ensure it remains valid.
+ */
+export function useSessionRefresh() {
+    const tokenBroker = useAuthTokenBroker();
+    const refreshInterval = ref<NodeJS.Timeout | null>(null);
+
+    function startRefresh(intervalMs = 5 * 60 * 1000) {
+        if (refreshInterval.value) return;
+
+        refreshInterval.value = setInterval(async () => {
+            try {
+                // Refresh token from provider
+                // Note: The template ID depends on the provider (e.g. 'convex')
+                // We use 'convex' here aligning with the hardcoded usage in server/auth/session.ts
+                const token = await tokenBroker.getProviderToken({
+                    providerId: 'convex',
+                    template: 'convex',
+                });
+
+                if (!token) {
+                    console.warn('[session-refresh] Failed to refresh token');
+                }
+            } catch (error) {
+                console.error('[session-refresh] Refresh error:', error);
+            }
+        }, intervalMs);
+    }
+
+    function stopRefresh() {
+        if (refreshInterval.value) {
+            clearInterval(refreshInterval.value);
+            refreshInterval.value = null;
+        }
+    }
+
+    onUnmounted(() => {
+        stopRefresh();
+    });
+
+    return {
+        startRefresh,
+        stopRefresh,
+    };
+}

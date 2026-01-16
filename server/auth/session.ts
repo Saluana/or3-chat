@@ -8,8 +8,9 @@ import type { ProviderSession } from './types';
 import { getAuthProvider } from './registry';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
 import { getConvexClient, api } from '../utils/convex-client';
+import { recordSessionResolution, recordProviderError } from './metrics';
 
-const SESSION_CONTEXT_KEY = '__or3_session_context';
+const SESSION_CONTEXT_KEY_PREFIX = '__or3_session_context_';
 
 /**
  * Resolve the session context for an H3 event.
@@ -21,26 +22,29 @@ const SESSION_CONTEXT_KEY = '__or3_session_context';
 export async function resolveSessionContext(
     event: H3Event
 ): Promise<SessionContext> {
+    // Get provider from config for cache key
+    const config = useRuntimeConfig();
+    const providerId = config.auth?.provider || 'clerk';
+    const cacheKey = `${SESSION_CONTEXT_KEY_PREFIX}${providerId}`;
+
     // Check cache first
-    if (event.context[SESSION_CONTEXT_KEY]) {
-        return event.context[SESSION_CONTEXT_KEY] as SessionContext;
+    if (event.context[cacheKey]) {
+        return event.context[cacheKey] as SessionContext;
     }
 
     // If SSR auth disabled, return unauthenticated
     if (!isSsrAuthEnabled(event)) {
         const nullSession: SessionContext = { authenticated: false };
-        event.context[SESSION_CONTEXT_KEY] = nullSession;
+        event.context[cacheKey] = nullSession;
         return nullSession;
     }
 
     // Get provider from config
-    const config = useRuntimeConfig();
-    const providerId = config.auth?.provider || 'clerk';
     const provider = getAuthProvider(providerId);
 
     if (!provider) {
         const nullSession: SessionContext = { authenticated: false };
-        event.context[SESSION_CONTEXT_KEY] = nullSession;
+        event.context[cacheKey] = nullSession;
         return nullSession;
     }
 
@@ -49,44 +53,53 @@ export async function resolveSessionContext(
     try {
         providerSession = await provider.getSession(event);
     } catch (error) {
+        recordProviderError();
+        recordSessionResolution(false);
         const nullSession: SessionContext = { authenticated: false };
-        event.context[SESSION_CONTEXT_KEY] = nullSession;
+        event.context[cacheKey] = nullSession;
         return nullSession;
     }
 
     if (!providerSession) {
+        recordSessionResolution(true);
         const nullSession: SessionContext = { authenticated: false };
-        event.context[SESSION_CONTEXT_KEY] = nullSession;
+        event.context[cacheKey] = nullSession;
         return nullSession;
     }
 
     // Map provider session to internal user/workspace via Convex
-    const convex = getConvexClient();
-    const workspaceInfo = await convex.mutation(api.workspaces.ensure, {
-        provider: providerSession.provider,
-        provider_user_id: providerSession.user.id,
-        email: providerSession.user.email,
-        name: providerSession.user.displayName,
-    });
-
-    const sessionContext: SessionContext = {
-        authenticated: true,
-        provider: providerSession.provider,
-        providerUserId: providerSession.user.id,
-        user: {
-            id: providerSession.user.id,
+    try {
+        const convex = getConvexClient();
+        const workspaceInfo = await convex.mutation(api.workspaces.ensure, {
+            provider: providerSession.provider,
+            provider_user_id: providerSession.user.id,
             email: providerSession.user.email,
-            displayName: providerSession.user.displayName,
-        },
-        workspace: {
-            id: workspaceInfo.id,
-            name: workspaceInfo.name,
-        },
-        role: workspaceInfo.role,
-        expiresAt: providerSession.expiresAt.toISOString(),
-    };
+            name: providerSession.user.displayName,
+        });
 
-    // Cache result
-    event.context[SESSION_CONTEXT_KEY] = sessionContext;
-    return sessionContext;
+        const sessionContext: SessionContext = {
+            authenticated: true,
+            provider: providerSession.provider,
+            providerUserId: providerSession.user.id,
+            user: {
+                id: providerSession.user.id,
+                email: providerSession.user.email,
+                displayName: providerSession.user.displayName,
+            },
+            workspace: {
+                id: workspaceInfo.id,
+                name: workspaceInfo.name,
+            },
+            role: workspaceInfo.role,
+            expiresAt: providerSession.expiresAt.toISOString(),
+        };
+
+        recordSessionResolution(true);
+        // Cache result
+        event.context[cacheKey] = sessionContext;
+        return sessionContext;
+    } catch (error) {
+        recordSessionResolution(false);
+        throw error;
+    }
 }
