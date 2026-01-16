@@ -48,74 +48,46 @@ export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
             onChanges: (changes: SyncChange[]) => void
         ): Promise<() => void> {
             const tablesToWatch = tables.length > 0 ? tables : SYNCED_TABLES;
-            let lastVersion = 0;
-            let unwatch: (() => void) | null = null;
             let disposed = false;
-            let pendingResubscribe: ReturnType<typeof setTimeout> | null = null;
 
-            const subscribeWithCursor = (cursor: number) => {
-                if (disposed) return;
-                
-                // Clear previous watcher
-                if (unwatch) {
-                    unwatch();
-                    unwatch = null;
-                }
+            // Single subscription - Convex reactive queries automatically re-run when data changes
+            // No need to re-subscribe with new cursor; that pattern caused infinite loops
+            const unwatch = client.onUpdate(
+                api.sync.watchChanges,
+                {
+                    workspace_id: scope.workspaceId as Id<'workspaces'>,
+                    cursor: 0,
+                    limit: 100,
+                },
+                (result) => {
+                    if (disposed) return;
 
-                // Subscribe to watchChanges query
-                // Note: Convex reactive queries re-run when data changes
-                unwatch = client.onUpdate(
-                    api.sync.watchChanges,
-                    {
-                        workspace_id: scope.workspaceId as Id<'workspaces'>,
-                        cursor,
-                        limit: 100,
-                    },
-                    (result) => {
-                        if (disposed) return;
-
-                        try {
-                            const safeChanges = z.array(SyncChangeSchema).safeParse(result.changes);
-                            if (!safeChanges.success) {
-                                console.error('[convex-sync] Invalid watch changes:', safeChanges.error);
-                                return;
-                            }
-
-                            const changes = safeChanges.data;
-                            const filtered = tables.length > 0
-                                ? changes.filter((c) => tables.includes(c.tableName))
-                                : changes;
-
-                            if (filtered.length > 0) {
-                                onChanges(filtered);
-                            }
-
-                            if (result.latestVersion > lastVersion) {
-                                lastVersion = result.latestVersion;
-                                // Debounce re-subscribe to prevent stack overflow
-                                if (pendingResubscribe) clearTimeout(pendingResubscribe);
-                                pendingResubscribe = setTimeout(() => {
-                                    subscribeWithCursor(lastVersion);
-                                }, 0);
-                            }
-                        } catch (error) {
-                            console.error('[convex-sync] onChanges error:', error);
+                    try {
+                        const safeChanges = z.array(SyncChangeSchema).safeParse(result.changes);
+                        if (!safeChanges.success) {
+                            console.error('[convex-sync] Invalid watch changes:', safeChanges.error);
+                            return;
                         }
+
+                        const changes = safeChanges.data;
+                        const filtered = tables.length > 0
+                            ? changes.filter((c) => tables.includes(c.tableName))
+                            : changes;
+
+                        if (filtered.length > 0) {
+                            onChanges(filtered);
+                        }
+                        // Cursor advancement is handled by SubscriptionManager.handleChanges()
+                    } catch (error) {
+                        console.error('[convex-sync] onChanges error:', error);
                     }
-                );
-            };
+                }
+            );
 
-            subscribeWithCursor(lastVersion);
-
-            // Store cleanup
             const key = `${scope.workspaceId}:${tablesToWatch.join(',')}`;
             const cleanup = () => {
                 disposed = true;
-                if (pendingResubscribe) clearTimeout(pendingResubscribe);
-                if (unwatch) {
-                    unwatch();
-                    unwatch = null;
-                }
+                if (unwatch) unwatch();
             };
             subscriptions.set(key, cleanup);
 

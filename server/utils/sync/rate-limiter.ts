@@ -62,15 +62,6 @@ export const ALL_RATE_LIMITS = {
     ...STORAGE_RATE_LIMITS,
 };
 
-/** In-memory store for rate limit entries, keyed by "userId:operation" */
-const rateLimitStore = new Map<string, RateLimitEntry>();
-
-/** Last cleanup timestamp */
-let lastCleanup = Date.now();
-
-/** Cleanup interval (5 minutes) */
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
-
 /** Maximum age for entries before cleanup (10 minutes) */
 const MAX_ENTRY_AGE_MS = 10 * 60 * 1000;
 
