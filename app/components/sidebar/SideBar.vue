@@ -79,10 +79,15 @@
             </div>
         </template>
         <template #footer>
-            <UButton variant="ghost" @click="showRenameModal = false"
+            <UButton
+                variant="ghost"
+                class="theme-btn"
+                @click="showRenameModal = false"
                 >Cancel</UButton
             >
-            <UButton color="primary" @click="saveRename">Save</UButton>
+            <UButton color="primary" class="theme-btn" @click="saveRename"
+                >Save</UButton
+            >
         </template>
     </UModal>
 
@@ -104,11 +109,15 @@
             </div>
         </template>
         <template #footer>
-            <UButton variant="ghost" @click="showRenameProjectModal = false"
+            <UButton
+                variant="ghost"
+                class="theme-btn"
+                @click="showRenameProjectModal = false"
                 >Cancel</UButton
             >
             <UButton
                 color="primary"
+                class="theme-btn"
                 :disabled="!renameProjectName.trim()"
                 @click="saveRenameProject"
                 >Save</UButton
@@ -128,10 +137,15 @@
             </p>
         </template>
         <template #footer>
-            <UButton variant="ghost" @click="showDeleteModal = false"
+            <UButton
+                variant="ghost"
+                class="theme-btn"
+                @click="showDeleteModal = false"
                 >Cancel</UButton
             >
-            <UButton color="error" @click="deleteThread">Delete</UButton>
+            <UButton color="error" class="theme-btn" @click="deleteThread"
+                >Delete</UButton
+            >
         </template>
     </UModal>
 
@@ -147,10 +161,15 @@
             </p>
         </template>
         <template #footer>
-            <UButton variant="ghost" @click="showDeleteDocumentModal = false"
+            <UButton
+                variant="ghost"
+                class="theme-btn"
+                @click="showDeleteDocumentModal = false"
                 >Cancel</UButton
             >
-            <UButton color="error" @click="deleteDocument">Delete</UButton>
+            <UButton color="error" class="theme-btn" @click="deleteDocument"
+                >Delete</UButton
+            >
         </template>
     </UModal>
 
@@ -167,10 +186,15 @@
             </p>
         </template>
         <template #footer>
-            <UButton variant="ghost" @click="showDeleteProjectModal = false"
+            <UButton
+                variant="ghost"
+                class="theme-btn"
+                @click="showDeleteProjectModal = false"
                 >Cancel</UButton
             >
-            <UButton color="error" @click="deleteProject">Delete</UButton>
+            <UButton color="error" class="theme-btn" @click="deleteProject"
+                >Delete</UButton
+            >
         </template>
     </UModal>
 
@@ -219,12 +243,16 @@
             </div>
         </template>
         <template #footer>
-            <UButton variant="ghost" @click="closeCreateProject"
+            <UButton
+                variant="ghost"
+                class="theme-btn"
+                @click="closeCreateProject"
                 >Cancel</UButton
             >
             <UButton
                 :disabled="!createProjectState.name.trim() || creatingProject"
                 color="primary"
+                class="theme-btn"
                 @click="submitCreateProject"
             >
                 <span v-if="!creatingProject">Create</span>
@@ -318,7 +346,12 @@
             </div>
         </template>
         <template #footer>
-            <UButton variant="ghost" @click="closeAddToProject">Cancel</UButton>
+            <UButton
+                variant="ghost"
+                class="theme-btn"
+                @click="closeAddToProject"
+                >Cancel</UButton
+            >
             <UButton
                 color="primary"
                 :disabled="
