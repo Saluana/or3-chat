@@ -23,11 +23,15 @@ import type { Id } from '~~/convex/_generated/dataModel';
 /** Tables to sync */
 const SYNCED_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'];
 
+/** Type for the Convex client */
+type ConvexClient = ReturnType<typeof useConvexClient>;
+
 /**
- * Create a Convex sync provider instance
+ * Create a Convex sync provider instance.
+ * 
+ * @param client - The Convex client instance (must be captured in Vue setup context)
  */
-export function createConvexSyncProvider(): SyncProvider {
-    const convex = useConvexClient();
+export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
     const subscriptions = new Map<string, () => void>();
 
     return {
@@ -60,7 +64,7 @@ export function createConvexSyncProvider(): SyncProvider {
 
                 // Subscribe to watchChanges query
                 // Note: Convex reactive queries re-run when data changes
-                unwatch = convex.onUpdate(
+                unwatch = client.onUpdate(
                     api.sync.watchChanges,
                     {
                         workspace_id: scope.workspaceId as Id<'workspaces'>,
@@ -119,7 +123,7 @@ export function createConvexSyncProvider(): SyncProvider {
         },
 
         async pull(request: PullRequest): Promise<PullResponse> {
-            const result = await convex.query(api.sync.pull, {
+            const result = await client.query(api.sync.pull, {
                 workspace_id: request.scope.workspaceId as Id<'workspaces'>,
                 cursor: request.cursor,
                 limit: request.limit,
@@ -142,7 +146,7 @@ export function createConvexSyncProvider(): SyncProvider {
         },
 
         async push(batch: PushBatch): Promise<PushResult> {
-            const result = await convex.mutation(api.sync.push, {
+            const result = await client.mutation(api.sync.push, {
                 workspace_id: batch.scope.workspaceId as Id<'workspaces'>,
                 ops: batch.ops.map((op: PendingOp) => ({
                     op_id: op.stamp.opId,
@@ -171,7 +175,7 @@ export function createConvexSyncProvider(): SyncProvider {
         },
 
         async updateCursor(scope: SyncScope, deviceId: string, version: number): Promise<void> {
-            await convex.mutation(api.sync.updateDeviceCursor, {
+            await client.mutation(api.sync.updateDeviceCursor, {
                 workspace_id: scope.workspaceId as Id<'workspaces'>,
                 device_id: deviceId,
                 last_seen_version: version,
@@ -179,14 +183,14 @@ export function createConvexSyncProvider(): SyncProvider {
         },
 
         async gcTombstones(scope: SyncScope, retentionSeconds: number): Promise<void> {
-            await convex.mutation(api.sync.gcTombstones, {
+            await client.mutation(api.sync.gcTombstones, {
                 workspace_id: scope.workspaceId as Id<'workspaces'>,
                 retention_seconds: retentionSeconds,
             });
         },
 
         async gcChangeLog(scope: SyncScope, retentionSeconds: number): Promise<void> {
-            await convex.mutation(api.sync.gcChangeLog, {
+            await client.mutation(api.sync.gcChangeLog, {
                 workspace_id: scope.workspaceId as Id<'workspaces'>,
                 retention_seconds: retentionSeconds,
             });

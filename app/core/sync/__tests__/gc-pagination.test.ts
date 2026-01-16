@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 
 // Simulation of the server-side pagination logic
 function paginate(

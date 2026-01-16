@@ -116,8 +116,8 @@ export class HookBridge {
         if (tableName === 'kv') {
             const kvName = (payload as { name?: string })?.name ?? pk.replace('kv:', '');
 
-            // Allow plugins to extend the blocklist
-            const blocklist = useHooks().applyFilters('sync.kv:blocklist', [...KV_SYNC_BLOCKLIST]);
+            // Allow plugins to extend the blocklist (untyped hook, use raw engine)
+            const blocklist = useHooks()._engine.applyFiltersSync('sync.kv:blocklist', [...KV_SYNC_BLOCKLIST]) as string[];
 
             if (blocklist.includes(kvName)) {
                 return; // Skip this key, don't capture for sync
