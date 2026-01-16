@@ -51,6 +51,26 @@ export const SYNC_RATE_LIMITS: Record<string, RateLimitConfig> = {
     'sync:cursor': { windowMs: 60_000, maxRequests: 60 },
 } as const;
 
+export const STORAGE_RATE_LIMITS: Record<string, RateLimitConfig> = {
+    'storage:upload': { windowMs: 60_000, maxRequests: 50 },
+    'storage:download': { windowMs: 60_000, maxRequests: 100 },
+};
+
+// Merge with existing SYNC_RATE_LIMITS
+export const ALL_RATE_LIMITS = {
+    ...SYNC_RATE_LIMITS,
+    ...STORAGE_RATE_LIMITS,
+};
+
+/** In-memory store for rate limit entries, keyed by "userId:operation" */
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+/** Last cleanup timestamp */
+let lastCleanup = Date.now();
+
+/** Cleanup interval (5 minutes) */
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+
 /** Maximum age for entries before cleanup (10 minutes) */
 const MAX_ENTRY_AGE_MS = 10 * 60 * 1000;
 
@@ -81,7 +101,7 @@ function getRateLimitKey(userId: string, operation: string): string {
  * @returns Rate limit result with allowed status and remaining requests
  */
 export function checkSyncRateLimit(userId: string, operation: string): RateLimitResult {
-    const config = SYNC_RATE_LIMITS[operation];
+    const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
     if (!config) {
         // Unknown operation - allow by default
         return { allowed: true, remaining: Infinity };
@@ -124,7 +144,7 @@ export function checkSyncRateLimit(userId: string, operation: string): RateLimit
  * @param operation - The operation type
  */
 export function recordSyncRequest(userId: string, operation: string): void {
-    const config = SYNC_RATE_LIMITS[operation];
+    const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
     if (!config) {
         return;
     }
@@ -154,7 +174,7 @@ export function recordSyncRequest(userId: string, operation: string): void {
  */
 export function resetSyncRateLimits(userId?: string): void {
     if (userId) {
-        for (const operation of Object.keys(SYNC_RATE_LIMITS)) {
+        for (const operation of Object.keys(ALL_RATE_LIMITS)) {
             rateLimitStore.delete(getRateLimitKey(userId, operation));
         }
     } else {
@@ -172,7 +192,7 @@ export function getSyncRateLimitStats(
     userId: string,
     operation: string
 ): { limit: number; remaining: number; resetMs: number } | null {
-    const config = SYNC_RATE_LIMITS[operation];
+    const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
     if (!config) {
         return null;
     }

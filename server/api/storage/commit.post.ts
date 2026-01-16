@@ -13,6 +13,7 @@ import {
     getClerkProviderToken,
     getConvexGatewayClient,
 } from '../../utils/sync/convex-gateway';
+import { recordUploadComplete } from '../../utils/storage/metrics';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -63,6 +64,8 @@ export default defineEventHandler(async (event) => {
         height: body.data.height,
         page_count: body.data.page_count,
     });
+
+    recordUploadComplete(body.data.size_bytes);
 
     return { ok: true };
 });

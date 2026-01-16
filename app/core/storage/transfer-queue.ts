@@ -15,11 +15,28 @@ import { err, reportError } from '~/utils/errors';
 import { getActiveStorageProvider } from './provider-registry';
 import type { ObjectStorageProvider } from './types';
 
-const DEFAULT_CONCURRENCY = 2;
 const DEFAULT_MAX_ATTEMPTS = 5;
 const DEFAULT_BACKOFF_BASE_MS = 1000;
 const DEFAULT_BACKOFF_MAX_MS = 60000;
 const DEFAULT_PRESIGN_EXPIRY_MS = 60 * 60 * 1000;
+
+function getDefaultConcurrency(): number {
+    if (typeof navigator === 'undefined' || !navigator.connection) {
+        return 2; // Default fallback
+    }
+
+    // @ts-expect-error - NetworkInformation API is not fully typed
+    const connection = navigator.connection;
+    const effectiveType = connection.effectiveType;
+
+    if (effectiveType === '4g') {
+        return 4;
+    } else if (effectiveType === '3g') {
+        return 2;
+    } else {
+        return 1; // 2g or slow-2g
+    }
+}
 
 export interface FileTransferQueueConfig {
     concurrency?: number;
@@ -48,7 +65,7 @@ export class FileTransferQueue {
         private provider: ObjectStorageProvider,
         config: FileTransferQueueConfig = {}
     ) {
-        this.concurrency = config.concurrency ?? DEFAULT_CONCURRENCY;
+        this.concurrency = config.concurrency ?? getDefaultConcurrency();
         this.maxAttempts = config.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
         this.backoffBaseMs = config.backoffBaseMs ?? DEFAULT_BACKOFF_BASE_MS;
         this.backoffMaxMs = config.backoffMaxMs ?? DEFAULT_BACKOFF_MAX_MS;
@@ -120,7 +137,11 @@ export class FileTransferQueue {
         return transfer;
     }
 
-    async waitForTransfer(id: string): Promise<void> {
+    async waitForTransfer(id: string, timeoutMs = 60_000): Promise<void> {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Transfer timeout')), timeoutMs);
+        });
+
         // Register waiter first to avoid race condition where transfer
         // completes between state check and Promise creation
         const waiterPromise = new Promise<void>((resolve, reject) => {
@@ -128,6 +149,9 @@ export class FileTransferQueue {
             waiters.push({ resolve, reject });
             this.waiters.set(id, waiters);
         });
+
+        // Suppress unhandled rejection if the race is lost or we throw early
+        waiterPromise.catch(() => {});
 
         // Check current state - if already done/failed, resolve immediately
         const transfer = await this.db.file_transfers.get(id);
@@ -145,7 +169,7 @@ export class FileTransferQueue {
             throw new Error(errorMsg);
         }
 
-        return waiterPromise;
+        return Promise.race([waiterPromise, timeoutPromise]);
     }
 
     async ensureDownloadedBlob(hash: string): Promise<Blob | undefined> {
@@ -455,6 +479,8 @@ export class FileTransferQueue {
 
         const reader = response.body.getReader();
         let received = 0;
+        let lastUpdate = 0;
+        const UPDATE_INTERVAL_MS = 200; // Update every 200ms max
 
         // Use a TransformStream approach to avoid double buffering
         // Stream chunks directly into a new Response for blob conversion
@@ -462,14 +488,26 @@ export class FileTransferQueue {
             pull: async (controller) => {
                 const { done, value } = await reader.read();
                 if (done) {
+                    // Final update on completion
+                    await this.updateTransfer(transferId, {
+                        bytes_done: received,
+                        bytes_total: contentLength || received,
+                    });
                     controller.close();
                     return;
                 }
+
                 received += value.byteLength;
-                await this.updateTransfer(transferId, {
-                    bytes_done: received,
-                    bytes_total: contentLength || received,
-                });
+
+                const now = Date.now();
+                if (now - lastUpdate > UPDATE_INTERVAL_MS) {
+                    await this.updateTransfer(transferId, {
+                        bytes_done: received,
+                        bytes_total: contentLength || received,
+                    });
+                    lastUpdate = now;
+                }
+
                 controller.enqueue(value);
             },
         });
