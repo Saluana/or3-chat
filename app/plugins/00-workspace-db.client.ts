@@ -1,6 +1,9 @@
 import { watch } from 'vue';
 import { setActiveWorkspaceDb } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { cleanupCursorManager } from '~/core/sync/cursor-manager';
+import { cleanupHookBridge } from '~/core/sync/hook-bridge';
+import { cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
 
 export default defineNuxtPlugin(async () => {
     if (import.meta.server) return;
@@ -22,7 +25,14 @@ export default defineNuxtPlugin(async () => {
 
     watch(
         () => data.value?.session,
-        () => {
+        (newSession, oldSession) => {
+            const oldWorkspaceId = oldSession?.workspace?.id;
+            if (oldWorkspaceId) {
+                const dbName = `or3-db-${oldWorkspaceId}`;
+                cleanupCursorManager(dbName);
+                cleanupHookBridge(dbName);
+                cleanupSubscriptionManager(`${oldWorkspaceId}:default`);
+            }
             setActiveWorkspaceDb(resolveWorkspaceId());
         }
     );

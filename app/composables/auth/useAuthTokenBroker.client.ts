@@ -20,6 +20,32 @@ interface ClerkClient {
     } | null;
 }
 
+function waitForClerk(timeoutMs = 5000): Promise<ClerkClient | null> {
+    return new Promise((resolve) => {
+        const startTime = Date.now();
+
+        const check = () => {
+            const clerk = (window as unknown as { Clerk?: ClerkClient }).Clerk;
+            if (clerk) {
+                resolve(clerk);
+                return;
+            }
+
+            // Check if timed out
+            if (Date.now() - startTime > timeoutMs) {
+                console.warn('[auth-token-broker] Clerk load timeout');
+                resolve(null);
+                return;
+            }
+
+            // Check again in 50ms
+            setTimeout(check, 50);
+        };
+
+        check();
+    });
+}
+
 export function useAuthTokenBroker(): AuthTokenBroker {
     const runtimeConfig = useRuntimeConfig();
 
@@ -30,8 +56,8 @@ export function useAuthTokenBroker(): AuthTokenBroker {
             }
 
             try {
-                // Access Clerk via window object (set by @clerk/nuxt)
-                const clerk = (window as unknown as { Clerk?: ClerkClient }).Clerk;
+                // Wait for Clerk to load with timeout
+                const clerk = await waitForClerk();
                 if (!clerk?.session) {
                     return null;
                 }

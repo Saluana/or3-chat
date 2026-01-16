@@ -9,63 +9,70 @@
  * Example: 1736648823456:0003:abc12345
  */
 
-// State persisted across calls
-let lastTimestamp = 0;
-let counter = 0;
-let nodeId: string | null = null;
+export class HLCGenerator {
+    private lastTimestamp = 0;
+    private counter = 0;
+    private nodeId: string | null = null;
 
-/**
- * Get or generate a persistent node/device ID
- */
-function getNodeId(): string {
-    if (nodeId) return nodeId;
-
-    // Try to get from localStorage
-    if (typeof localStorage !== 'undefined') {
-        const stored = localStorage.getItem('or3-device-id');
-        if (stored) {
-            nodeId = stored;
-            return nodeId;
+    /**
+     * Get or generate a persistent node/device ID
+     */
+    getNodeId(): string {
+        if (this.nodeId) return this.nodeId;
+        if (typeof localStorage !== 'undefined') {
+            const stored = localStorage.getItem('or3-device-id');
+            if (stored) {
+                this.nodeId = stored;
+                return this.nodeId;
+            }
         }
+        this.nodeId = crypto.randomUUID().slice(0, 8);
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('or3-device-id', this.nodeId);
+        }
+        return this.nodeId;
     }
 
-    // Generate new ID
-    nodeId = crypto.randomUUID().slice(0, 8);
-
-    // Persist it
-    if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('or3-device-id', nodeId);
+    /**
+     * Generate a new HLC timestamp
+     *
+     * Guarantees:
+     * - Monotonically increasing
+     * - Globally unique (with node ID)
+     * - Lexicographically sortable
+     */
+    generate(): string {
+        const now = Date.now();
+        if (now > this.lastTimestamp) {
+            this.lastTimestamp = now;
+            this.counter = 0;
+        } else {
+            this.counter++;
+        }
+        const ts = this.lastTimestamp.toString(36).padStart(9, '0');
+        const cnt = this.counter.toString(36).padStart(3, '0');
+        const node = this.getNodeId();
+        return `${ts}:${cnt}:${node}`;
     }
-
-    return nodeId;
 }
 
-/**
- * Generate a new HLC timestamp
- *
- * Guarantees:
- * - Monotonically increasing
- * - Globally unique (with node ID)
- * - Lexicographically sortable
- */
+let _instance: HLCGenerator | null = null;
+
+export function getHLCGenerator(): HLCGenerator {
+    if (!_instance) _instance = new HLCGenerator();
+    return _instance;
+}
+
 export function generateHLC(): string {
-    const now = Date.now();
+    return getHLCGenerator().generate();
+}
 
-    if (now > lastTimestamp) {
-        // Time has moved forward, reset counter
-        lastTimestamp = now;
-        counter = 0;
-    } else {
-        // Same or earlier time, increment counter
-        counter++;
-    }
+export function getDeviceId(): string {
+    return getHLCGenerator().getNodeId();
+}
 
-    // Format: 13-digit timestamp : 4-digit counter : 8-char node ID
-    const ts = lastTimestamp.toString().padStart(13, '0');
-    const cnt = counter.toString().padStart(4, '0');
-    const node = getNodeId();
-
-    return `${ts}:${cnt}:${node}`;
+export function _resetHLC(): void {
+    _instance = null;
 }
 
 /**
@@ -74,8 +81,8 @@ export function generateHLC(): string {
 export function parseHLC(hlc: string): { timestamp: number; counter: number; nodeId: string } {
     const parts = hlc.split(':');
     return {
-        timestamp: parseInt(parts[0] ?? '0', 10),
-        counter: parseInt(parts[1] ?? '0', 10),
+        timestamp: parseInt(parts[0] ?? '0', 36),
+        counter: parseInt(parts[1] ?? '0', 36),
         nodeId: parts[2] ?? '',
     };
 }
@@ -92,13 +99,6 @@ export function compareHLC(a: string, b: string): number {
 }
 
 /**
- * Get the current device ID
- */
-export function getDeviceId(): string {
-    return getNodeId();
-}
-
-/**
  * Derive an order_key from an HLC
  * Used for deterministic message ordering
  */
@@ -107,10 +107,8 @@ export function hlcToOrderKey(hlc: string): string {
 }
 
 /**
- * Reset HLC state (for testing only)
+ * @deprecated Use _resetHLC instead
  */
 export function _resetHLCState(): void {
-    lastTimestamp = 0;
-    counter = 0;
-    nodeId = null;
+    _resetHLC();
 }

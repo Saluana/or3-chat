@@ -4,6 +4,7 @@
  * This utility ensures consistent sanitization of payloads before
  * they are sent to the sync backend.
  */
+import { toServerFormat } from './field-mappings';
 
 /**
  * Sanitize a payload for sync by removing internal/derived fields
@@ -24,11 +25,12 @@ export function sanitizePayloadForSync(
     }
 
     // Filter out dotted keys (Dexie compound index artifacts)
-    const sanitized = Object.fromEntries(
-        Object.entries(payload as Record<string, unknown>).filter(
-            ([key]) => !key.includes('.')
-        )
-    );
+    const sanitized = { ...(payload as Record<string, unknown>) };
+    for (const key in sanitized) {
+        if (key.includes('.')) {
+            delete sanitized[key];
+        }
+    }
 
     // Remove HLC - it's stored separately in the stamp
     delete sanitized.hlc;
@@ -40,10 +42,5 @@ export function sanitizePayloadForSync(
     }
 
     // Handle snake_case/camelCase mapping for posts
-    if (tableName === 'posts' && 'postType' in sanitized && !('post_type' in sanitized)) {
-        sanitized.post_type = sanitized.postType;
-        delete sanitized.postType;
-    }
-
-    return sanitized;
+    return toServerFormat(tableName, sanitized);
 }

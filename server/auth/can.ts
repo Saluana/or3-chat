@@ -29,6 +29,7 @@ const ROLE_PERMISSIONS: Record<WorkspaceRole, Permission[]> = {
         'admin.access',
     ],
     editor: ['workspace.read', 'workspace.write'],
+    viewer: ['workspace.read'],
 };
 
 /**

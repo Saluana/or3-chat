@@ -8,28 +8,8 @@
  */
 import { TABLE_PAYLOAD_SCHEMAS } from '~~/shared/sync/schemas';
 import { hlcToOrderKey } from './hlc';
-
-/**
- * Field mapping rules for specific tables.
- * Maps server-side snake_case fields to client-side camelCase.
- */
-const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
-    posts: {
-        post_type: 'postType',
-    },
-};
-
-/**
- * Primary key fields per table
- */
-const PK_FIELDS: Record<string, string> = {
-    threads: 'id',
-    messages: 'id',
-    projects: 'id',
-    posts: 'id',
-    kv: 'id',
-    file_meta: 'hash',
-};
+import { getPkField } from '~~/shared/sync/table-metadata';
+import { toClientFormat } from '~~/shared/sync/field-mappings';
 
 export interface NormalizedPayload {
     payload: Record<string, unknown>;
@@ -59,19 +39,9 @@ export function normalizeSyncPayload(
     rawPayload: unknown,
     stamp: { clock: number; hlc: string }
 ): NormalizedPayload {
-    const payload = { ...((rawPayload ?? {}) as Record<string, unknown>) };
-    const pkField = PK_FIELDS[tableName] ?? 'id';
-
-    // Apply field mappings for this table
-    const mappings = FIELD_MAPPINGS[tableName];
-    if (mappings) {
-        for (const [snakeCase, camelCase] of Object.entries(mappings)) {
-            if (snakeCase in payload && !(camelCase in payload)) {
-                payload[camelCase] = payload[snakeCase];
-                delete payload[snakeCase];
-            }
-        }
-    }
+    const rawRecord = (rawPayload ?? {}) as Record<string, unknown>;
+    const payload = toClientFormat(tableName, rawRecord);
+    const pkField = getPkField(tableName);
 
     // Set primary key field
     payload[pkField] = pk;

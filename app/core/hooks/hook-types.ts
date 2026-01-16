@@ -412,7 +412,7 @@ export type Permission =
     | 'admin.access';
 
 /** Workspace membership role. */
-export type WorkspaceRole = 'owner' | 'editor';
+export type WorkspaceRole = 'owner' | 'editor' | 'viewer';
 
 /** Authorization decision returned by can(). */
 export interface AccessDecision {
