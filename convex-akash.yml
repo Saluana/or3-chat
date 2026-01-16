@@ -1,0 +1,98 @@
+---
+version: "2.0"
+
+services:
+  convex-backend:
+    image: ghcr.io/get-convex/convex-backend:latest
+    env:
+      # Required
+      - INSTANCE_NAME=convex-local
+      # 64 hex chars (0-9a-f). This fixes your "Couldn't hexdecode key" crash.
+      - INSTANCE_SECRET=YOUR_SECRET_KEY
+      # Recommended for Akash HTTP
+      - DO_NOT_REQUIRE_SSL=true
+
+      # Defaults matching the self-hosted compose file behavior
+      - CONVEX_CLOUD_ORIGIN=http://127.0.0.1:3210
+      - CONVEX_SITE_ORIGIN=http://127.0.0.1:3211
+      - RUST_LOG=info
+      - DOCUMENT_RETENTION_DELAY=172800
+
+      # Optional: disable telemetry beacon if you want
+      # - DISABLE_BEACON=true
+
+    # Public endpoints (map container ports to public ports)
+    expose:
+      - port: 3210
+        as: 80
+        to:
+          - global: true
+      - port: 3211
+        as: 3211
+        to:
+          - global: true
+
+    # Mount the persistent volume into the path Convex uses for SQLite
+    params:
+      storage:
+        data:
+          mount: /convex/data
+          readOnly: false
+
+  convex-dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:latest
+    env:
+      # MUST be the public backend URL (what the browser can reach), not the Akash service name.
+      # After backend deploys, set this to the backend lease URL Akash shows you (it will be http(s)://...).
+      - NEXT_PUBLIC_DEPLOYMENT_URL=REPLACE_WITH_BACKEND_PUBLIC_URL
+      - NEXT_PUBLIC_LOAD_MONACO_INTERNALLY=true
+    expose:
+      - port: 6791
+        as: 80
+        to:
+          - global: true
+
+profiles:
+  compute:
+    convex-backend:
+      resources:
+        cpu:
+          units: 2
+        memory:
+          size: 4Gi
+        storage:
+          - size: 1Gi
+          - name: data
+            size: 10Gi
+            attributes:
+              persistent: true
+              class: beta3
+
+    convex-dashboard:
+      resources:
+        cpu:
+          units: 1
+        memory:
+          size: 1Gi
+        storage:
+          - size: 1Gi
+
+  placement:
+    dcloud:
+      pricing:
+        convex-backend:
+          denom: uakt
+          amount: 10000
+        convex-dashboard:
+          denom: uakt
+          amount: 5000
+
+deployment:
+  convex-backend:
+    dcloud:
+      profile: convex-backend
+      count: 1
+  convex-dashboard:
+    dcloud:
+      profile: convex-dashboard
+      count: 1
