@@ -117,6 +117,11 @@ export function createPendingOpsTable(initial: PendingOp[] = []) {
         async delete(id: string) {
             rows.delete(id);
         },
+        async bulkDelete(ids: string[]) {
+            for (const id of ids) {
+                rows.delete(id);
+            }
+        },
         async put(op: PendingOp) {
             rows.set(op.id, { ...op });
         },

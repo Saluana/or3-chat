@@ -122,7 +122,7 @@ export class OutboxManager {
             const coalescedIds = new Set(coalesced.map((op) => op.id));
             const dropped = pendingOps.filter((op) => !coalescedIds.has(op.id));
             if (dropped.length) {
-                await Promise.all(dropped.map((op) => this.db.pending_ops.delete(op.id)));
+                await this.db.pending_ops.bulkDelete(dropped.map((op) => op.id));
             }
 
             if (!dueOps.length) return;

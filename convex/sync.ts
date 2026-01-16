@@ -39,25 +39,37 @@ const GC_CONTINUATION_DELAY_MS = 60_000;
 // ============================================================
 
 /**
- * Get next server version for a workspace (atomic increment)
+ * Allocate a batch of server versions for a workspace (atomic increment)
+ * Returns the *start* version of the batch.
  */
-async function getNextServerVersion(
+async function allocateServerVersions(
     ctx: MutationCtx,
-    workspaceId: Id<'workspaces'>
+    workspaceId: Id<'workspaces'>,
+    count: number
 ): Promise<number> {
+    if (count <= 0) {
+        // Should not happen, but return current version if it does
+        const existing = await ctx.db
+            .query('server_version_counter')
+            .withIndex('by_workspace', (q) => q.eq('workspace_id', workspaceId))
+            .first();
+        return existing?.value ?? 0;
+    }
+
     const existing = await ctx.db
         .query('server_version_counter')
         .withIndex('by_workspace', (q) => q.eq('workspace_id', workspaceId))
         .first();
 
     if (existing) {
-        const next = existing.value + 1;
-        await ctx.db.patch(existing._id, { value: next });
-        return next;
+        const start = existing.value + 1;
+        const end = existing.value + count;
+        await ctx.db.patch(existing._id, { value: end });
+        return start;
     } else {
         await ctx.db.insert('server_version_counter', {
             workspace_id: workspaceId,
-            value: 1,
+            value: count,
         });
         return 1;
     }
@@ -305,30 +317,39 @@ export const push = mutation({
 
         let latestVersion = 0;
 
-        // Collect all ops with their server versions first
+        // 1. Parallelize Idempotency Checks
+        // First, filter invalid tables and check for duplicates in parallel
+        const checkPromises = args.ops.map((op) => {
+            // SECURITY: Validate table_name against allowlist BEFORE any processing
+            if (!TABLE_INDEX_MAP[op.table_name]) return Promise.resolve(null);
+            return ctx.db
+                .query('change_log')
+                .withIndex('by_op_id', (q) => q.eq('op_id', op.op_id))
+                .first();
+        });
+
+        const existingLogs = await Promise.all(checkPromises);
+
+        // Collect all ops with their server versions
         const opsToApply: Array<{
             op: typeof args.ops[0];
-            serverVersion: number
+            serverVersion: number;
         }> = [];
 
-        for (const op of args.ops) {
-            // SECURITY: Validate table_name against allowlist BEFORE any processing
-            // This prevents unknown tables from polluting the change_log
+        // Temporary array to hold new ops before version allocation
+        const newOps: Array<{ op: typeof args.ops[0]; index: number }> = [];
+
+        args.ops.forEach((op, i) => {
             if (!TABLE_INDEX_MAP[op.table_name]) {
                 results.push({
                     opId: op.op_id,
                     success: false,
                     error: `Unknown table: ${op.table_name}`,
                 });
-                continue;
+                return;
             }
 
-            // Check for duplicate opId (idempotency)
-            const existing = await ctx.db
-                .query('change_log')
-                .withIndex('by_op_id', (q) => q.eq('op_id', op.op_id))
-                .first();
-
+            const existing = existingLogs[i];
             if (existing) {
                 // Already processed - return existing result
                 results.push({
@@ -336,13 +357,21 @@ export const push = mutation({
                     success: true,
                     serverVersion: existing.server_version,
                 });
-                continue;
+            } else {
+                newOps.push({ op, index: i });
             }
+        });
 
-            // Get next server version
-            const serverVersion = await getNextServerVersion(ctx, args.workspace_id);
-            latestVersion = serverVersion;
-            opsToApply.push({ op, serverVersion });
+        // 2. Batch Version Allocation
+        if (newOps.length > 0) {
+            const startVersion = await allocateServerVersions(ctx, args.workspace_id, newOps.length);
+
+            newOps.forEach((item, idx) => {
+                const serverVersion = startVersion + idx;
+                opsToApply.push({ op: item.op, serverVersion });
+            });
+
+            latestVersion = startVersion + newOps.length - 1;
         }
 
         // Apply ops in parallel (Convex transactions are serializable)
