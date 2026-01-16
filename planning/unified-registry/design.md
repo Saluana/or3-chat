@@ -1,27 +1,27 @@
 # Unified Registry Design: `or3client` (S‑Tier Spec)
 
-## 1) Design Principles
-1. **Adapter‑first**: Wrap existing registries/services instead of rewriting them.
-2. **Preserve semantics**: Behaviors like validation, ordering, and persistence are part of the public API.
-3. **Explicit SSR boundaries**: server instances are per‑request; client is singleton.
-4. **Typed, discoverable API**: everything lives under a namespaced client with known types.
-5. **Composable services are *not* registries**: Multi‑pane, tool registry, hooks, chat input bridge, etc. remain services.
+## 1) Design Principles (What must never change)
+1. **Adapter‑first**: Wrap existing registries/services instead of rewriting.
+2. **Behavior‑preserving**: Validation, ordering, async loading, persistence, and HMR rules are part of the public API.
+3. **SSR‑safe**: Server must be request‑scoped; client is singleton.
+4. **Typed discoverability**: Types are exported from their source, not duplicated.
+5. **Services are not registries**: Multi‑pane, tool registry, hooks, and chat input bridge remain services.
 
 ---
 
-## 2) OR3 Client Shape
+## 2) OR3 Client Shape (Public API)
 
-### 2.1 Client structure (top‑level)
+### 2.1 Top‑level interface
 ```ts
 export interface OR3Client {
   ui: UIClient;
   ai: AIClient;
   core: CoreClient;
-  plugins: PluginClient; // optional future extension
+  plugins?: PluginClient; // reserved for future
 }
 ```
 
-### 2.2 Sub‑clients
+### 2.2 UI namespace
 ```ts
 export interface UIClient {
   sidebar: SidebarClient;
@@ -33,13 +33,19 @@ export interface UIClient {
   threads: ThreadClient;
   documents: DocumentClient;
 }
+```
 
+### 2.3 AI namespace
+```ts
 export interface AIClient {
   tools: ToolClient;
-  models: ModelClient;
-  prompts: PromptClient;
+  models: ModelClient;  // wrapper around model store/service
+  prompts: PromptClient; // system prompts + templates
 }
+```
 
+### 2.4 Core namespace
+```ts
 export interface CoreClient {
   hooks: HookClient;
   theme: ThemeClient;
@@ -49,116 +55,149 @@ export interface CoreClient {
 
 ---
 
-## 3) Registry Adapter Contract
-We **do not** use a single `Registry<T>` for everything. Instead we define a minimal adapter interface and implement it per system, using the *existing* registry/composable internally.
+## 3) Adapter Contracts (How we wrap without breaking)
 
+### 3.1 Registry Adapter (minimal and safe)
 ```ts
 export interface RegistryAdapter<T> {
   register(item: T): void;
   unregister(id: string): void;
-  list(): Readonly<T[]>; // non‑reactive snapshot
+  list(): Readonly<T[]>;           // non‑reactive snapshot
   useItems(): ComputedRef<readonly T[]>; // reactive list
   listIds(): string[];
 }
 ```
 
-- Each adapter delegates to the existing registry functions, preserving behaviors (freeze, sorting, validation, HMR).
-- Adapters are **thin** and must not re‑implement logic.
+**Implementation rule:** this adapter **delegates** to existing composables; it does **not** re‑implement validation or sorting.
 
----
-
-## 4) Mapping: Existing APIs → or3client
-This section *defines the new API surface* and explicitly references current implementations to avoid guessing.
-
-### 4.1 UI / Sidebar
-| or3client | Current implementation | Notes |
-| --- | --- | --- |
-| `ui.sidebar.sections` | `registerSidebarSection`, `useSidebarSections`, `unregisterSidebarSection` | Grouped by placement + computed sorting. 【F:app/composables/sidebar/useSidebarSections.ts†L100-L206】 |
-| `ui.sidebar.footerActions` | `registerSidebarFooterAction`, `useSidebarFooterActions` | Contextual visible/disabled. 【F:app/composables/sidebar/useSidebarSections.ts†L116-L205】 |
-| `ui.sidebar.headerActions` | `registerHeaderAction`, `useHeaderActions` | Route + mobile context. 【F:app/composables/sidebar/useHeaderActions.ts†L10-L123】 |
-| `ui.sidebar.composerActions` | `registerComposerAction`, `useComposerActions` | Manual registry sync; visibility + disabled. 【F:app/composables/sidebar/useComposerActions.ts†L74-L182】 |
-| `ui.sidebar.pages` | `useSidebarPages()` | Zod validation, async components, SSR no‑op registration. 【F:app/composables/sidebar/useSidebarPages.ts†L84-L292】 |
-
-### 4.2 UI / Dashboard
-- `ui.dashboard.plugins`: adapter over `registerDashboardPlugin` / `useDashboardPlugins`.
-- `ui.dashboard.pages`: adapter over `registerDashboardPluginPage` / `useDashboardPluginPages`.
-- `ui.dashboard.navigation`: adapter over `useDashboardNavigation` + `resolveDashboardPluginPageComponent`.
-- Preserve navigation state, error handling, and async component resolution. 【F:app/composables/dashboard/useDashboardPlugins.ts†L1-L620】
-
-### 4.3 UI / Panes & Multi‑pane
-- `ui.panes.apps`: adapter for `usePaneApps` registry. 【F:app/composables/core/usePaneApps.ts†L1-L176】
-- `ui.panes.manager`: a service wrapper around `useMultiPane()`. This is **not** a registry. 【F:app/composables/core/useMultiPane.ts†L1-L240】
-
-### 4.4 UI / Chat & Editor
-- `ui.chat.messageActions`: adapter to `registerMessageAction` / `useMessageActions`. 【F:app/composables/chat/useMessageActions.ts†L1-L50】
-- `ui.chat.inputBridge`: service adapter to `useChatInputBridge` (register pane input, programmatic send). 【F:app/composables/chat/useChatInputBridge.ts†L1-L75】
-- `ui.editor.toolbar`: adapter to `registerEditorToolbarButton` / `useEditorToolbarButtons`. 【F:app/composables/editor/useEditorToolbar.ts†L1-L66】
-- `ui.editor.extensions`: **three registries** (nodes/marks/extensions) with lazy loading support; should be exposed as sub‑clients rather than a single flat registry. 【F:app/composables/editor/useEditorNodes.ts†L1-L170】【F:app/composables/editor/useEditorExtensionLoader.ts†L1-L132】
-
-### 4.5 UI / Projects / Threads / Documents
-- `ui.projects.treeActions`: adapter to `registerProjectTreeAction` / `useProjectTreeActions`. 【F:app/composables/projects/useProjectTreeActions.ts†L1-L83】
-- `ui.threads.historyActions`: adapter to `registerThreadHistoryAction` / `useThreadHistoryActions`. 【F:app/composables/threads/useThreadHistoryActions.ts†L1-L82】
-- `ui.documents.historyActions`: adapter to `registerDocumentHistoryAction` / `useDocumentHistoryActions`. 【F:app/composables/documents/useDocumentHistoryActions.ts†L1-L82】
-
-### 4.6 AI / Tools
-- `ai.tools` maps to `useToolRegistry()`.
-- Must preserve: enabled persistence, timeout execution, JSON schema validation, `getEnabledDefinitions`. 【F:app/utils/chat/tool-registry.ts†L1-L357】
-
-### 4.7 Core / Hooks
-- `core.hooks` maps to `useHooks()` and `useHookEffect()`.
-- The adapter must expose `on`, `off`, `doAction`, `applyFilters`, and optional helper `useHookEffect`. 【F:app/core/hooks/useHooks.ts†L1-L34】【F:app/composables/core/useHookEffect.ts†L1-L39】
-
----
-
-## 5) SSR + HMR Strategy
-### 5.1 SSR rules
-- The `OR3Client` instance is **per‑request** on the server.
-- Client uses a singleton (normal Nuxt plugin state).
-- Client‑only systems (Sidebar Pages, Tool Registry) should be **lazy** and/or no‑op on server. 【F:app/composables/sidebar/useSidebarPages.ts†L178-L238】【F:app/utils/chat/tool-registry.ts†L1-L357】
-
-### 5.2 HMR rules
-- Respect existing HMR behavior in registries (globalThis maps + warnings).
-- Provide wrapper methods that do not add extra state; keep registry ownership where it is today.
-
----
-
-## 6) Types & DX
-### 6.1 Central types export
-Provide a single public export path (e.g., `~/core/or3client/types`) that re‑exports registry types **verbatim** from existing files. This prevents duplicate source of truth.
-
-### 6.2 defineX helpers
-Follow the tool registry pattern (see `defineTool` in tools‑public) for any area where inference is weak (e.g., sidebar pages, dashboard pages). The helper should simply return its input but improve inference.
-
----
-
-## 7) Example: Adapter Implementation (Sidebar Sections)
+### 3.2 Service Adapter (for stateful systems)
 ```ts
-import {
-  registerSidebarSection,
-  unregisterSidebarSection,
-  useSidebarSections,
-  type SidebarSection,
-} from '~/composables/sidebar/useSidebarSections';
-
-export const sidebarSectionsAdapter: RegistryAdapter<SidebarSection> = {
-  register: registerSidebarSection,
-  unregister: unregisterSidebarSection,
-  useItems: () => useSidebarSections().value.main, // or return grouped API
-  list: () => useSidebarSections().value.main.slice(),
-  listIds: listRegisteredSidebarSectionIds,
-};
+export interface ServiceAdapter<T> {
+  use(): T;              // returns existing composable/service instance
+  get?(): T;             // optional singleton getter for stateless services
+}
 ```
 
-> Note: some registries return **grouped** data (`useSidebarSections`). Adapters should preserve these shapes; do not flatten unless explicitly required by UI.
+Use a service adapter for:
+- `useMultiPane()`
+- `useToolRegistry()`
+- `useHooks()`
+- `useChatInputBridge()`
 
 ---
 
-## 8) Migration Strategy
-1. **Phase 0:** Create the client with empty adapters (types only).
-2. **Phase 1:** Adapt “simple registries” (message actions, editor toolbar, tree actions).
-3. **Phase 2:** Adapt complex registries (dashboard, sidebar pages, tools, pane apps).
-4. **Phase 3:** Proxies: update old composables to call `or3client` internally.
-5. **Phase 4:** Deprecation tags and docs.
+## 4) Explicit Mapping to Current Systems (No Guessing)
+Below we define the exact adapters and their backing implementations.
 
-This keeps risk low while still delivering discoverability.
+### 4.1 UI / Sidebar
+- `ui.sidebar.sections` → wraps `registerSidebarSection`, `useSidebarSections`, `unregisterSidebarSection`.
+- `ui.sidebar.footerActions` → wraps `registerSidebarFooterAction`, `useSidebarFooterActions`.
+- `ui.sidebar.headerActions` → wraps `registerHeaderAction`, `useHeaderActions`.
+- `ui.sidebar.composerActions` → wraps `registerComposerAction`, `useComposerActions`.
+- `ui.sidebar.pages` → wraps `useSidebarPages()` return object.
+
+**Why this matters:**
+- Sections are grouped by placement (top/main/bottom). Any flattening breaks layout. 【F:app/composables/sidebar/useSidebarSections.ts†L100-L206】
+- Sidebar pages must keep Zod validation and async component wrapping. 【F:app/composables/sidebar/useSidebarPages.ts†L84-L176】
+
+### 4.2 UI / Dashboard
+- `ui.dashboard.plugins` → `registerDashboardPlugin`, `useDashboardPlugins`.
+- `ui.dashboard.pages` → `registerDashboardPluginPage`, `useDashboardPluginPages`.
+- `ui.dashboard.navigation` → `useDashboardNavigation`, `resolveDashboardPluginPageComponent`.
+
+**Why this matters:**
+- Navigation state + error handling are part of the UI contract. 【F:app/composables/dashboard/useDashboardPlugins.ts†L90-L620】
+
+### 4.3 UI / Panes
+- `ui.panes.apps` → `usePaneApps()` registry (with Zod validation). 【F:app/composables/core/usePaneApps.ts†L36-L176】
+- `ui.panes.manager` → `useMultiPane()` service (stateful, not a registry). 【F:app/composables/core/useMultiPane.ts†L1-L240】
+
+### 4.4 UI / Chat
+- `ui.chat.messageActions` → `registerMessageAction`, `useMessageActions`.
+- `ui.chat.inputBridge` → `registerPaneInput`, `programmaticSend`, `unregisterPaneInput`, `hasPane`. 【F:app/composables/chat/useChatInputBridge.ts†L1-L75】
+
+### 4.5 UI / Editor
+- `ui.editor.toolbar` → `registerEditorToolbarButton`, `useEditorToolbarButtons`.
+- `ui.editor.nodes` → `registerEditorNode`, `listEditorNodes`, `listRegisteredEditorNodeIds`.
+- `ui.editor.marks` → `registerEditorMark`, `listEditorMarks`, `listRegisteredEditorMarkIds`.
+- `ui.editor.extensions` → `registerEditorExtension`, `listEditorExtensions`, `listRegisteredEditorExtensionIds`.
+- `ui.editor.loader` → `loadEditorExtensions` + `createLazyNodeFactory` / `createLazyMarkFactory` / `createLazyExtensionFactory`.
+
+**Why this matters:**
+- Nodes/marks/extensions are separate registries with ordering and lazy loader support. 【F:app/composables/editor/useEditorNodes.ts†L1-L170】【F:app/composables/editor/useEditorExtensionLoader.ts†L1-L132】
+
+### 4.6 UI / Projects + Threads + Documents
+- `ui.projects.treeActions` → `registerProjectTreeAction`, `useProjectTreeActions`.
+- `ui.threads.historyActions` → `registerThreadHistoryAction`, `useThreadHistoryActions`.
+- `ui.documents.historyActions` → `registerDocumentHistoryAction`, `useDocumentHistoryActions`.
+
+### 4.7 AI / Tools
+- `ai.tools` → `useToolRegistry()`.
+
+**Why this matters:**
+- Tool registry persists enabled states and validates JSON schema params; this cannot be flattened into a list. 【F:app/utils/chat/tool-registry.ts†L1-L357】
+
+### 4.8 Core / Hooks
+- `core.hooks` → `useHooks()` + `useHookEffect()` helper.
+
+**Why this matters:**
+- Hook subscription + cleanup patterns are a key extension mechanism; must remain typed and HMR‑safe. 【F:app/core/hooks/useHooks.ts†L1-L34】【F:app/composables/core/useHookEffect.ts†L1-L39】
+
+---
+
+## 5) SSR + HMR Rules (Implementation detail)
+
+### 5.1 SSR
+- **Server**: create `OR3Client` per request (no shared state).
+- **Client**: singleton instance (provided by Nuxt plugin).
+- For client‑only registries (sidebar pages, tools), adapters must **no‑op** or lazily initialize when `process.server` is true.
+
+### 5.2 HMR
+- Keep `globalThis` registries intact; no extra caching layers in adapters.
+- Avoid duplicating registry items on hot reload; rely on existing `createRegistry` warnings.
+
+---
+
+## 6) Type Exports + Inference Helpers
+
+### 6.1 Central types export
+- A file like `app/core/or3client/types.ts` must **re‑export** types from their source composables, not re‑declare them.
+- This prevents type drift and keeps “source of truth” clear.
+
+### 6.2 `defineX` helpers
+- Provide helpers like:
+```ts
+export function defineSidebarPage(def: SidebarPageDef): SidebarPageDef {
+  return def;
+}
+```
+- This is purely for inference and consistency with `defineTool`.
+
+---
+
+## 7) Concrete Example (Sidebar Pages Adapter)
+```ts
+import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
+
+export function sidebarPagesAdapter() {
+  const api = useSidebarPages();
+  return {
+    register: api.registerSidebarPage,
+    unregister: api.unregisterSidebarPage,
+    get: api.getSidebarPage,
+    list: () => api.listSidebarPages.value.slice(),
+  };
+}
+```
+
+**Key details preserved:** Zod validation, async component wrapping, SSR no‑op registration, activation lifecycle hooks. 【F:app/composables/sidebar/useSidebarPages.ts†L84-L292】
+
+---
+
+## 8) Migration Strategy (Safe, incremental)
+1. **Phase 0**: Add or3client skeleton + type re‑exports.
+2. **Phase 1**: Wrap simple registries (message actions, editor toolbar, tree actions).
+3. **Phase 2**: Wrap complex registries (dashboard, sidebar pages, tools, pane apps).
+4. **Phase 3**: Proxy existing composables to or3client; add deprecations.
+5. **Phase 4**: Update docs + examples.
 

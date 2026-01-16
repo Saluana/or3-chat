@@ -1,134 +1,120 @@
 # Unified Registry Architecture (Deep Dive)
 
 ## 1) Architecture Goals
-- Provide **one discoverable API** for all extension points.
-- Avoid rewriting existing systems; **wrap, don’t replace**.
-- Preserve **validation**, **ordering**, **async component loading**, **localStorage persistence**, and **SSR safety**.
+- **Discoverability:** a single `or3client` API surface for all extension points.
+- **Safety:** preserve validation, ordering, and HMR behaviors of existing registries.
+- **SSR correctness:** no shared state across server requests; client remains singleton.
+- **Extensibility:** new systems plug into or3client via adapters, not core rewrites.
 
 ---
 
-## 2) High‑Level Component Graph
+## 2) Layered Architecture (Conceptual Model)
 ```mermaid
 flowchart LR
-  Dev[Plugin/Feature Code] --> OR3[or3client]
-  OR3 -->|Adapters| Registries[Existing Registries & Services]
+  Dev[Plugin/Feature Code] --> OR3[or3client API]
+  OR3 --> Adapters[Thin Adapters]
+  Adapters --> Registries[Existing Registries & Services]
   Registries --> UI[Vue Components]
   Registries --> Data[Dexie / Local Storage]
-
-  subgraph Registries
-    SR[Sidebar Registries]
-    DR[Dashboard Registry + Navigation]
-    TR[Tool Registry]
-    PR[Pane Apps Registry]
-    HR[Hook Engine]
-  end
 ```
+
+**Key rule:** adapters are **thin wrappers**. They do not replace or fork existing logic; they call existing composables/services directly.
 
 ---
 
-## 3) Layered Architecture
-### 3.1 Public API Layer (or3client)
-- Typed, namespaced, autocompletion‑friendly.
-- Thin adapter layer only; no direct business logic.
+## 3) Component Responsibilities
+
+### 3.1 `or3client` (API layer)
+- Owns **namespace structure** (ui / ai / core).
+- Provides typed, discoverable entry points.
+- Does **not** contain business logic.
 
 ### 3.2 Adapter Layer
-Adapters delegate to the *actual* registry/composable to preserve behavior.
+- **Registry adapters** delegate to `createRegistry`-based composables.
+- **Service adapters** delegate to stateful services (multi‑pane, tools, hooks).
 
+### 3.3 Existing Registries & Services (Source of Truth)
+- **Registries:** sidebar sections, header actions, message actions, editor toolbar, etc.
+- **Complex registries:** dashboard plugins/pages, sidebar pages, tool registry.
+- **Services:** multi‑pane, hooks, chat input bridge.
+
+---
+
+## 4) SSR Architecture
+
+### 4.1 Server isolation model
 ```mermaid
-classDiagram
-  class OR3Client {
-    +ui: UIClient
-    +ai: AIClient
-    +core: CoreClient
-  }
-  class SidebarClient {
-    +sections
-    +footerActions
-    +headerActions
-    +composerActions
-    +pages
-  }
-  class DashboardClient {
-    +plugins
-    +pages
-    +navigation
-  }
-  class ToolClient {
-    +registerTool
-    +executeTool
-  }
-  class HookClient {
-    +on
-    +off
-    +doAction
-    +applyFilters
-  }
-
-  OR3Client *-- SidebarClient
-  OR3Client *-- DashboardClient
-  OR3Client *-- ToolClient
-  OR3Client *-- HookClient
+sequenceDiagram
+  participant Client
+  participant Server
+  participant OR3Server as OR3Client (per request)
+  Client->>Server: Request
+  Server->>OR3Server: Create new OR3Client
+  OR3Server->>Server: Render SSR output
+  Server->>Client: Response
 ```
 
-### 3.3 Existing Implementation Layer (source of truth)
-- `createRegistry` (generic list)
-- Custom registries (Dashboard, Sidebar Pages, Tool Registry)
-- Service composables (Multi‑pane, Chat Input Bridge)
+**Implementation note:** The server must create a new `OR3Client` instance for each request; shared global registries should not be mutated on server paths.
 
-**Critical rule:** or3client must **not** fork or re‑implement these behaviors.
-
----
-
-## 4) SSR + HMR Strategy
-### 4.1 SSR isolation
-- Each SSR request must receive a **fresh OR3Client instance**.
-- Global registries using `globalThis` **must not** be mutated on SSR paths (or must be no‑op).
-  - Example: Sidebar Pages intentionally no‑ops on server. 【F:app/composables/sidebar/useSidebarPages.ts†L178-L238】
-
-### 4.2 HMR durability
-- Registries already store state on `globalThis` for hot reload. or3client should not wrap with extra mutable caches.
-- Where a registry has manual reactivity (e.g., composer actions), adapters should simply call existing functions. 【F:app/composables/sidebar/useComposerActions.ts†L74-L182】
+### 4.2 Client singleton model
+```mermaid
+sequenceDiagram
+  participant Browser
+  participant NuxtApp
+  participant OR3Client
+  Browser->>NuxtApp: Boot
+  NuxtApp->>OR3Client: Create singleton instance
+  NuxtApp->>Browser: Hydrate
+```
 
 ---
 
-## 5) Subsystem Notes (Architecture‑Level)
+## 5) HMR Considerations
+- Existing registries use `globalThis` to persist across HMR.
+- or3client should not introduce its own caches that could conflict with these global stores.
 
-### 5.1 Sidebar Pages (Async + Lifecycle)
-- Must keep Zod validation, async component wrapping, `canActivate`, `onActivate`, and `onDeactivate` hooks. 【F:app/composables/sidebar/useSidebarPages.ts†L12-L292】
-- or3client adapter should surface these lifecycles unchanged.
-
-### 5.2 Dashboard Navigation
-- Must keep page component caching, navigation state, and error handling. 【F:app/composables/dashboard/useDashboardPlugins.ts†L90-L620】
-- Adapter must expose `openPlugin`, `openPage`, `goBack`, and the resolved component ref.
-
-### 5.3 Tool Registry
-- Must preserve localStorage persistence, validation, and timeout behavior. 【F:app/utils/chat/tool-registry.ts†L1-L357】
-- or3client should expose both “definition” and “execution” APIs (for tools + UI).
-
-### 5.4 Pane Apps + Multi‑pane
-- Pane apps registry + multi‑pane manager are **separate** concepts. 【F:app/composables/core/usePaneApps.ts†L1-L176】【F:app/composables/core/useMultiPane.ts†L1-L240】
-- or3client should expose both: `ui.panes.apps` and `ui.panes.manager`.
-
-### 5.5 Editor Extensions
-- Nodes/marks/extensions are separate registries with lazy extension loader. 【F:app/composables/editor/useEditorNodes.ts†L1-L170】【F:app/composables/editor/useEditorExtensionLoader.ts†L1-L132】
-- or3client should expose `ui.editor.nodes`, `ui.editor.marks`, `ui.editor.extensions`, and `ui.editor.loader`.
+Example: composer actions use manual registry syncing; adapters should call existing functions rather than re‑implementing a new registry structure. 【F:app/composables/sidebar/useComposerActions.ts†L74-L182】
 
 ---
 
-## 6) Extension Path for New Systems
-When adding new extendable systems, add:
-1. A small composable or service (source of truth).
-2. A typed registry adapter in or3client.
-3. A type export in the central type file.
-4. A doc entry in `public/_documentation/docmap.json` (if public).
+## 6) Subsystem Architecture Notes
+
+### 6.1 Sidebar Pages
+- **Why special:** validation + async component wrapping + lifecycle hooks.
+- **Adapter design:** wrap the existing composable API, do not flatten to a generic registry.
+
+### 6.2 Dashboard
+- **Why special:** dual registries (plugins + pages), navigation state, and component caching.
+- **Adapter design:** expose a `navigation` service + `plugins/pages` registries.
+
+### 6.3 Tool Registry
+- **Why special:** localStorage persistence, timeout execution, validation.
+- **Adapter design:** service adapter that exposes `registerTool`, `executeTool`, `getEnabledDefinitions`, and state access.
+
+### 6.4 Editor Extensions
+- **Why special:** three registries + lazy loader.
+- **Adapter design:** expose sub‑clients: `nodes`, `marks`, `extensions`, and `loader`.
+
+### 6.5 Pane Apps vs Multi‑pane Manager
+- **Why special:** pane apps is a registry; multi‑pane is a stateful runtime.
+- **Adapter design:** keep two separate APIs under `ui.panes`.
 
 ---
 
-## 7) Risks & Mitigations
-| Risk | Mitigation |
-| --- | --- |
-| SSR state leakage | Keep server `OR3Client` per request; no global mutation. |
-| Breaking registry behavior | Adapters call existing composables; no re‑implementation. |
-| Performance regression | Avoid extra reactive copies; reuse existing computed refs. |
-| Type drift | Re‑export types from their actual source files; avoid duplicating. |
+## 7) Extending the System (Future‑proofing)
+When a new extension point is added, follow this pattern:
+1. Build a composable/service in its own module (source of truth).
+2. Add a thin adapter to or3client.
+3. Re‑export its types in `or3client/types.ts`.
+4. Update documentation (docmap entry + usage examples).
+
+---
+
+## 8) Risk Matrix
+| Risk | Impact | Mitigation |
+| --- | --- | --- |
+| SSR state leakage | High | per‑request OR3Client, no server‑side mutation of global registries |
+| Regression in registry behavior | High | adapters call existing composables; no new sorting/validation logic |
+| HMR duplication | Medium | rely on globalThis registry patterns already used |
+| Type drift | Medium | re‑export types directly from source modules |
 

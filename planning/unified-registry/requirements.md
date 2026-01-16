@@ -1,102 +1,164 @@
 # Unified Registry System Requirements (S‑Tier Edition)
 
 ## Executive Summary
-We want a single developer‑friendly entry point (`or3client`) that is **discoverable**, **extendable**, and **safe** across SSR/client boundaries. The current plan is too vague and ignores crucial implementation realities (e.g., validation, async component wrapping, per-request SSR isolation, persistent tool state, and HMR behaviors). This document captures *all* existing registry patterns, their quirks, and the required semantics so we can unify them without breaking anything.
+We need a **single, discoverable, strongly‑typed entry point** (`or3client`) that lets developers and plugin authors add UI actions, pages, tools, and services without hunting for scattered composables. The unified API must **wrap** existing registries/services rather than rewriting them, because those registries already encode important behavior (validation, async component handling, HMR persistence, and SSR‑safe no‑ops). This document spells out **every behavior that must be preserved** and adds concrete notes on how to implement each property so the migration is safe and predictable.
 
 ---
 
-## 1) Current Reality (Inventory + Known Behaviors)
-This section is **not optional**. Every item below exists today and must be preserved by `or3client`.
+## 1) Current Reality (Inventory + Behavior Breakdown)
+This section is **mandatory reading** before any implementation. Each item below is a real system in the codebase with **specific semantics** that cannot be lost.
 
-### 1.1 Generic registry factory
-- `createRegistry()` provides a global Map‑backed registry with:
-  - stable sort (order + id),
-  - immutable items (frozen),
-  - `useItems()` computed list,
-  - HMR‑safe `globalThis` storage.
-  - Default ordering: 200. 【F:app/composables/_registry.ts†L1-L86】
+### 1.1 Generic registry factory (`createRegistry`)
+The base registry provides the following guarantees:
+- **Global persistence via `globalThis`** for HMR survival.
+- **Stable ordering** (order first, then id for deterministic ties).
+- **Frozen payloads** to avoid external mutation after registration.
+- **Reactive list access** via `useItems()` computed.
+- **Convenience helpers**: `listIds()` and snapshot copy.
 
-### 1.2 UI registries with custom behaviors
-- **Sidebar Sections / Footer Actions**
-  - `createRegistry`‑based with contextual visibility/disabled handling, placement grouping, and computed lists. 【F:app/composables/sidebar/useSidebarSections.ts†L1-L206】
-- **Header Actions**
-  - Context‑aware visibility/disabled with route + mobile info. 【F:app/composables/sidebar/useHeaderActions.ts†L1-L123】
-- **Composer Actions**
-  - Uses global Map (not `createRegistry`), tracks a reactive list manually, supports visibility/disabled in editor context. 【F:app/composables/sidebar/useComposerActions.ts†L1-L182】
-- **Sidebar Pages**
-  - Validated via Zod, wraps async component factories using `defineAsyncComponent`, has activation hooks, default header handling, SSR no‑op registration on server, and explicit reactive invalidation via a version counter. 【F:app/composables/sidebar/useSidebarPages.ts†L1-L292】
-- **Dashboard Plugins & Pages**
-  - Complex: global plugin registry, per‑plugin page registry, page component caching, navigation state, and error handling. Also normalizes async components and supports plugin page resolution. 【F:app/composables/dashboard/useDashboardPlugins.ts†L1-L620】
-- **Pane Apps**
-  - Zod validation, supports async component factories, optional `postType`, and initial record creation. Reactivity via registry copy. 【F:app/composables/core/usePaneApps.ts†L1-L176】
-- **Multi‑pane runtime**
-  - Not a registry but a stateful service with Dexie queries, hook integration, and localStorage persistence. It must remain a service, not a list registry. 【F:app/composables/core/useMultiPane.ts†L1-L240】
-- **Project Tree Actions / Message Actions / History Actions / Editor Toolbar**
-  - These use `createRegistry` with ordering and filtered computed lists. 【F:app/composables/projects/useProjectTreeActions.ts†L1-L83】【F:app/composables/chat/useMessageActions.ts†L1-L50】【F:app/composables/threads/useThreadHistoryActions.ts†L1-L82】【F:app/composables/documents/useDocumentHistoryActions.ts†L1-L82】【F:app/composables/editor/useEditorToolbar.ts†L1-L66】
+Implementation notes:
+- `createRegistry` uses a Map stored on `globalThis`, a `shallowRef` list, and syncs after every mutation. It warns in dev if an ID is replaced, then freezes the item. These behaviors must remain intact if an adapter wraps it. 【F:app/composables/_registry.ts†L1-L86】
 
-### 1.3 Editor extension registries
-- Nodes/marks/extensions have **three** registries, explicit ordering, manual reactive lists, and allow lazy extension factories. 【F:app/composables/editor/useEditorNodes.ts†L1-L170】
-- Extension loader resolves lazy factories and skips failures. 【F:app/composables/editor/useEditorExtensionLoader.ts†L1-L132】
+### 1.2 Sidebar Sections + Footer Actions
+**Behavioral details:**
+- Sections are grouped by placement (`top/main/bottom`).
+- Footer actions are context‑aware (visibility + disabled state), then sorted by order.
+- Both use `createRegistry` and default to order `200`.
 
-### 1.4 Tool registry (AI)
-- Stores **enabled state** in localStorage and debounces persistence.
-- Validates arguments against JSON schema, enforces timeouts, exposes `getEnabledDefinitions` and `executeTool`.
-- Registry state is HMR‑safe and uses shallow reactive Map. 【F:app/utils/chat/tool-registry.ts†L1-L357】
+Implementation notes:
+- Adapters must preserve **grouped** output for sections (top/main/bottom) and the `SidebarFooterActionEntry` structure for footer actions (action + disabled). Flattening would lose UI semantics. 【F:app/composables/sidebar/useSidebarSections.ts†L100-L206】
 
-### 1.5 Hooks engine
-- `useHooks()` provides the typed global hook engine, with fallback if no Nuxt injection exists. 【F:app/core/hooks/useHooks.ts†L1-L34】
-- `useHookEffect()` provides safe cleanup across unmount/HMR. 【F:app/composables/core/useHookEffect.ts†L1-L39】
+### 1.3 Header Actions
+**Behavioral details:**
+- Accept route + mobile context.
+- Filter visibility, compute disabled, then sort by order.
 
-### 1.6 Chat input bridge (imperative API)
-- Global registry of chat input handlers with safe programmatic send and HMR behavior. This is *not* a simple list registry; it’s a service API. 【F:app/composables/chat/useChatInputBridge.ts†L1-L75】
+Implementation notes:
+- The adapter should forward `context()` and return the computed list of `{ action, disabled }`, not just raw actions. 【F:app/composables/sidebar/useHeaderActions.ts†L10-L123】
+
+### 1.4 Composer Actions
+**Behavioral details:**
+- Uses a manual Map + reactive list (not `createRegistry`).
+- Freezes action payloads.
+- Filters by visibility + disabled logic based on TipTap editor context.
+
+Implementation notes:
+- or3client must call existing `registerComposerAction`, `useComposerActions`, etc., rather than replacing with a generic registry to avoid breaking reactivity or visibility logic. 【F:app/composables/sidebar/useComposerActions.ts†L74-L182】
+
+### 1.5 Sidebar Pages
+**Behavioral details (critical):**
+- Validates input via **Zod** (id pattern, label length, order bounds).
+- Wraps async components in `defineAsyncComponent` with retry + timeout.
+- Supports lifecycle hooks: `provideContext`, `canActivate`, `onActivate`, `onDeactivate`.
+- Defaults `usesDefaultHeader` and `order` values.
+- SSR guard: registration is a **no‑op** on server.
+- Reactivity is manually triggered via a version counter.
+
+Implementation notes:
+- This is not just a list. Any adapter must preserve validation, wrapping, and lifecycle hooks as‑is. SSR no‑op is non‑negotiable. 【F:app/composables/sidebar/useSidebarPages.ts†L12-L292】
+
+### 1.6 Dashboard Plugins + Pages
+**Behavioral details:**
+- Two registries: plugins + pages (per‑plugin map).
+- Page component caching (avoid repeated async loads).
+- Navigation state with explicit error handling (missing plugin/page, resolve errors).
+- Pages can be inline on plugin registration (auto‑normalized).
+
+Implementation notes:
+- or3client should expose a **dashboard service** that wraps navigation and page resolution. A pure Registry<T> abstraction is insufficient. 【F:app/composables/dashboard/useDashboardPlugins.ts†L1-L620】
+
+### 1.7 Pane Apps + Multi‑pane runtime
+**Pane app registry behavior:**
+- Validates with Zod (id pattern, label length, order bounds).
+- Supports async component factories.
+- Allows custom `postType` and `createInitialRecord` handler.
+
+**Multi‑pane runtime behavior:**
+- Stateful service with Dexie integration, persistence, and hook usage.
+
+Implementation notes:
+- Pane apps are a registry; multi‑pane is a service. They must remain **distinct** in the unified API. 【F:app/composables/core/usePaneApps.ts†L1-L176】【F:app/composables/core/useMultiPane.ts†L1-L240】
+
+### 1.8 Editor nodes/marks/extensions
+**Behavioral details:**
+- Three registries (nodes, marks, extensions) each with ordering.
+- Extensions can be lazy‑loaded via factories.
+- Loader resolves factories and skips failed extensions.
+
+Implementation notes:
+- A single registry cannot represent this. or3client should expose `editor.nodes`, `editor.marks`, `editor.extensions`, and a `loader` helper. 【F:app/composables/editor/useEditorNodes.ts†L1-L170】【F:app/composables/editor/useEditorExtensionLoader.ts†L1-L132】
+
+### 1.9 Tool registry (AI)
+**Behavioral details:**
+- Stores enabled state in localStorage (debounced persistence).
+- Validates arguments against JSON schema.
+- Executes tools with timeout + error handling, storing last error per tool.
+- Returns enabled definitions for OpenRouter payloads.
+
+Implementation notes:
+- This is a service registry with stateful behavior; it must be exposed as such, not as a generic list. 【F:app/utils/chat/tool-registry.ts†L1-L357】
+
+### 1.10 Hooks engine + Hook effect
+**Behavioral details:**
+- `useHooks()` returns typed engine or fallback.
+- `useHookEffect()` auto‑cleans on unmount/HMR.
+
+Implementation notes:
+- The unified API must provide direct access to the typed hook engine and a helper for safe subscription. 【F:app/core/hooks/useHooks.ts†L1-L34】【F:app/composables/core/useHookEffect.ts†L1-L39】
+
+### 1.11 Chat Input Bridge
+**Behavioral details:**
+- Registry of chat input APIs keyed by paneId.
+- `programmaticSend` triggers the real input pipeline (so hooks fire).
+
+Implementation notes:
+- Treat as a service API, not a list registry. 【F:app/composables/chat/useChatInputBridge.ts†L1-L75】
 
 ---
 
-## 2) Why the Original Plan Is Insufficient
-### Missing or under‑specified pieces:
-1. **Registry heterogeneity** is ignored. Many “registries” are not list‑only (Dashboard, Sidebar Pages, Tools, Multi‑pane). A single generic `Registry<T>` is not enough. 【F:app/composables/dashboard/useDashboardPlugins.ts†L1-L620】【F:app/composables/sidebar/useSidebarPages.ts†L1-L292】【F:app/utils/chat/tool-registry.ts†L1-L357】
-2. **SSR boundaries** are non‑trivial. Some registries are client‑only or guard with `process.client` (Sidebar Pages). `or3client` must preserve SSR no‑op behavior without leaking global state across requests. 【F:app/composables/sidebar/useSidebarPages.ts†L178-L238】
-3. **Validation and normalization** are required (Zod for pane apps + sidebar pages, async component normalization, markRaw). If the unified API doesn’t mirror this, it will regress developer experience and runtime safety. 【F:app/composables/core/usePaneApps.ts†L36-L140】【F:app/composables/sidebar/useSidebarPages.ts†L84-L176】
-4. **HMR behaviors** differ per system. `createRegistry` already warns on duplicate IDs and freezes payloads; other registries manage their own reactivity. A single “Registry<T>” class cannot overwrite these patterns without re‑implementing the nuanced behaviors. 【F:app/composables/_registry.ts†L29-L86】【F:app/composables/sidebar/useComposerActions.ts†L76-L138】
-5. **Service boundaries** are blurred. Multi‑pane, tool registry, chat input bridge, and hooks are stateful services; they are not pure registries. Treating them as just registries will be a functional regression. 【F:app/composables/core/useMultiPane.ts†L1-L240】【F:app/utils/chat/tool-registry.ts†L1-L357】【F:app/composables/chat/useChatInputBridge.ts†L1-L75】
+## 2) Problems With the Original Plan
+1. **It conflates registries and services**, which would break systems like dashboard navigation, tool execution, and multi‑pane state. 【F:app/composables/dashboard/useDashboardPlugins.ts†L1-L620】【F:app/utils/chat/tool-registry.ts†L1-L357】
+2. **It ignores validation + normalization**, which are core to sidebar pages and pane apps. 【F:app/composables/sidebar/useSidebarPages.ts†L84-L176】【F:app/composables/core/usePaneApps.ts†L36-L140】
+3. **It does not address SSR no‑ops** for client‑only registration paths (e.g., sidebar pages). 【F:app/composables/sidebar/useSidebarPages.ts†L178-L238】
+4. **It lacks migration details**, leaving devs to reverse‑engineer composables to know what to wrap.
 
 ---
 
 ## 3) Requirements (Must‑Haves)
 
-### 3.1 Unified entry point (developer UX)
-- `useOR3Client()` (and/or auto‑injected `$or3client`) is the single source of truth.
-- `or3client` must expose **typed**, **discoverable** namespaces (e.g., `ui.sidebar.pages`, `ai.tools`, `core.hooks`).
+### 3.1 Unified entry point
+- `useOR3Client()` (and `$or3client` injection) is the only import needed for extensions.
+- Namespaces are organized by **domain** (`ui`, `ai`, `core`).
 
 ### 3.2 Preserve existing semantics
-- **No breaking behavior**: existing composables must continue to work by proxying to the new API.
-- Preserve existing HMR behavior, warnings, item freezing, validation, component wrapping, error handling, and localStorage persistence.
+- Every adapter must preserve the semantics listed in Section 1.
+- No breaking behavior: old composables must proxy to the unified API.
 
 ### 3.3 Extendability
-- The unified API must be *itself* extendable: a new feature should be able to add a namespace or registry without rewriting core.
-- Must support “service‑style” sub‑clients (not only lists).
+- New extension points should be added by registering new adapter modules under `or3client`, not by editing core components.
 
 ### 3.4 SSR/client boundaries
-- Per‑request isolation on server, singleton on client.
-- Client‑only registries must no‑op or lazily initialize in SSR contexts.
+- Server: new `OR3Client` instance per request.
+- Client: singleton instance, HMR‑stable.
+- Client‑only registries must no‑op or lazily initialize on SSR.
 
-### 3.5 Types are the product
-- Provide a central type map and registry interfaces that mirror existing shapes.
-- Provide `defineX()` helpers where better inference is needed (similar to `defineTool`).
+### 3.5 Typed discoverability
+- Type exports must be centralized (re‑export from existing composables, **no duplication**).
+- Provide `defineX` helpers for inference where needed.
 
 ---
 
 ## 4) Non‑Goals
-- Rewriting internal systems (Dashboard, Multi‑pane, Tool Registry) is **out of scope** for initial unification.
-- Removing existing composables is **not** required for the first iteration.
-- Changing UI behavior or ordering is **explicitly forbidden**.
+- Rewriting registries into a new system.
+- Removing old composables immediately.
+- Changing UI order or behavior.
 
 ---
 
 ## 5) Success Criteria
-- Dev can type `useOR3Client().ui...` and discover all extension points.
-- Existing plugin registrations still work unchanged.
-- SSR does not leak state between requests.
+- Dev can type `useOR3Client().ui.sidebar...` and discover all extension points.
+- Existing plugins continue to work unchanged.
+- SSR does not leak registry state between requests.
 - No regressions in:
   - Sidebar pages async loading
   - Tool registry persistence
