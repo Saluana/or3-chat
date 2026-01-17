@@ -614,6 +614,30 @@
                     "summary": "Documentation for the semantic icon system. Covers core concepts (Tokens, Registry, Composable), usage in components and configuration, adding new icons, and overriding icons in themes."
                 }
             ]
+        },
+        {
+            "title": "Cloud",
+            "path": "/cloud",
+            "files": [
+                {
+                    "name": "sync-layer.md",
+                    "path": "/cloud/sync-layer",
+                    "category": "Architecture",
+                    "summary": "Detailed overview of the offline-first DB Sync Layer. Covers the local-first architecture, write/read paths, LWW conflict resolution with Hybrid Logical Clocks, and core components (HookBridge, OutboxManager, SubscriptionManager)."
+                },
+                {
+                    "name": "auth-system.md",
+                    "path": "/cloud/auth-system",
+                    "category": "Architecture",
+                    "summary": "Architecture of the Hybrid Authentication System. Explains how Clerk is used for Identity/Sync and OpenRouter for LLM access, including the Server-Side Provisioning flow (Convex Workspaces)."
+                },
+                {
+                    "name": "storage-layer.md",
+                    "path": "/cloud/storage-layer",
+                    "category": "Architecture",
+                    "summary": "Overview of the CAS (Content-Addressable Storage) system for large assets. Details the local-first 'Blob' architecture, FileTransferQueue for offline support, and pluggable ObjectStorageProvider interface."
+                }
+            ]
         }
     ]
 }

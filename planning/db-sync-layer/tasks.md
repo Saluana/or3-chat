@@ -171,9 +171,9 @@ date: 2026-01-11
     - [x] Push flow with mock provider
     - [x] Pull flow with mock provider
     - [x] Conflict scenarios
-- [ ] **14.3 E2E tests**
-    - [ ] Multi-device sync
-    - [ ] Offline recovery
+- [x] **14.3 E2E tests**
+    - [x] Multi-device sync
+    - [x] Offline recovery
 
 ---
 
