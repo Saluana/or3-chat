@@ -15,7 +15,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
 
 ### Tasks
 
-- [ ] **0.1** Read `app/composables/_registry.ts` and document:
+- [x] **0.1** Read `app/composables/_registry.ts` and document:
   - How `globalThis` is used for HMR persistence
   - How ordering works (order first, then id)
   - How items are frozen after registration
@@ -25,7 +25,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
   
   【F:app/composables/_registry.ts†L1-L86】
 
-- [ ] **0.2** List all `createRegistry`-based composables and their locations:
+- [x] **0.2** List all `createRegistry`-based composables and their locations:
   - Sidebar sections
   - Footer actions  
   - Header actions
@@ -37,7 +37,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
   
   **Acceptance:** Spreadsheet/table with composable name, file path, and notes on any special behavior.
 
-- [ ] **0.3** List all **non‑registry services** that need service adapters:
+- [x] **0.3** List all **non‑registry services** that need service adapters:
   - `useMultiPane()` — stateful pane management 【F:app/composables/core/useMultiPane.ts】
   - `useHooks()` — typed hook engine 【F:app/core/hooks/useHooks.ts】
   - `useToolRegistry()` — AI tool management 【F:app/utils/chat/tool-registry.ts】
@@ -45,7 +45,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
   
   **Acceptance:** Each service documented with its key methods and state.
 
-- [ ] **0.4** Document validation/normalization for complex registries:
+- [x] **0.4** Document validation/normalization for complex registries:
   - Sidebar pages: Zod schema, async component wrapping, lifecycle hooks
   - Pane apps: Zod schema, async factories
   - Dashboard: inline page normalization, component caching
@@ -56,7 +56,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
   【F:app/composables/core/usePaneApps.ts†L36-L140】
   【F:app/composables/dashboard/useDashboardPlugins.ts†L90-L200】
 
-- [ ] **0.5** Document composer actions special handling:
+- [x] **0.5** Document composer actions special handling:
   - Uses manual Map (not `createRegistry`)
   - TipTap editor context for visibility/disabled
   
@@ -74,7 +74,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
 
 ### Directory Setup
 
-- [ ] **1.1** Create directory structure:
+- [x] **1.1** Create directory structure:
   ```
   app/core/or3client/
   ├── index.ts
@@ -90,7 +90,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
 
 ### Core Files
 
-- [ ] **1.2** Create `utils.ts` with adapter interfaces:
+- [x] **1.2** Create `utils.ts` with adapter interfaces:
   ```ts
   // RegistryAdapter<T> interface
   // ServiceAdapter<T> interface
@@ -101,7 +101,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
   
   **Reference:** See design.md Section 3 for exact interface definitions.
 
-- [ ] **1.3** Create `types.ts` with re-exports:
+- [x] **1.3** Create `types.ts` with re-exports:
   ```ts
   // Re-export types from source modules
   // DO NOT DUPLICATE TYPE DEFINITIONS
@@ -111,7 +111,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
   
   **Acceptance:** All type imports resolve. No duplicate type declarations.
 
-- [ ] **1.4** Create `define.ts` with helper functions:
+- [x] **1.4** Create `define.ts` with helper functions:
   ```ts
   export function defineSidebarPage(def: SidebarPageDef): SidebarPageDef { return def; }
   export function definePaneApp(def: PaneAppDef): PaneAppDef { return def; }
@@ -120,7 +120,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
   
   **Acceptance:** IDE autocomplete works when using defineX helpers.
 
-- [ ] **1.5** Create `client.ts` with OR3Client class:
+- [x] **1.5** Create `client.ts` with OR3Client class:
   ```ts
   export interface OR3Client {
     readonly version: 1;
@@ -137,7 +137,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
   
   **Acceptance:** `createOR3Client()` returns typed object. TypeScript happy.
 
-- [ ] **1.6** Create `index.ts` with exports:
+- [x] **1.6** Create `index.ts` with exports:
   ```ts
   export { createOR3Client, type OR3Client } from './client';
   export * from './types';
@@ -145,7 +145,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
   export { useOR3Client } from './composable';
   ```
 
-- [ ] **1.7** Create composable `useOR3Client.ts`:
+- [x] **1.7** Create composable `useOR3Client.ts`:
   ```ts
   export function useOR3Client(): OR3Client {
     const { $or3client } = useNuxtApp();
@@ -158,7 +158,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
 
 ### Nuxt Integration
 
-- [ ] **1.8** Create Nuxt plugin `app/plugins/or3client.ts`:
+- [x] **1.8** Create Nuxt plugin `app/plugins/or3client.ts`:
   ```ts
   export default defineNuxtPlugin(() => {
     const client = createOR3Client();
@@ -172,7 +172,7 @@ This is a **step‑by‑step execution plan** with clear intent per phase. The g
   
   **Acceptance:** `useNuxtApp().$or3client` returns the client instance.
 
-- [ ] **1.9** Verify SSR behavior:
+- [x] **1.9** Verify SSR behavior:
   - Server: each request gets fresh client instance
   - Client: singleton client persists
   
@@ -197,58 +197,58 @@ For each adapter:
 
 ### Tasks
 
-- [ ] **2.1** `ui.chat.messageActions` adapter
+- [x] **2.1** `ui.chat.messageActions` adapter
   - **Wraps:** `registerMessageAction`, `useMessageActions`, `unregisterMessageAction`
   - **File:** `adapters/message-actions.ts`
   - **Test:** Register action, verify it appears in `useItems()`
   
   【F:app/composables/chat/useMessageActions.ts】
 
-- [ ] **2.2** `ui.editor.toolbar` adapter
+- [x] **2.2** `ui.editor.toolbar` adapter
   - **Wraps:** `registerEditorToolbarButton`, `useEditorToolbarButtons`
   - **File:** `adapters/editor-toolbar.ts`
   
   【F:app/composables/editor/useEditorToolbar.ts】
 
-- [ ] **2.3** `ui.projects.treeActions` adapter
+- [x] **2.3** `ui.projects.treeActions` adapter
   - **Wraps:** `registerProjectTreeAction`, `useProjectTreeActions`
   - **File:** `adapters/project-tree-actions.ts`
   
   【F:app/composables/projects/useProjectTreeActions.ts】
 
-- [ ] **2.4** `ui.threads.historyActions` adapter
+- [x] **2.4** `ui.threads.historyActions` adapter
   - **Wraps:** `registerThreadHistoryAction`, `useThreadHistoryActions`
   - **File:** `adapters/thread-history-actions.ts`
   
   【F:app/composables/threads/useThreadHistoryActions.ts】
 
-- [ ] **2.5** `ui.documents.historyActions` adapter
+- [x] **2.5** `ui.documents.historyActions` adapter
   - **Wraps:** `registerDocumentHistoryAction`, `useDocumentHistoryActions`
   - **File:** `adapters/document-history-actions.ts`
   
   【F:app/composables/documents/useDocumentHistoryActions.ts】
 
-- [ ] **2.6** `ui.sidebar.sections` adapter
+- [x] **2.6** `ui.sidebar.sections` adapter
   - **Wraps:** `registerSidebarSection`, `useSidebarSections`, `unregisterSidebarSection`
   - **File:** `adapters/sidebar-sections.ts`
   - **Note:** Preserve grouped output (top/main/bottom)
   
   【F:app/composables/sidebar/useSidebarSections.ts】
 
-- [ ] **2.7** `ui.sidebar.footerActions` adapter
+- [x] **2.7** `ui.sidebar.footerActions` adapter
   - **Wraps:** `registerSidebarFooterAction`, `useSidebarFooterActions`
   - **File:** `adapters/sidebar-footer-actions.ts`
   
   【F:app/composables/sidebar/useSidebarSections.ts】
 
-- [ ] **2.8** `ui.sidebar.headerActions` adapter
+- [x] **2.8** `ui.sidebar.headerActions` adapter
   - **Wraps:** `registerHeaderAction`, `useHeaderActions`
   - **File:** `adapters/sidebar-header-actions.ts`
   - **Note:** Preserve context (route + mobile) handling
   
   【F:app/composables/sidebar/useHeaderActions.ts】
 
-- [ ] **2.9** `ui.sidebar.composerActions` adapter
+- [x] **2.9** `ui.sidebar.composerActions` adapter
   - **Wraps:** `registerComposerAction`, `useComposerActions`, `unregisterComposerAction`
   - **File:** `adapters/sidebar-composer-actions.ts`
   - **Note:** This is NOT createRegistry-based. Uses manual Map. Preserve TipTap context filtering.
@@ -265,7 +265,7 @@ For each adapter:
 
 ### Tasks
 
-- [ ] **3.1** `ui.sidebar.pages` adapter
+- [x] **3.1** `ui.sidebar.pages` adapter
   - **Wraps:** `useSidebarPages()` return object
   - **File:** `adapters/sidebar-pages.ts`
   - **Must preserve:**
@@ -277,52 +277,52 @@ For each adapter:
   
   【F:app/composables/sidebar/useSidebarPages.ts】
 
-- [ ] **3.2** `ui.dashboard.plugins` adapter
+- [x] **3.2** `ui.dashboard.plugins` adapter
   - **Wraps:** `registerDashboardPlugin`, `useDashboardPlugins`
   - **File:** `adapters/dashboard-plugins.ts`
   - **Must preserve:** Inline page normalization
   
   【F:app/composables/dashboard/useDashboardPlugins.ts】
 
-- [ ] **3.3** `ui.dashboard.pages` adapter
+- [x] **3.3** `ui.dashboard.pages` adapter
   - **Wraps:** `registerDashboardPluginPage`, `useDashboardPluginPages`
   - **File:** `adapters/dashboard-pages.ts`
   
   【F:app/composables/dashboard/useDashboardPlugins.ts】
 
-- [ ] **3.4** `ui.dashboard.navigation` adapter
+- [x] **3.4** `ui.dashboard.navigation` adapter
   - **Wraps:** `useDashboardNavigation`, `resolveDashboardPluginPageComponent`
   - **File:** `adapters/dashboard-navigation.ts`
   - **Must preserve:** Component cache + error handling state
   
   【F:app/composables/dashboard/useDashboardPlugins.ts】
 
-- [ ] **3.5** `ui.editor.nodes` adapter
+- [x] **3.5** `ui.editor.nodes` adapter
   - **Wraps:** `registerEditorNode`, `listEditorNodes`, `listRegisteredEditorNodeIds`
   - **File:** `adapters/editor-nodes.ts`
   
   【F:app/composables/editor/useEditorNodes.ts】
 
-- [ ] **3.6** `ui.editor.marks` adapter
+- [x] **3.6** `ui.editor.marks` adapter
   - **Wraps:** `registerEditorMark`, `listEditorMarks`, `listRegisteredEditorMarkIds`
   - **File:** `adapters/editor-marks.ts`
   
   【F:app/composables/editor/useEditorNodes.ts】
 
-- [ ] **3.7** `ui.editor.extensions` adapter
+- [x] **3.7** `ui.editor.extensions` adapter
   - **Wraps:** `registerEditorExtension`, `listEditorExtensions`, `listRegisteredEditorExtensionIds`
   - **File:** `adapters/editor-extensions.ts`
   - **Must preserve:** Lazy factory support
   
   【F:app/composables/editor/useEditorNodes.ts】
 
-- [ ] **3.8** `ui.editor.loader` adapter
+- [x] **3.8** `ui.editor.loader` adapter
   - **Wraps:** `loadEditorExtensions`, `createLazyNodeFactory`, `createLazyMarkFactory`, `createLazyExtensionFactory`
   - **File:** `adapters/editor-loader.ts`
   
   【F:app/composables/editor/useEditorExtensionLoader.ts】
 
-- [ ] **3.9** `ai.tools` adapter
+- [x] **3.9** `ai.tools` adapter
   - **Wraps:** `useToolRegistry()`
   - **File:** `adapters/tools.ts`
   - **Type:** Service adapter (not registry)
@@ -335,7 +335,7 @@ For each adapter:
   
   【F:app/utils/chat/tool-registry.ts】
 
-- [ ] **3.10** `ui.panes.apps` adapter
+- [x] **3.10** `ui.panes.apps` adapter
   - **Wraps:** `usePaneApps()` registry
   - **File:** `adapters/pane-apps.ts`
   - **Must preserve:**
@@ -355,7 +355,7 @@ For each adapter:
 
 ### Tasks
 
-- [ ] **4.1** `ui.panes.manager` adapter
+- [x] **4.1** `ui.panes.manager` adapter
   - **Wraps:** `useMultiPane()` factory
   - **File:** `adapters/multi-pane.ts`
   - **Type:** Service adapter
@@ -364,14 +364,14 @@ For each adapter:
   
   【F:app/composables/core/useMultiPane.ts】
 
-- [ ] **4.2** `ui.chat.inputBridge` adapter
+- [x] **4.2** `ui.chat.inputBridge` adapter
   - **Wraps:** `registerPaneInput`, `programmaticSend`, `unregisterPaneInput`, `hasPane`
   - **File:** `adapters/chat-input-bridge.ts`
   - **Type:** Service adapter
   
   【F:app/composables/chat/useChatInputBridge.ts】
 
-- [ ] **4.3** `core.hooks` adapter
+- [x] **4.3** `core.hooks` adapter
   - **Wraps:** `useHooks()` + `useHookEffect()` helper
   - **File:** `adapters/hooks.ts`
   - **Type:** Service adapter
@@ -399,14 +399,14 @@ For each adapter:
 
 ### Pre-Flight Checks
 
-- [ ] **5.0** Run circular dependency check:
+- [x] **5.0** Run circular dependency check:
   ```bash
   npx madge --circular app/core/or3client/
   ```
   
   **Acceptance:** No cycles detected.
 
-- [ ] **5.1** Add feature flag for rollback:
+- [x] **5.1** Add feature flag for rollback:
   ```ts
   // nuxt.config.ts or .env
   FEATURE_OR3CLIENT_PROXY=true
@@ -522,7 +522,7 @@ export function registerSidebarSection(section: SidebarSection) {
 
 ### Unit Tests
 
-- [ ] **7.1** Test each adapter preserves behavior:
+- [x] **7.1** Test each adapter preserves behavior:
   ```ts
   describe('sidebar pages adapter', () => {
     it('validates id pattern via Zod', () => {
@@ -537,7 +537,7 @@ export function registerSidebarSection(section: SidebarSection) {
   });
   ```
 
-- [ ] **7.2** Test that `or3client.ui.X.register()` produces identical results to direct composable call:
+- [x] **7.2** Test that `or3client.ui.X.register()` produces identical results to direct composable call:
   ```ts
   // Register via or3client
   or3client.ui.sidebar.pages.register(pageDef);
@@ -581,7 +581,7 @@ export function registerSidebarSection(section: SidebarSection) {
 
 ### Integration Tests
 
-- [ ] **7.6** Full workflow tests:
+- [x] **7.6** Full workflow tests:
   - Register dashboard plugin → navigate → verify page renders
   - Register tool → execute with valid args → verify result
   - Register sidebar page → navigate to it → verify lifecycle hooks fire
