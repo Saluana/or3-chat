@@ -812,7 +812,7 @@ export type CoreHookPayloadMap = {
             winner: 'local' | 'remote';
         }
     ];
-    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown }];
+    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];
     'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];
     'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];
     'sync.rescan:action:starting': [{ scope: SyncScopePayload }];

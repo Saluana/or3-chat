@@ -62,7 +62,7 @@
                         <UButton
                             size="sm"
                             variant="ghost"
-                            class="bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                                class="w-fit justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
                             @click="emit('cta')"
                         >
                             {{ ctaLabel }}

@@ -289,14 +289,12 @@ async function importLocalData() {
             'posts',
         ];
 
-        await targetDb.transaction('rw', tables.map((name) => (targetDb as any).table(name)), async () => {
-            for (const tableName of tables) {
-                const sourceRows = await (baseDb as any).table(tableName).toArray();
-                if (sourceRows.length) {
-                    await (targetDb as any).table(tableName).bulkPut(sourceRows);
-                }
+        for (const tableName of tables) {
+            const sourceRows = await (baseDb as any).table(tableName).toArray();
+            if (sourceRows.length) {
+                await (targetDb as any).table(tableName).bulkPut(sourceRows);
             }
-        });
+        }
 
         await loadLegacyStats();
         toast.add({

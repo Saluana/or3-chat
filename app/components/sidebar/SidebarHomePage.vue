@@ -116,7 +116,7 @@
                             <UButton
                                 size="sm"
                                 variant="ghost"
-                                class="w-full justify-center whitespace-nowrap truncate text-[12px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                                class="w-full justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
                                 title="Create your first project"
                                 @click="emit('new-project')"
                             >
@@ -125,7 +125,7 @@
                             <UButton
                                 size="sm"
                                 variant="ghost"
-                                class="w-full justify-center whitespace-nowrap truncate text-[12px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                                class="w-full justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
                                 title="Start a new chat"
                                 @click="emit('new-chat')"
                             >
@@ -134,7 +134,7 @@
                             <UButton
                                 size="sm"
                                 variant="ghost"
-                                class="w-full justify-center whitespace-nowrap truncate text-[12px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                                class="w-full justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
                                 title="Create a document"
                                 @click="emit('new-document')"
                             >

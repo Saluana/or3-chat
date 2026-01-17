@@ -19,7 +19,7 @@ export default {
                 overlay:
                     'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
                 content:
-                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none retro-shadow',
+                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none ',
                 body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)]  p-4',
                 header: 'relative border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-[var(--md-on-primary)]!',
                 title: 'text-[var(--md-on-primary)] font-semibold text-lg!',

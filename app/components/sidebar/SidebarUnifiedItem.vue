@@ -18,9 +18,9 @@
         <!-- Icon -->
         <UIcon
             :name="item.type === 'thread' ? iconChat : iconNote"
-            class="w-[18px] h-[18px] shrink-0 transition-colors"
+            class="w-[18px] h-[18px] shrink-0 transition-colors sb-btn-icon"
             :class="{
-                'text-[color:var(--md-primary)]': active,
+                'text-[color:var(--md-primary)] sb-btn-icon-active': active,
                 'text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-on-surface)]/80':
                     !active,
             }"
@@ -28,10 +28,10 @@
 
         <!-- Title -->
         <span
-            class="flex-1 truncate text-sm font-normal leading-tight"
+            class="flex-1 truncate text-sm font-normal leading-tight sb-btn-title"
             :class="
                 active
-                    ? 'text-[color:var(--md-primary)]'
+                    ? 'text-[color:var(--md-primary)] sb-btn-title-active'
                     : 'text-[color:var(--md-on-surface)]'
             "
         >
