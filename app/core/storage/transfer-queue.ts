@@ -616,5 +616,8 @@ export function getStorageTransferQueue(): FileTransferQueue | null {
 }
 
 export function _resetStorageTransferQueue(): void {
+    if (queueInstance) {
+        queueInstance.cancelAllRunning();
+    }
     queueInstance = null;
 }

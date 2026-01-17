@@ -72,6 +72,7 @@ hash: z.string(), // 'sha256:<hex>' or 'md5:<hex>' or '<hex>' (legacy MD5)
 
 Notes:
 - `ref_count` is derived (computed from references) and should not be LWW-synced.
+- Server-side metadata commits may seed `ref_count` (hint only) for new uploads.
 
 #### New `file_transfers` table (transfer outbox)
 

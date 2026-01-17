@@ -1,9 +1,23 @@
+import { z } from 'zod';
 import type { ObjectStorageProvider, PresignedUrlResult } from '../types';
 
-async function postJson<T>(
+const PresignedUrlResponseSchema = z
+    .object({
+        url: z.string(),
+        expiresAt: z.number(),
+        headers: z.record(z.string(), z.string()).optional(),
+        storageId: z.string().optional(),
+        method: z.string().optional(),
+    })
+    .passthrough();
+
+const CommitResponseSchema = z.object({ ok: z.boolean() }).passthrough();
+
+async function postJson<T extends z.ZodTypeAny>(
     url: string,
-    body: Record<string, unknown>
-): Promise<T> {
+    body: Record<string, unknown>,
+    schema: T
+): Promise<z.infer<T>> {
     const response = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -12,7 +26,8 @@ async function postJson<T>(
     if (!response.ok) {
         throw new Error(`Storage request failed: ${response.status}`);
     }
-    return (await response.json()) as T;
+    const json = await response.json();
+    return schema.parse(json);
 }
 
 export function createConvexStorageProvider(): ObjectStorageProvider {
@@ -26,40 +41,52 @@ export function createConvexStorageProvider(): ObjectStorageProvider {
         },
 
         async getPresignedUploadUrl(input): Promise<PresignedUrlResult> {
-            return postJson<PresignedUrlResult>('/api/storage/presign-upload', {
-                workspace_id: input.workspaceId,
-                hash: input.hash,
-                mime_type: input.mimeType,
-                size_bytes: input.sizeBytes,
-                expires_in_ms: input.expiresInMs,
-                disposition: input.disposition,
-            });
+            return postJson(
+                '/api/storage/presign-upload',
+                {
+                    workspace_id: input.workspaceId,
+                    hash: input.hash,
+                    mime_type: input.mimeType,
+                    size_bytes: input.sizeBytes,
+                    expires_in_ms: input.expiresInMs,
+                    disposition: input.disposition,
+                },
+                PresignedUrlResponseSchema
+            );
         },
 
         async getPresignedDownloadUrl(input): Promise<PresignedUrlResult> {
-            return postJson<PresignedUrlResult>('/api/storage/presign-download', {
-                workspace_id: input.workspaceId,
-                hash: input.hash,
-                storage_id: input.storageId,
-                expires_in_ms: input.expiresInMs,
-                disposition: input.disposition,
-            });
+            return postJson(
+                '/api/storage/presign-download',
+                {
+                    workspace_id: input.workspaceId,
+                    hash: input.hash,
+                    storage_id: input.storageId,
+                    expires_in_ms: input.expiresInMs,
+                    disposition: input.disposition,
+                },
+                PresignedUrlResponseSchema
+            );
         },
 
         async commitUpload(input): Promise<void> {
-            await postJson<void>('/api/storage/commit', {
-                workspace_id: input.workspaceId,
-                hash: input.hash,
-                storage_id: input.storageId,
-                storage_provider_id: input.storageProviderId ?? 'convex',
-                name: input.meta.name,
-                mime_type: input.meta.mimeType,
-                size_bytes: input.meta.sizeBytes,
-                kind: input.meta.kind,
-                width: input.meta.width,
-                height: input.meta.height,
-                page_count: input.meta.pageCount,
-            });
+            await postJson(
+                '/api/storage/commit',
+                {
+                    workspace_id: input.workspaceId,
+                    hash: input.hash,
+                    storage_id: input.storageId,
+                    storage_provider_id: input.storageProviderId ?? 'convex',
+                    name: input.meta.name,
+                    mime_type: input.meta.mimeType,
+                    size_bytes: input.meta.sizeBytes,
+                    kind: input.meta.kind,
+                    width: input.meta.width,
+                    height: input.meta.height,
+                    page_count: input.meta.pageCount,
+                },
+                CommitResponseSchema
+            );
         },
     };
 }

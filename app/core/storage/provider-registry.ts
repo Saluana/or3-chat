@@ -21,18 +21,31 @@ export const useStorageProviders = registry.useItems;
 let cachedProvider: ObjectStorageProvider | null = null;
 let cachedProviderId: string | null = null;
 
-export function getActiveStorageProvider(): ObjectStorageProvider | null {
+function getConfiguredProviderId(): string {
     const config = useRuntimeConfig();
-    const providerId = config.public?.storage?.provider || 'convex';
+    return config.public?.storage?.provider || 'convex';
+}
+
+function createProviderFromConfig(): ObjectStorageProvider | null {
+    const providerId = getConfiguredProviderId();
+    const items = registry.snapshot();
+    const entry = items.find((item) => item.id === providerId);
+    return entry?.create() ?? null;
+}
+
+export function getActiveStorageProvider(): ObjectStorageProvider | null {
+    if (!import.meta.client && !import.meta.env?.VITEST) {
+        return createProviderFromConfig();
+    }
+
+    const providerId = getConfiguredProviderId();
 
     // Return cached instance if provider hasn't changed
     if (cachedProvider && cachedProviderId === providerId) {
         return cachedProvider;
     }
 
-    const items = registry.snapshot();
-    const entry = items.find((item) => item.id === providerId);
-    cachedProvider = entry?.create() ?? null;
+    cachedProvider = createProviderFromConfig();
     cachedProviderId = providerId;
     return cachedProvider;
 }

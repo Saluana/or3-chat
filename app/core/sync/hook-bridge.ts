@@ -175,11 +175,15 @@ export class HookBridge {
             this.db.pending_ops.add(pendingOp).catch((error) => {
                 console.error('[HookBridge] Failed to enqueue pending op', error);
                 // Emit hook for observability
-                void useHooks().doAction('sync.capture:action:failed', {
-                    tableName,
-                    pk,
-                    error: String(error),
-                });
+                useHooks()
+                    .doAction('sync.capture:action:failed', {
+                        tableName,
+                        pk,
+                        error: String(error),
+                    })
+                    .catch((hookError) => {
+                        console.error('[HookBridge] Failed to emit capture failure hook', hookError);
+                    });
                 // Rethrow to fail the transaction and prevent silent data loss
                 throw error;
             });
@@ -187,7 +191,18 @@ export class HookBridge {
         if (hasPendingOps) {
             transaction.table('pending_ops').add(pendingOp);
         } else {
-            transaction.on('complete', enqueuePendingOp);
+            transaction.on('complete', () => {
+                enqueuePendingOp().catch((error) => {
+                    console.error(
+                        '[HookBridge] Deferred pending_ops insert failed. Op may be lost:',
+                        {
+                            tableName,
+                            pk,
+                            error: String(error),
+                        }
+                    );
+                });
+            });
         }
 
         if (operation === 'delete') {
@@ -209,11 +224,26 @@ export class HookBridge {
             if (hasTombstones) {
                 transaction.table('tombstones').put(tombstone);
             } else {
-                transaction.on('complete', enqueueTombstone);
+                transaction.on('complete', () => {
+                    enqueueTombstone().catch((error) => {
+                        console.error(
+                            '[HookBridge] Deferred tombstone insert failed. Op may be lost:',
+                            {
+                                tableName,
+                                pk,
+                                error: String(error),
+                            }
+                        );
+                    });
+                });
             }
         }
 
-        void useHooks().doAction('sync.op:action:captured', { op: pendingOp });
+        useHooks()
+            .doAction('sync.op:action:captured', { op: pendingOp })
+            .catch((error) => {
+                console.error('[HookBridge] Failed to emit capture hook', error);
+            });
     }
 
     /**

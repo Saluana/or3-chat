@@ -144,6 +144,18 @@ function sanitizePayload(payload: Record<string, unknown> | undefined): Record<s
     return safe;
 }
 
+function validatePayload(
+    tableName: string,
+    payload: Record<string, unknown> | undefined
+): void {
+    if (!payload) return;
+    if ('deleted' in payload && typeof payload.deleted !== 'boolean') {
+        throw new Error(
+            `Invalid payload for ${tableName}: 'deleted' must be boolean`
+        );
+    }
+}
+
 /**
  * Apply a single operation to the appropriate data table
  * Implements LWW (Last-Write-Wins) conflict resolution
@@ -170,6 +182,7 @@ async function applyOpToTable(
 
     // SECURITY: Strip workspace_id and _id from payload to prevent injection attacks
     const payload = sanitizePayload(op.payload as Record<string, unknown> | undefined);
+    validatePayload(op.table_name, payload);
     const payloadCreatedAt =
         typeof payload?.created_at === 'number' ? (payload.created_at as number) : undefined;
     const payloadUpdatedAt =

@@ -250,6 +250,7 @@
 			var(--tw-shadow);
 		transition: box-shadow 150ms ease;
 	}
+
 	.chat-input-main:hover {
 		--tw-shadow: 3px 3px 0 color-mix(in srgb, var(--md-primary) 10%, transparent);
 		box-shadow:
@@ -277,6 +278,14 @@
 
 .cm-user {
 	@apply shadow-[2px_2px_0_var(--md-border-color)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-5 py-6!;
+}
+
+.sb-bottom-border {
+	@apply mt-2 mb-1.5;
+}
+
+#nav-pages-section {
+	@apply justify-center items-center
 }
 
 /*

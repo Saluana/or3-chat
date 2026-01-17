@@ -77,25 +77,36 @@ export const sidebarOverrides = {
     },
     /* --- Sidebar bottom nav buttons --- */
     'button#sidebar.bottom-nav.info': {
-        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] hover:bg-[var(--md-info-hover)]! active:bg-[var(--md-info-active)]!',
+        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] hover:bg-[var(--md-info-hover)]! active:bg-[var(--md-info-active)]!',
         variant: 'soft',
     },
     'button#sidebar.bottom-nav.connect': {
-        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] transition-colors duration-150',
+        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] transition-colors duration-150',
         variant: 'soft',
     },
+    // SSR Auth button (Clerk sign-in/account) - PRIMARY CTA
+    // Base styles only - hover/active defined per-state to avoid conflicts
+    'button#sidebar.bottom-nav.auth': {
+        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] transition-colors duration-150',
+        variant: 'soft',
+    },
+    // OpenRouter auth button states (static build mode)
+    'button#sidebar.bottom-nav.auth:connected': {
+        class: 'bg-[var(--md-success)]/10! hover:border-[color:var(--md-error)]! hover:bg-[var(--md-error)]/30! active:bg-[var(--md-error)]/40! text-[color:var(--md-on-surface)]',
+    },
+    'button#sidebar.bottom-nav.auth:disconnected': {
+        class: 'hover:bg-[var(--md-success)]/15! active:bg-[var(--md-success)]/25!',
+    },
+    // SSR auth mode (Clerk) - subtle primary styling
+    'button#sidebar.bottom-nav.auth:ssr': {
+        class: 'bg-[var(--md-primary)]/8! border-[color:var(--md-primary)]/30! text-[var(--md-primary)]! hover:bg-[var(--md-primary)]/15! hover:border-[color:var(--md-primary)]/50! active:bg-[var(--md-primary)]/25!',
+    },
+
     'button#sidebar.bottom-nav.connect:connected': {
         class: 'bg-[var(--md-success)]/20 hover:border-[color:var(--md-error)]! hover:bg-[var(--md-error)]/30! active:bg-[var(--md-error)]/40! text-[color:var(--md-on-surface)]',
     },
     'button#sidebar.bottom-nav.connect:disconnected': {
         class: 'hover:bg-[var(--md-success)]/15! active:bg-[var(--md-success)]/25',
-    },
-
-    // SSR Auth button (Clerk sign-in/account) - PRIMARY CTA
-    // Uses subtle primary tint to draw attention as main action
-    'button#sidebar.bottom-nav.auth': {
-        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-[var(--md-primary)]/8 border-[length:var(--md-border-width)] border-[color:var(--md-primary)]/30 rounded-[var(--md-border-radius)] text-[var(--md-primary)] hover:bg-[var(--md-primary)]/15! hover:border-[color:var(--md-primary)]/50! active:bg-[var(--md-primary)]/25!',
-        variant: 'soft',
     },
 
     // Dashboard button - SECONDARY action (neutral styling)
@@ -111,13 +122,13 @@ export const sidebarOverrides = {
     /* --- Collapsed sidebar buttons --- */
     'button#sidebar.collapsed-page': {
         ui: {
-            base: 'bg-transparent hover:bg-[var(--md-surface-hover)] hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] text-[var(--md-on-surface)]',
+            base: 'h-[48px] w-[48px] bg-transparent hover:bg-[var(--md-primary)]/5 hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] text-[var(--md-on-surface)]',
             leadingIcon: 'w-6 h-6',
         },
     },
     'button#sidebar.collapsed-page:active': {
         ui: {
-            base: 'bg-[var(--md-surface-active)] ring-1 ring-[var(--md-primary-border)]/20 hover:ring-1 hover:ring-[var(--md-primary-border)]/50 hover:bg-[var(--md-surface-active)]  text-[var(--md-on-surface)]',
+            base: 'h-[48px] w-[48px] bg-[var(--md-primary)]/10 ring-1 ring-[var(--md-primary-border)]/30 hover:ring-1 hover:ring-[var(--md-primary-border)]/50 hover:bg-[var(--md-surface-active)] shadow-[3px_3px_0_color-mix(in_srgb,var(--md-primary)_10%,transparent)]! text-[var(--md-on-surface)]',
             leadingIcon: 'w-6 h-6',
         },
     },

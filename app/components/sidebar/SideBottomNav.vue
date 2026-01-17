@@ -14,20 +14,26 @@
                 side: 'right',
             }"
         >
-            <UButton
-                v-bind="infoButtonProps"
-                type="button"
-                aria-label="My Info"
+            <UTooltip
+                id="tooltip-account-info"
+                :delay-duration="0"
+                :content="{
+                    side: 'right',
+                }"
+                text="My Info"
             >
-                <template #default>
-                    <span class="flex flex-col items-center gap-1 w-full">
-                        <UIcon :name="iconUser" class="h-[18px] w-[18px]" />
-                        <span class="text-[7px] uppercase tracking-wider"
-                            >INFO</span
-                        >
-                    </span>
-                </template>
-            </UButton>
+                <UButton
+                    v-bind="infoButtonProps"
+                    type="button"
+                    aria-label="My Info"
+                >
+                    <template #default>
+                        <span class="flex flex-col items-center gap-1 w-full">
+                            <UIcon :name="iconUser" class="h-[24px] w-[24px]" />
+                        </span>
+                    </template>
+                </UButton>
+            </UTooltip>
             <template #content>
                 <div class="flex flex-col items-start w-[140px]">
                     <UButton
@@ -75,7 +81,9 @@
         </UTooltip>
 
         <!-- Visual separator between app tools and personal section -->
-        <div class="w-[40px] h-[1px] bg-[var(--md-border-color)]/50 my-1" />
+        <div
+            class="w-[40px] h-[var(--md-border-width)] bg-[var(--md-border-color)]/50 my-1 sb-bottom-border"
+        />
 
         <!-- Auth Button (Clerk SSR or OpenRouter) -->
         <SidebarAuthButton />

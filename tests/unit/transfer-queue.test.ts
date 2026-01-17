@@ -36,11 +36,22 @@ const mockDb = {
 } as unknown as Or3DB;
 
 // Mock Provider
-const mockProvider = {
+const createMockProvider = (
+    overrides: Partial<ObjectStorageProvider> = {}
+): ObjectStorageProvider => ({
     id: 'test-provider',
+    displayName: 'Test Provider',
+    supports: {
+        presignedUpload: true,
+        presignedDownload: true,
+        multipart: false,
+    },
     getPresignedUploadUrl: vi.fn(),
     getPresignedDownloadUrl: vi.fn(),
-} as unknown as ObjectStorageProvider;
+    ...overrides,
+});
+
+const mockProvider = createMockProvider();
 
 describe('FileTransferQueue', () => {
     let queue: FileTransferQueue;

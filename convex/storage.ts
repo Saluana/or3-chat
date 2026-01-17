@@ -85,7 +85,7 @@ export const commitUpload = mutation({
             return;
         }
 
-        await ctx.db.insert('file_meta', {
+        const createdId = await ctx.db.insert('file_meta', {
             workspace_id: args.workspace_id,
             hash: args.hash,
             name: args.name,
@@ -103,6 +103,32 @@ export const commitUpload = mutation({
             updated_at: nowSec(),
             clock: 0,
         });
+
+        const matches = await ctx.db
+            .query('file_meta')
+            .withIndex('by_workspace_hash', (q) =>
+                q.eq('workspace_id', args.workspace_id).eq('hash', args.hash)
+            )
+            .collect();
+
+        if (matches.length > 1) {
+            const sorted = [...matches].sort(
+                (a, b) => (a._creationTime ?? 0) - (b._creationTime ?? 0)
+            );
+            const keeper = sorted[0];
+            if (!keeper) return;
+            for (const file of sorted.slice(1)) {
+                if (file._id === keeper._id) continue;
+                await ctx.db.delete(file._id);
+            }
+            if (keeper._id !== createdId) {
+                await ctx.db.patch(keeper._id, {
+                    storage_id: args.storage_id,
+                    storage_provider_id: args.storage_provider_id,
+                    updated_at: nowSec(),
+                });
+            }
+        }
     },
 });
 

@@ -11,10 +11,11 @@ import {
     getActiveSyncProvider,
     getSyncProvider,
 } from '~/core/sync/sync-provider-registry';
-import { getHookBridge } from '~/core/sync/hook-bridge';
+import { getHookBridge, cleanupHookBridge } from '~/core/sync/hook-bridge';
 import { OutboxManager } from '~/core/sync/outbox-manager';
-import { createSubscriptionManager } from '~/core/sync/subscription-manager';
+import { createSubscriptionManager, cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
 import { GcManager } from '~/core/sync/gc-manager';
+import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { createWorkspaceDb, setActiveWorkspaceDb, type Or3DB } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import {
@@ -109,6 +110,11 @@ async function stopSyncEngine(): Promise<void> {
 
     // Dispose provider
     await engineState.provider.dispose();
+
+    const scopeKey = `${engineState.scope.workspaceId}:${engineState.scope.projectId ?? 'default'}`;
+    cleanupSubscriptionManager(scopeKey);
+    cleanupCursorManager(engineState.db.name);
+    cleanupHookBridge(engineState.db.name);
 
     engineState = null;
 

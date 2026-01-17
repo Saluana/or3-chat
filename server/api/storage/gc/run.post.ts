@@ -22,7 +22,19 @@ const BodySchema = z.object({
 
 // Simple in-memory rate limiting (resets on server restart)
 const GC_COOLDOWN_MS = 60_000; // 1 minute cooldown
+const MAX_TRACKED_WORKSPACES = 1000;
 const lastGcRunByWorkspace = new Map<string, number>();
+
+function recordGcRun(workspaceId: string, now: number): void {
+    if (lastGcRunByWorkspace.size >= MAX_TRACKED_WORKSPACES) {
+        for (const [id, timestamp] of lastGcRunByWorkspace) {
+            if (now - timestamp > GC_COOLDOWN_MS) {
+                lastGcRunByWorkspace.delete(id);
+            }
+        }
+    }
+    lastGcRunByWorkspace.set(workspaceId, now);
+}
 
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event)) {
@@ -50,7 +62,7 @@ export default defineEventHandler(async (event) => {
             statusMessage: `GC rate limited, wait ${waitSeconds} seconds`,
         });
     }
-    lastGcRunByWorkspace.set(body.data.workspace_id, now);
+    recordGcRun(body.data.workspace_id, now);
 
     const token = await getClerkProviderToken(event, 'convex');
     if (!token) {

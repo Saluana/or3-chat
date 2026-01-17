@@ -6,6 +6,7 @@
 
 // Core utilities
 export * from './hlc';
+export { normalizeSyncPayload } from './sync-payload-normalizer';
 
 // Bridge and managers
 export { HookBridge, getHookBridge, _resetHookBridge } from './hook-bridge';

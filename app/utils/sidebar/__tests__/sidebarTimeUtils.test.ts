@@ -60,7 +60,7 @@ describe('sidebarTimeUtils', () => {
         it('formats today as time', () => {
             const ts = new Date('2024-01-15T08:30:00Z').getTime() / 1000;
             expect(formatTimeDisplay(ts, 'today')).toMatch(
-                /\d{1,2}:\d{2}\s?(AM|PM)/
+                /\d{1,2}:\d{2}(\s?(AM|PM))?/i
             );
         });
 

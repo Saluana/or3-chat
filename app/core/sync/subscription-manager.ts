@@ -397,11 +397,15 @@ export class SubscriptionManager {
         this.status = status;
 
         if (previousStatus !== status) {
-            void useHooks().doAction('sync.subscription:action:statusChange', {
-                scope: this.scope,
-                previousStatus,
-                status,
-            });
+            useHooks()
+                .doAction('sync.subscription:action:statusChange', {
+                    scope: this.scope,
+                    previousStatus,
+                    status,
+                })
+                .catch((error) => {
+                    console.error('[SubscriptionManager] Hook error:', error);
+                });
         }
     }
 }
@@ -430,7 +434,9 @@ export function createSubscriptionManager(
     // Clean up existing instance if any
     const existing = subscriptionManagerInstances.get(key);
     if (existing) {
-        void existing.stop();
+        existing.stop().catch((error) => {
+            console.error('[SubscriptionManager] Failed to stop existing instance:', error);
+        });
     }
 
     const manager = new SubscriptionManager(db, provider, scope, config);
@@ -461,7 +467,9 @@ export async function _resetSubscriptionManagers(): Promise<void> {
 export function cleanupSubscriptionManager(scopeKey: string): void {
     const manager = subscriptionManagerInstances.get(scopeKey);
     if (manager) {
-        void manager.stop();
+        manager.stop().catch((error) => {
+            console.error('[SubscriptionManager] Failed to stop instance:', error);
+        });
     }
     subscriptionManagerInstances.delete(scopeKey);
 }
