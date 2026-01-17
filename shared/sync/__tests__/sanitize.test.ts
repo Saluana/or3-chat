@@ -26,6 +26,7 @@ describe('sanitizePayloadForSync', () => {
         expect(result).toEqual({
             id: '123',
             name: 'test',
+            deleted: false, // Added for legacy data compatibility
         });
     });
 
@@ -39,6 +40,7 @@ describe('sanitizePayloadForSync', () => {
         expect(result).toEqual({
             id: '123',
             name: 'test',
+            deleted: false, // Added for legacy data compatibility
         });
     });
 
@@ -54,6 +56,7 @@ describe('sanitizePayloadForSync', () => {
             hash: 'sha256:abc123',
             mime_type: 'image/png',
             size: 1024,
+            deleted: false, // Added for legacy data compatibility
         });
     });
 
@@ -66,6 +69,7 @@ describe('sanitizePayloadForSync', () => {
         expect(result).toEqual({
             id: '123',
             ref_count: 5,
+            deleted: false, // Added for legacy data compatibility
         });
     });
 
@@ -80,6 +84,7 @@ describe('sanitizePayloadForSync', () => {
             id: '123',
             title: 'Test Post',
             post_type: 'markdown',
+            deleted: false, // Added for legacy data compatibility
         });
     });
 
@@ -96,6 +101,7 @@ describe('sanitizePayloadForSync', () => {
             title: 'Test Post',
             postType: 'markdown',
             post_type: 'existing',
+            deleted: false, // Added for legacy data compatibility
         });
     });
 
@@ -108,6 +114,7 @@ describe('sanitizePayloadForSync', () => {
         expect(result).toEqual({
             id: '123',
             title: 'Test Post',
+            deleted: false, // Added for legacy data compatibility
         });
     });
 
@@ -124,6 +131,64 @@ describe('sanitizePayloadForSync', () => {
             id: '123',
             name: 'test',
             nested: { data: 'kept' },
+            deleted: false, // Added for legacy data compatibility
         });
+    });
+
+    it('adds deleted: false for synced tables that are missing it', () => {
+        const tablesWithDeleted = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'];
+        for (const table of tablesWithDeleted) {
+            const payload = { id: '123' };
+            const result = sanitizePayloadForSync(table, payload, 'put');
+            expect(result?.deleted).toBe(false);
+        }
+    });
+
+    it('preserves existing deleted value', () => {
+        const payload = { id: '123', deleted: true };
+        const result = sanitizePayloadForSync('threads', payload, 'put');
+        expect(result?.deleted).toBe(true);
+    });
+
+    it('converts messages error: null to undefined', () => {
+        const payload = { id: '123', error: null };
+        const result = sanitizePayloadForSync('messages', payload, 'put');
+        expect(result?.error).toBeUndefined();
+        expect('error' in (result || {})).toBe(false);
+    });
+
+    it('converts kv value: null to undefined', () => {
+        const payload = { id: '123', value: null };
+        const result = sanitizePayloadForSync('kv', payload, 'put');
+        expect(result?.value).toBeUndefined();
+        expect('value' in (result || {})).toBe(false);
+    });
+
+    it('strips large base64 data URLs from message data', () => {
+        const largeDataUrl = 'data:image/png;base64,' + 'A'.repeat(20000);
+        const payload = {
+            id: '123',
+            data: {
+                attachments: [
+                    { type: 'image/png', url: largeDataUrl }
+                ]
+            }
+        };
+        const result = sanitizePayloadForSync('messages', payload, 'put');
+        expect((result?.data as any)?.attachments?.[0]?.url).toBe('[data-url-stripped]');
+    });
+
+    it('preserves small data URLs in message data', () => {
+        const smallDataUrl = 'data:image/png;base64,' + 'A'.repeat(100);
+        const payload = {
+            id: '123',
+            data: {
+                attachments: [
+                    { type: 'image/png', url: smallDataUrl }
+                ]
+            }
+        };
+        const result = sanitizePayloadForSync('messages', payload, 'put');
+        expect((result?.data as any)?.attachments?.[0]?.url).toBe(smallDataUrl);
     });
 });

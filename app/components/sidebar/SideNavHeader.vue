@@ -1,10 +1,7 @@
 <template>
-    <div
-        id="side-nav-content-header"
-        class="px-3 pt-2 border-b border-[color:var(--md-border-color)]/10 pb-2"
-    >
+    <div id="side-nav-content-header" class="pt-2 pb-2">
         <div class="flex w-full items-center gap-2">
-            <div class="relative flex-1 pr-2">
+            <div class="relative flex-1">
                 <UInput
                     ref="searchInputWrapper"
                     v-model="sidebarQuery"

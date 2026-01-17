@@ -70,9 +70,6 @@ export const chatOverrides = {
             body: 'p-0!',
         },
     },
-    'div#message.user-container': {
-        class: 'px-4! pt-3! pb-8! bg-[var(--md-primary-border)] rounded-[var(--md-border-radius)] retro-shadow',
-    },
 };
 
 export const chatCssSelectors = {
@@ -132,20 +129,6 @@ export const chatCssSelectors = {
         style: {
             borderTop:
                 'var(--md-border-width) solid var(--md-border-color) !important',
-        },
-    },
-    '.cm-assistant': {
-        style: {
-            backgroundColor: 'transparent',
-            boxShadow: '2px 2px 0 var(--md-border-color)',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-        },
-    },
-    '.cm-user': {
-        style: {
-            boxShadow: '2px 2px 0 var(--md-border-color)',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            marginBottom: '20px',
         },
     },
     '.chat-settings-switch': {
@@ -244,11 +227,6 @@ export const chatCssSelectors = {
     '.tool-call-indicator-summary-icon .iconify': {
         style: {
             color: 'var(--md-primary) !important',
-        },
-    },
-    '.cm-actions-user': {
-        style: {
-            bottom: '-24px !important',
         },
     },
 };

@@ -96,18 +96,6 @@
   border-top: var(--md-border-width) solid var(--md-border-color) !important;
 }
 
-[data-theme="retro"] .cm-assistant {
-  background-color: transparent;
-  box-shadow: 2px 2px 0 var(--md-border-color);
-  border: var(--md-border-width) solid var(--md-border-color);
-}
-
-[data-theme="retro"] .cm-user {
-  box-shadow: 2px 2px 0 var(--md-border-color);
-  border: var(--md-border-width) solid var(--md-border-color);
-  margin-bottom: 20px;
-}
-
 [data-theme="retro"] .chat-settings-switch {
   height: 32px;
 }
@@ -192,10 +180,6 @@
   color: var(--md-primary) !important;
 }
 
-[data-theme="retro"] .cm-actions-user {
-  bottom: -24px !important;
-}
-
 [data-theme="retro"] .dashboard-plugin-icon-label {
   font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   font-size: 12px;
@@ -254,7 +238,6 @@
   align-items: center;
   justify-content: center;
 }
-
 
 [data-theme="retro"] #top-header .theme-btn {
   min-height: 24px;

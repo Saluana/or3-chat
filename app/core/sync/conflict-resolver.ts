@@ -46,6 +46,16 @@ export class ConflictResolver {
         const tableNames = Array.from(new Set(changes.map((c) => c.tableName)));
         const tables = [...tableNames, 'tombstones'];
 
+        // Collect conflicts to emit hooks AFTER transaction completes
+        // (calling async hooks inside transaction causes PrematureCommitError)
+        const conflicts: Array<{
+            tableName: string;
+            pk: string;
+            local: LocalRecord | undefined;
+            remote: unknown;
+            winner: 'local' | 'remote';
+        }> = [];
+
         // Apply in a single transaction for atomicity and performance
         await this.db.transaction('rw', tables, async (tx) => {
             // Mark this specific transaction as a sync transaction
@@ -77,14 +87,19 @@ export class ConflictResolver {
                 const tombstone = tombstonesMap.get(`${change.tableName}:${change.pk}`);
 
                 const changeResult = change.op === 'delete'
-                    ? await this.applyDeleteWithLocal(change, local, tombstone)
-                    : await this.applyPutWithLocal(change, local, tombstone);
+                    ? await this.applyDeleteWithLocal(change, local, tombstone, conflicts)
+                    : await this.applyPutWithLocal(change, local, tombstone, conflicts);
 
                 result.applied += changeResult.applied ? 1 : 0;
                 result.skipped += changeResult.skipped ? 1 : 0;
                 result.conflicts += changeResult.isConflict ? 1 : 0;
             }
         });
+
+        // Emit conflict hooks AFTER transaction completes
+        for (const conflict of conflicts) {
+            await useHooks().doAction('sync.conflict:action:detected', conflict);
+        }
 
         return result;
     }
@@ -95,7 +110,8 @@ export class ConflictResolver {
     private async applyDeleteWithLocal(
         change: SyncChange,
         local: LocalRecord | undefined,
-        existingTombstone: Tombstone | undefined
+        existingTombstone: Tombstone | undefined,
+        conflicts: Array<{ tableName: string; pk: string; local: LocalRecord | undefined; remote: unknown; winner: 'local' | 'remote' }>
     ): Promise<ChangeResult> {
         const { tableName, pk, stamp } = change;
         const table = this.db.table(tableName);
@@ -136,22 +152,12 @@ export class ConflictResolver {
                     hlc: stamp.hlc,
                 });
                 await this.writeTombstone(tableName, pk, stamp.clock, existingTombstone);
-                await useHooks().doAction('sync.conflict:action:detected', {
-                    tableName,
-                    pk,
-                    local,
-                    remote: { deleted: true },
-                    winner: 'remote',
-                });
+                // Queue conflict for hook emission after transaction
+                conflicts.push({ tableName, pk, local, remote: { deleted: true }, winner: 'remote' });
                 return { applied: true, skipped: false, isConflict: true, winner: 'remote' };
             }
-            await useHooks().doAction('sync.conflict:action:detected', {
-                tableName,
-                pk,
-                local,
-                remote: { deleted: true },
-                winner: 'local',
-            });
+            // Queue conflict for hook emission after transaction
+            conflicts.push({ tableName, pk, local, remote: { deleted: true }, winner: 'local' });
             return { applied: false, skipped: true, isConflict: true, winner: 'local' };
         }
 
@@ -165,7 +171,8 @@ export class ConflictResolver {
     private async applyPutWithLocal(
         change: SyncChange,
         local: LocalRecord | undefined,
-        tombstone: Tombstone | undefined
+        tombstone: Tombstone | undefined,
+        conflicts: Array<{ tableName: string; pk: string; local: LocalRecord | undefined; remote: unknown; winner: 'local' | 'remote' }>
     ): Promise<ChangeResult> {
         const { tableName, pk, payload, stamp } = change;
         const table = this.db.table(tableName);
@@ -212,23 +219,12 @@ export class ConflictResolver {
                 if (tombstone && tombstone.clock < remoteClock) {
                     await this.clearTombstone(tableName, pk);
                 }
-                await useHooks().doAction('sync.conflict:action:detected', {
-                    tableName,
-                    pk,
-                    local,
-                    remote: payload,
-                    winner: 'remote',
-                });
+                // Queue conflict for hook emission after transaction
+                conflicts.push({ tableName, pk, local, remote: payload, winner: 'remote' });
                 return { applied: true, skipped: false, isConflict: true, winner: 'remote' };
             }
-            // Local wins on tie-break
-            await useHooks().doAction('sync.conflict:action:detected', {
-                tableName,
-                pk,
-                local,
-                remote: payload,
-                winner: 'local',
-            });
+            // Queue conflict for hook emission after transaction
+            conflicts.push({ tableName, pk, local, remote: payload, winner: 'local' });
             return { applied: false, skipped: true, isConflict: true, winner: 'local' };
         }
 

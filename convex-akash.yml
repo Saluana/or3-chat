@@ -27,10 +27,28 @@ services:
         as: 80
         to:
           - global: true
+        http_options:
+          max_body_size: 104857600      # 100MB max request size
+          read_timeout: 60000            # 60 second read timeout
+          send_timeout: 60000            # 60 second send timeout
+          next_tries: 3                  # Retry failed requests 3 times
+          next_timeout: 10000            # 10 second timeout between retries
+          next_cases:                    # Retry on these conditions
+            - error                      # Network errors
+            - timeout                    # Timeouts
       - port: 3211
         as: 3211
         to:
           - global: true
+        http_options:
+          max_body_size: 104857600      # 100MB max request size
+          read_timeout: 60000            # 60 second read timeout
+          send_timeout: 60000            # 60 second send timeout
+          next_tries: 3                  # Retry failed requests 3 times
+          next_timeout: 10000            # 10 second timeout between retries
+          next_cases:                    # Retry on these conditions
+            - error                      # Network errors
+            - timeout                    # Timeouts
 
     # Mount the persistent volume into the path Convex uses for SQLite
     params:
@@ -51,6 +69,15 @@ services:
         as: 80
         to:
           - global: true
+        http_options:
+          max_body_size: 104857600      # 100MB max request size
+          read_timeout: 60000            # 60 second read timeout
+          send_timeout: 60000            # 60 second send timeout
+          next_tries: 3                  # Retry failed requests 3 times
+          next_timeout: 10000            # 10 second timeout between retries
+          next_cases:                    # Retry on these conditions
+            - error                      # Network errors
+            - timeout                    # Timeouts
 
 profiles:
   compute:

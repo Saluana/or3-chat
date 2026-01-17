@@ -226,21 +226,37 @@ export class OutboxManager {
      * Handle a failed operation
      */
     private async handleFailedOp(op: PendingOp, error?: string): Promise<void> {
-
         const hooks = useHooks();
         const attempts = op.attempts + 1;
         const maxAttempts = this.config.retryDelays.length;
 
-        if (attempts >= maxAttempts) {
-            // Max retries reached - mark as failed
+        // Check for permanent failures that should not be retried
+        const isPermanent = this.isPermanentFailure(error);
+
+        if (isPermanent || attempts >= maxAttempts) {
+            // Max retries reached or permanent failure - mark as failed
             const updatedOp = {
                 ...op,
                 status: 'failed' as const,
                 attempts,
             };
             await this.db.pending_ops.put(updatedOp);
-            console.error('[OutboxManager] Op failed after max retries:', op.stamp.opId, error);
-            await hooks.doAction('sync.error:action', { op: updatedOp, error });
+            
+            // Log detailed info for debugging
+            const payloadSize = op.payload ? JSON.stringify(op.payload).length : 0;
+            console.error(
+                '[OutboxManager] Op failed' + (isPermanent ? ' (permanent)' : ' after max retries') + ':',
+                {
+                    opId: op.stamp.opId,
+                    table: op.tableName,
+                    pk: op.pk,
+                    operation: op.operation,
+                    payloadSizeBytes: payloadSize,
+                    error,
+                }
+            );
+            
+            await hooks.doAction('sync.error:action', { op: updatedOp, error, permanent: isPermanent });
         } else {
             // Schedule retry
             const delay = this.config.retryDelays[attempts - 1] ?? 0;
@@ -254,6 +270,24 @@ export class OutboxManager {
             console.warn('[OutboxManager] Op will retry:', op.stamp.opId, 'attempt', attempts);
             await hooks.doAction('sync.retry:action', { op: updatedOp, attempt: attempts });
         }
+    }
+
+    /**
+     * Check if an error is permanent and should not be retried
+     */
+    private isPermanentFailure(error?: string): boolean {
+        if (!error) return false;
+
+        // Oversized document - can't be fixed without app changes
+        if (error.includes('Value is too large')) return true;
+
+        // Schema validation errors - data doesn't match expected format
+        if (error.includes('does not match the schema')) return true;
+        if (error.includes('does not match validator')) return true;
+        if (error.includes('missing the required field')) return true;
+        if (error.includes('Value does not match validator')) return true;
+
+        return false;
     }
 
     private async markTombstoneSynced(op: PendingOp): Promise<void> {

@@ -21,13 +21,12 @@ const DEFAULT_BACKOFF_MAX_MS = 60000;
 const DEFAULT_PRESIGN_EXPIRY_MS = 60 * 60 * 1000;
 
 function getDefaultConcurrency(): number {
-    if (typeof navigator === 'undefined' || !navigator.connection) {
+    if (typeof navigator === 'undefined' || !('connection' in navigator)) {
         return 2; // Default fallback
     }
 
-    // @ts-expect-error - NetworkInformation API is not fully typed
-    const connection = navigator.connection;
-    const effectiveType = connection.effectiveType;
+    const connection = navigator.connection as { effectiveType?: string } | undefined;
+    const effectiveType = connection?.effectiveType;
 
     if (effectiveType === '4g') {
         return 4;
@@ -249,12 +248,20 @@ export class FileTransferQueue {
             }
 
             const attempts = transfer.attempts + 1;
-            const failed = attempts >= this.maxAttempts;
             const message = error instanceof Error 
                 ? error.message 
                 : typeof error === 'object' && error !== null && 'message' in error
                     ? String((error as { message: unknown }).message)
                     : String(error);
+
+            // Check if error is marked as non-retryable (e.g., file too large)
+            const isNonRetryable = typeof error === 'object' && 
+                error !== null && 
+                'retryable' in error && 
+                (error as { retryable?: boolean }).retryable === false;
+
+            const failed = isNonRetryable || attempts >= this.maxAttempts;
+            
             await this.updateTransfer(transfer.id, {
                 state: failed ? 'failed' : 'queued',
                 attempts,
@@ -331,14 +338,34 @@ export class FileTransferQueue {
             disposition: urlOptions.disposition,
         });
 
+        // Convex storage requires Content-Type header set to the file's MIME type
+        // See: https://docs.convex.dev/file-storage/upload-files#calling-the-upload-apis-from-a-web-page
+        const uploadHeaders: Record<string, string> = {
+            'Content-Type': meta.mime_type,
+            ...(presign.headers ?? {}),
+        };
+
         const uploadResponse = await fetch(presign.url, {
             method: presign.method ?? 'POST',
-            headers: presign.headers,
+            headers: uploadHeaders,
             body: blobRow.blob,
             signal,
         });
 
         if (!uploadResponse.ok) {
+            // 413 Content Too Large - file exceeds storage provider's size limit
+            if (uploadResponse.status === 413) {
+                const sizeMB = (meta.size_bytes / (1024 * 1024)).toFixed(2);
+                throw err(
+                    'ERR_FILE_TOO_LARGE',
+                    `File too large for storage provider (${sizeMB} MB). ` +
+                    `Try compressing the image or using a smaller file.`,
+                    { 
+                        tags: { domain: 'storage', stage: 'upload' },
+                        retryable: false, // Don't retry - permanent failure
+                    }
+                );
+            }
             throw err(
                 'ERR_STORAGE_UPLOAD_FAILED',
                 `Upload failed (${uploadResponse.status})`,
