@@ -146,6 +146,10 @@ Implementation notes:
 - Type exports must be centralized (re‑export from existing composables, **no duplication**).
 - Provide `defineX` helpers for inference where needed.
 
+### 3.6 Versioning
+- The `OR3Client` interface must include a `version` field to enable future compatibility checks.
+- Plugins can check `or3client.version` to verify API compatibility.
+
 ---
 
 ## 4) Non‑Goals
@@ -164,4 +168,5 @@ Implementation notes:
   - Tool registry persistence
   - Dashboard navigation
   - Zod validation for pane apps/pages
-
+- All tests pass (unit + integration).
+- No circular dependencies in import graph.
