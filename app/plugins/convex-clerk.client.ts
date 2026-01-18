@@ -83,10 +83,18 @@ export default defineNuxtPlugin(async () => {
     convex.setAuth(getToken);
 
     // Listen for session changes to refresh auth
+    let unsubscribeClerkListener: (() => void) | undefined;
     if (clerk.addListener) {
-        clerk.addListener(() => {
+        unsubscribeClerkListener = clerk.addListener(() => {
             // When session changes, Convex will automatically call getToken again
             convex.setAuth(getToken);
+        });
+    }
+
+    // Clean up listener on HMR to prevent memory leaks
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => {
+            unsubscribeClerkListener?.();
         });
     }
 });

@@ -1,4 +1,4 @@
-import { db } from './client';
+import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { nowSec, parseOrThrow, nextClock } from './util';
@@ -69,7 +69,7 @@ export async function createPost(input: PostCreate): Promise<Post> {
         tableName: 'posts',
     });
     await dbTry(
-        () => db.posts.put(next),
+        () => getDb().posts.put(next),
         { op: 'write', entity: 'posts', action: 'create' },
         { rethrow: true }
     );
@@ -94,7 +94,7 @@ export async function upsertPost(value: Post): Promise<void> {
         mutable.meta = normalizeMeta(mutable.meta);
     }
     const validated = parseOrThrow(PostSchema, filtered);
-    const existing = await dbTry(() => db.posts.get(validated.id), {
+    const existing = await dbTry(() => getDb().posts.get(validated.id), {
         op: 'read',
         entity: 'posts',
         action: 'get',
@@ -108,7 +108,7 @@ export async function upsertPost(value: Post): Promise<void> {
         tableName: 'posts',
     });
     await dbTry(
-        () => db.posts.put(next),
+        () => getDb().posts.put(next),
         { op: 'write', entity: 'posts', action: 'upsert' },
         { rethrow: true }
     );
@@ -120,7 +120,7 @@ export async function upsertPost(value: Post): Promise<void> {
 
 export function getPost(id: string) {
     const hooks = useHooks();
-    return dbTry(() => db.posts.get(id), {
+    return dbTry(() => getDb().posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'get',
@@ -131,7 +131,7 @@ export function getPost(id: string) {
 
 export function allPosts() {
     const hooks = useHooks();
-    return dbTry(() => db.posts.toArray(), {
+    return dbTry(() => getDb().posts.toArray(), {
         op: 'read',
         entity: 'posts',
         action: 'all',
@@ -145,7 +145,7 @@ export function searchPosts(term: string) {
     const hooks = useHooks();
     return dbTry(
         () =>
-            db.posts.filter((p) => p.title.toLowerCase().includes(q)).toArray(),
+            getDb().posts.filter((p) => p.title.toLowerCase().includes(q)).toArray(),
         { op: 'read', entity: 'posts', action: 'search' }
     ).then((res) =>
         res ? hooks.applyFilters('db.posts.search:filter:output', res) : []
@@ -154,8 +154,8 @@ export function searchPosts(term: string) {
 
 export async function softDeletePost(id: string): Promise<void> {
     const hooks = useHooks();
-    await db.transaction('rw', db.posts, async () => {
-        const p = await dbTry(() => db.posts.get(id), {
+    await getDb().transaction('rw', getDb().posts, async () => {
+        const p = await dbTry(() => getDb().posts.get(id), {
             op: 'read',
             entity: 'posts',
             action: 'get',
@@ -166,7 +166,7 @@ export async function softDeletePost(id: string): Promise<void> {
             id: p.id,
             tableName: 'posts',
         });
-        await db.posts.put({
+        await getDb().posts.put({
             ...p,
             deleted: true,
             updated_at: nowSec(),
@@ -182,7 +182,7 @@ export async function softDeletePost(id: string): Promise<void> {
 
 export async function hardDeletePost(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.posts.get(id), {
+    const existing = await dbTry(() => getDb().posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'get',
@@ -192,7 +192,7 @@ export async function hardDeletePost(id: string): Promise<void> {
         id,
         tableName: 'posts',
     });
-    await db.posts.delete(id);
+    await getDb().posts.delete(id);
     await hooks.doAction('db.posts.delete:action:hard:after', {
         entity: toPostEntity(existing!),
         id,

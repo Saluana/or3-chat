@@ -182,6 +182,7 @@ async function applyOpToTable(
 
     // SECURITY: Strip workspace_id and _id from payload to prevent injection attacks
     const payload = sanitizePayload(op.payload as Record<string, unknown> | undefined);
+
     validatePayload(op.table_name, payload);
     const payloadCreatedAt =
         typeof payload?.created_at === 'number' ? (payload.created_at as number) : undefined;

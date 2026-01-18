@@ -1,4 +1,4 @@
-import { db } from './client';
+import { getDb } from './client';
 import { newId, nowSec, nextClock } from './util';
 import { useHooks } from '../core/hooks/useHooks';
 import type {
@@ -189,7 +189,7 @@ export async function createPrompt(
     };
     await hooks.doAction('db.prompts.create:action:before', actionPayload);
     const persistedRow = promptEntityToRow(actionPayload.entity, filteredRow);
-    // Convert PromptRow to Post type for db.posts.put
+    // Convert PromptRow to Post type for getDb().posts.put
     const postRow: Post = {
         id: persistedRow.id,
         title: persistedRow.title,
@@ -201,7 +201,7 @@ export async function createPrompt(
         meta: '',
         clock: persistedRow.clock ?? 0,
     };
-    await db.posts.put(postRow); // reuse posts table
+    await getDb().posts.put(postRow); // reuse posts table
     actionPayload = {
         ...actionPayload,
         entity: toPromptEntity(persistedRow),
@@ -212,7 +212,7 @@ export async function createPrompt(
 
 export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
     const hooks = useHooks();
-    const row = await db.posts.get(id);
+    const row = await getDb().posts.get(id);
     if (!isPromptPost(row)) return undefined;
     const baseRow: PromptRow = {
         id: row.id,
@@ -236,7 +236,7 @@ export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
 export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
     const hooks = useHooks();
     // Filter by postType (indexed) and non-deleted
-    const rows = await db.posts
+    const rows = await getDb().posts
         .where('postType')
         .equals('prompt')
         .and((r) => !r.deleted)
@@ -263,7 +263,7 @@ export async function updatePrompt(
     patch: UpdatePromptPatch
 ): Promise<PromptRecord | undefined> {
     const hooks = useHooks();
-    const existing = await db.posts.get(id);
+    const existing = await getDb().posts.get(id);
     if (!isPromptPost(existing)) return undefined;
     const existingRow: PromptRow = {
         id: existing.id,
@@ -309,7 +309,7 @@ export async function updatePrompt(
 
     await hooks.doAction('db.prompts.update:action:before', actionPayload);
     const persistedRow = promptEntityToRow(actionPayload.updated, mergedRow);
-    // Convert PromptRow to Post type for db.posts.put
+    // Convert PromptRow to Post type for getDb().posts.put
     const postRow: Post = {
         id: persistedRow.id,
         title: persistedRow.title,
@@ -321,7 +321,7 @@ export async function updatePrompt(
         meta: '',
         clock: persistedRow.clock ?? 0,
     };
-    await db.posts.put(postRow);
+    await getDb().posts.put(postRow);
     actionPayload = {
         ...actionPayload,
         updated: toPromptEntity(persistedRow),
@@ -332,7 +332,7 @@ export async function updatePrompt(
 
 export async function softDeletePrompt(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await db.posts.get(id);
+    const existing = await getDb().posts.get(id);
     if (!isPromptPost(existing)) return;
     const existingRow: PromptRow = {
         id: existing.id,
@@ -356,7 +356,7 @@ export async function softDeletePrompt(id: string): Promise<void> {
         updated_at: nowSec(),
         clock: nextClock(existingRow.clock),
     };
-    // Convert to Post type for db.posts.put
+    // Convert to Post type for getDb().posts.put
     const postRow: Post = {
         id: updatedRow.id,
         title: updatedRow.title,
@@ -368,13 +368,13 @@ export async function softDeletePrompt(id: string): Promise<void> {
         meta: '',
         clock: updatedRow.clock ?? 0,
     };
-    await db.posts.put(postRow);
+    await getDb().posts.put(postRow);
     await hooks.doAction('db.prompts.delete:action:soft:after', payload);
 }
 
 export async function hardDeletePrompt(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await db.posts.get(id);
+    const existing = await getDb().posts.get(id);
     if (!isPromptPost(existing)) return;
     const existingRow: PromptRow = {
         id: existing.id,
@@ -392,7 +392,7 @@ export async function hardDeletePrompt(id: string): Promise<void> {
         tableName: PROMPT_TABLE,
     };
     await hooks.doAction('db.prompts.delete:action:hard:before', payload);
-    await db.posts.delete(id);
+    await getDb().posts.delete(id);
     await hooks.doAction('db.prompts.delete:action:hard:after', payload);
 }
 

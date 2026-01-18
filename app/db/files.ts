@@ -1,4 +1,4 @@
-import { db } from './client';
+import { getDb } from './client';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, nextClock } from './util';
 import { FileMetaCreateSchema, FileMetaSchema, type FileMeta } from './schema';
@@ -80,8 +80,8 @@ function createFileDeletePayload(
 
 /** Internal helper to change ref_count and fire hook */
 async function changeRefCount(hash: string, delta: number) {
-    await db.transaction('rw', db.file_meta, async () => {
-        const meta = await db.file_meta.get(hash);
+    await getDb().transaction('rw', getDb().file_meta, async () => {
+        const meta = await getDb().file_meta.get(hash);
         if (!meta) return;
         const next = {
             ...meta,
@@ -89,7 +89,7 @@ async function changeRefCount(hash: string, delta: number) {
             updated_at: nowSec(),
             clock: nextClock(meta.clock),
         };
-        await db.file_meta.put(next);
+        await getDb().file_meta.put(next);
         const hooks = useHooks();
         await hooks.doAction('db.files.refchange:action:after', {
             before: toFileEntity(meta),
@@ -114,7 +114,7 @@ export async function createOrRefFile(
     if (file.size > MAX_FILE_SIZE_BYTES) throw new Error('file too large');
     const hooks = useHooks();
     const hash = await computeFileHash(file);
-    const existing = await db.file_meta.get(hash);
+    const existing = await getDb().file_meta.get(hash);
     if (existing) {
         await changeRefCount(hash, 1);
         if (import.meta.dev) {
@@ -176,7 +176,7 @@ export async function createOrRefFile(
     };
 
     let storedMeta: FileMeta | null = null;
-    await db.transaction('rw', db.file_meta, db.file_blobs, async () => {
+    await getDb().transaction('rw', getDb().file_meta, getDb().file_blobs, async () => {
         await hooks.doAction('db.files.create:action:before', actionPayload);
         const mergedMeta = parseOrThrow(
             FileMetaSchema,
@@ -184,8 +184,8 @@ export async function createOrRefFile(
         );
         // Parallel writes for ~20% faster file creation
         await Promise.all([
-            db.file_meta.put(mergedMeta),
-            db.file_blobs.put({ hash: mergedMeta.hash, blob: file }),
+            getDb().file_meta.put(mergedMeta),
+            getDb().file_blobs.put({ hash: mergedMeta.hash, blob: file }),
         ]);
         storedMeta = mergedMeta;
         actionPayload = {
@@ -212,7 +212,7 @@ export async function createOrRefFile(
 /** Get file metadata by hash */
 export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
     const hooks = useHooks();
-    const meta = await db.file_meta.get(hash);
+    const meta = await getDb().file_meta.get(hash);
     if (!meta) return undefined;
     const entity = await hooks.applyFilters(
         'db.files.get:filter:output',
@@ -224,7 +224,7 @@ export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
 
 /** Get binary Blob by hash */
 export async function getFileBlob(hash: string): Promise<Blob | undefined> {
-    const row = await db.file_blobs.get(hash);
+    const row = await getDb().file_blobs.get(hash);
     if (row?.blob) return row.blob;
     return ensureFileBlob(hash);
 }
@@ -233,7 +233,7 @@ export async function getFileBlob(hash: string): Promise<Blob | undefined> {
 export async function ensureFileBlob(
     hash: string
 ): Promise<Blob | undefined> {
-    const row = await db.file_blobs.get(hash);
+    const row = await getDb().file_blobs.get(hash);
     if (row?.blob) return row.blob;
     if (!import.meta.client) return undefined;
     try {
@@ -255,13 +255,13 @@ export async function ensureFileBlob(
 /** Soft delete file (mark deleted flag only) */
 export async function softDeleteFile(hash: string): Promise<void> {
     const hooks = useHooks();
-    await db.transaction('rw', db.file_meta, async () => {
-        const meta = await db.file_meta.get(hash);
+    await getDb().transaction('rw', getDb().file_meta, async () => {
+        const meta = await getDb().file_meta.get(hash);
         if (!meta) return;
         const payload = createFileDeletePayload(meta, hash);
         await hooks.doAction('db.files.delete:action:soft:before', payload);
         const now = nowSec();
-        await db.file_meta.put({
+        await getDb().file_meta.put({
             ...meta,
             deleted: true,
             deleted_at: now,
@@ -277,8 +277,8 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return;
     const hooks = useHooks();
-    await db.transaction('rw', db.file_meta, async () => {
-        const metas = await db.file_meta.bulkGet(unique);
+    await getDb().transaction('rw', getDb().file_meta, async () => {
+        const metas = await getDb().file_meta.bulkGet(unique);
         for (let i = 0; i < unique.length; i++) {
             const hash = unique[i]!;
             const meta = metas[i];
@@ -286,7 +286,7 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
             const payload = createFileDeletePayload(meta, hash);
             await hooks.doAction('db.files.delete:action:soft:before', payload);
             const now = nowSec();
-            await db.file_meta.put({
+            await getDb().file_meta.put({
                 ...meta,
                 deleted: true,
                 deleted_at: now,
@@ -303,8 +303,8 @@ export async function restoreMany(hashes: string[]): Promise<void> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return;
     const hooks = useHooks();
-    await db.transaction('rw', db.file_meta, async () => {
-        const metas = await db.file_meta.bulkGet(unique);
+    await getDb().transaction('rw', getDb().file_meta, async () => {
+        const metas = await getDb().file_meta.bulkGet(unique);
         for (let i = 0; i < unique.length; i++) {
             const meta = metas[i];
             if (!meta || meta.deleted !== true) continue;
@@ -318,7 +318,7 @@ export async function restoreMany(hashes: string[]): Promise<void> {
                 updated_at: nowSec(),
                 clock: nextClock(meta.clock),
             } as FileMeta;
-            await db.file_meta.put(updatedMeta);
+            await getDb().file_meta.put(updatedMeta);
             await hooks.doAction(
                 'db.files.restore:action:after',
                 toFileEntity(updatedMeta)
@@ -332,15 +332,15 @@ export async function hardDeleteMany(hashes: string[]): Promise<void> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return;
     const hooks = useHooks();
-    await db.transaction('rw', db.file_meta, db.file_blobs, async () => {
-        const metas = await db.file_meta.bulkGet(unique);
+    await getDb().transaction('rw', getDb().file_meta, getDb().file_blobs, async () => {
+        const metas = await getDb().file_meta.bulkGet(unique);
         for (let i = 0; i < unique.length; i++) {
             const hash = unique[i]!;
             const meta = metas[i];
             const payload = createFileDeletePayload(meta ?? undefined, hash);
             await hooks.doAction('db.files.delete:action:hard:before', payload);
-            await db.file_meta.delete(hash);
-            await db.file_blobs.delete(hash);
+            await getDb().file_meta.delete(hash);
+            await getDb().file_blobs.delete(hash);
             await hooks.doAction('db.files.delete:action:hard:after', payload);
         }
     });

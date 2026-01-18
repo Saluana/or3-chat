@@ -15,7 +15,7 @@ import {
 import type { Ref } from 'vue';
 import type { PaneState } from '~/composables/core/useMultiPane';
 import { createPost, upsertPost, getPost, softDeletePost } from '~/db/posts';
-import { db } from '~/db/client';
+import { getDb } from '~/db/client';
 import type { Post, PostCreate } from '~/db/schema';
 import type { TipTapDocument } from '~/types/database';
 
@@ -536,7 +536,7 @@ function makeApi(): PanePluginApi {
                     if (!existing)
                         return err('post_not_found', 'post not found');
 
-                    // getPost returns Post through db.posts.get
+                    // getPost returns Post through getDb().posts.get
                     const existingPost = existing as unknown as Post;
 
                     const updated: Post = {
@@ -587,7 +587,7 @@ function makeApi(): PanePluginApi {
                     return err('invalid_post_type', 'postType required');
 
                 try {
-                    const results = await db.posts
+                    const results = await getDb().posts
                         .where('postType')
                         .equals(postType)
                         .and((p) => !p.deleted)

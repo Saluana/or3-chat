@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue';
-import { db } from '~/db/client';
+import { getDb } from '~/db/client';
 import { reportError, err, asAppError, type AppError } from '~/utils/errors';
 import { useHooks } from '~/core/hooks/useHooks';
 import { useLazyBoundaries } from '~/composables/core/useLazyBoundaries';
@@ -135,7 +135,7 @@ function validateBackupMeta(meta: unknown): ImportMetadata {
             tags: { domain: 'db', action: 'validate' },
         });
     }
-    if (backupMeta.data.databaseVersion > db.verno) {
+    if (backupMeta.data.databaseVersion > getDb().verno) {
         throw err(
             'ERR_VALIDATION',
             'Backup is from a newer app version. Please update.',
@@ -245,7 +245,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 });
 
                 await streamWorkspaceExport({
-                    db,
+                    db: getDb(),
                     fileHandle,
                     chunkSize: STREAM_CHUNK_SIZE,
                     onProgress: updateStreamProgress,
@@ -312,7 +312,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 }
 
                 await streamWorkspaceExportToWritable({
-                    db,
+                    db: getDb(),
                     writable: writer,
                     chunkSize: STREAM_CHUNK_SIZE,
                     onProgress: updateStreamProgress,
@@ -479,7 +479,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 
             if (format === 'stream') {
                 await importWorkspaceStream({
-                    db,
+                    db: getDb(),
                     file,
                     clearTables: state.importMode.value === 'replace',
                     overwriteValues:
@@ -521,12 +521,12 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 };
 
                 if (state.importMode.value === 'replace') {
-                    await importInto(db, file, {
+                    await importInto(getDb(), file, {
                         ...baseOptions,
                         clearTablesBeforeImport: true,
                     });
                 } else {
-                    await importInto(db, file, {
+                    await importInto(getDb(), file, {
                         ...baseOptions,
                         clearTablesBeforeImport: false,
                         overwriteValues: state.overwriteValues.value,
@@ -597,7 +597,7 @@ function validateStreamHeader(header: WorkspaceBackupHeaderLine) {
             tags: { domain: 'db', action: 'validate' },
         });
     }
-    if (header.databaseVersion > db.verno) {
+    if (header.databaseVersion > getDb().verno) {
         throw err(
             'ERR_VALIDATION',
             'Backup is from a newer app version. Please update.',

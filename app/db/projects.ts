@@ -1,4 +1,4 @@
-import { db } from './client';
+import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, nextClock } from './util';
@@ -17,7 +17,7 @@ export async function createProject(input: Project): Promise<Project> {
         tableName: 'projects',
     });
     await dbTry(
-        () => db.projects.put(next),
+        () => getDb().projects.put(next),
         { op: 'write', entity: 'projects', action: 'create' },
         { rethrow: true }
     );
@@ -39,7 +39,7 @@ export async function upsertProject(value: Project): Promise<void> {
         tableName: 'projects',
     });
     const validated = parseOrThrow(ProjectSchema, filtered);
-    const existing = await dbTry(() => db.projects.get(validated.id), {
+    const existing = await dbTry(() => getDb().projects.get(validated.id), {
         op: 'read',
         entity: 'projects',
         action: 'get',
@@ -49,7 +49,7 @@ export async function upsertProject(value: Project): Promise<void> {
         clock: nextClock(existing?.clock ?? validated.clock),
     };
     await dbTry(
-        () => db.projects.put(next),
+        () => getDb().projects.put(next),
         { op: 'write', entity: 'projects', action: 'upsert' },
         { rethrow: true }
     );
@@ -61,8 +61,8 @@ export async function upsertProject(value: Project): Promise<void> {
 
 export async function softDeleteProject(id: string): Promise<void> {
     const hooks = useHooks();
-    await db.transaction('rw', db.projects, async () => {
-        const p = await dbTry(() => db.projects.get(id), {
+    await getDb().transaction('rw', getDb().projects, async () => {
+        const p = await dbTry(() => getDb().projects.get(id), {
             op: 'read',
             entity: 'projects',
             action: 'get',
@@ -73,7 +73,7 @@ export async function softDeleteProject(id: string): Promise<void> {
             id: p.id,
             tableName: 'projects',
         });
-        await db.projects.put({
+        await getDb().projects.put({
             ...p,
             deleted: true,
             updated_at: nowSec(),
@@ -89,7 +89,7 @@ export async function softDeleteProject(id: string): Promise<void> {
 
 export async function hardDeleteProject(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.projects.get(id), {
+    const existing = await dbTry(() => getDb().projects.get(id), {
         op: 'read',
         entity: 'projects',
         action: 'get',
@@ -99,7 +99,7 @@ export async function hardDeleteProject(id: string): Promise<void> {
         id,
         tableName: 'projects',
     });
-    await db.projects.delete(id);
+    await getDb().projects.delete(id);
     await hooks.doAction('db.projects.delete:action:hard:after', {
         entity: existing!,
         id,
@@ -109,7 +109,7 @@ export async function hardDeleteProject(id: string): Promise<void> {
 
 export async function getProject(id: string) {
     const hooks = useHooks();
-    const res = await dbTry(() => db.projects.get(id), {
+    const res = await dbTry(() => getDb().projects.get(id), {
         op: 'read',
         entity: 'projects',
         action: 'get',

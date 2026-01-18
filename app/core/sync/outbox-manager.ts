@@ -5,6 +5,7 @@
  * - Periodically flush pending_ops to the server
  * - Coalesce multiple updates to same record
  * - Retry failed operations with exponential backoff
+ * - Coordinate retries with circuit breaker
  * - Emit hooks for observability
  */
 import type { Or3DB } from '~/db/client';
@@ -12,6 +13,7 @@ import type { SyncProvider, SyncScope, PendingOp } from '~~/shared/sync/types';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
+import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 
 /** Default retry delays in milliseconds */
 const DEFAULT_RETRY_DELAYS = [250, 1000, 3000, 5000];
@@ -37,8 +39,9 @@ export class OutboxManager {
     private scope: SyncScope;
     private config: Required<OutboxManagerConfig>;
 
-    private flushInterval: ReturnType<typeof setInterval> | null = null;
+    private flushTimeout: ReturnType<typeof setTimeout> | null = null;
     private isFlushing = false;
+    private isRunning = false;
 
     constructor(
         db: Or3DB,
@@ -60,35 +63,55 @@ export class OutboxManager {
      * Start the flush loop
      */
     start(): void {
-        if (this.flushInterval) return;
-
-        this.flushInterval = setInterval(() => {
-            this.flush().catch((err) => {
-                console.error('[OutboxManager] Flush error:', err);
-            });
-        }, this.config.flushIntervalMs);
-
-        // Initial flush
-        this.flush().catch((err) => {
-            console.error('[OutboxManager] Initial flush error:', err);
-        });
+        if (this.isRunning) return;
+        this.isRunning = true;
+        this.scheduleNextFlush(0);
     }
 
     /**
      * Stop the flush loop
      */
     stop(): void {
-        if (this.flushInterval) {
-            clearInterval(this.flushInterval);
-            this.flushInterval = null;
+        this.isRunning = false;
+        if (this.flushTimeout) {
+            clearTimeout(this.flushTimeout);
+            this.flushTimeout = null;
         }
+    }
+
+    private scheduleNextFlush(delay: number): void {
+        if (!this.isRunning || this.flushTimeout) return;
+
+        this.flushTimeout = setTimeout(async () => {
+            this.flushTimeout = null;
+            if (!this.isRunning) return;
+
+            let didWork = false;
+            try {
+                didWork = await this.flush();
+            } catch (err) {
+                console.error('[OutboxManager] Flush error:', err);
+            }
+
+            // If work was found, retry quickly, otherwise behave like a heartbeat
+            const nextDelay = didWork ? 100 : this.config.flushIntervalMs;
+            this.scheduleNextFlush(nextDelay);
+        }, delay);
     }
 
     /**
      * Flush pending operations to the server
+     * Returns true if operations were processed
      */
-    async flush(): Promise<void> {
-        if (this.isFlushing) return;
+    async flush(): Promise<boolean> {
+        if (this.isFlushing) return false;
+
+        // Check circuit breaker before attempting flush
+        const circuitBreaker = getSyncCircuitBreaker();
+        if (!circuitBreaker.canRetry()) {
+            return false;
+        }
+
         this.isFlushing = true;
 
         try {
@@ -100,7 +123,9 @@ export class OutboxManager {
                 .equals('pending')
                 .sortBy('createdAt');
 
-            if (!pendingOps.length) return;
+            if (!pendingOps.length) return false;
+
+            // Log only when there's work to do
 
             // Check capacity
             if (pendingOps.length >= MAX_PENDING_OPS) {
@@ -125,7 +150,7 @@ export class OutboxManager {
                 await this.db.pending_ops.bulkDelete(dropped.map((op) => op.id));
             }
 
-            if (!dueOps.length) return;
+            if (!dueOps.length) return false;
 
             const batch = dueOps.slice(0, this.config.maxBatchSize);
 
@@ -150,7 +175,6 @@ export class OutboxManager {
                      scope: this.scope,
                      ops: sanitizedBatch,
                  });
-
 
                 // Process results
                 const resultsById = new Map(result.results.map((res) => [res.opId, res]));
@@ -184,6 +208,13 @@ export class OutboxManager {
                     successCount,
                     failCount,
                 });
+
+                // Update circuit breaker based on results
+                if (successCount > 0 && failCount === 0) {
+                    circuitBreaker.recordSuccess();
+                } else if (failCount > 0) {
+                    circuitBreaker.recordFailure();
+                }
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 let failCount = 0;
@@ -196,8 +227,10 @@ export class OutboxManager {
                     successCount: 0,
                     failCount,
                 });
+                circuitBreaker.recordFailure();
                 console.error('[OutboxManager] Push error:', error);
             }
+            return true;
         } finally {
             this.isFlushing = false;
         }

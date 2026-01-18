@@ -1,4 +1,4 @@
-import { db } from './client';
+import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { newId, nowSec, nextClock } from './util';
 import { useHooks } from '../core/hooks/useHooks';
@@ -213,7 +213,7 @@ export async function createDocument(
     };
     await hooks.doAction('db.documents.create:action:before', actionPayload);
     const persistedRow = documentEntityToRow(actionPayload.entity, filteredRow);
-    // Convert DocumentRow to Post type for db.posts.put
+    // Convert DocumentRow to Post type for getDb().posts.put
     const postRow: Post = {
         id: persistedRow.id,
         title: persistedRow.title,
@@ -226,7 +226,7 @@ export async function createDocument(
         clock: persistedRow.clock ?? 0,
     };
     await dbTry(
-        () => db.posts.put(postRow),
+        () => getDb().posts.put(postRow),
         { op: 'write', entity: 'posts', action: 'createDocument' },
         { rethrow: true }
     );
@@ -242,7 +242,7 @@ export async function getDocument(
     id: string
 ): Promise<DocumentRecord | undefined> {
     const hooks = useHooks();
-    const row = await dbTry(() => db.posts.get(id), {
+    const row = await dbTry(() => getDb().posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
@@ -272,7 +272,7 @@ export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
     // Filter by postType (indexed) and non-deleted
     const rows = await dbTry(
         () =>
-            db.posts
+            getDb().posts
                 .where('postType')
                 .equals('doc')
                 .and((r) => !r.deleted)
@@ -302,7 +302,7 @@ export async function updateDocument(
     patch: UpdateDocumentPatch
 ): Promise<DocumentRecord | undefined> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.posts.get(id), {
+    const existing = await dbTry(() => getDb().posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
@@ -357,7 +357,7 @@ export async function updateDocument(
     await hooks.doAction('db.documents.update:action:before', actionPayload);
 
     const persistedRow = documentEntityToRow(actionPayload.updated, mergedRow);
-    // Convert DocumentRow to Post type for db.posts.put
+    // Convert DocumentRow to Post type for getDb().posts.put
     const postRow: Post = {
         id: persistedRow.id,
         title: persistedRow.title,
@@ -370,7 +370,7 @@ export async function updateDocument(
         clock: persistedRow.clock ?? 0,
     };
     await dbTry(
-        () => db.posts.put(postRow),
+        () => getDb().posts.put(postRow),
         { op: 'write', entity: 'posts', action: 'updateDocument' },
         { rethrow: true }
     );
@@ -385,7 +385,7 @@ export async function updateDocument(
 
 export async function softDeleteDocument(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.posts.get(id), {
+    const existing = await dbTry(() => getDb().posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
@@ -413,7 +413,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         updated_at: nowSec(),
         clock: nextClock(existingRow.clock),
     };
-    // Convert to Post type for db.posts.put
+    // Convert to Post type for getDb().posts.put
     const postRow: Post = {
         id: updatedRow.id,
         title: updatedRow.title,
@@ -426,7 +426,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         clock: updatedRow.clock ?? 0,
     };
     await dbTry(
-        () => db.posts.put(postRow),
+        () => getDb().posts.put(postRow),
         { op: 'write', entity: 'posts', action: 'softDeleteDocument' },
         { rethrow: true }
     );
@@ -435,7 +435,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
 
 export async function hardDeleteDocument(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.posts.get(id), {
+    const existing = await dbTry(() => getDb().posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
@@ -458,7 +458,7 @@ export async function hardDeleteDocument(id: string): Promise<void> {
     };
     await hooks.doAction('db.documents.delete:action:hard:before', payload);
     await dbTry(
-        () => db.posts.delete(id),
+        () => getDb().posts.delete(id),
         { op: 'write', entity: 'posts', action: 'hardDeleteDocument' },
         { rethrow: true }
     );

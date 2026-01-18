@@ -205,6 +205,11 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         ? workflowState.executionState === 'running'
         : Boolean(raw.pending);
 
+    const errorValue = raw.error ??
+        (raw.data && typeof raw.data === 'object'
+            ? (raw.data as { error?: string | null }).error ?? null
+            : null);
+
     return {
         id,
         role,
@@ -214,11 +219,7 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         stream_id: raw.stream_id,
         pending,
         toolCalls,
-        error:
-            raw.error ??
-            (raw.data && typeof raw.data === 'object'
-                ? (raw.data as { error?: string | null }).error ?? null
-                : null),
+        error: errorValue,
         isWorkflow,
         workflowState,
     };

@@ -1,5 +1,5 @@
 import Dexie from 'dexie';
-import { db } from './client';
+import { getDb } from './client';
 import { newId, nowSec, nextClock } from './util';
 import type { Thread, Message } from './schema';
 import { useHooks } from '../core/hooks/useHooks';
@@ -120,11 +120,11 @@ export async function forkThread({
     anchorMessageId = filteredOptions.anchorMessageId;
     const branchMode = normalizeBranchMode(filteredOptions.mode ?? mode);
     titleOverride = filteredOptions.titleOverride;
-    return db.transaction('rw', db.threads, db.messages, async () => {
-        const src = await db.threads.get(sourceThreadId);
+    return getDb().transaction('rw', getDb().threads, getDb().messages, async () => {
+        const src = await getDb().threads.get(sourceThreadId);
         if (!src) throw new Error('Source thread not found');
 
-        const anchor = await db.messages.get(anchorMessageId);
+        const anchor = await getDb().messages.get(anchorMessageId);
         if (!anchor || anchor.thread_id !== sourceThreadId)
             throw new Error('Invalid anchor message');
         // Minimal model: allow either user OR assistant anchor. (User anchors enable alt assistant responses; assistant anchors capture existing reply.)
@@ -156,10 +156,10 @@ export async function forkThread({
         };
         await hooks.doAction('branch.fork:action:before', beforePayload);
 
-        await db.threads.put(fork);
+        await getDb().threads.put(fork);
 
         if (branchMode === 'copy') {
-            const ancestors = await db.messages
+            const ancestors = await getDb().messages
                 .where('[thread_id+index]')
                 // includeLower=true, includeUpper=true to include anchor row
                 .between(
@@ -172,7 +172,7 @@ export async function forkThread({
 
             let i = 0;
             for (const m of ancestors) {
-                await db.messages.put({
+                await getDb().messages.put({
                     ...m,
                     id: newId(),
                     thread_id: forkId,
@@ -180,7 +180,7 @@ export async function forkThread({
                     clock: nextClock(),
                 });
             }
-            await db.threads.put({
+            await getDb().threads.put({
                 ...fork,
                 last_message_at: anchor.created_at,
                 updated_at: nowSec(),
@@ -210,11 +210,11 @@ export async function retryBranch({
     assistantMessageId = filtered.assistantMessageId;
     mode = filtered.mode ?? mode;
     titleOverride = filtered.titleOverride;
-    const assistant = await db.messages.get(assistantMessageId);
+    const assistant = await getDb().messages.get(assistantMessageId);
     if (!assistant || assistant.role !== 'assistant')
         throw new Error('Assistant message not found');
     // Retry semantics: branch at preceding user (to produce alternate assistant response)
-    const prevUser = await db.messages
+    const prevUser = await getDb().messages
         .where('[thread_id+index]')
         .between(
             [assistant.thread_id, Dexie.minKey],
@@ -256,15 +256,15 @@ interface BuildContextParams {
  */
 export async function buildContext({ threadId }: BuildContextParams) {
     const hooks = useHooks();
-    const t = await db.threads.get(threadId);
+    const t = await getDb().threads.get(threadId);
     if (!t) return [] as Message[];
 
     if (!t.parent_thread_id || t.branch_mode === 'copy') {
-        return db.messages.where('thread_id').equals(threadId).sortBy('index');
+        return getDb().messages.where('thread_id').equals(threadId).sortBy('index');
     }
 
     const [ancestors, locals] = await Promise.all([
-        db.messages
+        getDb().messages
             .where('[thread_id+index]')
             // include anchor message by setting includeUpper=true
             .between(
@@ -274,7 +274,7 @@ export async function buildContext({ threadId }: BuildContextParams) {
                 true
             )
             .sortBy('index'),
-        db.messages.where('thread_id').equals(threadId).sortBy('index'),
+        getDb().messages.where('thread_id').equals(threadId).sortBy('index'),
     ]);
 
     const combinedMessages = [...ancestors, ...locals];

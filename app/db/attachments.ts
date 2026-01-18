@@ -1,4 +1,4 @@
-import { db } from './client';
+import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec } from './util';
@@ -23,7 +23,7 @@ export async function createAttachment(
     });
     const value = parseOrThrow(AttachmentCreateSchema, filtered);
     await dbTry(
-        () => db.attachments.put(value),
+        () => getDb().attachments.put(value),
         { op: 'write', entity: 'attachments', action: 'create' },
         { rethrow: true }
     );
@@ -46,7 +46,7 @@ export async function upsertAttachment(value: Attachment): Promise<void> {
     });
     const validated = parseOrThrow(AttachmentSchema, filtered);
     await dbTry(
-        () => db.attachments.put(validated),
+        () => getDb().attachments.put(validated),
         { op: 'write', entity: 'attachments', action: 'upsert' },
         { rethrow: true }
     );
@@ -58,8 +58,8 @@ export async function upsertAttachment(value: Attachment): Promise<void> {
 
 export async function softDeleteAttachment(id: string): Promise<void> {
     const hooks = useHooks();
-    await db.transaction('rw', db.attachments, async () => {
-        const a = await dbTry(() => db.attachments.get(id), {
+    await getDb().transaction('rw', getDb().attachments, async () => {
+        const a = await dbTry(() => getDb().attachments.get(id), {
             op: 'read',
             entity: 'attachments',
             action: 'get',
@@ -70,7 +70,7 @@ export async function softDeleteAttachment(id: string): Promise<void> {
             id: a.id,
             tableName: 'attachments',
         });
-        await db.attachments.put({
+        await getDb().attachments.put({
             ...a,
             deleted: true,
             updated_at: nowSec(),
@@ -85,7 +85,7 @@ export async function softDeleteAttachment(id: string): Promise<void> {
 
 export async function hardDeleteAttachment(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.attachments.get(id), {
+    const existing = await dbTry(() => getDb().attachments.get(id), {
         op: 'read',
         entity: 'attachments',
         action: 'get',
@@ -95,7 +95,7 @@ export async function hardDeleteAttachment(id: string): Promise<void> {
         id,
         tableName: 'attachments',
     });
-    await db.attachments.delete(id);
+    await getDb().attachments.delete(id);
     await hooks.doAction('db.attachments.delete:action:hard:after', {
         entity: existing!,
         id,
@@ -105,7 +105,7 @@ export async function hardDeleteAttachment(id: string): Promise<void> {
 
 export async function getAttachment(id: string) {
     const hooks = useHooks();
-    const res = await dbTry(() => db.attachments.get(id), {
+    const res = await dbTry(() => getDb().attachments.get(id), {
         op: 'read',
         entity: 'attachments',
         action: 'get',

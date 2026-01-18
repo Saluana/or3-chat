@@ -129,8 +129,21 @@ export class Or3DB extends Dexie {
 const defaultDb = new Or3DB();
 const workspaceDbCache = new Map<string, Or3DB>();
 let activeWorkspaceId: string | null = null;
+let activeDb: Or3DB = defaultDb;
 
+/**
+ * @deprecated Use getDb() instead to ensure you always get the current active DB.
+ * Direct `db` imports capture a stale reference when workspace changes.
+ */
 export let db = defaultDb;
+
+/**
+ * Get the currently active database.
+ * Always use this instead of importing `db` directly to avoid stale references.
+ */
+export function getDb(): Or3DB {
+    return activeDb;
+}
 
 export function getDefaultDb(): Or3DB {
     return defaultDb;
@@ -151,13 +164,15 @@ export function getWorkspaceDb(workspaceId: string): Or3DB {
 export function setActiveWorkspaceDb(workspaceId: string | null): Or3DB {
     if (!workspaceId) {
         activeWorkspaceId = null;
+        activeDb = defaultDb;
         db = defaultDb;
-        return db;
+        return activeDb;
     }
 
     activeWorkspaceId = workspaceId;
-    db = getWorkspaceDb(workspaceId);
-    return db;
+    activeDb = getWorkspaceDb(workspaceId);
+    db = activeDb;
+    return activeDb;
 }
 
 /**

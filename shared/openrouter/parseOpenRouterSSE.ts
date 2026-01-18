@@ -343,14 +343,17 @@ export async function* parseOpenRouterSSE(
                         if (Array.isArray(finalContent)) {
                             const fIxRef2 = { v: 0 };
                             for (const part of finalContent) {
+                                // Emit text from final message content (reasoning models often send final answer here)
+                                if (part.type === 'text' && part.text) {
+                                    yield { type: 'text', text: part.text };
+                                }
                                 const url = extractImageUrl(part);
-                                const evt = emitImageCandidate(
-                                    url,
-                                    fIxRef2,
-                                    true
-                                );
+                                const evt = emitImageCandidate(url, fIxRef2, true);
                                 if (evt) yield evt;
                             }
+                        } else if (typeof finalContent === 'string' && finalContent) {
+                            // Final message content as plain string (some reasoning models)
+                            yield { type: 'text', text: finalContent };
                         }
                     }
                 } catch (parseError) {

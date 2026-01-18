@@ -33,6 +33,35 @@ const KV_SYNC_BLOCKLIST = [
     'workspace.manager.cache',  // Device-local UI cache
 ] as const;
 
+/**
+ * Deep clone an object for safe modification
+ */
+function deepClone<T>(obj: T): T {
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(deepClone) as T;
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+        result[key] = deepClone(value);
+    }
+    return result as T;
+}
+
+/**
+ * Set a nested value using dot-notation key (e.g., 'data.content')
+ */
+function setNestedValue(obj: unknown, path: string, value: unknown): void {
+    const parts = path.split('.');
+    let current = obj as Record<string, unknown>;
+    for (let i = 0; i < parts.length - 1; i++) {
+        const key = parts[i]!;
+        if (current[key] === undefined || typeof current[key] !== 'object') {
+            current[key] = {};
+        }
+        current = current[key] as Record<string, unknown>;
+    }
+    current[parts[parts.length - 1]!] = value;
+}
+
 export class HookBridge {
     private db: Or3DB;
     private deviceId: string;
@@ -71,7 +100,20 @@ export class HookBridge {
             // Hook: Updating (modify)
             table.hook('updating', (modifications, primKey, obj, transaction) => {
                 if (!this.captureEnabled || this.syncTransactions.get(transaction)) return;
-                const merged = { ...obj, ...modifications };
+                
+                // Dexie passes modifications with dot-notation keys like 'data.content'
+                // We need to properly merge these into the existing object
+                const merged = deepClone(obj);
+                for (const [key, value] of Object.entries(modifications ?? {})) {
+                    if (key.includes('.')) {
+                        // Handle dot-notation key like 'data.content'
+                        setNestedValue(merged, key, value);
+                    } else {
+                        // Simple top-level key
+                        (merged as Record<string, unknown>)[key] = value;
+                    }
+                }
+                
                 this.captureWrite(transaction, tableName, 'put', primKey, merged);
             });
 
@@ -121,6 +163,15 @@ export class HookBridge {
 
             if (blocklist.includes(kvName)) {
                 return; // Skip this key, don't capture for sync
+            }
+        }
+
+        // Skip messages that are still streaming (pending: true)
+        // This avoids race conditions and reduces bandwidth - only sync finalized messages
+        if (tableName === 'messages' && operation === 'put') {
+            const msg = payload as { pending?: boolean };
+            if (msg.pending === true) {
+                return; // Skip intermediate streaming updates, wait for finalization
             }
         }
 

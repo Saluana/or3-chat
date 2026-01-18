@@ -1,4 +1,4 @@
-import { db } from './client';
+import { getDb } from './client';
 import type { FileMeta } from './schema';
 import { nowSec, nextClock } from './util';
 
@@ -9,7 +9,7 @@ export async function listImageMetasPaged(
     offset = 0,
     limit = 50
 ): Promise<FileMeta[]> {
-    return db.file_meta
+    return getDb().file_meta
         .orderBy('updated_at')
         .reverse()
         .filter(
@@ -27,7 +27,7 @@ export async function listDeletedImageMetasPaged(
     offset = 0,
     limit = 50
 ): Promise<FileMeta[]> {
-    return db.file_meta
+    return getDb().file_meta
         .orderBy('updated_at')
         .reverse()
         .filter(
@@ -45,9 +45,9 @@ export async function updateFileName(
     hash: string,
     name: string
 ): Promise<void> {
-    const meta = await db.file_meta.get(hash);
+    const meta = await getDb().file_meta.get(hash);
     if (!meta) return;
-    await db.file_meta.put({
+    await getDb().file_meta.put({
         ...meta,
         name,
         updated_at: nowSec(),

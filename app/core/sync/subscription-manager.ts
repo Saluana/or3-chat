@@ -14,6 +14,7 @@ import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
 import { useHooks } from '~/core/hooks/useHooks';
 import { getHookBridge } from './hook-bridge';
+import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 
 /** Default tables to sync */
 const DEFAULT_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'];
@@ -23,6 +24,9 @@ const BOOTSTRAP_PAGE_SIZE = 100;
 
 /** Reconnect delays (exponential backoff) */
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
+
+/** Max reconnect attempts before giving up (about 10 minutes of trying) */
+const MAX_RECONNECT_ATTEMPTS = 20;
 
 export type SubscriptionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 
@@ -46,6 +50,7 @@ export class SubscriptionManager {
     private reconnectAttempts = 0;
     private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
     private isBootstrapping = false;
+    private boundBeforeUnload: (() => void) | null = null;
 
     constructor(
         db: Or3DB,
@@ -64,6 +69,14 @@ export class SubscriptionManager {
 
         this.cursorManager = getCursorManager(db);
         this.conflictResolver = new ConflictResolver(db);
+
+        // Defensive cleanup for browser close/navigation
+        if (typeof window !== 'undefined') {
+            this.boundBeforeUnload = () => {
+                this.stop().catch(() => {});
+            };
+            window.addEventListener('beforeunload', this.boundBeforeUnload);
+        }
     }
 
     /**
@@ -116,6 +129,12 @@ export class SubscriptionManager {
             this.unsubscribe = null;
         }
 
+        // Clean up beforeunload listener
+        if (typeof window !== 'undefined' && this.boundBeforeUnload) {
+            window.removeEventListener('beforeunload', this.boundBeforeUnload);
+            this.boundBeforeUnload = null;
+        }
+
         this.setStatus('disconnected');
     }
 
@@ -137,6 +156,13 @@ export class SubscriptionManager {
      * Perform bootstrap pull (paginated)
      */
     private async bootstrap(): Promise<void> {
+        // Check circuit breaker to prevent retry storm during outages
+        const circuitBreaker = getSyncCircuitBreaker();
+        if (!circuitBreaker.canRetry()) {
+            console.warn('[SubscriptionManager] Circuit breaker open, skipping bootstrap');
+            return;
+        }
+
         this.isBootstrapping = true;
 
         try {
@@ -150,6 +176,12 @@ export class SubscriptionManager {
 
             while (hasMore) {
                 if (this.status === 'disconnected') break;
+
+                // Check circuit breaker each iteration
+                if (!circuitBreaker.canRetry()) {
+                    console.warn('[SubscriptionManager] Circuit breaker opened during bootstrap');
+                    break;
+                }
 
                 const response = await this.provider.pull({
                     scope: this.scope,
@@ -197,6 +229,13 @@ export class SubscriptionManager {
      * Perform a full rescan when cursor is expired
      */
     private async rescan(): Promise<void> {
+        // Check circuit breaker to prevent retry storm during outages
+        const circuitBreaker = getSyncCircuitBreaker();
+        if (!circuitBreaker.canRetry()) {
+            console.warn('[SubscriptionManager] Circuit breaker open, skipping rescan');
+            return;
+        }
+
         this.isBootstrapping = true;
 
         try {
@@ -211,6 +250,12 @@ export class SubscriptionManager {
 
             while (hasMore) {
                 if (this.status === 'disconnected') break;
+
+                // Check circuit breaker each iteration
+                if (!circuitBreaker.canRetry()) {
+                    console.warn('[SubscriptionManager] Circuit breaker opened during rescan');
+                    break;
+                }
 
                 const response = await this.provider.pull({
                     scope: this.scope,
@@ -295,17 +340,23 @@ export class SubscriptionManager {
     private async handleChanges(changes: SyncChange[]): Promise<void> {
         if (changes.length === 0) return;
 
+        // Filter out changes we've already seen to avoid reprocessing
+        // This is critical for efficiency since convex-sync-provider uses cursor: 0
+        const currentCursor = await this.cursorManager.getCursor();
+        const newChanges = changes.filter((c) => c.serverVersion > currentCursor);
+        
+        if (newChanges.length === 0) return; // Nothing new to process
+
         try {
             await useHooks().doAction('sync.pull:action:received', {
                 scope: this.scope,
-                changeCount: changes.length,
+                changeCount: newChanges.length,
             });
 
-            const result = await this.applyChanges(changes);
+            const result = await this.applyChanges(newChanges);
 
             // Update cursor to highest server version
-            const maxVersion = Math.max(...changes.map((c) => c.serverVersion));
-            const currentCursor = await this.cursorManager.getCursor();
+            const maxVersion = Math.max(...newChanges.map((c) => c.serverVersion));
 
             if (maxVersion > currentCursor) {
                 await this.cursorManager.setCursor(maxVersion);
@@ -359,6 +410,17 @@ export class SubscriptionManager {
      */
     private scheduleReconnect(): void {
         this.clearReconnectTimeout();
+
+        // Give up after max attempts to prevent infinite reconnection loop
+        if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            console.error('[SubscriptionManager] Max reconnect attempts reached, giving up');
+            this.setStatus('error');
+            useHooks().doAction('sync.subscription:action:maxRetriesExceeded', {
+                scope: this.scope,
+                attempts: this.reconnectAttempts,
+            }).catch(() => {});
+            return;
+        }
 
         const delayIndex = Math.min(
             this.reconnectAttempts,

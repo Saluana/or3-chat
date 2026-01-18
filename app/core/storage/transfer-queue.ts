@@ -1,4 +1,4 @@
-import { db } from '~/db/client';
+import { getDb } from '~/db/client';
 import type { Or3DB } from '~/db/client';
 import { nowSec, nextClock } from '~/db/util';
 import { useHooks } from '~/core/hooks/useHooks';
@@ -58,6 +58,8 @@ export class FileTransferQueue {
     private waiters = new Map<string, TransferWaiter[]>();
     private abortControllers = new Map<string, AbortController>();
     private workspaceId: string | null = null;
+    private processQueueTimeout: ReturnType<typeof setTimeout> | null = null;
+    private processQueueAt: number | null = null;
 
     constructor(
         private db: Or3DB,
@@ -80,7 +82,7 @@ export class FileTransferQueue {
         }
 
         if (workspaceId) {
-            void this.processQueue();
+            this.scheduleProcessQueue(0);
         }
     }
 
@@ -113,7 +115,7 @@ export class FileTransferQueue {
 
         const existing = await this.findExistingTransfer(hash, direction);
         if (existing && existing.state !== 'failed') {
-            void this.processQueue();
+            this.scheduleProcessQueue(0);
             return existing;
         }
 
@@ -132,7 +134,7 @@ export class FileTransferQueue {
         };
 
         await this.db.file_transfers.put(transfer);
-        void this.processQueue();
+        this.scheduleProcessQueue(0);
         return transfer;
     }
 
@@ -210,7 +212,7 @@ export class FileTransferQueue {
             this.running.add(transfer.id);
             void this.processTransfer(transfer).finally(() => {
                 this.running.delete(transfer.id);
-                void this.processQueue();
+                this.scheduleProcessQueue(0);
             });
         }
     }
@@ -278,10 +280,26 @@ export class FileTransferQueue {
             }
 
             const delay = this.getBackoffDelay(attempts);
-            setTimeout(() => void this.processQueue(), delay);
+            this.scheduleProcessQueue(delay);
         } finally {
             this.abortControllers.delete(transfer.id);
         }
+    }
+
+    private scheduleProcessQueue(delayMs: number): void {
+        const targetAt = Date.now() + delayMs;
+        if (this.processQueueTimeout) {
+            if (this.processQueueAt !== null && this.processQueueAt <= targetAt) {
+                return;
+            }
+            clearTimeout(this.processQueueTimeout);
+        }
+        this.processQueueAt = targetAt;
+        this.processQueueTimeout = setTimeout(() => {
+            this.processQueueTimeout = null;
+            this.processQueueAt = null;
+            void this.processQueue();
+        }, delayMs);
     }
 
     private async doUpload(transfer: FileTransfer, signal: AbortSignal): Promise<void> {
@@ -611,7 +629,7 @@ export function getStorageTransferQueue(): FileTransferQueue | null {
     const provider = getActiveStorageProvider();
     if (!provider) return null;
 
-    queueInstance = new FileTransferQueue(db, provider);
+    queueInstance = new FileTransferQueue(getDb(), provider);
     return queueInstance;
 }
 

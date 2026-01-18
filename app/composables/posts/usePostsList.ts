@@ -1,6 +1,6 @@
 import { ref, computed, onScopeDispose } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
-import { db } from '~/db/client';
+import { getDb } from '~/db/client';
 import type { Post } from '~/db/schema';
 
 export interface UsePostsListOptions {
@@ -62,7 +62,7 @@ export function usePostsList(
             const sortField = sort === 'created_at' ? 'created_at' : 'updated_at';
             
             // Query posts by postType, filter soft-deleted
-            const query = db.posts
+            const query = getDb().posts
                 .where('postType')
                 .equals(postType)
                 .and((p) => !p.deleted);

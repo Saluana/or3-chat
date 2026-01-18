@@ -4,7 +4,7 @@
 </template>
 <script setup lang="ts">
 import PageShell from '~/components/PageShell.vue';
-import { db } from '~/db/client';
+import { getDb } from '~/db/client';
 import { getThread } from '~/db/threads';
 
 const route = useRoute();
@@ -13,7 +13,7 @@ const ready = ref(false);
 
 onMounted(async () => {
     try {
-        if (!db.isOpen()) await db.open();
+        if (!getDb().isOpen()) await getDb().open();
         const t = await getThread(routeId.value);
         const exists = !!(t && !t.deleted);
         if (!exists) await navigateTo('/chat', { replace: true });

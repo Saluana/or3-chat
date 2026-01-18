@@ -1,7 +1,8 @@
 import { ref } from 'vue';
 import { useToast, useAppConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
-import { create, db, tx, upsert, type Message } from '~/db';
+import { create, tx, upsert, type Message } from '~/db';
+import { getDb } from '~/db/client';
 import { createOrRefFile } from '~/db/files';
 import {
     serializeFileHashes,
@@ -164,12 +165,33 @@ export function useChat(
     ): Promise<void> {
         const base =
             existing ??
-            ((await db.messages.get(id)) as StoredMessage | undefined);
+            ((await getDb().messages.get(id)) as StoredMessage | undefined);
         if (!base) return;
+
+        // If error is being updated, also update data.error for reliable sync
+        // (data uses v.any() and syncs reliably; top-level error may not)
+        let finalPatch = patch;
+        if ('error' in patch) {
+            const baseData = base.data && typeof base.data === 'object'
+                ? (base.data as Record<string, unknown>)
+                : {};
+            const patchData = patch.data && typeof patch.data === 'object'
+                ? (patch.data as Record<string, unknown>)
+                : {};
+            finalPatch = {
+                ...patch,
+                data: {
+                    ...baseData,
+                    ...patchData,
+                    error: patch.error, // Sync error to data.error
+                },
+            };
+        }
+
         await upsert.message({
             ...base,
-            ...patch,
-            updated_at: patch.updated_at ?? nowSec(),
+            ...finalPatch,
+            updated_at: finalPatch.updated_at ?? nowSec(),
         });
     }
 
@@ -183,10 +205,12 @@ export function useChat(
             content,
             reasoning,
             toolCalls,
+            finalize = false, // When true, clears pending flag to trigger sync
         }: {
             content?: string;
             reasoning?: string | null;
             toolCalls?: ToolCallInfo[] | null;
+            finalize?: boolean;
         }) {
             const baseData =
                 assistantDbMsg.data && typeof assistantDbMsg.data === 'object'
@@ -199,10 +223,12 @@ export function useChat(
                 serialized !== lastSerialized ||
                 content != null ||
                 reasoning != null ||
-                toolCalls != null
+                toolCalls != null ||
+                finalize
             ) {
                 const payload: StoredMessage = {
                     ...assistantDbMsg,
+                    pending: finalize ? false : assistantDbMsg.pending, // Clear pending on finalize
                     data: {
                         ...baseData,
                         content:
@@ -274,7 +300,7 @@ export function useChat(
 
         if (!updated && threadIdRef.value) {
             try {
-                const row = await db.messages.get(messageId);
+                const row = await getDb().messages.get(messageId);
                 if (row && row.thread_id === threadIdRef.value) {
                     const data =
                         (row.data as Record<string, unknown> | null) || null;
@@ -364,7 +390,7 @@ export function useChat(
                 rawMessages
             );
             messages.value = rawMessages.value
-                .filter((m) => m.role !== 'tool')
+                .filter((m: ChatMessage) => m.role !== 'tool')
                 .map((m) => ensureUiMessage(m));
         }
     }
@@ -924,6 +950,7 @@ export function useChat(
                 thread_id: threadIdRef.value,
                 role: 'assistant',
                 stream_id: newStreamId,
+                pending: true, // Mark as streaming - HookBridge will skip sync until finalized
                 data: { content: '', attachments: [], reasoning_text: null },
             })) as StoredMessage;
             // Track file hashes across loop iterations
@@ -1329,6 +1356,7 @@ export function useChat(
                 content: incoming,
                 reasoning: current.reasoning_text ?? null,
                 toolCalls: current.toolCalls ?? null,
+                finalize: true, // Clear pending flag to trigger sync
             });
             const finalized: StoredMessage = {
                 ...assistantDbMsg,
@@ -1396,7 +1424,7 @@ export function useChat(
                 // Only delete if there's no text; otherwise preserve with 'stopped' status
                 if (tailAssistant.value?.id && !tailAssistant.value.text) {
                     try {
-                        await db.messages.delete(tailAssistant.value.id);
+                        await getDb().messages.delete(tailAssistant.value.id);
                         const idx = rawMessages.value.findIndex(
                             (m) => m.id === tailAssistant.value!.id
                         );
@@ -1449,7 +1477,7 @@ export function useChat(
                         }
                     }
                     try {
-                        const existing = (await db.messages.get(
+                        const existing = (await getDb().messages.get(
                             tailAssistant.value.id
                         )) as StoredMessage | undefined;
                         const baseData =
@@ -1459,14 +1487,16 @@ export function useChat(
                         await updateMessageRecord(
                             tailAssistant.value.id,
                             {
+                                pending: false, // Clear pending so sync captures this
                                 data: {
                                     ...baseData,
                                     content: tailAssistant.value.text,
                                     reasoning_text:
                                         tailAssistant.value.reasoning_text ??
                                         null,
+                                    error: 'stopped', // Store in data for reliable sync
                                 },
-                                error: 'stopped',
+                                error: 'stopped', // Also at top-level for local reads
                             },
                             existing
                         );
@@ -1508,7 +1538,7 @@ export function useChat(
                 });
                 if (!tailAssistant.value?.text && tailAssistant.value?.id) {
                     try {
-                        await db.messages.delete(tailAssistant.value.id);
+                        await getDb().messages.delete(tailAssistant.value.id);
                         const idx = rawMessages.value.findIndex(
                             (m) => m.id === tailAssistant.value!.id
                         );
@@ -1536,7 +1566,7 @@ export function useChat(
                         }
                     }
                     try {
-                        const existing = (await db.messages.get(
+                        const existing = (await getDb().messages.get(
                             tailAssistant.value.id
                         )) as StoredMessage | undefined;
                         const baseData =
@@ -1546,14 +1576,16 @@ export function useChat(
                         await updateMessageRecord(
                             tailAssistant.value.id,
                             {
+                                pending: false, // Clear pending so sync captures this
                                 data: {
                                     ...baseData,
                                     content: tailAssistant.value.text,
                                     reasoning_text:
                                         tailAssistant.value.reasoning_text ??
                                         null,
+                                    error: 'stream_interrupted', // Store in data for reliable sync
                                 },
-                                error: 'stream_interrupted',
+                                error: 'stream_interrupted', // Also at top-level for local reads
                             },
                             existing
                         );
@@ -1581,12 +1613,12 @@ export function useChat(
     async function retryMessage(messageId: string, modelOverride?: string) {
         if (loading.value || !threadIdRef.value) return;
         try {
-            const target = await db.messages.get(messageId);
+            const target = await getDb().messages.get(messageId);
             if (!target || target.thread_id !== threadIdRef.value) return;
             let userMsg = target.role === 'user' ? target : undefined;
             if (!userMsg && target.role === 'assistant') {
                 const DexieMod = (await import('dexie')).default;
-                userMsg = await db.messages
+                userMsg = await getDb().messages
                     .where('[thread_id+index]')
                     .between(
                         [target.thread_id, DexieMod.minKey],
@@ -1602,7 +1634,7 @@ export function useChat(
             }
             if (!userMsg) return;
             const DexieMod2 = (await import('dexie')).default;
-            const assistant = await db.messages
+            const assistant = await getDb().messages
                 .where('[thread_id+index]')
                 .between(
                     [
@@ -1709,7 +1741,7 @@ export function useChat(
                                 : null,
                     })
                 );
-                const uiMessages = dbMessages.filter((m) => m.role !== 'tool');
+                const uiMessages = dbMessages.filter((m: StoredMessage) => m.role !== 'tool');
                 messages.value = uiMessages.map((m) =>
                     ensureUiMessage({
                         role: m.role as
@@ -1744,9 +1776,9 @@ export function useChat(
             }
 
             // Delete from database
-            await db.transaction('rw', db.messages, async () => {
-                await db.messages.delete(userMsg.id);
-                if (assistant) await db.messages.delete(assistant.id);
+            await getDb().transaction('rw', getDb().messages, async () => {
+                await getDb().messages.delete(userMsg.id);
+                if (assistant) await getDb().messages.delete(assistant.id);
             });
 
             // Remove deleted messages from in-memory arrays
@@ -1802,7 +1834,7 @@ export function useChat(
         if (loading.value || !threadIdRef.value) return;
         if (!apiKey.value) return;
         try {
-            const target = (await db.messages.get(messageId)) as
+            const target = (await getDb().messages.get(messageId)) as
                 | StoredMessage
                 | undefined;
             if (
@@ -1829,7 +1861,7 @@ export function useChat(
             if (!existingText) return;
 
             const DexieMod = (await import('dexie')).default;
-            const all = await db.messages
+            const all = await getDb().messages
                 .where('[thread_id+index]')
                 .between(
                     [threadIdRef.value, DexieMod.minKey],
@@ -1837,7 +1869,7 @@ export function useChat(
                 )
                 .filter((m: Message) => !m.deleted)
                 .toArray();
-            all.sort((a, b) => (a.index || 0) - (b.index || 0));
+            all.sort((a: Message, b: Message) => (a.index || 0) - (b.index || 0));
 
             const toReasoning = (m: StoredMessage) => {
                 if (
@@ -2319,6 +2351,7 @@ export function useChat(
                     content: current.text,
                     reasoning: current.reasoning_text ?? null,
                     toolCalls: current.toolCalls ?? null,
+                    finalize: true, // Clear pending so sync captures this
                 });
                 await updateMessageRecord(messageId, { error: null });
                 current.error = null;
@@ -2344,13 +2377,19 @@ export function useChat(
                         ? streamError
                         : new Error(String(streamError));
                 streamAcc.finalize({ error: e });
+                
+                // Check if this was an intentional abort (user clicked stop)
+                const wasAborted = aborted.value;
+                const errorType = wasAborted ? 'stopped' : 'stream_interrupted';
+                
                 if (tailAssistant.value.text) {
                     await persistAssistant({
                         content: tailAssistant.value.text,
                         reasoning: tailAssistant.value.reasoning_text ?? null,
                         toolCalls: tailAssistant.value.toolCalls ?? null,
+                        finalize: true, // Clear pending so sync captures this
                     });
-                    tailAssistant.value.error = 'stream_interrupted';
+                    tailAssistant.value.error = errorType;
                 }
                 const rawIdx = rawMessages.value.findIndex(
                     (m) => m.id === messageId
@@ -2366,24 +2405,28 @@ export function useChat(
                             reasoning_text:
                                 tailAssistant.value.reasoning_text ??
                                 existingRaw.reasoning_text,
-                            error: 'stream_interrupted',
+                            error: errorType,
                         };
                     }
                 }
                 await updateMessageRecord(messageId, {
-                    error: 'stream_interrupted',
+                    error: errorType,
                 });
-                reportError(e, {
-                    code: 'ERR_STREAM_FAILURE',
-                    tags: {
-                        domain: 'chat',
-                        threadId: threadIdRef.value || '',
-                        streamId: streamId.value || '',
-                        modelId,
-                        stage: 'continue',
-                    },
-                    toast: true,
-                });
+                
+                // Only show error toast for unintentional interruptions, not manual stops
+                if (!wasAborted) {
+                    reportError(e, {
+                        code: 'ERR_STREAM_FAILURE',
+                        tags: {
+                            domain: 'chat',
+                            threadId: threadIdRef.value || '',
+                            streamId: streamId.value || '',
+                            modelId,
+                            stage: 'continue',
+                        },
+                        toast: true,
+                    });
+                }
             } finally {
                 loading.value = false;
                 if (tailAssistant.value.pending) {

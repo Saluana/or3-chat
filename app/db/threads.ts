@@ -1,4 +1,4 @@
-import { db } from './client';
+import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { newId, nowSec, parseOrThrow, nextClock } from './util';
@@ -27,7 +27,7 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
         tableName: 'threads',
     });
     await dbTry(
-        () => db.threads.put(value),
+        () => getDb().threads.put(value),
         { op: 'write', entity: 'threads', action: 'create' },
         { rethrow: true }
     );
@@ -45,7 +45,7 @@ export async function upsertThread(value: Thread): Promise<void> {
         value
     );
     const validated = parseOrThrow(ThreadSchema, filtered);
-    const existing = await dbTry(() => db.threads.get(validated.id), {
+    const existing = await dbTry(() => getDb().threads.get(validated.id), {
         op: 'read',
         entity: 'threads',
         action: 'get',
@@ -59,7 +59,7 @@ export async function upsertThread(value: Thread): Promise<void> {
         tableName: 'threads',
     });
     await dbTry(
-        () => db.threads.put(next),
+        () => getDb().threads.put(next),
         { op: 'write', entity: 'threads', action: 'upsert' },
         { rethrow: true }
     );
@@ -72,7 +72,7 @@ export async function upsertThread(value: Thread): Promise<void> {
 export function threadsByProject(projectId: string) {
     const hooks = useHooks();
     const promise = dbTry(
-        () => db.threads.where('project_id').equals(projectId).toArray(),
+        () => getDb().threads.where('project_id').equals(projectId).toArray(),
         { op: 'read', entity: 'threads', action: 'byProject' }
     );
     return promise.then((res) =>
@@ -83,7 +83,7 @@ export function threadsByProject(projectId: string) {
 export function searchThreadsByTitle(term: string) {
     const q = term.toLowerCase();
     const hooks = useHooks();
-    return db.threads
+    return getDb().threads
         .filter((t) => (t.title ?? '').toLowerCase().includes(q))
         .toArray()
         .then((res) =>
@@ -93,7 +93,7 @@ export function searchThreadsByTitle(term: string) {
 
 export function getThread(id: string) {
     const hooks = useHooks();
-    return dbTry(() => db.threads.get(id), {
+    return dbTry(() => getDb().threads.get(id), {
         op: 'read',
         entity: 'threads',
         action: 'get',
@@ -106,7 +106,7 @@ export function getThread(id: string) {
 
 export function childThreads(parentThreadId: string) {
     const hooks = useHooks();
-    return db.threads
+    return getDb().threads
         .where('parent_thread_id')
         .equals(parentThreadId)
         .toArray()
@@ -117,8 +117,8 @@ export function childThreads(parentThreadId: string) {
 
 export async function softDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
-    await db.transaction('rw', db.threads, async () => {
-        const t = await dbTry(() => db.threads.get(id), {
+    await getDb().transaction('rw', getDb().threads, async () => {
+        const t = await dbTry(() => getDb().threads.get(id), {
             op: 'read',
             entity: 'threads',
             action: 'get',
@@ -129,7 +129,7 @@ export async function softDeleteThread(id: string): Promise<void> {
             id: t.id,
             tableName: 'threads',
         });
-        await db.threads.put({
+        await getDb().threads.put({
             ...t,
             deleted: true,
             updated_at: nowSec(),
@@ -145,19 +145,19 @@ export async function softDeleteThread(id: string): Promise<void> {
 
 export async function hardDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.threads.get(id), {
+    const existing = await dbTry(() => getDb().threads.get(id), {
         op: 'read',
         entity: 'threads',
         action: 'get',
     });
-    await db.transaction('rw', db.threads, db.messages, async () => {
+    await getDb().transaction('rw', getDb().threads, getDb().messages, async () => {
         await hooks.doAction('db.threads.delete:action:hard:before', {
             entity: existing!,
             id,
             tableName: 'threads',
         });
-        await db.messages.where('thread_id').equals(id).delete();
-        await db.threads.delete(id);
+        await getDb().messages.where('thread_id').equals(id).delete();
+        await getDb().threads.delete(id);
         await hooks.doAction('db.threads.delete:action:hard:after', {
             entity: existing!,
             id,
@@ -173,9 +173,9 @@ export async function forkThread(
     options: { copyMessages?: boolean } = {}
 ): Promise<Thread> {
     const hooks = useHooks();
-    return db.transaction('rw', db.threads, db.messages, async () => {
+    return getDb().transaction('rw', getDb().threads, getDb().messages, async () => {
         const src = await dbTry(
-            () => db.threads.get(sourceThreadId),
+            () => getDb().threads.get(sourceThreadId),
             { op: 'read', entity: 'threads', action: 'get' },
             { rethrow: true }
         );
@@ -198,7 +198,7 @@ export async function forkThread(
             fork,
         });
         await dbTry(
-            () => db.threads.put(fork),
+            () => getDb().threads.put(fork),
             { op: 'write', entity: 'threads', action: 'fork' },
             { rethrow: true }
         );
@@ -207,7 +207,7 @@ export async function forkThread(
             const msgs =
                 (await dbTry(
                     () =>
-                        db.messages
+                        getDb().messages
                             .where('thread_id')
                             .equals(src.id)
                             .sortBy('index'),
@@ -220,7 +220,7 @@ export async function forkThread(
             for (const m of msgs) {
                 await dbTry(
                     () =>
-                        db.messages.put({
+                        getDb().messages.put({
                             ...m,
                             id: newId(),
                             thread_id: forkId,
@@ -237,7 +237,7 @@ export async function forkThread(
             if (msgs.length > 0) {
                 await dbTry(
                     () =>
-                        db.threads.put({
+                        getDb().threads.put({
                             ...fork,
                             last_message_at: now,
                             updated_at: now,
@@ -262,8 +262,8 @@ export async function updateThreadSystemPrompt(
     promptId: string | null
 ): Promise<void> {
     const hooks = useHooks();
-    await db.transaction('rw', db.threads, async () => {
-        const thread = await dbTry(() => db.threads.get(threadId), {
+    await getDb().transaction('rw', getDb().threads, async () => {
+        const thread = await dbTry(() => getDb().threads.get(threadId), {
             op: 'read',
             entity: 'threads',
             action: 'get',
@@ -280,7 +280,7 @@ export async function updateThreadSystemPrompt(
             promptId,
         });
         await dbTry(
-            () => db.threads.put(updated),
+            () => getDb().threads.put(updated),
             { op: 'write', entity: 'threads', action: 'updateSystemPrompt' },
             { rethrow: true }
         );
@@ -295,7 +295,7 @@ export async function getThreadSystemPrompt(
     threadId: string
 ): Promise<string | null> {
     const hooks = useHooks();
-    const thread = await dbTry(() => db.threads.get(threadId), {
+    const thread = await dbTry(() => getDb().threads.get(threadId), {
         op: 'read',
         entity: 'threads',
         action: 'get',

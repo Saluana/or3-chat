@@ -1,4 +1,4 @@
-import { db } from './client';
+import { getDb } from './client';
 import type { FileMeta } from './schema';
 import { parseFileHashes, serializeFileHashes } from './files-util';
 import { createOrRefFile, derefFile, getFileMeta } from './files';
@@ -12,11 +12,11 @@ export type AddableFile =
 
 /** Resolve file metadata list for a message id */
 export async function filesForMessage(messageId: string): Promise<FileMeta[]> {
-    const msg = await db.messages.get(messageId);
+    const msg = await getDb().messages.get(messageId);
     if (!msg) return [];
     const hashes = parseFileHashes(msg.file_hashes);
     if (!hashes.length) return [];
-    return db.file_meta.where('hash').anyOf(hashes).toArray();
+    return getDb().file_meta.where('hash').anyOf(hashes).toArray();
 }
 
 /** Add files (blobs or existing hashes) to a message, updating ref counts */
@@ -26,13 +26,13 @@ export async function addFilesToMessage(
 ): Promise<void> {
     if (!files.length) return;
     const hooks = useHooks();
-    await db.transaction(
+    await getDb().transaction(
         'rw',
-        db.messages,
-        db.file_meta,
-        db.file_blobs,
+        getDb().messages,
+        getDb().file_meta,
+        getDb().file_blobs,
         async () => {
-            const msg = await db.messages.get(messageId);
+            const msg = await getDb().messages.get(messageId);
             if (!msg) throw new Error('message not found');
             const existing = parseFileHashes(msg.file_hashes);
             const newHashes: string[] = [];
@@ -59,7 +59,7 @@ export async function addFilesToMessage(
                 combined
             );
             const serialized = serializeFileHashes(filtered);
-            await db.messages.put({
+            await getDb().messages.put({
                 ...msg,
                 file_hashes: serialized,
                 updated_at: nowSec(),
@@ -74,13 +74,13 @@ export async function removeFileFromMessage(
     messageId: string,
     hash: string
 ): Promise<void> {
-    await db.transaction('rw', db.messages, db.file_meta, async () => {
-        const msg = await db.messages.get(messageId);
+    await getDb().transaction('rw', getDb().messages, getDb().file_meta, async () => {
+        const msg = await getDb().messages.get(messageId);
         if (!msg) return;
         const hashes = parseFileHashes(msg.file_hashes);
         const next = hashes.filter((h) => h !== hash);
         if (next.length === hashes.length) return; // no change
-        await db.messages.put({
+        await getDb().messages.put({
             ...msg,
             file_hashes: serializeFileHashes(next),
             updated_at: nowSec(),
