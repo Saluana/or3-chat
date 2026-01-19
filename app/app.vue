@@ -13,6 +13,10 @@
 <script setup lang="ts">
 // Apply initial theme class to <html> so CSS variables cascade app-wide
 const nuxtApp = useNuxtApp();
+const runtimeConfig = useRuntimeConfig();
+const appName = computed(
+    () => runtimeConfig.public?.branding?.appName || 'OR3'
+);
 const isDark = computed(() =>
     (
         (nuxtApp as any).$theme?.current?.value ||
@@ -30,7 +34,7 @@ useHead({
         class: 'light',
         lang: 'en',
     },
-    title: 'or3 chat',
+    title: appName,
     link: [
         { rel: 'icon', type: 'image/webp', href: '/butthole-logo.webp' },
         // Provide an Apple touch icon to avoid 404s in Safari/iOS

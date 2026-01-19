@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue';
-import { defineNuxtPlugin, useAppConfig } from '#imports';
+import { defineNuxtPlugin, useAppConfig, useRuntimeConfig } from '#imports';
 import { defu } from 'defu';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import type { CompiledTheme } from '~/theme/_shared/types';
@@ -128,11 +128,35 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         }
     };
 
+    const runtimeConfig = useRuntimeConfig();
     // Determine current default theme from manifest
-    const DEFAULT_THEME =
+    const baseDefaultTheme =
         manifestEntries.find((entry) => entry.isDefault)?.name ??
         manifestEntries[0]?.name ??
         'retro';
+    const configuredDefaultTheme =
+        runtimeConfig.public?.branding?.defaultTheme;
+    const normalizedConfiguredDefault =
+        typeof configuredDefaultTheme === 'string' &&
+        configuredDefaultTheme !== 'system'
+            ? configuredDefaultTheme
+            : null;
+    const availableThemes = new Set(themeManifest.keys());
+    const DEFAULT_THEME =
+        normalizedConfiguredDefault &&
+        availableThemes.has(normalizedConfiguredDefault)
+            ? normalizedConfiguredDefault
+            : baseDefaultTheme;
+
+    if (
+        import.meta.dev &&
+        normalizedConfiguredDefault &&
+        !availableThemes.has(normalizedConfiguredDefault)
+    ) {
+        console.warn(
+            `[theme] Default theme "${normalizedConfiguredDefault}" not found. Falling back to "${baseDefaultTheme}".`
+        );
+    }
 
     // Previous default theme persistence keys
     const previousDefaultStorageKey = 'previousDefaultTheme';
@@ -191,8 +215,6 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     } catch (_) {
         // Ignore storage errors silently
     }
-
-    const availableThemes = new Set(themeManifest.keys());
 
     const storageKey = 'theme';
     const root = document.documentElement;
@@ -748,5 +770,3 @@ function injectThemeVariables(themeName: string, css: string) {
     }
     style.textContent = css;
 }
-
-

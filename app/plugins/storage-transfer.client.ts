@@ -8,8 +8,12 @@ export default defineNuxtPlugin(() => {
     if (import.meta.server) return;
 
     const runtimeConfig = useRuntimeConfig();
-    if (!runtimeConfig.public.ssrAuthEnabled) {
-        console.log('[storage] SSR auth disabled, storage queue paused');
+    if (
+        !runtimeConfig.public.ssrAuthEnabled ||
+        !runtimeConfig.public.storage?.enabled ||
+        runtimeConfig.public.storage?.provider !== 'convex'
+    ) {
+        console.log('[storage] Storage disabled, storage queue paused');
         return;
     }
 

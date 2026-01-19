@@ -1,5 +1,5 @@
-import { ref } from 'vue';
-import { useToast, useAppConfig } from '#imports';
+import { ref, computed } from 'vue';
+import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
 import { create, tx, upsert, type Message } from '~/db';
 import { getDb } from '~/db/client';
@@ -102,6 +102,20 @@ export function useChat(
     const abortController = ref<AbortController | null>(null);
     const aborted = ref(false);
     const { apiKey, setKey } = useUserApiKey();
+    const runtimeConfig = useRuntimeConfig();
+    const openRouterConfig = computed(
+        () => runtimeConfig.public?.openRouter ?? {}
+    );
+    const allowUserOverride = computed(
+        () => openRouterConfig.value.allowUserOverride !== false
+    );
+    const hasInstanceKey = computed(
+        () => openRouterConfig.value.hasInstanceKey === true
+    );
+    const effectiveApiKey = computed(() =>
+        allowUserOverride.value ? apiKey.value : null
+    );
+    const limitsConfig = computed(() => runtimeConfig.public?.limits ?? {});
     const hooks = useHooks();
     const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
@@ -120,6 +134,61 @@ export function useChat(
     function resetStream() {
         streamAcc.reset();
         streamId.value = undefined;
+    }
+
+    async function enforceClientLimits(isNewThread: boolean): Promise<boolean> {
+        const limits = limitsConfig.value;
+        if (limits?.enabled === false) return true;
+
+        const toast = useToast();
+
+        const maxConversations =
+            typeof limits?.maxConversations === 'number'
+                ? limits.maxConversations
+                : 0;
+        if (isNewThread && maxConversations > 0) {
+            const threadCount = await getDb().threads
+                .where('deleted')
+                .equals(false)
+                .count();
+            if (threadCount >= maxConversations) {
+                toast.add({
+                    title: 'Conversation limit reached',
+                    description:
+                        'You have reached the maximum number of conversations allowed for this instance.',
+                    color: 'warning',
+                    duration: 4000,
+                });
+                return false;
+            }
+        }
+
+        const maxMessagesPerDay =
+            typeof limits?.maxMessagesPerDay === 'number'
+                ? limits.maxMessagesPerDay
+                : 0;
+        if (maxMessagesPerDay > 0) {
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            const startOfDaySec = Math.floor(startOfDay.getTime() / 1000);
+            const messageCount = await getDb().messages
+                .where('created_at')
+                .aboveOrEqual(startOfDaySec)
+                .and((msg) => msg.deleted !== true)
+                .count();
+            if (messageCount >= maxMessagesPerDay) {
+                toast.add({
+                    title: 'Daily message limit reached',
+                    description:
+                        'You have reached the maximum messages per day for this instance.',
+                    color: 'warning',
+                    duration: 4000,
+                });
+                return false;
+            }
+        }
+
+        return true;
     }
 
     async function getSystemPromptContent(): Promise<string | null> {
@@ -426,7 +495,20 @@ export function useChat(
             sendMessagesParams = contentOrParams;
         }
 
-        if (!apiKey.value) return;
+        const hasKey =
+            Boolean(effectiveApiKey.value) || hasInstanceKey.value;
+        if (!hasKey) {
+            if (!allowUserOverride.value) {
+                useToast().add({
+                    title: 'Instance key required',
+                    description:
+                        'This deployment requires a managed OpenRouter key. Contact your administrator.',
+                    color: 'warning',
+                    duration: 4000,
+                });
+            }
+            return;
+        }
 
         const outgoing = await hooks.applyFilters(
             'ui.chat.message:filter:outgoing',
@@ -445,6 +527,9 @@ export function useChat(
             });
             return;
         }
+
+        const canSend = await enforceClientLimits(!threadIdRef.value);
+        if (!canSend) return;
 
         if (!threadIdRef.value) {
             let effectivePromptId: string | null = pendingPromptId || null;
@@ -1043,7 +1128,7 @@ export function useChat(
                 loopIteration++;
 
                 const stream = openRouterStream({
-                    apiKey: apiKey.value,
+                    apiKey: effectiveApiKey.value,
                     model: modelId,
                     orMessages: orMessages as Parameters<
                         typeof openRouterStream
@@ -1832,7 +1917,9 @@ export function useChat(
 
     async function continueMessage(messageId: string, modelOverride?: string) {
         if (loading.value || !threadIdRef.value) return;
-        if (!apiKey.value) return;
+        const hasKey =
+            Boolean(effectiveApiKey.value) || hasInstanceKey.value;
+        if (!hasKey) return;
         try {
             const target = (await getDb().messages.get(messageId)) as
                 | StoredMessage
@@ -2166,7 +2253,7 @@ export function useChat(
             );
 
             const stream = openRouterStream({
-                apiKey: apiKey.value,
+                apiKey: effectiveApiKey.value,
                 model: modelId,
                 orMessages: orMessages as Parameters<
                     typeof openRouterStream

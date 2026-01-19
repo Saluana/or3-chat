@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
+import { isStorageEnabled } from '../../utils/storage/is-storage-enabled';
 import { api } from '~~/convex/_generated/api';
 import type { Id } from '~~/convex/_generated/dataModel';
 import {
@@ -30,7 +31,7 @@ const BodySchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-    if (!isSsrAuthEnabled(event)) {
+    if (!isSsrAuthEnabled(event) || !isStorageEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
 

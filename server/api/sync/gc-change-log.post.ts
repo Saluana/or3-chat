@@ -8,6 +8,7 @@ import { SyncScopeSchema } from '~~/shared/sync/schemas';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
+import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
 import { api } from '~~/convex/_generated/api';
 import type { Id } from '~~/convex/_generated/dataModel';
 import { getClerkProviderToken, getConvexGatewayClient } from '../../utils/sync/convex-gateway';
@@ -18,7 +19,7 @@ const GcRequestSchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-    if (!isSsrAuthEnabled(event)) {
+    if (!isSsrAuthEnabled(event) || !isSyncEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
 

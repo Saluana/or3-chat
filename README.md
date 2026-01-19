@@ -27,6 +27,23 @@ bun run dev
 
 Visit `http://localhost:3000`, connect your OpenRouter account via the built-in PKCE flow, and you’re ready to chat. Additional build, preview, and test commands live in `package.json`.
 
+## OR3 Cloud Configuration
+
+OR3 Cloud features are configured through `config.or3cloud.ts` at the project root. This file is the single source of truth for SSR auth, sync, storage, instance-level OpenRouter keys, branding, and limits.
+
+Key environment variables you can use inside `config.or3cloud.ts`:
+
+-   `SSR_AUTH_ENABLED` (true/false)
+-   `NUXT_PUBLIC_CONVEX_URL` / `VITE_CONVEX_URL`
+-   `OPENROUTER_API_KEY`
+-   `OR3_OPENROUTER_ALLOW_USER_OVERRIDE` (true/false)
+-   `OR3_REQUESTS_PER_MINUTE`, `OR3_MAX_CONVERSATIONS`, `OR3_MAX_MESSAGES_PER_DAY`
+-   `OR3_APP_NAME`, `OR3_LOGO_URL`, `OR3_DEFAULT_THEME`
+-   `OR3_TERMS_URL`, `OR3_PRIVACY_URL`
+-   `OR3_ALLOWED_ORIGINS`, `OR3_FORCE_HTTPS`
+
+Update the config file to match your deployment, then restart Nuxt for changes to take effect.
+
 ## Learn More
 
 Deep dives, API references, and plugin guides live at [or3.chat/documentation](https://or3.chat/documentation). The docs cover advanced topics like hook surfaces, data schemas, and performance tuning.

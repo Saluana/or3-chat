@@ -16,10 +16,13 @@
             <slot name="sidebar-header">
                 <div id="header-content" class="flex items-center px-[6px]">
                     <img
-                        src="/logos/logo-svg.svg"
-                        alt="Or3.chat"
+                        :src="logoUrl"
+                        :alt="appName"
                         class="h-7 w-auto"
                     />
+                    <span class="header-title ml-2 text-[9px]">
+                        {{ appName }}
+                    </span>
                 </div>
             </slot>
         </div>
@@ -54,6 +57,13 @@ const props = defineProps({
 const emit = defineEmits(['toggle']);
 
 const theme = useNuxtApp().$theme as ThemePlugin | undefined;
+const runtimeConfig = useRuntimeConfig();
+const appName = computed(
+    () => runtimeConfig.public?.branding?.appName || 'OR3'
+);
+const logoUrl = computed(
+    () => runtimeConfig.public?.branding?.logoUrl || '/logos/logo-svg.svg'
+);
 
 const sidebarToggleOverrides = theme
     ? useThemeOverrides({

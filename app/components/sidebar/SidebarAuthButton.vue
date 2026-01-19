@@ -11,13 +11,7 @@
             type="button"
             @click="onOpenRouterClick"
             :data-connection-state="connectionState"
-            :aria-label="
-                hydrated
-                    ? isConnected
-                        ? 'Disconnect from OpenRouter'
-                        : 'Connect to OpenRouter'
-                    : 'Connect to OpenRouter'
-            "
+            :aria-label="ariaLabel"
         >
             <template #default>
                 <span class="flex flex-col items-center gap-1 w-full">
@@ -48,15 +42,13 @@
                     <span
                         class="text-[7px] uppercase tracking-wider whitespace-nowrap"
                     >
-                        <template v-if="hydrated">
-                            {{ isConnected ? 'Disconnect' : 'Connect' }}
-                        </template>
+                        <template v-if="hydrated">{{ connectionLabel }}</template>
                         <template v-else>Connect</template>
                     </span>
                     <span
                         class="w-[54%] h-[3px] opacity-50"
                         :class="
-                            isConnected
+                            effectiveConnected
                                 ? 'bg-[var(--md-success)] opacity-100'
                                 : 'bg-[var(--md-error)]'
                         "
@@ -74,9 +66,18 @@ import { state } from '~/state/global';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 // Check if SSR auth is enabled via runtime config
-const config = useRuntimeConfig();
-const ssrAuthEnabled = config.public?.ssrAuthEnabled === true;
+const runtimeConfig = useRuntimeConfig();
+const ssrAuthEnabled = runtimeConfig.public?.ssrAuthEnabled === true;
 const isSsrAuthEnabled = computed(() => ssrAuthEnabled);
+const openRouterConfig = computed(
+    () => runtimeConfig.public?.openRouter ?? {}
+);
+const allowUserOverride = computed(
+    () => openRouterConfig.value.allowUserOverride !== false
+);
+const hasInstanceKey = computed(
+    () => openRouterConfig.value.hasInstanceKey === true
+);
 
 // Hydration mismatch fix
 const hydrated = ref(false);
@@ -86,15 +87,40 @@ onMounted(() => {
 
 // OpenRouter state (only used when SSR auth is disabled)
 const openrouter = ssrAuthEnabled ? null : useOpenRouterAuth();
-const isConnected = computed(() => state.value.openrouterKey);
+const isConnected = computed(() => Boolean(state.value.openrouterKey));
+const usingInstanceKey = computed(
+    () => hasInstanceKey.value && (!allowUserOverride.value || !isConnected.value)
+);
+const effectiveConnected = computed(
+    () => isConnected.value || usingInstanceKey.value
+);
 
 const connectionState = computed(() =>
     hydrated.value
-        ? isConnected.value
+        ? effectiveConnected.value
             ? 'connected'
             : 'disconnected'
         : 'loading'
 );
+
+const connectionLabel = computed(() => {
+    if (!hydrated.value) return 'Connect';
+    if (usingInstanceKey.value) return 'Instance';
+    if (isConnected.value) return 'User';
+    return 'Connect';
+});
+
+const isManaged = computed(
+    () => usingInstanceKey.value && !allowUserOverride.value
+);
+
+const ariaLabel = computed(() => {
+    if (!hydrated.value) return 'Connect to OpenRouter';
+    if (isManaged.value) return 'OpenRouter managed by instance';
+    if (isConnected.value) return 'Disconnect from OpenRouter';
+    if (usingInstanceKey.value) return 'Using instance OpenRouter key';
+    return 'Connect to OpenRouter';
+});
 
 // Button props with theme overrides - match other sidebar buttons exactly
 const buttonProps = computed(() => {
@@ -109,11 +135,15 @@ const buttonProps = computed(() => {
         variant: 'soft' as const,
         color: 'neutral' as const,
         block: true,
+        disabled: isManaged.value,
         ...overrides.value,
     };
 });
 
 function onOpenRouterClick() {
+    if (isManaged.value) {
+        return;
+    }
     if (isConnected.value) {
         state.value.openrouterKey = null;
         openrouter?.logoutOpenRouter();

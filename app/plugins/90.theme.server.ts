@@ -1,6 +1,6 @@
 import { ref, type Ref } from 'vue';
 import { callWithNuxt, type NuxtApp } from '#app';
-import { useAppConfig, useHead } from '#imports';
+import { useAppConfig, useHead, useRuntimeConfig } from '#imports';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
 import type { CompiledTheme } from '~/theme/_shared/types';
@@ -31,6 +31,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     for (const entry of manifestEntries) {
         themeManifest.set(entry.name, entry);
     }
+    const runtimeConfig = useRuntimeConfig();
 
     const appConfig = useAppConfig() as any;
     const baseAppConfig = cloneDeep(appConfig);
@@ -68,7 +69,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         );
     }
 
-    const DEFAULT_THEME =
+    const baseDefaultTheme =
         manifestEntries.find((entry) => entry.isDefault)?.name ??
         manifestEntries[0]?.name ??
         'retro';
@@ -81,6 +82,28 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     );
 
     const availableThemes = new Set(themeManifest.keys());
+    const configuredDefaultTheme =
+        runtimeConfig.public?.branding?.defaultTheme;
+    const normalizedConfiguredDefault =
+        typeof configuredDefaultTheme === 'string' &&
+        configuredDefaultTheme !== 'system'
+            ? configuredDefaultTheme
+            : null;
+    const DEFAULT_THEME =
+        normalizedConfiguredDefault &&
+        availableThemes.has(normalizedConfiguredDefault)
+            ? normalizedConfiguredDefault
+            : baseDefaultTheme;
+
+    if (
+        import.meta.dev &&
+        normalizedConfiguredDefault &&
+        !availableThemes.has(normalizedConfiguredDefault)
+    ) {
+        console.warn(
+            `[theme] Default theme "${normalizedConfiguredDefault}" not found. Falling back to "${baseDefaultTheme}".`
+        );
+    }
 
     // SSR-safe light/dark tracking (defaults to light)
     const current = ref<'light' | 'dark'>(

@@ -11,6 +11,15 @@
  * Reqs: 1 (env-or-client key), 2 (streaming + abort), 4 (no logging keys)
  */
 
+import { getRequestIP, setResponseHeader } from 'h3';
+import { resolveSessionContext } from '../../auth/session';
+import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
+import {
+    checkLlmRateLimit,
+    getLlmRateLimitStats,
+    recordLlmRequest,
+} from '../../utils/llm/rate-limiter';
+
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 export default defineEventHandler(async (event) => {
@@ -25,15 +34,62 @@ export default defineEventHandler(async (event) => {
 
     // Req 1, 4: Select API key: env > Authorization header. Never log keys.
     const config = useRuntimeConfig(event);
+    const allowUserOverride = config.openrouterAllowUserOverride !== false;
     const authHeader = getHeader(event, 'authorization');
     const clientKey = authHeader?.startsWith('Bearer ')
         ? authHeader.slice(7)
         : undefined;
 
-    const apiKey = config.openrouterApiKey || clientKey;
+    const apiKey = config.openrouterApiKey || (allowUserOverride ? clientKey : undefined);
     if (!apiKey) {
         setResponseStatus(event, 400);
         return 'Missing OpenRouter API key';
+    }
+
+    const limits = config.limits;
+    const limitConfig =
+        limits?.enabled !== false && (limits?.requestsPerMinute ?? 0) > 0
+            ? {
+                  windowMs: 60_000,
+                  maxRequests: limits?.requestsPerMinute ?? 20,
+              }
+            : null;
+    let rateKey: string | null = null;
+    if (limitConfig) {
+        rateKey = 'anonymous';
+        if (isSsrAuthEnabled(event)) {
+            const session = await resolveSessionContext(event);
+            if (session.authenticated && session.user?.id) {
+                rateKey = `user:${session.user.id}`;
+            }
+        }
+        if (rateKey === 'anonymous') {
+            const ip =
+                getRequestIP(event, { xForwardedFor: true }) ||
+                event.node.req.socket.remoteAddress ||
+                'unknown';
+            rateKey = `ip:${ip}`;
+        }
+        const rateResult = checkLlmRateLimit(rateKey, limitConfig);
+        if (!rateResult.allowed) {
+            const retryAfterSec = Math.ceil(
+                (rateResult.retryAfterMs ?? 1000) / 1000
+            );
+            setResponseHeader(event, 'Retry-After', String(retryAfterSec));
+            const stats = getLlmRateLimitStats(rateKey, limitConfig);
+            setResponseHeader(
+                event,
+                'X-RateLimit-Limit',
+                String(stats.limit)
+            );
+            setResponseHeader(
+                event,
+                'X-RateLimit-Remaining',
+                String(stats.remaining)
+            );
+            setResponseStatus(event, 429);
+            return `Rate limit exceeded. Retry after ${retryAfterSec}s`;
+        }
     }
 
     // Req 2: Setup abort controller for client disconnect
@@ -93,6 +149,17 @@ export default defineEventHandler(async (event) => {
     setHeader(event, 'Content-Type', 'text/event-stream');
     setHeader(event, 'Cache-Control', 'no-cache, no-transform');
     setHeader(event, 'Connection', 'keep-alive');
+
+    if (limitConfig && rateKey) {
+        const stats = getLlmRateLimitStats(rateKey, limitConfig);
+        setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
+        setResponseHeader(
+            event,
+            'X-RateLimit-Remaining',
+            String(stats.remaining)
+        );
+        recordLlmRequest(rateKey, limitConfig);
+    }
 
     // Just pipe the upstream SSE directly to client - no need to parse and re-encode
     // The client will parse it with the shared parser
