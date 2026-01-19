@@ -49,7 +49,7 @@ vi.mock('../client', () => {
         },
     };
 
-    return { db: mockDb };
+    return { db: mockDb, getDb: () => mockDb };
 });
 
 const nowSecState = vi.hoisted(() => ({ value: 0 }));

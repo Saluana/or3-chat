@@ -8,6 +8,7 @@ import type {
     SyncChange,
     SyncProvider,
     SyncScope,
+    SyncSubscribeOptions,
 } from '~~/shared/sync/types';
 import { OutboxManager } from '../outbox-manager';
 import { createMockDb, createPendingOpsTable } from './sync-test-utils';
@@ -38,7 +39,8 @@ class SpyProvider implements SyncProvider {
     async subscribe(
         _scope: SyncScope,
         _tables: string[],
-        _onChanges: (changes: SyncChange[]) => void
+        _onChanges: (changes: SyncChange[]) => void,
+        _options?: SyncSubscribeOptions
     ): Promise<() => void> {
         return () => undefined;
     }

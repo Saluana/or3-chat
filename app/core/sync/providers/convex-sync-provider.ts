@@ -15,6 +15,7 @@ import type {
     PushBatch,
     PushResult,
     PendingOp,
+    SyncSubscribeOptions,
 } from '~~/shared/sync/types';
 import { PullResponseSchema, SyncChangeSchema, PushResultSchema } from '~~/shared/sync/schemas';
 import { z } from 'zod';
@@ -45,19 +46,20 @@ export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
         async subscribe(
             scope: SyncScope,
             tables: string[],
-            onChanges: (changes: SyncChange[]) => void
+            onChanges: (changes: SyncChange[]) => void,
+            options?: SyncSubscribeOptions
         ): Promise<() => void> {
             const tablesToWatch = tables.length > 0 ? tables : SYNCED_TABLES;
             let disposed = false;
+            const cursor = options?.cursor ?? 0;
+            const limit = options?.limit ?? 200;
 
-            // Single subscription - Convex reactive queries automatically re-run when data changes
-            // No need to re-subscribe with new cursor; that pattern caused infinite loops
             const unwatch = client.onUpdate(
                 api.sync.watchChanges,
                 {
                     workspace_id: scope.workspaceId as Id<'workspaces'>,
-                    cursor: 0,
-                    limit: 100,
+                    cursor,
+                    limit,
                 },
                 (result) => {
                     if (disposed) return;
@@ -84,7 +86,7 @@ export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
                 }
             );
 
-            const key = `${scope.workspaceId}:${tablesToWatch.join(',')}`;
+            const key = `${scope.workspaceId}:${tablesToWatch.join(',')}:${cursor}:${limit}`;
             const cleanup = () => {
                 disposed = true;
                 if (unwatch) unwatch();

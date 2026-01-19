@@ -51,6 +51,7 @@ export class SubscriptionManager {
     private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
     private isBootstrapping = false;
     private boundBeforeUnload: (() => void) | null = null;
+    private lastSubscriptionCursor: number | null = null;
 
     constructor(
         db: Or3DB,
@@ -322,6 +323,18 @@ export class SubscriptionManager {
      * Subscribe to real-time changes
      */
     private async subscribe(): Promise<void> {
+        const cursor = await this.cursorManager.getCursor();
+
+        if (this.lastSubscriptionCursor === cursor && this.unsubscribe) {
+            return;
+        }
+
+        if (this.unsubscribe) {
+            this.unsubscribe();
+            this.unsubscribe = null;
+        }
+
+        this.lastSubscriptionCursor = cursor;
         this.unsubscribe = await this.provider.subscribe(
             this.scope,
             this.config.tables,
@@ -330,7 +343,8 @@ export class SubscriptionManager {
                     console.error('[SubscriptionManager] handleChanges error:', err);
                     this.handleError(err);
                 });
-            }
+            },
+            { cursor, limit: this.config.bootstrapPageSize }
         );
     }
 
@@ -341,7 +355,6 @@ export class SubscriptionManager {
         if (changes.length === 0) return;
 
         // Filter out changes we've already seen to avoid reprocessing
-        // This is critical for efficiency since convex-sync-provider uses cursor: 0
         const currentCursor = await this.cursorManager.getCursor();
         const newChanges = changes.filter((c) => c.serverVersion > currentCursor);
         
@@ -356,9 +369,15 @@ export class SubscriptionManager {
             const result = await this.applyChanges(newChanges);
 
             // Update cursor to highest server version
-            const maxVersion = Math.max(...newChanges.map((c) => c.serverVersion));
+            let maxVersion = Math.max(...newChanges.map((c) => c.serverVersion));
 
             if (maxVersion > currentCursor) {
+                await this.cursorManager.setCursor(maxVersion);
+            }
+
+            const drainResult = await this.drainBacklog(currentCursor);
+            if (drainResult.cursor > maxVersion) {
+                maxVersion = drainResult.cursor;
                 await this.cursorManager.setCursor(maxVersion);
             }
 
@@ -369,11 +388,13 @@ export class SubscriptionManager {
                 maxVersion
             );
 
+            await this.subscribe();
+
             await useHooks().doAction('sync.pull:action:applied', {
                 scope: this.scope,
-                applied: result.applied,
-                skipped: result.skipped,
-                conflicts: result.conflicts,
+                applied: result.applied + drainResult.applied,
+                skipped: result.skipped + drainResult.skipped,
+                conflicts: result.conflicts + drainResult.conflicts,
             });
         } catch (error) {
             console.error('[SubscriptionManager] Failed to apply changes:', error);
@@ -390,6 +411,38 @@ export class SubscriptionManager {
      */
     private async applyChanges(changes: SyncChange[]) {
         return this.conflictResolver.applyChanges(changes);
+    }
+
+    private async drainBacklog(startCursor: number) {
+        let cursor = startCursor;
+        let hasMore = true;
+        const totals = { applied: 0, skipped: 0, conflicts: 0, cursor };
+        const circuitBreaker = getSyncCircuitBreaker();
+
+        while (hasMore) {
+            if (this.status === 'disconnected') break;
+            if (!circuitBreaker.canRetry()) break;
+
+            const response = await this.provider.pull({
+                scope: this.scope,
+                cursor,
+                limit: this.config.bootstrapPageSize,
+                tables: this.config.tables,
+            });
+
+            if (response.changes.length) {
+                const result = await this.applyChanges(response.changes);
+                totals.applied += result.applied;
+                totals.skipped += result.skipped;
+                totals.conflicts += result.conflicts;
+            }
+
+            cursor = response.nextCursor;
+            totals.cursor = cursor;
+            hasMore = response.hasMore;
+        }
+
+        return totals;
     }
 
     /**

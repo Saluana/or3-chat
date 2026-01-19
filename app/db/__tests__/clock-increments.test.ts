@@ -60,8 +60,8 @@ const dbState = vi.hoisted(() => {
     return { tables, reset };
 });
 
-vi.mock('../client', () => ({
-    db: {
+vi.mock('../client', () => {
+    const db = {
         ...dbState.tables,
         async transaction(_mode: string, ...args: Array<unknown>) {
             const fn = args[args.length - 1];
@@ -69,8 +69,12 @@ vi.mock('../client', () => ({
                 await (fn as () => Promise<void>)();
             }
         },
-    },
-}));
+    };
+    return {
+        db,
+        getDb: () => db,
+    };
+});
 
 vi.mock('../dbTry', () => ({
     dbTry: async <T>(fn: () => T | Promise<T>) => fn(),

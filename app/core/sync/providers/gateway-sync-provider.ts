@@ -12,6 +12,7 @@ import type {
     PullResponse,
     PushBatch,
     PushResult,
+    SyncSubscribeOptions,
 } from '~~/shared/sync/types';
 
 const DEFAULT_POLL_INTERVAL_MS = 2000;
@@ -56,10 +57,12 @@ export function createGatewaySyncProvider(
         async subscribe(
             scope: SyncScope,
             tables: string[],
-            onChanges: (changes: SyncChange[]) => void
+            onChanges: (changes: SyncChange[]) => void,
+            options?: SyncSubscribeOptions
         ): Promise<() => void> {
             let active = true;
-            let cursor = 0;
+            let cursor = options?.cursor ?? 0;
+            const limit = options?.limit ?? pullLimit;
             let timeout: ReturnType<typeof setTimeout> | null = null;
 
             const poll = async () => {
@@ -70,7 +73,7 @@ export function createGatewaySyncProvider(
                         {
                             scope,
                             cursor,
-                            limit: pullLimit,
+                            limit,
                             tables,
                         },
                         baseUrl

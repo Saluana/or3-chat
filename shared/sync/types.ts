@@ -119,6 +119,14 @@ export interface SyncProviderAuth {
 }
 
 /**
+ * Subscribe options for real-time providers
+ */
+export interface SyncSubscribeOptions {
+    cursor?: number;
+    limit?: number;
+}
+
+/**
  * SyncProvider interface - implemented by each backend adapter
  */
 export interface SyncProvider {
@@ -133,7 +141,8 @@ export interface SyncProvider {
     subscribe(
         scope: SyncScope,
         tables: string[],
-        onChanges: (changes: SyncChange[]) => void
+        onChanges: (changes: SyncChange[]) => void,
+        options?: SyncSubscribeOptions
     ): Promise<() => void>;
 
     /**

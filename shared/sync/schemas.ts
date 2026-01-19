@@ -77,6 +77,7 @@ export const MessagePayloadSchema = z
         created_at: z.number(),
         updated_at: z.number(),
         clock: z.number(),
+        hlc: z.string().optional(),
     })
     .passthrough();
 
@@ -121,7 +122,7 @@ export const KvPayloadSchema = z
     .object({
         id: z.string(),
         name: z.string(),
-        value: z.unknown(),
+        value: z.unknown().optional().nullable(),
         created_at: z.number(),
         updated_at: z.number(),
         clock: z.number(),

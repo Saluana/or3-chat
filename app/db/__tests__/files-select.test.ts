@@ -62,7 +62,8 @@ vi.mock('../client', () => {
             else rows.push(meta);
         },
     };
-    return { db: { file_meta: table } };
+    const mockDb = { file_meta: table };
+    return { db: mockDb, getDb: () => mockDb };
 });
 
 const nowSecState = vi.hoisted(() => ({ value: 0 }));

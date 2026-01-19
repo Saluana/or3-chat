@@ -47,9 +47,13 @@ vi.mock('~/utils/workspace-backup-stream', async () => {
     };
 });
 
-vi.mock('~/db/client', () => ({
-    db: {} as any,
-}));
+vi.mock('~/db/client', () => {
+    const mockDb = {} as any;
+    return {
+        db: mockDb,
+        getDb: () => mockDb,
+    };
+});
 
 vi.mock('~/composables/useHooks', () => ({
     useHooks: () => ({

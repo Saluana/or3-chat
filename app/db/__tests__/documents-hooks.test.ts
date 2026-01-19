@@ -94,7 +94,11 @@ vi.mock('../client', () => {
         },
         isOpen: () => true,
     };
-    return { db: { posts, isOpen: () => true } };
+    const db = { posts, isOpen: () => true };
+    return {
+        db,
+        getDb: () => db,
+    };
 });
 
 // Mock dbTry to pass through

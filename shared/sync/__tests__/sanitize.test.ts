@@ -164,6 +164,12 @@ describe('sanitizePayloadForSync', () => {
         expect('value' in (result || {})).toBe(false);
     });
 
+    it('allows kv payloads without value after sanitization', () => {
+        const payload = { id: '123', name: 'pref', value: null };
+        const result = sanitizePayloadForSync('kv', payload, 'put');
+        expect(result).toEqual({ id: '123', name: 'pref', deleted: false });
+    });
+
     it('strips large base64 data URLs from message data', () => {
         const largeDataUrl = 'data:image/png;base64,' + 'A'.repeat(20000);
         const payload = {

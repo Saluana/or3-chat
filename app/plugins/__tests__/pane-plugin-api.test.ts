@@ -42,8 +42,8 @@ vi.mock('~/db/posts', () => ({
 
 const postsData: any[] = [];
 
-vi.mock('~/db/client', () => ({
-    db: {
+vi.mock('~/db/client', () => {
+    const mockDb = {
         posts: {
             where: vi.fn((field: string) => ({
                 equals: vi.fn((value: any) => ({
@@ -67,12 +67,16 @@ vi.mock('~/db/client', () => ({
                 })),
             })),
         },
-    },
-    __setPostsData(data: any[]) {
-        postsData.length = 0;
-        postsData.push(...data);
-    },
-}));
+    };
+    return {
+        db: mockDb,
+        getDb: () => mockDb,
+        __setPostsData(data: any[]) {
+            postsData.length = 0;
+            postsData.push(...data);
+        },
+    };
+});
 
 describe('pane-plugin-api posts.listByType', () => {
     let pluginFactory: (() => Promise<void>) | undefined;

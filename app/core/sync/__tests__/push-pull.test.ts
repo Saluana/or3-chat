@@ -8,6 +8,7 @@ import type {
     SyncChange,
     SyncProvider,
     SyncScope,
+    SyncSubscribeOptions,
 } from '~~/shared/sync/types';
 import { ConflictResolver } from '../conflict-resolver';
 import { OutboxManager } from '../outbox-manager';
@@ -78,7 +79,8 @@ class FakeSyncProvider implements SyncProvider {
     async subscribe(
         _scope: SyncScope,
         _tables: string[],
-        _onChanges: (changes: SyncChange[]) => void
+        _onChanges: (changes: SyncChange[]) => void,
+        _options?: SyncSubscribeOptions
     ): Promise<() => void> {
         return () => undefined;
     }

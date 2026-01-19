@@ -39,6 +39,30 @@ interface SyncEngineState {
 
 let engineState: SyncEngineState | null = null;
 let convexClient: ReturnType<typeof useConvexClient> | null = null;
+let authRetryTimeout: ReturnType<typeof setTimeout> | null = null;
+const AUTH_RETRY_DELAYS = [500, 1000, 2000, 5000];
+
+function getActiveWorkspaceId(): string | null {
+    return engineState?.scope.workspaceId ?? null;
+}
+
+function scheduleAuthRetry(workspaceId: string, attempt: number): void {
+    if (authRetryTimeout) {
+        clearTimeout(authRetryTimeout);
+        authRetryTimeout = null;
+    }
+
+    const delayIndex = Math.min(attempt - 1, AUTH_RETRY_DELAYS.length - 1);
+    const delay = AUTH_RETRY_DELAYS[delayIndex] ?? 5000;
+
+    authRetryTimeout = setTimeout(() => {
+        authRetryTimeout = null;
+        void startSyncEngine(workspaceId).catch((error) => {
+            console.error('[convex-sync] Auth retry failed:', error);
+            scheduleAuthRetry(workspaceId, attempt + 1);
+        });
+    }, delay);
+}
 
 /**
  * Start the sync engine for a workspace
@@ -47,6 +71,11 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
     if (engineState) {
         console.warn('[convex-sync] Engine already running, stopping first');
         await stopSyncEngine();
+    }
+
+    if (authRetryTimeout) {
+        clearTimeout(authRetryTimeout);
+        authRetryTimeout = null;
     }
 
     console.log('[convex-sync] Starting sync engine for workspace:', workspaceId);
@@ -58,12 +87,14 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
     const provider = getActiveSyncProvider();
     if (!provider) {
         console.error('[convex-sync] No sync provider available');
+        scheduleAuthRetry(workspaceId, 1);
         return;
     }
 
     const resolvedProvider = await ensureProviderAuth(provider);
     if (!resolvedProvider) {
         console.error('[convex-sync] Provider auth unavailable');
+        scheduleAuthRetry(workspaceId, 1);
         return;
     }
 
@@ -101,6 +132,11 @@ async function stopSyncEngine(): Promise<void> {
     if (!engineState) return;
 
     console.log('[convex-sync] Stopping sync engine');
+
+    if (authRetryTimeout) {
+        clearTimeout(authRetryTimeout);
+        authRetryTimeout = null;
+    }
 
     // Stop outbox
     engineState.outboxManager.stop();
@@ -165,6 +201,10 @@ export default defineNuxtPlugin(async () => {
                     console.error('[convex-sync] Failed to start sync engine:', error);
                 });
             } else {
+                if (authRetryTimeout) {
+                    clearTimeout(authRetryTimeout);
+                    authRetryTimeout = null;
+                }
                 void stopSyncEngine().catch((error) => {
                     console.error('[convex-sync] Failed to stop sync engine:', error);
                 });
@@ -205,6 +245,10 @@ async function ensureProviderAuth(provider: SyncProvider): Promise<SyncProvider 
             console.warn(
                 '[convex-sync] Provider token unavailable, falling back to gateway mode'
             );
+            const workspaceId = getActiveWorkspaceId();
+            if (workspaceId) {
+                scheduleAuthRetry(workspaceId, 1);
+            }
             return gatewayFallback;
         }
         return null;

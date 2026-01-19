@@ -105,6 +105,8 @@ date: 2026-01-11
     - [x] Subscribe to Convex reactive queries per table
     - [x] Route changes to ConflictResolver
     - [x] Handle subscription errors gracefully
+    - [x] Re-subscribe with cursor advancement to avoid stale watch windows
+    - [x] Drain backlog via pull after subscription batches
 - [x] **8.2 Implement CursorManager** (Requirements: 5.2)
     - [x] Persist cursor in sync_state table
     - [x] Drive bootstrap pull on cold start
@@ -150,6 +152,7 @@ date: 2026-01-11
     - [x] Start engine on authenticated session
     - [x] Stop engine on sign-out
     - [x] Handle HMR disposal
+    - [x] Retry sync engine start when provider auth is delayed
 - [x] **12.2 Integrate with auth system**
     - [x] Watch session changes
     - [x] Pass workspace ID to engine
@@ -171,6 +174,8 @@ date: 2026-01-11
     - [x] Push flow with mock provider
     - [x] Pull flow with mock provider
     - [x] Conflict scenarios
+    - [x] Subscription resubscribe + backlog drain
+    - [x] Auth retry + gateway fallback
 - [x] **14.3 E2E tests**
     - [x] Multi-device sync
     - [x] Offline recovery
