@@ -2,6 +2,7 @@
 
 artifact_id: or3-cloud-config-tasks
 date: 2026-01-23
+updated: 2026-01-18
 
 ## 1. Define Types and Utilities
 
@@ -31,3 +32,40 @@ date: 2026-01-23
 ## 5. Documentation
 
 - [ ] Update main README or create a new doc explaining how to use `config.or3cloud.ts` to manage the environment.
+- [ ] Document all configuration options with examples for common deployment scenarios.
+
+## 6. Shared API Key Support
+
+- [ ] Implement `services.llm.openRouter.instanceApiKey` field.
+- [ ] Implement `allowUserOverride` logic in the LLM request flow.
+- [ ] Add UI to indicate when using instance vs. user API key.
+
+## 7. Rate Limiting & Usage Limits
+
+- [ ] Implement `limits.requestsPerMinute` enforcement.
+- [ ] Implement `limits.maxConversations` enforcement (if non-zero).
+- [ ] Implement `limits.maxMessagesPerDay` enforcement (if non-zero).
+- [ ] Add UI feedback when limits are reached.
+
+## 8. Branding & Customization
+
+- [ ] Implement `branding.appName` throughout UI (title, headers, etc.).
+- [ ] Implement `branding.logoUrl` in sidebar/header.
+- [ ] Implement `branding.defaultTheme` for new users.
+
+## 9. Legal Compliance
+
+- [ ] Implement `legal.termsUrl` display in footer.
+- [ ] Implement `legal.privacyUrl` display in footer.
+- [ ] Conditionally show legal links only when configured.
+
+## 10. Security Hardening
+
+- [ ] Implement `security.allowedOrigins` CORS configuration.
+- [ ] Implement `security.forceHttps` redirect middleware.
+
+## 11. Validation & Strict Mode
+
+- [ ] Implement `defineOr3CloudConfig` validation logic.
+- [ ] Implement `strict` mode startup checks.
+- [ ] Log clear error messages for missing required config.

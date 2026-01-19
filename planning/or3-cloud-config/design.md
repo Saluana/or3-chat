@@ -2,6 +2,7 @@
 
 artifact_id: or3-cloud-config-design
 date: 2026-01-23
+updated: 2026-01-18
 
 ## Overview
 
@@ -91,16 +92,133 @@ export interface Or3CloudConfig {
      */
     llm?: {
       openRouter?: {
-        apiKey?: string;
+        /**
+         * Instance-level API key provided by the cloud hoster.
+         * Used as a fallback when users haven't configured their own key.
+         * @env OPENROUTER_API_KEY
+         */
+        instanceApiKey?: string;
+        
+        /**
+         * If true, users can override with their own API key in settings.
+         * If false, only the instance key is used (enterprise deployments).
+         * @default true
+         */
+        allowUserOverride?: boolean;
       };
     };
   };
+
+  /**
+   * Rate limiting and usage quotas.
+   * Controls API usage limits for the instance.
+   */
+  limits?: {
+    /**
+     * Enable rate limiting.
+     * @default true
+     */
+    enabled?: boolean;
+    
+    /**
+     * Maximum LLM requests per user per minute.
+     * @default 20
+     */
+    requestsPerMinute?: number;
+    
+    /**
+     * Maximum conversations per user (0 = unlimited).
+     * @default 0
+     */
+    maxConversations?: number;
+    
+    /**
+     * Maximum messages per user per day (0 = unlimited).
+     * @default 0
+     */
+    maxMessagesPerDay?: number;
+  };
+
+  /**
+   * Branding and customization options.
+   * Allows cloud hosters to customize the app appearance.
+   */
+  branding?: {
+    /**
+     * Custom application name.
+     * @default 'OR3'
+     */
+    appName?: string;
+    
+    /**
+     * URL to a custom logo image.
+     */
+    logoUrl?: string;
+    
+    /**
+     * Default theme for new users.
+     * @default 'system'
+     */
+    defaultTheme?: 'light' | 'dark' | 'system' | string;
+  };
+
+  /**
+   * Legal URLs for compliance.
+   * Required for public deployments.
+   */
+  legal?: {
+    /**
+     * URL to Terms of Service page.
+     */
+    termsUrl?: string;
+    
+    /**
+     * URL to Privacy Policy page.
+     */
+    privacyUrl?: string;
+  };
+
+  /**
+   * Security hardening options.
+   */
+  security?: {
+    /**
+     * Allowed origins for CORS. Empty array means all origins allowed.
+     */
+    allowedOrigins?: string[];
+    
+    /**
+     * Force HTTPS redirects.
+     * @default true in production
+     */
+    forceHttps?: boolean;
+  };
+
+  /**
+   * Plugin/extension configuration namespace.
+   * Allows third-party plugins to register their own config.
+   * @example { myPlugin: { settingA: true } }
+   */
+  extensions?: Record<string, unknown>;
+}
+
+export interface Or3CloudConfigOptions {
+  /**
+   * If true, throws at startup if required secrets are missing.
+   * @default true in production, false in development
+   */
+  strict?: boolean;
 }
 
 /**
  * Define the OR3 Cloud configuration.
+ * @param config - The configuration object
+ * @param options - Optional settings for validation behavior
  */
-export function defineOr3CloudConfig(config: Or3CloudConfig): Or3CloudConfig;
+export function defineOr3CloudConfig(
+  config: Or3CloudConfig, 
+  options?: Or3CloudConfigOptions
+): Or3CloudConfig;
 ```
 
 ### 2. Integration with `nuxt.config.ts`
@@ -179,9 +297,25 @@ export const or3CloudConfig = defineOr3CloudConfig({
   services: {
     llm: {
       openRouter: {
-        apiKey: process.env.OPENROUTER_API_KEY,
+        instanceApiKey: process.env.OPENROUTER_API_KEY,
+        allowUserOverride: true,
       }
     }
-  }
-});
+  },
+  limits: {
+    enabled: true,
+    requestsPerMinute: 30,
+  },
+  branding: {
+    appName: 'My OR3 Instance',
+    defaultTheme: 'dark',
+  },
+  legal: {
+    termsUrl: 'https://example.com/terms',
+    privacyUrl: 'https://example.com/privacy',
+  },
+  security: {
+    forceHttps: true,
+  },
+}, { strict: true });
 ```

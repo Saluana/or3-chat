@@ -2,6 +2,7 @@
 
 artifact_id: or3-cloud-config-reqs
 date: 2026-01-23
+updated: 2026-01-18
 
 ## Introduction
 
@@ -38,6 +39,51 @@ Non-goals:
 
 -   The config SHALL provide boolean flags to enable/disable major features (e.g., `auth.enabled`, `sync.enabled`).
 -   Disabling a feature SHALL effectively remove or mock its dependencies in the build/runtime to prevent errors.
+
+### 7. Shared/Instance-Level API Keys
+
+7.1 As a cloud hoster, I want to provide a shared OpenRouter API key for all users, so that users can use the app without needing their own API keys.
+
+-   The config SHALL support an `instanceApiKey` for LLM services that applies to all users.
+-   The config SHALL provide an `allowUserOverride` flag to control whether users can use their own API keys.
+-   WHEN `allowUserOverride` is false, the system SHALL only use the instance-level key.
+
+### 8. Rate Limiting & Usage Limits
+
+8.1 As a cloud hoster, I want to configure rate limits and usage quotas, so that I can protect my deployment from abuse and manage costs.
+
+-   The config SHALL support rate limiting settings (e.g., requests per minute).
+-   The config SHALL support usage limits (e.g., max conversations, max messages per day).
+-   These limits SHALL be enforceable at both the instance and per-user level.
+
+### 9. Branding & Customization
+
+9.1 As a cloud hoster, I want to customize the branding of my deployment, so that it matches my organization's identity.
+
+-   The config SHALL support branding options: `appName`, `logoUrl`, `defaultTheme`.
+-   The branding settings SHALL be applied consistently across the UI.
+
+### 10. Legal & Compliance
+
+10.1 As a cloud hoster deploying to the public, I need to display Terms of Service and Privacy Policy links, so that I meet legal requirements.
+
+-   The config SHALL support `legal.termsUrl` and `legal.privacyUrl`.
+-   WHEN these URLs are configured, the app SHALL display them in appropriate locations (footer, signup, etc.).
+
+### 11. Security Hardening
+
+11.1 As a security-conscious operator, I want to configure security settings, so that my deployment is protected.
+
+-   The config SHALL support `allowedOrigins` for CORS configuration.
+-   The config SHALL support `forceHttps` to enforce HTTPS redirects.
+
+### 12. Validation & Startup Checks
+
+12.1 As an operator, I want the app to fail fast if required configuration is missing, so that I catch misconfigurations early.
+
+-   The config loader SHALL validate required fields at startup.
+-   A `strict` mode SHALL be available to enforce validation (default: true in production).
+-   WHEN validation fails in strict mode, the app SHALL not start and SHALL log clear error messages.
 
 ### 4. Extendability & Plugin Support
 
