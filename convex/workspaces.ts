@@ -253,6 +253,7 @@ export const remove = mutation({
                 const nextMembership = await ctx.db
                     .query('workspace_members')
                     .withIndex('by_user', (q) => q.eq('user_id', member.user_id))
+                    .order('asc') // Deterministic: oldest workspace first
                     .first();
                 await ctx.db.patch(member.user_id, {
                     active_workspace_id: nextMembership?.workspace_id ?? undefined,
@@ -308,6 +309,7 @@ export const ensure = mutation({
         const firstMembership = await ctx.db
             .query('workspace_members')
             .withIndex('by_user', (q) => q.eq('user_id', userId))
+            .order('asc') // Deterministic: oldest workspace first
             .first();
 
         let workspaceId = user?.active_workspace_id ?? undefined;
