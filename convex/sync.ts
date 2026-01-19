@@ -77,6 +77,7 @@ async function allocateServerVersions(
 
 /**
  * Table name to index name mapping
+ * Note: file_meta uses `hash` as PK (content-addressable) instead of `id`
  */
 const TABLE_INDEX_MAP: Record<string, { table: string; indexName: string }> = {
     threads: { table: 'threads', indexName: 'by_workspace_id' },

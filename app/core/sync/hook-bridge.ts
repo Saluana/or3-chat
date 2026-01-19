@@ -252,6 +252,12 @@ export class HookBridge {
                             error: String(error),
                         }
                     );
+                    // Emit hook for observability
+                    void useHooks().doAction('sync.capture:action:deferredFailed', {
+                        tableName,
+                        pk,
+                        error: String(error),
+                    });
                 });
             });
         }

@@ -237,7 +237,9 @@ export class OutboxManager {
     }
 
     /**
-     * Coalesce multiple ops for same record to latest
+     * Coalesce multiple ops for same record to latest.
+     * If put -> delete sequence exists, only delete is kept (correct LWW behavior).
+     * This ensures we don't waste bandwidth sending intermediate states.
      */
     private coalesceOps(ops: PendingOp[]): PendingOp[] {
         const byKey = new Map<string, PendingOp>();

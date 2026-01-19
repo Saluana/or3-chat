@@ -41,6 +41,7 @@ describe('sanitizePayloadForSync', () => {
             id: '123',
             name: 'test',
             deleted: false, // Added for legacy data compatibility
+            forked: false, // Added for legacy threads compatibility
         });
     });
 
@@ -70,6 +71,7 @@ describe('sanitizePayloadForSync', () => {
             id: '123',
             ref_count: 5,
             deleted: false, // Added for legacy data compatibility
+            forked: false, // Added for legacy threads compatibility
         });
     });
 
@@ -132,6 +134,7 @@ describe('sanitizePayloadForSync', () => {
             name: 'test',
             nested: { data: 'kept' },
             deleted: false, // Added for legacy data compatibility
+            forked: false, // Added for legacy threads compatibility
         });
     });
 
@@ -148,6 +151,7 @@ describe('sanitizePayloadForSync', () => {
         const payload = { id: '123', deleted: true };
         const result = sanitizePayloadForSync('threads', payload, 'put');
         expect(result?.deleted).toBe(true);
+        expect(result?.forked).toBe(false); // forked is also added for legacy threads
     });
 
     it('converts messages error: null to undefined', () => {

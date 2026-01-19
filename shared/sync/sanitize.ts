@@ -53,6 +53,12 @@ export function sanitizePayloadForSync(
         sanitized.deleted = false;
     }
 
+    // Ensure required `forked` field exists for threads
+    // Legacy local threads may not have this field
+    if (tableName === 'threads' && sanitized.forked === undefined) {
+        sanitized.forked = false;
+    }
+
     // Convert error: null to undefined for Convex schema compatibility
     // (Convex expects v.optional(v.string()), so null is invalid but undefined is fine)
     if (tableName === 'messages' && sanitized.error === null) {

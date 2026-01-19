@@ -7,6 +7,7 @@ import type { Or3DB } from '~/db/client';
 import type { SyncProvider, SyncScope } from '~~/shared/sync/types';
 import { nowSec } from '~/db/util';
 import { useHooks } from '~/core/hooks/useHooks';
+import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 
 const DEFAULT_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 const DEFAULT_INTERVAL_MS = 10 * 60 * 1000;
@@ -123,6 +124,12 @@ export class GcManager {
 
             if (eligibleIds.length) {
                 await this.db.tombstones.bulkDelete(eligibleIds);
+            }
+
+            // Check circuit breaker before external provider calls
+            const circuitBreaker = getSyncCircuitBreaker();
+            if (!circuitBreaker.canRetry()) {
+                return;
             }
 
             if (this.provider.gcTombstones) {
