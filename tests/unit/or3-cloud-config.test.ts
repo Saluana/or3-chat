@@ -23,7 +23,6 @@ const baseConfig: Or3CloudConfig = {
         },
     },
     limits: {},
-    branding: {},
     legal: {},
     security: {},
     extensions: {},
@@ -32,7 +31,6 @@ const baseConfig: Or3CloudConfig = {
 describe('defineOr3CloudConfig', () => {
     it('applies defaults for optional sections', () => {
         const config = defineOr3CloudConfig(baseConfig, { strict: false });
-        expect(config.branding?.appName).toBe('OR3');
         expect(config.limits?.requestsPerMinute).toBe(20);
         expect(config.services.llm?.openRouter?.allowUserOverride).toBe(true);
     });

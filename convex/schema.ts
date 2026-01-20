@@ -253,4 +253,19 @@ export default defineSchema({
     })
         .index('by_workspace_name', ['workspace_id', 'name'])
         .index('by_workspace_id', ['workspace_id', 'id']),
+
+    // ============================================================
+    // RATE LIMITING
+    // ============================================================
+
+    /**
+     * Rate limits - persistent storage for rate limiting counters.
+     * Used for daily limits that should survive server restarts.
+     */
+    rate_limits: defineTable({
+        key: v.string(), // e.g., "daily:user:xxx" or "daily:ip:xxx"
+        count: v.number(), // Current count in window
+        window_start: v.number(), // Timestamp when window started
+        updated_at: v.number(),
+    }).index('by_key', ['key']),
 });

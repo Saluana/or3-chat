@@ -9,6 +9,7 @@
  */
 
 import type * as crons from "../crons.js";
+import type * as rateLimits from "../rateLimits.js";
 import type * as storage from "../storage.js";
 import type * as sync from "../sync.js";
 import type * as users from "../users.js";
@@ -22,6 +23,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   crons: typeof crons;
+  rateLimits: typeof rateLimits;
   storage: typeof storage;
   sync: typeof sync;
   users: typeof users;

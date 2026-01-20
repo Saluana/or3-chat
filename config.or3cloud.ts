@@ -70,14 +70,13 @@ export const or3CloudConfig = defineOr3CloudConfig({
         maxMessagesPerDay: process.env.OR3_MAX_MESSAGES_PER_DAY
             ? Number(process.env.OR3_MAX_MESSAGES_PER_DAY)
             : 0,
-    },
-    /**
-     * Branding for the UI and theme defaults.
-     */
-    branding: {
-        appName: process.env.OR3_APP_NAME || 'OR3',
-        logoUrl: process.env.OR3_LOGO_URL,
-        defaultTheme: process.env.OR3_DEFAULT_THEME || 'system',
+        // Use Convex for persistent limits when sync is enabled, otherwise memory
+        storageProvider:
+            (process.env.OR3_LIMITS_STORAGE_PROVIDER as
+                | 'memory'
+                | 'convex'
+                | 'redis'
+                | 'postgres') || (syncEnabled ? 'convex' : 'memory'),
     },
     /**
      * Legal URLs for footer links.

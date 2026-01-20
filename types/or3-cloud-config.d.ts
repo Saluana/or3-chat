@@ -127,29 +127,14 @@ export interface Or3CloudConfig {
          * @default 0
          */
         maxMessagesPerDay?: number;
-    };
-
-    /**
-     * Branding and customization options.
-     * Allows cloud hosters to customize the app appearance.
-     */
-    branding?: {
-        /**
-         * Custom application name.
-         * @default 'OR3'
-         */
-        appName?: string;
 
         /**
-         * URL to a custom logo image.
+         * Storage provider for rate limits.
+         * - 'memory': In-memory (default, resets on restart)
+         * - 'convex': Persistent via Convex
+         * @default 'memory'
          */
-        logoUrl?: string;
-
-        /**
-         * Default theme for new users.
-         * @default 'system'
-         */
-        defaultTheme?: 'light' | 'dark' | 'system' | string;
+        storageProvider?: 'memory' | 'convex' | 'redis' | 'postgres';
     };
 
     /**

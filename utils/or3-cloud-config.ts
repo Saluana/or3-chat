@@ -38,11 +38,6 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         maxConversations: 0,
         maxMessagesPerDay: 0,
     },
-    branding: {
-        appName: 'OR3',
-        defaultTheme: 'system',
-        logoUrl: undefined,
-    },
     legal: {
         termsUrl: undefined,
         privacyUrl: undefined,
@@ -100,13 +95,7 @@ const cloudConfigSchema = z
                 requestsPerMinute: z.number().int().min(1).optional(),
                 maxConversations: z.number().int().min(0).optional(),
                 maxMessagesPerDay: z.number().int().min(0).optional(),
-            })
-            .optional(),
-        branding: z
-            .object({
-                appName: z.string().optional(),
-                logoUrl: z.union([z.string().url(), z.literal('')]).optional(),
-                defaultTheme: z.string().optional(),
+                storageProvider: z.enum(['memory', 'convex', 'redis', 'postgres']).optional(),
             })
             .optional(),
         legal: z
@@ -169,10 +158,6 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
         limits: {
             ...DEFAULT_OR3_CLOUD_CONFIG.limits,
             ...config.limits,
-        },
-        branding: {
-            ...DEFAULT_OR3_CLOUD_CONFIG.branding,
-            ...config.branding,
         },
         legal: {
             ...DEFAULT_OR3_CLOUD_CONFIG.legal,

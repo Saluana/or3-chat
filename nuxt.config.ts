@@ -12,7 +12,9 @@ const convexEnabled =
         or3CloudConfig.sync.provider === 'convex') ||
     (or3CloudConfig.storage.enabled &&
         or3CloudConfig.storage.provider === 'convex');
-const appName = or3CloudConfig.branding!.appName!;
+
+// Branding defaults (will be moved to separate or3config in future)
+const appName = process.env.OR3_APP_NAME || 'OR3';
 const appShortName = appName.length > 12 ? appName.slice(0, 12) : appName;
 
 // Shared config objects (DRY: used in both server and public runtimeConfig)
@@ -21,11 +23,12 @@ const limitsConfig = {
     requestsPerMinute: or3CloudConfig.limits!.requestsPerMinute!,
     maxConversations: or3CloudConfig.limits!.maxConversations!,
     maxMessagesPerDay: or3CloudConfig.limits!.maxMessagesPerDay!,
+    storageProvider: or3CloudConfig.limits!.storageProvider || 'memory',
 };
 const brandingConfig = {
-    appName: or3CloudConfig.branding!.appName!,
-    logoUrl: or3CloudConfig.branding!.logoUrl || '',
-    defaultTheme: or3CloudConfig.branding!.defaultTheme!,
+    appName: process.env.OR3_APP_NAME || 'OR3',
+    logoUrl: process.env.OR3_LOGO_URL || '',
+    defaultTheme: process.env.OR3_DEFAULT_THEME || 'system',
 };
 const legalConfig = {
     termsUrl: or3CloudConfig.legal!.termsUrl || '',

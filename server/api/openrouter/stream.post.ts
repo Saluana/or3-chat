@@ -19,6 +19,7 @@ import {
     getLlmRateLimitStats,
     recordLlmRequest,
 } from '../../utils/llm/rate-limiter';
+import { getRateLimitProvider } from '../../utils/rate-limit/store';
 
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -46,42 +47,42 @@ export default defineEventHandler(async (event) => {
         return 'Missing OpenRouter API key';
     }
 
+    // Resolve user key for rate limiting (user ID or IP)
+    let rateKey: string = 'anonymous';
+    if (isSsrAuthEnabled(event)) {
+        const session = await resolveSessionContext(event);
+        if (session.authenticated && session.user?.id) {
+            rateKey = `user:${session.user.id}`;
+        }
+    }
+    if (rateKey === 'anonymous') {
+        const ip =
+            getRequestIP(event, { xForwardedFor: true }) ||
+            event.node.req.socket.remoteAddress ||
+            'unknown';
+        rateKey = `ip:${ip}`;
+    }
+
     const limits = config.limits;
-    const limitConfig =
+
+    // Check requestsPerMinute limit
+    const minuteConfig =
         limits?.enabled !== false && (limits?.requestsPerMinute ?? 0) > 0
             ? {
                   windowMs: 60_000,
                   maxRequests: limits?.requestsPerMinute ?? 20,
               }
             : null;
-    let rateKey: string | null = null;
-    if (limitConfig) {
-        rateKey = 'anonymous';
-        if (isSsrAuthEnabled(event)) {
-            const session = await resolveSessionContext(event);
-            if (session.authenticated && session.user?.id) {
-                rateKey = `user:${session.user.id}`;
-            }
-        }
-        if (rateKey === 'anonymous') {
-            const ip =
-                getRequestIP(event, { xForwardedFor: true }) ||
-                event.node.req.socket.remoteAddress ||
-                'unknown';
-            rateKey = `ip:${ip}`;
-        }
-        const rateResult = checkLlmRateLimit(rateKey, limitConfig);
+
+    if (minuteConfig) {
+        const rateResult = checkLlmRateLimit(rateKey, minuteConfig);
         if (!rateResult.allowed) {
             const retryAfterSec = Math.ceil(
                 (rateResult.retryAfterMs ?? 1000) / 1000
             );
-            setResponseHeader(event, 'Retry-After', String(retryAfterSec));
-            const stats = getLlmRateLimitStats(rateKey, limitConfig);
-            setResponseHeader(
-                event,
-                'X-RateLimit-Limit',
-                String(stats.limit)
-            );
+            setResponseHeader(event, 'Retry-After', retryAfterSec);
+            const stats = getLlmRateLimitStats(rateKey, minuteConfig);
+            setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
             setResponseHeader(
                 event,
                 'X-RateLimit-Remaining',
@@ -89,6 +90,44 @@ export default defineEventHandler(async (event) => {
             );
             setResponseStatus(event, 429);
             return `Rate limit exceeded. Retry after ${retryAfterSec}s`;
+        }
+    }
+
+    // Check maxMessagesPerDay limit (24-hour rolling window)
+    // Uses pluggable provider with atomic check-and-record
+    const dailyConfig =
+        limits?.enabled !== false && (limits?.maxMessagesPerDay ?? 0) > 0
+            ? {
+                  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+                  maxRequests: limits?.maxMessagesPerDay ?? 0,
+              }
+            : null;
+
+    // We'll check daily limit and record atomically
+    const provider = dailyConfig ? getRateLimitProvider() : null;
+    let dailyLimitResult: { allowed: boolean; remaining: number; retryAfterMs?: number } | null = null;
+
+    if (dailyConfig && provider) {
+        const dailyKey = `daily:${rateKey}`;
+        // Atomic check-and-record to prevent race conditions
+        dailyLimitResult = await provider.checkAndRecord(dailyKey, dailyConfig);
+        if (!dailyLimitResult.allowed) {
+            const retryAfterSec = Math.ceil(
+                (dailyLimitResult.retryAfterMs ?? 1000) / 1000
+            );
+            setResponseHeader(event, 'Retry-After', retryAfterSec);
+            setResponseHeader(
+                event,
+                'X-DailyLimit-Limit',
+                String(dailyConfig.maxRequests)
+            );
+            setResponseHeader(
+                event,
+                'X-DailyLimit-Remaining',
+                String(dailyLimitResult.remaining)
+            );
+            setResponseStatus(event, 429);
+            return `Daily message limit reached (${dailyConfig.maxRequests}). Try again tomorrow.`;
         }
     }
 
@@ -150,15 +189,30 @@ export default defineEventHandler(async (event) => {
     setHeader(event, 'Cache-Control', 'no-cache, no-transform');
     setHeader(event, 'Connection', 'keep-alive');
 
-    if (limitConfig && rateKey) {
-        const stats = getLlmRateLimitStats(rateKey, limitConfig);
+    if (minuteConfig) {
+        const stats = getLlmRateLimitStats(rateKey, minuteConfig);
         setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
         setResponseHeader(
             event,
             'X-RateLimit-Remaining',
             String(stats.remaining)
         );
-        recordLlmRequest(rateKey, limitConfig);
+        recordLlmRequest(rateKey, minuteConfig);
+    }
+
+    // Daily limit already recorded atomically in checkAndRecord
+    // Add daily limit headers for successful requests
+    if (dailyConfig && dailyLimitResult) {
+        setResponseHeader(
+            event,
+            'X-DailyLimit-Limit',
+            String(dailyConfig.maxRequests)
+        );
+        setResponseHeader(
+            event,
+            'X-DailyLimit-Remaining',
+            String(dailyLimitResult.remaining)
+        );
     }
 
     // Just pipe the upstream SSE directly to client - no need to parse and re-encode
