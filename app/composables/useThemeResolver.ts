@@ -109,7 +109,7 @@ export function useThemeResolver(): UseThemeResolverReturn {
         const resolver = theme.getResolver(currentTheme);
 
         if (!resolver) {
-            if (import.meta.dev || (process as any).dev) {
+            if (import.meta.dev || (process as { dev?: boolean }).dev) {
                 console.warn(
                     `[useThemeResolver] No resolver found for theme "${currentTheme}"`
                 );

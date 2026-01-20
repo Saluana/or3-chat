@@ -54,7 +54,7 @@ export function usePaginatedSidebarItems(options: {
     async function fetchItems(
         limit: number
     ): Promise<{ items: UnifiedSidebarItem[]; hasMore: boolean }> {
-        const query = searchQuery?.value?.toLowerCase() || '';
+        const query = searchQuery?.value.toLowerCase() || '';
         const batchLimit = limit + 1;
         
         let threadsBatch: Thread[] = [];
@@ -69,7 +69,7 @@ export function usePaginatedSidebarItems(options: {
                     (t) =>
                         !t.deleted &&
                         (query === '' ||
-                            !!t.title?.toLowerCase().includes(query))
+                            (t.title != null && t.title.toLowerCase().includes(query)))
                 )
                 .limit(batchLimit)
                 .toArray();
@@ -85,7 +85,7 @@ export function usePaginatedSidebarItems(options: {
                         p.postType === 'doc' &&
                         !p.deleted &&
                         (query === '' ||
-                            !!p.title?.toLowerCase().includes(query))
+                            p.title.toLowerCase().includes(query))
                 )
                 .limit(batchLimit)
                 .toArray();
