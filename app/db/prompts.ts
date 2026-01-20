@@ -199,7 +199,7 @@ export async function createPrompt(
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
         meta: '',
-        clock: persistedRow.clock,
+        clock: persistedRow.clock ?? 0,
     };
     await getDb().posts.put(postRow); // reuse posts table
     actionPayload = {
@@ -319,7 +319,7 @@ export async function updatePrompt(
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
         meta: '',
-        clock: persistedRow.clock,
+        clock: persistedRow.clock ?? 0,
     };
     await getDb().posts.put(postRow);
     actionPayload = {

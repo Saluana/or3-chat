@@ -3,7 +3,7 @@ const DEFAULT_MAX_MESSAGE_FILE_HASHES = 6;
 
 /** Allow runtime override via public env (bounded 1..12 to avoid abuse) */
 const envLimitRaw: string | undefined = (
-    import.meta as ImportMeta & { env?: Record<string, string | undefined> }
+    import.meta as ImportMeta & { env: Record<string, string | undefined> }
 ).env.NUXT_PUBLIC_MAX_MESSAGE_FILES;
 let resolvedLimit = DEFAULT_MAX_MESSAGE_FILE_HASHES;
 if (envLimitRaw) {

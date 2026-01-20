@@ -147,10 +147,10 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
             ...DEFAULT_OR3_CLOUD_CONFIG.services,
             ...config.services,
             llm: {
-                ...DEFAULT_OR3_CLOUD_CONFIG.services.llm,
+                ...DEFAULT_OR3_CLOUD_CONFIG.services.llm!,
                 ...(config.services.llm ?? {}),
                 openRouter: {
-                    ...DEFAULT_OR3_CLOUD_CONFIG.services.llm.openRouter,
+                    ...DEFAULT_OR3_CLOUD_CONFIG.services.llm!.openRouter,
                     ...(config.services.llm?.openRouter ?? {}),
                 },
             },

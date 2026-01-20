@@ -223,7 +223,7 @@ export async function createDocument(
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
         meta: '',
-        clock: persistedRow.clock,
+        clock: persistedRow.clock ?? 0,
     };
     await dbTry(
         () => getDb().posts.put(postRow),
@@ -367,7 +367,7 @@ export async function updateDocument(
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
         meta: '',
-        clock: persistedRow.clock,
+        clock: persistedRow.clock ?? 0,
     };
     await dbTry(
         () => getDb().posts.put(postRow),

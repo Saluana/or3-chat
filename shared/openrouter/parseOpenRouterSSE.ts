@@ -66,7 +66,7 @@ interface Delta {
 
 interface Message {
     images?: ImagePart[];
-    content?: ContentPart[];
+    content?: string | ContentPart[];
 }
 
 interface Choice {

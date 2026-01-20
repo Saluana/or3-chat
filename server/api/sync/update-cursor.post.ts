@@ -49,7 +49,7 @@ export default defineEventHandler(async (event) => {
     const retryAfterDefaultMs = 1000;
     const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:cursor');
     if (!rateLimitResult.allowed) {
-        const retryAfterSec = Math.ceil(rateLimitResult.retryAfterMs / 1000);
+        const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
         setResponseHeader(event, 'Retry-After', retryAfterSec);
         throw createError({
             statusCode: 429,
@@ -59,8 +59,10 @@ export default defineEventHandler(async (event) => {
 
     // Add rate limit headers
     const stats = getSyncRateLimitStats(session.user.id, 'sync:cursor');
-    setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
-    setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
+    if (stats) {
+        setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
+        setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
+    }
 
     const token = await getClerkProviderToken(event, 'convex');
     if (!token) {

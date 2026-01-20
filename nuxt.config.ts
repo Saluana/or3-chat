@@ -37,6 +37,7 @@ const legalConfig = {
 
 export default defineNuxtConfig({
     // convex-nuxt module options (mirrors into runtimeConfig.public.convex)
+    // @ts-expect-error: convex-nuxt types not yet merged into InputConfig
     convex: {
         url: convexUrl,
         // Avoid crashing the whole app when Convex isn't configured.

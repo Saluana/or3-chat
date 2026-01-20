@@ -51,7 +51,7 @@ export function createMemoryTable<T extends Record<string, unknown>>(
                     // This is a bit of a hack but needed for HookBridge to find pending_ops/tombstones
                     // when called inside a hook. We'll rely on global mock DB for this.
                     return (global as Record<string, unknown>).__MOCK_DB__ ? (
-                        (global as Record<string, Record<string, unknown>>).__MOCK_DB__ as { table: (n: string) => unknown }
+                        (global as unknown as Record<string, Record<string, unknown>>).__MOCK_DB__ as { table: (n: string) => unknown }
                     ).table(name) : null;
                 }
             };
