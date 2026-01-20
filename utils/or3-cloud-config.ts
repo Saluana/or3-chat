@@ -49,7 +49,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
     },
     security: {
         allowedOrigins: [],
-        forceHttps: import.meta.env.PROD,
+        forceHttps: process.env.NODE_ENV === 'production',
     },
     extensions: {},
 };
@@ -121,7 +121,7 @@ const cloudConfigSchema = z
                 forceHttps: z.boolean().optional(),
             })
             .optional(),
-        extensions: z.record(z.unknown()).optional(),
+        extensions: z.record(z.string(), z.unknown()).optional(),
     })
     .passthrough();
 
@@ -237,7 +237,7 @@ export function defineOr3CloudConfig(
 ): Or3CloudConfig {
     const strict =
         options.strict ??
-        (import.meta.env.PROD || import.meta.env.OR3_STRICT_CONFIG === 'true');
+        (process.env.NODE_ENV === 'production' || process.env.OR3_STRICT_CONFIG === 'true');
     const merged = mergeConfig(config);
     validateConfig(merged, strict);
     return merged;
