@@ -2,6 +2,8 @@
  * Client-side session composable.
  * Uses the server session endpoint when SSR auth is enabled.
  * When disabled, returns unauthenticated state.
+ *
+ * Named useOr3Session to avoid conflict with Clerk's useSession.
  */
 import { computed } from 'vue';
 import type { ComputedRef } from 'vue';
@@ -27,9 +29,11 @@ const staticRefs: SessionState = {
  * Get the current auth session state.
  * Uses Clerk when SSR auth is enabled, otherwise returns unauthenticated state.
  *
+ * Named useOr3Session to avoid conflict with Clerk's useSession.
+ *
  * @returns Session state with isSignedIn, isLoaded, userId, sessionId
  */
-export function useSession(): SessionState {
+export function useOr3Session(): SessionState {
     const config = useRuntimeConfig();
     const isSsrAuthEnabled = config.public?.ssrAuthEnabled === true;
 

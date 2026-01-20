@@ -1,11 +1,13 @@
 import { LRUCache } from 'lru-cache';
 
-export interface RateLimitConfig {
+/** LLM-specific rate limit config (avoids conflict with sync rate-limiter) */
+export interface LlmRateLimitConfig {
     windowMs: number;
     maxRequests: number;
 }
 
-export interface RateLimitResult {
+/** LLM-specific rate limit result (avoids conflict with sync rate-limiter) */
+export interface LlmRateLimitResult {
     allowed: boolean;
     remaining: number;
     retryAfterMs?: number;
@@ -26,8 +28,8 @@ const rateLimitStore = new LRUCache<string, RateLimitEntry>({
 
 export function checkLlmRateLimit(
     key: string,
-    config: RateLimitConfig
-): RateLimitResult {
+    config: LlmRateLimitConfig
+): LlmRateLimitResult {
     const entry = rateLimitStore.get(key);
     const now = Date.now();
     const windowStart = now - config.windowMs;
@@ -53,7 +55,7 @@ export function checkLlmRateLimit(
     return { allowed: true, remaining };
 }
 
-export function recordLlmRequest(key: string, config: RateLimitConfig): void {
+export function recordLlmRequest(key: string, config: LlmRateLimitConfig): void {
     const now = Date.now();
     const windowStart = now - config.windowMs;
 
@@ -69,7 +71,7 @@ export function recordLlmRequest(key: string, config: RateLimitConfig): void {
 
 export function getLlmRateLimitStats(
     key: string,
-    config: RateLimitConfig
+    config: LlmRateLimitConfig
 ): { limit: number; remaining: number; resetMs: number } {
     const result = checkLlmRateLimit(key, config);
     return {

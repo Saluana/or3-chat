@@ -1,10 +1,9 @@
 import { defineOr3CloudConfig } from './utils/or3-cloud-config';
 
 const authEnabled = process.env.SSR_AUTH_ENABLED === 'true';
-const syncEnabled =
-    process.env.OR3_SYNC_ENABLED === 'true' || authEnabled;
-const storageEnabled =
-    process.env.OR3_STORAGE_ENABLED === 'true' || authEnabled;
+// Auth is the gate - sync/storage require auth but can be individually disabled
+const syncEnabled = authEnabled && process.env.OR3_SYNC_ENABLED !== 'false';
+const storageEnabled = authEnabled && process.env.OR3_STORAGE_ENABLED !== 'false';
 
 export const or3CloudConfig = defineOr3CloudConfig({
     /**
@@ -30,7 +29,6 @@ export const or3CloudConfig = defineOr3CloudConfig({
                 | 'custom') || 'convex',
         convex: {
             url:
-                process.env.NUXT_PUBLIC_CONVEX_URL ||
                 process.env.VITE_CONVEX_URL ||
                 undefined,
         },
