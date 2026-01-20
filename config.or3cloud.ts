@@ -11,7 +11,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
      */
     auth: {
         enabled: authEnabled,
-        provider: (process.env.AUTH_PROVIDER as 'clerk' | 'custom') || 'clerk',
+        provider: (process.env.AUTH_PROVIDER ?? 'clerk') as 'clerk' | 'custom',
         clerk: {
             publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
             secretKey: process.env.NUXT_CLERK_SECRET_KEY,
@@ -22,11 +22,10 @@ export const or3CloudConfig = defineOr3CloudConfig({
      */
     sync: {
         enabled: syncEnabled,
-        provider:
-            (process.env.OR3_SYNC_PROVIDER as
-                | 'convex'
-                | 'firebase'
-                | 'custom') || 'convex',
+        provider: (process.env.OR3_SYNC_PROVIDER ?? 'convex') as
+            | 'convex'
+            | 'firebase'
+            | 'custom',
         convex: {
             url:
                 process.env.VITE_CONVEX_URL ||
@@ -38,11 +37,10 @@ export const or3CloudConfig = defineOr3CloudConfig({
      */
     storage: {
         enabled: storageEnabled,
-        provider:
-            (process.env.NUXT_PUBLIC_STORAGE_PROVIDER as
-                | 'convex'
-                | 's3'
-                | 'custom') || 'convex',
+        provider: (process.env.NUXT_PUBLIC_STORAGE_PROVIDER ?? 'convex') as
+            | 'convex'
+            | 's3'
+            | 'custom',
     },
     /**
      * Service integrations (LLM, etc.).
@@ -71,12 +69,11 @@ export const or3CloudConfig = defineOr3CloudConfig({
             ? Number(process.env.OR3_MAX_MESSAGES_PER_DAY)
             : 0,
         // Use Convex for persistent limits when sync is enabled, otherwise memory
-        storageProvider:
-            (process.env.OR3_LIMITS_STORAGE_PROVIDER as
-                | 'memory'
-                | 'convex'
-                | 'redis'
-                | 'postgres') || (syncEnabled ? 'convex' : 'memory'),
+        storageProvider: (process.env.OR3_LIMITS_STORAGE_PROVIDER ?? (syncEnabled ? 'convex' : 'memory')) as
+            | 'memory'
+            | 'convex'
+            | 'redis'
+            | 'postgres',
     },
     /**
      * Legal URLs for footer links.

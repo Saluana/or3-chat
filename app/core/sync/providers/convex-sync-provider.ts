@@ -89,7 +89,7 @@ export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
             const key = `${scope.workspaceId}:${tablesToWatch.join(',')}:${cursor}:${limit}`;
             const cleanup = () => {
                 disposed = true;
-                if (unwatch) unwatch();
+                unwatch();
             };
             subscriptions.set(key, cleanup);
 

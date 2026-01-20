@@ -1,13 +1,20 @@
 import { createHookEngine, type HookEngine } from './hooks';
 import { createTypedHookEngine, type TypedHookEngine } from './typed-hooks';
-import { useNuxtApp } from '#app';
+import { useNuxtApp as useNuxtAppBase } from 'nuxt/app';
 
 let cached: { engine: HookEngine; typed: TypedHookEngine } | null = null;
 let fallback: { engine: HookEngine; typed: TypedHookEngine } | null = null;
 
+type UseNuxtApp = typeof useNuxtAppBase;
+
+function resolveUseNuxtApp(): UseNuxtApp {
+    const g = globalThis as typeof globalThis & { useNuxtApp?: UseNuxtApp };
+    return g.useNuxtApp ?? useNuxtAppBase;
+}
+
 // Return a typed wrapper around the global HookEngine (singleton per engine instance).
 export function useHooks(): TypedHookEngine {
-    const nuxt = useNuxtApp();
+    const nuxt = resolveUseNuxtApp()();
     const provided = nuxt.$hooks as HookEngine | undefined;
 
     if (!provided) {

@@ -128,7 +128,7 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
             ...config.auth,
             clerk: {
                 ...DEFAULT_OR3_CLOUD_CONFIG.auth.clerk,
-                ...config.auth?.clerk,
+                ...(config.auth.clerk ?? {}),
             },
         },
         sync: {
@@ -136,7 +136,7 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
             ...config.sync,
             convex: {
                 ...DEFAULT_OR3_CLOUD_CONFIG.sync.convex,
-                ...config.sync?.convex,
+                ...(config.sync.convex ?? {}),
             },
         },
         storage: {
@@ -148,10 +148,10 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
             ...config.services,
             llm: {
                 ...DEFAULT_OR3_CLOUD_CONFIG.services.llm,
-                ...config.services?.llm,
+                ...(config.services.llm ?? {}),
                 openRouter: {
-                    ...DEFAULT_OR3_CLOUD_CONFIG.services.llm?.openRouter,
-                    ...config.services?.llm?.openRouter,
+                    ...DEFAULT_OR3_CLOUD_CONFIG.services.llm.openRouter,
+                    ...(config.services.llm?.openRouter ?? {}),
                 },
             },
         },
@@ -204,7 +204,7 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
         }
     }
 
-    const openRouter = config.services?.llm?.openRouter;
+    const openRouter = config.services.llm?.openRouter;
     if (openRouter?.allowUserOverride === false && !openRouter.instanceApiKey) {
         errors.push(
             'services.llm.openRouter.instanceApiKey is required when allowUserOverride is false.'

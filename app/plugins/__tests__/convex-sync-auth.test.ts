@@ -104,7 +104,12 @@ vi.mock('vue', async () => {
 
 vi.mock('#app', () => ({
     defineNuxtPlugin: (plugin: () => void) => plugin(),
-    useRuntimeConfig: () => ({ public: { ssrAuthEnabled: true } }),
+    useRuntimeConfig: () => ({
+        public: {
+            ssrAuthEnabled: true,
+            sync: { enabled: true, provider: 'convex' },
+        },
+    }),
     useNuxtApp: () => ({ provide: vi.fn() }),
 }));
 
@@ -122,8 +127,19 @@ describe('convex-sync auth retry', () => {
         };
         (globalThis as typeof globalThis & { defineNuxtPlugin: (plugin: () => unknown) => unknown }).defineNuxtPlugin =
             (plugin) => plugin();
-        (globalThis as typeof globalThis & { useRuntimeConfig?: () => { public: { ssrAuthEnabled: boolean } } }).useRuntimeConfig =
-            () => ({ public: { ssrAuthEnabled: true } });
+        (globalThis as typeof globalThis & {
+            useRuntimeConfig?: () => {
+                public: {
+                    ssrAuthEnabled: boolean;
+                    sync?: { enabled: boolean; provider: string };
+                };
+            };
+        }).useRuntimeConfig = () => ({
+            public: {
+                ssrAuthEnabled: true,
+                sync: { enabled: true, provider: 'convex' },
+            },
+        });
         (globalThis as typeof globalThis & { useNuxtApp?: () => { provide: (key: string, value: unknown) => void } }).useNuxtApp =
             () => ({ provide: vi.fn() });
     });

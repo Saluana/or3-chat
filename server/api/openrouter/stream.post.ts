@@ -67,10 +67,10 @@ export default defineEventHandler(async (event) => {
 
     // Check requestsPerMinute limit
     const minuteConfig =
-        limits?.enabled !== false && (limits?.requestsPerMinute ?? 0) > 0
+        limits.enabled !== false && limits.requestsPerMinute > 0
             ? {
                   windowMs: 60_000,
-                  maxRequests: limits?.requestsPerMinute ?? 20,
+                  maxRequests: limits.requestsPerMinute,
               }
             : null;
 
@@ -96,10 +96,10 @@ export default defineEventHandler(async (event) => {
     // Check maxMessagesPerDay limit (24-hour rolling window)
     // Uses pluggable provider with atomic check-and-record
     const dailyConfig =
-        limits?.enabled !== false && (limits?.maxMessagesPerDay ?? 0) > 0
+        limits.enabled !== false && limits.maxMessagesPerDay > 0
             ? {
                   windowMs: 24 * 60 * 60 * 1000, // 24 hours
-                  maxRequests: limits?.maxMessagesPerDay ?? 0,
+                  maxRequests: limits.maxMessagesPerDay,
               }
             : null;
 

@@ -190,10 +190,10 @@ export async function createDocument(
     const id = newId();
     const baseRow: DocumentRow = {
         id,
-        title: await resolveTitle(hooks, input.title ?? null, {
+        title: await resolveTitle(hooks, input.title, {
             phase: 'create',
             id,
-            rawTitle: input.title ?? null,
+            rawTitle: input.title,
         }),
         content: JSON.stringify(input.content ?? emptyDocJSON()),
         postType: 'doc',
@@ -223,7 +223,7 @@ export async function createDocument(
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
         meta: '',
-        clock: persistedRow.clock ?? 0,
+        clock: persistedRow.clock,
     };
     await dbTry(
         () => getDb().posts.put(postRow),
@@ -256,7 +256,7 @@ export async function getDocument(
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted: row.deleted,
-        clock: row.clock ?? 0,
+        clock: row.clock,
     };
     const filteredEntity = await hooks.applyFilters(
         'db.documents.get:filter:output',
@@ -316,7 +316,7 @@ export async function updateDocument(
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
-        clock: existing.clock ?? 0,
+        clock: existing.clock,
     };
     const updatedRow: DocumentRow = {
         id: existingRow.id,
@@ -367,7 +367,7 @@ export async function updateDocument(
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
         meta: '',
-        clock: persistedRow.clock ?? 0,
+        clock: persistedRow.clock,
     };
     await dbTry(
         () => getDb().posts.put(postRow),
@@ -399,7 +399,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
-        clock: existing.clock ?? 0,
+        clock: existing.clock,
     };
     const payload: DbDeletePayload<DocumentEntity> = {
         entity: toDocumentEntity(existingRow),
@@ -423,7 +423,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         updated_at: updatedRow.updated_at,
         deleted: updatedRow.deleted,
         meta: '',
-        clock: updatedRow.clock ?? 0,
+        clock: updatedRow.clock,
     };
     await dbTry(
         () => getDb().posts.put(postRow),
@@ -449,7 +449,7 @@ export async function hardDeleteDocument(id: string): Promise<void> {
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
-        clock: existing.clock ?? 0,
+        clock: existing.clock,
     };
     const payload: DbDeletePayload<DocumentEntity> = {
         entity: toDocumentEntity(existingRow),

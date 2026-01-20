@@ -27,7 +27,7 @@ export class ConvexRateLimitProvider implements RateLimitProvider {
         this.initialized = true;
 
         const config = useRuntimeConfig();
-        const convexUrl = config.public?.sync?.convexUrl;
+        const convexUrl = config.public.sync.convexUrl;
 
         if (!convexUrl) {
             return null;

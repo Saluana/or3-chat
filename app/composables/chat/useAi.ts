@@ -100,12 +100,10 @@ export function useChat(
     const rawMessages = ref<ChatMessage[]>([...msgs]);
     const loading = ref(false);
     const abortController = ref<AbortController | null>(null);
-    const aborted = ref(false);
+    const aborted = ref<boolean>(false);
     const { apiKey, setKey } = useUserApiKey();
     const runtimeConfig = useRuntimeConfig();
-    const openRouterConfig = computed(
-        () => runtimeConfig.public?.openRouter ?? {}
-    );
+    const openRouterConfig = computed(() => runtimeConfig.public.openRouter);
     const allowUserOverride = computed(
         () => openRouterConfig.value.allowUserOverride !== false
     );
@@ -115,7 +113,7 @@ export function useChat(
     const effectiveApiKey = computed(() =>
         allowUserOverride.value ? apiKey.value : null
     );
-    const limitsConfig = computed(() => runtimeConfig.public?.limits ?? {});
+    const limitsConfig = computed(() => runtimeConfig.public.limits);
     const hooks = useHooks();
     const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
@@ -138,18 +136,17 @@ export function useChat(
 
     async function enforceClientLimits(isNewThread: boolean): Promise<boolean> {
         const limits = limitsConfig.value;
-        if (limits?.enabled === false) return true;
+        if (limits.enabled === false) return true;
 
         const toast = useToast();
 
         const maxConversations =
-            typeof limits?.maxConversations === 'number'
+            typeof limits.maxConversations === 'number'
                 ? limits.maxConversations
                 : 0;
         if (isNewThread && maxConversations > 0) {
             const threadCount = await getDb().threads
-                .where('deleted')
-                .equals(false)
+                .filter((thread) => thread.deleted !== true)
                 .count();
             if (threadCount >= maxConversations) {
                 toast.add({
@@ -164,7 +161,7 @@ export function useChat(
         }
 
         const maxMessagesPerDay =
-            typeof limits?.maxMessagesPerDay === 'number'
+            typeof limits.maxMessagesPerDay === 'number'
                 ? limits.maxMessagesPerDay
                 : 0;
         if (maxMessagesPerDay > 0) {
@@ -467,9 +464,10 @@ export function useChat(
     const tailAssistant = ref<UiChatMessage | null>(null);
     let lastSuppressedAssistantId: string | null = null;
     function flushTailAssistant() {
-        if (!tailAssistant.value) return;
-        if (!messages.value.find((m) => m.id === tailAssistant.value!.id)) {
-            messages.value.push(tailAssistant.value);
+        const tail = tailAssistant.value;
+        if (!tail) return;
+        if (!messages.value.find((m) => m.id === tail.id)) {
+            messages.value.push(tail);
         }
         tailAssistant.value = null;
     }
@@ -2465,19 +2463,20 @@ export function useChat(
                         : new Error(String(streamError));
                 streamAcc.finalize({ error: e });
                 
-                // Check if this was an intentional abort (user clicked stop)
-                const wasAborted = aborted.value;
-                const errorType = wasAborted ? 'stopped' : 'stream_interrupted';
+                // Stream interrupted - aborted.value would be true for user stops but those don't throw
+                const errorType = 'stream_interrupted';
                 
-                if (tailAssistant.value.text) {
-                    await persistAssistant({
-                        content: tailAssistant.value.text,
-                        reasoning: tailAssistant.value.reasoning_text ?? null,
-                        toolCalls: tailAssistant.value.toolCalls ?? null,
-                        finalize: true, // Clear pending so sync captures this
-                    });
-                    tailAssistant.value.error = errorType;
-                }
+                const tail = tailAssistant.value;
+                const tailText = tail.text || '';
+                const tailReasoning = tail.reasoning_text ?? null;
+                const tailToolCalls = tail.toolCalls ?? null;
+                tail.error = errorType;
+                await persistAssistant({
+                    content: tailText,
+                    reasoning: tailReasoning,
+                    toolCalls: tailToolCalls,
+                    finalize: true, // Clear pending so sync captures this
+                });
                 const rawIdx = rawMessages.value.findIndex(
                     (m) => m.id === messageId
                 );
@@ -2487,11 +2486,9 @@ export function useChat(
                         rawMessages.value[rawIdx] = {
                             ...existingRaw,
                             role: existingRaw.role,
-                            content:
-                                tailAssistant.value.text || existingRaw.content,
+                            content: tailText || existingRaw.content,
                             reasoning_text:
-                                tailAssistant.value.reasoning_text ??
-                                existingRaw.reasoning_text,
+                                tailReasoning ?? existingRaw.reasoning_text,
                             error: errorType,
                         };
                     }
@@ -2500,25 +2497,23 @@ export function useChat(
                     error: errorType,
                 });
                 
-                // Only show error toast for unintentional interruptions, not manual stops
-                if (!wasAborted) {
-                    reportError(e, {
-                        code: 'ERR_STREAM_FAILURE',
-                        tags: {
-                            domain: 'chat',
-                            threadId: threadIdRef.value || '',
-                            streamId: streamId.value || '',
-                            modelId,
-                            stage: 'continue',
-                        },
-                        toast: true,
-                    });
-                }
+                // Show error toast for stream interruptions
+                reportError(e, {
+                    code: 'ERR_STREAM_FAILURE',
+                    tags: {
+                        domain: 'chat',
+                        threadId: threadIdRef.value || '',
+                        streamId: streamId.value || '',
+                        modelId,
+                        stage: 'continue',
+                    },
+                    toast: true,
+                });
             } finally {
                 loading.value = false;
-                if (tailAssistant.value.pending) {
-                    tailAssistant.value.pending = false;
-                }
+                const tailRef = tailAssistant.value;
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- tailRef may be null if stream setup failed
+                if (tailRef) tailRef.pending = false;
                 abortController.value = null;
                 setTimeout(() => {
                     if (!loading.value && streamState.finalized) resetStream();

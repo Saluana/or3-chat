@@ -6,5 +6,5 @@ import type { H3Event } from 'h3';
  */
 export function isSyncEnabled(_event?: H3Event): boolean {
     const config = useRuntimeConfig();
-    return config.sync?.enabled === true;
+    return config.sync.enabled === true;
 }

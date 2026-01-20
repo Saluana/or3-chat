@@ -10,8 +10,8 @@ export const clerkAuthProvider: AuthProvider = {
 
     async getSession(event: H3Event): Promise<ProviderSession | null> {
         // Clerk middleware populates event.context.auth
-        const auth = event.context.auth?.();
-        if (!auth?.userId) return null;
+        const auth = event.context.auth();
+        if (!auth.userId) return null;
 
         return {
             provider: 'clerk',
@@ -21,7 +21,7 @@ export const clerkAuthProvider: AuthProvider = {
                 // if needed; keeping minimal for now
             },
             expiresAt: new Date(
-                ((auth.sessionClaims?.exp as number) || 0) * 1000 ||
+                ((auth.sessionClaims.exp as number) || 0) * 1000 ||
                     Date.now() + 3600000
             ),
             claims: auth.sessionClaims as Record<string, unknown>,

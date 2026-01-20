@@ -23,7 +23,7 @@ let cachedProviderId: string | null = null;
 
 function getConfiguredProviderId(): string {
     const config = useRuntimeConfig();
-    return config.public?.storage?.provider || 'convex';
+    return config.public.storage.provider || 'convex';
 }
 
 function createProviderFromConfig(): ObjectStorageProvider | null {
@@ -34,10 +34,6 @@ function createProviderFromConfig(): ObjectStorageProvider | null {
 }
 
 export function getActiveStorageProvider(): ObjectStorageProvider | null {
-    if (!import.meta.client && !import.meta.env?.VITEST) {
-        return createProviderFromConfig();
-    }
-
     const providerId = getConfiguredProviderId();
 
     // Return cached instance if provider hasn't changed

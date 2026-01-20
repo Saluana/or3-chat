@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
 
-    const body = await readBody(event);
+    const body: unknown = await readBody(event);
     const parsed = GcRequestSchema.safeParse(body);
     if (!parsed.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid GC request' });

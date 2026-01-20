@@ -6,5 +6,5 @@ import type { H3Event } from 'h3';
  */
 export function isStorageEnabled(_event?: H3Event): boolean {
     const config = useRuntimeConfig();
-    return config.storage?.enabled === true;
+    return config.storage.enabled === true;
 }

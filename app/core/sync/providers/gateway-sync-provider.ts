@@ -100,7 +100,6 @@ export function createGatewaySyncProvider(
                 } catch (error) {
                     console.error('[gateway-sync] Poll failed:', error);
                 }
-                if (!active) return;
                 // Add random jitter (0-500ms) to prevent thundering herd
                 const jitter = Math.floor(Math.random() * 500);
                 timeout = setTimeout(run, pollIntervalMs + jitter);

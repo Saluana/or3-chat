@@ -13,12 +13,15 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
     const hooks = useHooks();
 
     // Check maxConversations limit (client-side enforcement)
-    if (typeof window !== 'undefined') {
+    if (import.meta.client) {
         const { useRuntimeConfig } = await import('#imports');
         const config = useRuntimeConfig();
-        const limits = config.public?.limits;
-        if (limits?.enabled !== false && (limits?.maxConversations ?? 0) > 0) {
-            const count = await getDb().threads.where('deleted').equals(0).count();
+        const limits = config.public.limits;
+        if (limits.enabled !== false && limits.maxConversations > 0) {
+            const count = await getDb()
+                .threads
+                .filter((thread) => thread.deleted !== true)
+                .count();
             if (count >= limits.maxConversations) {
                 throw new Error(
                     `Conversation limit reached (${limits.maxConversations}). Delete existing conversations to create new ones.`
@@ -100,7 +103,7 @@ export function searchThreadsByTitle(term: string) {
     const q = term.toLowerCase();
     const hooks = useHooks();
     return getDb().threads
-        .filter((t) => (t.title ?? '').toLowerCase().includes(q))
+        .filter((t) => t.title.toLowerCase().includes(q))
         .toArray()
         .then((res) =>
             hooks.applyFilters('db.threads.searchByTitle:filter:output', res)
@@ -316,7 +319,7 @@ export async function getThreadSystemPrompt(
         entity: 'threads',
         action: 'get',
     });
-    const result = thread?.system_prompt_id ?? null;
+    const result = thread.system_prompt_id;
     return hooks.applyFilters(
         'db.threads.getSystemPrompt:filter:output',
         result

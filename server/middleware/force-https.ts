@@ -2,11 +2,14 @@ import { defineEventHandler, getHeader, sendRedirect } from 'h3';
 
 export default defineEventHandler((event) => {
     const config = useRuntimeConfig();
-    const forceHttps = config.security?.forceHttps === true;
+    const forceHttps = config.security.forceHttps === true;
     if (!forceHttps) return;
 
     const xfProto = getHeader(event, 'x-forwarded-proto');
-    const proto = xfProto || (event.node.req.socket.encrypted ? 'https' : 'http');
+    const socket = event.node.req.socket as (typeof event.node.req.socket & {
+        encrypted?: boolean;
+    });
+    const proto = xfProto || (socket.encrypted ? 'https' : 'http');
 
     if (proto === 'https') return;
 

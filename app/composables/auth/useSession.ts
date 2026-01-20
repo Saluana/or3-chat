@@ -35,7 +35,7 @@ const staticRefs: SessionState = {
  */
 export function useOr3Session(): SessionState {
     const config = useRuntimeConfig();
-    const isSsrAuthEnabled = config.public?.ssrAuthEnabled === true;
+    const isSsrAuthEnabled = config.public.ssrAuthEnabled === true;
 
     if (!isSsrAuthEnabled) {
         return staticRefs;

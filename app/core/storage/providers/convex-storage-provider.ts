@@ -26,7 +26,7 @@ async function postJson<T extends z.ZodTypeAny>(
     if (!response.ok) {
         throw new Error(`Storage request failed: ${response.status}`);
     }
-    const json = await response.json();
+    const json: unknown = await response.json();
     return schema.parse(json);
 }
 

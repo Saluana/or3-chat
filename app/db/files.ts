@@ -390,19 +390,23 @@ interface ImageLike {
     onerror: (() => void) | null;
 }
 
+type ImageConstructor = new () => ImageLike;
+
+function getImageConstructor(value: unknown): ImageConstructor | null {
+    return typeof value === 'function' ? (value as ImageConstructor) : null;
+}
+
 async function blobImageSize(
     blob: Blob
 ): Promise<{ width: number; height: number } | undefined> {
     // Guard for non-browser environments where Image constructor is unavailable
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const g = globalThis as any;
-    if (typeof g.Image !== 'function') {
+    const imageCtor = getImageConstructor((globalThis as { Image?: unknown }).Image);
+    if (!imageCtor) {
         return undefined;
     }
 
     return new Promise((resolve) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const img: ImageLike = new (g.Image as any)();
+        const img: ImageLike = new imageCtor();
         let resolved = false;
 
         // Timeout to prevent hung operations from malformed images

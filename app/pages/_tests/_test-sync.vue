@@ -27,9 +27,16 @@ const selectedWorkspaceId = ref<Id<'workspaces'> | null>(null);
 const creatingWorkspace = ref(false);
 const workspaceError = ref<string | null>(null);
 
+type WorkspaceItem = NonNullable<NonNullable<typeof workspaces.value>[number]>;
+const resolvedWorkspaces = computed(() =>
+    (workspaces.value ?? []).filter(
+        (workspace): workspace is WorkspaceItem => workspace !== null
+    )
+);
+
 // Auto-select first workspace
-watch(workspaces, (ws) => {
-    const firstWorkspace = ws?.[0];
+watch(resolvedWorkspaces, (ws) => {
+    const firstWorkspace = ws[0];
     if (firstWorkspace && !selectedWorkspaceId.value) {
         selectedWorkspaceId.value = firstWorkspace._id;
     }
@@ -420,11 +427,11 @@ onMounted(async () => {
             <div class="card" v-if="identity">
                 <h2>🏢 Workspace</h2>
                 <div v-if="workspacesLoading" class="info">Loading workspaces...</div>
-                <div v-else-if="workspaces && workspaces.length > 0">
+                <div v-else-if="resolvedWorkspaces.length > 0">
                     <p class="help">Select a workspace for sync:</p>
                     <div class="workspace-list">
                         <div
-                            v-for="ws in workspaces ?? []"
+                            v-for="ws in resolvedWorkspaces"
                             :key="ws._id"
                             class="workspace-item"
                             :class="{ selected: selectedWorkspaceId === ws._id }"

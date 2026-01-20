@@ -42,6 +42,12 @@ vi.mock('@vueuse/core', async () => {
 // Mock other dependencies
 vi.mock('#imports', () => ({
     useToast: () => ({ add: vi.fn() }),
+    useRuntimeConfig: () => ({
+        public: {
+            openRouter: {},
+            limits: {},
+        },
+    }),
     useUserApiKey: () => ({ apiKey: ref('test-key') }),
     useOpenRouterAuth: () => ({ startLogin: vi.fn() }),
     useComposerActions: () => [],

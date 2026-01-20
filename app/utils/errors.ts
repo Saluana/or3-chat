@@ -2,7 +2,6 @@
 // Provides: types, err(), isAppError(), asAppError(), reportError(), simpleRetry(), light scrub & duplicate suppression.
 
 import { useHooks } from '~/core/hooks/useHooks';
-import { useToast } from '#imports';
 
 export type ErrorSeverity = 'info' | 'warn' | 'error' | 'fatal';
 
@@ -101,12 +100,42 @@ function shouldLog(code: string, message: string): boolean {
     return !dup;
 }
 
-// Use Nuxt UI toast directly; no custom store.
-function pushToast(error: AppError, retry?: () => void) {
-    if (!import.meta.client) return;
+type ToastAction = {
+    label: string;
+    onClick: () => void;
+};
+
+type ToastPayload = {
+    id?: string | number;
+    title?: string;
+    description?: string;
+    actions?: ToastAction[];
+    color?: string;
+    duration?: number;
+};
+
+type ToastApi = {
+    add: (toast: ToastPayload) => void;
+};
+
+async function resolveToastApi(): Promise<ToastApi | null> {
+    if (!import.meta.client) return null;
     try {
-        const { add } = useToast();
-        add({
+        const mod = (await import('#imports')) as {
+            useToast?: () => ToastApi;
+        };
+        return mod.useToast ? mod.useToast() : null;
+    } catch {
+        return null;
+    }
+}
+
+// Use Nuxt UI toast directly; no custom store.
+async function pushToast(error: AppError, retry?: () => void) {
+    const toast = await resolveToastApi();
+    if (!toast) return;
+    try {
+        toast.add({
             id: error.timestamp + '-' + error.code,
             title: error.code,
             description: error.message,
@@ -194,7 +223,7 @@ export function reportError(
             !opts.silent &&
             !(e.code === 'ERR_STREAM_ABORTED' && e.severity === 'info')
         ) {
-            if (opts.toast || e.severity !== 'info') pushToast(e, opts.retry);
+            if (opts.toast || e.severity !== 'info') void pushToast(e, opts.retry);
         }
         return e;
     } catch (inner) {

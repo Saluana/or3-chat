@@ -13,5 +13,5 @@ import type { H3Event } from 'h3';
  */
 export function isSsrAuthEnabled(_event?: H3Event): boolean {
     const config = useRuntimeConfig();
-    return config.auth?.enabled === true;
+    return config.auth.enabled === true;
 }

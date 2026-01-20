@@ -21,12 +21,12 @@ export function getRateLimitProvider(): RateLimitProvider {
     }
 
     const config = useRuntimeConfig();
-    const storageProvider = config.limits?.storageProvider;
+    const storageProvider = config.limits.storageProvider;
 
     switch (storageProvider) {
         case 'convex':
             // Check if Convex is actually available
-            if (config.public?.sync?.convexUrl) {
+            if (config.public.sync.convexUrl) {
                 cachedProvider = convexProvider;
             } else {
                 console.warn('[rate-limit] Convex URL not configured, using memory');

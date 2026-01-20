@@ -39,16 +39,20 @@ export default defineEventHandler(async (event) => {
     }
 
     const session = await resolveSessionContext(event);
+    if (!session.authenticated || !session.user) {
+        throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
+    }
     requireCan(session, 'workspace.read', {
         kind: 'workspace',
         id: body.data.workspace_id,
     });
 
     // Rate limiting
-    const rateLimitResult = checkSyncRateLimit(session.user.id, 'storage:download');
+    const userId = session.user.id;
+    const rateLimitResult = checkSyncRateLimit(userId, 'storage:download');
     if (!rateLimitResult.allowed) {
         const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
-        setResponseHeader(event, 'Retry-After', String(retryAfterSec));
+        setResponseHeader(event, 'Retry-After', retryAfterSec);
         throw createError({
             statusCode: 429,
             statusMessage: `Rate limit exceeded. Retry after ${retryAfterSec}s`,
@@ -72,7 +76,7 @@ export default defineEventHandler(async (event) => {
 
     const expiryMs = Math.min(body.data.expires_in_ms ?? 3600_000, 3600_000);
 
-    recordSyncRequest(session.user.id, 'storage:download');
+    recordSyncRequest(userId, 'storage:download');
     recordDownloadStart();
 
     return {

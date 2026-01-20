@@ -17,21 +17,10 @@ import { LRUCache } from 'lru-cache';
  * deployments. For distributed deployments, consider Redis.
  */
 
-export interface RateLimitConfig {
-    /** Time window in milliseconds */
-    windowMs: number;
-    /** Maximum requests allowed in the window */
-    maxRequests: number;
-}
-
-export interface RateLimitResult {
-    /** Whether the request is allowed */
-    allowed: boolean;
-    /** Remaining requests in the current window */
-    remaining: number;
-    /** Milliseconds until the rate limit resets (if blocked) */
-    retryAfterMs?: number;
-}
+import type {
+    RateLimitConfig,
+    RateLimitResult,
+} from '../rate-limit/types';
 
 interface RateLimitEntry {
     /** Timestamps of requests in the current window */
