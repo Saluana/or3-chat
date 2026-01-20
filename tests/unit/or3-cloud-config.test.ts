@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { defineOr3CloudConfig } from '../utils/or3-cloud-config';
-import type { Or3CloudConfig } from '../types/or3-cloud-config';
+import { defineOr3CloudConfig } from '../../utils/or3-cloud-config';
+import type { Or3CloudConfig } from '../../types/or3-cloud-config';
 
 const baseConfig: Or3CloudConfig = {
     auth: {

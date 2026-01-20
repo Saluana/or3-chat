@@ -11,6 +11,7 @@ export default defineNuxtPlugin(() => {
     };
 
     if (legal.termsUrl) {
+        const termsUrl = legal.termsUrl;
         const id = 'legal:terms';
         registerSidebarFooterAction({
             id,
@@ -18,12 +19,13 @@ export default defineNuxtPlugin(() => {
             label: 'Terms',
             tooltip: 'Terms of Service',
             order: 900,
-            handler: () => openUrl(legal.termsUrl as string),
+            handler: () => openUrl(termsUrl),
         });
         actions.push({ id });
     }
 
     if (legal.privacyUrl) {
+        const privacyUrl = legal.privacyUrl;
         const id = 'legal:privacy';
         registerSidebarFooterAction({
             id,
@@ -31,7 +33,7 @@ export default defineNuxtPlugin(() => {
             label: 'Privacy',
             tooltip: 'Privacy Policy',
             order: 910,
-            handler: () => openUrl(legal.privacyUrl as string),
+            handler: () => openUrl(privacyUrl),
         });
         actions.push({ id });
     }

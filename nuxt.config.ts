@@ -12,8 +12,25 @@ const convexEnabled =
         or3CloudConfig.sync.provider === 'convex') ||
     (or3CloudConfig.storage.enabled &&
         or3CloudConfig.storage.provider === 'convex');
-const appName = or3CloudConfig.branding?.appName || 'OR3';
+const appName = or3CloudConfig.branding!.appName!;
 const appShortName = appName.length > 12 ? appName.slice(0, 12) : appName;
+
+// Shared config objects (DRY: used in both server and public runtimeConfig)
+const limitsConfig = {
+    enabled: or3CloudConfig.limits!.enabled!,
+    requestsPerMinute: or3CloudConfig.limits!.requestsPerMinute!,
+    maxConversations: or3CloudConfig.limits!.maxConversations!,
+    maxMessagesPerDay: or3CloudConfig.limits!.maxMessagesPerDay!,
+};
+const brandingConfig = {
+    appName: or3CloudConfig.branding!.appName!,
+    logoUrl: or3CloudConfig.branding!.logoUrl || '',
+    defaultTheme: or3CloudConfig.branding!.defaultTheme!,
+};
+const legalConfig = {
+    termsUrl: or3CloudConfig.legal!.termsUrl || '',
+    privacyUrl: or3CloudConfig.legal!.privacyUrl || '',
+};
 
 export default defineNuxtConfig({
     // convex-nuxt module options (mirrors into runtimeConfig.public.convex)
@@ -75,24 +92,12 @@ export default defineNuxtConfig({
             enabled: or3CloudConfig.storage.enabled,
             provider: or3CloudConfig.storage.provider,
         },
-        limits: {
-            enabled: or3CloudConfig.limits?.enabled ?? true,
-            requestsPerMinute: or3CloudConfig.limits?.requestsPerMinute ?? 20,
-            maxConversations: or3CloudConfig.limits?.maxConversations ?? 0,
-            maxMessagesPerDay: or3CloudConfig.limits?.maxMessagesPerDay ?? 0,
-        },
-        branding: {
-            appName: or3CloudConfig.branding?.appName || 'OR3',
-            logoUrl: or3CloudConfig.branding?.logoUrl || '',
-            defaultTheme: or3CloudConfig.branding?.defaultTheme || 'system',
-        },
-        legal: {
-            termsUrl: or3CloudConfig.legal?.termsUrl || '',
-            privacyUrl: or3CloudConfig.legal?.privacyUrl || '',
-        },
+        limits: limitsConfig,
+        branding: brandingConfig,
+        legal: legalConfig,
         security: {
-            allowedOrigins: or3CloudConfig.security?.allowedOrigins ?? [],
-            forceHttps: or3CloudConfig.security?.forceHttps ?? false,
+            allowedOrigins: or3CloudConfig.security!.allowedOrigins!,
+            forceHttps: or3CloudConfig.security!.forceHttps!,
         },
         public: {
             // Single source of truth for client gating.
@@ -115,21 +120,9 @@ export default defineNuxtConfig({
                 provider: or3CloudConfig.sync.provider,
                 convexUrl,
             },
-            limits: {
-                enabled: or3CloudConfig.limits?.enabled ?? true,
-                requestsPerMinute: or3CloudConfig.limits?.requestsPerMinute ?? 20,
-                maxConversations: or3CloudConfig.limits?.maxConversations ?? 0,
-                maxMessagesPerDay: or3CloudConfig.limits?.maxMessagesPerDay ?? 0,
-            },
-            branding: {
-                appName: or3CloudConfig.branding?.appName || 'OR3',
-                logoUrl: or3CloudConfig.branding?.logoUrl || '',
-                defaultTheme: or3CloudConfig.branding?.defaultTheme || 'system',
-            },
-            legal: {
-                termsUrl: or3CloudConfig.legal?.termsUrl || '',
-                privacyUrl: or3CloudConfig.legal?.privacyUrl || '',
-            },
+            limits: limitsConfig,
+            branding: brandingConfig,
+            legal: legalConfig,
             // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
             clerkPublishableKey: '',
         },

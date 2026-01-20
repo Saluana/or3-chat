@@ -49,7 +49,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
     },
     security: {
         allowedOrigins: [],
-        forceHttps: process.env.NODE_ENV === 'production',
+        forceHttps: import.meta.env.PROD,
     },
     extensions: {},
 };
@@ -105,14 +105,14 @@ const cloudConfigSchema = z
         branding: z
             .object({
                 appName: z.string().optional(),
-                logoUrl: z.string().optional(),
+                logoUrl: z.union([z.string().url(), z.literal('')]).optional(),
                 defaultTheme: z.string().optional(),
             })
             .optional(),
         legal: z
             .object({
-                termsUrl: z.string().optional(),
-                privacyUrl: z.string().optional(),
+                termsUrl: z.union([z.string().url(), z.literal('')]).optional(),
+                privacyUrl: z.union([z.string().url(), z.literal('')]).optional(),
             })
             .optional(),
         security: z
@@ -192,10 +192,10 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
 function validateConfig(config: Or3CloudConfig, strict: boolean): void {
     const parsed = cloudConfigSchema.safeParse(config);
     if (!parsed.success) {
-        const errors = parsed.error.errors.map((err) =>
-            err.path.length
-                ? `${err.path.join('.')}: ${err.message}`
-                : err.message
+        const errors = parsed.error.issues.map((issue) =>
+            issue.path.length
+                ? `${issue.path.join('.')}: ${issue.message}`
+                : issue.message
         );
         throw new Error(formatConfigErrors(errors));
     }
@@ -237,7 +237,7 @@ export function defineOr3CloudConfig(
 ): Or3CloudConfig {
     const strict =
         options.strict ??
-        (process.env.NODE_ENV === 'production' || process.env.OR3_STRICT_CONFIG === 'true');
+        (import.meta.env.PROD || import.meta.env.OR3_STRICT_CONFIG === 'true');
     const merged = mergeConfig(config);
     validateConfig(merged, strict);
     return merged;
