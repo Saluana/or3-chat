@@ -103,7 +103,7 @@ export function searchThreadsByTitle(term: string) {
     const q = term.toLowerCase();
     const hooks = useHooks();
     return getDb().threads
-        .filter((t) => t.title.toLowerCase().includes(q))
+        .filter((t) => (t.title ?? '').toLowerCase().includes(q))
         .toArray()
         .then((res) =>
             hooks.applyFilters('db.threads.searchByTitle:filter:output', res)
@@ -319,9 +319,10 @@ export async function getThreadSystemPrompt(
         entity: 'threads',
         action: 'get',
     });
+    if (!thread) return null;
     const result = thread.system_prompt_id;
     return hooks.applyFilters(
         'db.threads.getSystemPrompt:filter:output',
-        result
+        result ?? null
     );
 }

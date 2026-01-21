@@ -13,6 +13,8 @@
  * The plugin only runs on the client side (.client.ts suffix).
  */
 
+import { useConvexClient } from 'convex-vue';
+
 // Full Clerk client type with load promise
 interface ClerkClient {
     loaded?: boolean;
@@ -47,7 +49,7 @@ export default defineNuxtPlugin(async () => {
     }
 
     // Skip if Convex isn't configured (prevents startup crash).
-    if (!runtimeConfig.public.convex?.url) {
+    if (!(runtimeConfig.public.convex as { url?: string })?.url) {
         return;
     }
 
