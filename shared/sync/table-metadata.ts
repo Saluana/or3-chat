@@ -8,5 +8,8 @@ export const TABLE_METADATA = {
 } as const;
 
 export function getPkField(tableName: string): string {
-    return TABLE_METADATA[tableName as keyof typeof TABLE_METADATA]?.pk ?? 'id';
+    if (tableName in TABLE_METADATA) {
+        return TABLE_METADATA[tableName as keyof typeof TABLE_METADATA].pk;
+    }
+    return 'id';
 }

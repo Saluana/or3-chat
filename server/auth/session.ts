@@ -24,7 +24,7 @@ export async function resolveSessionContext(
 ): Promise<SessionContext> {
     // Get provider from config for cache key
     const config = useRuntimeConfig();
-    const providerId = config.auth?.provider || 'clerk';
+    const providerId = config.auth.provider || 'clerk';
     const cacheKey = `${SESSION_CONTEXT_KEY_PREFIX}${providerId}`;
 
     // Check cache first

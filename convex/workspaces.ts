@@ -4,7 +4,7 @@
  */
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import { v } from 'convex/values';
-import type { Id } from './_generated/dataModel';
+import type { Id, TableNames } from './_generated/dataModel';
 
 async function getAuthAccount(
     ctx: MutationCtx | QueryCtx
@@ -48,9 +48,22 @@ async function requireWorkspaceMembership(
 }
 
 async function deleteWorkspaceData(ctx: MutationCtx, workspaceId: Id<'workspaces'>) {
-    const deleteByIndex = async (table: string, indexName: string) => {
-        const rows = await (ctx.db.query(table as any) as any)
-            .withIndex(indexName, (q: any) => q.eq('workspace_id', workspaceId))
+    type IndexQueryBuilder = {
+        eq: (field: string, value: unknown) => IndexQueryBuilder;
+    };
+    type ConvexDoc = {
+        _id: Id<TableNames>;
+    } & Record<string, unknown>;
+    type QueryByIndex = {
+        withIndex: (
+            index: string,
+            cb: (q: IndexQueryBuilder) => IndexQueryBuilder
+        ) => { collect: () => Promise<ConvexDoc[]> };
+    };
+
+    const deleteByIndex = async (table: TableNames, indexName: string) => {
+        const rows = await (ctx.db.query(table) as unknown as QueryByIndex)
+            .withIndex(indexName, (q) => q.eq('workspace_id', workspaceId))
             .collect();
         for (const row of rows) {
             await ctx.db.delete(row._id);

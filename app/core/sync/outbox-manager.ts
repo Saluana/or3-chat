@@ -342,7 +342,7 @@ export class OutboxManager {
             return;
         }
 
-        if ((existing.clock ?? 0) <= op.stamp.clock) {
+        if (existing.clock <= op.stamp.clock) {
             await this.db.tombstones.update(id, { clock: op.stamp.clock, syncedAt });
         }
     }

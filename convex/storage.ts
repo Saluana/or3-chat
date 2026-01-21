@@ -113,7 +113,7 @@ export const commitUpload = mutation({
 
         if (matches.length > 1) {
             const sorted = [...matches].sort(
-                (a, b) => (a._creationTime ?? 0) - (b._creationTime ?? 0)
+                (a, b) => a._creationTime - b._creationTime
             );
             const keeper = sorted[0];
             if (!keeper) return;

@@ -60,8 +60,7 @@ export function normalizeSyncPayload(
     if (schema) {
         const result = schema.safeParse(payload);
         if (!result.success) {
-            const errors = result.error.issues?.map((e) => `${e.path.join('.')}: ${e.message}`) ?? 
-                           [result.error.message ?? 'Validation failed'];
+            const errors = result.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`);
             return {
                 payload,
                 isValid: false,

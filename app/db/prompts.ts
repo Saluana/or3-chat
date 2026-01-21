@@ -222,7 +222,7 @@ export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted: row.deleted,
-        clock: row.clock ?? 0,
+        clock: row.clock,
     };
     const filteredEntity = await hooks.applyFilters(
         'db.prompts.get:filter:output',
@@ -273,7 +273,7 @@ export async function updatePrompt(
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
-        clock: existing.clock ?? 0,
+        clock: existing.clock,
     };
     const updatedRow: PromptRow = {
         id: existingRow.id,
@@ -342,7 +342,7 @@ export async function softDeletePrompt(id: string): Promise<void> {
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
-        clock: existing.clock ?? 0,
+        clock: existing.clock,
     };
     const payload: DbDeletePayload<PromptEntity> = {
         entity: toPromptEntity(existingRow),
@@ -366,7 +366,7 @@ export async function softDeletePrompt(id: string): Promise<void> {
         updated_at: updatedRow.updated_at,
         deleted: updatedRow.deleted,
         meta: '',
-        clock: updatedRow.clock ?? 0,
+        clock: updatedRow.clock,
     };
     await getDb().posts.put(postRow);
     await hooks.doAction('db.prompts.delete:action:soft:after', payload);
@@ -384,7 +384,7 @@ export async function hardDeletePrompt(id: string): Promise<void> {
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
-        clock: existing.clock ?? 0,
+        clock: existing.clock,
     };
     const payload: DbDeletePayload<PromptEntity> = {
         entity: toPromptEntity(existingRow),

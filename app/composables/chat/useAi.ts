@@ -1,5 +1,5 @@
-import { ref } from 'vue';
-import { useToast, useAppConfig } from '#imports';
+import { ref, computed } from 'vue';
+import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
 import { create, tx, upsert, type Message } from '~/db';
 import { getDb } from '~/db/client';
@@ -100,8 +100,20 @@ export function useChat(
     const rawMessages = ref<ChatMessage[]>([...msgs]);
     const loading = ref(false);
     const abortController = ref<AbortController | null>(null);
-    const aborted = ref(false);
+    const aborted = ref<boolean>(false);
     const { apiKey, setKey } = useUserApiKey();
+    const runtimeConfig = useRuntimeConfig();
+    const openRouterConfig = computed(() => runtimeConfig.public.openRouter);
+    const allowUserOverride = computed(
+        () => openRouterConfig.value.allowUserOverride !== false
+    );
+    const hasInstanceKey = computed(
+        () => openRouterConfig.value.hasInstanceKey === true
+    );
+    const effectiveApiKey = computed(() =>
+        allowUserOverride.value ? apiKey.value : null
+    );
+    const limitsConfig = computed(() => runtimeConfig.public.limits);
     const hooks = useHooks();
     const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
@@ -120,6 +132,60 @@ export function useChat(
     function resetStream() {
         streamAcc.reset();
         streamId.value = undefined;
+    }
+
+    async function enforceClientLimits(isNewThread: boolean): Promise<boolean> {
+        const limits = limitsConfig.value;
+        if (limits.enabled === false) return true;
+
+        const toast = useToast();
+
+        const maxConversations =
+            typeof limits.maxConversations === 'number'
+                ? limits.maxConversations
+                : 0;
+        if (isNewThread && maxConversations > 0) {
+            const threadCount = await getDb().threads
+                .filter((thread) => thread.deleted !== true)
+                .count();
+            if (threadCount >= maxConversations) {
+                toast.add({
+                    title: 'Conversation limit reached',
+                    description:
+                        'You have reached the maximum number of conversations allowed for this instance.',
+                    color: 'warning',
+                    duration: 4000,
+                });
+                return false;
+            }
+        }
+
+        const maxMessagesPerDay =
+            typeof limits.maxMessagesPerDay === 'number'
+                ? limits.maxMessagesPerDay
+                : 0;
+        if (maxMessagesPerDay > 0) {
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            const startOfDaySec = Math.floor(startOfDay.getTime() / 1000);
+            const messageCount = await getDb().messages
+                .where('created_at')
+                .aboveOrEqual(startOfDaySec)
+                .and((msg) => msg.deleted !== true)
+                .count();
+            if (messageCount >= maxMessagesPerDay) {
+                toast.add({
+                    title: 'Daily message limit reached',
+                    description:
+                        'You have reached the maximum messages per day for this instance.',
+                    color: 'warning',
+                    duration: 4000,
+                });
+                return false;
+            }
+        }
+
+        return true;
     }
 
     async function getSystemPromptContent(): Promise<string | null> {
@@ -398,9 +464,10 @@ export function useChat(
     const tailAssistant = ref<UiChatMessage | null>(null);
     let lastSuppressedAssistantId: string | null = null;
     function flushTailAssistant() {
-        if (!tailAssistant.value) return;
-        if (!messages.value.find((m) => m.id === tailAssistant.value!.id)) {
-            messages.value.push(tailAssistant.value);
+        const tail = tailAssistant.value;
+        if (!tail) return;
+        if (!messages.value.find((m) => m.id === tail.id)) {
+            messages.value.push(tail);
         }
         tailAssistant.value = null;
     }
@@ -426,7 +493,20 @@ export function useChat(
             sendMessagesParams = contentOrParams;
         }
 
-        if (!apiKey.value) return;
+        const hasKey =
+            Boolean(effectiveApiKey.value) || hasInstanceKey.value;
+        if (!hasKey) {
+            if (!allowUserOverride.value) {
+                useToast().add({
+                    title: 'Instance key required',
+                    description:
+                        'This deployment requires a managed OpenRouter key. Contact your administrator.',
+                    color: 'warning',
+                    duration: 4000,
+                });
+            }
+            return;
+        }
 
         const outgoing = await hooks.applyFilters(
             'ui.chat.message:filter:outgoing',
@@ -445,6 +525,9 @@ export function useChat(
             });
             return;
         }
+
+        const canSend = await enforceClientLimits(!threadIdRef.value);
+        if (!canSend) return;
 
         if (!threadIdRef.value) {
             let effectivePromptId: string | null = pendingPromptId || null;
@@ -1043,7 +1126,7 @@ export function useChat(
                 loopIteration++;
 
                 const stream = openRouterStream({
-                    apiKey: apiKey.value,
+                    apiKey: effectiveApiKey.value,
                     model: modelId,
                     orMessages: orMessages as Parameters<
                         typeof openRouterStream
@@ -1832,7 +1915,9 @@ export function useChat(
 
     async function continueMessage(messageId: string, modelOverride?: string) {
         if (loading.value || !threadIdRef.value) return;
-        if (!apiKey.value) return;
+        const hasKey =
+            Boolean(effectiveApiKey.value) || hasInstanceKey.value;
+        if (!hasKey) return;
         try {
             const target = (await getDb().messages.get(messageId)) as
                 | StoredMessage
@@ -2166,7 +2251,7 @@ export function useChat(
             );
 
             const stream = openRouterStream({
-                apiKey: apiKey.value,
+                apiKey: effectiveApiKey.value,
                 model: modelId,
                 orMessages: orMessages as Parameters<
                     typeof openRouterStream
@@ -2378,19 +2463,20 @@ export function useChat(
                         : new Error(String(streamError));
                 streamAcc.finalize({ error: e });
                 
-                // Check if this was an intentional abort (user clicked stop)
-                const wasAborted = aborted.value;
-                const errorType = wasAborted ? 'stopped' : 'stream_interrupted';
+                // Stream interrupted - aborted.value would be true for user stops but those don't throw
+                const errorType = 'stream_interrupted';
                 
-                if (tailAssistant.value.text) {
-                    await persistAssistant({
-                        content: tailAssistant.value.text,
-                        reasoning: tailAssistant.value.reasoning_text ?? null,
-                        toolCalls: tailAssistant.value.toolCalls ?? null,
-                        finalize: true, // Clear pending so sync captures this
-                    });
-                    tailAssistant.value.error = errorType;
-                }
+                const tail = tailAssistant.value;
+                const tailText = tail.text || '';
+                const tailReasoning = tail.reasoning_text ?? null;
+                const tailToolCalls = tail.toolCalls ?? null;
+                tail.error = errorType;
+                await persistAssistant({
+                    content: tailText,
+                    reasoning: tailReasoning,
+                    toolCalls: tailToolCalls,
+                    finalize: true, // Clear pending so sync captures this
+                });
                 const rawIdx = rawMessages.value.findIndex(
                     (m) => m.id === messageId
                 );
@@ -2400,11 +2486,9 @@ export function useChat(
                         rawMessages.value[rawIdx] = {
                             ...existingRaw,
                             role: existingRaw.role,
-                            content:
-                                tailAssistant.value.text || existingRaw.content,
+                            content: tailText || existingRaw.content,
                             reasoning_text:
-                                tailAssistant.value.reasoning_text ??
-                                existingRaw.reasoning_text,
+                                tailReasoning ?? existingRaw.reasoning_text,
                             error: errorType,
                         };
                     }
@@ -2413,25 +2497,23 @@ export function useChat(
                     error: errorType,
                 });
                 
-                // Only show error toast for unintentional interruptions, not manual stops
-                if (!wasAborted) {
-                    reportError(e, {
-                        code: 'ERR_STREAM_FAILURE',
-                        tags: {
-                            domain: 'chat',
-                            threadId: threadIdRef.value || '',
-                            streamId: streamId.value || '',
-                            modelId,
-                            stage: 'continue',
-                        },
-                        toast: true,
-                    });
-                }
+                // Show error toast for stream interruptions
+                reportError(e, {
+                    code: 'ERR_STREAM_FAILURE',
+                    tags: {
+                        domain: 'chat',
+                        threadId: threadIdRef.value || '',
+                        streamId: streamId.value || '',
+                        modelId,
+                        stage: 'continue',
+                    },
+                    toast: true,
+                });
             } finally {
                 loading.value = false;
-                if (tailAssistant.value.pending) {
-                    tailAssistant.value.pending = false;
-                }
+                const tailRef = tailAssistant.value;
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- tailRef may be null if stream setup failed
+                if (tailRef) tailRef.pending = false;
                 abortController.value = null;
                 setTimeout(() => {
                     if (!loading.value && streamState.finalized) resetStream();

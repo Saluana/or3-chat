@@ -344,6 +344,7 @@ import {
     useOpenRouterAuth,
     useModelStore,
     useAiSettings,
+    useRuntimeConfig,
 } from '#imports';
 import {
     useComposerActions,
@@ -375,6 +376,14 @@ const { favoriteModels, getFavoriteModels } = useModelStore();
 const { settings: aiSettings } = useAiSettings();
 const webSearchEnabled = ref<boolean>(false);
 const LAST_MODEL_KEY = 'last_selected_model';
+const runtimeConfig = useRuntimeConfig();
+const openRouterConfig = computed(() => runtimeConfig.public?.openRouter ?? {});
+const allowUserOverride = computed(
+    () => openRouterConfig.value.allowUserOverride !== false
+);
+const hasInstanceKey = computed(
+    () => openRouterConfig.value.hasInstanceKey === true
+);
 
 // Use VueUse's useLocalStorage for persisted model selection
 const persistedModel = useLocalStorage<string>(
@@ -1059,7 +1068,17 @@ const handleSend = async () => {
     }
     // Require OpenRouter connection (api key) before sending
     const { apiKey } = useUserApiKey();
-    if (!apiKey.value) {
+    if (!apiKey.value && !hasInstanceKey.value) {
+        if (!allowUserOverride.value) {
+            useToast().add({
+                title: 'Instance key required',
+                description:
+                    'This deployment requires a managed OpenRouter key. Contact your administrator.',
+                color: 'primary',
+                duration: 5000,
+            });
+            return;
+        }
         const { startLogin } = useOpenRouterAuth();
         // Show toast with action to initiate login
         useToast().add({

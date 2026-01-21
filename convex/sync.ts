@@ -10,7 +10,7 @@
 import { v } from 'convex/values';
 import { mutation, query, internalMutation, type MutationCtx, type QueryCtx } from './_generated/server';
 import { internal } from './_generated/api';
-import type { Id } from './_generated/dataModel';
+import type { Id, TableNames } from './_generated/dataModel';
 import { getPkField } from '../shared/sync/table-metadata';
 
 const nowSec = (): number => Math.floor(Date.now() / 1000);
@@ -111,7 +111,7 @@ async function upsertTombstone(
         )
         .first();
 
-    if (existing && (existing.clock ?? 0) >= op.clock) {
+    if (existing && typeof existing.clock === 'number' && existing.clock >= op.clock) {
         return;
     }
 
@@ -198,12 +198,27 @@ async function applyOpToTable(
     // and runtime validation of payloads happens client-side in ConflictResolver.applyPut()
     // using Zod schemas (TABLE_PAYLOAD_SCHEMAS).
     // Future: Consider a type-safe helper with switch statement for each table.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const existing = await (ctx.db.query(table as any) as any)
-        .withIndex(indexName, (q: { eq: (field: string, value: unknown) => unknown }) =>
+    type IndexQueryBuilder = {
+        eq: (field: string, value: unknown) => IndexQueryBuilder;
+    };
+    type ConvexDoc = {
+        _id: Id<TableNames>;
+        deleted?: boolean;
+        clock?: number;
+    } & Record<string, unknown>;
+    type QueryByIndex = {
+        withIndex: (
+            index: string,
+            cb: (q: IndexQueryBuilder) => IndexQueryBuilder
+        ) => { first: () => Promise<ConvexDoc | null> };
+    };
+
+    const typedTable = table as TableNames;
+    const existing = await (ctx.db.query(typedTable) as unknown as QueryByIndex)
+        .withIndex(indexName, (q) =>
             pkField === 'hash'
-                ? (q as any).eq('workspace_id', workspaceId).eq('hash', op.pk)
-                : (q as any).eq('workspace_id', workspaceId).eq('id', op.pk)
+                ? q.eq('workspace_id', workspaceId).eq('hash', op.pk)
+                : q.eq('workspace_id', workspaceId).eq('id', op.pk)
         )
         .first();
 
@@ -236,8 +251,10 @@ async function applyOpToTable(
             if (table === 'file_meta' && insertPayload.ref_count == null) {
                 insertPayload.ref_count = 0;
             }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (ctx.db as any).insert(table, {
+            type InsertableDb = {
+                insert: (name: TableNames, doc: Record<string, unknown>) => Promise<Id<TableNames>>;
+            };
+            await (ctx.db as unknown as InsertableDb).insert(table as TableNames, {
                 ...insertPayload,
                 workspace_id: workspaceId,
                 [pkField]: op.pk,
@@ -394,13 +411,17 @@ export const push = mutation({
             opsToApply.map(async ({ op, serverVersion }) => {
                 await applyOpToTable(ctx, args.workspace_id, op);
 
+                const opPayload =
+                    typeof op.payload === 'object' && op.payload !== null
+                        ? (op.payload as Record<string, unknown>)
+                        : undefined;
                 await ctx.db.insert('change_log', {
                     workspace_id: args.workspace_id,
                     server_version: serverVersion,
                     table_name: op.table_name,
                     pk: op.pk,
                     op: op.operation,
-                    payload: op.payload,
+                    payload: opPayload,
                     clock: op.clock,
                     hlc: op.hlc,
                     device_id: op.device_id,
@@ -409,9 +430,13 @@ export const push = mutation({
                 });
 
                 if (op.operation === 'delete') {
+                    const payload: { deleted_at?: number } | undefined =
+                        typeof op.payload === 'object' && op.payload !== null
+                            ? (op.payload as { deleted_at?: number })
+                            : undefined;
                     const deletedAt =
-                        typeof (op.payload as { deleted_at?: number })?.deleted_at === 'number'
-                            ? ((op.payload as { deleted_at?: number }).deleted_at as number)
+                        payload && typeof payload.deleted_at === 'number'
+                            ? payload.deleted_at
                             : nowSec();
                     await upsertTombstone(ctx, args.workspace_id, op, serverVersion, deletedAt);
                 }
@@ -495,25 +520,35 @@ export const pull = query({
         // Cap limit to prevent abuse
         const limit = Math.min(args.limit, MAX_PULL_LIMIT);
 
-        const rawResults = await ctx.db
+        type ChangeLogRow = {
+            server_version: number;
+            table_name: string;
+            pk: string;
+            op: string;
+            payload?: unknown;
+            clock: number;
+            hlc: string;
+            device_id: string;
+            op_id: string;
+        };
+        const rawResults = (await ctx.db
             .query('change_log')
             .withIndex('by_workspace_version', (q) =>
                 q.eq('workspace_id', args.workspace_id).gt('server_version', args.cursor)
             )
             .order('asc')
-            .take(limit + 1);
+            .take(limit + 1)) as ChangeLogRow[];
 
         const hasMore = rawResults.length > limit;
         const window = hasMore ? rawResults.slice(0, -1) : rawResults;
+        const tableFilter: string[] = Array.isArray(args.tables) ? args.tables : [];
         const changes =
-            args.tables && args.tables.length > 0
-                ? window.filter((c) => args.tables!.includes(c.table_name))
+            tableFilter.length > 0
+                ? window.filter((c) => tableFilter.includes(c.table_name))
                 : window;
 
-        const nextCursor =
-            window.length > 0
-                ? (window[window.length - 1]?.server_version ?? args.cursor)
-                : args.cursor;
+        const lastChange = window[window.length - 1];
+        const nextCursor = lastChange ? lastChange.server_version : args.cursor;
 
         return {
             changes: changes.map((c) => ({
@@ -550,18 +585,27 @@ export const watchChanges = query({
         const since = args.cursor ?? 0;
         const limit = args.limit ?? 100;
 
-        const changes = await ctx.db
+        type ChangeLogRow = {
+            server_version: number;
+            table_name: string;
+            pk: string;
+            op: string;
+            payload?: unknown;
+            clock: number;
+            hlc: string;
+            device_id: string;
+            op_id: string;
+        };
+        const changes = (await ctx.db
             .query('change_log')
             .withIndex('by_workspace_version', (q) =>
                 q.eq('workspace_id', args.workspace_id).gt('server_version', since)
             )
             .order('asc')
-            .take(limit);
+            .take(limit)) as ChangeLogRow[];
 
-        const latestVersion =
-            changes.length > 0
-                ? (changes[changes.length - 1]?.server_version ?? since)
-                : since;
+        const latestChange = changes[changes.length - 1];
+        const latestVersion = latestChange ? latestChange.server_version : since;
 
         return {
             changes: changes.map((c) => ({
@@ -623,7 +667,7 @@ export const gcTombstones = mutation({
             .order('asc')
             .first();
 
-        const minCursor = minCursorRow?.last_seen_version ?? 0;
+        const minCursor = minCursorRow ? minCursorRow.last_seen_version : 0;
         const cutoff = nowSec() - args.retention_seconds;
 
         // Use .take() instead of .collect() to avoid loading all records into memory
@@ -644,7 +688,7 @@ export const gcTombstones = mutation({
         let nextCursor = startCursor;
         for (const row of batch) {
             nextCursor = row.server_version;
-            if ((row.deleted_at ?? 0) < cutoff) {
+            if (row.deleted_at < cutoff) {
                 await ctx.db.delete(row._id);
                 purged += 1;
             }
@@ -677,7 +721,7 @@ export const gcChangeLog = mutation({
             .order('asc')
             .first();
 
-        const minCursor = minCursorRow?.last_seen_version ?? 0;
+        const minCursor = minCursorRow ? minCursorRow.last_seen_version : 0;
         const cutoff = nowSec() - args.retention_seconds;
 
         // Use .take() instead of .collect() to avoid loading all records into memory
@@ -698,7 +742,7 @@ export const gcChangeLog = mutation({
         let nextCursor = startCursor;
         for (const row of batch) {
             nextCursor = row.server_version;
-            if ((row.created_at ?? 0) < cutoff) {
+            if (row.created_at < cutoff) {
                 await ctx.db.delete(row._id);
                 purged += 1;
             }
@@ -736,7 +780,7 @@ export const runWorkspaceGc = internalMutation({
             .order('asc')
             .first();
 
-        const minCursor = minCursorRow?.last_seen_version ?? 0;
+        const minCursor = minCursorRow ? minCursorRow.last_seen_version : 0;
         const cutoff = nowSec() - retentionSeconds;
 
         let totalPurged = 0;
@@ -746,59 +790,55 @@ export const runWorkspaceGc = internalMutation({
         let nextChangelogCursor = startChangelogCursor;
 
         // GC tombstones (one batch)
-        if (hasMoreTombstones) {
-            const tombstones = await ctx.db
-                .query('tombstones')
-                .withIndex('by_workspace_version', (q) =>
-                    q
-                        .eq('workspace_id', args.workspace_id)
-                        .gt('server_version', startTombstoneCursor)
-                        .lt('server_version', minCursor)
-                )
-                .take(batchSize + 1);
+        const tombstones = await ctx.db
+            .query('tombstones')
+            .withIndex('by_workspace_version', (q) =>
+                q
+                    .eq('workspace_id', args.workspace_id)
+                    .gt('server_version', startTombstoneCursor)
+                    .lt('server_version', minCursor)
+            )
+            .take(batchSize + 1);
 
-            hasMoreTombstones = tombstones.length > batchSize;
-            const batch = hasMoreTombstones ? tombstones.slice(0, -1) : tombstones;
+        hasMoreTombstones = tombstones.length > batchSize;
+        const tombstoneBatch = hasMoreTombstones ? tombstones.slice(0, -1) : tombstones;
 
-            for (const row of batch) {
-                nextTombstoneCursor = row.server_version;
-                if ((row.deleted_at ?? 0) < cutoff) {
-                    await ctx.db.delete(row._id);
-                    totalPurged += 1;
-                }
-            }
-
-            if (batch.length === 0) {
-                hasMoreTombstones = false;
+        for (const row of tombstoneBatch) {
+            nextTombstoneCursor = row.server_version;
+            if (row.deleted_at < cutoff) {
+                await ctx.db.delete(row._id);
+                totalPurged += 1;
             }
         }
 
+        if (tombstoneBatch.length === 0) {
+            hasMoreTombstones = false;
+        }
+
         // GC change_log (one batch)
-        if (hasMoreChangeLogs) {
-            const changeLogs = await ctx.db
-                .query('change_log')
-                .withIndex('by_workspace_version', (q) =>
-                    q
-                        .eq('workspace_id', args.workspace_id)
-                        .gt('server_version', startChangelogCursor)
-                        .lt('server_version', minCursor)
-                )
-                .take(batchSize + 1);
+        const changeLogs = await ctx.db
+            .query('change_log')
+            .withIndex('by_workspace_version', (q) =>
+                q
+                    .eq('workspace_id', args.workspace_id)
+                    .gt('server_version', startChangelogCursor)
+                    .lt('server_version', minCursor)
+            )
+            .take(batchSize + 1);
 
-            hasMoreChangeLogs = changeLogs.length > batchSize;
-            const batch = hasMoreChangeLogs ? changeLogs.slice(0, -1) : changeLogs;
+        hasMoreChangeLogs = changeLogs.length > batchSize;
+        const changeLogBatch = hasMoreChangeLogs ? changeLogs.slice(0, -1) : changeLogs;
 
-            for (const row of batch) {
-                nextChangelogCursor = row.server_version;
-                if ((row.created_at ?? 0) < cutoff) {
-                    await ctx.db.delete(row._id);
-                    totalPurged += 1;
-                }
+        for (const row of changeLogBatch) {
+            nextChangelogCursor = row.server_version;
+            if (row.created_at < cutoff) {
+                await ctx.db.delete(row._id);
+                totalPurged += 1;
             }
+        }
 
-            if (batch.length === 0) {
-                hasMoreChangeLogs = false;
-            }
+        if (changeLogBatch.length === 0) {
+            hasMoreChangeLogs = false;
         }
 
         // Schedule continuation if there's more to process
@@ -839,7 +879,8 @@ export const runScheduledGc = internalMutation({
 
         const workspaceIds = new Set<Id<'workspaces'>>();
         for (const change of recentChanges) {
-            if ((change.created_at ?? 0) >= sevenDaysAgo) {
+            const createdAt = typeof change.created_at === 'number' ? change.created_at : 0;
+            if (createdAt >= sevenDaysAgo) {
                 workspaceIds.add(change.workspace_id);
             }
         }

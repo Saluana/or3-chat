@@ -1,14 +1,39 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
 import { resolve } from 'path';
+import { or3CloudConfig } from './config.or3cloud';
 
 // SSR auth is gated by environment variable to preserve static builds
-const isSsrAuthEnabled = process.env.SSR_AUTH_ENABLED === 'true';
+const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
 
-// Convex client URL (required for convex-vue/convex-nuxt)
-// Nuxt does not automatically expose VITE_* vars, so we map it explicitly.
-const convexUrl =
-    process.env.NUXT_PUBLIC_CONVEX_URL || process.env.VITE_CONVEX_URL || '';
+const convexUrl = or3CloudConfig.sync.convex?.url || '';
+const convexEnabled =
+    (or3CloudConfig.sync.enabled &&
+        or3CloudConfig.sync.provider === 'convex') ||
+    (or3CloudConfig.storage.enabled &&
+        or3CloudConfig.storage.provider === 'convex');
+
+// Branding defaults (will be moved to separate or3config in future)
+const appName = process.env.OR3_APP_NAME || 'OR3';
+const appShortName = appName.length > 12 ? appName.slice(0, 12) : appName;
+
+// Shared config objects (DRY: used in both server and public runtimeConfig)
+const limitsConfig = {
+    enabled: or3CloudConfig.limits!.enabled!,
+    requestsPerMinute: or3CloudConfig.limits!.requestsPerMinute!,
+    maxConversations: or3CloudConfig.limits!.maxConversations!,
+    maxMessagesPerDay: or3CloudConfig.limits!.maxMessagesPerDay!,
+    storageProvider: or3CloudConfig.limits!.storageProvider || 'memory',
+};
+const brandingConfig = {
+    appName: process.env.OR3_APP_NAME || 'OR3',
+    logoUrl: process.env.OR3_LOGO_URL || '',
+    defaultTheme: process.env.OR3_DEFAULT_THEME || 'system',
+};
+const legalConfig = {
+    termsUrl: or3CloudConfig.legal!.termsUrl || '',
+    privacyUrl: or3CloudConfig.legal!.privacyUrl || '',
+};
 
 export default defineNuxtConfig({
     // convex-nuxt module options (mirrors into runtimeConfig.public.convex)
@@ -52,19 +77,55 @@ export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
     runtimeConfig: {
         // Server-only env variables (auto-mapped from NUXT_*)
-        openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
+        openrouterApiKey:
+            or3CloudConfig.services.llm?.openRouter?.instanceApiKey || '',
+        openrouterAllowUserOverride:
+            or3CloudConfig.services.llm?.openRouter?.allowUserOverride ?? true,
         clerkSecretKey: '', // Auto-mapped from NUXT_CLERK_SECRET_KEY
         auth: {
             enabled: isSsrAuthEnabled,
-            provider: process.env.AUTH_PROVIDER || 'clerk',
+            provider: or3CloudConfig.auth.provider,
+        },
+        sync: {
+            enabled: or3CloudConfig.sync.enabled,
+            provider: or3CloudConfig.sync.provider,
+            convexUrl,
+        },
+        storage: {
+            enabled: or3CloudConfig.storage.enabled,
+            provider: or3CloudConfig.storage.provider,
+        },
+        limits: limitsConfig,
+        branding: brandingConfig,
+        legal: legalConfig,
+        security: {
+            allowedOrigins: or3CloudConfig.security!.allowedOrigins!,
+            forceHttps: or3CloudConfig.security!.forceHttps!,
         },
         public: {
             // Single source of truth for client gating.
             // Avoid inferring enablement from presence of publishable keys.
             ssrAuthEnabled: isSsrAuthEnabled,
-            storage: {
-                provider: process.env.NUXT_PUBLIC_STORAGE_PROVIDER || 'convex',
+            openRouter: {
+                allowUserOverride:
+                    or3CloudConfig.services.llm?.openRouter?.allowUserOverride ??
+                    true,
+                hasInstanceKey: Boolean(
+                    or3CloudConfig.services.llm?.openRouter?.instanceApiKey
+                ),
             },
+            storage: {
+                enabled: or3CloudConfig.storage.enabled,
+                provider: or3CloudConfig.storage.provider,
+            },
+            sync: {
+                enabled: or3CloudConfig.sync.enabled,
+                provider: or3CloudConfig.sync.provider,
+                convexUrl,
+            },
+            limits: limitsConfig,
+            branding: brandingConfig,
+            legal: legalConfig,
             // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
             clerkPublishableKey: '',
         },
@@ -92,9 +153,11 @@ export default defineNuxtConfig({
         '@nuxt/ui',
         '@nuxt/fonts',
         '@vite-pwa/nuxt',
-        'convex-nuxt',
+        ...(convexEnabled ? ['convex-nuxt'] : []),
         // Only include Clerk when SSR auth is enabled to preserve static builds
-        ...(isSsrAuthEnabled ? ['@clerk/nuxt'] : []),
+        ...(isSsrAuthEnabled && or3CloudConfig.auth.provider === 'clerk'
+            ? ['@clerk/nuxt']
+            : []),
     ],
     // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
     srcDir: 'app',
@@ -327,8 +390,8 @@ export default defineNuxtConfig({
         },
         // Web App Manifest
         manifest: {
-            name: 'Or3 Chat',
-            short_name: 'Or3.Chat',
+            name: appName,
+            short_name: appShortName,
             description:
                 'The open, extensible AI chat platform for the people.',
             start_url: '/',

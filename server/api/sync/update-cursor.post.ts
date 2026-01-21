@@ -8,6 +8,7 @@ import { SyncScopeSchema } from '~~/shared/sync/schemas';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
+import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
 import { api } from '~~/convex/_generated/api';
 import type { Id } from '~~/convex/_generated/dataModel';
 import { getClerkProviderToken, getConvexGatewayClient } from '../../utils/sync/convex-gateway';
@@ -24,11 +25,11 @@ const UpdateCursorSchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-    if (!isSsrAuthEnabled(event)) {
+    if (!isSsrAuthEnabled(event) || !isSyncEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
 
-    const body = await readBody(event);
+    const body: unknown = await readBody(event);
     const parsed = UpdateCursorSchema.safeParse(body);
     if (!parsed.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid cursor request' });
@@ -48,8 +49,8 @@ export default defineEventHandler(async (event) => {
     const retryAfterDefaultMs = 1000;
     const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:cursor');
     if (!rateLimitResult.allowed) {
-        const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? retryAfterDefaultMs) / 1000);
-        setResponseHeader(event, 'Retry-After', String(retryAfterSec));
+        const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
+        setResponseHeader(event, 'Retry-After', retryAfterSec);
         throw createError({
             statusCode: 429,
             statusMessage: `Rate limit exceeded. Retry after ${retryAfterSec}s`,

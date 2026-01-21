@@ -62,6 +62,11 @@ function setNestedValue(obj: unknown, path: string, value: unknown): void {
     current[parts[parts.length - 1]!] = value;
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== 'object') return {};
+    return value as Record<string, unknown>;
+}
+
 export class HookBridge {
     private db: Or3DB;
     private deviceId: string;
@@ -86,10 +91,7 @@ export class HookBridge {
         const tableNames = SYNCED_TABLES as unknown as string[];
         for (const tableName of tableNames) {
             const table = this.db.table(tableName);
-            if (!table) {
-                console.warn(`[HookBridge] Skipping unknown table: ${tableName}`);
-                continue;
-            }
+
 
             // Hook: Creating (insert)
             table.hook('creating', (primKey, obj, transaction) => {
@@ -98,13 +100,26 @@ export class HookBridge {
             });
 
             // Hook: Updating (modify)
-            table.hook('updating', (modifications, primKey, obj, transaction) => {
+            const updatingHook = table as unknown as {
+                hook: (
+                    type: 'updating',
+                    fn: (
+                        modifications: unknown,
+                        primKey: unknown,
+                        obj: unknown,
+                        transaction: Transaction
+                    ) => void
+                ) => void;
+            };
+            updatingHook.hook('updating', (modifications, primKey, obj, transaction) => {
                 if (!this.captureEnabled || this.syncTransactions.get(transaction)) return;
-                
+
                 // Dexie passes modifications with dot-notation keys like 'data.content'
                 // We need to properly merge these into the existing object
                 const merged = deepClone(obj);
-                for (const [key, value] of Object.entries(modifications ?? {})) {
+                const safeModifications = toRecord(modifications);
+                const modificationEntries = Object.entries(safeModifications);
+                for (const [key, value] of modificationEntries) {
                     if (key.includes('.')) {
                         // Handle dot-notation key like 'data.content'
                         setNestedValue(merged, key, value);
@@ -113,7 +128,7 @@ export class HookBridge {
                         (merged as Record<string, unknown>)[key] = value;
                     }
                 }
-                
+
                 this.captureWrite(transaction, tableName, 'put', primKey, merged);
             });
 
@@ -152,14 +167,17 @@ export class HookBridge {
         payload: unknown
     ): void {
         const pkField = getPkField(tableName);
-        const pk = String(primKey ?? (payload as Record<string, unknown>)?.[pkField] ?? '');
+        const pk = String(primKey ?? (payload as Record<string, unknown>)[pkField] ?? '');
 
         // Filter out blocked KV keys (large caches, secrets, device-local data)
         if (tableName === 'kv') {
-            const kvName = (payload as { name?: string })?.name ?? pk.replace('kv:', '');
+            const kvName = (payload as { name?: string }).name ?? pk.replace('kv:', '');
 
             // Allow plugins to extend the blocklist (untyped hook, use raw engine)
-            const blocklist = useHooks()._engine.applyFiltersSync('sync.kv:blocklist', [...KV_SYNC_BLOCKLIST]) as string[];
+            const blocklist = useHooks()._engine.applyFiltersSync(
+                'sync.kv:blocklist',
+                [...KV_SYNC_BLOCKLIST]
+            ) as string[];
 
             if (blocklist.includes(kvName)) {
                 return; // Skip this key, don't capture for sync
@@ -176,7 +194,7 @@ export class HookBridge {
         }
 
         const hlc = generateHLC();
-        const baseClock = (payload as { clock?: number })?.clock ?? 0;
+        const baseClock = (payload as { clock?: number }).clock ?? 0;
         const stamp: ChangeStamp = {
             deviceId: this.deviceId,
             opId: crypto.randomUUID(),
@@ -207,7 +225,7 @@ export class HookBridge {
             status: 'pending',
         };
 
-        const tableNames = transaction.storeNames ?? [];
+        const tableNames = transaction.storeNames;
         const hasPendingOps = tableNames.includes('pending_ops');
         const hasTombstones = tableNames.includes('tombstones');
         const hasPendingOpsTable = this.db.tables.some(

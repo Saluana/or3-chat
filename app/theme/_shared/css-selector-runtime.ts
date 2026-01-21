@@ -26,6 +26,48 @@ export function applyThemeClasses(
     const entries = Object.entries(selectors);
     if (entries.length === 0) return;
 
+    const applyEntry = ([selector, config]: [string, CSSelectorConfig]) => {
+        if (!config.class) return;
+
+        const classes = config.class.split(/\s+/).filter(Boolean);
+        if (classes.length === 0) return;
+
+        try {
+            const elements = document.querySelectorAll(selector);
+
+            elements.forEach((element) => {
+                if (!(element instanceof HTMLElement)) return;
+
+                // Track what we've added to avoid duplicates
+                if (!classApplicationCache.has(element)) {
+                    classApplicationCache.set(element, new Set());
+                }
+
+                const applied = classApplicationCache.get(element)!;
+                const newClasses = classes.filter((c: string) => !applied.has(c));
+
+                if (newClasses.length > 0) {
+                    element.classList.add(...newClasses);
+                    newClasses.forEach((c: string) => applied.add(c));
+                }
+            });
+        } catch (error) {
+            if (import.meta.dev) {
+                console.warn(
+                    `[theme] Invalid CSS selector: "${selector}"`,
+                    error
+                );
+            }
+        }
+    };
+
+    if (import.meta.test) {
+        for (const entry of entries) {
+            applyEntry(entry);
+        }
+        return;
+    }
+
     // Chunking execution to prevent frame drops
     let index = 0;
 
@@ -35,42 +77,7 @@ export function applyThemeClasses(
         while (index < entries.length && performance.now() - start < 5) {
             const entry = entries[index++];
             if (!entry) break;
-            const [selector, config] = entry;
-
-            if (!config.class) continue;
-
-            const classes = config.class.split(/\s+/).filter(Boolean);
-            if (classes.length === 0) continue;
-
-            try {
-                const elements = document.querySelectorAll(selector);
-
-                elements.forEach((element) => {
-                    if (!(element instanceof HTMLElement)) return;
-
-                    // Track what we've added to avoid duplicates
-                    if (!classApplicationCache.has(element)) {
-                        classApplicationCache.set(element, new Set());
-                    }
-
-                    const applied = classApplicationCache.get(element)!;
-                    const newClasses = classes.filter(
-                        (c: string) => !applied.has(c)
-                    );
-
-                    if (newClasses.length > 0) {
-                        element.classList.add(...newClasses);
-                        newClasses.forEach((c: string) => applied.add(c));
-                    }
-                });
-            } catch (error) {
-                if (import.meta.dev) {
-                    console.warn(
-                        `[theme] Invalid CSS selector: "${selector}"`,
-                        error
-                    );
-                }
-            }
+            applyEntry(entry);
         }
 
         if (index < entries.length) {

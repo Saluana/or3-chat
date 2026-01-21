@@ -58,6 +58,7 @@ export default [
             'nuxt.config.ts',
             'vitest.config.ts',
             'playwright.config.ts',
+            'convex/auth.config.ts',
         ],
     },
 ];

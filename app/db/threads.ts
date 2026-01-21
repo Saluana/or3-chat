@@ -11,6 +11,25 @@ import {
 
 export async function createThread(input: ThreadCreate): Promise<Thread> {
     const hooks = useHooks();
+
+    // Check maxConversations limit (client-side enforcement)
+    if (import.meta.client) {
+        const { useRuntimeConfig } = await import('#imports');
+        const config = useRuntimeConfig();
+        const limits = config.public.limits;
+        if (limits.enabled !== false && limits.maxConversations > 0) {
+            const count = await getDb()
+                .threads
+                .filter((thread) => thread.deleted !== true)
+                .count();
+            if (count >= limits.maxConversations) {
+                throw new Error(
+                    `Conversation limit reached (${limits.maxConversations}). Delete existing conversations to create new ones.`
+                );
+            }
+        }
+    }
+
     const filtered = (await hooks.applyFilters(
         'db.threads.create:filter:input',
         input
@@ -300,9 +319,10 @@ export async function getThreadSystemPrompt(
         entity: 'threads',
         action: 'get',
     });
-    const result = thread?.system_prompt_id ?? null;
+    if (!thread) return null;
+    const result = thread.system_prompt_id;
     return hooks.applyFilters(
         'db.threads.getSystemPrompt:filter:output',
-        result
+        result ?? null
     );
 }

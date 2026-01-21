@@ -309,7 +309,6 @@ export class SubscriptionManager {
             hookBridge.markSyncTransaction(tx);
             for (const op of pendingOps) {
                 const table = this.db.table(op.tableName);
-                if (!table) continue;
                 if (op.operation === 'put' && op.payload) {
                     await table.put(op.payload as Record<string, unknown>);
                 } else if (op.operation === 'delete') {

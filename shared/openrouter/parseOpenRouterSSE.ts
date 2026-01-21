@@ -66,7 +66,7 @@ interface Delta {
 
 interface Message {
     images?: ImagePart[];
-    content?: ContentPart[];
+    content?: string | ContentPart[];
 }
 
 interface Choice {
@@ -351,7 +351,7 @@ export async function* parseOpenRouterSSE(
                                 const evt = emitImageCandidate(url, fIxRef2, true);
                                 if (evt) yield evt;
                             }
-                        } else if (typeof finalContent === 'string' && finalContent) {
+                        } else if (typeof finalContent === 'string' && finalContent.length > 0) {
                             // Final message content as plain string (some reasoning models)
                             yield { type: 'text', text: finalContent };
                         }

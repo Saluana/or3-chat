@@ -110,7 +110,7 @@ function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
 }
 
 export async function* openRouterStream(params: {
-    apiKey: string;
+    apiKey?: string | null;
     model: string;
     orMessages: ORMessage[];
     modalities: string[];
@@ -119,6 +119,7 @@ export async function* openRouterStream(params: {
     reasoning?: unknown;
 }): AsyncGenerator<ORStreamEvent, void, unknown> {
     const { apiKey, model, orMessages, modalities, tools, signal } = params;
+    const hasApiKey = Boolean(apiKey);
 
     const body: OpenRouterRequestBody = {
         model,
@@ -142,10 +143,12 @@ export async function* openRouterStream(params: {
         try {
             const serverResp = await fetch('/api/openrouter/stream', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${apiKey}`, // Req 1, 3: Send API key in header; server uses only if env key missing
-                },
+                headers: hasApiKey
+                    ? {
+                          'Content-Type': 'application/json',
+                          Authorization: `Bearer ${apiKey}`, // Req 1, 3: Send API key in header; server uses only if env key missing
+                      }
+                    : { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
                 signal,
             });
@@ -158,12 +161,32 @@ export async function* openRouterStream(params: {
                 return; // Success; don't fall back
             }
 
-            // Server route not OK; mark as unavailable and fall through
-            setServerRouteAvailable(false);
-        } catch {
+            if (serverResp.status === 404 || serverResp.status === 405) {
+                // Server route not OK; mark as unavailable and fall through
+                setServerRouteAvailable(false);
+            } else {
+                const errorText = await serverResp.text().catch(() => '');
+                throw new Error(
+                    `OpenRouter proxy error ${serverResp.status}: ${errorText.slice(
+                        0,
+                        300
+                    )}`
+                );
+            }
+        } catch (error) {
+            if (
+                error instanceof Error &&
+                error.message.startsWith('OpenRouter proxy error')
+            ) {
+                throw error;
+            }
             // Server route unavailable (404, network error, etc.); mark as unavailable and fall back
             setServerRouteAvailable(false);
         }
+    }
+
+    if (!hasApiKey) {
+        throw new Error('Missing OpenRouter API key');
     }
 
     // Fallback: direct OpenRouter (legacy path)

@@ -66,7 +66,7 @@ export function can(
         };
     }
 
-    const allowedPermissions = ROLE_PERMISSIONS[role] || [];
+    const allowedPermissions = ROLE_PERMISSIONS[role];
     const allowed = allowedPermissions.includes(permission);
 
     const base: AccessDecision = {

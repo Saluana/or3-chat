@@ -1,3 +1,4 @@
+import { onUnmounted, ref } from 'vue';
 import { useAuthTokenBroker } from './useAuthTokenBroker.client';
 
 /**
@@ -5,7 +6,7 @@ import { useAuthTokenBroker } from './useAuthTokenBroker.client';
  */
 export function useSessionRefresh() {
     const tokenBroker = useAuthTokenBroker();
-    const refreshInterval = ref<NodeJS.Timeout | null>(null);
+    const refreshInterval = ref<ReturnType<typeof setInterval> | null>(null);
 
     function startRefresh(intervalMs = 5 * 60 * 1000) {
         if (refreshInterval.value) return;

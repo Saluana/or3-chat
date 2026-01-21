@@ -22,7 +22,7 @@ export function createMemoryTable<T extends Record<string, unknown>>(
         rows.set(key, { ...row });
     }
 
-    const triggerHooks = (event: string, ...args: any[]) => {
+    const triggerHooks = (event: string, ...args: unknown[]) => {
         const h = hooks.get(event) || [];
         for (const cb of h) {
             cb(...args);
@@ -50,7 +50,9 @@ export function createMemoryTable<T extends Record<string, unknown>>(
                 table: (name: string) => {
                     // This is a bit of a hack but needed for HookBridge to find pending_ops/tombstones
                     // when called inside a hook. We'll rely on global mock DB for this.
-                    return (global as any).__MOCK_DB__?.table(name);
+                    return (global as Record<string, unknown>).__MOCK_DB__ ? (
+                        (global as unknown as Record<string, Record<string, unknown>>).__MOCK_DB__ as { table: (n: string) => unknown }
+                    ).table(name) : null;
                 }
             };
 
@@ -133,9 +135,9 @@ export function createMockDb<T extends Record<string, unknown>>(tables: T) {
         ...tables,
         name: 'mock-db',
         table(name: string) {
-            return (tables as Record<string, any>)[name] ?? null;
+            return (tables as Record<string, unknown>)[name] ?? null;
         },
-        async transaction(mode: string, tableNames: string[], callback: (tx: any) => Promise<any>) {
+        async transaction(mode: string, tableNames: string[], callback: (tx: { mode: string; tableNames: string[]; table: (n: string) => unknown }) => Promise<unknown>) {
             const tx = {
                 mode,
                 tableNames,
@@ -145,6 +147,6 @@ export function createMockDb<T extends Record<string, unknown>>(tables: T) {
         },
     };
     // Expose globally for the 'add' hook hack
-    (global as any).__MOCK_DB__ = db;
+    (global as Record<string, unknown>).__MOCK_DB__ = db;
     return db;
 }

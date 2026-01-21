@@ -79,7 +79,7 @@ async function migrateFromLocalStorage(): Promise<AiSettingsV1 | null> {
     if (!raw) return null;
     
     try {
-        const parsed = JSON.parse(raw);
+        const parsed: unknown = JSON.parse(raw);
         const settings = sanitizeAiSettings(parsed);
         
         // Mark as migrated by removing from localStorage
@@ -104,7 +104,7 @@ async function loadSettings(): Promise<void> {
             // Try KV first
             const kvRecord = await getKvByName(AI_SETTINGS_KV_KEY);
             if (kvRecord?.value) {
-                const parsed = JSON.parse(kvRecord.value);
+                const parsed: unknown = JSON.parse(kvRecord.value);
                 _settings.value = sanitizeAiSettings(parsed);
                 _loaded = true;
                 return;

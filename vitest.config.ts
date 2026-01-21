@@ -18,6 +18,7 @@ export default defineConfig({
             '~~': path.resolve(__dirname),
             '~~/': path.resolve(__dirname) + '/',
             '#app': path.resolve(__dirname, 'tests/stubs/nuxt-app.ts'),
+            'nuxt/app': path.resolve(__dirname, 'tests/stubs/nuxt-app.ts'),
         },
     },
     test: {

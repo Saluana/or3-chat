@@ -161,11 +161,10 @@
                         </UButton>
                     </div>
                     <p
-                        v-if="!apiKey"
+                        v-if="showKeyHint"
                         class="mt-2 text-xs text-[var(--md-on-surface-variant)]"
                     >
-                        Connect your Openrouter account at or3.chat to enable
-                        replies.
+                        {{ keyHintText }}
                     </p>
                 </form>
             </div>
@@ -228,7 +227,20 @@ interface HelpChatMessage {
 // Separate storage for tool results to avoid bloating the visible message history
 const toolResultsCache = new Map<string, string>();
 
+const runtimeConfig = useRuntimeConfig();
+const openRouterConfig = computed(
+    () => runtimeConfig.public?.openRouter ?? {}
+);
+const allowUserOverride = computed(
+    () => openRouterConfig.value.allowUserOverride !== false
+);
+const hasInstanceKey = computed(
+    () => openRouterConfig.value.hasInstanceKey === true
+);
 const { apiKey } = useUserApiKey();
+const effectiveApiKey = computed(() =>
+    allowUserOverride.value ? apiKey.value : null
+);
 const toast = useToast();
 const { $theme } = useNuxtApp();
 
@@ -310,7 +322,19 @@ const messages = ref<HelpChatMessage[]>([
 ]);
 
 const canSend = computed(() =>
-    Boolean(message.value.trim().length && apiKey.value && !isSending.value)
+    Boolean(
+        message.value.trim().length &&
+            (effectiveApiKey.value || hasInstanceKey.value) &&
+            !isSending.value
+    )
+);
+const showKeyHint = computed(
+    () => !effectiveApiKey.value && !hasInstanceKey.value
+);
+const keyHintText = computed(() =>
+    allowUserOverride.value
+        ? 'Connect your Openrouter account at or3.chat to enable replies.'
+        : 'This deployment requires a managed OpenRouter key. Contact your administrator.'
 );
 
 // Throttled scroll function to prevent excessive layout recalculations during streaming
@@ -433,11 +457,14 @@ async function sendMessage() {
 
     if (!trimmed || isSending.value) return;
 
-    if (!apiKey.value) {
+    if (!effectiveApiKey.value && !hasInstanceKey.value) {
         toast.add({
-            title: 'OpenRouter key required',
-            description:
-                'Add your OpenRouter API key in Settings to ask the help chat questions.',
+            title: allowUserOverride.value
+                ? 'OpenRouter key required'
+                : 'Instance key required',
+            description: allowUserOverride.value
+                ? 'Add your OpenRouter API key in Settings to ask the help chat questions.'
+                : 'This deployment requires a managed OpenRouter key. Contact your administrator.',
             color: 'warning',
         });
         return;
@@ -600,7 +627,7 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
 
             const controller = new AbortController();
             const stream = openRouterStream({
-                apiKey: apiKey.value,
+                apiKey: effectiveApiKey.value,
                 model: 'z-ai/glm-4.6',
                 orMessages,
                 modalities: ['text'],

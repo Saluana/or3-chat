@@ -9,7 +9,7 @@ export default defineNitroPlugin(() => {
     const config = useRuntimeConfig();
 
     // Only register provider when SSR auth is enabled
-    if (config.auth?.enabled !== true) {
+    if (config.auth.enabled !== true) {
         return;
     }
 

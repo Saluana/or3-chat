@@ -163,9 +163,13 @@ export default defineNuxtPlugin(async () => {
 
     const runtimeConfig = useRuntimeConfig();
 
-    // Only run when SSR auth is enabled
-    if (!runtimeConfig.public.ssrAuthEnabled) {
-        console.log('[convex-sync] SSR auth disabled, skipping sync');
+    // Only run when SSR auth and sync are enabled
+    if (
+        !runtimeConfig.public.ssrAuthEnabled ||
+        !runtimeConfig.public.sync?.enabled ||
+        runtimeConfig.public.sync?.provider !== 'convex'
+    ) {
+        console.log('[convex-sync] Sync disabled, skipping sync');
         return;
     }
 
