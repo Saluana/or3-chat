@@ -110,7 +110,7 @@ export const FileMetaPayloadSchema = z
         hash: z.string(),
         kind: z.string().optional(),
         mime_type: z.string().optional(),
-        size: z.number().optional(),
+        size_bytes: z.number().optional(),
         deleted: z.boolean(),
         created_at: z.number(),
         updated_at: z.number(),

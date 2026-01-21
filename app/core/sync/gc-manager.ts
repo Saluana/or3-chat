@@ -26,6 +26,7 @@ export class GcManager {
     private provider: SyncProvider;
     private scope: SyncScope;
     private config: Required<GcManagerConfig>;
+    private circuitBreakerKey: string;
     private interval: ReturnType<typeof setInterval> | null = null;
     private idleHandle: IdleHandle | null = null;
     private running = false;
@@ -39,6 +40,7 @@ export class GcManager {
         this.db = db;
         this.provider = provider;
         this.scope = scope;
+        this.circuitBreakerKey = `${scope.workspaceId}:${provider.id}`;
         this.config = {
             retentionSeconds: config.retentionSeconds ?? DEFAULT_RETENTION_SECONDS,
             intervalMs: config.intervalMs ?? DEFAULT_INTERVAL_MS,
@@ -127,7 +129,7 @@ export class GcManager {
             }
 
             // Check circuit breaker before external provider calls
-            const circuitBreaker = getSyncCircuitBreaker();
+            const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
             if (!circuitBreaker.canRetry()) {
                 return;
             }

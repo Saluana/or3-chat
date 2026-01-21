@@ -123,6 +123,12 @@ export class Or3DB extends Dexie {
             file_transfers:
                 'id, hash, direction, state, workspace_id, created_at, updated_at, [hash+direction], [state+created_at], [state+workspace_id]',
         });
+
+        // Version 11: Add ordered compound index for queued transfer scans
+        this.version(11).stores({
+            file_transfers:
+                'id, hash, direction, state, workspace_id, created_at, updated_at, [hash+direction], [state+created_at], [state+workspace_id], [state+workspace_id+created_at]',
+        });
     }
 }
 

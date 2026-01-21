@@ -1,3 +1,4 @@
+import Dexie from 'dexie';
 import { getDb } from '~/db/client';
 import type { Or3DB } from '~/db/client';
 import { nowSec, nextClock } from '~/db/util';
@@ -19,6 +20,8 @@ const DEFAULT_MAX_ATTEMPTS = 5;
 const DEFAULT_BACKOFF_BASE_MS = 1000;
 const DEFAULT_BACKOFF_MAX_MS = 60000;
 const DEFAULT_PRESIGN_EXPIRY_MS = 60 * 60 * 1000;
+const TRANSFER_RETENTION_SEC = 7 * 24 * 60 * 60;
+const TRANSFER_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 function getDefaultConcurrency(): number {
     if (typeof navigator === 'undefined' || !('connection' in navigator)) {
@@ -60,6 +63,7 @@ export class FileTransferQueue {
     private workspaceId: string | null = null;
     private processQueueTimeout: ReturnType<typeof setTimeout> | null = null;
     private processQueueAt: number | null = null;
+    private lastCleanupAt = 0;
 
     constructor(
         private db: Or3DB,
@@ -198,12 +202,18 @@ export class FileTransferQueue {
         if (!this.workspaceId) return;
         if (this.running.size >= this.concurrency) return;
 
+        await this.cleanupOldTransfers();
+
         const available = this.concurrency - this.running.size;
         // Use compound index for efficient workspace-scoped queries
         const candidates = await this.db.file_transfers
-            .where('[state+workspace_id]')
-            .equals(['queued', this.workspaceId])
-            .sortBy('created_at');
+            .where('[state+workspace_id+created_at]')
+            .between(
+                ['queued', this.workspaceId, Dexie.minKey],
+                ['queued', this.workspaceId, Dexie.maxKey]
+            )
+            .limit(available)
+            .toArray();
 
         const toProcess = candidates.slice(0, available);
         if (!toProcess.length) return;
@@ -586,6 +596,24 @@ export class FileTransferQueue {
             ...patch,
             updated_at: nowSec(),
         });
+    }
+
+    private async cleanupOldTransfers(): Promise<void> {
+        const now = Date.now();
+        if (now - this.lastCleanupAt < TRANSFER_CLEANUP_INTERVAL_MS) {
+            return;
+        }
+        this.lastCleanupAt = now;
+
+        const cutoff = nowSec() - TRANSFER_RETENTION_SEC;
+        await this.db.file_transfers
+            .where('[state+created_at]')
+            .between(['done', 0], ['done', cutoff])
+            .delete();
+        await this.db.file_transfers
+            .where('[state+created_at]')
+            .between(['failed', 0], ['failed', cutoff])
+            .delete();
     }
 
     private getBackoffDelay(attempt: number): number {

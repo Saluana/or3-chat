@@ -135,24 +135,28 @@ export class SyncCircuitBreaker {
     }
 }
 
-// Singleton instance for app-wide coordination
-let globalCircuitBreaker: SyncCircuitBreaker | null = null;
+const DEFAULT_CIRCUIT_KEY = 'global';
+const circuitBreakers = new Map<string, SyncCircuitBreaker>();
 
 /**
- * Get the global sync circuit breaker instance.
- * Creates one if it doesn't exist.
+ * Get a sync circuit breaker instance scoped to a key.
+ * Use workspace/provider-specific keys to avoid cross-tenant throttling.
  */
-export function getSyncCircuitBreaker(): SyncCircuitBreaker {
-    if (!globalCircuitBreaker) {
-        globalCircuitBreaker = new SyncCircuitBreaker();
-    }
-    return globalCircuitBreaker;
+export function getSyncCircuitBreaker(key: string = DEFAULT_CIRCUIT_KEY): SyncCircuitBreaker {
+    const existing = circuitBreakers.get(key);
+    if (existing) return existing;
+
+    const created = new SyncCircuitBreaker();
+    circuitBreakers.set(key, created);
+    return created;
 }
 
 /**
- * Reset the global circuit breaker (for testing).
+ * Reset all circuit breakers (for testing).
  */
 export function _resetSyncCircuitBreaker(): void {
-    globalCircuitBreaker?.reset();
-    globalCircuitBreaker = null;
+    for (const breaker of circuitBreakers.values()) {
+        breaker.reset();
+    }
+    circuitBreakers.clear();
 }
