@@ -215,10 +215,9 @@ export class FileTransferQueue {
             .limit(available)
             .toArray();
 
-        const toProcess = candidates.slice(0, available);
-        if (!toProcess.length) return;
+        if (!candidates.length) return;
 
-        for (const transfer of toProcess) {
+        for (const transfer of candidates) {
             this.running.add(transfer.id);
             void this.processTransfer(transfer).finally(() => {
                 this.running.delete(transfer.id);

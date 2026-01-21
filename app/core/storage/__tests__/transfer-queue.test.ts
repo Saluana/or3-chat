@@ -66,6 +66,44 @@ class TableStub<T extends Record<string, any>> {
                     },
                 };
             },
+            between: (lower: unknown, upper: unknown) => {
+                const matches = Array.from(this.rows.values()).filter((row) => {
+                    if (field === '[state+created_at]') {
+                        const lowerTuple = lower as [string, number];
+                        const upperTuple = upper as [string, number];
+                        // Match state and check if created_at is between lower and upper
+                        return (
+                            row.state === lowerTuple[0] &&
+                            row.state === upperTuple[0] &&
+                            row.created_at >= lowerTuple[1] &&
+                            row.created_at <= upperTuple[1]
+                        );
+                    }
+                    if (field === '[state+workspace_id+created_at]') {
+                        const lowerTuple = lower as [string, string, unknown];
+                        const upperTuple = upper as [string, string, unknown];
+                        // Match state and workspace_id
+                        return (
+                            row.state === lowerTuple[0] &&
+                            row.state === upperTuple[0] &&
+                            row.workspace_id === lowerTuple[1] &&
+                            row.workspace_id === upperTuple[1]
+                        );
+                    }
+                    return false;
+                });
+                return {
+                    toArray: async () => matches,
+                    limit: (n: number) => ({
+                        toArray: async () => matches.slice(0, n),
+                    }),
+                    delete: async () => {
+                        matches.forEach((row) => {
+                            this.rows.delete(String(row[this.keyField]));
+                        });
+                    },
+                };
+            },
         };
     }
 
