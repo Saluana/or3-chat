@@ -1,5 +1,5 @@
 <template>
-    <div class="h-full flex flex-col min-h-0">
+    <div v-if="documentsEnabled" class="h-full flex flex-col min-h-0">
         <div class="px-3 py-2 flex items-center justify-between shrink-0">
             <UButton
                 variant="ghost"
@@ -40,6 +40,9 @@
             @cta="emit('new-document')"
         />
     </div>
+    <div v-else class="h-full flex items-center justify-center text-sm opacity-70">
+        Documents are disabled.
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -48,6 +51,7 @@ import { useIcon } from '~/composables/useIcon';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import SidebarTimeGroupedList from './SidebarTimeGroupedList.vue';
+import { useOr3Config } from '~/composables/useOr3Config';
 
 // Component name for KeepAlive matching
 defineOptions({
@@ -69,6 +73,8 @@ const emit = defineEmits<{
 const iconBack = useIcon('ui.chevron.left');
 const iconNewDoc = useIcon('sidebar.new_note');
 const { setActivePage } = useActiveSidebarPage();
+const or3Config = useOr3Config();
+const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 
 function goBack() {
     setActivePage('sidebar-home');

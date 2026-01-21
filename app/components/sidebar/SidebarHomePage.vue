@@ -132,6 +132,7 @@
                                 Start a new chat
                             </UButton>
                             <UButton
+                                v-if="documentsEnabled"
                                 size="sm"
                                 variant="ghost"
                                 class="w-full justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
@@ -228,6 +229,7 @@ import SidebarUnifiedItem from './SidebarUnifiedItem.vue';
 import { useIcon } from '~/composables/useIcon';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarSections';
+import { useOr3Config } from '~/composables/useOr3Config';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 type SidebarCombinedItem =
@@ -350,10 +352,15 @@ function toggleGroup(groupKey: string) {
     }
 }
 
+// Config and feature flags (must be declared before usePaginatedSidebarItems)
+const or3Config = useOr3Config();
+const documentsEnabled = computed(() => or3Config.features.documents.enabled);
+
 // Paginated items
 const sidebarQuery = computed(() => props.sidebarQuery.trim());
 const { items, loading, reset } = usePaginatedSidebarItems({
     query: sidebarQuery,
+    type: documentsEnabled.value ? 'all' : 'thread',
 });
 
 const iconChats = useIcon('sidebar.page.messages');
@@ -413,17 +420,18 @@ const combinedItems = computed(() => {
         });
     }
 
-    result.push(
-        {
-            key: 'page-link-chats',
-            type: 'page-link',
-            label: 'Chats',
-            class: 'mb-3',
-            description: 'View your chat history.',
-            icon: iconChats.value,
-            pageId: 'sidebar-chats',
-        },
-        {
+    result.push({
+        key: 'page-link-chats',
+        type: 'page-link',
+        label: 'Chats',
+        class: 'mb-3',
+        description: 'View your chat history.',
+        icon: iconChats.value,
+        pageId: 'sidebar-chats',
+    });
+
+    if (documentsEnabled.value) {
+        result.push({
             key: 'page-link-docs',
             type: 'page-link',
             label: 'Documents',
@@ -431,8 +439,8 @@ const combinedItems = computed(() => {
             icon: iconDocs.value,
             pageId: 'sidebar-docs',
             class: 'mb-3',
-        }
-    );
+        });
+    }
 
     // Projects section (single item that renders the whole section)
     if (props.activeSections.projects && !isCompletelyEmpty.value) {

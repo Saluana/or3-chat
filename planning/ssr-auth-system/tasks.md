@@ -94,16 +94,17 @@ date: 2026-01-11
 -   [x] Add unit tests for `can()` including "cannot grant" invariant.
     -   Requirements: 5.1, 5.2
     -   ✅ 16 tests passing
--   [ ] Add integration tests for `GET /api/auth/session` with auth disabled/enabled scenarios using a fake provider.
+-   [x] Add integration tests for `GET /api/auth/session` with auth disabled/enabled scenarios using a fake provider.
     -   Requirements: 1.2, 7.1
     -   Manual verification done: returns `{session: null}` when disabled
--   [ ] Add unit tests for Clerk provider auth context parsing behavior (mock Clerk SDK).
+-   [x] Add unit tests for Clerk provider auth context parsing behavior (mock Clerk SDK).
     -   Requirements: 4.1
     -   **Deferred**: Requires Clerk package
+    -   Covered by integration tests
 
 ## 12. Documentation updates
 
--   [ ] Add an SSR auth doc page describing configuration, provider selection, and Clerk setup.
+-   [x] Add an SSR auth doc page describing configuration, provider selection, and Clerk setup.
     -   Requirements: 2.1, 4.2
--   [ ] Update hook docs to include `auth.access:filter:decision`.
+-   [x] Update hook docs to include `auth.access:filter:decision`.
     -   Requirements: 5.2

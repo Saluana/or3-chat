@@ -56,6 +56,7 @@
 
         <!-- DASHBOARD -->
         <UTooltip
+            v-if="dashboardEnabled"
             id="tooltip-dashboard"
             :delay-duration="0"
             :content="{
@@ -98,11 +99,14 @@
 import { computed, ref, useAttrs } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { useOr3Config } from '~/composables/useOr3Config';
 
 const iconUser = useIcon('sidebar.user');
 const iconActivity = useIcon('sidebar.activity');
 const iconCredits = useIcon('sidebar.credits');
 const iconDashboard = useIcon('dashboard.home');
+const or3Config = useOr3Config();
+const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
 
 // Check if SSR auth is enabled via runtime config
 const config = useRuntimeConfig();

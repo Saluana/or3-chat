@@ -11,6 +11,8 @@ export default defineNuxtPlugin(() => {
     // Use the composable to get the register function
     const { registerSidebarPage } = useSidebarPages();
     const icon = useIcon('sidebar.page.messages');
+    const or3Config = useOr3Config();
+    const documentsEnabled = or3Config.features.documents.enabled;
 
     // Register the home page
     const unregisterHome = registerSidebarPage({
@@ -35,15 +37,18 @@ export default defineNuxtPlugin(() => {
     });
 
     // Register Docs-only page
-    const unregisterDocs = registerSidebarPage({
-        id: 'sidebar-docs',
-        label: 'Docs',
-        icon: useIcon('sidebar.note').value,
-        order: 20,
-        keepAlive: true,
-        usesDefaultHeader: true,
-        component: () => import('~/components/sidebar/SidebarDocsPage.vue'),
-    });
+    const unregisterDocs = documentsEnabled
+        ? registerSidebarPage({
+              id: 'sidebar-docs',
+              label: 'Docs',
+              icon: useIcon('sidebar.note').value,
+              order: 20,
+              keepAlive: true,
+              usesDefaultHeader: true,
+              component: () =>
+                  import('~/components/sidebar/SidebarDocsPage.vue'),
+          })
+        : () => {};
 
     // Handle HMR cleanup
     if (import.meta.hot) {

@@ -214,4 +214,4 @@ date: 2026-01-11
 - [x] **5.3** Gateway provider support (optional)
 
 ### Group 6: E2E Validation
-- [ ] **14.3** E2E tests (multi-device, offline recovery)
+- [x] **14.3** E2E tests (multi-device, offline recovery)

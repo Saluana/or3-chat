@@ -31,7 +31,11 @@ Visit `http://localhost:3000`, connect your OpenRouter account via the built-in 
 
 OR3 Cloud features are configured through `config.or3cloud.ts` at the project root. This file is the single source of truth for SSR auth, sync, storage, instance-level OpenRouter keys, branding, and limits.
 
-Key environment variables you can use inside `config.or3cloud.ts`:
+## Base Configuration
+
+Site branding, feature toggles, and client-side limits are configured in `config.or3.ts` at the project root. This allows you to customize the application appearance and capabilities without modifying the core code.
+
+Key environment variables you can use inside `config.or3cloud.ts` and `config.or3.ts`:
 
 -   `SSR_AUTH_ENABLED` (true/false)
 -   `NUXT_PUBLIC_CONVEX_URL` / `VITE_CONVEX_URL`
@@ -41,8 +45,9 @@ Key environment variables you can use inside `config.or3cloud.ts`:
 -   `OR3_APP_NAME`, `OR3_LOGO_URL`, `OR3_DEFAULT_THEME`
 -   `OR3_TERMS_URL`, `OR3_PRIVACY_URL`
 -   `OR3_ALLOWED_ORIGINS`, `OR3_FORCE_HTTPS`
+-   `OR3_WORKFLOWS_ENABLED`, `OR3_DOCUMENTS_ENABLED`, `OR3_DASHBOARD_ENABLED` (feature toggles)
 
-Update the config file to match your deployment, then restart Nuxt for changes to take effect.
+Update the config files to match your deployment, then restart Nuxt for changes to take effect.
 
 ## Learn More
 

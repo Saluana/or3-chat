@@ -10,6 +10,7 @@
 
 import { defineNuxtPlugin } from '#app';
 import { useAppConfig, useHooks, useToast, useModelStore } from '#imports';
+import { useOr3Config } from '~/composables/useOr3Config';
 import type { Extension, Node } from '@tiptap/core';
 import type {
     ToolCallEventWithNode,
@@ -657,13 +658,26 @@ export default defineNuxtPlugin((nuxtApp) => {
     // SSR guard
     if (!import.meta.client) return;
 
+    const or3Config = useOr3Config();
+    if (!or3Config.features.workflows.enabled) {
+        console.log('[workflow-slash] Workflows disabled via OR3 config');
+        return;
+    }
+
+    const workflowExecutionEnabled =
+        or3Config.features.workflows.enabled &&
+        or3Config.features.workflows.execution;
+    const workflowSlashEnabled =
+        or3Config.features.workflows.enabled &&
+        or3Config.features.workflows.slashCommands;
+
     const appConfig = useAppConfig();
     const slashConfig: WorkflowSlashConfig =
         ((appConfig as Record<string, unknown>)
             ?.workflowSlashCommands as WorkflowSlashConfig) || {};
 
     // Check feature flag
-    if (slashConfig.enabled === false) {
+    if (slashConfig.enabled === false || !workflowSlashEnabled) {
         console.log('[workflow-slash] Plugin disabled via feature flag');
         return;
     }
@@ -1429,6 +1443,15 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     async function retryWorkflowMessage(messageId: string): Promise<boolean> {
         try {
+            if (!workflowExecutionEnabled) {
+                toast.add({
+                    title: 'Workflow execution disabled',
+                    description:
+                        'This deployment has workflow execution turned off.',
+                    color: 'warning',
+                });
+                return false;
+            }
             const [slashMod, execMod] = await Promise.all([
                 loadSlashModule(),
                 loadExecutionModule(),
@@ -1591,6 +1614,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     hooks.on(
         'editor:request-extensions',
         async () => {
+            if (!workflowSlashEnabled) return;
             const module = await loadSlashModule();
             if (!module) return;
 
@@ -1640,6 +1664,9 @@ export default defineNuxtPlugin((nuxtApp) => {
     hooks.on(
         'ai.chat.messages:filter:before_send',
         async (payload: MessagesPayload) => {
+            if (!workflowSlashEnabled) {
+                return { messages: normalizeMessagesPayload(payload) };
+            }
             const messages = normalizeMessagesPayload(payload);
 
             if (!messages.length) {
@@ -1828,6 +1855,16 @@ export default defineNuxtPlugin((nuxtApp) => {
                     });
                     return { messages };
                 }
+            }
+
+            if (!workflowExecutionEnabled) {
+                toast.add({
+                    title: 'Workflow execution disabled',
+                    description:
+                        'This deployment has workflow execution turned off.',
+                    color: 'warning',
+                });
+                return { messages };
             }
 
             // Get API key

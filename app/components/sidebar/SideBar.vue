@@ -374,6 +374,7 @@
     </UModal>
     <!-- New Document Naming Modal -->
     <UModal
+        v-if="documentsEnabled"
         v-bind="createDocumentModalProps"
         v-model:open="showCreateDocumentModal"
         title="New Document"
@@ -452,6 +453,7 @@ import { loadDocument } from '~/composables/documents/useDocumentsStore';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { useOr3Config } from '~/composables/useOr3Config';
 import {
     normalizeProjectData,
     type ProjectEntry,
@@ -496,12 +498,15 @@ const {
     syncProjectEntryTitle,
 } = useProjectsCrud();
 
+const or3Config = useOr3Config();
+const documentsEnabled = computed(() => or3Config.features.documents.enabled);
+
 // Section visibility (multi-select) defaults to all on
 const activeSections = ref<{
     projects: boolean;
     chats: boolean;
     docs: boolean;
-}>({ projects: true, chats: true, docs: true });
+}>({ projects: true, chats: true, docs: documentsEnabled.value });
 
 const props = defineProps<{
     activeThread?: string;
@@ -727,7 +732,9 @@ const displayProjects = computed<SidebarProject[]>(() => {
     return results;
 });
 const displayDocuments = computed(() =>
-    sidebarQuery.value.trim() ? (documentResults.value as Post[]) : undefined
+    documentsEnabled.value && sidebarQuery.value.trim()
+        ? (documentResults.value as Post[])
+        : undefined
 );
 function onEscapeClear() {
     if (sidebarQuery.value) sidebarQuery.value = '';
@@ -814,19 +821,23 @@ onMounted(async () => {
         },
         error: (err) => console.error('projects liveQuery error', err),
     });
-    // Documents subscription (docs only, excluding deleted)
-    subDocs = liveQuery(() =>
-        db.posts
-            .where('postType')
-            .equals('doc')
-            .and((r) => !r.deleted)
-            .toArray()
-    ).subscribe({
-        next: (res) => {
-            docs.value = res.map((d: any) => ({ ...d }));
-        },
-        error: (err) => console.error('documents liveQuery error', err),
-    });
+    if (documentsEnabled.value) {
+        // Documents subscription (docs only, excluding deleted)
+        subDocs = liveQuery(() =>
+            db.posts
+                .where('postType')
+                .equals('doc')
+                .and((r) => !r.deleted)
+                .toArray()
+        ).subscribe({
+            next: (res) => {
+                docs.value = res.map((d: any) => ({ ...d }));
+            },
+            error: (err) => console.error('documents liveQuery error', err),
+        });
+    } else {
+        docs.value = [];
+    }
 });
 
 // Re-measure bottom pad when data that can change nav size or list height updates (debounced by nextTick)
@@ -1360,6 +1371,7 @@ const createDocumentModalProps = createSidebarModalProps(
 );
 
 function openCreateDocumentModal() {
+    if (!documentsEnabled.value) return;
     showCreateDocumentModal.value = true;
     newDocumentState.value = { title: '' };
     newDocumentErrors.value = {};
@@ -1369,6 +1381,7 @@ function closeCreateDocumentModal() {
 }
 async function submitCreateDocument() {
     if (creatingDocument.value) return;
+    if (!documentsEnabled.value) return;
     const title = newDocumentState.value.title.trim();
     if (!title) {
         newDocumentErrors.value.title = 'Title required';

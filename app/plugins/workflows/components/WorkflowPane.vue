@@ -18,6 +18,7 @@ import {
 import { useWorkflowStorage } from '../composables/useWorkflowStorage';
 import { EMPTY_WORKFLOW, resolveWorkflowData } from './pane/workflowLoad';
 import { useWorkflowSidebarControls } from '../composables/useWorkflowSidebarControls';
+import { useOr3Config } from '~/composables/useOr3Config';
 
 // Standard pane app props
 const props = defineProps<{
@@ -29,6 +30,12 @@ const props = defineProps<{
 
 // Get or create editor for this specific pane
 const editor = computed(() => getEditorForPane(props.paneId));
+const or3Config = useOr3Config();
+const canEdit = computed(
+    () =>
+        or3Config.features.workflows.enabled &&
+        or3Config.features.workflows.editor
+);
 
 // Initialize CRUD operations
 const { getWorkflow, updateWorkflow } = useWorkflowsCrud(props.postApi);
@@ -206,6 +213,7 @@ async function loadWorkflow() {
 // Save workflow to database
 async function saveWorkflow() {
     if (isDisposed) return;
+    if (!canEdit.value) return;
     if (!props.recordId || !hasLoaded.value) return;
     if (!forceSave) {
         const syncState = getWorkflowSyncState(props.recordId);
@@ -239,6 +247,7 @@ async function saveWorkflow() {
 
 // Subscribe to editor changes for auto-save
 function setupChangeListener() {
+    if (!canEdit.value) return;
     // The editor emits 'update' event when nodes/edges change
     unsubscribeEditor = editor.value.on('update', () => {
         if (hasLoaded.value) {
@@ -249,6 +258,7 @@ function setupChangeListener() {
 }
 
 function setupSelectionListener() {
+    if (!canEdit.value) return;
     unsubscribeSelection = editor.value.on('selectionUpdate', () => {
         if (!isActivePane.value) return;
         deselectAllOtherEditors(props.paneId);
@@ -347,6 +357,15 @@ function setInteractionMode(mode: 'drag' | 'select') {
     interactionMode.value = mode;
 }
 
+function setEditorEditable(editable: boolean) {
+    const target = editor.value as unknown as {
+        setEditable?: (value: boolean) => void;
+        setReadOnly?: (value: boolean) => void;
+    };
+    target.setEditable?.(editable);
+    target.setReadOnly?.(!editable);
+}
+
 // Lifecycle
 onMounted(() => {
     void loadWorkflow();
@@ -400,11 +419,20 @@ watch(
     },
     { immediate: true }
 );
+
+watch(
+    () => canEdit.value,
+    (editable) => {
+        setEditorEditable(editable);
+        showValidation.value = editable ? showValidation.value : false;
+    },
+    { immediate: true }
+);
 </script>
 
 <template>
     <div ref="paneRef" :class="{'border-t border-(--md-border-color) not-last:border-r': !isSinglePane}" class="workflow-app flex flex-col flex-1 min-h-0 h-full w-full">
-        <div :class="toolbarClass">
+        <div v-if="canEdit" :class="toolbarClass">
             <!-- Undo/Redo group -->
             <UButtonGroup class="shrink-0">
                 <UTooltip text="Undo (⌘Z)">
@@ -576,6 +604,7 @@ watch(
                 :canvas-id="paneId"
                 :pan-on-drag="panOnDrag"
                 :selection-key-code="selectionKeyCode"
+                :class="{ 'pointer-events-none': !canEdit }"
                 @node-click="handleNodeClick"
                 @node-inspect="handleNodeInspect"
                 @edge-click="() => {}"
@@ -583,7 +612,7 @@ watch(
             />
 
             <ValidationOverlay
-                v-if="showValidation && !loading && !error"
+                v-if="showValidation && canEdit && !loading && !error"
                 :editor="editor"
             />
 

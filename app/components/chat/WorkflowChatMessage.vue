@@ -55,10 +55,18 @@
                 <UTooltip
                     v-if="canRetry"
                     :delay-duration="500"
-                    text="Retry from failed node"
+                    :text="
+                        workflowExecutionEnabled
+                            ? 'Retry from failed node'
+                            : 'Workflow execution disabled'
+                    "
                     :teleport="true"
                 >
-                    <UButton v-bind="retryButtonProps" @click="retryFromHere" />
+                    <UButton
+                        v-bind="retryButtonProps"
+                        :disabled="!workflowExecutionEnabled"
+                        @click="retryFromHere"
+                    />
                 </UTooltip>
                 <!-- Add more actions like Retry/Stop here if needed in future -->
             </UButtonGroup>
@@ -78,6 +86,7 @@ import type { ThemePlugin } from '~/plugins/90.theme.client';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useToast } from '#imports';
+import { useOr3Config } from '~/composables/useOr3Config';
 
 const props = defineProps<{
     message: UiChatMessage;
@@ -85,6 +94,12 @@ const props = defineProps<{
 
 const toast = useToast();
 const nuxtApp = useNuxtApp();
+const or3Config = useOr3Config();
+const workflowExecutionEnabled = computed(
+    () =>
+        or3Config.features.workflows.enabled &&
+        or3Config.features.workflows.execution
+);
 
 // Theme
 const themePlugin = computed<ThemePlugin>(() => nuxtApp.$theme);
@@ -199,6 +214,14 @@ function copyResult() {
 
 async function retryFromHere() {
     if (!canRetry.value) return;
+    if (!workflowExecutionEnabled.value) {
+        toast.add({
+            title: 'Workflow execution disabled',
+            description: 'This deployment has workflow execution turned off.',
+            color: 'warning',
+        });
+        return;
+    }
     const svc = nuxtApp.$workflowSlash;
     if (!svc?.retry) return;
     const ok = await svc.retry(props.message.id);

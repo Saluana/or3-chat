@@ -620,6 +620,18 @@
             "path": "/cloud",
             "files": [
                 {
+                    "name": "or3-config.md",
+                    "path": "/cloud/or3-config",
+                    "category": "Configuration",
+                    "summary": "Local-first configuration for site branding, feature toggles, and client-side limits. Covers site.name/logo/theme settings, granular feature flags for workflows/documents/mentions/backup, upload limits, and UI defaults like pane count."
+                },
+                {
+                    "name": "or3-cloud-config.md",
+                    "path": "/cloud/or3-cloud-config",
+                    "category": "Configuration",
+                    "summary": "Server-side configuration for cloud features. Covers authentication (Clerk), sync (Convex), storage providers, LLM services (OpenRouter managed keys), rate limiting with pluggable backends, legal URLs, and security (CORS, HTTPS). Includes dependency chain and validation rules."
+                },
+                {
                     "name": "sync-layer.md",
                     "path": "/cloud/sync-layer",
                     "category": "Architecture",

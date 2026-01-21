@@ -23,14 +23,25 @@ interface IndexRecord {
 // ============================================================================
 let MAX_PER_GROUP = 5;
 let MAX_CONTEXT_BYTES = 50_000;
+let ENABLED_SOURCES: { documents: boolean; conversations: boolean } = {
+    documents: true,
+    conversations: true,
+};
 
 export function setMentionsConfig(config: {
     maxPerGroup?: number;
     maxContextBytes?: number;
+    enabledSources?: { documents?: boolean; conversations?: boolean };
 }) {
     if (config.maxPerGroup !== undefined) MAX_PER_GROUP = config.maxPerGroup;
     if (config.maxContextBytes !== undefined)
         MAX_CONTEXT_BYTES = config.maxContextBytes;
+    if (config.enabledSources) {
+        if (config.enabledSources.documents !== undefined)
+            ENABLED_SOURCES.documents = config.enabledSources.documents;
+        if (config.enabledSources.conversations !== undefined)
+            ENABLED_SOURCES.conversations = config.enabledSources.conversations;
+    }
 }
 
 // ============================================================================
@@ -157,12 +168,12 @@ export async function searchMentions(query: string): Promise<MentionItem[]> {
                 !!i.id && (i.source === 'document' || i.source === 'chat')
         );
 
-        const docs = items
-            .filter((i) => i.source === 'document')
-            .slice(0, MAX_PER_GROUP);
-        const chats = items
-            .filter((i) => i.source === 'chat')
-            .slice(0, MAX_PER_GROUP);
+        const docs = ENABLED_SOURCES.documents
+            ? items.filter((i) => i.source === 'document').slice(0, MAX_PER_GROUP)
+            : [];
+        const chats = ENABLED_SOURCES.conversations
+            ? items.filter((i) => i.source === 'chat').slice(0, MAX_PER_GROUP)
+            : [];
 
         return [...docs, ...chats];
     } catch (error) {

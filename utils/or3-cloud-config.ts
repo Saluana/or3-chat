@@ -38,15 +38,10 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         maxConversations: 0,
         maxMessagesPerDay: 0,
     },
-    legal: {
-        termsUrl: undefined,
-        privacyUrl: undefined,
-    },
     security: {
         allowedOrigins: [],
         forceHttps: process.env.NODE_ENV === 'production',
     },
-    extensions: {},
 };
 
 const cloudConfigSchema = z
@@ -98,19 +93,12 @@ const cloudConfigSchema = z
                 storageProvider: z.enum(['memory', 'convex', 'redis', 'postgres']).optional(),
             })
             .optional(),
-        legal: z
-            .object({
-                termsUrl: z.union([z.string().url(), z.literal('')]).optional(),
-                privacyUrl: z.union([z.string().url(), z.literal('')]).optional(),
-            })
-            .optional(),
         security: z
             .object({
                 allowedOrigins: z.array(z.string()).optional(),
                 forceHttps: z.boolean().optional(),
             })
             .optional(),
-        extensions: z.record(z.string(), z.unknown()).optional(),
     })
     .passthrough();
 
@@ -159,17 +147,9 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
             ...DEFAULT_OR3_CLOUD_CONFIG.limits,
             ...config.limits,
         },
-        legal: {
-            ...DEFAULT_OR3_CLOUD_CONFIG.legal,
-            ...config.legal,
-        },
         security: {
             ...DEFAULT_OR3_CLOUD_CONFIG.security,
             ...config.security,
-        },
-        extensions: {
-            ...DEFAULT_OR3_CLOUD_CONFIG.extensions,
-            ...config.extensions,
         },
     };
 }

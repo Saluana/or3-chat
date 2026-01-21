@@ -1,18 +1,8 @@
 /** Default maximum number of files (hashes) per message */
-const DEFAULT_MAX_MESSAGE_FILE_HASHES = 6;
-
-/** Allow runtime override via public env (bounded 1..12 to avoid abuse) */
-const envLimitRaw: string | undefined = (
-    import.meta as ImportMeta & { env: Record<string, string | undefined> }
-).env.NUXT_PUBLIC_MAX_MESSAGE_FILES;
-let resolvedLimit = DEFAULT_MAX_MESSAGE_FILE_HASHES;
-if (envLimitRaw) {
-    const n = parseInt(envLimitRaw, 10);
-    if (!isNaN(n) && n >= 1 && n <= 12) resolvedLimit = n;
-}
+import { or3Config } from '~~/config.or3';
 
 /** Primary export used across app (UI + DB) */
-export const MAX_FILES_PER_MESSAGE: number = resolvedLimit;
+export const MAX_FILES_PER_MESSAGE: number = or3Config.limits.maxFilesPerMessage;
 
 /** Backward compatibility alias (internal usage) */
 export const MAX_MESSAGE_FILE_HASHES: number = MAX_FILES_PER_MESSAGE;

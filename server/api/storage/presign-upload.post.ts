@@ -10,6 +10,7 @@ import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../utils/storage/is-storage-enabled';
 import { api } from '~~/convex/_generated/api';
 import type { Id } from '~~/convex/_generated/dataModel';
+import { or3Config } from '~~/config.or3';
 import {
     getClerkProviderToken,
     getConvexGatewayClient,
@@ -60,8 +61,8 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    // Size limit check (e.g., 100MB)
-    const MAX_FILE_SIZE = 100 * 1024 * 1024;
+    // Size limit check (from config)
+    const MAX_FILE_SIZE = or3Config.limits.maxCloudFileSizeBytes;
     if (body.data.size_bytes > MAX_FILE_SIZE) {
         throw createError({
             statusCode: 413,

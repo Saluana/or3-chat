@@ -1,6 +1,7 @@
 // app/plugins/workflows.client.ts
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { useHooks } from '#imports';
+import { useOr3Config } from '~/composables/useOr3Config';
 import { registerSidebarPage } from '~/composables/sidebar/registerSidebarPage';
 import { usePaneApps } from '~/composables/core/usePaneApps';
 import WorkflowPane from './workflows/components/WorkflowPane.vue';
@@ -19,6 +20,13 @@ import 'or3-workflow-vue/style.css';
 import './workflows/styles/workflow-theme-bridge.css';
 
 export default defineNuxtPlugin(() => {
+    // Check OR3 config feature flag (master toggle)
+    const or3Config = useOr3Config();
+    if (!or3Config.features.workflows.enabled) {
+        console.log('[workflows] Plugin disabled via OR3 config');
+        return;
+    }
+
     const hooks = useHooks();
 
     // Register Workflow mini app

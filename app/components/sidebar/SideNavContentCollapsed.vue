@@ -42,6 +42,7 @@
                 </UButton>
             </UTooltip>
             <UTooltip
+                v-if="documentsEnabled"
                 id="tooltip-doc"
                 :delay-duration="0"
                 :content="{
@@ -208,6 +209,7 @@ import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import SideBottomNav from './SideBottomNav.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { useOr3Config } from '~/composables/useOr3Config';
 
 const iconNewChat = useIcon('sidebar.new_chat');
 const iconSearch = useIcon('sidebar.search');
@@ -215,6 +217,8 @@ const iconNewNote = useIcon('sidebar.new_note');
 const iconNewFolder = useIcon('sidebar.new_folder');
 const iconPageHome = useIcon('sidebar.page.home');
 const iconPageDefault = useIcon('sidebar.page.default');
+const or3Config = useOr3Config();
+const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 
 const props = defineProps<{
     activeThread?: string;

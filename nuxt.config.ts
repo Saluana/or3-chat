@@ -2,6 +2,7 @@
 import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
 import { resolve } from 'path';
 import { or3CloudConfig } from './config.or3cloud';
+import { or3Config } from './config.or3';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
@@ -13,8 +14,8 @@ const convexEnabled =
     (or3CloudConfig.storage.enabled &&
         or3CloudConfig.storage.provider === 'convex');
 
-// Branding defaults (will be moved to separate or3config in future)
-const appName = process.env.OR3_APP_NAME || 'OR3';
+// Branding defaults (sourced from or3Config)
+const appName = or3Config.site.name;
 const appShortName = appName.length > 12 ? appName.slice(0, 12) : appName;
 
 // Shared config objects (DRY: used in both server and public runtimeConfig)
@@ -26,13 +27,13 @@ const limitsConfig = {
     storageProvider: or3CloudConfig.limits!.storageProvider || 'memory',
 };
 const brandingConfig = {
-    appName: process.env.OR3_APP_NAME || 'OR3',
-    logoUrl: process.env.OR3_LOGO_URL || '',
-    defaultTheme: process.env.OR3_DEFAULT_THEME || 'system',
+    appName: or3Config.site.name,
+    logoUrl: or3Config.site.logoUrl,
+    defaultTheme: or3Config.site.defaultTheme,
 };
 const legalConfig = {
-    termsUrl: or3CloudConfig.legal!.termsUrl || '',
-    privacyUrl: or3CloudConfig.legal!.privacyUrl || '',
+    termsUrl: or3Config.legal.termsUrl,
+    privacyUrl: or3Config.legal.privacyUrl,
 };
 
 export default defineNuxtConfig({
@@ -49,12 +50,12 @@ export default defineNuxtConfig({
                 {
                     rel: 'icon',
                     type: 'image/svg+xml',
-                    href: '/logos/icon-logo-svg.svg',
+                    href: or3Config.site.faviconUrl || '/logos/icon-logo-svg.svg',
                 },
                 {
                     rel: 'icon',
                     type: 'image/x-icon',
-                    href: '/favicon.ico',
+                    href: or3Config.site.faviconUrl || '/favicon.ico',
                     sizes: '32x32',
                 },
                 {

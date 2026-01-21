@@ -29,7 +29,36 @@ import type {
  * All hooks receive relevant metadata; filters can transform or veto (return false to reject).
  */
 
-const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB cap
+// Default max file size (20MB) - can be overridden by config
+const DEFAULT_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+
+// Cached config value to avoid repeated dynamic imports
+let cachedMaxFileSize: number | null = null;
+
+// Get max file size from OR3 config
+function getMaxFileSizeBytes(): number {
+    // Return cached value if available
+    if (cachedMaxFileSize !== null) {
+        return cachedMaxFileSize;
+    }
+    // Default fallback - actual config is loaded via initMaxFileSize
+    return DEFAULT_MAX_FILE_SIZE_BYTES;
+}
+
+// Initialize max file size from config (called once at module load on client)
+async function initMaxFileSize(): Promise<void> {
+    try {
+        const { or3Config } = await import('~~/config.or3');
+        cachedMaxFileSize = or3Config.limits.maxFileSizeBytes;
+    } catch {
+        cachedMaxFileSize = DEFAULT_MAX_FILE_SIZE_BYTES;
+    }
+}
+
+// Eagerly initialize on client side
+if (import.meta.client) {
+    void initMaxFileSize();
+}
 
 const FILE_TABLE = 'files';
 
@@ -111,7 +140,7 @@ export async function createOrRefFile(
             ? `filestore-${Date.now()}-${Math.random().toString(36).slice(2)}`
             : undefined;
     if (markId && hasPerf) performance.mark(`${markId}:start`);
-    if (file.size > MAX_FILE_SIZE_BYTES) throw new Error('file too large');
+    if (file.size > getMaxFileSizeBytes()) throw new Error('file too large');
     const hooks = useHooks();
     const hash = await computeFileHash(file);
     const existing = await getDb().file_meta.get(hash);

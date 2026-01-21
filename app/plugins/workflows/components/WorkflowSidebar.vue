@@ -20,6 +20,7 @@ import { useWorkflowSidebarControls } from '../composables/useWorkflowSidebarCon
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import WorkflowsTab from './sidebar/WorkflowsTab.vue';
 import { closeSidebarIfMobile } from '~/utils/sidebarLayoutApi';
+import { useOr3Config } from '~/composables/useOr3Config';
 
 /** Extended meta type that includes optional description field */
 interface WorkflowMetaWithDescription {
@@ -33,6 +34,12 @@ const toolRegistry = useToolRegistry();
 const panePluginApi = useSidebarPostsApi();
 const postApi = panePluginApi?.posts ?? null;
 const { listWorkflows } = useWorkflowsCrud(postApi);
+const or3Config = useOr3Config();
+const canEdit = computed(
+    () =>
+        or3Config.features.workflows.enabled &&
+        or3Config.features.workflows.editor
+);
 
 function onPanelChange(value: TabsItem['value']) {
     if (value === 'workflows' || value === 'palette' || value === 'inspector') {
@@ -132,11 +139,14 @@ watch(
     }
 );
 
-const items: TabsItem[] = [
-    { label: 'Workflows', value: 'workflows' },
-    { label: 'Node Palette', value: 'palette' },
-    { label: 'Node Inspector', value: 'inspector' },
-];
+const items = computed<TabsItem[]>(() => {
+    if (!canEdit.value) return [];
+    return [
+        { label: 'Workflows', value: 'workflows' },
+        { label: 'Node Palette', value: 'palette' },
+        { label: 'Node Inspector', value: 'inspector' },
+    ];
+});
 
 function handlePaletteQuickAdd() {
     closeSidebarIfMobile();
@@ -149,7 +159,7 @@ function handlePaletteQuickAdd() {
     >
         <div class="flex flex-col h-full gap-4 overflow-y-auto">
             <!-- Tabs -->
-            <div class="flex">
+            <div v-if="canEdit" class="flex">
                 <UTabs
                     size="sm"
                     v-model="activePanel"
@@ -166,14 +176,14 @@ function handlePaletteQuickAdd() {
 
             <!-- Workflows Panel -->
             <WorkflowsTab
-            class="ml-0.5 mr-2"
-                v-if="activePanel === 'workflows'"
+                class="ml-0.5 mr-2"
+                v-if="!canEdit || activePanel === 'workflows'"
                 @workflow-selected="emit('close-sidebar')"
             />
 
             <!-- Node Palette Panel -->
             <div
-                v-else-if="activePanel === 'palette'"
+                v-else-if="canEdit && activePanel === 'palette'"
                 class="flex-1 overflow-y-auto px-0.5"
             >
                 <NodePalette
@@ -184,7 +194,7 @@ function handlePaletteQuickAdd() {
 
             <!-- Node Inspector Panel -->
             <div
-                v-else-if="activePanel === 'inspector'"
+                v-else-if="canEdit && activePanel === 'inspector'"
                 class="flex-1 overflow-y-auto"
             >
                 <NodeInspector

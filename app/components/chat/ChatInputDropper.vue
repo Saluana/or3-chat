@@ -328,7 +328,7 @@ import {
     watch,
     getCurrentInstance,
 } from 'vue';
-import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
+import { useOr3Config } from '~/composables/useOr3Config';
 import { reportError, err } from '~/utils/errors';
 import { validateFile, persistAttachment } from './file-upload-utils';
 import type { FileMeta } from '~/db/schema';
@@ -881,7 +881,8 @@ const triggerFileInput = () => {
     open();
 };
 
-const MAX_IMAGES = MAX_FILES_PER_MESSAGE;
+const or3Config = useOr3Config();
+const MAX_IMAGES = or3Config.limits.maxFilesPerMessage;
 
 function makePreviewUrl(file: File): string {
     try {
@@ -911,7 +912,14 @@ async function processAttachment(file: File, name?: string) {
         return;
     }
     const kind = validation.kind;
-    if (attachments.value.length >= MAX_IMAGES) return;
+    if (attachments.value.length >= MAX_IMAGES) {
+        useToast().add({
+            title: 'Attachment limit reached',
+            description: `Maximum ${MAX_IMAGES} files per message.`,
+            color: 'warning',
+        });
+        return;
+    }
     const previewUrl = makePreviewUrl(file);
     const attachment: UploadedImage = {
         file,
@@ -929,7 +937,14 @@ async function processAttachment(file: File, name?: string) {
 const processFiles = async (files: FileList | null) => {
     if (!files) return;
     for (let i = 0; i < files.length; i++) {
-        if (attachments.value.length >= MAX_IMAGES) break;
+        if (attachments.value.length >= MAX_IMAGES) {
+            useToast().add({
+                title: 'Attachment limit reached',
+                description: `Maximum ${MAX_IMAGES} files per message.`,
+                color: 'warning',
+            });
+            break;
+        }
         const file = files[i];
         if (!file) continue;
         await processAttachment(file);

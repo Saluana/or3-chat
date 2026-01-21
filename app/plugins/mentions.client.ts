@@ -4,6 +4,7 @@
 
 import { defineNuxtPlugin } from '#app';
 import { useAppConfig, useHooks } from '#imports';
+import { useOr3Config, isMentionSourceEnabled } from '~/composables/useOr3Config';
 import type {
     OpenRouterMessage,
     DbCreatePayload,
@@ -74,16 +75,27 @@ function safeId(payload: {
 }
 
 export default defineNuxtPlugin(() => {
+    // Check OR3 config feature flag (master toggle)
+    const or3Config = useOr3Config();
+    if (!or3Config.features.mentions.enabled) {
+        console.log('[mentions] Plugin disabled via OR3 config');
+        return;
+    }
+
+    // Determine which mention sources are enabled
+    const documentsEnabled = isMentionSourceEnabled('documents');
+    const conversationsEnabled = isMentionSourceEnabled('conversations');
+
+    // If both sources are disabled, no point in initializing
+    if (!documentsEnabled && !conversationsEnabled) {
+        console.log('[mentions] All mention sources disabled, skipping initialization');
+        return;
+    }
+
     const appConfig = useAppConfig();
     const mentionsConfig: MentionsConfig =
         ((appConfig as Record<string, unknown>)?.mentions as MentionsConfig) ||
         {};
-
-    // Check feature flag (requirement 8.2)
-    if (mentionsConfig.enabled === false) {
-        console.log('[mentions] Plugin disabled via feature flag');
-        return;
-    }
 
     const hooks = useHooks();
     let indexInitialized = false;
@@ -123,6 +135,10 @@ export default defineNuxtPlugin(() => {
             setMentionsConfig({
                 maxPerGroup: mentionsConfig?.maxPerGroup || 5,
                 maxContextBytes: mentionsConfig?.maxContextBytes || 50_000,
+                enabledSources: {
+                    documents: documentsEnabled,
+                    conversations: conversationsEnabled,
+                },
             });
 
             mentionsModule = {

@@ -8,7 +8,7 @@
                 @new-chat="onNewChat"
                 @new-document="onNewDocument"
                 @document-selected="onDocumentSelected"
-                @toggle-dashboard="showDashboardModal = !showDashboardModal"
+                @toggle-dashboard="toggleDashboard"
             />
         </template>
         <template #sidebar-collapsed>
@@ -19,7 +19,7 @@
                 @new-document="openCollapsedCreateDocumentModal"
                 @new-project="openCollapsedCreateProjectModal"
                 @focus-search="focusSidebarSearch"
-                @toggle-dashboard="showDashboardModal = !showDashboardModal"
+                @toggle-dashboard="toggleDashboard"
                 @expand-sidebar="expandSidebar"
             />
         </template>
@@ -209,7 +209,10 @@
                 </div>
             </div>
         </div>
-        <lazy-dashboard v-model:showModal="showDashboardModal" />
+        <lazy-dashboard
+            v-if="dashboardEnabled"
+            v-model:showModal="showDashboardModal"
+        />
     </resizable-sidebar-layout>
 </template>
 <script setup lang="ts">
@@ -249,6 +252,7 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { useIcon } from '~/composables/useIcon';
+import { useOr3Config } from '~/composables/useOr3Config';
 import {
     setGlobalSidebarLayoutApi,
     type SidebarLayoutApi,
@@ -284,6 +288,9 @@ const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
 const sideNavExpandedRef = ref<any | null>(null);
 const showDashboardModal = ref(false);
 const hasSyncedInitial = ref(false);
+const or3Config = useOr3Config();
+const documentsEnabled = computed(() => or3Config.features.documents.enabled);
+const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
 
 // ---------------- Multi-pane ----------------
 const {
@@ -566,6 +573,12 @@ function resolvePaneComponent(pane: PaneState): Component {
 
     // Built-in: doc (lazy loaded)
     if (pane.mode === 'doc') {
+        if (!documentsEnabled.value) {
+            if (import.meta.dev) {
+                console.debug('[PageShell] doc mode disabled, using PaneUnknown');
+            }
+            return PaneUnknown;
+        }
         if (import.meta.dev) {
             console.debug('[PageShell] resolve component: doc');
         }
@@ -723,6 +736,11 @@ async function initInitial() {
         return;
     }
     if (props.initialDocumentId) {
+        if (!documentsEnabled.value) {
+            await navigateTo('/chat', { replace: true });
+            hasSyncedInitial.value = true;
+            return;
+        }
         if (props.validateInitial) {
             pane.validating = true;
             const token = ++validateToken;
@@ -750,7 +768,7 @@ async function initInitial() {
         return;
     }
     // No ids: set default mode
-    if (props.defaultMode === 'doc') {
+    if (props.defaultMode === 'doc' && documentsEnabled.value) {
         pane.mode = 'doc';
         pane.documentId = undefined;
         pane.threadId = '';
@@ -826,11 +844,20 @@ const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
 });
 
 async function onNewDocument(initial?: { title?: string }) {
+    if (!documentsEnabled.value) {
+        toast.add({
+            title: 'Documents disabled',
+            description: 'This deployment has documents turned off.',
+            color: 'warning',
+        });
+        return;
+    }
     const doc = await newDocumentInActive(initial);
     if (doc) updateUrl();
     closeSidebarIfMobile();
 }
 async function onDocumentSelected(id: string) {
+    if (!documentsEnabled.value) return;
     await selectDocumentInActive(id);
     updateUrl();
     closeSidebarIfMobile();
@@ -944,6 +971,11 @@ async function handleHeaderAction(entry: HeaderActionEntry) {
     }
 }
 const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
+
+function toggleDashboard() {
+    if (!dashboardEnabled.value) return;
+    showDashboardModal.value = !showDashboardModal.value;
+}
 function openMobileSidebar() {
     (layoutRef.value as any)?.openSidebar?.();
 }

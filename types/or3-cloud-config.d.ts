@@ -138,22 +138,6 @@ export interface Or3CloudConfig {
     };
 
     /**
-     * Legal URLs for compliance.
-     * Required for public deployments.
-     */
-    legal?: {
-        /**
-         * URL to Terms of Service page.
-         */
-        termsUrl?: string;
-
-        /**
-         * URL to Privacy Policy page.
-         */
-        privacyUrl?: string;
-    };
-
-    /**
      * Security hardening options.
      */
     security?: {
@@ -168,13 +152,6 @@ export interface Or3CloudConfig {
          */
         forceHttps?: boolean;
     };
-
-    /**
-     * Plugin/extension configuration namespace.
-     * Allows third-party plugins to register their own config.
-     * @example { myPlugin: { settingA: true } }
-     */
-    extensions?: Record<string, unknown>;
 }
 
 export interface Or3CloudConfigOptions {

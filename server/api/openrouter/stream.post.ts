@@ -15,9 +15,8 @@ import { getRequestIP, setResponseHeader } from 'h3';
 import { resolveSessionContext } from '../../auth/session';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import {
-    checkLlmRateLimit,
+    checkAndRecordLlmRequest,
     getLlmRateLimitStats,
-    recordLlmRequest,
 } from '../../utils/llm/rate-limiter';
 import { getRateLimitProvider } from '../../utils/rate-limit/store';
 
@@ -74,19 +73,20 @@ export default defineEventHandler(async (event) => {
               }
             : null;
 
+    // Atomic check-and-record for per-minute rate limit (prevents TOCTOU race)
+    let minuteResult: { allowed: boolean; remaining: number; retryAfterMs?: number } | null = null;
     if (minuteConfig) {
-        const rateResult = checkLlmRateLimit(rateKey, minuteConfig);
-        if (!rateResult.allowed) {
+        minuteResult = checkAndRecordLlmRequest(rateKey, minuteConfig);
+        if (!minuteResult.allowed) {
             const retryAfterSec = Math.ceil(
-                (rateResult.retryAfterMs ?? 1000) / 1000
+                (minuteResult.retryAfterMs ?? 1000) / 1000
             );
             setResponseHeader(event, 'Retry-After', retryAfterSec);
-            const stats = getLlmRateLimitStats(rateKey, minuteConfig);
-            setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
+            setResponseHeader(event, 'X-RateLimit-Limit', String(minuteConfig.maxRequests));
             setResponseHeader(
                 event,
                 'X-RateLimit-Remaining',
-                String(stats.remaining)
+                String(minuteResult.remaining)
             );
             setResponseStatus(event, 429);
             return `Rate limit exceeded. Retry after ${retryAfterSec}s`;
@@ -189,15 +189,15 @@ export default defineEventHandler(async (event) => {
     setHeader(event, 'Cache-Control', 'no-cache, no-transform');
     setHeader(event, 'Connection', 'keep-alive');
 
-    if (minuteConfig) {
-        const stats = getLlmRateLimitStats(rateKey, minuteConfig);
-        setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
+    // Per-minute rate limit already recorded atomically in checkAndRecordLlmRequest
+    // Add rate limit headers for successful requests
+    if (minuteConfig && minuteResult) {
+        setResponseHeader(event, 'X-RateLimit-Limit', String(minuteConfig.maxRequests));
         setResponseHeader(
             event,
             'X-RateLimit-Remaining',
-            String(stats.remaining)
+            String(minuteResult.remaining)
         );
-        recordLlmRequest(rateKey, minuteConfig);
     }
 
     // Daily limit already recorded atomically in checkAndRecord

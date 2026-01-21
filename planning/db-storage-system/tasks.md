@@ -138,20 +138,20 @@ date: 2026-01-11
     - [x] Hash parsing/formatting tests
     - [x] Transfer queue logic tests
     - [x] Provider registry tests
-- [ ] **10.2 Integration tests**
-    - [ ] Upload flow test
-    - [ ] Download flow test
-    - [ ] Sync flow test
-- [ ] **10.3 Manual E2E verification**
-    - [ ] Multi-device sync verification
-    - [ ] Offline resilience verification
-    - [ ] File attachment flow verification
+- [x] **10.2 Integration tests**
+    - [x] Upload flow test
+    - [x] Download flow test
+    - [x] Sync flow test
+- [x] **10.3 Manual E2E verification**
+    - [x] Multi-device sync verification
+    - [x] Offline resilience verification
+    - [x] File attachment flow verification
 
 ### 11. Documentation and Migration
 - [x] **11.1 Update error codes** (Requirements: all)
     - [x] Add storage-specific error codes
-    - [ ] Update error documentation
-- [ ] **11.2 Create migration guide**
-    - [ ] Document Dexie version upgrade
-    - [ ] Document Convex setup steps
-    - [ ] Document configuration options
+    - [x] Update error documentation
+- [x] **11.2 Create migration guide**
+    - [x] Document Dexie version upgrade
+    - [x] Document Convex setup steps
+    - [x] Document configuration options

@@ -76,13 +76,6 @@ export const or3CloudConfig = defineOr3CloudConfig({
             | 'postgres',
     },
     /**
-     * Legal URLs for footer links.
-     */
-    legal: {
-        termsUrl: process.env.OR3_TERMS_URL,
-        privacyUrl: process.env.OR3_PRIVACY_URL,
-    },
-    /**
      * Security options (CORS + HTTPS redirects).
      */
     security: {
@@ -96,5 +89,4 @@ export const or3CloudConfig = defineOr3CloudConfig({
                 ? process.env.OR3_FORCE_HTTPS === 'true'
                 : process.env.NODE_ENV === 'production',
     },
-    extensions: {},
 });

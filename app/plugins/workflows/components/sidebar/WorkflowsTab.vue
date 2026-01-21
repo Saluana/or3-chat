@@ -9,6 +9,7 @@ import {
 } from '../../composables/useWorkflows';
 import { useWorkflowStorage } from '../../composables/useWorkflowStorage';
 import { closeSidebarIfMobile } from '~/utils/sidebarLayoutApi';
+import { useOr3Config } from '~/composables/useOr3Config';
 
 const multiPane = useSidebarMultiPane();
 const panePluginApi = useSidebarPostsApi();
@@ -24,6 +25,12 @@ const workflows = ref<WorkflowPost[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const isCreating = ref(false);
+const or3Config = useOr3Config();
+const canEdit = computed(
+    () =>
+        or3Config.features.workflows.enabled &&
+        or3Config.features.workflows.editor
+);
 
 // Modal state
 const showDeleteModal = ref(false);
@@ -215,7 +222,7 @@ onMounted(() => {
         <!-- Header with create -->
         <div class="flex justify-between items-center">
             <h1 class="font-medium text-lg">Workflows</h1>
-            <div class="flex items-center gap-1">
+            <div v-if="canEdit" class="flex items-center gap-1">
                 <UButton
                     size="sm"
                     variant="ghost"
@@ -286,6 +293,7 @@ onMounted(() => {
                     }}</span>
                 </div>
                 <div
+                    v-if="canEdit"
                     class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                     <UButton
@@ -311,6 +319,7 @@ onMounted(() => {
 
         <!-- Create Modal -->
         <UModal
+            v-if="canEdit"
             v-model:open="showCreateModal"
             title="New Workflow"
             description="Give your workflow a name before creating it."
@@ -335,6 +344,7 @@ onMounted(() => {
 
         <!-- Delete Confirmation Modal -->
         <UModal
+            v-if="canEdit"
             v-model:open="showDeleteModal"
             title="Delete Workflow"
             description="This action cannot be undone."
@@ -365,6 +375,7 @@ onMounted(() => {
 
         <!-- Rename Modal -->
         <UModal
+            v-if="canEdit"
             v-model:open="showRenameModal"
             title="Rename Workflow"
             description="Choose a new name for this workflow."
