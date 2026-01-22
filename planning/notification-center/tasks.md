@@ -156,6 +156,8 @@ Requirements: 2.1
 - [ ] 13.1 Add notification emission for system warnings (sync errors, storage failures)
 - [ ] 13.2 Create helper function for system notification emission
 
+**Note**: Event source integrations are optional enhancements that can be added incrementally after core functionality is tested.
+
 ---
 
 ## Phase 6: Testing
@@ -178,13 +180,23 @@ Requirements: 7.1
 
 ### 16. Manual Testing Checklist
 
-- [ ] 16.1 Create notification via console: `await hooks.doAction('notify:action:push', { type: 'test', title: 'Test' })`
+- [x] 16.1 Manual test script created in `tests/manual/notification-tests.ts`
 - [ ] 16.2 Verify bell badge appears with correct count
 - [ ] 16.3 Open panel, verify notification displays
 - [ ] 16.4 Click notification, verify it marks as read
 - [ ] 16.5 Verify "Mark all as read" works
 - [ ] 16.6 Verify "Clear all" works
 - [ ] 16.7 Test with sync enabled (two browser tabs)
+
+**Manual Test Instructions**:
+1. Run `bun run dev` to start the dev server
+2. Open browser console
+3. Run commands from `tests/manual/notification-tests.ts`:
+   - `notificationTests.testCreateNotification()` - Create a test notification
+   - `notificationTests.testMultipleNotifications()` - Create 5 notifications
+   - `notificationTests.testUnreadCount()` - Check unread count
+   - `notificationTests.testMarkAllRead()` - Mark all as read
+   - `notificationTests.testClearAll()` - Clear all notifications
 
 ---
 
