@@ -19,7 +19,15 @@ import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
 import { getPkField } from '~~/shared/sync/table-metadata';
 
 /** Tables that should be captured for sync */
-const SYNCED_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'] as const;
+const SYNCED_TABLES = [
+    'threads',
+    'messages',
+    'projects',
+    'posts',
+    'kv',
+    'file_meta',
+    'notifications',
+] as const;
 
 /**
  * KV keys that should NOT be synced.

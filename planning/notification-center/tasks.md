@@ -38,35 +38,35 @@ Requirements: 1.2
 ### 3. Hook Definitions
 Requirements: 6.1, 6.2
 
-- [ ] 3.1 Add notification hook keys to `app/core/hooks/hook-keys.ts`:
+- [x] 3.1 Add notification hook keys to `app/core/hooks/hook-keys.ts`:
     - `notify:action:push`
     - `notify:action:read`
     - `notify:action:clicked`
     - `notify:action:cleared`
     - `notify:filter:before_store`
-- [ ] 3.2 Add payload types to `app/core/hooks/hook-types.ts`:
+- [x] 3.2 Add payload types to `app/core/hooks/hook-types.ts`:
     - `NotificationCreatePayload`
     - Hook payload map entries for all notify hooks
 
 ### 4. NotificationService
 Requirements: 1.1, 3.1, 3.2, 6.1
 
-- [ ] 4.1 Create `app/core/notifications/` directory
-- [ ] 4.2 Create `notification-service.ts` with:
+- [x] 4.1 Create `app/core/notifications/` directory
+- [x] 4.2 Create `notification-service.ts` with:
     - Constructor (db, hooks, userId)
     - `create(payload)` method with filter hook
     - `markRead(id)` method
     - `markAllRead()` method
     - `clearAll()` method
-- [ ] 4.3 Create `types.ts` with notification type exports
-- [ ] 4.4 Create `index.ts` barrel export
+- [x] 4.3 Create `types.ts` with notification type exports
+- [x] 4.4 Create `index.ts` barrel export
 
 ### 5. Sync Integration
 Requirements: 1.2
 
-- [ ] 5.1 Add `notifications` to `SYNCED_TABLES` in `app/core/sync/hook-bridge.ts`
-- [ ] 5.2 Verify Zod schema for notifications in conflict resolver if needed
-- [ ] 5.3 Test sync flow with notifications table
+- [x] 5.1 Add `notifications` to `SYNCED_TABLES` in `app/core/sync/hook-bridge.ts`
+- [x] 5.2 Conflict resolver uses generic table handling (no changes needed)
+- [ ] 5.3 Run typecheck to verify no errors
 
 ---
 

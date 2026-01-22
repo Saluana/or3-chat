@@ -466,6 +466,52 @@ export interface SyncPendingOpPayload {
 }
 
 // ============================================================================
+// NOTIFICATION TYPES
+// ============================================================================
+
+/** Notification action button/link configuration */
+export interface NotificationAction {
+    id: string;
+    label: string;
+    kind: 'navigate' | 'callback';
+    target?: {
+        threadId?: string;
+        documentId?: string;
+        route?: string;
+    };
+    data?: Record<string, unknown>;
+}
+
+/** Payload for creating a notification via hooks */
+export interface NotificationCreatePayload {
+    type: string;
+    title: string;
+    body?: string;
+    threadId?: string;
+    documentId?: string;
+    actions?: NotificationAction[];
+}
+
+/** Full notification entity from database */
+export interface NotificationEntity {
+    id: string;
+    workspace_id?: string;
+    user_id: string;
+    thread_id?: string;
+    document_id?: string;
+    type: string;
+    title: string;
+    body?: string;
+    actions?: NotificationAction[];
+    read_at?: number;
+    deleted: boolean;
+    deleted_at?: number;
+    created_at: number;
+    updated_at: number;
+    clock: number;
+}
+
+// ============================================================================
 // STORAGE TYPES
 // ============================================================================
 
@@ -821,6 +867,13 @@ export type CoreHookPayloadMap = {
     'sync.stats:action': [
         { pendingCount: number; cursor: number; lastSyncAt: number }
     ];
+
+    // Notification hooks
+    'notify:action:push': [NotificationCreatePayload];
+    'notify:action:read': [{ id: string; readAt: number }];
+    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];
+    'notify:action:cleared': [{ count: number }];
+    'notify:filter:before_store': [NotificationCreatePayload, { source: string }];
 };
 
 // Derived payloads for DB action hooks
