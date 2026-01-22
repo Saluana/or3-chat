@@ -8,7 +8,7 @@ This document catalogs code quality issues, performance problems, type safety vi
 
 ## Executive Summary
 
-- **26 Blocker/High** issues found across sync, auth, and storage layers
+- **32 Blocker/High** issues found across sync, auth, and storage layers
 - **Performance**: Multiple N+1 queries, unbounded loops, memory leaks in singletons
 - **Type Safety**: `any` types, unsafe casts, missing Zod validation
 - **Duplication**: Repeated logic in normalizers, sanitizers, and hook patterns
@@ -1100,6 +1100,12 @@ export const runScheduledGc = internalMutation({
 - [ ] Cleanup singleton maps on workspace switch (issue #23)
 - [ ] Batch DB writes in Convex push (issue #24)
 - [ ] Add tests for all fixes
+- [ ] Fix file_meta sync schema mismatch (issue #27)
+- [ ] Recover syncing ops after crash (issue #28)
+- [ ] Scope circuit breaker per workspace/provider (issue #29)
+- [ ] Add GC for file_transfers table (issue #30)
+- [ ] Avoid in-memory sort of queued transfers (issue #31)
+- [ ] Add cleanup for workspace DB cache (issue #32)
 
 ---
 
@@ -1113,8 +1119,212 @@ You shipped a working sync system, but it has the hallmarks of a v0.1:
 - **Memory leaks** (singletons, rate limiter)
 - **Type unsafety** (Convex `any` casts)
 - **Over-engineering** (staging dataset)
+- **Schema mismatches** (file_meta size fields)
+- **Stuck queues** (syncing ops with no recovery)
+- **Global throttles** (circuit breaker shared across workspaces)
 
 Fix these and you'll have a solid v1. Don't, and you'll hit scaling issues at 1000 concurrent users.
+
+---
+
+### 27. File Meta Sync Schema Mismatch (`size` vs `size_bytes`)
+
+**Severity**: High
+
+**Evidence**: `shared/sync/schemas.ts:96-105`
+
+```typescript
+export const FileMetaPayloadSchema = z
+    .object({
+        hash: z.string(),
+        kind: z.string().optional(),
+        mime_type: z.string().optional(),
+        size: z.number().optional(),
+        deleted: z.boolean(),
+        created_at: z.number(),
+        updated_at: z.number(),
+        clock: z.number(),
+    })
+    .passthrough();
+```
+
+**Why**: The local schema uses `size_bytes` (`app/db/schema.ts`) but the sync schema expects `size`. That means validated payloads can drop the real field or accept the wrong one. This is a silent data corruption risk when syncing file metadata.
+
+**Fix**: Align the sync schema with the actual wire schema.
+
+```typescript
+export const FileMetaPayloadSchema = z
+    .object({
+        hash: z.string(),
+        kind: z.string().optional(),
+        mime_type: z.string().optional(),
+        size_bytes: z.number().optional(),
+        deleted: z.boolean(),
+        created_at: z.number(),
+        updated_at: z.number(),
+        clock: z.number(),
+    })
+    .passthrough();
+```
+
+**Tests**: Add a payload validation test that asserts `size_bytes` passes and `size` is rejected.
+
+---
+
+### 28. Outbox Ops Can Get Stuck in `syncing` Forever
+
+**Severity**: High
+
+**Evidence**: `app/core/sync/outbox-manager.ts:158-170`
+
+```typescript
+// Mark as syncing
+await this.db.pending_ops.bulkPut(
+    batch.map((op) => ({ ...op, status: 'syncing' as const }))
+);
+```
+
+**Why**: If the app crashes or refreshes after marking ops as `syncing`, they never get retried. The flush query only looks for `status === 'pending'`, so those ops are effectively lost forever.
+
+**Fix**: On startup (or before each flush), reset stale `syncing` ops back to `pending`. Track a `syncing_at` timestamp and requeue anything older than a timeout.
+
+```typescript
+await this.db.pending_ops
+    .where('status')
+    .equals('syncing')
+    .modify({ status: 'pending', nextAttemptAt: Date.now() });
+```
+
+**Tests**: Simulate crash by marking ops as `syncing`, restart manager, assert ops are retried.
+
+---
+
+### 29. Circuit Breaker Is Global, So One Workspace Blocks All
+
+**Severity**: Medium
+
+**Evidence**: `shared/sync/circuit-breaker.ts:109-134`
+
+```typescript
+let globalCircuitBreaker: SyncCircuitBreaker | null = null;
+
+export function getSyncCircuitBreaker(): SyncCircuitBreaker {
+    if (!globalCircuitBreaker) {
+        globalCircuitBreaker = new SyncCircuitBreaker();
+    }
+    return globalCircuitBreaker;
+}
+```
+
+**Why**: A single failing workspace or provider trips the breaker for *every* workspace because it’s global. That means one bad tenant can pause sync for everyone on the device.
+
+**Fix**: Key the circuit breaker by `{workspaceId, providerId}` (or at least workspaceId).
+
+```typescript
+const breakers = new Map<string, SyncCircuitBreaker>();
+
+export function getSyncCircuitBreaker(key: string): SyncCircuitBreaker {
+    const existing = breakers.get(key);
+    if (existing) return existing;
+    const created = new SyncCircuitBreaker();
+    breakers.set(key, created);
+    return created;
+}
+```
+
+**Tests**: Trip breaker for workspace A, verify workspace B still retries.
+
+---
+
+### 30. `file_transfers` Never Gets Cleaned Up
+
+**Severity**: Medium
+
+**Evidence**: `app/core/storage/transfer-queue.ts:189-230`
+
+```typescript
+await this.updateTransfer(transfer.id, {
+    state: 'done',
+    bytes_done: latest?.bytes_total ?? transfer.bytes_total,
+});
+```
+
+**Why**: Completed transfers are kept forever. The table grows without bounds and every queue scan gets slower over time.
+
+**Fix**: Add a GC pass (e.g., delete `done`/`failed` transfers older than N days) or prune after completion.
+
+```typescript
+await this.db.file_transfers
+    .where('state')
+    .equals('done')
+    .and((row) => row.updated_at < nowSec() - 7 * 24 * 60 * 60)
+    .delete();
+```
+
+**Tests**: Insert old done transfers, run GC, verify deletion.
+
+---
+
+### 31. Queue Scans Do In-Memory Sorting of All Transfers
+
+**Severity**: Medium
+
+**Evidence**: `app/core/storage/transfer-queue.ts:154-165`
+
+```typescript
+const candidates = await this.db.file_transfers
+    .where('[state+workspace_id]')
+    .equals(['queued', this.workspaceId])
+    .sortBy('created_at');
+```
+
+**Why**: `sortBy` pulls *all* queued transfers into memory and sorts in JS, then slices. That’s O(n log n) every tick and gets worse as the table grows.
+
+**Fix**: Add an index that supports ordering (e.g., `[state+workspace_id+created_at]`) and use `between(...).limit(...)`.
+
+```typescript
+const candidates = await this.db.file_transfers
+    .where('[state+workspace_id+created_at]')
+    .between(['queued', this.workspaceId, Dexie.minKey], ['queued', this.workspaceId, Dexie.maxKey])
+    .limit(available)
+    .toArray();
+```
+
+**Tests**: Seed 10k queued transfers and measure queue scan time before/after.
+
+---
+
+### 32. Workspace DB Cache Never Evicts
+
+**Severity**: Medium
+
+**Evidence**: `app/db/client.ts:133-158`
+
+```typescript
+const workspaceDbCache = new Map<string, Or3DB>();
+
+export function getWorkspaceDb(workspaceId: string): Or3DB {
+    const existing = workspaceDbCache.get(workspaceId);
+    if (existing) return existing;
+    const created = new Or3DB(`or3-db-${workspaceId}`);
+    workspaceDbCache.set(workspaceId, created);
+    return created;
+}
+```
+
+**Why**: Each workspace allocates a Dexie instance and it never gets closed or evicted. Users who bounce across many workspaces will retain DB handles and caches indefinitely.
+
+**Fix**: Add an eviction strategy (LRU) and call `db.close()` on removal. Also clean up sync singletons tied to the DB name.
+
+```typescript
+function evictWorkspaceDb(workspaceId: string) {
+    const db = workspaceDbCache.get(workspaceId);
+    if (db) db.close();
+    workspaceDbCache.delete(workspaceId);
+}
+```
+
+**Tests**: Switch across 50 workspaces, verify cache size and open connections remain bounded.
 
 ---
 

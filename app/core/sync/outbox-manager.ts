@@ -38,6 +38,7 @@ export class OutboxManager {
     private provider: SyncProvider;
     private scope: SyncScope;
     private config: Required<OutboxManagerConfig>;
+    private circuitBreakerKey: string;
 
     private flushTimeout: ReturnType<typeof setTimeout> | null = null;
     private isFlushing = false;
@@ -52,6 +53,7 @@ export class OutboxManager {
         this.db = db;
         this.provider = provider;
         this.scope = scope;
+        this.circuitBreakerKey = `${scope.workspaceId}:${provider.id}`;
         this.config = {
             flushIntervalMs: config.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS,
             maxBatchSize: config.maxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
@@ -107,7 +109,7 @@ export class OutboxManager {
         if (this.isFlushing) return false;
 
         // Check circuit breaker before attempting flush
-        const circuitBreaker = getSyncCircuitBreaker();
+        const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
         if (!circuitBreaker.canRetry()) {
             return false;
         }
@@ -116,6 +118,12 @@ export class OutboxManager {
 
         try {
             const hooks = useHooks();
+
+            // Reset any syncing ops (e.g., after a crash) back to pending
+            await this.db.pending_ops
+                .where('status')
+                .equals('syncing')
+                .modify({ status: 'pending', nextAttemptAt: Date.now() });
 
             // Get pending ops
             const pendingOps = await this.db.pending_ops

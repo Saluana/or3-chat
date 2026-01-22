@@ -41,6 +41,7 @@ export class SubscriptionManager {
     private provider: SyncProvider;
     private scope: SyncScope;
     private config: Required<SubscriptionManagerConfig>;
+    private circuitBreakerKey: string;
 
     private cursorManager: CursorManager;
     private conflictResolver: ConflictResolver;
@@ -62,6 +63,7 @@ export class SubscriptionManager {
         this.db = db;
         this.provider = provider;
         this.scope = scope;
+        this.circuitBreakerKey = `${scope.workspaceId}:${provider.id}`;
         this.config = {
             tables: config.tables ?? DEFAULT_TABLES,
             bootstrapPageSize: config.bootstrapPageSize ?? BOOTSTRAP_PAGE_SIZE,
@@ -158,7 +160,7 @@ export class SubscriptionManager {
      */
     private async bootstrap(): Promise<void> {
         // Check circuit breaker to prevent retry storm during outages
-        const circuitBreaker = getSyncCircuitBreaker();
+        const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
         if (!circuitBreaker.canRetry()) {
             console.warn('[SubscriptionManager] Circuit breaker open, skipping bootstrap');
             return;
@@ -231,7 +233,7 @@ export class SubscriptionManager {
      */
     private async rescan(): Promise<void> {
         // Check circuit breaker to prevent retry storm during outages
-        const circuitBreaker = getSyncCircuitBreaker();
+        const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
         if (!circuitBreaker.canRetry()) {
             console.warn('[SubscriptionManager] Circuit breaker open, skipping rescan');
             return;
@@ -416,7 +418,7 @@ export class SubscriptionManager {
         let cursor = startCursor;
         let hasMore = true;
         const totals = { applied: 0, skipped: 0, conflicts: 0, cursor };
-        const circuitBreaker = getSyncCircuitBreaker();
+        const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
 
         while (hasMore) {
             if (this.status === 'disconnected') break;
