@@ -75,21 +75,21 @@ Requirements: 1.2
 ### 6. useNotifications Composable
 Requirements: 4.1, 4.2, 4.3, 5.1
 
-- [ ] 6.1 Create `app/composables/notifications/useNotifications.ts`
-- [ ] 6.2 Implement reactive queries:
+- [x] 6.1 Create `app/composables/notifications/useNotifications.ts`
+- [x] 6.2 Implement reactive queries:
     - `notifications` (sorted by created_at desc)
     - `unreadCount`
-- [ ] 6.3 Implement actions:
+- [x] 6.3 Implement actions:
     - `markRead(id)`
     - `markAllRead()`
     - `clearAll()`
     - `push(payload)` (convenience wrapper)
-- [ ] 6.4 Implement mute functions:
+- [x] 6.4 Implement mute functions:
     - `isThreadMuted(threadId)`
     - `muteThread(threadId)`
     - `unmuteThread(threadId)`
-- [ ] 6.5 Create `app/composables/notifications/index.ts` barrel export
-- [ ] 6.6 Export from main composables index
+- [x] 6.5 Create `app/composables/notifications/index.ts` barrel export
+- [x] 6.6 Export from main composables index
 
 ---
 
