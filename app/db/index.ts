@@ -161,6 +161,9 @@ export type {
     Project,
     Post,
     PostCreate,
+    Notification,
+    NotificationCreate,
+    NotificationAction,
 };
 
 export type { Document } from './documents';

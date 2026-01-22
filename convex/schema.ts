@@ -254,6 +254,30 @@ export default defineSchema({
         .index('by_workspace_name', ['workspace_id', 'name'])
         .index('by_workspace_id', ['workspace_id', 'id']),
 
+    /**
+     * Notifications - user notification center entries
+     */
+    notifications: defineTable({
+        workspace_id: v.id('workspaces'),
+        id: v.string(),
+        user_id: v.string(),
+        thread_id: v.optional(v.string()),
+        document_id: v.optional(v.string()),
+        type: v.string(),
+        title: v.string(),
+        body: v.optional(v.string()),
+        actions: v.optional(v.string()), // JSON serialized NotificationAction[]
+        read_at: v.optional(v.number()),
+        deleted: v.boolean(),
+        deleted_at: v.optional(v.number()),
+        created_at: v.number(),
+        updated_at: v.number(),
+        clock: v.number(),
+    })
+        .index('by_workspace', ['workspace_id', 'updated_at'])
+        .index('by_workspace_id', ['workspace_id', 'id'])
+        .index('by_workspace_user', ['workspace_id', 'user_id', 'created_at']),
+
     // ============================================================
     // RATE LIMITING
     // ============================================================

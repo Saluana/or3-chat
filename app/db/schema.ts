@@ -236,3 +236,62 @@ export const FileMetaCreateSchema = FileMetaSchema.omit({
     clock: z.number().int().default(0),
 });
 export type FileMetaCreate = z.infer<typeof FileMetaCreateSchema>;
+
+// notification actions
+export const NotificationActionSchema = z.object({
+    id: z.string(),
+    label: z.string(),
+    kind: z.enum(['navigate', 'callback']),
+    target: z
+        .object({
+            threadId: z.string().optional(),
+            documentId: z.string().optional(),
+            route: z.string().optional(),
+        })
+        .optional(),
+    data: z.record(z.unknown()).optional(),
+});
+export type NotificationAction = z.infer<typeof NotificationActionSchema>;
+
+// notifications
+export const NotificationSchema = z.object({
+    id: z.string(),
+    workspace_id: z.string().optional(),
+    user_id: z.string(),
+    thread_id: z.string().optional(),
+    document_id: z.string().optional(),
+    type: z.string(),
+    title: z.string(),
+    body: z.string().optional(),
+    actions: z.array(NotificationActionSchema).optional(),
+    read_at: z.number().int().optional(),
+    deleted: z.boolean().default(false),
+    deleted_at: z.number().int().optional(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    clock: z.number().int(),
+});
+export type Notification = z.infer<typeof NotificationSchema>;
+
+export const NotificationCreateSchema = NotificationSchema.partial({
+    id: true,
+    workspace_id: true,
+    read_at: true,
+    deleted: true,
+    deleted_at: true,
+})
+    .omit({ created_at: true, updated_at: true, clock: true })
+    .extend({
+        id: z
+            .string()
+            .optional()
+            .transform((v) => v ?? newId()),
+        clock: z
+            .number()
+            .int()
+            .optional()
+            .transform((v) => v ?? 0),
+        created_at: z.number().int().default(nowSec()),
+        updated_at: z.number().int().default(nowSec()),
+    });
+export type NotificationCreate = z.input<typeof NotificationCreateSchema>;

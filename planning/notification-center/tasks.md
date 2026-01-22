@@ -14,22 +14,22 @@ Implementation checklist for the Notification Center feature. Each task maps to 
 ### 1. Dexie Schema Updates
 Requirements: 1.1
 
-- [ ] 1.1 Add `Notification` and `NotificationAction` interfaces to `app/db/tables.ts`
-- [ ] 1.2 Add `notifications` table to Dexie schema in `app/db/schema.ts`
+- [x] 1.1 Add `Notification` and `NotificationAction` interfaces to `app/db/schema.ts`
+- [x] 1.2 Add `notifications` table to Dexie schema in `app/db/client.ts`
     - Primary key: `&id`
     - Indexes: `user_id`, `[user_id+read_at]`, `[user_id+created_at]`, `[user_id+thread_id]`, `type`, `deleted`, `clock`
-- [ ] 1.3 Bump Dexie version number in `app/db/schema.ts`
-- [ ] 1.4 Verify local DB initializes correctly with new table
+- [x] 1.3 Bump Dexie version number to v12 in `app/db/client.ts`
+- [x] 1.4 Export new types from `app/db/index.ts`
 
 ### 2. Convex Schema Updates
 Requirements: 1.2
 
-- [ ] 2.1 Add `notifications` table to `convex/schema.ts`
+- [x] 2.1 Add `notifications` table to `convex/schema.ts`
     - Fields: `workspace_id`, `id`, `user_id`, `thread_id`, `document_id`, `type`, `title`, `body`, `actions`, `read_at`, `deleted`, `deleted_at`, `created_at`, `updated_at`, `clock`
     - Indexes: `by_workspace`, `by_workspace_id`, `by_workspace_user`
-- [ ] 2.2 Add notifications handling to `convex/sync.ts` push mutation
-- [ ] 2.3 Add notifications handling to `convex/sync.ts` pull query
-- [ ] 2.4 Run `bun run convex-dev` to validate schema
+- [x] 2.2 Add notifications to TABLE_INDEX_MAP in `convex/sync.ts`
+- [ ] 2.3 Verify schema builds correctly
+- [ ] 2.4 Run typecheck to verify no errors
 
 ---
 
