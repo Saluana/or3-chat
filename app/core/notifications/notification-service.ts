@@ -17,8 +17,11 @@ export class NotificationService {
     private userId: string;
 
     constructor(db: Or3DB, hooks: HookEngine, userId: string) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         this.db = db;
+         
         this.hooks = hooks;
+         
         this.userId = userId;
         this.setupListeners();
     }
@@ -28,8 +31,9 @@ export class NotificationService {
      */
     private setupListeners(): void {
         // Listen for push events
-        this.hooks.on('notify:action:push', async (payload: NotificationCreatePayload) => {
-            await this.create(payload);
+         
+        this.hooks.addAction('notify:action:push', async (payload: unknown) => {
+            await this.create(payload as NotificationCreatePayload);
         });
     }
 
@@ -106,7 +110,7 @@ export class NotificationService {
      */
     async clearAll(): Promise<number> {
         const deletedAt = Date.now();
-        const count = await this.db.notifications
+        const count = (await this.db.notifications
             .where('user_id')
             .equals(this.userId)
             .and((n) => !n.deleted)
@@ -115,7 +119,7 @@ export class NotificationService {
                 deleted_at: deletedAt,
                 updated_at: deletedAt,
                 clock: deletedAt,
-            });
+            })) as number;
         await this.hooks.doAction('notify:action:cleared', { count });
         return count;
     }

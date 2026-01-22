@@ -128,9 +128,12 @@ export function useNotifications() {
 
     // Cleanup subscriptions
     onScopeDispose(() => {
-        notificationsSubscription?.unsubscribe();
-        unreadCountSubscription?.unsubscribe();
-        mutedThreadsSubscription?.unsubscribe();
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (notificationsSubscription) notificationsSubscription.unsubscribe();
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (unreadCountSubscription) unreadCountSubscription.unsubscribe();
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (mutedThreadsSubscription) mutedThreadsSubscription.unsubscribe();
     });
 
     /**
