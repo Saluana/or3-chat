@@ -86,6 +86,9 @@
             class="w-[40px] h-[var(--md-border-width)] bg-[var(--md-border-color)]/50 my-1 sb-bottom-border"
         />
 
+        <!-- Notifications -->
+        <NotificationBell />
+
         <!-- Auth Button (Clerk SSR or OpenRouter) -->
         <SidebarAuthButton />
     </div>

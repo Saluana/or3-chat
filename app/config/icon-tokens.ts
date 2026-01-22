@@ -131,6 +131,15 @@ export const DEFAULT_ICONS = {
     'workflow.status.error': 'pixelarticons:close',
     'workflow.status.stopped': 'pixelarticons:pause',
     'workflow.status.pending': 'pixelarticons:clock',
+
+    // Notifications
+    'notification.bell': 'pixelarticons:bell',
+    'notification.message': 'pixelarticons:message',
+    'notification.workflow': 'pixelarticons:zap',
+    'notification.sync': 'pixelarticons:sync',
+    'notification.warning': 'pixelarticons:warning-box',
+    'notification.default': 'pixelarticons:info-box',
+    close: 'pixelarticons:close',
 } as const;
 
 export type IconToken = keyof typeof DEFAULT_ICONS;
