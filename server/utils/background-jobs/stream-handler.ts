@@ -11,6 +11,7 @@ import { checkJobAborted } from '../background-jobs/providers/convex';
 import {
     parseOpenRouterSSE,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
+import { emitBackgroundJobComplete, emitBackgroundJobError } from '../notifications/emit';
 
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -18,6 +19,7 @@ export interface BackgroundStreamParams {
     body: Record<string, unknown>;
     apiKey: string;
     userId: string;
+    workspaceId: string;
     threadId: string;
     messageId: string;
     referer: string;
@@ -64,7 +66,7 @@ export function validateBackgroundParams(body: Record<string, unknown>): {
 export async function startBackgroundStream(
     params: BackgroundStreamParams
 ): Promise<BackgroundStreamResult> {
-    const provider = getJobProvider();
+    const provider = await getJobProvider();
     const model = (params.body.model as string) || 'unknown';
 
     // Create job
@@ -148,13 +150,38 @@ async function streamInBackground(
         // Complete the job
         await provider.completeJob(jobId, fullContent);
 
-        // Notifications are emitted client-side when background jobs complete.
+        // Emit server-side notification for job completion
+        try {
+            await emitBackgroundJobComplete(
+                params.workspaceId,
+                params.userId,
+                params.threadId,
+                jobId
+            );
+        } catch (err) {
+            console.error('[background-stream] Failed to emit notification:', err);
+            // Don't fail the job if notification fails
+        }
 
     } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
             // Job was aborted (already marked in provider)
             return;
         }
+        
+        // Emit error notification
+        try {
+            await emitBackgroundJobError(
+                params.workspaceId,
+                params.userId,
+                params.threadId,
+                jobId,
+                err instanceof Error ? err.message : String(err)
+            );
+        } catch (notifyErr) {
+            console.error('[background-stream] Failed to emit error notification:', notifyErr);
+        }
+        
         throw err;
     }
 }

@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
         return { error: 'Authentication required', aborted: false };
     }
 
-    const provider = getJobProvider();
+    const provider = await getJobProvider();
     const aborted = await provider.abortJob(jobId, userId);
 
     if (!aborted) {
