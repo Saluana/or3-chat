@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { defineOr3CloudConfig } from './utils/or3-cloud-config';
 
 const authEnabled = process.env.SSR_AUTH_ENABLED === 'true';

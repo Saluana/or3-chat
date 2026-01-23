@@ -46,7 +46,19 @@ export default defineEventHandler(async (event) => {
         ? authHeader.slice(7)
         : undefined;
 
-    const apiKey = config.openrouterApiKey || (allowUserOverride ? clientKey : undefined);
+    const apiKey =
+        config.openrouterApiKey ||
+        process.env.OPENROUTER_API_KEY ||
+        (allowUserOverride ? clientKey : undefined);
+
+    if (!apiKey && process.env.NODE_ENV !== 'production') {
+        console.warn('[openrouter][stream] missing api key', {
+            hasRuntimeConfigKey: Boolean(config.openrouterApiKey),
+            hasEnvKey: Boolean(process.env.OPENROUTER_API_KEY),
+            allowUserOverride,
+            hasAuthHeader: Boolean(authHeader),
+        });
+    }
     if (!apiKey) {
         setResponseStatus(event, 400);
         return 'Missing OpenRouter API key';
