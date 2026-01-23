@@ -165,18 +165,27 @@ Requirements: 2.1
 ### 14. Unit Tests
 Requirements: 7.1
 
-- [ ] 14.1 Create `app/core/notifications/__tests__/notification-service.test.ts`
+- [x] 14.1 Create `app/core/notifications/__tests__/notification-service.test.ts`
     - Test create, markRead, markAllRead, clearAll
     - Test filter hook rejection
-- [ ] 14.2 Create `app/composables/notifications/__tests__/useNotifications.test.ts`
+- [x] 14.2 Create `app/composables/notifications/__tests__/useNotifications.test.ts`
     - Test reactive queries
     - Test mute functions
+- [x] 14.3 Create `tests/unit/background-streaming-notifications.test.ts`
+    - Test AI message notifications
+    - Test error/abort notifications
+    - Test thread mute preferences
+    - Test notification actions
+- [x] 14.4 Create `tests/unit/notification-listeners.test.ts`
+    - Test sync conflict notifications
+    - Test system warning notifications
+    - Test error handling
 
 ### 15. Integration Tests
 Requirements: 7.1
 
-- [ ] 15.1 Add notifications to existing sync integration tests
-- [ ] 15.2 Test full hook flow: push → filter → store → query
+- [x] 15.1 Add notifications to existing sync integration tests
+- [x] 15.2 Test full hook flow: push → filter → store → query
 
 ### 16. Manual Testing Checklist
 
@@ -187,6 +196,9 @@ Requirements: 7.1
 - [ ] 16.5 Verify "Mark all as read" works
 - [ ] 16.6 Verify "Clear all" works
 - [ ] 16.7 Test with sync enabled (two browser tabs)
+- [ ] 16.8 Test background streaming with notifications
+- [ ] 16.9 Test sync conflict generates notification
+- [ ] 16.10 Test system warnings generate notifications
 
 **Manual Test Instructions**:
 1. Run `bun run dev` to start the dev server
