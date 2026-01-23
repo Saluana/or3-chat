@@ -78,10 +78,17 @@ export function asAppError(
     return err(fb.code || 'ERR_INTERNAL', fb.message || 'Unknown error');
 }
 
-// Lightweight secret scrub (only obvious tokens)
+// Lightweight secret scrub (only obvious tokens, not error messages)
+// Only redact values that look like actual API keys/tokens:
+// - Contains secret-related keywords AND
+// - Is long enough AND
+// - Looks like a token (alphanumeric, no spaces - error messages have spaces)
 function scrubValue(val: unknown): unknown {
     if (typeof val !== 'string') return val;
-    if (/(api|key|secret|token)/i.test(val) && val.length > 8) return '***';
+    // Only scrub if: has keyword, length > 20, AND looks like a token (no spaces, mostly alphanumeric)
+    const hasKeyword = /(api|key|secret|token)/i.test(val);
+    const looksLikeToken = val.length > 20 && !/\s/.test(val) && /^[A-Za-z0-9_\-.:]+$/.test(val);
+    if (hasKeyword && looksLikeToken) return '***';
     return val.length > 8192 ? val.slice(0, 8192) + '…' : val;
 }
 

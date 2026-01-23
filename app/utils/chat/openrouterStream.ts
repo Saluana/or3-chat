@@ -289,16 +289,28 @@ export interface BackgroundStreamResult {
     status: 'streaming';
 }
 
+async function readErrorMessage(
+    response: Response,
+    fallback: string
+): Promise<string> {
+    const data = (await response.json().catch(() => null)) as unknown;
+    if (data && typeof data === 'object' && 'error' in data) {
+        const error = (data as { error?: unknown }).error;
+        if (typeof error === 'string') return error;
+    }
+    return fallback;
+}
+
 /**
  * Check if background streaming is available (server must support it)
  */
 export function isBackgroundStreamingEnabled(): boolean {
     if (!isServerRouteAvailable()) return false;
 
-    const runtimeConfig = useRuntimeConfig?.() as
-        | { public?: { backgroundStreaming?: { enabled?: boolean } } }
-        | undefined;
-    const configEnabled = runtimeConfig?.public?.backgroundStreaming?.enabled;
+    const runtimeConfig = useRuntimeConfig() as {
+        public?: { backgroundStreaming?: { enabled?: boolean } };
+    };
+    const configEnabled = runtimeConfig.public?.backgroundStreaming?.enabled;
     if (configEnabled === false) return false;
     
     // Check cached result
@@ -377,8 +389,11 @@ export async function startBackgroundStream(params: {
             setServerRouteAvailable(false);
             setBackgroundStreamingAvailable(false);
         }
-        const errorData = await resp.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Background stream failed: ${resp.status}`);
+        const message = await readErrorMessage(
+            resp,
+            `Background stream failed: ${resp.status}`
+        );
+        throw new Error(message);
     }
 
     const result = await resp.json() as BackgroundStreamResult;
@@ -396,8 +411,11 @@ export async function pollJobStatus(jobId: string): Promise<BackgroundJobStatus>
     const resp = await fetch(`/api/jobs/${jobId}/status`);
 
     if (!resp.ok) {
-        const errorData = await resp.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Job status failed: ${resp.status}`);
+        const message = await readErrorMessage(
+            resp,
+            `Job status failed: ${resp.status}`
+        );
+        throw new Error(message);
     }
 
     return await resp.json() as BackgroundJobStatus;

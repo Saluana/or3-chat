@@ -7,7 +7,7 @@
 
 import type { BackgroundJobProvider, BackgroundJobConfig } from './types';
 import { DEFAULT_CONFIG } from './types';
-import { memoryProvider } from './providers/memory';
+import { memoryJobProvider } from './providers/memory';
 
 let cachedProvider: BackgroundJobProvider | null = null;
 
@@ -27,16 +27,15 @@ export function getJobProvider(): BackgroundJobProvider {
     switch (storageProvider) {
         case 'convex': {
             // Dynamically import to avoid loading if not used
-            const convexUrl = config.public?.sync?.convexUrl;
+            const convexUrl = config.public.sync.convexUrl;
             if (convexUrl) {
-                // eslint-disable-next-line @typescript-eslint/no-require-imports
-                const { convexProvider } = require('./providers/convex') as {
-                    convexProvider: BackgroundJobProvider;
+                const { convexJobProvider } = require('./providers/convex') as {
+                    convexJobProvider: BackgroundJobProvider;
                 };
-                cachedProvider = convexProvider;
+                cachedProvider = convexJobProvider;
             } else {
                 console.warn('[background-jobs] Convex URL not configured, using memory');
-                cachedProvider = memoryProvider;
+                cachedProvider = memoryJobProvider;
             }
             break;
         }
@@ -44,12 +43,12 @@ export function getJobProvider(): BackgroundJobProvider {
         case 'redis':
             // Future: Redis provider
             console.warn('[background-jobs] Redis provider not yet implemented, using memory');
-            cachedProvider = memoryProvider;
+            cachedProvider = memoryJobProvider;
             break;
 
         case 'memory':
         default:
-            cachedProvider = memoryProvider;
+            cachedProvider = memoryJobProvider;
             break;
     }
 

@@ -63,20 +63,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useIcon } from '~/composables/useIcon';
-import { useNotifications } from '~/composables/notifications/useNotifications';
 import { useHooks } from '~/core/hooks/useHooks';
 import type { Notification, NotificationAction } from '~/db/schema';
 
 const props = defineProps<{
     notification: Notification;
+    onMarkRead: (id: string) => Promise<void>;
 }>();
 
 const router = useRouter();
-const { markRead } = useNotifications();
 const hooks = useHooks();
+const hasMarkedRead = ref(false);
 
 // Pre-compute all possible icons at setup time to avoid calling useIcon inside computed
 // This follows Vue best practices - composables should only be called at setup, not in getters
@@ -117,11 +117,14 @@ const formattedTime = computed(() => {
     return 'Just now';
 });
 
+const markReadOnce = async (): Promise<void> => {
+    if (props.notification.read_at || hasMarkedRead.value) return;
+    hasMarkedRead.value = true;
+    await props.onMarkRead(props.notification.id);
+};
+
 async function handleClick() {
-    // Mark as read
-    if (!props.notification.read_at) {
-        await markRead(props.notification.id);
-    }
+    await markReadOnce();
 
     // If there's a default navigate action, execute it
     const navigateAction = props.notification.actions?.find(
@@ -133,10 +136,7 @@ async function handleClick() {
 }
 
 async function handleActionClick(action: NotificationAction) {
-    // Mark as read if not already
-    if (!props.notification.read_at) {
-        await markRead(props.notification.id);
-    }
+    await markReadOnce();
 
     if (action.kind === 'navigate') {
         // Handle navigation

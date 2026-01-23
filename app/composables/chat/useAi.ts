@@ -118,7 +118,7 @@ async function isThreadMuted(threadId: string): Promise<boolean> {
     try {
         const kv = await getDb().kv.get(BACKGROUND_JOB_MUTED_KEY);
         if (!kv?.value) return false;
-        const parsed = JSON.parse(kv.value);
+        const parsed: unknown = JSON.parse(kv.value);
         return Array.isArray(parsed) && parsed.includes(threadId);
     } catch {
         return false;
@@ -200,7 +200,10 @@ async function persistBackgroundJobUpdate(
             : null;
     const mergedData = {
         ...baseData,
-        content: content ?? (baseData.content as string | undefined) ?? '',
+        content:
+            content.length > 0
+                ? content
+                : (baseData.content as string | undefined) ?? '',
         background_job_id: tracker.jobId,
         background_job_status: status.status,
         ...(status.error ? { background_job_error: status.error } : {}),
@@ -224,7 +227,7 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
     if (tracker.polling) return;
     tracker.polling = true;
 
-    while (true) {
+    for (;;) {
         let status: BackgroundJobStatus;
         try {
             status = await pollJobStatus(tracker.jobId);
@@ -391,7 +394,7 @@ export function useChat(
     const backgroundJobId = ref<string | null>(null);
     const backgroundJobDisposers: Array<() => void> = [];
     const attachedBackgroundJobs = new Set<string>();
-    const detached = ref(false);
+    const detached = ref<boolean>(false);
     function resetStream() {
         streamAcc.reset();
         streamId.value = undefined;
@@ -1570,6 +1573,7 @@ export function useChat(
                     });
 
                     const completion = await tracker.completion;
+                    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- detached can flip during cleanup
                     if (detached.value) return;
 
                     if (completion.status === 'complete') {

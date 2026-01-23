@@ -87,7 +87,7 @@
         />
 
         <!-- Notifications -->
-        <NotificationBell />
+        <NotificationsNotificationBell />
 
         <!-- Auth Button (Clerk SSR or OpenRouter) -->
         <SidebarAuthButton />

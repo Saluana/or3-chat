@@ -36,13 +36,13 @@ function ensureCleanupInterval(): void {
 
     cleanupInterval = setInterval(
         () => {
-            void memoryProvider.cleanupExpired();
+            void memoryJobProvider.cleanupExpired();
         },
         60_000 // Every minute
     );
 
     // Don't block process exit
-    if (cleanupInterval.unref) {
+    if (typeof cleanupInterval.unref === 'function') {
         cleanupInterval.unref();
     }
 }
@@ -54,7 +54,7 @@ function generateJobId(): string {
     return crypto.randomUUID();
 }
 
-export const memoryProvider: BackgroundJobProvider = {
+export const memoryJobProvider: BackgroundJobProvider = {
     name: 'memory',
 
     async createJob(params: CreateJobParams): Promise<string> {

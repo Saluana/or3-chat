@@ -6,7 +6,7 @@
  */
 
 import { ref, computed, onScopeDispose } from 'vue';
-import { liveQuery, type Subscription } from 'dexie';
+import Dexie, { liveQuery, type Subscription } from 'dexie';
 import { z } from 'zod';
 import { getDb } from '~/db/client';
 import { NotificationService } from '~/core/notifications/notification-service';
@@ -34,7 +34,8 @@ let serviceRefCount = 0;
  * Composable for accessing notification center functionality
  */
 export function useNotifications() {
-    if (!import.meta.client) {
+    const isClient = import.meta.client || typeof indexedDB !== 'undefined';
+    if (!isClient) {
         // SSR-safe no-op
         return {
             notifications: computed(() => [] as Notification[]),
@@ -76,13 +77,12 @@ export function useNotifications() {
     // Live query for notifications (sorted by created_at desc)
     const notificationsObservable = liveQuery(async () => {
         try {
-            const results = await db.notifications
-                .where('user_id')
-                .equals(userId)
-                .and((n) => !n.deleted)
+            return await db.notifications
+                .where('[user_id+created_at]')
+                .between([userId, Dexie.minKey], [userId, Dexie.maxKey])
                 .reverse()
-                .sortBy('created_at');
-            return results;
+                .and((n) => !n.deleted)
+                .toArray();
         } catch (err) {
             console.error('[useNotifications] Query error:', err);
             return [];

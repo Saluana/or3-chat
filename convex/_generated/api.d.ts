@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as backgroundJobs from "../backgroundJobs.js";
 import type * as crons from "../crons.js";
 import type * as rateLimits from "../rateLimits.js";
 import type * as storage from "../storage.js";
@@ -22,6 +23,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  backgroundJobs: typeof backgroundJobs;
   crons: typeof crons;
   rateLimits: typeof rateLimits;
   storage: typeof storage;

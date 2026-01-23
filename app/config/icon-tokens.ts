@@ -133,7 +133,7 @@ export const DEFAULT_ICONS = {
     'workflow.status.pending': 'pixelarticons:clock',
 
     // Notifications
-    'notification.bell': 'pixelarticons:bell',
+    'notification.bell': 'pixelarticons:notification',
     'notification.message': 'pixelarticons:message',
     'notification.workflow': 'pixelarticons:zap',
     'notification.sync': 'pixelarticons:sync',

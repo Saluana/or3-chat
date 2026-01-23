@@ -7,13 +7,24 @@
  */
 
 import type { Or3DB } from '~/db/client';
+import { NotificationActionSchema } from '~/db/schema';
 import type { Notification } from '~/db/schema';
 import type { TypedHookEngine } from '../hooks/typed-hooks';
 import type { NotificationCreatePayload } from '../hooks/hook-types';
 import { nowSec } from '~/db/util';
+import { z } from 'zod';
 
 // Callback type for the push action handler
 type PushActionCallback = (payload: unknown) => Promise<void>;
+
+const NotificationCreatePayloadSchema = z.object({
+    type: z.string().min(1),
+    title: z.string().min(1),
+    body: z.string().optional(),
+    threadId: z.string().optional(),
+    documentId: z.string().optional(),
+    actions: z.array(NotificationActionSchema).optional(),
+});
 
 export class NotificationService {
     private db: Or3DB;
@@ -42,7 +53,15 @@ export class NotificationService {
         }
 
         this.actionHandler = async (payload: unknown) => {
-            await this.create(payload as NotificationCreatePayload);
+            const parsed = NotificationCreatePayloadSchema.safeParse(payload);
+            if (!parsed.success) {
+                console.warn(
+                    '[NotificationService] Invalid notification payload',
+                    parsed.error.message
+                );
+                return;
+            }
+            await this.create(parsed.data);
         };
 
         this.hooks.addAction('notify:action:push', this.actionHandler);
@@ -68,10 +87,18 @@ export class NotificationService {
      * Applies filter hooks before storage
      */
     async create(payload: NotificationCreatePayload): Promise<Notification | null> {
+        const parsedPayload = NotificationCreatePayloadSchema.safeParse(payload);
+        if (!parsedPayload.success) {
+            console.warn(
+                '[NotificationService] Invalid notification payload',
+                parsedPayload.error.message
+            );
+            return null;
+        }
         // Apply filter hook to allow modifications or rejection
         const filtered = await this.hooks.applyFilters(
             'notify:filter:before_store',
-            payload,
+            parsedPayload.data,
             { source: 'client' }
         );
 
@@ -80,16 +107,25 @@ export class NotificationService {
             return null;
         }
 
+        const filteredPayload = NotificationCreatePayloadSchema.safeParse(filtered);
+        if (!filteredPayload.success) {
+            console.warn(
+                '[NotificationService] Invalid filtered notification payload',
+                filteredPayload.error.message
+            );
+            return null;
+        }
+
         const now = nowSec();
         const notification: Notification = {
             id: crypto.randomUUID(),
             user_id: this.userId,
-            type: filtered.type,
-            title: filtered.title,
-            body: filtered.body,
-            thread_id: filtered.threadId,
-            document_id: filtered.documentId,
-            actions: filtered.actions,
+            type: filteredPayload.data.type,
+            title: filteredPayload.data.title,
+            body: filteredPayload.data.body,
+            thread_id: filteredPayload.data.threadId,
+            document_id: filteredPayload.data.documentId,
+            actions: filteredPayload.data.actions,
             read_at: undefined,
             deleted: false,
             created_at: now,

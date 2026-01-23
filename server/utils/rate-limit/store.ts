@@ -6,8 +6,8 @@
  */
 
 import type { RateLimitProvider } from './types';
-import { memoryProvider } from './providers/memory';
-import { convexProvider } from './providers/convex';
+import { memoryRateLimitProvider } from './providers/memory';
+import { convexRateLimitProvider } from './providers/convex';
 
 let cachedProvider: RateLimitProvider | null = null;
 
@@ -27,28 +27,28 @@ export function getRateLimitProvider(): RateLimitProvider {
         case 'convex':
             // Check if Convex is actually available
             if (config.public.sync.convexUrl) {
-                cachedProvider = convexProvider;
+                cachedProvider = convexRateLimitProvider;
             } else {
                 console.warn('[rate-limit] Convex URL not configured, using memory');
-                cachedProvider = memoryProvider;
+                cachedProvider = memoryRateLimitProvider;
             }
             break;
 
         case 'redis':
             // Future: Redis provider
             console.warn('[rate-limit] Redis provider not yet implemented, using memory');
-            cachedProvider = memoryProvider;
+            cachedProvider = memoryRateLimitProvider;
             break;
 
         case 'postgres':
             // Future: Postgres provider
             console.warn('[rate-limit] Postgres provider not yet implemented, using memory');
-            cachedProvider = memoryProvider;
+            cachedProvider = memoryRateLimitProvider;
             break;
 
         case 'memory':
         default:
-            cachedProvider = memoryProvider;
+            cachedProvider = memoryRateLimitProvider;
             break;
     }
 
