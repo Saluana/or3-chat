@@ -131,11 +131,15 @@ async function emitBackgroundComplete(
 ): Promise<void> {
     if (!import.meta.client) return;
     if (!tracker.threadId) return;
+    // Only emit notification if no subscribers (user has navigated away)
     if (tracker.subscribers.size > 0) return;
     if (await isThreadMuted(tracker.threadId)) return;
 
     const hooks = useHooks();
-    const service = new NotificationService(getDb(), hooks, 'temp-user');
+    // Use 'local-user' as userId for local-first mode
+    // In SSR mode with auth, this would be the actual user ID from session
+    const userId = 'local-user';
+    const service = new NotificationService(getDb(), hooks, userId);
     const isError = status.status === 'error';
     const isAbort = status.status === 'aborted';
     const type = isError || isAbort ? 'system.warning' : 'ai.message.received';

@@ -3,24 +3,33 @@
  * Phase 9.3: Provider factory tests
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, beforeAll } from 'vitest';
+
+// Create a mock that will be shared
+const mockUseRuntimeConfig = vi.fn();
+
+// Hoist the mock setup before any imports
+vi.mock('#imports', () => ({
+    useRuntimeConfig: mockUseRuntimeConfig,
+}));
+
+// Now import the modules that depend on the mock
 import {
     getJobProvider,
     isBackgroundStreamingEnabled,
     resetJobProvider,
 } from '../../server/utils/background-jobs/store';
 
-// Mock useRuntimeConfig
-vi.mock('#imports', () => ({
-    useRuntimeConfig: vi.fn(),
-}));
-
-import { useRuntimeConfig } from '#imports';
-
 describe('Background Job Provider Factory', () => {
     beforeEach(() => {
         resetJobProvider();
         vi.clearAllMocks();
+        // Default mock return value
+        mockUseRuntimeConfig.mockReturnValue({
+            backgroundJobs: {
+                storageProvider: 'memory',
+            },
+        });
     });
 
     afterEach(() => {
@@ -29,25 +38,25 @@ describe('Background Job Provider Factory', () => {
 
     describe('Provider Selection', () => {
         it('should return memory provider by default', () => {
-            vi.mocked(useRuntimeConfig).mockReturnValue({
+            mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {
                     storageProvider: 'memory',
                 },
-            } as ReturnType<typeof useRuntimeConfig>);
+            });
 
             const provider = getJobProvider();
             expect(provider.name).toBe('memory');
         });
 
         it('should return memory provider when no config is provided', () => {
-            vi.mocked(useRuntimeConfig).mockReturnValue({} as ReturnType<typeof useRuntimeConfig>);
+            mockUseRuntimeConfig.mockReturnValue({});
 
             const provider = getJobProvider();
             expect(provider.name).toBe('memory');
         });
 
         it('should return convex provider when configured with convexUrl', () => {
-            vi.mocked(useRuntimeConfig).mockReturnValue({
+            mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {
                     storageProvider: 'convex',
                 },
@@ -56,7 +65,7 @@ describe('Background Job Provider Factory', () => {
                         convexUrl: 'https://test.convex.cloud',
                     },
                 },
-            } as ReturnType<typeof useRuntimeConfig>);
+            });
 
             const provider = getJobProvider();
             expect(provider.name).toBe('convex');
@@ -65,7 +74,7 @@ describe('Background Job Provider Factory', () => {
         it('should fall back to memory when convex is selected but no URL is configured', () => {
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-            vi.mocked(useRuntimeConfig).mockReturnValue({
+            mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {
                     storageProvider: 'convex',
                 },
@@ -74,7 +83,7 @@ describe('Background Job Provider Factory', () => {
                         convexUrl: undefined,
                     },
                 },
-            } as ReturnType<typeof useRuntimeConfig>);
+            });
 
             const provider = getJobProvider();
             expect(provider.name).toBe('memory');
@@ -88,11 +97,11 @@ describe('Background Job Provider Factory', () => {
         it('should fall back to memory for unimplemented redis provider', () => {
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-            vi.mocked(useRuntimeConfig).mockReturnValue({
+            mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {
                     storageProvider: 'redis',
                 },
-            } as ReturnType<typeof useRuntimeConfig>);
+            });
 
             const provider = getJobProvider();
             expect(provider.name).toBe('memory');
@@ -104,29 +113,27 @@ describe('Background Job Provider Factory', () => {
         });
 
         it('should cache provider instance after first call', () => {
-            const config = {
+            mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {
                     storageProvider: 'memory',
                 },
-            } as ReturnType<typeof useRuntimeConfig>;
-
-            vi.mocked(useRuntimeConfig).mockReturnValue(config);
+            });
 
             const provider1 = getJobProvider();
             const provider2 = getJobProvider();
 
             expect(provider1).toBe(provider2);
             // useRuntimeConfig should only be called once due to caching
-            expect(useRuntimeConfig).toHaveBeenCalledTimes(1);
+            expect(mockUseRuntimeConfig).toHaveBeenCalledTimes(1);
         });
 
         it('should reset cache and allow provider switch', () => {
             // First call - memory provider
-            vi.mocked(useRuntimeConfig).mockReturnValue({
+            mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {
                     storageProvider: 'memory',
                 },
-            } as ReturnType<typeof useRuntimeConfig>);
+            });
 
             const provider1 = getJobProvider();
             expect(provider1.name).toBe('memory');
@@ -135,7 +142,7 @@ describe('Background Job Provider Factory', () => {
             resetJobProvider();
 
             // Second call - convex provider (simulated)
-            vi.mocked(useRuntimeConfig).mockReturnValue({
+            mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {
                     storageProvider: 'convex',
                 },
@@ -144,7 +151,7 @@ describe('Background Job Provider Factory', () => {
                         convexUrl: 'https://test.convex.cloud',
                     },
                 },
-            } as ReturnType<typeof useRuntimeConfig>);
+            });
 
             const provider2 = getJobProvider();
             expect(provider2.name).toBe('convex');
@@ -153,35 +160,35 @@ describe('Background Job Provider Factory', () => {
 
     describe('Background Streaming Enablement', () => {
         it('should return false when background jobs are not enabled', () => {
-            vi.mocked(useRuntimeConfig).mockReturnValue({
+            mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {
                     enabled: false,
                 },
-            } as ReturnType<typeof useRuntimeConfig>);
+            });
 
             expect(isBackgroundStreamingEnabled()).toBe(false);
         });
 
         it('should return true when background jobs are enabled', () => {
-            vi.mocked(useRuntimeConfig).mockReturnValue({
+            mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {
                     enabled: true,
                 },
-            } as ReturnType<typeof useRuntimeConfig>);
+            });
 
             expect(isBackgroundStreamingEnabled()).toBe(true);
         });
 
         it('should return false when no config is provided', () => {
-            vi.mocked(useRuntimeConfig).mockReturnValue({} as ReturnType<typeof useRuntimeConfig>);
+            mockUseRuntimeConfig.mockReturnValue({});
 
             expect(isBackgroundStreamingEnabled()).toBe(false);
         });
 
         it('should return false when backgroundJobs config is missing', () => {
-            vi.mocked(useRuntimeConfig).mockReturnValue({
+            mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: undefined,
-            } as ReturnType<typeof useRuntimeConfig>);
+            });
 
             expect(isBackgroundStreamingEnabled()).toBe(false);
         });
