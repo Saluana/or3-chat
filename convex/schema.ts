@@ -292,4 +292,33 @@ export default defineSchema({
         window_start: v.number(), // Timestamp when window started
         updated_at: v.number(),
     }).index('by_key', ['key']),
+
+    // ============================================================
+    // BACKGROUND JOBS
+    // ============================================================
+
+    /**
+     * Background jobs - persistent storage for background streaming jobs.
+     * Allows jobs to survive server restarts and work across instances.
+     */
+    background_jobs: defineTable({
+        user_id: v.string(), // User who created the job
+        thread_id: v.string(), // Thread the message belongs to
+        message_id: v.string(), // Message ID being generated
+        model: v.string(), // Model being used
+        status: v.union(
+            v.literal('streaming'),
+            v.literal('complete'),
+            v.literal('error'),
+            v.literal('aborted')
+        ),
+        content: v.string(), // Accumulated content
+        chunks_received: v.number(), // Progress tracking
+        started_at: v.number(), // Unix timestamp
+        completed_at: v.optional(v.number()),
+        error: v.optional(v.string()),
+    })
+        .index('by_user', ['user_id'])
+        .index('by_status', ['status'])
+        .index('by_message', ['message_id']),
 });

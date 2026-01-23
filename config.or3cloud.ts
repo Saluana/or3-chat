@@ -89,4 +89,21 @@ export const or3CloudConfig = defineOr3CloudConfig({
                 ? process.env.OR3_FORCE_HTTPS === 'true'
                 : process.env.NODE_ENV === 'production',
     },
+    /**
+     * Background streaming configuration (SSR mode only).
+     * Enables AI streaming to continue on the server when users navigate away.
+     */
+    backgroundStreaming: {
+        enabled: process.env.OR3_BACKGROUND_STREAMING_ENABLED === 'true',
+        storageProvider: (process.env.OR3_BACKGROUND_STREAMING_PROVIDER ?? (syncEnabled ? 'convex' : 'memory')) as
+            | 'memory'
+            | 'convex'
+            | 'redis',
+        maxConcurrentJobs: process.env.OR3_BACKGROUND_MAX_JOBS
+            ? Number(process.env.OR3_BACKGROUND_MAX_JOBS)
+            : 20,
+        jobTimeoutSeconds: process.env.OR3_BACKGROUND_JOB_TIMEOUT
+            ? Number(process.env.OR3_BACKGROUND_JOB_TIMEOUT)
+            : 300,
+    },
 });

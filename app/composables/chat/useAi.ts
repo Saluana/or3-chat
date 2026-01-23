@@ -32,7 +32,14 @@ import {
     trimOrMessagesImages,
 } from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
-import { openRouterStream } from '../../utils/chat/openrouterStream';
+import {
+    openRouterStream,
+    startBackgroundStream,
+    pollJobStatus,
+    abortBackgroundJob,
+    isBackgroundStreamingEnabled,
+    type BackgroundJobStatus,
+} from '../../utils/chat/openrouterStream';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
 import {
@@ -50,6 +57,7 @@ import { useActivePrompt } from '#imports';
 import { getDefaultPromptId } from '#imports';
 import { useHooks } from '#imports';
 import { consumeWorkflowHandlingFlag } from '~/plugins/workflow-slash-commands.client';
+import { NotificationService } from '~/core/notifications/notification-service';
 // settings/model store are provided elsewhere at runtime; keep dynamic access guards
 import type {
     ChatSettings,
@@ -68,11 +76,262 @@ type GlobalWithPaneApi = typeof globalThis & {
     __or3MultiPaneApi?: UseMultiPaneApi;
 };
 
+const BACKGROUND_JOB_POLL_INTERVAL_MS = 1000;
+const BACKGROUND_JOB_PERSIST_INTERVAL_MS = 500;
+const BACKGROUND_JOB_MUTED_KEY = 'notification_muted_threads';
+
+type BackgroundJobUpdate = {
+    status: BackgroundJobStatus;
+    content: string;
+    delta: string;
+};
+
+type BackgroundJobSubscriber = {
+    onUpdate?: (update: BackgroundJobUpdate) => void;
+    onComplete?: (update: BackgroundJobUpdate) => void;
+    onError?: (update: BackgroundJobUpdate) => void;
+    onAbort?: (update: BackgroundJobUpdate) => void;
+};
+
+type BackgroundJobTracker = {
+    jobId: string;
+    threadId: string;
+    messageId: string;
+    status: BackgroundJobStatus['status'];
+    lastContent: string;
+    lastPersistedLength: number;
+    lastPersistAt: number;
+    polling: boolean;
+    subscribers: Set<BackgroundJobSubscriber>;
+    completion: Promise<BackgroundJobStatus>;
+    resolveCompletion: (status: BackgroundJobStatus) => void;
+};
+
+const backgroundJobTrackers = new Map<string, BackgroundJobTracker>();
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function isThreadMuted(threadId: string): Promise<boolean> {
+    if (!import.meta.client) return false;
+    try {
+        const kv = await getDb().kv.get(BACKGROUND_JOB_MUTED_KEY);
+        if (!kv?.value) return false;
+        const parsed = JSON.parse(kv.value);
+        return Array.isArray(parsed) && parsed.includes(threadId);
+    } catch {
+        return false;
+    }
+}
+
+async function emitBackgroundComplete(
+    tracker: BackgroundJobTracker,
+    status: BackgroundJobStatus
+): Promise<void> {
+    if (!import.meta.client) return;
+    if (!tracker.threadId) return;
+    if (tracker.subscribers.size > 0) return;
+    if (await isThreadMuted(tracker.threadId)) return;
+
+    const hooks = useHooks();
+    const service = new NotificationService(getDb(), hooks, 'temp-user');
+    const isError = status.status === 'error';
+    const isAbort = status.status === 'aborted';
+    const type = isError || isAbort ? 'system.warning' : 'ai.message.received';
+    const title = isError
+        ? 'AI response failed'
+        : isAbort
+        ? 'AI response stopped'
+        : 'AI response ready';
+    const body = isError
+        ? status.error || 'Background response failed.'
+        : isAbort
+        ? 'Background response was aborted.'
+        : 'Your background response is ready.';
+
+    await service.create({
+        type,
+        title,
+        body,
+        threadId: tracker.threadId,
+        actions: [
+            {
+                id: newId(),
+                label: 'Open chat',
+                kind: 'navigate',
+                target: { threadId: tracker.threadId },
+                data: { messageId: tracker.messageId },
+            },
+        ],
+    });
+}
+
+async function persistBackgroundJobUpdate(
+    tracker: BackgroundJobTracker,
+    status: BackgroundJobStatus,
+    content: string
+): Promise<void> {
+    if (!import.meta.client) return;
+    const now = Date.now();
+    const statusChanged = status.status !== tracker.status;
+    const contentChanged = content.length > tracker.lastPersistedLength;
+    const shouldPersistContent =
+        contentChanged &&
+        (now - tracker.lastPersistAt > BACKGROUND_JOB_PERSIST_INTERVAL_MS ||
+            status.status !== 'streaming');
+
+    if (!statusChanged && !shouldPersistContent) return;
+
+    const existing = (await getDb().messages.get(tracker.messageId)) as
+        | StoredMessage
+        | undefined;
+    if (!existing) return;
+
+    const baseData =
+        existing.data && typeof existing.data === 'object'
+            ? (existing.data as Record<string, unknown>)
+            : {};
+    const nextError =
+        status.status === 'error'
+            ? status.error || 'Background response failed'
+            : status.status === 'aborted'
+            ? 'Background response aborted'
+            : null;
+    const mergedData = {
+        ...baseData,
+        content: content ?? (baseData.content as string | undefined) ?? '',
+        background_job_id: tracker.jobId,
+        background_job_status: status.status,
+        ...(status.error ? { background_job_error: status.error } : {}),
+        ...(nextError ? { error: nextError } : {}),
+    };
+
+    await upsert.message({
+        ...existing,
+        pending: status.status === 'streaming',
+        error: nextError,
+        data: mergedData,
+        updated_at: nowSec(),
+    });
+
+    tracker.status = status.status;
+    tracker.lastPersistAt = now;
+    tracker.lastPersistedLength = content.length;
+}
+
+async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
+    if (tracker.polling) return;
+    tracker.polling = true;
+
+    while (true) {
+        let status: BackgroundJobStatus;
+        try {
+            status = await pollJobStatus(tracker.jobId);
+        } catch (err) {
+            const error = err instanceof Error ? err.message : 'Unknown error';
+            status = {
+                id: tracker.jobId,
+                status: 'error',
+                threadId: tracker.threadId,
+                messageId: tracker.messageId,
+                model: 'unknown',
+                chunksReceived: 0,
+                startedAt: Date.now(),
+                completedAt: Date.now(),
+                error,
+                content: tracker.lastContent,
+            };
+        }
+
+        const content =
+            typeof status.content === 'string' ? status.content : tracker.lastContent;
+        const delta =
+            content.length > tracker.lastContent.length
+                ? content.slice(tracker.lastContent.length)
+                : '';
+        tracker.lastContent = content;
+
+        await persistBackgroundJobUpdate(tracker, status, content);
+
+        const update: BackgroundJobUpdate = { status, content, delta };
+        for (const subscriber of tracker.subscribers) {
+            subscriber.onUpdate?.(update);
+        }
+
+        if (status.status !== 'streaming') {
+            for (const subscriber of tracker.subscribers) {
+                if (status.status === 'complete') {
+                    subscriber.onComplete?.(update);
+                } else if (status.status === 'aborted') {
+                    subscriber.onAbort?.(update);
+                } else {
+                    subscriber.onError?.(update);
+                }
+            }
+            await emitBackgroundComplete(tracker, status);
+            tracker.resolveCompletion(status);
+            backgroundJobTrackers.delete(tracker.jobId);
+            tracker.polling = false;
+            return;
+        }
+
+        await sleep(BACKGROUND_JOB_POLL_INTERVAL_MS);
+    }
+}
+
+function ensureBackgroundJobTracker(params: {
+    jobId: string;
+    threadId: string;
+    messageId: string;
+}): BackgroundJobTracker {
+    const existing = backgroundJobTrackers.get(params.jobId);
+    if (existing) {
+        if (!existing.threadId) existing.threadId = params.threadId;
+        if (!existing.messageId) existing.messageId = params.messageId;
+        return existing;
+    }
+
+    let resolveCompletion: (status: BackgroundJobStatus) => void = () => {};
+    const completion = new Promise<BackgroundJobStatus>((resolve) => {
+        resolveCompletion = resolve;
+    });
+    const tracker: BackgroundJobTracker = {
+        jobId: params.jobId,
+        threadId: params.threadId,
+        messageId: params.messageId,
+        status: 'streaming',
+        lastContent: '',
+        lastPersistedLength: 0,
+        lastPersistAt: 0,
+        polling: false,
+        subscribers: new Set<BackgroundJobSubscriber>(),
+        completion,
+        resolveCompletion,
+    };
+    backgroundJobTrackers.set(params.jobId, tracker);
+    void pollBackgroundJob(tracker);
+    return tracker;
+}
+
+function subscribeBackgroundJob(
+    tracker: BackgroundJobTracker,
+    subscriber: BackgroundJobSubscriber
+): () => void {
+    tracker.subscribers.add(subscriber);
+    return () => {
+        tracker.subscribers.delete(subscriber);
+    };
+}
+
 type StoredMessage = Message & {
     data?: {
         content?: string;
         reasoning_text?: string | null;
         tool_calls?: ToolCallInfo[] | null;
+        background_job_id?: string;
+        background_job_status?: BackgroundJobStatus['status'];
+        background_job_error?: string | null;
         [key: string]: unknown;
     } | null;
     content?: string | ContentPart[];
@@ -129,10 +388,25 @@ export function useChat(
     const streamAcc = createStreamAccumulator();
     const streamState = streamAcc.state;
     const streamId = ref<string | undefined>(undefined);
+    const backgroundJobId = ref<string | null>(null);
+    const backgroundJobDisposers: Array<() => void> = [];
+    const attachedBackgroundJobs = new Set<string>();
+    const detached = ref(false);
     function resetStream() {
         streamAcc.reset();
         streamId.value = undefined;
     }
+
+    const backgroundStreamingConfig = computed(() =>
+        (runtimeConfig.public as { backgroundStreaming?: { enabled?: boolean } })
+            .backgroundStreaming
+    );
+    const backgroundStreamingAllowed = computed(
+        () =>
+            runtimeConfig.public.ssrAuthEnabled === true &&
+            backgroundStreamingConfig.value?.enabled === true &&
+            isBackgroundStreamingEnabled()
+    );
 
     async function enforceClientLimits(isNewThread: boolean): Promise<boolean> {
         const limits = limitsConfig.value;
@@ -458,6 +732,7 @@ export function useChat(
             messages.value = rawMessages.value
                 .filter((m: ChatMessage) => m.role !== 'tool')
                 .map((m) => ensureUiMessage(m));
+            await reattachBackgroundJobs();
         }
     }
 
@@ -470,6 +745,134 @@ export function useChat(
             messages.value.push(tail);
         }
         tailAssistant.value = null;
+    }
+
+    function resolveUiMessage(messageId: string): UiChatMessage | null {
+        if (tailAssistant.value?.id === messageId) return tailAssistant.value;
+        return messages.value.find((m) => m.id === messageId) ?? null;
+    }
+
+    function clearBackgroundJobSubscriptions(): void {
+        if (!backgroundJobDisposers.length) return;
+        for (const dispose of backgroundJobDisposers.splice(0, backgroundJobDisposers.length)) {
+            try {
+                dispose();
+            } catch {
+                /* intentionally empty */
+            }
+        }
+        attachedBackgroundJobs.clear();
+    }
+
+    function attachBackgroundJobToUi(params: {
+        jobId: string;
+        messageId: string;
+        threadId: string;
+    }): BackgroundJobTracker {
+        const tracker = ensureBackgroundJobTracker({
+            jobId: params.jobId,
+            threadId: params.threadId,
+            messageId: params.messageId,
+        });
+        if (!attachedBackgroundJobs.has(params.jobId)) {
+            const subscriber: BackgroundJobSubscriber = {
+                onUpdate: ({ content, delta }) => {
+                    if (detached.value) return;
+                    const target = resolveUiMessage(params.messageId);
+                    if (!target) return;
+                    if (target.pending && delta) target.pending = false;
+                    target.text = content;
+                    if (tailAssistant.value?.id === params.messageId && delta) {
+                        streamAcc.append(delta, { kind: 'text' });
+                    } else if (delta) {
+                        messages.value = [...messages.value];
+                    }
+                },
+                onComplete: ({ content }) => {
+                    if (detached.value) return;
+                    const target = resolveUiMessage(params.messageId);
+                    if (!target) return;
+                    target.text = content;
+                    target.pending = false;
+                    if (tailAssistant.value?.id !== params.messageId) {
+                        messages.value = [...messages.value];
+                    }
+                    streamAcc.finalize();
+                    if (backgroundJobId.value === params.jobId) {
+                        loading.value = false;
+                        backgroundJobId.value = null;
+                    }
+                },
+                onError: ({ status }) => {
+                    if (detached.value) return;
+                    const target = resolveUiMessage(params.messageId);
+                    if (!target) return;
+                    target.pending = false;
+                    target.error = status.error || 'Background response failed';
+                    if (tailAssistant.value?.id !== params.messageId) {
+                        messages.value = [...messages.value];
+                    }
+                    streamAcc.finalize({
+                        error: new Error(target.error || 'Background response failed'),
+                    });
+                    if (backgroundJobId.value === params.jobId) {
+                        loading.value = false;
+                        backgroundJobId.value = null;
+                    }
+                },
+                onAbort: () => {
+                    if (detached.value) return;
+                    const target = resolveUiMessage(params.messageId);
+                    if (!target) return;
+                    target.pending = false;
+                    if (tailAssistant.value?.id !== params.messageId) {
+                        messages.value = [...messages.value];
+                    }
+                    streamAcc.finalize({ aborted: true });
+                    if (backgroundJobId.value === params.jobId) {
+                        loading.value = false;
+                        backgroundJobId.value = null;
+                    }
+                },
+            };
+            const unsubscribe = subscribeBackgroundJob(tracker, subscriber);
+            attachedBackgroundJobs.add(params.jobId);
+            backgroundJobDisposers.push(unsubscribe);
+        }
+        return tracker;
+    }
+
+    async function reattachBackgroundJobs(): Promise<void> {
+        if (!backgroundStreamingAllowed.value || !threadIdRef.value) return;
+        try {
+            const dbMessages = (await messagesByThread(threadIdRef.value)) as
+                | StoredMessage[]
+                | undefined;
+            const list = Array.isArray(dbMessages) ? dbMessages : [];
+            for (const msg of list) {
+                if (msg.role !== 'assistant' || !msg.pending || !msg.data) continue;
+                const data = msg.data as Record<string, unknown>;
+                const jobId =
+                    typeof data.background_job_id === 'string'
+                        ? data.background_job_id
+                        : null;
+                const status =
+                    typeof data.background_job_status === 'string'
+                        ? data.background_job_status
+                        : 'streaming';
+                if (!jobId || status !== 'streaming') continue;
+                attachBackgroundJobToUi({
+                    jobId,
+                    messageId: msg.id,
+                    threadId: threadIdRef.value,
+                });
+                if (!backgroundJobId.value) {
+                    backgroundJobId.value = jobId;
+                }
+            }
+        } catch {
+            /* intentionally empty */
+        }
     }
 
     async function sendMessage(
@@ -879,6 +1282,8 @@ export function useChat(
 
         loading.value = true;
         streamId.value = undefined;
+        backgroundJobId.value = null;
+        detached.value = false;
 
         let currentModelId: string | undefined;
         try {
@@ -1060,11 +1465,7 @@ export function useChat(
             const activeToolCalls = new Map<string, ToolCallInfo>();
 
             aborted.value = false;
-            abortController.value = new AbortController();
-
-            let continueLoop = true;
-            let loopIteration = 0;
-            const MAX_TOOL_ITERATIONS = 10; // Prevent infinite loops
+            abortController.value = null;
 
             const filteredMessages = await hooks.applyFilters(
                 'ai.chat.messages:filter:before_send',
@@ -1120,6 +1521,128 @@ export function useChat(
                 loading.value = false;
                 return;
             }
+
+            const allowBackgroundStreaming =
+                backgroundStreamingAllowed.value &&
+                enabledToolDefs.length === 0 &&
+                modalities.length === 1 &&
+                modalities[0] === 'text';
+
+            if (allowBackgroundStreaming) {
+                try {
+                    const result = await startBackgroundStream({
+                        apiKey: effectiveApiKey.value ?? undefined,
+                        model: modelId,
+                        orMessages:
+                            orMessages as Parameters<
+                                typeof startBackgroundStream
+                            >[0]['orMessages'],
+                        modalities,
+                        threadId: threadIdRef.value!,
+                        messageId: assistantDbMsg.id,
+                    });
+
+                    const rawAssistant: ChatMessage = {
+                        role: 'assistant',
+                        content: '',
+                        id: assistantDbMsg.id,
+                        stream_id: newStreamId,
+                        reasoning_text: null,
+                    };
+                    recordRawMessage(rawAssistant);
+                    rawMessages.value.push(rawAssistant);
+                    const uiAssistant = ensureUiMessage(rawAssistant);
+                    uiAssistant.pending = true;
+                    tailAssistant.value = uiAssistant;
+
+                    backgroundJobId.value = result.jobId;
+                    await updateMessageRecord(assistantDbMsg.id, {
+                        data: {
+                            background_job_id: result.jobId,
+                            background_job_status: 'streaming',
+                        },
+                    });
+
+                    const tracker = attachBackgroundJobToUi({
+                        jobId: result.jobId,
+                        messageId: assistantDbMsg.id,
+                        threadId: threadIdRef.value!,
+                    });
+
+                    const completion = await tracker.completion;
+                    if (detached.value) return;
+
+                    if (completion.status === 'complete') {
+                        const fullText = tracker.lastContent;
+                        const hookName = 'ui.chat.message:filter:incoming';
+                        const errorsBefore =
+                            hooks._diagnostics.errors[hookName] ?? 0;
+                        const incoming = await hooks.applyFilters(
+                            hookName,
+                            fullText,
+                            threadIdRef.value
+                        );
+                        const errorsAfter =
+                            hooks._diagnostics.errors[hookName] ?? 0;
+                        if (errorsAfter > errorsBefore) {
+                            throw new Error('Incoming filter threw an exception');
+                        }
+                        const target = resolveUiMessage(assistantDbMsg.id);
+                        if (target) {
+                            target.text = incoming;
+                            target.pending = false;
+                        }
+                        await updateMessageRecord(assistantDbMsg.id, {
+                            data: { content: incoming },
+                            pending: false,
+                        });
+                        await hooks.doAction('ai.chat.stream:action:complete', {
+                            threadId: threadIdRef.value,
+                            assistantId: assistantDbMsg.id,
+                            streamId: newStreamId,
+                            totalLength: incoming.length,
+                            reasoningLength: 0,
+                            fileHashes: assistantDbMsg.file_hashes || null,
+                        });
+                        const endedAt = Date.now();
+                        await hooks.doAction('ai.chat.send:action:after', {
+                            threadId: threadIdRef.value,
+                            request: { modelId, userId: userDbMsg.id },
+                            response: {
+                                assistantId: assistantDbMsg.id,
+                                length: incoming.length,
+                            },
+                            timings: {
+                                startedAt,
+                                endedAt,
+                                durationMs: endedAt - startedAt,
+                            },
+                            aborted: false,
+                        });
+                        streamAcc.finalize();
+                    } else if (completion.status === 'aborted') {
+                        aborted.value = true;
+                        streamAcc.finalize({ aborted: true });
+                    } else if (completion.status === 'error') {
+                        streamAcc.finalize({
+                            error: new Error(
+                                completion.error || 'Background response failed'
+                            ),
+                        });
+                    }
+                    return;
+                } catch (err) {
+                    if (import.meta.dev) {
+                        console.warn('[useAi] Background stream failed, falling back', err);
+                    }
+                }
+            }
+
+            abortController.value = new AbortController();
+
+            let continueLoop = true;
+            let loopIteration = 0;
+            const MAX_TOOL_ITERATIONS = 10; // Prevent infinite loops
 
             while (continueLoop && loopIteration < MAX_TOOL_ITERATIONS) {
                 continueLoop = false;
@@ -2535,8 +3058,12 @@ export function useChat(
     }
 
     function clear() {
-        // CRITICAL: Abort any active stream before clearing to prevent memory leaks
-        if (abortController.value) {
+        if (backgroundJobId.value) {
+            detached.value = true;
+            clearBackgroundJobSubscriptions();
+            backgroundJobId.value = null;
+        } else if (abortController.value) {
+            // CRITICAL: Abort any active stream before clearing to prevent memory leaks
             aborted.value = true;
             try {
                 abortController.value.abort();
@@ -2551,6 +3078,8 @@ export function useChat(
             streamAcc.finalize({ aborted: true });
             abortController.value = null;
         }
+
+        clearBackgroundJobSubscriptions();
 
         // Clean up any registered hooks to avoid leaking listeners across threads
         if (cleanupFns.length) {
@@ -2600,6 +3129,8 @@ export function useChat(
         return updated;
     }
 
+    void reattachBackgroundJobs();
+
     return {
         messages,
         rawMessages,
@@ -2617,6 +3148,17 @@ export function useChat(
         applyLocalEdit,
         ensureHistorySynced,
         abort: () => {
+            if (backgroundJobId.value) {
+                const jobId = backgroundJobId.value;
+                backgroundJobId.value = null;
+                aborted.value = true;
+                void abortBackgroundJob(jobId);
+                streamAcc.finalize({ aborted: true });
+                if (tailAssistant.value?.pending)
+                    tailAssistant.value.pending = false;
+                return;
+            }
+
             if (!loading.value || !abortController.value) return;
             aborted.value = true;
             try {

@@ -15,17 +15,17 @@ Implementation checklist for background AI streaming with pluggable provider sup
 ### 1. Define Provider Interface
 Requirements: 2.1, 3.4
 
-- [ ] 1.1 Create `server/utils/background-jobs/types.ts`
-    - [ ] Define `BackgroundJob` interface
-    - [ ] Define `CreateJobParams` interface
-    - [ ] Define `JobUpdate` interface
-    - [ ] Define `BackgroundJobProvider` interface
+- [x] 1.1 Create `server/utils/background-jobs/types.ts`
+    - [x] Define `BackgroundJob` interface
+    - [x] Define `CreateJobParams` interface
+    - [x] Define `JobUpdate` interface
+    - [x] Define `BackgroundJobProvider` interface
     
-- [ ] 1.2 Create `server/utils/background-jobs/store.ts`
-    - [ ] Implement `getJobProvider()` factory
-    - [ ] Implement `isBackgroundStreamingEnabled()`
-    - [ ] Implement `resetJobProvider()` for testing
-    - [ ] Read config from `runtimeConfig.backgroundJobs`
+- [x] 1.2 Create `server/utils/background-jobs/store.ts`
+    - [x] Implement `getJobProvider()` factory
+    - [x] Implement `isBackgroundStreamingEnabled()`
+    - [x] Implement `resetJobProvider()` for testing
+    - [x] Read config from `runtimeConfig.backgroundJobs`
 
 ---
 
@@ -34,21 +34,21 @@ Requirements: 2.1, 3.4
 ### 2. Implement Memory Provider
 Requirements: 2.1, 3.1, 3.2
 
-- [ ] 2.1 Create `server/utils/background-jobs/providers/memory.ts`
-    - [ ] Implement `createJob()` with UUID generation
-    - [ ] Implement `getJob()` with user authorization
-    - [ ] Implement `updateJob()` for chunk accumulation
-    - [ ] Implement `completeJob()`
-    - [ ] Implement `failJob()`
-    - [ ] Implement `abortJob()` with AbortController
-    - [ ] Implement `getAbortController()`
-    - [ ] Implement `cleanupExpired()` with timeout handling
+- [x] 2.1 Create `server/utils/background-jobs/providers/memory.ts`
+    - [x] Implement `createJob()` with UUID generation
+    - [x] Implement `getJob()` with user authorization
+    - [x] Implement `updateJob()` for chunk accumulation
+    - [x] Implement `completeJob()`
+    - [x] Implement `failJob()`
+    - [x] Implement `abortJob()` with AbortController
+    - [x] Implement `getAbortController()`
+    - [x] Implement `cleanupExpired()` with timeout handling
     
-- [ ] 2.2 Add lifecycle management
-    - [ ] Enforce max concurrent jobs limit
-    - [ ] Start cleanup interval on first job
-    - [ ] Handle job timeout (mark as error)
-    - [ ] Clean up stale completed jobs
+- [x] 2.2 Add lifecycle management
+    - [x] Enforce max concurrent jobs limit
+    - [x] Start cleanup interval on first job
+    - [x] Handle job timeout (mark as error)
+    - [x] Clean up stale completed jobs
 
 ---
 
@@ -57,24 +57,24 @@ Requirements: 2.1, 3.1, 3.2
 ### 3. Implement Convex Provider
 Requirements: 2.1, 3.1
 
-- [ ] 3.1 Add Convex schema
-    - [ ] Add `backgroundJobs` table to `convex/schema.ts`
-    - [ ] Add indexes: `by_user`, `by_status`, `by_message`
+- [x] 3.1 Add Convex schema
+    - [x] Add `backgroundJobs` table to `convex/schema.ts`
+    - [x] Add indexes: `by_user`, `by_status`, `by_message`
     
-- [ ] 3.2 Create Convex functions
-    - [ ] `convex/backgroundJobs.ts` - mutations & queries
-    - [ ] `create` mutation
-    - [ ] `get` query with user filter
-    - [ ] `update` mutation
-    - [ ] `complete` mutation
-    - [ ] `fail` mutation
-    - [ ] `abort` mutation
-    - [ ] `cleanup` mutation (scheduled or on-demand)
+- [x] 3.2 Create Convex functions
+    - [x] `convex/backgroundJobs.ts` - mutations & queries
+    - [x] `create` mutation
+    - [x] `get` query with user filter
+    - [x] `update` mutation
+    - [x] `complete` mutation
+    - [x] `fail` mutation
+    - [x] `abort` mutation
+    - [x] `cleanup` mutation (scheduled or on-demand)
     
-- [ ] 3.3 Create `server/utils/background-jobs/providers/convex.ts`
-    - [ ] Implement all provider interface methods
-    - [ ] Use ConvexHttpClient for server-side calls
-    - [ ] Handle poll-based abort (no AbortController)
+- [x] 3.3 Create `server/utils/background-jobs/providers/convex.ts`
+    - [x] Implement all provider interface methods
+    - [x] Use ConvexHttpClient for server-side calls
+    - [x] Handle poll-based abort (no AbortController)
 
 ---
 
@@ -83,26 +83,26 @@ Requirements: 2.1, 3.1
 ### 4. Enhance `/api/openrouter/stream`
 Requirements: 2.1, 2.2
 
-- [ ] 4.1 Add background mode detection
-    - [ ] Check for `_background: true` in request body
-    - [ ] Validate `_threadId` and `_messageId`
-    - [ ] Check `isBackgroundStreamingEnabled()`
+- [x] 4.1 Add background mode detection
+    - [x] Check for `_background: true` in request body
+    - [x] Validate `_threadId` and `_messageId`
+    - [x] Check `isBackgroundStreamingEnabled()`
     
-- [ ] 4.2 Implement background mode handler
-    - [ ] Get provider via `getJobProvider()`
-    - [ ] Create job and return `{ jobId, status }` immediately
-    - [ ] Handle max jobs exceeded (503)
+- [x] 4.2 Implement background mode handler
+    - [x] Get provider via `getJobProvider()`
+    - [x] Create job and return `{ jobId, status }` immediately
+    - [x] Handle max jobs exceeded (503)
     
-- [ ] 4.3 Implement `streamInBackground()` function
-    - [ ] Get AbortController from provider (if supported)
-    - [ ] Stream from OpenRouter
-    - [ ] Update provider with chunks periodically
-    - [ ] Check for abort status (poll-based for Convex)
-    - [ ] Call `completeJob()` on success
-    - [ ] Call `failJob()` on error
+- [x] 4.3 Implement `streamInBackground()` function
+    - [x] Get AbortController from provider (if supported)
+    - [x] Stream from OpenRouter
+    - [x] Update provider with chunks periodically
+    - [x] Check for abort status (poll-based for Convex)
+    - [x] Call `completeJob()` on success
+    - [x] Call `failJob()` on error
     
-- [ ] 4.4 Preserve existing foreground behavior
-    - [ ] No breaking changes for non-background requests
+- [x] 4.4 Preserve existing foreground behavior
+    - [x] No breaking changes for non-background requests
 
 ---
 
@@ -111,16 +111,16 @@ Requirements: 2.1, 2.2
 ### 5. Create Job Endpoints
 Requirements: 2.1, 3.3
 
-- [ ] 5.1 Create `server/api/jobs/[id]/status.get.ts`
-    - [ ] Resolve user from session
-    - [ ] Get job from provider
-    - [ ] Return status, progress, timestamps
-    - [ ] Handle 404 for missing/unauthorized
+- [x] 5.1 Create `server/api/jobs/[id]/status.get.ts`
+    - [x] Resolve user from session
+    - [x] Get job from provider
+    - [x] Return status, progress, timestamps
+    - [x] Handle 404 for missing/unauthorized
     
-- [ ] 5.2 Create `server/api/jobs/[id]/abort.post.ts`
-    - [ ] Resolve user from session
-    - [ ] Call provider's `abortJob()`
-    - [ ] Return `{ aborted: boolean }`
+- [x] 5.2 Create `server/api/jobs/[id]/abort.post.ts`
+    - [x] Resolve user from session
+    - [x] Call provider's `abortJob()`
+    - [x] Return `{ aborted: boolean }`
 
 ---
 
@@ -129,17 +129,17 @@ Requirements: 2.1, 3.3
 ### 6. Client-Side Changes
 Requirements: 2.1, 2.2, 2.3
 
-- [ ] 6.1 Add to `app/utils/chat/openrouterStream.ts`
-    - [ ] Export `startBackgroundStream()` 
-    - [ ] Export `pollJobStatus()`
-    - [ ] Export `abortBackgroundJob()`
-    - [ ] Export `isBackgroundStreamingEnabled()` (client-side)
+- [x] 6.1 Add to `app/utils/chat/openrouterStream.ts`
+    - [x] Export `startBackgroundStream()` 
+    - [x] Export `pollJobStatus()`
+    - [x] Export `abortBackgroundJob()`
+    - [x] Export `isBackgroundStreamingEnabled()` (client-side)
     
 - [ ] 6.2 Modify `app/composables/chat/useAi.ts`
-    - [ ] Modify `clear()` to detach instead of abort (SSR mode)
-    - [ ] Add reattach logic on thread load
-    - [ ] Store detached stream references
-    - [ ] Handle completed background jobs
+    - [x] Modify `clear()` to detach instead of abort (SSR mode)
+    - [x] Add reattach logic on thread load
+    - [x] Store detached stream references
+    - [x] Handle completed background jobs
 
 ---
 
@@ -149,13 +149,13 @@ Requirements: 2.1, 2.2, 2.3
 Requirements: 2.4
 
 - [ ] 7.1 Server-side notification emission
-    - [ ] Create `emitBackgroundComplete()` helper
-    - [ ] Store notification via Convex/Dexie
-    - [ ] Include threadId for navigation
+    - [x] Create `emitBackgroundComplete()` helper
+    - [x] Store notification via Convex/Dexie
+    - [x] Include threadId for navigation
     
 - [ ] 7.2 Mute preference handling
-    - [ ] Check thread mute status before creating notification
-    - [ ] Skip notification if user is viewing thread
+    - [x] Check thread mute status before creating notification
+    - [x] Skip notification if user is viewing thread
 
 ---
 
@@ -164,12 +164,12 @@ Requirements: 2.4
 ### 8. Add Runtime Config
 Requirements: 3.4
 
-- [ ] 8.1 Update `nuxt.config.ts`
-    - [ ] Add `runtimeConfig.backgroundJobs` section
-    - [ ] Document environment variables in README
+- [x] 8.1 Update `nuxt.config.ts`
+    - [x] Add `runtimeConfig.backgroundJobs` section
+    - [x] Document environment variables in README
     
 - [ ] 8.2 Ensure static build compatibility
-    - [ ] Feature detection prevents background code paths
+    - [x] Feature detection prevents background code paths
     - [ ] Test static build has no regressions
 
 ---
@@ -239,14 +239,14 @@ graph TD
 
 | Phase | Effort |
 |-------|--------|
-| Phase 1: Types & Interface | 0.5 hours |
-| Phase 2: Memory Provider | 1.5 hours |
-| Phase 3: Convex Provider | 2 hours |
-| Phase 4: Stream Endpoint | 1.5 hours |
-| Phase 5: Job API | 1 hour |
-| Phase 6: Client Integration | 2 hours |
+| Phase 1: Types & Interface | 0.5 hours ✅ |
+| Phase 2: Memory Provider | 1.5 hours ✅ |
+| Phase 3: Convex Provider | 2 hours ✅ |
+| Phase 4: Stream Endpoint | 1.5 hours ✅ |
+| Phase 5: Job API | 1 hour ✅ |
+| Phase 6: Client Integration | 2 hours (partial) |
 | Phase 7: Notifications | 1 hour |
-| Phase 8: Configuration | 0.5 hours |
+| Phase 8: Configuration | 0.5 hours (partial) |
 | Phase 9: Testing | 2 hours |
 | **Total** | **~12 hours** |
 
