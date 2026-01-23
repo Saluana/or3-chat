@@ -524,3 +524,50 @@ The notification schema supports future admin features:
 4. Click notification, verify navigation
 5. Mark as read, verify badge decrements
 6. Test with sync enabled across two browsers
+
+---
+
+## Code Review Fixes (2026-01-22)
+
+The following issues from the Razor code review were addressed:
+
+### 1. Memory Leak Fix (HIGH)
+- **Problem:** `NotificationService` registered duplicate hook listeners every time `useNotifications()` was called
+- **Solution:** Implemented singleton pattern with `startListening()`/`stopListening()` methods and ref counting in composable
+- **Files:** `notification-service.ts`, `useNotifications.ts`
+
+### 2. Zod Validation for JSON.parse (HIGH)
+- **Problem:** Muted threads data parsed without validation could crash on malformed data
+- **Solution:** Added `mutedThreadsSchema` with Zod `safeParse()` and graceful fallback
+- **File:** `useNotifications.ts`
+
+### 3. Timestamp Unit Consistency (MEDIUM)
+- **Problem:** `Date.now()` (milliseconds) used instead of `nowSec()` (seconds)
+- **Solution:** Changed all timestamp calls to use `nowSec()` for consistency with other tables
+- **Files:** `notification-service.ts`, `useNotifications.ts`, `NotificationItem.vue`
+
+### 4. Pre-computed Icons (MEDIUM)
+- **Problem:** `useIcon()` called inside computed getter (Vue anti-pattern)
+- **Solution:** Pre-computed all icons at setup time, access `.value` in computed
+- **File:** `NotificationItem.vue`
+
+### 5. Modal Instead of confirm() (LOW)
+- **Problem:** Browser `confirm()` blocks main thread and doesn't match design system
+- **Solution:** Replaced with `UModal` component for clear confirmation UX
+- **File:** `NotificationPanel.vue`
+
+### 6. TypedHookEngine Compatibility (MEDIUM)
+- **Problem:** Service used `HookEngine` but `useHooks()` returns `TypedHookEngine`
+- **Solution:** Updated service import and type annotations
+- **File:** `notification-service.ts`
+
+### 7. Filter Rejection Type (LOW)
+- **Problem:** `notify:filter:before_store` couldn't return `false` for rejection
+- **Solution:** Updated hook type to `NotificationCreatePayload | false`
+- **File:** `hook-types.ts`
+
+### Verification
+- `bunx nuxi typecheck` passes (exit code 0)
+- `bunx eslint` clean on notification files
+- `bunx vitest run` passes (70 tests, 1 pre-existing unrelated failure)
+

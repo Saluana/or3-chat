@@ -107,9 +107,25 @@ async function testClearAll() {
     console.log(`📬 After: ${notifications.value.length} notifications`);
 }
 
+// Type-safe window extension for test harness
+interface NotificationTestHarness {
+    testCreateNotification: typeof testCreateNotification;
+    testNotificationWithActions: typeof testNotificationWithActions;
+    testMultipleNotifications: typeof testMultipleNotifications;
+    testUnreadCount: typeof testUnreadCount;
+    testMarkAllRead: typeof testMarkAllRead;
+    testClearAll: typeof testClearAll;
+}
+
+declare global {
+    interface Window {
+        notificationTests?: NotificationTestHarness;
+    }
+}
+
 // Export test functions to global scope for easy access
 if (typeof window !== 'undefined') {
-    (window as any).notificationTests = {
+    window.notificationTests = {
         testCreateNotification,
         testNotificationWithActions,
         testMultipleNotifications,

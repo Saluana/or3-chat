@@ -28,8 +28,8 @@ Requirements: 1.2
     - Fields: `workspace_id`, `id`, `user_id`, `thread_id`, `document_id`, `type`, `title`, `body`, `actions`, `read_at`, `deleted`, `deleted_at`, `created_at`, `updated_at`, `clock`
     - Indexes: `by_workspace`, `by_workspace_id`, `by_workspace_user`
 - [x] 2.2 Add notifications to TABLE_INDEX_MAP in `convex/sync.ts`
-- [ ] 2.3 Verify schema builds correctly
-- [ ] 2.4 Run typecheck to verify no errors
+- [x] 2.3 Verify schema builds correctly
+- [x] 2.4 Run typecheck to verify no errors
 
 ---
 
@@ -66,7 +66,7 @@ Requirements: 1.2
 
 - [x] 5.1 Add `notifications` to `SYNCED_TABLES` in `app/core/sync/hook-bridge.ts`
 - [x] 5.2 Conflict resolver uses generic table handling (no changes needed)
-- [ ] 5.3 Run typecheck to verify no errors
+- [x] 5.3 Run typecheck to verify no errors
 
 ---
 

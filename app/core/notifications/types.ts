@@ -14,4 +14,5 @@ export type {
 export type {
     Notification,
     NotificationCreate,
-} from '~/app/db/schema';
+} from '~/db/schema';
+

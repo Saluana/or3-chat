@@ -22,7 +22,6 @@
                         variant="ghost"
                         color="neutral"
                         size="sm"
-                        icon
                         @click="isOpen = false"
                         aria-label="Close"
                     >
@@ -74,17 +73,44 @@
                     variant="ghost"
                     color="error"
                     block
-                    @click="handleClearAll"
+                    @click="showClearConfirm = true"
                 >
                     Clear all notifications
                 </UButton>
             </div>
         </div>
     </USlideover>
+
+    <!-- Clear confirmation modal -->
+    <UModal v-model="showClearConfirm">
+        <div class="p-6 bg-[var(--md-surface)] rounded-lg">
+            <h3 class="text-lg font-bold text-[var(--md-on-surface)] mb-2">
+                Clear All Notifications?
+            </h3>
+            <p class="text-[var(--md-on-surface-variant)] mb-6">
+                This will permanently remove all notifications. This action cannot be undone.
+            </p>
+            <div class="flex justify-end gap-3">
+                <UButton
+                    variant="ghost"
+                    color="neutral"
+                    @click="showClearConfirm = false"
+                >
+                    Cancel
+                </UButton>
+                <UButton
+                    color="error"
+                    @click="confirmClearAll"
+                >
+                    Clear All
+                </UButton>
+            </div>
+        </div>
+    </UModal>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
 import { useIcon } from '~/composables/useIcon';
 import { useNotifications } from '~/composables/notifications/useNotifications';
 
@@ -108,21 +134,15 @@ const isOpen = computed({
     set: (value) => emit('update:modelValue', value),
 });
 
+const showClearConfirm = ref(false);
+
 async function handleMarkAllRead() {
     await markAllRead();
 }
 
-async function handleClearAll() {
-    // Confirm before clearing
-    if (
-        confirm(
-            'Are you sure you want to clear all notifications? This cannot be undone.'
-        )
-    ) {
-        const count = await clearAll();
-        console.log(`Cleared ${count} notifications`);
-        // Optionally close the panel
-        // isOpen.value = false;
-    }
+async function confirmClearAll() {
+    const count = await clearAll();
+    console.log(`Cleared ${count} notifications`);
+    showClearConfirm.value = false;
 }
 </script>

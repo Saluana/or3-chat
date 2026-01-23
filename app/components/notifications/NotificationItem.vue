@@ -78,24 +78,32 @@ const router = useRouter();
 const { markRead } = useNotifications();
 const hooks = useHooks();
 
-// Type to icon mapping
-const typeIconMap: Record<string, string> = {
-    'ai.message.received': 'message',
-    'workflow.completed': 'workflow',
-    'sync.conflict': 'sync',
-    'system.warning': 'warning',
-};
+// Pre-compute all possible icons at setup time to avoid calling useIcon inside computed
+// This follows Vue best practices - composables should only be called at setup, not in getters
+const icons = {
+    'ai.message.received': useIcon('notification.message'),
+    'workflow.completed': useIcon('notification.workflow'),
+    'sync.conflict': useIcon('notification.sync'),
+    'system.warning': useIcon('notification.warning'),
+    default: useIcon('notification.default'),
+} as const;
 
+// Type-safe lookup using pre-computed icons
+// We access .value to unwrap the ComputedRef and return a plain string
 const typeIcon = computed(() => {
-    const icon = typeIconMap[props.notification.type];
-    if (icon) return useIcon(`notification.${icon}`);
-    return useIcon('notification.default');
+    const notificationType = props.notification.type;
+    if (notificationType in icons) {
+        return icons[notificationType as keyof typeof icons].value;
+    }
+    return icons.default.value;
 });
 
 // Format timestamp as relative time
+// Note: timestamps are in seconds (nowSec()), so we multiply by 1000 for comparison with Date.now()
 const formattedTime = computed(() => {
     const now = Date.now();
-    const created = props.notification.created_at;
+    // created_at is in seconds, convert to milliseconds
+    const created = props.notification.created_at * 1000;
     const diff = now - created;
 
     const seconds = Math.floor(diff / 1000);

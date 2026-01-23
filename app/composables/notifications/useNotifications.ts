@@ -7,20 +7,34 @@
 
 import { ref, computed, onScopeDispose } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
+import { z } from 'zod';
 import { getDb } from '~/db/client';
 import { NotificationService } from '~/core/notifications/notification-service';
 import { useHooks } from '~/core/hooks/useHooks';
+import { nowSec } from '~/db/util';
 import type { Notification } from '~/db/schema';
 import type { NotificationCreatePayload } from '~/core/hooks/hook-types';
 
-// Hardcoded user ID for now - will be replaced with auth system
+/**
+ * User ID for notifications.
+ * TODO: Replace with actual user from auth system when multi-user is implemented.
+ * Expected integration: const { session } = useSession(); userId = session.value?.user?.id ?? 'guest';
+ */
 const TEMP_USER_ID = 'temp-user';
+
+// Zod schema for validating muted threads data from KV store
+const mutedThreadsSchema = z.array(z.string());
+
+// Singleton service state to prevent memory leaks from duplicate listeners
+let sharedService: NotificationService | null = null;
+let serviceCleanup: (() => void) | null = null;
+let serviceRefCount = 0;
 
 /**
  * Composable for accessing notification center functionality
  */
 export function useNotifications() {
-    if (!process.client) {
+    if (!import.meta.client) {
         // SSR-safe no-op
         return {
             notifications: computed(() => [] as Notification[]),
@@ -38,10 +52,16 @@ export function useNotifications() {
 
     const db = getDb();
     const hooks = useHooks();
-    const userId = TEMP_USER_ID; // TODO: Replace with actual user from auth
+    const userId = TEMP_USER_ID;
 
-    // Create service instance
-    const service = new NotificationService(db, hooks, userId);
+    // Use singleton service pattern to prevent memory leaks
+    if (!sharedService) {
+        sharedService = new NotificationService(db, hooks, userId);
+        serviceCleanup = sharedService.startListening();
+    }
+    serviceRefCount++;
+
+    const service = sharedService;
 
     // Reactive state
     const notifications = ref<Notification[]>([]);
@@ -70,6 +90,9 @@ export function useNotifications() {
     });
 
     // Live query for unread count
+    // Note: Using compound index [user_id+read_at] would be more efficient,
+    // but Dexie doesn't support querying for undefined in compound indexes well.
+    // The .and() filter is acceptable for typical notification volumes (<1000).
     const unreadCountObservable = liveQuery(async () => {
         try {
             const count = await db.notifications
@@ -84,12 +107,19 @@ export function useNotifications() {
         }
     });
 
-    // Live query for muted threads
+    // Live query for muted threads with Zod validation
     const mutedThreadsObservable = liveQuery(async () => {
         try {
             const kvRecord = await db.kv.get('notification_muted_threads');
             if (!kvRecord?.value) return [];
-            return JSON.parse(kvRecord.value) as string[];
+            
+            // Parse and validate with Zod to prevent runtime crashes from malformed data
+            const parseResult = mutedThreadsSchema.safeParse(JSON.parse(kvRecord.value));
+            if (!parseResult.success) {
+                console.warn('[useNotifications] Invalid muted threads data, resetting:', parseResult.error.message);
+                return [];
+            }
+            return parseResult.data;
         } catch (err) {
             console.error('[useNotifications] Muted threads error:', err);
             return [];
@@ -126,14 +156,22 @@ export function useNotifications() {
         },
     });
 
-    // Cleanup subscriptions
+    // Cleanup subscriptions and service ref count
     onScopeDispose(() => {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- guard handles async race between init and dispose
         if (notificationsSubscription) notificationsSubscription.unsubscribe();
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- guard handles async race between init and dispose
         if (unreadCountSubscription) unreadCountSubscription.unsubscribe();
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- guard handles async race between init and dispose
         if (mutedThreadsSubscription) mutedThreadsSubscription.unsubscribe();
+
+        // Decrement service ref count and cleanup when no more users
+        serviceRefCount--;
+        if (serviceRefCount === 0 && serviceCleanup) {
+            serviceCleanup();
+            sharedService = null;
+            serviceCleanup = null;
+        }
     });
 
     /**
@@ -150,7 +188,7 @@ export function useNotifications() {
         const muted = [...mutedThreadsData.value];
         if (!muted.includes(threadId)) {
             muted.push(threadId);
-            const now = Date.now();
+            const now = nowSec();
             await db.kv.put({
                 id: 'notification_muted_threads',
                 name: 'notification_muted_threads',
@@ -168,7 +206,7 @@ export function useNotifications() {
      */
     const unmuteThread = async (threadId: string): Promise<void> => {
         const muted = mutedThreadsData.value.filter((id) => id !== threadId);
-        const now = Date.now();
+        const now = nowSec();
         await db.kv.put({
             id: 'notification_muted_threads',
             name: 'notification_muted_threads',

@@ -249,7 +249,7 @@ export const NotificationActionSchema = z.object({
             route: z.string().optional(),
         })
         .optional(),
-    data: z.record(z.unknown()).optional(),
+    data: z.record(z.string(), z.unknown()).optional(),
 });
 export type NotificationAction = z.infer<typeof NotificationActionSchema>;
 

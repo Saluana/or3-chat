@@ -873,7 +873,7 @@ export type CoreHookPayloadMap = {
     'notify:action:read': [{ id: string; readAt: number }];
     'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];
     'notify:action:cleared': [{ count: number }];
-    'notify:filter:before_store': [NotificationCreatePayload, { source: string }];
+    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];
 };
 
 // Derived payloads for DB action hooks

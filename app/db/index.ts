@@ -10,6 +10,9 @@ import type {
     ThreadCreate,
     Post,
     PostCreate,
+    Notification,
+    NotificationCreate,
+    NotificationAction,
 } from './schema';
 import {
     createThread,

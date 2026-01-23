@@ -6,35 +6,61 @@
  * Integrates with hook system for extensibility.
  */
 
-import type { Or3DB } from '~/app/db/client';
-import type { Notification } from '~/app/db/schema';
-import type { HookEngine } from '../hooks/hooks';
+import type { Or3DB } from '~/db/client';
+import type { Notification } from '~/db/schema';
+import type { TypedHookEngine } from '../hooks/typed-hooks';
 import type { NotificationCreatePayload } from '../hooks/hook-types';
+import { nowSec } from '~/db/util';
+
+// Callback type for the push action handler
+type PushActionCallback = (payload: unknown) => Promise<void>;
 
 export class NotificationService {
     private db: Or3DB;
-    private hooks: HookEngine;
+    private hooks: TypedHookEngine;
     private userId: string;
+    private actionHandler: PushActionCallback | null = null;
+    private isListening = false;
 
-    constructor(db: Or3DB, hooks: HookEngine, userId: string) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    constructor(db: Or3DB, hooks: TypedHookEngine, userId: string) {
         this.db = db;
-         
         this.hooks = hooks;
-         
         this.userId = userId;
-        this.setupListeners();
+        // NOTE: Do NOT call setupListeners() here - use startListening() explicitly
+        // to prevent memory leaks from multiple service instances
     }
 
     /**
-     * Set up hook listeners for notification actions
+     * Start listening for push events.
+     * Call once per session, not per composable instance.
+     * Returns a cleanup function to stop listening.
      */
-    private setupListeners(): void {
-        // Listen for push events
-         
-        this.hooks.addAction('notify:action:push', async (payload: unknown) => {
+    startListening(): () => void {
+        if (this.isListening) {
+            console.warn('[NotificationService] Already listening, skipping duplicate registration');
+            return () => this.stopListening();
+        }
+
+        this.actionHandler = async (payload: unknown) => {
             await this.create(payload as NotificationCreatePayload);
-        });
+        };
+
+        this.hooks.addAction('notify:action:push', this.actionHandler);
+        this.isListening = true;
+
+        return () => this.stopListening();
+    }
+
+    /**
+     * Stop listening for push events.
+     * Cleans up the action handler to prevent memory leaks.
+     */
+    stopListening(): void {
+        if (this.actionHandler && this.isListening) {
+            this.hooks.removeAction('notify:action:push', this.actionHandler);
+            this.actionHandler = null;
+            this.isListening = false;
+        }
     }
 
     /**
@@ -49,12 +75,12 @@ export class NotificationService {
             { source: 'client' }
         );
 
-        // If filter returns false, reject the notification
-        if (filtered === false) {
+        // If filter returns false or nullish, reject the notification
+        if (!filtered) {
             return null;
         }
 
-        const now = Date.now();
+        const now = nowSec();
         const notification: Notification = {
             id: crypto.randomUUID(),
             user_id: this.userId,
@@ -79,7 +105,7 @@ export class NotificationService {
      * Mark a single notification as read
      */
     async markRead(id: string): Promise<void> {
-        const readAt = Date.now();
+        const readAt = nowSec();
         await this.db.notifications.update(id, {
             read_at: readAt,
             updated_at: readAt,
@@ -92,11 +118,11 @@ export class NotificationService {
      * Mark all unread notifications as read for current user
      */
     async markAllRead(): Promise<void> {
-        const readAt = Date.now();
+        const readAt = nowSec();
         await this.db.notifications
             .where('user_id')
             .equals(this.userId)
-            .and((n) => n.read_at === undefined && !n.deleted)
+            .and((n: Notification) => n.read_at === undefined && !n.deleted)
             .modify({
                 read_at: readAt,
                 updated_at: readAt,
@@ -109,17 +135,19 @@ export class NotificationService {
      * Returns the count of notifications cleared
      */
     async clearAll(): Promise<number> {
-        const deletedAt = Date.now();
-        const count = (await this.db.notifications
+        const deletedAt = nowSec();
+        const result = await this.db.notifications
             .where('user_id')
             .equals(this.userId)
-            .and((n) => !n.deleted)
+            .and((n: Notification) => !n.deleted)
             .modify({
                 deleted: true,
                 deleted_at: deletedAt,
                 updated_at: deletedAt,
                 clock: deletedAt,
-            })) as number;
+            });
+        // Dexie modify() returns number of modified records
+        const count = typeof result === 'number' ? result : 0;
         await this.hooks.doAction('notify:action:cleared', { count });
         return count;
     }
