@@ -50,3 +50,6 @@ export * from './posts/usePostsList';
 // Project composables
 export * from './projects/useProjectTreeActions';
 export * from './projects/useProjectsCrud';
+
+// Notification composables
+export * from './notifications/useNotifications';

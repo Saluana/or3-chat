@@ -103,6 +103,14 @@ export default defineNuxtConfig({
             allowedOrigins: or3CloudConfig.security!.allowedOrigins!,
             forceHttps: or3CloudConfig.security!.forceHttps!,
         },
+        // Background streaming configuration (SSR mode only)
+        backgroundJobs: {
+            enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
+            storageProvider: or3CloudConfig.backgroundStreaming?.storageProvider ?? 'memory',
+            maxConcurrentJobs: or3CloudConfig.backgroundStreaming?.maxConcurrentJobs ?? 20,
+            jobTimeoutMs: (or3CloudConfig.backgroundStreaming?.jobTimeoutSeconds ?? 300) * 1000,
+            completedJobRetentionMs: 5 * 60 * 1000, // 5 minutes
+        },
         public: {
             // Single source of truth for client gating.
             // Avoid inferring enablement from presence of publishable keys.
@@ -127,6 +135,9 @@ export default defineNuxtConfig({
             limits: limitsConfig,
             branding: brandingConfig,
             legal: legalConfig,
+            backgroundStreaming: {
+                enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
+            },
             // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
             clerkPublishableKey: '',
         },

@@ -42,6 +42,12 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         allowedOrigins: [],
         forceHttps: process.env.NODE_ENV === 'production',
     },
+    backgroundStreaming: {
+        enabled: false,
+        storageProvider: 'memory',
+        maxConcurrentJobs: 20,
+        jobTimeoutSeconds: 300,
+    },
 };
 
 const cloudConfigSchema = z
@@ -99,6 +105,14 @@ const cloudConfigSchema = z
                 forceHttps: z.boolean().optional(),
             })
             .optional(),
+        backgroundStreaming: z
+            .object({
+                enabled: z.boolean().optional(),
+                storageProvider: z.enum(['memory', 'convex', 'redis']).optional(),
+                maxConcurrentJobs: z.number().int().min(1).optional(),
+                jobTimeoutSeconds: z.number().int().min(1).optional(),
+            })
+            .optional(),
     })
     .passthrough();
 
@@ -150,6 +164,10 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
         security: {
             ...DEFAULT_OR3_CLOUD_CONFIG.security,
             ...config.security,
+        },
+        backgroundStreaming: {
+            ...DEFAULT_OR3_CLOUD_CONFIG.backgroundStreaming,
+            ...config.backgroundStreaming,
         },
     };
 }

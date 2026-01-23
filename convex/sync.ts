@@ -86,6 +86,7 @@ const TABLE_INDEX_MAP: Record<string, { table: string; indexName: string }> = {
     posts: { table: 'posts', indexName: 'by_workspace_id' },
     kv: { table: 'kv', indexName: 'by_workspace_id' },
     file_meta: { table: 'file_meta', indexName: 'by_workspace_hash' },
+    notifications: { table: 'notifications', indexName: 'by_workspace_id' },
 };
 
 /**

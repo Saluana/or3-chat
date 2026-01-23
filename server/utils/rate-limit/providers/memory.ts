@@ -88,4 +88,4 @@ export class MemoryRateLimitProvider implements RateLimitProvider {
 }
 
 // Singleton instance
-export const memoryProvider = new MemoryRateLimitProvider();
+export const memoryRateLimitProvider = new MemoryRateLimitProvider();

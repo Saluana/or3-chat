@@ -254,6 +254,30 @@ export default defineSchema({
         .index('by_workspace_name', ['workspace_id', 'name'])
         .index('by_workspace_id', ['workspace_id', 'id']),
 
+    /**
+     * Notifications - user notification center entries
+     */
+    notifications: defineTable({
+        workspace_id: v.id('workspaces'),
+        id: v.string(),
+        user_id: v.string(),
+        thread_id: v.optional(v.string()),
+        document_id: v.optional(v.string()),
+        type: v.string(),
+        title: v.string(),
+        body: v.optional(v.string()),
+        actions: v.optional(v.string()), // JSON serialized NotificationAction[]
+        read_at: v.optional(v.number()),
+        deleted: v.boolean(),
+        deleted_at: v.optional(v.number()),
+        created_at: v.number(),
+        updated_at: v.number(),
+        clock: v.number(),
+    })
+        .index('by_workspace', ['workspace_id', 'updated_at'])
+        .index('by_workspace_id', ['workspace_id', 'id'])
+        .index('by_workspace_user', ['workspace_id', 'user_id', 'created_at']),
+
     // ============================================================
     // RATE LIMITING
     // ============================================================
@@ -268,4 +292,33 @@ export default defineSchema({
         window_start: v.number(), // Timestamp when window started
         updated_at: v.number(),
     }).index('by_key', ['key']),
+
+    // ============================================================
+    // BACKGROUND JOBS
+    // ============================================================
+
+    /**
+     * Background jobs - persistent storage for background streaming jobs.
+     * Allows jobs to survive server restarts and work across instances.
+     */
+    background_jobs: defineTable({
+        user_id: v.string(), // User who created the job
+        thread_id: v.string(), // Thread the message belongs to
+        message_id: v.string(), // Message ID being generated
+        model: v.string(), // Model being used
+        status: v.union(
+            v.literal('streaming'),
+            v.literal('complete'),
+            v.literal('error'),
+            v.literal('aborted')
+        ),
+        content: v.string(), // Accumulated content
+        chunks_received: v.number(), // Progress tracking
+        started_at: v.number(), // Unix timestamp
+        completed_at: v.optional(v.number()),
+        error: v.optional(v.string()),
+    })
+        .index('by_user', ['user_id'])
+        .index('by_status', ['status'])
+        .index('by_message', ['message_id']),
 });

@@ -50,7 +50,12 @@ export type KnownHookKey =
     | 'sync.rescan:action:starting'
     | 'sync.rescan:action:progress'
     | 'sync.rescan:action:completed'
-    | 'sync.stats:action';
+    | 'sync.stats:action'
+    | 'notify:action:push'
+    | 'notify:action:read'
+    | 'notify:action:clicked'
+    | 'notify:action:cleared'
+    | 'notify:filter:before_store';
 
 // Families for DB hooks as template literal types (broad coverage without listing all)
 export type DbFamily =

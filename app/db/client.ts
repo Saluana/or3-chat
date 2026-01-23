@@ -7,6 +7,7 @@ import type {
     Thread,
     FileMeta,
     Post,
+    Notification,
 } from './schema';
 import type { PendingOp, Tombstone, SyncState, SyncRun } from '~~/shared/sync/types';
 import type { FileTransfer } from '~~/shared/storage/types';
@@ -27,6 +28,7 @@ export class Or3DB extends Dexie {
     file_blobs!: Table<FileBlobRow, string>; // hash as primary key -> Blob
     posts!: Table<Post, string>;
     file_transfers!: Table<FileTransfer, string>;
+    notifications!: Table<Notification, string>;
 
     // Sync tables (added in v7)
     pending_ops!: Table<PendingOp, string>;
@@ -128,6 +130,12 @@ export class Or3DB extends Dexie {
         this.version(11).stores({
             file_transfers:
                 'id, hash, direction, state, workspace_id, created_at, updated_at, [hash+direction], [state+created_at], [state+workspace_id], [state+workspace_id+created_at]',
+        });
+
+        // Version 12: Add notifications table
+        this.version(12).stores({
+            notifications:
+                '&id, user_id, [user_id+read_at], [user_id+created_at], [user_id+thread_id], type, deleted, clock, created_at, updated_at',
         });
     }
 }

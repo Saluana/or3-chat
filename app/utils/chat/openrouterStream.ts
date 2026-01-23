@@ -1,3 +1,4 @@
+import { useRuntimeConfig } from '#imports';
 import type { ToolDefinition } from './types';
 import {
     parseOpenRouterSSE,
@@ -253,4 +254,217 @@ export async function* openRouterStream(params: {
     for await (const evt of parseOpenRouterSSE(resp.body)) {
         yield evt;
     }
+}
+
+// ============================================================
+// BACKGROUND STREAMING (SSR mode only)
+// ============================================================
+
+/**
+ * Cache key for background streaming availability
+ */
+const BACKGROUND_STREAMING_CACHE_KEY = 'or3:background-streaming-available';
+
+/**
+ * Background job status from server
+ */
+export interface BackgroundJobStatus {
+    id: string;
+    status: 'streaming' | 'complete' | 'error' | 'aborted';
+    threadId: string;
+    messageId: string;
+    model: string;
+    chunksReceived: number;
+    startedAt: number;
+    completedAt?: number;
+    error?: string;
+    content?: string;
+}
+
+/**
+ * Result from starting a background stream
+ */
+export interface BackgroundStreamResult {
+    jobId: string;
+    status: 'streaming';
+}
+
+async function readErrorMessage(
+    response: Response,
+    fallback: string
+): Promise<string> {
+    const data = (await response.json().catch(() => null)) as unknown;
+    if (data && typeof data === 'object' && 'error' in data) {
+        const error = (data as { error?: unknown }).error;
+        if (typeof error === 'string') return error;
+    }
+    return fallback;
+}
+
+/**
+ * Check if background streaming is available (server must support it)
+ */
+export function isBackgroundStreamingEnabled(): boolean {
+    if (!isServerRouteAvailable()) return false;
+
+    const runtimeConfig = useRuntimeConfig() as {
+        public?: { backgroundStreaming?: { enabled?: boolean } };
+    };
+    const configEnabled = runtimeConfig.public?.backgroundStreaming?.enabled;
+    if (configEnabled === false) return false;
+    
+    // Check cached result
+    if (typeof localStorage !== 'undefined') {
+        const cached = localStorage.getItem(BACKGROUND_STREAMING_CACHE_KEY);
+        if (cached === 'true') return true;
+        if (cached === 'false') return false;
+    }
+
+    if (configEnabled === true) return true;
+
+    // Default: assume not available until first successful background request
+    return false;
+}
+
+/**
+ * Mark background streaming as available
+ */
+function setBackgroundStreamingAvailable(available: boolean): void {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(BACKGROUND_STREAMING_CACHE_KEY, String(available));
+}
+
+/**
+ * Start a background streaming job.
+ * Returns immediately with a job ID; streaming continues on server.
+ */
+export async function startBackgroundStream(params: {
+    apiKey?: string | null;
+    model: string;
+    orMessages: ORMessage[];
+    modalities: string[];
+    threadId: string;
+    messageId: string;
+    reasoning?: unknown;
+    tools?: ToolDefinition[];
+}): Promise<BackgroundStreamResult> {
+    const body: OpenRouterRequestBody & {
+        _background: true;
+        _threadId: string;
+        _messageId: string;
+    } = {
+        model: params.model,
+        messages: params.orMessages,
+        modalities: params.modalities,
+        stream: true,
+        _background: true,
+        _threadId: params.threadId,
+        _messageId: params.messageId,
+    };
+
+    if (params.reasoning) {
+        body.reasoning = params.reasoning;
+    }
+
+    if (params.tools) {
+        body.tools = params.tools.map(stripUiMetadata);
+        body.tool_choice = 'auto';
+    }
+
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+    };
+    if (params.apiKey) {
+        headers.Authorization = `Bearer ${params.apiKey}`;
+    }
+
+    const resp = await fetch('/api/openrouter/stream', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+        if (resp.status === 404 || resp.status === 405) {
+            setServerRouteAvailable(false);
+            setBackgroundStreamingAvailable(false);
+        }
+        const message = await readErrorMessage(
+            resp,
+            `Background stream failed: ${resp.status}`
+        );
+        throw new Error(message);
+    }
+
+    const result = await resp.json() as BackgroundStreamResult;
+    
+    // Mark background streaming as available since it worked
+    setBackgroundStreamingAvailable(true);
+    
+    return result;
+}
+
+/**
+ * Poll the status of a background job
+ */
+export async function pollJobStatus(jobId: string): Promise<BackgroundJobStatus> {
+    const resp = await fetch(`/api/jobs/${jobId}/status`);
+
+    if (!resp.ok) {
+        const message = await readErrorMessage(
+            resp,
+            `Job status failed: ${resp.status}`
+        );
+        throw new Error(message);
+    }
+
+    return await resp.json() as BackgroundJobStatus;
+}
+
+/**
+ * Abort a background streaming job
+ */
+export async function abortBackgroundJob(jobId: string): Promise<boolean> {
+    const resp = await fetch(`/api/jobs/${jobId}/abort`, {
+        method: 'POST',
+    });
+
+    if (!resp.ok) {
+        return false;
+    }
+
+    const result = await resp.json() as { aborted: boolean };
+    return result.aborted;
+}
+
+/**
+ * Poll a job until it completes or errors
+ * @param jobId - The job ID to poll
+ * @param onProgress - Optional callback for progress updates
+ * @param pollIntervalMs - Polling interval in ms (default 1000)
+ * @param maxWaitMs - Maximum wait time in ms (default 5 minutes)
+ */
+export async function waitForJobCompletion(
+    jobId: string,
+    onProgress?: (status: BackgroundJobStatus) => void,
+    pollIntervalMs = 1000,
+    maxWaitMs = 5 * 60 * 1000
+): Promise<BackgroundJobStatus> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitMs) {
+        const status = await pollJobStatus(jobId);
+        
+        if (onProgress) {
+            onProgress(status);
+        }
+
+        if (status.status !== 'streaming') {
+            return status;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+
+    throw new Error('Job timed out waiting for completion');
 }

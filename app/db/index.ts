@@ -10,6 +10,9 @@ import type {
     ThreadCreate,
     Post,
     PostCreate,
+    Notification,
+    NotificationCreate,
+    NotificationAction,
 } from './schema';
 import {
     createThread,
@@ -161,6 +164,9 @@ export type {
     Project,
     Post,
     PostCreate,
+    Notification,
+    NotificationCreate,
+    NotificationAction,
 };
 
 export type { Document } from './documents';

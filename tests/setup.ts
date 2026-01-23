@@ -1,3 +1,4 @@
+import 'fake-indexeddb/auto';
 // Global test setup: mock heavy virtualization lib to avoid jsdom/Bun hangs.
 import { vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';

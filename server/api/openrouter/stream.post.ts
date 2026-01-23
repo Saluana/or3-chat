@@ -19,6 +19,12 @@ import {
     getLlmRateLimitStats,
 } from '../../utils/llm/rate-limiter';
 import { getRateLimitProvider } from '../../utils/rate-limit/store';
+import {
+    isBackgroundModeRequest,
+    validateBackgroundParams,
+    startBackgroundStream,
+    isBackgroundStreamingAvailable,
+} from '../../utils/background-jobs/stream-handler';
 
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -40,7 +46,19 @@ export default defineEventHandler(async (event) => {
         ? authHeader.slice(7)
         : undefined;
 
-    const apiKey = config.openrouterApiKey || (allowUserOverride ? clientKey : undefined);
+    const apiKey =
+        config.openrouterApiKey ||
+        process.env.OPENROUTER_API_KEY ||
+        (allowUserOverride ? clientKey : undefined);
+
+    if (!apiKey && process.env.NODE_ENV !== 'production') {
+        console.warn('[openrouter][stream] missing api key', {
+            hasRuntimeConfigKey: Boolean(config.openrouterApiKey),
+            hasEnvKey: Boolean(process.env.OPENROUTER_API_KEY),
+            allowUserOverride,
+            hasAuthHeader: Boolean(authHeader),
+        });
+    }
     if (!apiKey) {
         setResponseStatus(event, 400);
         return 'Missing OpenRouter API key';
@@ -130,6 +148,62 @@ export default defineEventHandler(async (event) => {
             return `Daily message limit reached (${dailyConfig.maxRequests}). Try again tomorrow.`;
         }
     }
+
+    // =============================
+    // BACKGROUND MODE HANDLING
+    // =============================
+    // If background mode is requested and enabled, start a background job
+    // and return immediately with the job ID.
+    if (isBackgroundModeRequest(body) && isBackgroundStreamingAvailable()) {
+        // Resolve user ID for authorization
+        let userId: string | null = null;
+        if (isSsrAuthEnabled(event)) {
+            const session = await resolveSessionContext(event);
+            if (session.authenticated && session.user?.id) {
+                userId = session.user.id;
+            }
+        }
+
+        if (!userId) {
+            setResponseStatus(event, 401);
+            return { error: 'Authentication required for background streaming' };
+        }
+
+        const validation = validateBackgroundParams(body);
+        if (!validation.valid) {
+            setResponseStatus(event, 400);
+            return { error: validation.error };
+        }
+
+        const host = getHeader(event, 'host') || 'localhost';
+        const xfProto = getHeader(event, 'x-forwarded-proto');
+        const isLocal = /^localhost(?:\d+)?$|^127\.0\.0\.1(?::\d+)?$/.test(host);
+        const proto = xfProto || (isLocal ? 'http' : 'https');
+
+        try {
+            const result = await startBackgroundStream({
+                body,
+                apiKey,
+                userId,
+                threadId: validation.threadId!,
+                messageId: validation.messageId!,
+                referer: `${proto}://${host}`,
+            });
+
+            return result;
+        } catch (err) {
+            if (err instanceof Error && err.message.includes('Max concurrent')) {
+                setResponseStatus(event, 503);
+                return { error: 'Server busy, try again later' };
+            }
+            setResponseStatus(event, 500);
+            return { error: err instanceof Error ? err.message : 'Background stream failed' };
+        }
+    }
+
+    // =============================
+    // FOREGROUND STREAMING (existing behavior)
+    // =============================
 
     // Req 2: Setup abort controller for client disconnect
     const ac = new AbortController();

@@ -138,6 +138,33 @@ export interface Or3CloudConfig {
     };
 
     /**
+     * Background streaming configuration (SSR mode only).
+     * Enables AI streaming to continue on the server when users navigate away.
+     */
+    backgroundStreaming?: {
+        /**
+         * Enable background streaming.
+         * @default false
+         */
+        enabled?: boolean;
+        /**
+         * Storage provider for background jobs.
+         * @default 'memory'
+         */
+        storageProvider?: 'memory' | 'convex' | 'redis';
+        /**
+         * Maximum concurrent background jobs.
+         * @default 20
+         */
+        maxConcurrentJobs?: number;
+        /**
+         * Background job timeout in seconds.
+         * @default 300
+         */
+        jobTimeoutSeconds?: number;
+    };
+
+    /**
      * Security hardening options.
      */
     security?: {
