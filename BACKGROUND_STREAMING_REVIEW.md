@@ -107,7 +107,11 @@
    * Remove client-side `emitBackgroundComplete` in `useAi.ts` once server-side is implemented, to avoid duplicate notifications (or guard it).
 
 7. **Checklist for merge**
-   * [ ] Convert `getJobProvider` to async and fix `require`.
-   * [ ] Implement server-side notification emission.
-   * [ ] Add unit tests for `MemoryProvider`.
-   * [ ] Add integration test for background stream flow.
+   * [x] Convert `getJobProvider` to async and fix `require`.
+   * [x] Implement server-side notification emission.
+   * [x] Add unit tests for `MemoryProvider`.
+   * [x] Add integration test for background stream flow.
+
+## Implementation Complete ✅
+
+All tasks from this code review have been implemented. See `BACKGROUND_STREAMING_IMPLEMENTATION_SUMMARY.md` for details.
