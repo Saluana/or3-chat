@@ -148,12 +148,12 @@ Requirements: 2.1, 2.2, 2.3
 ### 7. Connect to Notification Center
 Requirements: 2.4
 
-- [ ] 7.1 Server-side notification emission
+- [x] 7.1 Server-side notification emission
     - [x] Create `emitBackgroundComplete()` helper
     - [x] Store notification via Convex/Dexie
     - [x] Include threadId for navigation
     
-- [ ] 7.2 Mute preference handling
+- [x] 7.2 Mute preference handling
     - [x] Check thread mute status before creating notification
     - [x] Skip notification if user is viewing thread
 

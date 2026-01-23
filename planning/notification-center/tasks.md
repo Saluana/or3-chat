@@ -140,21 +140,21 @@ Requirements: 4.1
 ### 11. AI Message Notifications
 Requirements: 2.1
 
-- [ ] 11.1 Identify AI streaming completion point in codebase
-- [ ] 11.2 Add notification emission for non-active thread messages
-- [ ] 11.3 Respect thread mute preferences before emitting
+- [x] 11.1 Identify AI streaming completion point in codebase
+- [x] 11.2 Add notification emission for non-active thread messages
+- [x] 11.3 Respect thread mute preferences before emitting
 
 ### 12. Sync Conflict Notifications
 Requirements: 2.1
 
-- [ ] 12.1 Add notification emission in conflict resolver
-- [ ] 12.2 Include relevant conflict metadata in notification
+- [x] 12.1 Add notification emission in conflict resolver
+- [x] 12.2 Include relevant conflict metadata in notification
 
 ### 13. System Warning Notifications
 Requirements: 2.1
 
-- [ ] 13.1 Add notification emission for system warnings (sync errors, storage failures)
-- [ ] 13.2 Create helper function for system notification emission
+- [x] 13.1 Add notification emission for system warnings (sync errors, storage failures)
+- [x] 13.2 Create helper function for system notification emission
 
 **Note**: Event source integrations are optional enhancements that can be added incrementally after core functionality is tested.
 
