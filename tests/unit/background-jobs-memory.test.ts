@@ -21,6 +21,25 @@ import {
     getJobCount,
 } from '../../server/utils/background-jobs/providers/memory';
 
+// Helper to update mock config
+async function setMockJobConfig(config: {
+    maxConcurrentJobs?: number;
+    jobTimeoutMs?: number;
+    completedJobRetentionMs?: number;
+}) {
+    const { getJobConfig } = await import('../../server/utils/background-jobs/store');
+    vi.mocked(getJobConfig).mockReturnValue({
+        maxConcurrentJobs: config.maxConcurrentJobs ?? 20,
+        jobTimeoutMs: config.jobTimeoutMs ?? 5 * 60 * 1000,
+        completedJobRetentionMs: config.completedJobRetentionMs ?? 5 * 60 * 1000,
+    });
+}
+
+// Helper to reset mock config to defaults
+async function resetMockJobConfig() {
+    await setMockJobConfig({});
+}
+
 describe('Memory Background Job Provider', () => {
     beforeEach(() => {
         clearAllJobs();
@@ -250,12 +269,7 @@ describe('Memory Background Job Provider', () => {
     describe('Max Jobs Limit', () => {
         it('should enforce max concurrent jobs limit', async () => {
             // Mock the config to return a low limit
-            const { getJobConfig } = await import('../../server/utils/background-jobs/store');
-            vi.mocked(getJobConfig).mockReturnValue({
-                maxConcurrentJobs: 2,
-                jobTimeoutMs: 5 * 60 * 1000,
-                completedJobRetentionMs: 5 * 60 * 1000,
-            });
+            await setMockJobConfig({ maxConcurrentJobs: 2 });
 
             // Clear jobs
             clearAllJobs();
@@ -276,22 +290,13 @@ describe('Memory Background Job Provider', () => {
                 memoryJobProvider.createJob({ ...params, messageId: 'msg-3' })
             ).rejects.toThrow(/Max concurrent/);
 
-            // Restore mock
-            vi.mocked(getJobConfig).mockReturnValue({
-                maxConcurrentJobs: 20,
-                jobTimeoutMs: 5 * 60 * 1000,
-                completedJobRetentionMs: 5 * 60 * 1000,
-            });
+            // Restore defaults
+            await resetMockJobConfig();
         });
 
         it('should allow new jobs after completing existing ones', async () => {
             // Mock the config to return a low limit
-            const { getJobConfig } = await import('../../server/utils/background-jobs/store');
-            vi.mocked(getJobConfig).mockReturnValue({
-                maxConcurrentJobs: 2,
-                jobTimeoutMs: 5 * 60 * 1000,
-                completedJobRetentionMs: 5 * 60 * 1000,
-            });
+            await setMockJobConfig({ maxConcurrentJobs: 2 });
 
             clearAllJobs();
 
@@ -312,12 +317,8 @@ describe('Memory Background Job Provider', () => {
             const job3 = await memoryJobProvider.createJob({ ...params, messageId: 'msg-3' });
             expect(job3).toBeTruthy();
 
-            // Restore mock
-            vi.mocked(getJobConfig).mockReturnValue({
-                maxConcurrentJobs: 20,
-                jobTimeoutMs: 5 * 60 * 1000,
-                completedJobRetentionMs: 5 * 60 * 1000,
-            });
+            // Restore defaults
+            await resetMockJobConfig();
         });
     });
 
@@ -334,12 +335,7 @@ describe('Memory Background Job Provider', () => {
             };
 
             // Mock getJobConfig to return a very short timeout
-            const { getJobConfig } = await import('../../server/utils/background-jobs/store');
-            vi.mocked(getJobConfig).mockReturnValue({
-                maxConcurrentJobs: 20,
-                jobTimeoutMs: 100, // 100ms timeout
-                completedJobRetentionMs: 5 * 60 * 1000,
-            });
+            await setMockJobConfig({ jobTimeoutMs: 100 });
 
             const jobId = await memoryJobProvider.createJob(params);
 
@@ -355,11 +351,7 @@ describe('Memory Background Job Provider', () => {
 
             // Restore
             vi.useFakeTimers();
-            vi.mocked(getJobConfig).mockReturnValue({
-                maxConcurrentJobs: 20,
-                jobTimeoutMs: 5 * 60 * 1000,
-                completedJobRetentionMs: 5 * 60 * 1000,
-            });
+            await resetMockJobConfig();
         });
 
         it('should clean up stale completed jobs', async () => {
@@ -373,12 +365,7 @@ describe('Memory Background Job Provider', () => {
             };
 
             // Mock config to use short retention
-            const { getJobConfig } = await import('../../server/utils/background-jobs/store');
-            vi.mocked(getJobConfig).mockReturnValue({
-                maxConcurrentJobs: 20,
-                jobTimeoutMs: 5 * 60 * 1000,
-                completedJobRetentionMs: 100, // 100ms retention
-            });
+            await setMockJobConfig({ completedJobRetentionMs: 100 });
 
             const jobId = await memoryJobProvider.createJob(params);
             await memoryJobProvider.completeJob(jobId, 'Done');
@@ -394,11 +381,7 @@ describe('Memory Background Job Provider', () => {
 
             // Restore
             vi.useFakeTimers();
-            vi.mocked(getJobConfig).mockReturnValue({
-                maxConcurrentJobs: 20,
-                jobTimeoutMs: 5 * 60 * 1000,
-                completedJobRetentionMs: 5 * 60 * 1000,
-            });
+            await resetMockJobConfig();
         });
 
         it('should not clean up recent completed jobs', async () => {
@@ -412,12 +395,7 @@ describe('Memory Background Job Provider', () => {
             };
 
             // Use longer retention
-            const { getJobConfig } = await import('../../server/utils/background-jobs/store');
-            vi.mocked(getJobConfig).mockReturnValue({
-                maxConcurrentJobs: 20,
-                jobTimeoutMs: 5 * 60 * 1000,
-                completedJobRetentionMs: 1000, // 1 second
-            });
+            await setMockJobConfig({ completedJobRetentionMs: 1000 });
 
             const jobId = await memoryJobProvider.createJob(params);
             await memoryJobProvider.completeJob(jobId, 'Done');
@@ -433,11 +411,7 @@ describe('Memory Background Job Provider', () => {
 
             // Restore
             vi.useFakeTimers();
-            vi.mocked(getJobConfig).mockReturnValue({
-                maxConcurrentJobs: 20,
-                jobTimeoutMs: 5 * 60 * 1000,
-                completedJobRetentionMs: 5 * 60 * 1000,
-            });
+            await resetMockJobConfig();
         });
 
         it('should not timeout active streaming jobs within timeout period', async () => {
@@ -451,12 +425,7 @@ describe('Memory Background Job Provider', () => {
             };
 
             // Use longer timeout
-            const { getJobConfig } = await import('../../server/utils/background-jobs/store');
-            vi.mocked(getJobConfig).mockReturnValue({
-                maxConcurrentJobs: 20,
-                jobTimeoutMs: 1000, // 1 second
-                completedJobRetentionMs: 5 * 60 * 1000,
-            });
+            await setMockJobConfig({ jobTimeoutMs: 1000 });
 
             const jobId = await memoryJobProvider.createJob(params);
 
@@ -470,11 +439,7 @@ describe('Memory Background Job Provider', () => {
 
             // Restore
             vi.useFakeTimers();
-            vi.mocked(getJobConfig).mockReturnValue({
-                maxConcurrentJobs: 20,
-                jobTimeoutMs: 5 * 60 * 1000,
-                completedJobRetentionMs: 5 * 60 * 1000,
-            });
+            await resetMockJobConfig();
         });
     });
 
