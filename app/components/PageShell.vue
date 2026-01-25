@@ -75,7 +75,7 @@
                         />
                     </UTooltip>
                 </div>
-                <div class="h-full flex items-center justify-center px-4">
+                <div class="h-full flex items-center justify-center px-4 gap-2">
                     <UTooltip :delay-duration="0" text="Toggle theme">
                         <UButton
                             v-bind="themeToggleButtonProps"
@@ -93,6 +93,13 @@
                             @click="toggleTheme"
                         />
                     </UTooltip>
+                    <NotificationsNotificationBell
+                        :button-props="notificationButtonProps"
+                        button-class="pointer-events-auto backdrop-blur"
+                        popover-side="bottom"
+                        popover-align="end"
+                        tooltip-side="bottom"
+                    />
                     <div
                         v-if="headerActions.length"
                         class="h-full flex items-center gap-1 px-2 pointer-events-auto"
@@ -380,6 +387,10 @@ const themeToggleButtonProps = useButtonThemeProps('shell.theme-toggle', {
     color: 'neutral',
     ui: { base: 'theme-btn' },
 });
+const notificationButtonProps = computed(() => ({
+    ...themeToggleButtonProps.value,
+    square: true,
+}));
 const headerActionButtonProps = useButtonThemeProps('shell.header-action', {
     class: 'theme-btn',
     variant: 'ghost',

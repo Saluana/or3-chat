@@ -7,7 +7,7 @@
         <div class="flex items-start gap-3">
             <!-- Type icon -->
             <div
-                class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-high)]"
+                class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-high)] notification-type-icon"
             >
                 <UIcon :name="typeIcon" class="w-5 h-5" />
             </div>
@@ -16,7 +16,7 @@
             <div class="flex-1 min-w-0">
                 <!-- Title -->
                 <div
-                    class="font-medium text-[var(--md-on-surface)] mb-1"
+                    class="font-medium text-[var(--md-on-surface)] mb-1 notification-title"
                     :class="{ 'font-bold': !notification.read_at }"
                 >
                     {{ notification.title }}
@@ -25,13 +25,13 @@
                 <!-- Body -->
                 <div
                     v-if="notification.body"
-                    class="text-sm text-[var(--md-on-surface-variant)] mb-2"
+                    class="text-sm text-[var(--md-on-surface-variant)] mb-2 notification-body"
                 >
                     {{ notification.body }}
                 </div>
 
                 <!-- Timestamp -->
-                <div class="text-xs text-[var(--md-on-surface-variant)]">
+                <div class="text-xs text-[var(--md-on-surface-variant)] notification-timestamp">
                     {{ formattedTime }}
                 </div>
             </div>
@@ -39,18 +39,19 @@
             <!-- Unread indicator -->
             <div
                 v-if="!notification.read_at"
-                class="flex-shrink-0 w-2 h-2 rounded-full bg-[var(--md-primary)]"
+                class="flex-shrink-0 w-2 h-2 rounded-full bg-[var(--md-primary)] notification-unread-indicator"
             />
         </div>
 
         <!-- Actions -->
         <div
             v-if="notification.actions && notification.actions.length > 0"
-            class="flex gap-2 mt-3 pl-11"
+            class="flex gap-2 mt-3 pl-11 notification-actions"
         >
             <UButton
                 v-for="action in notification.actions"
                 :key="action.id"
+                class="theme-btn notification-action-btn"
                 variant="ghost"
                 color="primary"
                 size="sm"

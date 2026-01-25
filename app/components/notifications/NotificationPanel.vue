@@ -5,6 +5,7 @@
             <span class="text-sm font-semibold text-[var(--md-on-surface)]">Notifications</span>
             <UButton
                 v-if="unreadCount > 0"
+                class="w-fit px-1! notification-mark-all-read-btn"
                 variant="link"
                 color="primary"
                 size="xs"
@@ -45,6 +46,7 @@
         <!-- Footer -->
         <div v-if="notifications.length > 0 && !showClearConfirm" class="px-3 py-2 border-t border-[var(--md-border-color)]">
             <UButton
+            class="notification-clear-btn"
                 variant="link"
                 color="error"
                 size="xs"
@@ -59,10 +61,10 @@
         <div v-if="showClearConfirm" class="px-3 py-2 border-t border-[var(--md-border-color)] bg-[var(--md-error-container)]">
             <p class="text-xs text-[var(--md-on-error-container)] mb-2">Clear all notifications?</p>
             <div class="flex gap-2">
-                <UButton size="xs" variant="soft" color="neutral" @click="showClearConfirm = false">
+                <UButton class="w-fit px-1! notif-clear-cancel" size="xs" variant="solid"  @click="showClearConfirm = false">
                     Cancel
                 </UButton>
-                <UButton size="xs" color="error" @click="confirmClearAll">
+                <UButton class="w-fit px-1! notif-clear-confirm" size="xs" color="error" variant="solid" @click="confirmClearAll">
                     Clear
                 </UButton>
             </div>
