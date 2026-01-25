@@ -266,7 +266,7 @@ export default defineSchema({
         type: v.string(),
         title: v.string(),
         body: v.optional(v.string()),
-        actions: v.optional(v.string()), // JSON serialized NotificationAction[]
+        actions: v.optional(v.any()), // NotificationAction[] (stored as JSON-compatible data)
         read_at: v.optional(v.number()),
         deleted: v.boolean(),
         deleted_at: v.optional(v.number()),

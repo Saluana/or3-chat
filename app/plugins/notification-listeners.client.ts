@@ -9,26 +9,43 @@
  */
 
 import { defineNuxtPlugin } from '#app';
+import { useRuntimeConfig } from '#imports';
 import { useHooks } from '~/core/hooks/useHooks';
 import { NotificationService } from '~/core/notifications/notification-service';
+import { resolveNotificationUserId } from '~/core/notifications/notification-user';
 import { getDb } from '~/db/client';
 import { newId } from '~/db/util';
-import type { NotificationCreatePayload } from '~/core/hooks/hook-types';
+import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 
 /**
  * Create a notification for system warnings and errors
  * Task 13.2: Helper function for system notification emission
  */
+function isClientRuntime(): boolean {
+    const override = (globalThis as { __OR3_TEST_CLIENT?: boolean })
+        ?.__OR3_TEST_CLIENT;
+    if (typeof override === 'boolean') return override;
+    return Boolean(import.meta.client);
+}
+
 export async function emitSystemNotification(payload: {
     title: string;
     body: string;
     threadId?: string;
     documentId?: string;
 }): Promise<void> {
-    if (!import.meta.client) return;
+    if (!isClientRuntime()) return;
     
+    const runtimeConfig = useRuntimeConfig();
+    const sessionContext =
+        runtimeConfig.public?.ssrAuthEnabled === true
+            ? useSessionContext()
+            : null;
     const hooks = useHooks();
-    const userId = 'local-user'; // TODO: Replace with actual user ID from auth
+    const userId = resolveNotificationUserId(
+        sessionContext?.data.value?.session
+    );
     const service = new NotificationService(getDb(), hooks, userId);
     
     await service.create({
@@ -41,21 +58,73 @@ export async function emitSystemNotification(payload: {
 }
 
 export default defineNuxtPlugin(() => {
-    if (!import.meta.client) return;
+    if (!isClientRuntime()) return;
     
+    const runtimeConfig = useRuntimeConfig();
+    const sessionContext =
+        runtimeConfig.public?.ssrAuthEnabled === true
+            ? useSessionContext()
+            : null;
     const hooks = useHooks();
-    const userId = 'local-user'; // TODO: Replace with actual user ID from auth system
-    const service = new NotificationService(getDb(), hooks, userId);
+    const syncConfig = runtimeConfig.public?.sync;
+    const serverNotificationsEnabled =
+        runtimeConfig.public?.ssrAuthEnabled === true &&
+        syncConfig?.enabled === true &&
+        syncConfig?.provider === 'convex' &&
+        Boolean(syncConfig?.convexUrl);
+    const getNotificationUserId = () =>
+        resolveNotificationUserId(sessionContext?.data.value?.session);
+    const conflictDedupe = new Map<string, number>();
+    const errorDedupe = new Map<string, number>();
+    const streamDedupe = new Map<string, number>();
+    const DEDUPE_WINDOW_MS = 15_000;
+
+    function isThreadOpen(threadId?: string): boolean {
+        if (!threadId) return false;
+        const api = getGlobalMultiPaneApi();
+        const panes = api?.panes?.value;
+        if (!Array.isArray(panes)) return false;
+        return panes.some(
+            (pane) => pane?.mode === 'chat' && pane?.threadId === threadId
+        );
+    }
+
+    function shouldDedupe(key: string): boolean {
+        const now = Date.now();
+        const lastSeen = streamDedupe.get(key);
+        if (lastSeen && now - lastSeen < DEDUPE_WINDOW_MS) return true;
+        streamDedupe.set(key, now);
+        return false;
+    }
     
     // Task 12.1 & 12.2: Listen for sync conflicts and create notifications
     hooks.addAction('sync.conflict:action:detected', async (conflict) => {
         try {
             const { tableName, pk, local, remote, winner } = conflict;
+            if (import.meta.dev) {
+                console.debug('[notify] sync.conflict:detected', {
+                    tableName,
+                    pk,
+                    winner,
+                    localClock: (local as { clock?: number })?.clock,
+                    remoteClock: (remote as { clock?: number })?.clock,
+                });
+            }
+            const conflictKey = `${tableName}:${pk}:${winner}`;
+            const now = Date.now();
+            const lastSeen = conflictDedupe.get(conflictKey);
+            if (lastSeen && now - lastSeen < DEDUPE_WINDOW_MS) return;
+            conflictDedupe.set(conflictKey, now);
             
             // Create a notification for the conflict
             const title = 'Sync conflict resolved';
             const body = `A conflict was detected in ${tableName} and resolved using last-write-wins. The ${winner} version was kept.`;
             
+            const service = new NotificationService(
+                getDb(),
+                hooks,
+                getNotificationUserId()
+            );
             await service.create({
                 type: 'sync.conflict',
                 title,
@@ -80,6 +149,30 @@ export default defineNuxtPlugin(() => {
             console.error('[notification-listeners] Failed to create sync conflict notification:', err);
         }
     });
+
+    // Handle permanent sync errors with dedupe + noise filtering
+    hooks.addAction('sync.error:action', async ({ op, error, permanent }) => {
+        try {
+            if (!permanent) return;
+            if (op.tableName === 'notifications' || op.tableName === 'pending_ops') {
+                return;
+            }
+            const message =
+                error instanceof Error ? error.message : String(error || 'Sync error');
+            const errorKey = `${op.tableName}:${op.pk}:${message}`;
+            const now = Date.now();
+            const lastSeen = errorDedupe.get(errorKey);
+            if (lastSeen && now - lastSeen < DEDUPE_WINDOW_MS) return;
+            errorDedupe.set(errorKey, now);
+
+            await emitSystemNotification({
+                title: 'Sync error',
+                body: message,
+            });
+        } catch (err) {
+            console.error('[notification-listeners] Failed to create sync error notification:', err);
+        }
+    });
     
     // Task 13.1: Listen for sync errors
     hooks.addAction('sync:action:error', async (error) => {
@@ -102,6 +195,69 @@ export default defineNuxtPlugin(() => {
             });
         } catch (err) {
             console.error('[notification-listeners] Failed to create storage error notification:', err);
+        }
+    });
+
+    // AI stream completion notifications (only when thread is not open)
+    hooks.addAction('ai.chat.stream:action:complete', async (payload) => {
+        try {
+            if (serverNotificationsEnabled) return;
+            if (!payload?.threadId) return;
+            if (isThreadOpen(payload.threadId)) return;
+            const dedupeKey = `complete:${payload.streamId || payload.assistantId}`;
+            if (shouldDedupe(dedupeKey)) return;
+
+            const service = new NotificationService(
+                getDb(),
+                hooks,
+                getNotificationUserId()
+            );
+            await service.create({
+                type: 'ai.message.received',
+                title: 'AI response ready',
+                body: 'Your background response is ready.',
+                threadId: payload.threadId,
+                actions: [
+                    {
+                        id: newId(),
+                        label: 'Open chat',
+                        kind: 'navigate',
+                        target: { threadId: payload.threadId },
+                        data: { messageId: payload.assistantId },
+                    },
+                ],
+            });
+        } catch (err) {
+            console.error('[notification-listeners] Failed to create AI completion notification:', err);
+        }
+    });
+
+    // AI stream error notifications (skip aborts)
+    hooks.addAction('ai.chat.stream:action:error', async (payload) => {
+        try {
+            if (serverNotificationsEnabled) return;
+            if (!payload?.threadId) return;
+            if (payload.aborted) return;
+            if (isThreadOpen(payload.threadId)) return;
+            const dedupeKey = `error:${payload.streamId || payload.threadId}`;
+            if (shouldDedupe(dedupeKey)) return;
+
+            const service = new NotificationService(
+                getDb(),
+                hooks,
+                getNotificationUserId()
+            );
+            await service.create({
+                type: 'system.warning',
+                title: 'AI response failed',
+                body:
+                    payload.error instanceof Error
+                        ? payload.error.message
+                        : 'Background response failed.',
+                threadId: payload.threadId,
+            });
+        } catch (err) {
+            console.error('[notification-listeners] Failed to create AI error notification:', err);
         }
     });
 });

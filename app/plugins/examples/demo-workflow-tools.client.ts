@@ -37,7 +37,7 @@ export default defineNuxtPlugin(() => {
             label: 'Add Numbers',
             icon: 'tabler:plus',
             descriptionHint: 'Add two numbers and return the result',
-            defaultEnabled: true,
+            defaultEnabled: false,
             category: 'Demo Tools',
         },
     });
@@ -69,7 +69,7 @@ export default defineNuxtPlugin(() => {
             label: 'CoinGecko Price',
             icon: 'tabler:currency-bitcoin',
             descriptionHint: 'Fetch live prices from CoinGecko',
-            defaultEnabled: true,
+            defaultEnabled: false,
             category: 'Demo Tools',
         },
     });
@@ -84,7 +84,7 @@ export default defineNuxtPlugin(() => {
             const sum = a + b;
             return `Sum: ${a} + ${b} = ${sum}`;
         },
-        { enabled: true }
+        { enabled: false }
     );
 
     registerTool(
@@ -127,7 +127,7 @@ export default defineNuxtPlugin(() => {
 
             return `CoinGecko price for ${safeCoinId} in ${safeCurrency.toUpperCase()}: ${price}`;
         },
-        { enabled: true }
+        { enabled: false }
     );
 
     onScopeDispose(() => {

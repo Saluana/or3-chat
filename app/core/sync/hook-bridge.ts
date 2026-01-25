@@ -17,6 +17,7 @@ import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
 import { getPkField } from '~~/shared/sync/table-metadata';
+import { markRecentOpId } from './recent-op-cache';
 
 /** Tables that should be captured for sync */
 const SYNCED_TABLES = [
@@ -209,6 +210,9 @@ export class HookBridge {
             hlc,
             clock: operation === 'delete' ? baseClock + 1 : baseClock,
         };
+
+        // Mark opId immediately to suppress echo before push completes
+        markRecentOpId(stamp.opId);
 
         // Auto-generate order_key for messages if missing
         if (tableName === 'messages' && operation === 'put') {

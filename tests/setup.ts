@@ -74,6 +74,7 @@ vi.mock('#app', async () => {
                 setActiveTheme: vi.fn(),
             },
         }),
+        defineNuxtPlugin: (plugin: unknown) => plugin,
     };
 });
 
@@ -101,6 +102,17 @@ vi.mock('#imports', () => ({
             getResolver: () => ({ resolve: () => ({ props: {} }) }),
             setActiveTheme: vi.fn(),
         },
+    }),
+    useChat: (...args: unknown[]) => {
+        const g = globalThis as Record<string, unknown>;
+        const fn = g.useChat as ((...a: unknown[]) => unknown) | undefined;
+        return fn ? fn(...args) : undefined;
+    },
+    useToast: () => ({ add: vi.fn() }),
+    useHooks: () => ({
+        on: vi.fn().mockReturnValue(() => {}),
+        off: vi.fn(),
+        doAction: vi.fn(),
     }),
     useRuntimeConfig: () => ({
         public: {},

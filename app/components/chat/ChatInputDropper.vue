@@ -68,37 +68,39 @@
                     </div>
                     <!-- Settings Button (stub) -->
                     <div class="chat-input-settings-btn relative shrink-0">
-                        <UPopover class="chat-input-settings-popover">
-                            <UButton
-                                v-bind="settingsButtonProps"
-                                label="Open"
-                                type="button"
-                                aria-label="Settings"
-                                :disabled="loading"
-                            >
-                                <UIcon
-                                    :name="iconModelSettings"
-                                    class="w-4 h-4"
-                                />
-                            </UButton>
-                            <template #content>
-                                <ChatSettingsPopover
-                                    :container-width="containerWidth"
-                                    :loading="loading"
-                                    :streaming="props.streaming"
-                                    v-model:model="selectedModel"
-                                    v-model:web-search-enabled="
-                                        webSearchEnabled
-                                    "
-                                    @open-system-prompts="
-                                        showSystemPrompts = true
-                                    "
-                                    @open-model-catalog="
-                                        showModelCatalog = true
-                                    "
-                                />
-                            </template>
-                        </UPopover>
+                        <ClientOnly>
+                            <UPopover class="chat-input-settings-popover">
+                                <UButton
+                                    v-bind="settingsButtonProps"
+                                    label="Open"
+                                    type="button"
+                                    aria-label="Settings"
+                                    :disabled="loading"
+                                >
+                                    <UIcon
+                                        :name="iconModelSettings"
+                                        class="w-4 h-4"
+                                    />
+                                </UButton>
+                                <template #content>
+                                    <ChatSettingsPopover
+                                        :container-width="containerWidth"
+                                        :loading="loading"
+                                        :streaming="props.streaming"
+                                        v-model:model="selectedModel"
+                                        v-model:web-search-enabled="
+                                            webSearchEnabled
+                                        "
+                                        @open-system-prompts="
+                                            showSystemPrompts = true
+                                        "
+                                        @open-model-catalog="
+                                            showModelCatalog = true
+                                        "
+                                    />
+                                </template>
+                            </UPopover>
+                        </ClientOnly>
                     </div>
                 </div>
 

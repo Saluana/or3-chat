@@ -157,14 +157,16 @@ export default defineEventHandler(async (event) => {
     if (isBackgroundModeRequest(body) && isBackgroundStreamingAvailable()) {
         // Resolve user ID for authorization
         let userId: string | null = null;
+        let workspaceId: string | null = null;
         if (isSsrAuthEnabled(event)) {
             const session = await resolveSessionContext(event);
-            if (session.authenticated && session.user?.id) {
+            if (session.authenticated && session.user?.id && session.workspace?.id) {
                 userId = session.user.id;
+                workspaceId = session.workspace.id;
             }
         }
 
-        if (!userId) {
+        if (!userId || !workspaceId) {
             setResponseStatus(event, 401);
             return { error: 'Authentication required for background streaming' };
         }
@@ -185,6 +187,7 @@ export default defineEventHandler(async (event) => {
                 body,
                 apiKey,
                 userId,
+                workspaceId,
                 threadId: validation.threadId!,
                 messageId: validation.messageId!,
                 referer: `${proto}://${host}`,

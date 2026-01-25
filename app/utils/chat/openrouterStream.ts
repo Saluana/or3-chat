@@ -34,6 +34,9 @@ type OpenRouterRequestBody = {
     reasoning?: unknown;
     tools?: ToolDefinition[];
     tool_choice?: 'auto';
+    _background?: true;
+    _threadId?: string;
+    _messageId?: string;
 };
 
 // Cache key for detecting static build (no server routes)
@@ -121,6 +124,17 @@ export async function* openRouterStream(params: {
 }): AsyncGenerator<ORStreamEvent, void, unknown> {
     const { apiKey, model, orMessages, modalities, tools, signal } = params;
     const hasApiKey = Boolean(apiKey);
+    const runtimeConfig = useRuntimeConfig() as {
+        public: {
+            ssrAuthEnabled: boolean;
+            backgroundStreaming: { enabled: boolean };
+        };
+    };
+    const forceServerRoute = Boolean(
+        runtimeConfig.public.ssrAuthEnabled === true &&
+            runtimeConfig.public.backgroundStreaming.enabled === true
+    );
+    const shouldForceServerRoute = () => forceServerRoute;
 
     const body: OpenRouterRequestBody = {
         model,
@@ -140,7 +154,7 @@ export async function* openRouterStream(params: {
 
     // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available
     // Skip if we've already determined it's not available (static build or server down)
-    if (isServerRouteAvailable()) {
+    if (forceServerRoute || isServerRouteAvailable()) {
         try {
             const serverResp = await fetch('/api/openrouter/stream', {
                 method: 'POST',
@@ -163,7 +177,12 @@ export async function* openRouterStream(params: {
             }
 
             if (serverResp.status === 404 || serverResp.status === 405) {
-                // Server route not OK; mark as unavailable and fall through
+                // Server route not OK
+                if (forceServerRoute) {
+                    throw new Error(
+                        'OpenRouter server route unavailable in SSR mode'
+                    );
+                }
                 setServerRouteAvailable(false);
             } else {
                 const errorText = await serverResp.text().catch(() => '');
@@ -181,9 +200,18 @@ export async function* openRouterStream(params: {
             ) {
                 throw error;
             }
+            if (shouldForceServerRoute()) {
+                throw error instanceof Error
+                    ? error
+                    : new Error('OpenRouter server route failed in SSR mode');
+            }
             // Server route unavailable (404, network error, etc.); mark as unavailable and fall back
             setServerRouteAvailable(false);
         }
+    }
+
+    if (shouldForceServerRoute()) {
+        throw new Error('OpenRouter server route required in SSR mode');
     }
 
     if (!hasApiKey) {
@@ -191,6 +219,11 @@ export async function* openRouterStream(params: {
     }
 
     // Fallback: direct OpenRouter (legacy path)
+    const fallbackBody = { ...body };
+    delete fallbackBody._background;
+    delete fallbackBody._threadId;
+    delete fallbackBody._messageId;
+
     const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -202,7 +235,7 @@ export async function* openRouterStream(params: {
             'X-Title': 'or3.chat',
             Accept: 'text/event-stream',
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(fallbackBody),
         signal,
     });
 
@@ -221,7 +254,7 @@ export async function* openRouterStream(params: {
         let bodyPreview = '<preview-failed>';
         try {
             bodyPreview = JSON.stringify(
-                body,
+                fallbackBody,
                 (_key: string, value: unknown): unknown => {
                     if (typeof value === 'string' && value.length > 300) {
                         return `${value.slice(0, 300)}...(${value.length})`;
@@ -279,6 +312,8 @@ export interface BackgroundJobStatus {
     completedAt?: number;
     error?: string;
     content?: string;
+    content_delta?: string;
+    content_length?: number;
 }
 
 /**
@@ -288,6 +323,11 @@ export interface BackgroundStreamResult {
     jobId: string;
     status: 'streaming';
 }
+
+export type BackgroundJobStreamEvent = {
+    event: 'snapshot' | 'delta' | 'status';
+    status: BackgroundJobStatus;
+};
 
 async function readErrorMessage(
     response: Response,
@@ -407,8 +447,15 @@ export async function startBackgroundStream(params: {
 /**
  * Poll the status of a background job
  */
-export async function pollJobStatus(jobId: string): Promise<BackgroundJobStatus> {
-    const resp = await fetch(`/api/jobs/${jobId}/status`);
+export async function pollJobStatus(
+    jobId: string,
+    offset?: number
+): Promise<BackgroundJobStatus> {
+    const url =
+        typeof offset === 'number' && Number.isFinite(offset) && offset >= 0
+            ? `/api/jobs/${jobId}/status?offset=${Math.floor(offset)}`
+            : `/api/jobs/${jobId}/status`;
+    const resp = await fetch(url);
 
     if (!resp.ok) {
         const message = await readErrorMessage(
@@ -467,4 +514,55 @@ export async function waitForJobCompletion(
     }
 
     throw new Error('Job timed out waiting for completion');
+}
+
+/**
+ * Subscribe to background job updates via SSE.
+ */
+export function subscribeBackgroundJobStream(params: {
+    jobId: string;
+    offset?: number;
+    onStatus: (status: BackgroundJobStatus) => void;
+    onError?: (error: Error) => void;
+}): () => void {
+    if (typeof EventSource === 'undefined') {
+        throw new Error('EventSource unavailable');
+    }
+    const offset =
+        typeof params.offset === 'number' && Number.isFinite(params.offset)
+            ? Math.max(0, Math.floor(params.offset))
+            : null;
+    const url =
+        offset !== null
+            ? `/api/jobs/${params.jobId}/stream?offset=${offset}`
+            : `/api/jobs/${params.jobId}/stream`;
+
+    const es = new EventSource(url);
+
+    es.onmessage = (event) => {
+        try {
+            const parsed = JSON.parse(event.data) as BackgroundJobStreamEvent;
+            params.onStatus(parsed.status);
+        } catch (err) {
+            if (params.onError) {
+                params.onError(
+                    err instanceof Error ? err : new Error('Invalid SSE payload')
+                );
+            }
+        }
+    };
+
+    es.onerror = () => {
+        if (params.onError) {
+            params.onError(new Error('Background SSE connection failed'));
+        }
+    };
+
+    return () => {
+        try {
+            es.close();
+        } catch {
+            /* intentionally empty */
+        }
+    };
 }

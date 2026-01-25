@@ -10,6 +10,7 @@
 
 import type * as backgroundJobs from "../backgroundJobs.js";
 import type * as crons from "../crons.js";
+import type * as notifications from "../notifications.js";
 import type * as rateLimits from "../rateLimits.js";
 import type * as storage from "../storage.js";
 import type * as sync from "../sync.js";
@@ -25,6 +26,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   backgroundJobs: typeof backgroundJobs;
   crons: typeof crons;
+  notifications: typeof notifications;
   rateLimits: typeof rateLimits;
   storage: typeof storage;
   sync: typeof sync;

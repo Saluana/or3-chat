@@ -82,7 +82,7 @@
                     />
                 </div>
                 <lazy-chat-input-dropper
-                    :loading="loading"
+                    :loading="inputLoading"
                     :streaming="streamingActive"
                     :container-width="containerWidth"
                     :thread-id="currentThreadId"
@@ -223,10 +223,12 @@ const chat = shallowRef<ChatInstance>(
         pendingPromptId.value || undefined
     ) as ChatInstance
 );
+// Ensure history + background job reattachment on initial load
+void chat.value?.ensureHistorySynced?.();
 
 watch(
     () => props.threadId,
-    (newId) => {
+    async (newId) => {
         const currentId = chat.value?.threadId?.value;
         // Avoid re-initializing if the composable already set the same id (first-send case)
         if (newId && currentId && newId === currentId) {
@@ -243,11 +245,13 @@ watch(
                 );
             }
         }
+        // Don't seed with stale snapshot; let ensureHistorySynced pull fresh data
         chat.value = useChat(
-            props.messageHistory,
+            [],
             newId,
             pendingPromptId.value || undefined
         ) as ChatInstance;
+        await chat.value?.ensureHistorySynced?.();
     }
 );
 
@@ -258,6 +262,20 @@ watch(
         if (!chat.value) return;
         // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
         if (chat.value.loading.value) {
+            return;
+        }
+        const backgroundMode = backgroundJobMode.value;
+        const backgroundJobIdValue = backgroundJobId.value;
+        const hasPendingBackground = chat.value.messages.value.some(
+            (m) => m.role === 'assistant' && m.pending
+        );
+        if (backgroundJobIdValue && hasPendingBackground) {
+            return;
+        }
+        if (backgroundMode && backgroundMode !== 'none' && hasPendingBackground) {
+            return;
+        }
+        if (hasPendingBackground) {
             return;
         }
         // Prefer to update the internal messages array directly to avoid remount flicker
@@ -289,13 +307,27 @@ const messages = computed<UiChatMessage[]>(
 );
 
 const loading = computed(() => chat.value?.loading?.value || false);
+const backgroundJobId = computed(() =>
+    unwrapRef(chat.value?.backgroundJobId ?? null)
+);
+const backgroundJobMode = computed(() =>
+    unwrapRef(chat.value?.backgroundJobMode ?? 'none')
+);
+const backgroundStreaming = computed(
+    () => Boolean(backgroundJobId.value) && backgroundJobMode.value !== 'none'
+);
 const workflowRunning = computed(() => {
     for (const wf of workflowStates.values()) {
         if (wf && wf.executionState === 'running') return true;
     }
     return false;
 });
-const streamingActive = computed(() => loading.value || workflowRunning.value);
+const streamingActive = computed(
+    () => loading.value || workflowRunning.value || backgroundStreaming.value
+);
+const inputLoading = computed(
+    () => loading.value || backgroundStreaming.value
+);
 
 // Tail streaming now provided directly by useChat composable
 // `useChat` returns many refs; unwrap common ones so computed values expose plain objects/primitives
@@ -668,6 +700,7 @@ function onPendingPromptSelected(promptId: string | null) {
         props.threadId,
         pendingPromptId.value || undefined
     );
+    void chat.value?.ensureHistorySynced?.();
 }
 
 function onStopStream() {

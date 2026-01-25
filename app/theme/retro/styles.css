@@ -84,7 +84,7 @@
 	}
 
 	#nav-header {
-		margin-bottom: 16px;
+		margin-bottom: 0px;
 		margin-left: 12px;
 		margin-right: 24px;
 		padding-bottom: 0px;
@@ -286,6 +286,10 @@
 
 #nav-pages-section {
 	@apply justify-center items-center
+}
+
+.sidebar-scroll {
+	@apply pr-3 pt-5;
 }
 
 /*

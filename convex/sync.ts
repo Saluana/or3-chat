@@ -225,6 +225,12 @@ async function applyOpToTable(
 
     if (op.operation === 'delete') {
         if (existing && !existing.deleted) {
+            console.debug('[sync] apply delete', {
+                table: op.table_name,
+                pk: op.pk,
+                clock: op.clock,
+                existingClock: existing.clock ?? 0,
+            });
             await ctx.db.patch(existing._id, {
                 deleted: true,
                 deleted_at: payloadDeletedAt ?? nowSec(),
@@ -237,10 +243,25 @@ async function applyOpToTable(
         if (existing) {
             // LWW: only update if incoming clock >= existing
             if (op.clock >= (existing.clock ?? 0)) {
+                console.debug('[sync] apply put', {
+                    table: op.table_name,
+                    pk: op.pk,
+                    clock: op.clock,
+                    existingClock: existing.clock ?? 0,
+                    applied: true,
+                });
                 await ctx.db.patch(existing._id, {
                     ...(payload ?? {}),
                     clock: op.clock,
                     updated_at: payloadUpdatedAt ?? nowSec(),
+                });
+            } else {
+                console.debug('[sync] apply put skipped', {
+                    table: op.table_name,
+                    pk: op.pk,
+                    clock: op.clock,
+                    existingClock: existing.clock ?? 0,
+                    applied: false,
                 });
             }
             // else: local wins, no-op
@@ -333,6 +354,10 @@ export const push = mutation({
         ),
     },
     handler: async (ctx, args) => {
+        console.debug('[sync] push', {
+            workspace: args.workspace_id,
+            ops: args.ops.length,
+        });
         // Validate batch size to prevent abuse
         if (args.ops.length > MAX_PUSH_OPS) {
             throw new Error(`Batch size ${args.ops.length} exceeds maximum of ${MAX_PUSH_OPS} ops`);
@@ -410,6 +435,14 @@ export const push = mutation({
         // Apply ops in parallel (Convex transactions are serializable)
         const applyResults = await Promise.allSettled(
             opsToApply.map(async ({ op, serverVersion }) => {
+                console.debug('[sync] push apply', {
+                    table: op.table_name,
+                    pk: op.pk,
+                    op: op.operation,
+                    clock: op.clock,
+                    opId: op.op_id,
+                    serverVersion,
+                });
                 await applyOpToTable(ctx, args.workspace_id, op);
 
                 const opPayload =
@@ -551,6 +584,15 @@ export const pull = query({
         const lastChange = window[window.length - 1];
         const nextCursor = lastChange ? lastChange.server_version : args.cursor;
 
+        console.debug('[sync] pull', {
+            workspace: args.workspace_id,
+            cursor: args.cursor,
+            limit,
+            returned: changes.length,
+            nextCursor,
+            hasMore,
+        });
+
         return {
             changes: changes.map((c) => ({
                 serverVersion: c.server_version,
@@ -607,6 +649,14 @@ export const watchChanges = query({
 
         const latestChange = changes[changes.length - 1];
         const latestVersion = latestChange ? latestChange.server_version : since;
+
+        console.debug('[sync] watchChanges', {
+            workspace: args.workspace_id,
+            cursor: since,
+            limit,
+            returned: changes.length,
+            latestVersion,
+        });
 
         return {
             changes: changes.map((c) => ({

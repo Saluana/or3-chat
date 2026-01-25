@@ -48,7 +48,7 @@
                     <span
                         class="w-[54%] h-[3px] opacity-50"
                         :class="
-                            effectiveConnected
+                            isConnected
                                 ? 'bg-[var(--md-success)] opacity-100'
                                 : 'bg-[var(--md-error)]'
                         "
@@ -96,18 +96,12 @@ const effectiveConnected = computed(
 );
 
 const connectionState = computed(() =>
-    hydrated.value
-        ? effectiveConnected.value
-            ? 'connected'
-            : 'disconnected'
-        : 'loading'
+    hydrated.value ? (isConnected.value ? 'connected' : 'disconnected') : 'loading'
 );
 
 const connectionLabel = computed(() => {
     if (!hydrated.value) return 'Connect';
-    if (usingInstanceKey.value) return 'Instance';
-    if (isConnected.value) return 'User';
-    return 'Connect';
+    return isConnected.value ? 'Disconnect' : 'Connect';
 });
 
 const isManaged = computed(

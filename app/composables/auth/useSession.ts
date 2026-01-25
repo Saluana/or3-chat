@@ -41,12 +41,12 @@ export function useOr3Session(): SessionState {
         return staticRefs;
     }
 
-    const { data, status } = useSessionContext();
+    const { data, pending } = useSessionContext();
     const session = computed(() => data.value?.session ?? null);
 
     return {
         isSignedIn: computed(() => session.value?.authenticated === true),
-        isLoaded: computed(() => status.value !== 'pending'),
+        isLoaded: computed(() => !pending.value),
         userId: computed(() => session.value?.user?.id ?? null),
         // Provider session id is not currently surfaced by the API.
         sessionId: computed(() => null),

@@ -14,6 +14,7 @@ import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
 import { useHooks } from '~/core/hooks/useHooks';
 import { getHookBridge } from './hook-bridge';
+import { isRecentOpId } from './recent-op-cache';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 
 /** Default tables to sync */
@@ -194,7 +195,10 @@ export class SubscriptionManager {
                 });
 
                 if (response.changes.length > 0) {
-                    await this.applyChanges(response.changes);
+                    const filtered = this.filterRecentOps(response.changes);
+                    if (filtered.length) {
+                        await this.applyChanges(filtered);
+                    }
                     totalPulled += response.changes.length;
                 }
 
@@ -268,7 +272,10 @@ export class SubscriptionManager {
                 });
 
                 if (response.changes.length) {
-                    await this.conflictResolver.applyChanges(response.changes);
+                    const filtered = this.filterRecentOps(response.changes);
+                    if (filtered.length) {
+                        await this.conflictResolver.applyChanges(filtered);
+                    }
                 }
 
                 cursor = response.nextCursor;
@@ -358,7 +365,18 @@ export class SubscriptionManager {
         // Filter out changes we've already seen to avoid reprocessing
         const currentCursor = await this.cursorManager.getCursor();
         const newChanges = changes.filter((c) => c.serverVersion > currentCursor);
-        
+        const filteredChanges = this.filterRecentOps(newChanges);
+
+        if (import.meta.dev) {
+            console.debug('[sync] subscription changes', {
+                scope: this.scope,
+                incoming: changes.length,
+                newChanges: newChanges.length,
+                filtered: filteredChanges.length,
+                cursor: currentCursor,
+            });
+        }
+
         if (newChanges.length === 0) return; // Nothing new to process
 
         try {
@@ -367,10 +385,21 @@ export class SubscriptionManager {
                 changeCount: newChanges.length,
             });
 
-            const result = await this.applyChanges(newChanges);
+            const result = filteredChanges.length
+                ? await this.applyChanges(filteredChanges)
+                : { applied: 0, skipped: 0, conflicts: 0 };
 
             // Update cursor to highest server version
             let maxVersion = Math.max(...newChanges.map((c) => c.serverVersion));
+
+            if (import.meta.dev) {
+                console.debug('[sync] subscription apply', {
+                    applied: result.applied,
+                    skipped: result.skipped,
+                    conflicts: result.conflicts,
+                    maxVersion,
+                });
+            }
 
             if (maxVersion > currentCursor) {
                 await this.cursorManager.setCursor(maxVersion);
@@ -414,6 +443,23 @@ export class SubscriptionManager {
         return this.conflictResolver.applyChanges(changes);
     }
 
+    private filterRecentOps(changes: SyncChange[]): SyncChange[] {
+        const filtered = changes.filter((c) => !isRecentOpId(c.stamp.opId));
+        if (import.meta.dev) {
+            const dropped = changes
+                .filter((c) => !filtered.includes(c))
+                .map((c) => ({
+                    opId: c.stamp.opId,
+                    table: c.tableName,
+                    pk: c.pk,
+                }));
+            if (dropped.length) {
+                console.debug('[sync] filtered echoed ops', dropped);
+            }
+        }
+        return filtered;
+    }
+
     private async drainBacklog(startCursor: number) {
         let cursor = startCursor;
         let hasMore = true;
@@ -432,7 +478,10 @@ export class SubscriptionManager {
             });
 
             if (response.changes.length) {
-                const result = await this.applyChanges(response.changes);
+                const filtered = this.filterRecentOps(response.changes);
+                const result = filtered.length
+                    ? await this.applyChanges(filtered)
+                    : { applied: 0, skipped: 0, conflicts: 0 };
                 totals.applied += result.applied;
                 totals.skipped += result.skipped;
                 totals.conflicts += result.conflicts;

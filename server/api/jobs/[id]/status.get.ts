@@ -31,12 +31,41 @@ export default defineEventHandler(async (event) => {
         return { error: 'Authentication required' };
     }
 
-    const provider = getJobProvider();
+    const provider = await getJobProvider();
     const job = await provider.getJob(jobId, userId);
 
     if (!job) {
         setResponseStatus(event, 404);
         return { error: 'Job not found or unauthorized' };
+    }
+
+    const query = getQuery(event);
+    const offsetParam = typeof query.offset === 'string' ? query.offset : null;
+    const offset = offsetParam ? Number(offsetParam) : null;
+
+    if (
+        typeof offset === 'number' &&
+        Number.isFinite(offset) &&
+        offset >= 0 &&
+        typeof job.content === 'string'
+    ) {
+        const contentLength = job.content.length;
+        const safeOffset = Math.min(offset, contentLength);
+        const contentDelta = job.content.slice(safeOffset);
+        return {
+            id: job.id,
+            status: job.status,
+            threadId: job.threadId,
+            messageId: job.messageId,
+            model: job.model,
+            chunksReceived: job.chunksReceived,
+            startedAt: job.startedAt,
+            completedAt: job.completedAt,
+            error: job.error,
+            content_delta: contentDelta,
+            content_length: contentLength,
+            content: safeOffset < offset ? job.content : undefined,
+        };
     }
 
     return {

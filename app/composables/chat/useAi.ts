@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onScopeDispose } from 'vue';
 import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
 import { create, tx, upsert, type Message } from '~/db';
@@ -34,8 +34,9 @@ import {
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import {
     openRouterStream,
-    startBackgroundStream,
     pollJobStatus,
+    startBackgroundStream,
+    subscribeBackgroundJobStream,
     abortBackgroundJob,
     isBackgroundStreamingEnabled,
     type BackgroundJobStatus,
@@ -58,6 +59,8 @@ import { getDefaultPromptId } from '#imports';
 import { useHooks } from '#imports';
 import { consumeWorkflowHandlingFlag } from '~/plugins/workflow-slash-commands.client';
 import { NotificationService } from '~/core/notifications/notification-service';
+import { resolveNotificationUserId } from '~/core/notifications/notification-user';
+import { useSessionContext } from '~/composables/auth/useSessionContext';
 // settings/model store are provided elsewhere at runtime; keep dynamic access guards
 import type {
     ChatSettings,
@@ -76,7 +79,8 @@ type GlobalWithPaneApi = typeof globalThis & {
     __or3MultiPaneApi?: UseMultiPaneApi;
 };
 
-const BACKGROUND_JOB_POLL_INTERVAL_MS = 1000;
+const BACKGROUND_JOB_POLL_INTERVAL_MS = 300;
+const BACKGROUND_JOB_POLL_INTERVAL_ACTIVE_MS = 80;
 const BACKGROUND_JOB_PERSIST_INTERVAL_MS = 500;
 const BACKGROUND_JOB_MUTED_KEY = 'notification_muted_threads';
 
@@ -95,6 +99,7 @@ type BackgroundJobSubscriber = {
 
 type BackgroundJobTracker = {
     jobId: string;
+    userId: string;
     threadId: string;
     messageId: string;
     status: BackgroundJobStatus['status'];
@@ -102,6 +107,9 @@ type BackgroundJobTracker = {
     lastPersistedLength: number;
     lastPersistAt: number;
     polling: boolean;
+    streaming: boolean;
+    active: boolean;
+    streamUnsubscribe?: () => void;
     subscribers: Set<BackgroundJobSubscriber>;
     completion: Promise<BackgroundJobStatus>;
     resolveCompletion: (status: BackgroundJobStatus) => void;
@@ -135,10 +143,10 @@ async function emitBackgroundComplete(
     if (tracker.subscribers.size > 0) return;
     if (await isThreadMuted(tracker.threadId)) return;
 
+    const runtimeConfig = useRuntimeConfig();
+
     const hooks = useHooks();
-    // Use 'local-user' as userId for local-first mode
-    // In SSR mode with auth, this would be the actual user ID from session
-    const userId = 'local-user';
+    const userId = tracker.userId;
     const service = new NotificationService(getDb(), hooks, userId);
     const isError = status.status === 'error';
     const isAbort = status.status === 'aborted';
@@ -175,8 +183,9 @@ async function persistBackgroundJobUpdate(
     tracker: BackgroundJobTracker,
     status: BackgroundJobStatus,
     content: string
-): Promise<void> {
-    if (!import.meta.client) return;
+): Promise<boolean> {
+    if (!import.meta.client) return true;
+
     const now = Date.now();
     const statusChanged = status.status !== tracker.status;
     const contentChanged = content.length > tracker.lastPersistedLength;
@@ -185,12 +194,12 @@ async function persistBackgroundJobUpdate(
         (now - tracker.lastPersistAt > BACKGROUND_JOB_PERSIST_INTERVAL_MS ||
             status.status !== 'streaming');
 
-    if (!statusChanged && !shouldPersistContent) return;
+    if (!statusChanged && !shouldPersistContent) return true;
 
     const existing = (await getDb().messages.get(tracker.messageId)) as
         | StoredMessage
         | undefined;
-    if (!existing) return;
+    if (!existing) return false;
 
     const baseData =
         existing.data && typeof existing.data === 'object'
@@ -225,16 +234,195 @@ async function persistBackgroundJobUpdate(
     tracker.status = status.status;
     tracker.lastPersistAt = now;
     tracker.lastPersistedLength = content.length;
+    return true;
+}
+
+function deriveBackgroundContent(
+    tracker: BackgroundJobTracker,
+    status: BackgroundJobStatus
+): { safeContent: string; delta: string } {
+    let nextContent = tracker.lastContent;
+    if (typeof status.content_delta === 'string') {
+        nextContent = tracker.lastContent + status.content_delta;
+    } else if (typeof status.content === 'string') {
+        nextContent = status.content;
+    }
+    if (
+        typeof status.content_length === 'number' &&
+        Number.isFinite(status.content_length)
+    ) {
+        const len = status.content_length;
+        if (nextContent.length > len) {
+            nextContent = nextContent.slice(0, len);
+        } else if (
+            nextContent.length < len &&
+            typeof status.content === 'string'
+        ) {
+            nextContent = status.content;
+        }
+    }
+    const safeContent =
+        nextContent.length >= tracker.lastContent.length
+            ? nextContent
+            : tracker.lastContent;
+    const delta =
+        safeContent.length > tracker.lastContent.length
+            ? safeContent.slice(tracker.lastContent.length)
+            : '';
+    return { safeContent, delta };
+}
+
+async function ensureFullBackgroundStatus(
+    tracker: BackgroundJobTracker,
+    status: BackgroundJobStatus
+): Promise<BackgroundJobStatus> {
+    if (status.status === 'streaming') return status;
+    const contentLen =
+        typeof status.content_length === 'number'
+            ? status.content_length
+            : typeof status.content === 'string'
+            ? status.content.length
+            : null;
+    const hasFullContent =
+        typeof status.content === 'string' &&
+        (contentLen === null || status.content.length >= contentLen);
+    if (hasFullContent) return status;
+    try {
+        return await pollJobStatus(tracker.jobId);
+    } catch {
+        return status;
+    }
+}
+
+async function handleBackgroundStatus(
+    tracker: BackgroundJobTracker,
+    status: BackgroundJobStatus
+): Promise<boolean> {
+    if (!tracker.active) return false;
+    let nextStatus = status;
+    if (nextStatus.status !== 'streaming') {
+        nextStatus = await ensureFullBackgroundStatus(tracker, nextStatus);
+    }
+    const { safeContent, delta } = deriveBackgroundContent(tracker, nextStatus);
+    tracker.lastContent = safeContent;
+
+    const persisted = await persistBackgroundJobUpdate(
+        tracker,
+        nextStatus,
+        safeContent
+    );
+    if (!persisted) {
+        tracker.active = false;
+        tracker.polling = false;
+        tracker.streaming = false;
+        backgroundJobTrackers.delete(tracker.jobId);
+        void abortBackgroundJob(tracker.jobId);
+        return false;
+    }
+
+    const update: BackgroundJobUpdate = {
+        status: nextStatus,
+        content: safeContent,
+        delta,
+    };
+    for (const subscriber of tracker.subscribers) {
+        subscriber.onUpdate?.(update);
+    }
+
+    if (nextStatus.status !== 'streaming') {
+        for (const subscriber of tracker.subscribers) {
+            if (nextStatus.status === 'complete') {
+                subscriber.onComplete?.(update);
+            } else if (nextStatus.status === 'aborted') {
+                subscriber.onAbort?.(update);
+            } else {
+                subscriber.onError?.(update);
+            }
+        }
+        await emitBackgroundComplete(tracker, nextStatus);
+        tracker.resolveCompletion(nextStatus);
+        tracker.active = false;
+        tracker.polling = false;
+        tracker.streaming = false;
+        backgroundJobTrackers.delete(tracker.jobId);
+        return false;
+    }
+
+    return true;
+}
+
+export async function primeBackgroundJobUpdate(
+    tracker: BackgroundJobTracker
+): Promise<void> {
+    // Fetch full content from server (no offset) - server is source of truth
+    let initialStatus: BackgroundJobStatus | null = null;
+    try {
+        initialStatus = await pollJobStatus(tracker.jobId);
+    } catch {
+        initialStatus = null;
+    }
+
+    if (!initialStatus) return;
+
+    // Handle terminal states
+    if (initialStatus.status !== 'streaming') {
+        const fullStatus = await ensureFullBackgroundStatus(tracker, initialStatus);
+        const content = fullStatus.content || '';
+        tracker.lastContent = content;
+        const update: BackgroundJobUpdate = {
+            status: fullStatus,
+            content,
+            delta: content,
+        };
+        for (const subscriber of tracker.subscribers) {
+            if (fullStatus.status === 'complete') {
+                subscriber.onComplete?.(update);
+            } else if (fullStatus.status === 'error') {
+                subscriber.onError?.(update);
+            } else if (fullStatus.status === 'aborted') {
+                subscriber.onAbort?.(update);
+            }
+        }
+        return;
+    }
+
+    // Streaming - deliver full content immediately
+    // Only update if server has more content than we currently have
+    const serverContent = initialStatus.content || '';
+    if (serverContent.length >= tracker.lastContent.length) {
+        tracker.lastContent = serverContent;
+        const persisted = await persistBackgroundJobUpdate(
+            tracker,
+            initialStatus,
+            serverContent
+        );
+        if (!persisted) return;
+        const update: BackgroundJobUpdate = {
+            status: initialStatus,
+            content: serverContent,
+            delta: serverContent, // Full content as delta since baseline was empty
+        };
+        for (const subscriber of tracker.subscribers) {
+            subscriber.onUpdate?.(update);
+        }
+    }
+    // If server has less, keep our content and let normal polling continue
+    // Normal polling will continue from here - no burst loop needed
 }
 
 async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
     if (tracker.polling) return;
     tracker.polling = true;
+    tracker.active = true;
+    const isActive = () => tracker.active;
 
-    for (;;) {
+    while (isActive()) {
         let status: BackgroundJobStatus;
         try {
-            status = await pollJobStatus(tracker.jobId);
+            status = await pollJobStatus(
+                tracker.jobId,
+                tracker.lastContent.length
+            );
         } catch (err) {
             const error = err instanceof Error ? err.message : 'Unknown error';
             status = {
@@ -251,51 +439,123 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
             };
         }
 
-        const content =
-            typeof status.content === 'string' ? status.content : tracker.lastContent;
-        const delta =
-            content.length > tracker.lastContent.length
-                ? content.slice(tracker.lastContent.length)
-                : '';
-        tracker.lastContent = content;
+        const shouldContinue = await handleBackgroundStatus(tracker, status);
+        if (!shouldContinue) break;
 
-        await persistBackgroundJobUpdate(tracker, status, content);
+        const pollInterval =
+            tracker.subscribers.size > 0
+                ? BACKGROUND_JOB_POLL_INTERVAL_ACTIVE_MS
+                : BACKGROUND_JOB_POLL_INTERVAL_MS;
+        await sleep(pollInterval);
+    }
+    tracker.polling = false;
+}
 
-        const update: BackgroundJobUpdate = { status, content, delta };
-        for (const subscriber of tracker.subscribers) {
-            subscriber.onUpdate?.(update);
+export function stopBackgroundJobTracking(
+    tracker: BackgroundJobTracker
+): void {
+    tracker.active = false;
+    tracker.polling = false;
+    tracker.streaming = false;
+    if (tracker.streamUnsubscribe) {
+        try {
+            tracker.streamUnsubscribe();
+        } catch {
+            /* intentionally empty */
         }
+        tracker.streamUnsubscribe = undefined;
+    }
+}
 
-        if (status.status !== 'streaming') {
-            for (const subscriber of tracker.subscribers) {
-                if (status.status === 'complete') {
-                    subscriber.onComplete?.(update);
-                } else if (status.status === 'aborted') {
-                    subscriber.onAbort?.(update);
-                } else {
-                    subscriber.onError?.(update);
+function startBackgroundJobTracking(
+    tracker: BackgroundJobTracker,
+    options?: { useSse?: boolean }
+): void {
+    if (tracker.polling || tracker.streaming) return;
+    if (options?.useSse) {
+        tracker.streaming = true;
+        tracker.active = true;
+        let closed = false;
+        let chain = Promise.resolve();
+        let unsubscribe: (() => void) | null = null;
+
+        const closeStream = () => {
+            if (closed) return;
+            closed = true;
+            tracker.streaming = false;
+            tracker.streamUnsubscribe = undefined;
+            if (unsubscribe) {
+                try {
+                    unsubscribe();
+                } catch {
+                    /* intentionally empty */
                 }
             }
-            await emitBackgroundComplete(tracker, status);
-            tracker.resolveCompletion(status);
-            backgroundJobTrackers.delete(tracker.jobId);
-            tracker.polling = false;
+        };
+
+        try {
+            unsubscribe = subscribeBackgroundJobStream({
+                jobId: tracker.jobId,
+                offset: tracker.lastContent.length,
+                onStatus: (status) => {
+                    chain = chain
+                        .then(() => handleBackgroundStatus(tracker, status))
+                        .then((shouldContinue) => {
+                            if (!shouldContinue) {
+                                closeStream();
+                            }
+                        })
+                        .catch(() => {
+                            // Fallback to polling on handler error
+                            closeStream();
+                            void pollBackgroundJob(tracker);
+                        });
+                },
+                onError: () => {
+                    if (!closed) {
+                        closeStream();
+                        void pollBackgroundJob(tracker);
+                    }
+                },
+            });
+        } catch {
+            closeStream();
+            void pollBackgroundJob(tracker);
             return;
         }
 
-        await sleep(BACKGROUND_JOB_POLL_INTERVAL_MS);
+        tracker.streamUnsubscribe = closeStream;
+        return;
     }
+
+    void pollBackgroundJob(tracker);
 }
 
 function ensureBackgroundJobTracker(params: {
     jobId: string;
+    userId: string;
     threadId: string;
     messageId: string;
+    initialContent?: string;
+    useSse?: boolean;
 }): BackgroundJobTracker {
     const existing = backgroundJobTrackers.get(params.jobId);
     if (existing) {
+        if (params.userId && existing.userId !== params.userId) {
+            existing.userId = params.userId;
+        }
         if (!existing.threadId) existing.threadId = params.threadId;
         if (!existing.messageId) existing.messageId = params.messageId;
+        if (
+            typeof params.initialContent === 'string' &&
+            params.initialContent.length > existing.lastContent.length
+        ) {
+            existing.lastContent = params.initialContent;
+            existing.lastPersistedLength = params.initialContent.length;
+        }
+        if (params.useSse && !existing.polling && !existing.streaming) {
+            startBackgroundJobTracking(existing, { useSse: true });
+        }
         return existing;
     }
 
@@ -303,21 +563,26 @@ function ensureBackgroundJobTracker(params: {
     const completion = new Promise<BackgroundJobStatus>((resolve) => {
         resolveCompletion = resolve;
     });
+    const seedContent =
+        typeof params.initialContent === 'string' ? params.initialContent : '';
     const tracker: BackgroundJobTracker = {
         jobId: params.jobId,
+        userId: params.userId,
         threadId: params.threadId,
         messageId: params.messageId,
         status: 'streaming',
-        lastContent: '',
-        lastPersistedLength: 0,
+        lastContent: seedContent,
+        lastPersistedLength: seedContent.length,
         lastPersistAt: 0,
         polling: false,
+        streaming: false,
+        active: false,
         subscribers: new Set<BackgroundJobSubscriber>(),
         completion,
         resolveCompletion,
     };
     backgroundJobTrackers.set(params.jobId, tracker);
-    void pollBackgroundJob(tracker);
+    startBackgroundJobTracking(tracker, { useSse: params.useSse });
     return tracker;
 }
 
@@ -369,6 +634,11 @@ export function useChat(
     const aborted = ref<boolean>(false);
     const { apiKey, setKey } = useUserApiKey();
     const runtimeConfig = useRuntimeConfig();
+    const sessionContext =
+        runtimeConfig.public.ssrAuthEnabled === true ? useSessionContext() : null;
+    const notificationUserId = computed(() =>
+        resolveNotificationUserId(sessionContext?.data.value?.session)
+    );
     const openRouterConfig = computed(() => runtimeConfig.public.openRouter);
     const allowUserOverride = computed(
         () => openRouterConfig.value.allowUserOverride !== false
@@ -386,6 +656,17 @@ export function useChat(
     const historyLoadedFor = ref<string | null>(null);
     const cleanupFns: Array<() => void> = [];
 
+    watch(
+        () => notificationUserId.value,
+        (nextUserId) => {
+            if (!nextUserId) return;
+            for (const tracker of backgroundJobTrackers.values()) {
+                tracker.userId = nextUserId;
+            }
+        },
+        { immediate: true }
+    );
+
     if (import.meta.dev) {
         if (state.value.openrouterKey && apiKey.value) {
             setKey(state.value.openrouterKey);
@@ -396,9 +677,16 @@ export function useChat(
     const streamState = streamAcc.state;
     const streamId = ref<string | undefined>(undefined);
     const backgroundJobId = ref<string | null>(null);
+    const backgroundJobMode = ref<'none' | 'background'>('none');
+    const backgroundJobInfo = ref<{
+        jobId: string;
+        threadId: string;
+        messageId: string;
+    } | null>(null);
     const backgroundJobDisposers: Array<() => void> = [];
     const attachedBackgroundJobs = new Set<string>();
     const detached = ref<boolean>(false);
+    const isDetached = () => detached.value;
     function resetStream() {
         streamAcc.reset();
         streamId.value = undefined;
@@ -726,20 +1014,28 @@ export function useChat(
         )
     );
 
+    let historySyncInFlight = false;
     async function ensureHistorySynced() {
+        if (historySyncInFlight) return;
         if (threadIdRef.value && historyLoadedFor.value !== threadIdRef.value) {
-            const { ensureThreadHistoryLoaded } = await import(
-                '~/utils/chat/history'
-            );
-            await ensureThreadHistoryLoaded(
-                threadIdRef,
-                historyLoadedFor,
-                rawMessages
-            );
-            messages.value = rawMessages.value
-                .filter((m: ChatMessage) => m.role !== 'tool')
-                .map((m) => ensureUiMessage(m));
-            await reattachBackgroundJobs();
+            historySyncInFlight = true;
+            try {
+                if (detached.value) detached.value = false;
+                const { ensureThreadHistoryLoaded } = await import(
+                    '~/utils/chat/history'
+                );
+                await ensureThreadHistoryLoaded(
+                    threadIdRef,
+                    historyLoadedFor,
+                    rawMessages
+                );
+                messages.value = rawMessages.value
+                    .filter((m: ChatMessage) => m.role !== 'tool')
+                    .map((m) => ensureUiMessage(m));
+                await reattachBackgroundJobs();
+            } finally {
+                historySyncInFlight = false;
+            }
         }
     }
 
@@ -759,8 +1055,16 @@ export function useChat(
         return messages.value.find((m) => m.id === messageId) ?? null;
     }
 
-    function clearBackgroundJobSubscriptions(): void {
+    function clearBackgroundJobSubscriptions(options?: {
+        keepTracking?: boolean;
+    }): void {
         if (!backgroundJobDisposers.length) return;
+        for (const jobId of attachedBackgroundJobs) {
+            const tracker = backgroundJobTrackers.get(jobId);
+            if (tracker && !options?.keepTracking) {
+                stopBackgroundJobTracking(tracker);
+            }
+        }
         for (const dispose of backgroundJobDisposers.splice(0, backgroundJobDisposers.length)) {
             try {
                 dispose();
@@ -773,45 +1077,95 @@ export function useChat(
 
     function attachBackgroundJobToUi(params: {
         jobId: string;
+        userId: string;
         messageId: string;
         threadId: string;
+        initialContent?: string;
+        isReattach?: boolean;
+        useSse?: boolean;
     }): BackgroundJobTracker {
         const tracker = ensureBackgroundJobTracker({
             jobId: params.jobId,
+            userId: params.userId,
             threadId: params.threadId,
             messageId: params.messageId,
+            // Seed with DB content - server must have MORE to update
+            initialContent: params.initialContent,
+            useSse: params.useSse,
         });
+        if (params.isReattach && typeof params.initialContent === 'string') {
+            // Set tracker baseline to DB content
+            // Server must have MORE content to trigger an update
+            if (params.initialContent.length > tracker.lastContent.length) {
+                tracker.lastContent = params.initialContent;
+                tracker.lastPersistedLength = params.initialContent.length;
+            }
+            tracker.lastPersistAt = 0;
+            // Sync UI with DB content (don't clear it)
+            const target = resolveUiMessage(params.messageId);
+            if (target && params.initialContent.length > target.text.length) {
+                target.text = params.initialContent;
+            }
+        }
+        if (params.isReattach && tailAssistant.value?.id === params.messageId) {
+            // Seed stream accumulator with current content
+            streamAcc.reset();
+            if (params.initialContent) {
+                streamAcc.append(params.initialContent, { kind: 'text' });
+            }
+        }
         if (!attachedBackgroundJobs.has(params.jobId)) {
             const subscriber: BackgroundJobSubscriber = {
                 onUpdate: ({ content, delta }) => {
-                    if (detached.value) return;
+                    if (detached.value) {
+                        return;
+                    }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
+                    const currentLen = target.text.length;
+                    // Only update if server has MORE content than current UI
+                    if (content.length < currentLen) {
+                        return;
+                    }
                     if (target.pending && delta) target.pending = false;
                     target.text = content;
-                    if (tailAssistant.value?.id === params.messageId && delta) {
-                        streamAcc.append(delta, { kind: 'text' });
+                    if (tailAssistant.value?.id === params.messageId) {
+                        // Replace accumulator with full content
+                        streamAcc.reset();
+                        streamAcc.append(content, { kind: 'text' });
                     } else if (delta) {
                         messages.value = [...messages.value];
                     }
                 },
                 onComplete: ({ content }) => {
-                    if (detached.value) return;
+                    if (detached.value) {
+                        return;
+                    }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
                     target.text = content;
                     target.pending = false;
-                    if (tailAssistant.value?.id !== params.messageId) {
+                    if (tailAssistant.value?.id === params.messageId) {
+                        // Ensure stream accumulator has full content before finalizing
+                        streamAcc.reset();
+                        if (content) {
+                            streamAcc.append(content, { kind: 'text' });
+                        }
+                        streamAcc.finalize();
+                    } else {
                         messages.value = [...messages.value];
                     }
-                    streamAcc.finalize();
                     if (backgroundJobId.value === params.jobId) {
                         loading.value = false;
                         backgroundJobId.value = null;
+                        backgroundJobMode.value = 'none';
+                        backgroundJobInfo.value = null;
                     }
                 },
                 onError: ({ status }) => {
-                    if (detached.value) return;
+                    if (detached.value) {
+                        return;
+                    }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
                     target.pending = false;
@@ -825,32 +1179,50 @@ export function useChat(
                     if (backgroundJobId.value === params.jobId) {
                         loading.value = false;
                         backgroundJobId.value = null;
+                        backgroundJobMode.value = 'none';
+                        backgroundJobInfo.value = null;
                     }
                 },
                 onAbort: () => {
-                    if (detached.value) return;
+                    if (detached.value) {
+                        return;
+                    }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
                     target.pending = false;
+                    target.error = 'stopped';
                     if (tailAssistant.value?.id !== params.messageId) {
                         messages.value = [...messages.value];
                     }
                     streamAcc.finalize({ aborted: true });
+                    void updateMessageRecord(params.messageId, {
+                        pending: false,
+                        error: 'stopped',
+                    });
                     if (backgroundJobId.value === params.jobId) {
                         loading.value = false;
                         backgroundJobId.value = null;
+                        backgroundJobMode.value = 'none';
+                        backgroundJobInfo.value = null;
                     }
                 },
             };
             const unsubscribe = subscribeBackgroundJob(tracker, subscriber);
             attachedBackgroundJobs.add(params.jobId);
             backgroundJobDisposers.push(unsubscribe);
+            if (params.isReattach && !tracker.polling && !tracker.streaming) {
+                // Only prime if polling hasn't started yet
+                void primeBackgroundJobUpdate(tracker);
+            }
+            // If polling is already running, resetting tracker.lastContent = ''
+            // will cause next poll to fetch full content automatically
         }
         return tracker;
     }
 
     async function reattachBackgroundJobs(): Promise<void> {
         if (!backgroundStreamingAllowed.value || !threadIdRef.value) return;
+
         try {
             const dbMessages = (await messagesByThread(threadIdRef.value)) as
                 | StoredMessage[]
@@ -868,13 +1240,27 @@ export function useChat(
                         ? data.background_job_status
                         : 'streaming';
                 if (!jobId || status !== 'streaming') continue;
+
+                const initialContent =
+                    typeof data.content === 'string'
+                        ? data.content
+                        : typeof msg.content === 'string'
+                        ? msg.content
+                        : '';
+
                 attachBackgroundJobToUi({
                     jobId,
+                    userId: notificationUserId.value,
                     messageId: msg.id,
                     threadId: threadIdRef.value,
+                    initialContent,
+                    isReattach: true,
+                    useSse: backgroundStreamingAllowed.value,
                 });
-                if (!backgroundJobId.value) {
-                    backgroundJobId.value = jobId;
+
+                if (!backgroundJobId.value) backgroundJobId.value = jobId;
+                if (backgroundJobMode.value === 'none') {
+                    backgroundJobMode.value = 'background';
                 }
             }
         } catch {
@@ -1473,6 +1859,9 @@ export function useChat(
 
             aborted.value = false;
             abortController.value = null;
+            backgroundJobId.value = null;
+            backgroundJobMode.value = 'none';
+            backgroundJobInfo.value = null;
 
             const filteredMessages = await hooks.applyFilters(
                 'ai.chat.messages:filter:before_send',
@@ -1495,11 +1884,6 @@ export function useChat(
 
             // Check if a workflow is handling this request - skip AI call
             if (consumeWorkflowHandlingFlag()) {
-                if (import.meta.dev) {
-                    console.log(
-                        '[useAi] Workflow is handling request, skipping AI call'
-                    );
-                }
                 // Seed UI with assistant placeholder so workflow state can render immediately
                 const workflowAssistant: ChatMessage = {
                     role: 'assistant',
@@ -1520,11 +1904,6 @@ export function useChat(
 
             // Also skip if messages array is empty (e.g., workflow returned empty)
             if (orMessages.length === 0) {
-                if (import.meta.dev) {
-                    console.log(
-                        '[useAi] No messages to send, skipping AI call'
-                    );
-                }
                 loading.value = false;
                 return;
             }
@@ -1536,33 +1915,57 @@ export function useChat(
                 modalities[0] === 'text';
 
             if (allowBackgroundStreaming) {
+                backgroundJobMode.value = 'background';
+
+                const rawAssistant: ChatMessage = {
+                    role: 'assistant',
+                    content: '',
+                    id: assistantDbMsg.id,
+                    stream_id: newStreamId,
+                    reasoning_text: null,
+                };
+
+                recordRawMessage(rawAssistant);
+                rawMessages.value.push(rawAssistant);
+                const uiAssistant = ensureUiMessage(rawAssistant);
+                uiAssistant.pending = true;
+                tailAssistant.value = uiAssistant;
+
                 try {
                     const result = await startBackgroundStream({
-                        apiKey: effectiveApiKey.value ?? undefined,
+                        apiKey: effectiveApiKey.value,
                         model: modelId,
-                        orMessages:
-                            orMessages as Parameters<
-                                typeof startBackgroundStream
-                            >[0]['orMessages'],
+                        orMessages: orMessages as Parameters<
+                            typeof startBackgroundStream
+                        >[0]['orMessages'],
                         modalities,
                         threadId: threadIdRef.value!,
                         messageId: assistantDbMsg.id,
+                        tools:
+                            enabledToolDefs.length > 0
+                                ? enabledToolDefs
+                                : undefined,
                     });
 
-                    const rawAssistant: ChatMessage = {
-                        role: 'assistant',
-                        content: '',
-                        id: assistantDbMsg.id,
-                        stream_id: newStreamId,
-                        reasoning_text: null,
-                    };
-                    recordRawMessage(rawAssistant);
-                    rawMessages.value.push(rawAssistant);
-                    const uiAssistant = ensureUiMessage(rawAssistant);
-                    uiAssistant.pending = true;
-                    tailAssistant.value = uiAssistant;
-
                     backgroundJobId.value = result.jobId;
+                    backgroundJobInfo.value = {
+                        jobId: result.jobId,
+                        threadId: threadIdRef.value!,
+                        messageId: assistantDbMsg.id,
+                    };
+
+                    if (assistantDbMsg.data && typeof assistantDbMsg.data === 'object') {
+                        assistantDbMsg.data = {
+                            ...(assistantDbMsg.data as Record<string, unknown>),
+                            background_job_id: result.jobId,
+                            background_job_status: 'streaming',
+                        };
+                    } else {
+                        assistantDbMsg.data = {
+                            background_job_id: result.jobId,
+                            background_job_status: 'streaming',
+                        } as Record<string, unknown>;
+                    }
                     await updateMessageRecord(assistantDbMsg.id, {
                         data: {
                             background_job_id: result.jobId,
@@ -1572,78 +1975,33 @@ export function useChat(
 
                     const tracker = attachBackgroundJobToUi({
                         jobId: result.jobId,
+                        userId: notificationUserId.value,
                         messageId: assistantDbMsg.id,
                         threadId: threadIdRef.value!,
+                        initialContent: '',
+                        useSse: backgroundStreamingAllowed.value,
                     });
 
-                    const completion = await tracker.completion;
-                    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- detached can flip during cleanup
-                    if (detached.value) return;
-
-                    if (completion.status === 'complete') {
-                        const fullText = tracker.lastContent;
-                        const hookName = 'ui.chat.message:filter:incoming';
-                        const errorsBefore =
-                            hooks._diagnostics.errors[hookName] ?? 0;
-                        const incoming = await hooks.applyFilters(
-                            hookName,
-                            fullText,
-                            threadIdRef.value
-                        );
-                        const errorsAfter =
-                            hooks._diagnostics.errors[hookName] ?? 0;
-                        if (errorsAfter > errorsBefore) {
-                            throw new Error('Incoming filter threw an exception');
-                        }
-                        const target = resolveUiMessage(assistantDbMsg.id);
-                        if (target) {
-                            target.text = incoming;
-                            target.pending = false;
-                        }
-                        await updateMessageRecord(assistantDbMsg.id, {
-                            data: { content: incoming },
-                            pending: false,
-                        });
-                        await hooks.doAction('ai.chat.stream:action:complete', {
-                            threadId: threadIdRef.value,
-                            assistantId: assistantDbMsg.id,
-                            streamId: newStreamId,
-                            totalLength: incoming.length,
-                            reasoningLength: 0,
-                            fileHashes: assistantDbMsg.file_hashes || null,
-                        });
-                        const endedAt = Date.now();
-                        await hooks.doAction('ai.chat.send:action:after', {
-                            threadId: threadIdRef.value,
-                            request: { modelId, userId: userDbMsg.id },
-                            response: {
-                                assistantId: assistantDbMsg.id,
-                                length: incoming.length,
-                            },
-                            timings: {
-                                startedAt,
-                                endedAt,
-                                durationMs: endedAt - startedAt,
-                            },
-                            aborted: false,
-                        });
-                        streamAcc.finalize();
-                    } else if (completion.status === 'aborted') {
-                        aborted.value = true;
-                        streamAcc.finalize({ aborted: true });
-                    } else if (completion.status === 'error') {
-                        streamAcc.finalize({
-                            error: new Error(
-                                completion.error || 'Background response failed'
-                            ),
-                        });
+                    await tracker.completion;
+                } catch (error) {
+                    const errMessage =
+                        error instanceof Error
+                            ? error.message
+                            : 'Background stream failed';
+                    const target = resolveUiMessage(assistantDbMsg.id);
+                    if (target) {
+                        target.pending = false;
+                        target.error = errMessage;
+                        messages.value = [...messages.value];
                     }
-                    return;
-                } catch (err) {
-                    if (import.meta.dev) {
-                        console.warn('[useAi] Background stream failed, falling back', err);
-                    }
+                    streamAcc.finalize({ error: new Error(errMessage) });
+                    loading.value = false;
+                    backgroundJobId.value = null;
+                    backgroundJobMode.value = 'none';
+                    backgroundJobInfo.value = null;
                 }
+
+                return;
             }
 
             abortController.value = new AbortController();
@@ -2021,7 +2379,13 @@ export function useChat(
                 aborted: false,
             });
             streamAcc.finalize();
+            backgroundJobId.value = null;
+            backgroundJobMode.value = 'none';
+            backgroundJobInfo.value = null;
         } catch (err) {
+            if (err instanceof Error && err.name === 'AbortError') {
+                if (isDetached()) return;
+            }
             if (aborted.value) {
                 if (tailAssistant.value?.pending)
                     tailAssistant.value.pending = false;
@@ -3066,11 +3430,30 @@ export function useChat(
     }
 
     function clear() {
-        if (backgroundJobId.value) {
+        const disposeHooks = () => {
+            if (!cleanupFns.length) return;
+            for (const dispose of cleanupFns.splice(0, cleanupFns.length)) {
+                try {
+                    dispose();
+                } catch {
+                    /* intentionally empty */
+                }
+            }
+        };
+
+        const isBackgroundActive =
+            backgroundStreamingAllowed.value &&
+            (backgroundJobId.value || backgroundJobMode.value !== 'none');
+
+        if (isBackgroundActive) {
             detached.value = true;
-            clearBackgroundJobSubscriptions();
-            backgroundJobId.value = null;
-        } else if (abortController.value) {
+            clearBackgroundJobSubscriptions({ keepTracking: true });
+            disposeHooks();
+            // Do NOT reset backgroundJobId, backgroundJobMode, or backgroundJobInfo
+            // This allows reattachment or background processing to continue
+            return;
+        }
+        if (abortController.value) {
             // CRITICAL: Abort any active stream before clearing to prevent memory leaks
             aborted.value = true;
             try {
@@ -3090,15 +3473,7 @@ export function useChat(
         clearBackgroundJobSubscriptions();
 
         // Clean up any registered hooks to avoid leaking listeners across threads
-        if (cleanupFns.length) {
-            for (const dispose of cleanupFns.splice(0, cleanupFns.length)) {
-                try {
-                    dispose();
-                } catch {
-                    /* intentionally empty */
-                }
-            }
-        }
+        disposeHooks();
 
         rawMessages.value = [];
         messages.value = [];
@@ -3139,6 +3514,10 @@ export function useChat(
 
     void reattachBackgroundJobs();
 
+    onScopeDispose(() => {
+        clear();
+    });
+
     return {
         messages,
         rawMessages,
@@ -3147,6 +3526,8 @@ export function useChat(
         retryMessage,
         continueMessage,
         loading,
+        backgroundJobId,
+        backgroundJobMode,
         threadId: threadIdRef,
         streamId,
         resetStream,
@@ -3158,12 +3539,35 @@ export function useChat(
         abort: () => {
             if (backgroundJobId.value) {
                 const jobId = backgroundJobId.value;
+                const info = backgroundJobInfo.value;
                 backgroundJobId.value = null;
+                backgroundJobMode.value = 'none';
+                backgroundJobInfo.value = null;
                 aborted.value = true;
                 void abortBackgroundJob(jobId);
+                if (abortController.value) {
+                    try {
+                        abortController.value.abort();
+                    } catch {
+                        /* intentionally empty */
+                    }
+                    abortController.value = null;
+                }
                 streamAcc.finalize({ aborted: true });
                 if (tailAssistant.value?.pending)
                     tailAssistant.value.pending = false;
+                if (info?.messageId) {
+                    const target = resolveUiMessage(info.messageId);
+                    if (target) {
+                        target.pending = false;
+                        target.error = 'stopped';
+                        messages.value = [...messages.value];
+                    }
+                    void updateMessageRecord(info.messageId, {
+                        pending: false,
+                        error: 'stopped',
+                    });
+                }
                 return;
             }
 

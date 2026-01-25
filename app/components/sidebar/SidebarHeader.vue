@@ -20,7 +20,7 @@
                         :alt="appName"
                         class="h-7 w-auto"
                     />
-                    <span class="header-title ml-2 text-[9px]">
+                    <span v-if="!logoUrl" class="header-title ml-2 text-[9px]">
                         {{ appName }}
                     </span>
                 </div>

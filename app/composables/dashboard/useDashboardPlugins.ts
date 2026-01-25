@@ -158,8 +158,11 @@ function sync() {
 }
 
 export function registerDashboardPlugin(plugin: DashboardPlugin) {
-    if (import.meta.dev && registry.has(plugin.id)) {
-         
+    const isDev =
+        import.meta.dev ||
+        (typeof process !== 'undefined' &&
+            (process as { dev?: boolean }).dev === true);
+    if (isDev && registry.has(plugin.id)) {
         console.warn(
             `[dashboard] Overwriting existing plugin id "${plugin.id}"`
         );
@@ -301,7 +304,11 @@ export async function resolveDashboardPluginPageComponent(
         const loaded = await comp();
         // Handle both { default: Component } and direct Component returns
         comp = (typeof loaded === 'object' && 'default' in loaded ? loaded.default : loaded) as Component;
-        if (import.meta.dev && typeof comp !== 'object') {
+        const isDev =
+            import.meta.dev ||
+            (typeof process !== 'undefined' &&
+                (process as { dev?: boolean }).dev === true);
+        if (isDev && typeof comp !== 'object') {
              
             console.warn(
                 `[dashboard] Async page loader for ${pluginId}:${pageId} returned non-component`,

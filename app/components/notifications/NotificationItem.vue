@@ -7,7 +7,7 @@
         <div class="flex items-start gap-3">
             <!-- Type icon -->
             <div
-                class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-high)]"
+                class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-high)] notification-type-icon"
             >
                 <UIcon :name="typeIcon" class="w-5 h-5" />
             </div>
@@ -16,7 +16,7 @@
             <div class="flex-1 min-w-0">
                 <!-- Title -->
                 <div
-                    class="font-medium text-[var(--md-on-surface)] mb-1"
+                    class="font-medium text-[var(--md-on-surface)] mb-1 notification-title"
                     :class="{ 'font-bold': !notification.read_at }"
                 >
                     {{ notification.title }}
@@ -25,13 +25,13 @@
                 <!-- Body -->
                 <div
                     v-if="notification.body"
-                    class="text-sm text-[var(--md-on-surface-variant)] mb-2"
+                    class="text-sm text-[var(--md-on-surface-variant)] mb-2 notification-body"
                 >
                     {{ notification.body }}
                 </div>
 
                 <!-- Timestamp -->
-                <div class="text-xs text-[var(--md-on-surface-variant)]">
+                <div class="text-xs text-[var(--md-on-surface-variant)] notification-timestamp">
                     {{ formattedTime }}
                 </div>
             </div>
@@ -39,18 +39,19 @@
             <!-- Unread indicator -->
             <div
                 v-if="!notification.read_at"
-                class="flex-shrink-0 w-2 h-2 rounded-full bg-[var(--md-primary)]"
+                class="flex-shrink-0 w-2 h-2 rounded-full bg-[var(--md-primary)] notification-unread-indicator"
             />
         </div>
 
         <!-- Actions -->
         <div
             v-if="notification.actions && notification.actions.length > 0"
-            class="flex gap-2 mt-3 pl-11"
+            class="flex gap-2 mt-3 pl-11 notification-actions"
         >
             <UButton
                 v-for="action in notification.actions"
                 :key="action.id"
+                class="theme-btn notification-action-btn"
                 variant="ghost"
                 color="primary"
                 size="sm"
@@ -63,11 +64,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, inject } from 'vue';
 import { useRouter } from 'vue-router';
 import { useIcon } from '~/composables/useIcon';
 import { useHooks } from '~/core/hooks/useHooks';
 import type { Notification, NotificationAction } from '~/db/schema';
+import { NOTIFICATION_POPOVER_CLOSE_KEY } from './notification-popover';
+import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 
 const props = defineProps<{
     notification: Notification;
@@ -77,6 +80,10 @@ const props = defineProps<{
 const router = useRouter();
 const hooks = useHooks();
 const hasMarkedRead = ref(false);
+const closePopover = inject<(() => void) | null>(
+    NOTIFICATION_POPOVER_CLOSE_KEY,
+    null
+);
 
 // Pre-compute all possible icons at setup time to avoid calling useIcon inside computed
 // This follows Vue best practices - composables should only be called at setup, not in getters
@@ -125,6 +132,7 @@ const markReadOnce = async (): Promise<void> => {
 
 async function handleClick() {
     await markReadOnce();
+    closePopover?.();
 
     // If there's a default navigate action, execute it
     const navigateAction = props.notification.actions?.find(
@@ -137,15 +145,44 @@ async function handleClick() {
 
 async function handleActionClick(action: NotificationAction) {
     await markReadOnce();
+    closePopover?.();
 
     if (action.kind === 'navigate') {
+        const target = (action.target ?? {}) as {
+            route?: string;
+            threadId?: string;
+            documentId?: string;
+            thread_id?: string;
+            document_id?: string;
+        };
+        const threadId = target.threadId ?? target.thread_id;
+        const documentId = target.documentId ?? target.document_id;
+        const multiPane = getGlobalMultiPaneApi();
+        if (threadId && multiPane) {
+            const idx = multiPane.activePaneIndex.value ?? 0;
+            multiPane.updatePane(idx, {
+                mode: 'chat',
+                documentId: undefined,
+            });
+            await multiPane.setPaneThread(idx, threadId);
+            return;
+        }
+        if (documentId && multiPane) {
+            const idx = multiPane.activePaneIndex.value ?? 0;
+            multiPane.updatePane(idx, {
+                mode: 'doc',
+                threadId: '',
+            });
+            await multiPane.setPaneApp(idx, 'doc', { recordId: documentId });
+            return;
+        }
         // Handle navigation
-        if (action.target?.route) {
-            await router.push(action.target.route);
-        } else if (action.target?.threadId) {
-            await router.push(`/chat/${action.target.threadId}`);
-        } else if (action.target?.documentId) {
-            await router.push(`/docs/${action.target.documentId}`);
+        if (target.route) {
+            await router.push(target.route);
+        } else if (threadId) {
+            await router.push(`/chat/${threadId}`);
+        } else if (documentId) {
+            await router.push(`/docs/${documentId}`);
         }
     } else if (action.kind === 'callback') {
         // Emit hook for callback actions
