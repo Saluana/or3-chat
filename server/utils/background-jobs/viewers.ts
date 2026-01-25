@@ -166,6 +166,9 @@ function scheduleCleanup(jobId: string, state: LiveJobState): void {
     state.cleanupTimer = setTimeout(() => {
         jobStreams.delete(jobId);
     }, LIVE_JOB_RETENTION_MS);
+    if (typeof state.cleanupTimer.unref === 'function') {
+        state.cleanupTimer.unref();
+    }
 }
 
 function maybeCleanupJobLiveState(jobId: string, state: LiveJobState): void {

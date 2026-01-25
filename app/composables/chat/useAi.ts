@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onScopeDispose } from 'vue';
 import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
 import { create, tx, upsert, type Message } from '~/db';
@@ -1362,32 +1362,13 @@ export function useChat(
     }
 
     async function reattachBackgroundJobs(): Promise<void> {
-        if (!backgroundStreamingAllowed.value || !threadIdRef.value) {
-            if (import.meta.dev) {
-                console.debug('[bg-stream] reattachBackgroundJobs:skip', {
-                    allowed: backgroundStreamingAllowed.value,
-                    threadId: threadIdRef.value,
-                });
-            }
-            return;
-        }
-        if (import.meta.dev) {
-            console.debug('[bg-stream] reattachBackgroundJobs:start', {
-                threadId: threadIdRef.value,
-            });
-        }
+        if (!backgroundStreamingAllowed.value || !threadIdRef.value) return;
+
         try {
             const dbMessages = (await messagesByThread(threadIdRef.value)) as
                 | StoredMessage[]
                 | undefined;
-                const list = Array.isArray(dbMessages) ? dbMessages : [];
-            if (import.meta.dev) {
-                console.debug('[bg-stream] reattachBackgroundJobs:scan', {
-                    threadId: threadIdRef.value,
-                    total: list.length,
-                    pending: list.filter((m) => m.role === 'assistant' && m.pending).length,
-                });
-            }
+            const list = Array.isArray(dbMessages) ? dbMessages : [];
             for (const msg of list) {
                 if (msg.role !== 'assistant' || !msg.pending || !msg.data) continue;
                 const data = msg.data as Record<string, unknown>;
@@ -1400,20 +1381,14 @@ export function useChat(
                         ? data.background_job_status
                         : 'streaming';
                 if (!jobId || status !== 'streaming') continue;
+
                 const initialContent =
                     typeof data.content === 'string'
                         ? data.content
                         : typeof msg.content === 'string'
                         ? msg.content
                         : '';
-                if (import.meta.dev) {
-                    console.debug('[bg-stream] reattachBackgroundJobs:attach', {
-                        jobId,
-                        threadId: threadIdRef.value,
-                        messageId: msg.id,
-                        initialLen: initialContent.length,
-                    });
-                }
+
                 attachBackgroundJobToUi({
                     jobId,
                     userId: notificationUserId.value,
@@ -1423,9 +1398,8 @@ export function useChat(
                     isReattach: true,
                     useSse: backgroundStreamingAllowed.value,
                 });
-                if (!backgroundJobId.value) {
-                    backgroundJobId.value = jobId;
-                }
+
+                if (!backgroundJobId.value) backgroundJobId.value = jobId;
                 if (backgroundJobMode.value === 'none') {
                     backgroundJobMode.value = 'background';
                 }
@@ -3704,6 +3678,10 @@ export function useChat(
     }
 
     void reattachBackgroundJobs();
+
+    onScopeDispose(() => {
+        clear();
+    });
 
     return {
         messages,
