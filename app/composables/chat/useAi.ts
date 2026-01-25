@@ -3430,6 +3430,17 @@ export function useChat(
     }
 
     function clear() {
+        const disposeHooks = () => {
+            if (!cleanupFns.length) return;
+            for (const dispose of cleanupFns.splice(0, cleanupFns.length)) {
+                try {
+                    dispose();
+                } catch {
+                    /* intentionally empty */
+                }
+            }
+        };
+
         const isBackgroundActive =
             backgroundStreamingAllowed.value &&
             (backgroundJobId.value || backgroundJobMode.value !== 'none');
@@ -3437,6 +3448,7 @@ export function useChat(
         if (isBackgroundActive) {
             detached.value = true;
             clearBackgroundJobSubscriptions({ keepTracking: true });
+            disposeHooks();
             // Do NOT reset backgroundJobId, backgroundJobMode, or backgroundJobInfo
             // This allows reattachment or background processing to continue
             return;
@@ -3461,15 +3473,7 @@ export function useChat(
         clearBackgroundJobSubscriptions();
 
         // Clean up any registered hooks to avoid leaking listeners across threads
-        if (cleanupFns.length) {
-            for (const dispose of cleanupFns.splice(0, cleanupFns.length)) {
-                try {
-                    dispose();
-                } catch {
-                    /* intentionally empty */
-                }
-            }
-        }
+        disposeHooks();
 
         rawMessages.value = [];
         messages.value = [];
