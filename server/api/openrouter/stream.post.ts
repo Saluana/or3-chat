@@ -24,7 +24,9 @@ import {
     validateBackgroundParams,
     startBackgroundStream,
     isBackgroundStreamingAvailable,
+    consumeBackgroundStream,
 } from '../../utils/background-jobs/stream-handler';
+import { getJobProvider } from '../../utils/background-jobs/store';
 
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -152,6 +154,131 @@ export default defineEventHandler(async (event) => {
     // =============================
     // BACKGROUND MODE HANDLING
     // =============================
+    const backgroundMode =
+        typeof body._backgroundMode === 'string' ? body._backgroundMode : null;
+    const isHybridBackground =
+        isBackgroundModeRequest(body) && backgroundMode === 'hybrid';
+
+    // If hybrid background mode is requested, stream to client and persist on server.
+    if (isHybridBackground && isBackgroundStreamingAvailable()) {
+        // Resolve user ID for authorization
+        let userId: string | null = null;
+        let workspaceId: string | null = null;
+        if (isSsrAuthEnabled(event)) {
+            const session = await resolveSessionContext(event);
+            if (session.authenticated && session.user?.id && session.workspace?.id) {
+                userId = session.user.id;
+                workspaceId = session.workspace.id;
+            }
+        }
+
+        if (!userId || !workspaceId) {
+            setResponseStatus(event, 401);
+            return { error: 'Authentication required for background streaming' };
+        }
+
+        const validation = validateBackgroundParams(body);
+        if (!validation.valid) {
+            setResponseStatus(event, 400);
+            return { error: validation.error };
+        }
+
+        const host = getHeader(event, 'host') || 'localhost';
+        const xfProto = getHeader(event, 'x-forwarded-proto');
+        const isLocal = /^localhost(?:\d+)?$|^127\.0\.0\.1(?::\d+)?$/.test(host);
+        const proto = xfProto || (isLocal ? 'http' : 'https');
+
+        const provider = await getJobProvider();
+        const model = (body.model as string) || 'unknown';
+        let jobId: string;
+        try {
+            jobId = await provider.createJob({
+                userId,
+                threadId: validation.threadId!,
+                messageId: validation.messageId!,
+                model,
+            });
+        } catch (err) {
+            if (err instanceof Error && err.message.includes('Max concurrent')) {
+                setResponseStatus(event, 503);
+                return { error: 'Server busy, try again later' };
+            }
+            setResponseStatus(event, 500);
+            return { error: err instanceof Error ? err.message : 'Background stream failed' };
+        }
+
+        // Track client disconnect without aborting upstream
+        let clientDisconnected = false;
+        event.node.req.on('close', () => {
+            clientDisconnected = true;
+        });
+
+        // Strip internal fields from body before sending to OpenRouter
+        const { _background, _threadId, _messageId, _backgroundMode, ...cleanBody } = body;
+
+        const ac = provider.getAbortController?.(jobId) ?? new AbortController();
+        let upstream: Response;
+        try {
+            upstream = await fetch(OR_URL, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                    Accept: 'text/event-stream',
+                    'HTTP-Referer': `${proto}://${host}`,
+                    'X-Title': 'or3.chat',
+                },
+                body: JSON.stringify(cleanBody),
+                signal: ac.signal,
+            });
+        } catch (e: unknown) {
+            if (e instanceof Error && e.name === 'AbortError') {
+                return;
+            }
+            setResponseStatus(event, 502);
+            return 'Failed to reach OpenRouter';
+        }
+
+        if (!upstream.ok || !upstream.body) {
+            let respText = '<no-body>';
+            try {
+                respText = await upstream.text();
+            } catch {
+                respText = '<error-reading-body>';
+            }
+            await provider.failJob(jobId, respText.slice(0, 200));
+            setResponseStatus(event, upstream.status);
+            return respText.slice(0, 2000);
+        }
+
+        const [clientStream, backgroundStream] = upstream.body.tee();
+        void consumeBackgroundStream({
+            jobId,
+            stream: backgroundStream,
+            context: {
+                body,
+                apiKey,
+                userId,
+                workspaceId,
+                threadId: validation.threadId!,
+                messageId: validation.messageId!,
+                referer: `${proto}://${host}`,
+            },
+            provider,
+            shouldNotify: () => clientDisconnected,
+        }).catch((err) => {
+            console.error('[background-stream] Hybrid job failed:', jobId, err);
+        });
+
+        // SSE headers + job id
+        setHeader(event, 'Content-Type', 'text/event-stream');
+        setHeader(event, 'Cache-Control', 'no-cache, no-transform');
+        setHeader(event, 'Connection', 'keep-alive');
+        setResponseHeader(event, 'X-Or3-Background-Job-Id', jobId);
+
+        return sendStream(event, clientStream);
+    }
+
     // If background mode is requested and enabled, start a background job
     // and return immediately with the job ID.
     if (isBackgroundModeRequest(body) && isBackgroundStreamingAvailable()) {

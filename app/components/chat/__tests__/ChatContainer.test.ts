@@ -38,15 +38,36 @@ vi.mock('~/utils/chat/uiMessages', () => ({
     ensureUiMessage: (m: any) => m,
 }));
 
-vi.mock('#imports', () => ({
-    useToast: () => ({ add: vi.fn() }),
-    useChat: () => ({
+const chatInstances: Array<{
+    ensureHistorySynced: ReturnType<typeof vi.fn>;
+    clear: ReturnType<typeof vi.fn>;
+}> = [];
+
+const useChatMock = vi.fn(() => {
+    const instance = {
         messages: { value: [] },
         loading: { value: false },
         threadId: { value: 'thread-1' },
+        streamId: { value: undefined },
+        streamState: { finalized: true },
+        tailAssistant: { value: null },
         sendMessage: vi.fn().mockResolvedValue(undefined),
+        retryMessage: vi.fn(),
+        continueMessage: vi.fn(),
+        applyLocalEdit: vi.fn().mockReturnValue(false),
+        ensureHistorySynced: vi.fn().mockResolvedValue(undefined),
         clear: vi.fn(),
-    }),
+    };
+    chatInstances.push({
+        ensureHistorySynced: instance.ensureHistorySynced,
+        clear: instance.clear,
+    });
+    return instance;
+});
+
+vi.mock('#imports', () => ({
+    useToast: () => ({ add: vi.fn() }),
+    useChat: useChatMock,
     useHooks: () => ({
         on: vi.fn().mockReturnValue(() => {}),
         off: vi.fn(),
@@ -68,6 +89,11 @@ describe('ChatContainer', () => {
         messageHistory: [],
         paneId: 'pane-1',
     };
+
+    beforeEach(() => {
+        chatInstances.length = 0;
+        useChatMock.mockClear();
+    });
 
     it('renders scroll to bottom button when scrolled up', async () => {
         const wrapper = mount(ChatContainer, {
@@ -185,5 +211,29 @@ describe('ChatContainer', () => {
         expect(scroller.vm.scrollToBottom).toHaveBeenCalledWith({
             smooth: true,
         });
+    });
+
+    it('ensures history is synced on mount and thread switch', async () => {
+        const wrapper = mount(ChatContainer, {
+            props: defaultProps,
+            global: {
+                stubs: {
+                    LazyChatMessage,
+                    LazyChatInputDropper,
+                    ClientOnly: { template: '<div><slot /></div>' },
+                    UButton: {
+                        template:
+                            '<button class="u-button" @click="$emit(\'click\')"></button>',
+                    },
+                },
+            },
+        });
+
+        expect(chatInstances[0]?.ensureHistorySynced).toHaveBeenCalledTimes(1);
+
+        await wrapper.setProps({ threadId: 'thread-2' });
+        await nextTick();
+
+        expect(chatInstances[1]?.ensureHistorySynced).toHaveBeenCalledTimes(1);
     });
 });

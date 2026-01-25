@@ -37,6 +37,7 @@ export async function ensureThreadHistoryLoaded(
                 id: dbMsg.id,
                 stream_id: dbMsg.stream_id ?? undefined,
                 file_hashes: dbMsg.file_hashes,
+                pending: dbMsg.pending ?? false,
                 error: dbMsg.error ?? null,
                 reasoning_text:
                     typeof data?.reasoning_text === 'string'

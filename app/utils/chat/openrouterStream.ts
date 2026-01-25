@@ -34,6 +34,10 @@ type OpenRouterRequestBody = {
     reasoning?: unknown;
     tools?: ToolDefinition[];
     tool_choice?: 'auto';
+    _background?: true;
+    _threadId?: string;
+    _messageId?: string;
+    _backgroundMode?: 'hybrid';
 };
 
 // Cache key for detecting static build (no server routes)
@@ -118,9 +122,24 @@ export async function* openRouterStream(params: {
     tools?: ToolDefinition[];
     signal?: AbortSignal;
     reasoning?: unknown;
+    background?: {
+        threadId: string;
+        messageId: string;
+        mode: 'hybrid';
+    };
+    onBackgroundJobId?: (jobId: string) => void;
 }): AsyncGenerator<ORStreamEvent, void, unknown> {
     const { apiKey, model, orMessages, modalities, tools, signal } = params;
     const hasApiKey = Boolean(apiKey);
+    const runtimeConfig = useRuntimeConfig() as {
+        public?: {
+            ssrAuthEnabled?: boolean;
+            backgroundStreaming?: { enabled?: boolean };
+        };
+    };
+    const forceServerRoute =
+        runtimeConfig.public?.ssrAuthEnabled === true &&
+        runtimeConfig.public?.backgroundStreaming?.enabled === true;
 
     const body: OpenRouterRequestBody = {
         model,
@@ -138,9 +157,16 @@ export async function* openRouterStream(params: {
         body.tool_choice = 'auto';
     }
 
+    if (params.background) {
+        body._background = true;
+        body._threadId = params.background.threadId;
+        body._messageId = params.background.messageId;
+        body._backgroundMode = params.background.mode;
+    }
+
     // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available
     // Skip if we've already determined it's not available (static build or server down)
-    if (isServerRouteAvailable()) {
+    if (forceServerRoute || isServerRouteAvailable()) {
         try {
             const serverResp = await fetch('/api/openrouter/stream', {
                 method: 'POST',
@@ -155,6 +181,12 @@ export async function* openRouterStream(params: {
             });
 
             if (serverResp.ok && serverResp.body) {
+                const backgroundJobId = serverResp.headers.get(
+                    'x-or3-background-job-id'
+                );
+                if (backgroundJobId && params.onBackgroundJobId) {
+                    params.onBackgroundJobId(backgroundJobId);
+                }
                 // Server route available; use shared parser on response
                 for await (const evt of parseOpenRouterSSE(serverResp.body)) {
                     yield evt;
@@ -163,7 +195,12 @@ export async function* openRouterStream(params: {
             }
 
             if (serverResp.status === 404 || serverResp.status === 405) {
-                // Server route not OK; mark as unavailable and fall through
+                // Server route not OK
+                if (forceServerRoute) {
+                    throw new Error(
+                        'OpenRouter server route unavailable in SSR mode'
+                    );
+                }
                 setServerRouteAvailable(false);
             } else {
                 const errorText = await serverResp.text().catch(() => '');
@@ -181,9 +218,18 @@ export async function* openRouterStream(params: {
             ) {
                 throw error;
             }
+            if (forceServerRoute) {
+                throw error instanceof Error
+                    ? error
+                    : new Error('OpenRouter server route failed in SSR mode');
+            }
             // Server route unavailable (404, network error, etc.); mark as unavailable and fall back
             setServerRouteAvailable(false);
         }
+    }
+
+    if (forceServerRoute) {
+        throw new Error('OpenRouter server route required in SSR mode');
     }
 
     if (!hasApiKey) {
@@ -191,6 +237,12 @@ export async function* openRouterStream(params: {
     }
 
     // Fallback: direct OpenRouter (legacy path)
+    const fallbackBody = { ...body };
+    delete fallbackBody._background;
+    delete fallbackBody._threadId;
+    delete fallbackBody._messageId;
+    delete fallbackBody._backgroundMode;
+
     const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -202,7 +254,7 @@ export async function* openRouterStream(params: {
             'X-Title': 'or3.chat',
             Accept: 'text/event-stream',
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(fallbackBody),
         signal,
     });
 
@@ -221,7 +273,7 @@ export async function* openRouterStream(params: {
         let bodyPreview = '<preview-failed>';
         try {
             bodyPreview = JSON.stringify(
-                body,
+                fallbackBody,
                 (_key: string, value: unknown): unknown => {
                     if (typeof value === 'string' && value.length > 300) {
                         return `${value.slice(0, 300)}...(${value.length})`;

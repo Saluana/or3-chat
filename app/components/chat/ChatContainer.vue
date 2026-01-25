@@ -223,10 +223,18 @@ const chat = shallowRef<ChatInstance>(
         pendingPromptId.value || undefined
     ) as ChatInstance
 );
+// Ensure history + background job reattachment on initial load
+void chat.value?.ensureHistorySynced?.();
 
 watch(
     () => props.threadId,
-    (newId) => {
+    async (newId) => {
+        if (import.meta.dev) {
+            console.debug('[chat-ui] thread switch', {
+                from: chat.value?.threadId?.value,
+                to: newId,
+            });
+        }
         const currentId = chat.value?.threadId?.value;
         // Avoid re-initializing if the composable already set the same id (first-send case)
         if (newId && currentId && newId === currentId) {
@@ -243,11 +251,18 @@ watch(
                 );
             }
         }
+        // Don't seed with stale snapshot; let ensureHistorySynced pull fresh data
         chat.value = useChat(
-            props.messageHistory,
+            [],
             newId,
             pendingPromptId.value || undefined
         ) as ChatInstance;
+        if (import.meta.dev) {
+            console.debug('[chat-ui] ensureHistorySynced start', {
+                threadId: newId,
+            });
+        }
+        await chat.value?.ensureHistorySynced?.();
     }
 );
 
@@ -258,6 +273,43 @@ watch(
         if (!chat.value) return;
         // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
         if (chat.value.loading.value) {
+            return;
+        }
+        const backgroundMode =
+            typeof chat.value.backgroundJobMode === 'object' &&
+            'value' in chat.value.backgroundJobMode
+                ? chat.value.backgroundJobMode.value
+                : 'none';
+        if (import.meta.dev) {
+            console.debug('[chat-ui] messageHistory update check', {
+                threadId: chat.value.threadId?.value,
+                backgroundMode,
+                loading: chat.value.loading.value,
+                pendingCount: chat.value.messages.value.filter(
+                    (m) => m.role === 'assistant' && m.pending
+                ).length,
+                incomingCount: Array.isArray(mh) ? mh.length : 0,
+            });
+        }
+        if (backgroundMode && backgroundMode !== 'none') {
+            if (import.meta.dev) {
+                console.debug('[chat-ui] messageHistory skipped (backgroundMode)', {
+                    threadId: chat.value.threadId?.value,
+                    backgroundMode,
+                });
+            }
+            return;
+        }
+        // Also bail if any message is pending a background job
+        const hasPendingBackground = chat.value.messages.value.some(
+            (m) => m.role === 'assistant' && m.pending
+        );
+        if (hasPendingBackground) {
+            if (import.meta.dev) {
+                console.debug('[chat-ui] messageHistory skipped (pending)', {
+                    threadId: chat.value.threadId?.value,
+                });
+            }
             return;
         }
         // Prefer to update the internal messages array directly to avoid remount flicker
@@ -668,6 +720,7 @@ function onPendingPromptSelected(promptId: string | null) {
         props.threadId,
         pendingPromptId.value || undefined
     );
+    void chat.value?.ensureHistorySynced?.();
 }
 
 function onStopStream() {

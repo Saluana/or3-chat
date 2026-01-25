@@ -6,7 +6,10 @@
  */
 
 import type { BackgroundJobProvider } from '../background-jobs/types';
-import { getJobProvider, isBackgroundStreamingEnabled } from '../background-jobs/store';
+import {
+    getJobProvider,
+    isBackgroundStreamingEnabled,
+} from '../background-jobs/store';
 import { checkJobAborted } from '../background-jobs/providers/convex';
 import {
     parseOpenRouterSSE,
@@ -87,6 +90,96 @@ export async function startBackgroundStream(
 }
 
 /**
+ * Consume a background stream and persist updates.
+ * Can be used for background-only and hybrid (client-attached) streaming.
+ */
+export async function consumeBackgroundStream(params: {
+    jobId: string;
+    stream: ReadableStream<Uint8Array>;
+    context: BackgroundStreamParams;
+    provider: BackgroundJobProvider;
+    shouldNotify?: () => boolean;
+}): Promise<void> {
+    let fullContent = '';
+    let chunks = 0;
+    const UPDATE_INTERVAL = 10; // Update provider every N chunks
+    const isConvexProvider = params.provider.name === 'convex';
+    const shouldNotify = params.shouldNotify ?? (() => true);
+
+    try {
+        for await (const evt of parseOpenRouterSSE(params.stream)) {
+            if (evt.type === 'text') {
+                fullContent += evt.text;
+                chunks++;
+
+                // Update provider periodically
+                if (chunks % UPDATE_INTERVAL === 0) {
+                    await params.provider.updateJob(params.jobId, {
+                        contentChunk: evt.text,
+                        chunksReceived: chunks,
+                    });
+
+                    // For Convex provider, poll for abort status
+                    if (isConvexProvider) {
+                        const aborted = await checkJobAborted(params.jobId);
+                        if (aborted) {
+                            throw new Error('Job aborted by user');
+                        }
+                    }
+                }
+            }
+        }
+
+        // Complete the job
+        await params.provider.completeJob(params.jobId, fullContent);
+
+        if (shouldNotify()) {
+            // Emit server-side notification for job completion
+            try {
+                await emitBackgroundJobComplete(
+                    params.context.workspaceId,
+                    params.context.userId,
+                    params.context.threadId,
+                    params.jobId
+                );
+            } catch (err) {
+                console.error(
+                    '[background-stream] Failed to emit notification:',
+                    err
+                );
+                // Don't fail the job if notification fails
+            }
+        }
+
+    } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+            // Job was aborted (already marked in provider)
+            return;
+        }
+        
+        if (shouldNotify()) {
+            // Emit error notification
+            try {
+                await emitBackgroundJobError(
+                    params.context.workspaceId,
+                    params.context.userId,
+                    params.context.threadId,
+                    params.jobId,
+                    err instanceof Error ? err.message : String(err)
+                );
+            } catch (notifyErr) {
+                console.error(
+                    '[background-stream] Failed to emit error notification:',
+                    notifyErr
+                );
+            }
+        }
+        
+        throw err;
+    }
+}
+
+/**
  * Stream in the background without client connection
  */
 async function streamInBackground(
@@ -96,7 +189,6 @@ async function streamInBackground(
 ): Promise<void> {
     // Get abort controller if provider supports it (memory provider)
     const ac = provider.getAbortController?.(jobId) ?? new AbortController();
-    const isConvexProvider = provider.name === 'convex';
 
     // Strip internal fields from body before sending to OpenRouter
     const { _background, _threadId, _messageId, ...cleanBody } = params.body;
@@ -116,74 +208,17 @@ async function streamInBackground(
 
     if (!upstream.ok || !upstream.body) {
         const errorText = await upstream.text().catch(() => '<no body>');
-        throw new Error(`OpenRouter error ${upstream.status}: ${errorText.slice(0, 200)}`);
+        throw new Error(
+            `OpenRouter error ${upstream.status}: ${errorText.slice(0, 200)}`
+        );
     }
 
-    let fullContent = '';
-    let chunks = 0;
-    const UPDATE_INTERVAL = 10; // Update provider every N chunks
-
-    try {
-        for await (const evt of parseOpenRouterSSE(upstream.body)) {
-            if (evt.type === 'text') {
-                fullContent += evt.text;
-                chunks++;
-
-                // Update provider periodically
-                if (chunks % UPDATE_INTERVAL === 0) {
-                    await provider.updateJob(jobId, {
-                        contentChunk: evt.text,
-                        chunksReceived: chunks,
-                    });
-
-                    // For Convex provider, poll for abort status
-                    if (isConvexProvider) {
-                        const aborted = await checkJobAborted(jobId);
-                        if (aborted) {
-                            throw new Error('Job aborted by user');
-                        }
-                    }
-                }
-            }
-        }
-
-        // Complete the job
-        await provider.completeJob(jobId, fullContent);
-
-        // Emit server-side notification for job completion
-        try {
-            await emitBackgroundJobComplete(
-                params.workspaceId,
-                params.userId,
-                params.threadId,
-                jobId
-            );
-        } catch (err) {
-            console.error('[background-stream] Failed to emit notification:', err);
-            // Don't fail the job if notification fails
-        }
-
-    } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') {
-            // Job was aborted (already marked in provider)
-            return;
-        }
-        
-        // Emit error notification
-        try {
-            await emitBackgroundJobError(
-                params.workspaceId,
-                params.userId,
-                params.threadId,
-                jobId,
-                err instanceof Error ? err.message : String(err)
-            );
-        } catch (notifyErr) {
-            console.error('[background-stream] Failed to emit error notification:', notifyErr);
-        }
-        
-        throw err;
-    }
+    await consumeBackgroundStream({
+        jobId,
+        stream: upstream.body,
+        context: params,
+        provider,
+    });
 }
 
 /**

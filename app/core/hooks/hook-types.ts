@@ -808,6 +808,7 @@ export type CoreHookPayloadMap = {
     'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];
     'storage.files.upload:filter:policy': [StorageFileUploadPolicyPayload | false];
     'storage.files.gc:action:run': [StorageFileGcPayload];
+    'storage:action:error': [{ message?: string } & Record<string, unknown>];
 
     // Sync hooks
     'sync.op:action:captured': [{ op: SyncPendingOpPayload }];
@@ -867,6 +868,7 @@ export type CoreHookPayloadMap = {
     'sync.stats:action': [
         { pendingCount: number; cursor: number; lastSyncAt: number }
     ];
+    'sync:action:error': [{ message?: string } & Record<string, unknown>];
 
     // Notification hooks
     'notify:action:push': [NotificationCreatePayload];

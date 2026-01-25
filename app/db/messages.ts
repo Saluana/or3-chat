@@ -3,6 +3,7 @@ import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { newId, nowSec, parseOrThrow, nextClock } from './util';
+import { generateHLC } from '../core/sync/hlc';
 import {
     MessageCreateSchema,
     MessageSchema,
@@ -60,6 +61,7 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
     const value = parseOrThrow(MessageSchema, {
         ...prepared,
         clock: nextClock(prepared.clock),
+        hlc: prepared.hlc ?? generateHLC(),
     });
     await hooks.doAction('db.messages.create:action:before', {
         entity: toMessageEntity(value),
@@ -92,6 +94,7 @@ export async function upsertMessage(value: Message): Promise<void> {
     const next = {
         ...validated,
         clock: nextClock(existing?.clock ?? validated.clock),
+        hlc: validated.hlc ?? generateHLC(),
     };
     await hooks.doAction('db.messages.upsert:action:before', {
         entity: toMessageEntity(next),
@@ -162,6 +165,7 @@ export async function softDeleteMessage(id: string): Promise<void> {
                     deleted: true,
                     updated_at: nowSec(),
                     clock: nextClock(m.clock),
+                    hlc: generateHLC(),
                 }),
             { op: 'write', entity: 'messages', action: 'softDelete' }
         );

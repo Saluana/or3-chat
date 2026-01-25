@@ -13,6 +13,7 @@ import type { SyncProvider, SyncScope, PendingOp } from '~~/shared/sync/types';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
+import { markRecentOpId } from './recent-op-cache';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 
 /** Default retry delays in milliseconds */
@@ -162,6 +163,13 @@ export class OutboxManager {
 
             const batch = dueOps.slice(0, this.config.maxBatchSize);
 
+            if (import.meta.dev) {
+                console.debug('[sync] outbox push start', {
+                    scope: this.scope,
+                    batchSize: batch.length,
+                });
+            }
+
             await hooks.doAction('sync.push:action:before', {
                 scope: this.scope,
                 count: batch.length,
@@ -203,6 +211,7 @@ export class OutboxManager {
                             await this.markTombstoneSynced(op);
                         }
                         await this.db.pending_ops.delete(op.id);
+                        markRecentOpId(op.stamp.opId);
                         successCount += 1;
                     } else {
                         // Failed - handle retry
@@ -216,6 +225,14 @@ export class OutboxManager {
                     successCount,
                     failCount,
                 });
+
+                if (import.meta.dev) {
+                    console.debug('[sync] outbox push done', {
+                        scope: this.scope,
+                        successCount,
+                        failCount,
+                    });
+                }
 
                 // Update circuit breaker based on results
                 if (successCount > 0 && failCount === 0) {

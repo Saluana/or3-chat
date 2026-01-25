@@ -56,7 +56,7 @@ export default defineNuxtPlugin(() => {
             label: 'Calculator',
             icon: 'pixelarticons:calculator',
             descriptionHint: 'Let the AI perform arithmetic calculations',
-            defaultEnabled: true, // Enable by default for testing
+            defaultEnabled: false, // Keep demo tools opt-in by default
             category: 'Demo Tools',
         },
     });
@@ -96,7 +96,7 @@ export default defineNuxtPlugin(() => {
             return `Calculation complete: ${a} ${operation} ${b} = ${result}`;
         },
         {
-            enabled: true, // Start enabled for testing
+            enabled: false, // Start disabled so background streaming can run
         }
     );
 

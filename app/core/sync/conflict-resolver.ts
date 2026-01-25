@@ -152,11 +152,31 @@ export class ConflictResolver {
                     hlc: stamp.hlc,
                 });
                 await this.writeTombstone(tableName, pk, stamp.clock, existingTombstone);
+                if (import.meta.dev) {
+                    console.debug('[sync] conflict delete tie -> remote', {
+                        tableName,
+                        pk,
+                        localClock,
+                        remoteClock: stamp.clock,
+                        localHlc,
+                        remoteHlc: stamp.hlc,
+                    });
+                }
                 // Queue conflict for hook emission after transaction
                 conflicts.push({ tableName, pk, local, remote: { deleted: true }, winner: 'remote' });
                 return { applied: true, skipped: false, isConflict: true, winner: 'remote' };
             }
             // Queue conflict for hook emission after transaction
+            if (import.meta.dev) {
+                console.debug('[sync] conflict delete tie -> local', {
+                    tableName,
+                    pk,
+                    localClock,
+                    remoteClock: stamp.clock,
+                    localHlc,
+                    remoteHlc: stamp.hlc,
+                });
+            }
             conflicts.push({ tableName, pk, local, remote: { deleted: true }, winner: 'local' });
             return { applied: false, skipped: true, isConflict: true, winner: 'local' };
         }
@@ -219,11 +239,31 @@ export class ConflictResolver {
                 if (tombstone && tombstone.clock < remoteClock) {
                     await this.clearTombstone(tableName, pk);
                 }
+                if (import.meta.dev) {
+                    console.debug('[sync] conflict put tie -> remote', {
+                        tableName,
+                        pk,
+                        localClock,
+                        remoteClock,
+                        localHlc,
+                        remoteHlc: stamp.hlc,
+                    });
+                }
                 // Queue conflict for hook emission after transaction
                 conflicts.push({ tableName, pk, local, remote: payload, winner: 'remote' });
                 return { applied: true, skipped: false, isConflict: true, winner: 'remote' };
             }
             // Queue conflict for hook emission after transaction
+            if (import.meta.dev) {
+                console.debug('[sync] conflict put tie -> local', {
+                    tableName,
+                    pk,
+                    localClock,
+                    remoteClock,
+                    localHlc,
+                    remoteHlc: stamp.hlc,
+                });
+            }
             conflicts.push({ tableName, pk, local, remote: payload, winner: 'local' });
             return { applied: false, skipped: true, isConflict: true, winner: 'local' };
         }

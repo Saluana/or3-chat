@@ -30,6 +30,7 @@ export const ThreadSchema = z.object({
     deleted: z.boolean().default(false),
     pinned: z.boolean().default(false),
     clock: z.number().int(),
+    hlc: z.string().optional(),
     forked: z.boolean().default(false),
     project_id: z.string().nullable().optional(),
     system_prompt_id: z.string().nullable().optional(),
@@ -83,6 +84,7 @@ export const MessageSchema = z.object({
     // HLC-derived ordering key for deterministic ordering when index collides
     order_key: z.string().optional(),
     clock: z.number().int(),
+    hlc: z.string().optional(),
     stream_id: z.string().nullable().optional(),
     // JSON serialized array of file content hashes (sha256/md5) or null/undefined when absent.
     // Kept as a string to avoid bloating indexed row size & allow lazy parsing.
