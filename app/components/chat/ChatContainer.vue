@@ -82,7 +82,7 @@
                     />
                 </div>
                 <lazy-chat-input-dropper
-                    :loading="loading"
+                    :loading="inputLoading"
                     :streaming="streamingActive"
                     :container-width="containerWidth"
                     :thread-id="currentThreadId"
@@ -355,13 +355,27 @@ const messages = computed<UiChatMessage[]>(
 );
 
 const loading = computed(() => chat.value?.loading?.value || false);
+const backgroundJobId = computed(() =>
+    unwrapRef(chat.value?.backgroundJobId ?? null)
+);
+const backgroundJobMode = computed(() =>
+    unwrapRef(chat.value?.backgroundJobMode ?? 'none')
+);
+const backgroundStreaming = computed(
+    () => Boolean(backgroundJobId.value) && backgroundJobMode.value !== 'none'
+);
 const workflowRunning = computed(() => {
     for (const wf of workflowStates.values()) {
         if (wf && wf.executionState === 'running') return true;
     }
     return false;
 });
-const streamingActive = computed(() => loading.value || workflowRunning.value);
+const streamingActive = computed(
+    () => loading.value || workflowRunning.value || backgroundStreaming.value
+);
+const inputLoading = computed(
+    () => loading.value || backgroundStreaming.value
+);
 
 // Tail streaming now provided directly by useChat composable
 // `useChat` returns many refs; unwrap common ones so computed values expose plain objects/primitives
