@@ -229,12 +229,6 @@ void chat.value?.ensureHistorySynced?.();
 watch(
     () => props.threadId,
     async (newId) => {
-        if (import.meta.dev) {
-            console.debug('[chat-ui] thread switch', {
-                from: chat.value?.threadId?.value,
-                to: newId,
-            });
-        }
         const currentId = chat.value?.threadId?.value;
         // Avoid re-initializing if the composable already set the same id (first-send case)
         if (newId && currentId && newId === currentId) {
@@ -257,11 +251,6 @@ watch(
             newId,
             pendingPromptId.value || undefined
         ) as ChatInstance;
-        if (import.meta.dev) {
-            console.debug('[chat-ui] ensureHistorySynced start', {
-                threadId: newId,
-            });
-        }
         await chat.value?.ensureHistorySynced?.();
     }
 );
@@ -277,45 +266,16 @@ watch(
         }
         const backgroundMode = backgroundJobMode.value;
         const backgroundJobIdValue = backgroundJobId.value;
-        if (import.meta.dev) {
-            console.debug('[chat-ui] messageHistory update check', {
-                threadId: chat.value.threadId?.value,
-                backgroundMode,
-                backgroundJobId: backgroundJobIdValue,
-                loading: chat.value.loading.value,
-                pendingCount: chat.value.messages.value.filter(
-                    (m) => m.role === 'assistant' && m.pending
-                ).length,
-                incomingCount: Array.isArray(mh) ? mh.length : 0,
-            });
-        }
         const hasPendingBackground = chat.value.messages.value.some(
             (m) => m.role === 'assistant' && m.pending
         );
         if (backgroundJobIdValue && hasPendingBackground) {
-            if (import.meta.dev) {
-                console.debug('[chat-ui] messageHistory skipped (backgroundJobId)', {
-                    threadId: chat.value.threadId?.value,
-                    backgroundJobId: backgroundJobIdValue,
-                });
-            }
             return;
         }
         if (backgroundMode && backgroundMode !== 'none' && hasPendingBackground) {
-            if (import.meta.dev) {
-                console.debug('[chat-ui] messageHistory skipped (backgroundMode)', {
-                    threadId: chat.value.threadId?.value,
-                    backgroundMode,
-                });
-            }
             return;
         }
         if (hasPendingBackground) {
-            if (import.meta.dev) {
-                console.debug('[chat-ui] messageHistory skipped (pending)', {
-                    threadId: chat.value.threadId?.value,
-                });
-            }
             return;
         }
         // Prefer to update the internal messages array directly to avoid remount flicker
