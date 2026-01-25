@@ -1,5 +1,5 @@
 <template>
-    <UPopover :content="{ side: 'right', align: 'end' }">
+    <UPopover v-model:open="open" :content="{ side: 'right', align: 'end' }">
         <UTooltip
             id="tooltip-notifications"
             :delay-duration="0"
@@ -33,13 +33,29 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch, provide } from 'vue';
+import { useRoute } from 'vue-router';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useNotifications } from '~/composables/notifications/useNotifications';
+import { NOTIFICATION_POPOVER_CLOSE_KEY } from './notification-popover';
 
 const iconBell = useIcon('notification.bell');
 const { unreadCount } = useNotifications();
+const open = ref(false);
+const route = useRoute();
+const closePopover = () => {
+    open.value = false;
+};
+
+watch(
+    () => route.fullPath,
+    () => {
+        closePopover();
+    }
+);
+
+provide(NOTIFICATION_POPOVER_CLOSE_KEY, closePopover);
 
 const tooltipText = computed(() => {
     if (unreadCount.value === 0) return 'Notifications';

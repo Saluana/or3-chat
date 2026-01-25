@@ -63,11 +63,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, inject } from 'vue';
 import { useRouter } from 'vue-router';
 import { useIcon } from '~/composables/useIcon';
 import { useHooks } from '~/core/hooks/useHooks';
 import type { Notification, NotificationAction } from '~/db/schema';
+import { NOTIFICATION_POPOVER_CLOSE_KEY } from './notification-popover';
+import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 
 const props = defineProps<{
     notification: Notification;
@@ -77,6 +79,7 @@ const props = defineProps<{
 const router = useRouter();
 const hooks = useHooks();
 const hasMarkedRead = ref(false);
+const closePopover = inject<() => void>(NOTIFICATION_POPOVER_CLOSE_KEY, null);
 
 // Pre-compute all possible icons at setup time to avoid calling useIcon inside computed
 // This follows Vue best practices - composables should only be called at setup, not in getters
@@ -125,6 +128,7 @@ const markReadOnce = async (): Promise<void> => {
 
 async function handleClick() {
     await markReadOnce();
+    closePopover?.();
 
     // If there's a default navigate action, execute it
     const navigateAction = props.notification.actions?.find(
@@ -137,15 +141,44 @@ async function handleClick() {
 
 async function handleActionClick(action: NotificationAction) {
     await markReadOnce();
+    closePopover?.();
 
     if (action.kind === 'navigate') {
+        const target = (action.target ?? {}) as {
+            route?: string;
+            threadId?: string;
+            documentId?: string;
+            thread_id?: string;
+            document_id?: string;
+        };
+        const threadId = target.threadId ?? target.thread_id;
+        const documentId = target.documentId ?? target.document_id;
+        const multiPane = getGlobalMultiPaneApi();
+        if (threadId && multiPane) {
+            const idx = multiPane.activePaneIndex.value ?? 0;
+            multiPane.updatePane(idx, {
+                mode: 'chat',
+                documentId: undefined,
+            });
+            await multiPane.setPaneThread(idx, threadId);
+            return;
+        }
+        if (documentId && multiPane) {
+            const idx = multiPane.activePaneIndex.value ?? 0;
+            multiPane.updatePane(idx, {
+                mode: 'doc',
+                threadId: '',
+            });
+            await multiPane.setPaneApp(idx, 'doc', { recordId: documentId });
+            return;
+        }
         // Handle navigation
-        if (action.target?.route) {
-            await router.push(action.target.route);
-        } else if (action.target?.threadId) {
-            await router.push(`/chat/${action.target.threadId}`);
-        } else if (action.target?.documentId) {
-            await router.push(`/docs/${action.target.documentId}`);
+        if (target.route) {
+            await router.push(target.route);
+        } else if (threadId) {
+            await router.push(`/chat/${threadId}`);
+        } else if (documentId) {
+            await router.push(`/docs/${documentId}`);
         }
     } else if (action.kind === 'callback') {
         // Emit hook for callback actions

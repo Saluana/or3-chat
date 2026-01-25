@@ -49,22 +49,19 @@ describe('openrouterStream', () => {
         vi.useRealTimers();
     });
 
-    it('uses server route and forwards background job id', async () => {
+    it('uses server route for streaming when available', async () => {
         const fetchMock = vi
             .fn()
-            .mockResolvedValue(createStreamResponse({ 'x-or3-background-job-id': 'job-1' }));
+            .mockResolvedValue(createStreamResponse());
         (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
 
         const events: Array<{ type: string; text?: string }> = [];
-        const onBackgroundJobId = vi.fn();
 
         for await (const event of openRouterStream({
             apiKey: 'key-1',
             model: 'model-1',
             orMessages: [{ role: 'user', content: 'hi' }],
             modalities: ['text'],
-            background: { threadId: 't1', messageId: 'm1', mode: 'hybrid' },
-            onBackgroundJobId,
         })) {
             events.push(event);
         }
@@ -73,7 +70,6 @@ describe('openrouterStream', () => {
             '/api/openrouter/stream',
             expect.objectContaining({ method: 'POST' })
         );
-        expect(onBackgroundJobId).toHaveBeenCalledWith('job-1');
         expect(events).toHaveLength(1);
         expect(parseMock).toHaveBeenCalledTimes(1);
     });

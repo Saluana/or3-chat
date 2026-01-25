@@ -280,10 +280,16 @@ watch(
             'value' in chat.value.backgroundJobMode
                 ? chat.value.backgroundJobMode.value
                 : 'none';
+        const backgroundJobId =
+            typeof chat.value.backgroundJobId === 'object' &&
+            'value' in chat.value.backgroundJobId
+                ? chat.value.backgroundJobId.value
+                : null;
         if (import.meta.dev) {
             console.debug('[chat-ui] messageHistory update check', {
                 threadId: chat.value.threadId?.value,
                 backgroundMode,
+                backgroundJobId,
                 loading: chat.value.loading.value,
                 pendingCount: chat.value.messages.value.filter(
                     (m) => m.role === 'assistant' && m.pending
@@ -291,7 +297,19 @@ watch(
                 incomingCount: Array.isArray(mh) ? mh.length : 0,
             });
         }
-        if (backgroundMode && backgroundMode !== 'none') {
+        const hasPendingBackground = chat.value.messages.value.some(
+            (m) => m.role === 'assistant' && m.pending
+        );
+        if (backgroundJobId && hasPendingBackground) {
+            if (import.meta.dev) {
+                console.debug('[chat-ui] messageHistory skipped (backgroundJobId)', {
+                    threadId: chat.value.threadId?.value,
+                    backgroundJobId,
+                });
+            }
+            return;
+        }
+        if (backgroundMode && backgroundMode !== 'none' && hasPendingBackground) {
             if (import.meta.dev) {
                 console.debug('[chat-ui] messageHistory skipped (backgroundMode)', {
                     threadId: chat.value.threadId?.value,
@@ -300,10 +318,6 @@ watch(
             }
             return;
         }
-        // Also bail if any message is pending a background job
-        const hasPendingBackground = chat.value.messages.value.some(
-            (m) => m.role === 'assistant' && m.pending
-        );
         if (hasPendingBackground) {
             if (import.meta.dev) {
                 console.debug('[chat-ui] messageHistory skipped (pending)', {

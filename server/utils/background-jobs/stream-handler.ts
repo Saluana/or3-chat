@@ -15,6 +15,12 @@ import {
     parseOpenRouterSSE,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
 import { emitBackgroundJobComplete, emitBackgroundJobError } from '../notifications/emit';
+import {
+    emitJobDelta,
+    emitJobStatus,
+    hasJobViewers,
+    initJobLiveState,
+} from './viewers';
 
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -91,7 +97,7 @@ export async function startBackgroundStream(
 
 /**
  * Consume a background stream and persist updates.
- * Can be used for background-only and hybrid (client-attached) streaming.
+ * Used for server-authoritative background streaming.
  */
 export async function consumeBackgroundStream(params: {
     jobId: string;
@@ -99,39 +105,130 @@ export async function consumeBackgroundStream(params: {
     context: BackgroundStreamParams;
     provider: BackgroundJobProvider;
     shouldNotify?: () => boolean;
+    flushOnEveryChunk?: boolean;
+    flushIntervalMs?: number;
+    flushChunkInterval?: number;
 }): Promise<void> {
     let fullContent = '';
     let chunks = 0;
-    const UPDATE_INTERVAL = 10; // Update provider every N chunks
+    const flushEveryChunk = params.flushOnEveryChunk ?? false;
+    const UPDATE_INTERVAL =
+        typeof params.flushChunkInterval === 'number'
+            ? Math.max(1, Math.floor(params.flushChunkInterval))
+            : flushEveryChunk
+            ? 1
+            : 3;
+    const UPDATE_INTERVAL_MS =
+        typeof params.flushIntervalMs === 'number'
+            ? Math.max(0, Math.floor(params.flushIntervalMs))
+            : flushEveryChunk
+            ? 30
+            : 120;
     const isConvexProvider = params.provider.name === 'convex';
     const shouldNotify = params.shouldNotify ?? (() => true);
+    let pendingChunk = '';
+    let lastUpdateAt = 0;
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    let flushScheduled = false;
+    let flushInFlight = Promise.resolve();
+    let flushError: unknown = null;
+
+    initJobLiveState(params.jobId);
+
+    const scheduleFlush = (delayMs: number) => {
+        if (flushScheduled) return;
+        flushScheduled = true;
+        flushTimer = setTimeout(() => {
+            flushScheduled = false;
+            flushTimer = null;
+            void flushPending();
+        }, Math.max(0, delayMs));
+    };
+
+    const flushPending = async () => {
+        flushInFlight = flushInFlight.then(async () => {
+            if (!pendingChunk) return;
+            const chunk = pendingChunk;
+            pendingChunk = '';
+            await params.provider.updateJob(params.jobId, {
+                contentChunk: chunk,
+                chunksReceived: chunks,
+            });
+            lastUpdateAt = Date.now();
+
+            // For Convex provider, poll for abort status
+            if (isConvexProvider) {
+                const aborted = await checkJobAborted(params.jobId);
+                if (aborted) {
+                    const abortErr = new Error('Job aborted by user');
+                    abortErr.name = 'AbortError';
+                    throw abortErr;
+                }
+            }
+        }).catch((err) => {
+            flushError = err;
+        });
+
+        return flushInFlight;
+    };
 
     try {
         for await (const evt of parseOpenRouterSSE(params.stream)) {
             if (evt.type === 'text') {
                 fullContent += evt.text;
                 chunks++;
+                pendingChunk += evt.text;
+                emitJobDelta(params.jobId, evt.text, {
+                    contentLength: fullContent.length,
+                    chunksReceived: chunks,
+                });
+
+                const now = Date.now();
+                const shouldFlushByChunk = chunks % UPDATE_INTERVAL === 0;
+                const shouldFlushByTime =
+                    UPDATE_INTERVAL_MS === 0
+                        ? false
+                        : now - lastUpdateAt >= UPDATE_INTERVAL_MS;
 
                 // Update provider periodically
-                if (chunks % UPDATE_INTERVAL === 0) {
-                    await params.provider.updateJob(params.jobId, {
-                        contentChunk: evt.text,
-                        chunksReceived: chunks,
-                    });
-
-                    // For Convex provider, poll for abort status
-                    if (isConvexProvider) {
-                        const aborted = await checkJobAborted(params.jobId);
-                        if (aborted) {
-                            throw new Error('Job aborted by user');
-                        }
+                if (pendingChunk) {
+                    if (shouldFlushByChunk || shouldFlushByTime) {
+                        void flushPending();
+                    } else {
+                        const remaining =
+                            UPDATE_INTERVAL_MS > 0
+                                ? UPDATE_INTERVAL_MS - (now - lastUpdateAt)
+                                : 0;
+                        scheduleFlush(remaining);
                     }
+                }
+                if (flushError) {
+                    throw flushError;
                 }
             }
         }
 
+        if (flushTimer) {
+            clearTimeout(flushTimer);
+            flushTimer = null;
+            flushScheduled = false;
+        }
+        if (pendingChunk) {
+            await flushPending();
+        }
+        await flushInFlight;
+        if (flushError) {
+            throw flushError;
+        }
+
         // Complete the job
         await params.provider.completeJob(params.jobId, fullContent);
+        emitJobStatus(params.jobId, 'complete', {
+            content: fullContent,
+            contentLength: fullContent.length,
+            chunksReceived: chunks,
+            completedAt: Date.now(),
+        });
 
         if (shouldNotify()) {
             // Emit server-side notification for job completion
@@ -152,10 +249,29 @@ export async function consumeBackgroundStream(params: {
         }
 
     } catch (err) {
+        if (flushTimer) {
+            clearTimeout(flushTimer);
+            flushTimer = null;
+            flushScheduled = false;
+        }
         if (err instanceof Error && err.name === 'AbortError') {
             // Job was aborted (already marked in provider)
+            emitJobStatus(params.jobId, 'aborted', {
+                content: fullContent,
+                contentLength: fullContent.length,
+                chunksReceived: chunks,
+                completedAt: Date.now(),
+            });
             return;
         }
+
+        emitJobStatus(params.jobId, 'error', {
+            content: fullContent,
+            contentLength: fullContent.length,
+            chunksReceived: chunks,
+            completedAt: Date.now(),
+            error: err instanceof Error ? err.message : String(err),
+        });
         
         if (shouldNotify()) {
             // Emit error notification
@@ -191,7 +307,7 @@ async function streamInBackground(
     const ac = provider.getAbortController?.(jobId) ?? new AbortController();
 
     // Strip internal fields from body before sending to OpenRouter
-    const { _background, _threadId, _messageId, ...cleanBody } = params.body;
+    const { _background, _threadId, _messageId, _backgroundMode, ...cleanBody } = params.body;
 
     const upstream = await fetch(OR_URL, {
         method: 'POST',
@@ -218,6 +334,9 @@ async function streamInBackground(
         stream: upstream.body,
         context: params,
         provider,
+        shouldNotify: () => !hasJobViewers(jobId),
+        flushOnEveryChunk: true,
+        flushIntervalMs: 30,
     });
 }
 

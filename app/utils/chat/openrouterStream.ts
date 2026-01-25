@@ -37,7 +37,6 @@ type OpenRouterRequestBody = {
     _background?: true;
     _threadId?: string;
     _messageId?: string;
-    _backgroundMode?: 'hybrid';
 };
 
 // Cache key for detecting static build (no server routes)
@@ -122,12 +121,6 @@ export async function* openRouterStream(params: {
     tools?: ToolDefinition[];
     signal?: AbortSignal;
     reasoning?: unknown;
-    background?: {
-        threadId: string;
-        messageId: string;
-        mode: 'hybrid';
-    };
-    onBackgroundJobId?: (jobId: string) => void;
 }): AsyncGenerator<ORStreamEvent, void, unknown> {
     const { apiKey, model, orMessages, modalities, tools, signal } = params;
     const hasApiKey = Boolean(apiKey);
@@ -157,13 +150,6 @@ export async function* openRouterStream(params: {
         body.tool_choice = 'auto';
     }
 
-    if (params.background) {
-        body._background = true;
-        body._threadId = params.background.threadId;
-        body._messageId = params.background.messageId;
-        body._backgroundMode = params.background.mode;
-    }
-
     // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available
     // Skip if we've already determined it's not available (static build or server down)
     if (forceServerRoute || isServerRouteAvailable()) {
@@ -181,12 +167,6 @@ export async function* openRouterStream(params: {
             });
 
             if (serverResp.ok && serverResp.body) {
-                const backgroundJobId = serverResp.headers.get(
-                    'x-or3-background-job-id'
-                );
-                if (backgroundJobId && params.onBackgroundJobId) {
-                    params.onBackgroundJobId(backgroundJobId);
-                }
                 // Server route available; use shared parser on response
                 for await (const evt of parseOpenRouterSSE(serverResp.body)) {
                     yield evt;
@@ -241,7 +221,6 @@ export async function* openRouterStream(params: {
     delete fallbackBody._background;
     delete fallbackBody._threadId;
     delete fallbackBody._messageId;
-    delete fallbackBody._backgroundMode;
 
     const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -331,6 +310,8 @@ export interface BackgroundJobStatus {
     completedAt?: number;
     error?: string;
     content?: string;
+    content_delta?: string;
+    content_length?: number;
 }
 
 /**
@@ -340,6 +321,11 @@ export interface BackgroundStreamResult {
     jobId: string;
     status: 'streaming';
 }
+
+export type BackgroundJobStreamEvent = {
+    event: 'snapshot' | 'delta' | 'status';
+    status: BackgroundJobStatus;
+};
 
 async function readErrorMessage(
     response: Response,
@@ -459,8 +445,15 @@ export async function startBackgroundStream(params: {
 /**
  * Poll the status of a background job
  */
-export async function pollJobStatus(jobId: string): Promise<BackgroundJobStatus> {
-    const resp = await fetch(`/api/jobs/${jobId}/status`);
+export async function pollJobStatus(
+    jobId: string,
+    offset?: number
+): Promise<BackgroundJobStatus> {
+    const url =
+        typeof offset === 'number' && Number.isFinite(offset) && offset >= 0
+            ? `/api/jobs/${jobId}/status?offset=${Math.floor(offset)}`
+            : `/api/jobs/${jobId}/status`;
+    const resp = await fetch(url);
 
     if (!resp.ok) {
         const message = await readErrorMessage(
@@ -519,4 +512,57 @@ export async function waitForJobCompletion(
     }
 
     throw new Error('Job timed out waiting for completion');
+}
+
+/**
+ * Subscribe to background job updates via SSE.
+ */
+export function subscribeBackgroundJobStream(params: {
+    jobId: string;
+    offset?: number;
+    onStatus: (status: BackgroundJobStatus) => void;
+    onError?: (error: Error) => void;
+}): () => void {
+    if (typeof EventSource === 'undefined') {
+        throw new Error('EventSource unavailable');
+    }
+    const offset =
+        typeof params.offset === 'number' && Number.isFinite(params.offset)
+            ? Math.max(0, Math.floor(params.offset))
+            : null;
+    const url =
+        offset !== null
+            ? `/api/jobs/${params.jobId}/stream?offset=${offset}`
+            : `/api/jobs/${params.jobId}/stream`;
+
+    const es = new EventSource(url);
+
+    es.onmessage = (event) => {
+        try {
+            const parsed = JSON.parse(event.data) as BackgroundJobStreamEvent;
+            if (parsed && typeof parsed === 'object' && parsed.status) {
+                params.onStatus(parsed.status);
+            }
+        } catch (err) {
+            if (params.onError) {
+                params.onError(
+                    err instanceof Error ? err : new Error('Invalid SSE payload')
+                );
+            }
+        }
+    };
+
+    es.onerror = () => {
+        if (params.onError) {
+            params.onError(new Error('Background SSE connection failed'));
+        }
+    };
+
+    return () => {
+        try {
+            es.close();
+        } catch {
+            /* intentionally empty */
+        }
+    };
 }
