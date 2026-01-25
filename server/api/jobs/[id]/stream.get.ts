@@ -49,6 +49,7 @@ export function serializeJobStatus(
     }
 ): StreamEventPayload['status'] {
     const includeContent = overrides?.includeContent !== false;
+    const contentOverride = overrides?.content;
     const status: StreamEventPayload['status'] = {
         id: job.id,
         status: job.status,
@@ -68,11 +69,9 @@ export function serializeJobStatus(
 
     if (includeContent) {
         status.content =
-            typeof overrides?.content === 'string'
-                ? overrides.content
-                : job.content;
-    } else if (typeof overrides?.content === 'string') {
-        status.content = overrides.content;
+            typeof contentOverride === 'string' ? contentOverride : job.content;
+    } else if (typeof contentOverride === 'string') {
+        status.content = contentOverride;
     }
 
     return status;
@@ -134,9 +133,10 @@ export default defineEventHandler(async (event) => {
 
             const disposeViewer = registerJobViewer(jobId);
             let disposeLive: (() => void) | null = null;
+            const isClosed = () => closed;
 
             const closeStream = () => {
-                if (closed) return;
+                if (isClosed()) return;
                 closed = true;
                 try {
                     controller.close();
@@ -155,7 +155,7 @@ export default defineEventHandler(async (event) => {
             });
 
             const write = (payload: StreamEventPayload) => {
-                if (closed) return;
+                if (isClosed()) return;
                 controller.enqueue(
                     encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)
                 );
@@ -186,7 +186,7 @@ export default defineEventHandler(async (event) => {
             if (initialJob.status === 'streaming') {
                 // Subscribe to live stream updates (fast path when viewer is attached).
                 disposeLive = registerJobStream(jobId, (liveEvent) => {
-                    if (closed) return;
+                    if (isClosed()) return;
                     if (liveEvent.type === 'delta') {
                         if (liveEvent.content_length <= lastContentLength)
                             return;
@@ -209,30 +209,28 @@ export default defineEventHandler(async (event) => {
                         });
                         return;
                     }
-                    if (liveEvent.type === 'status') {
-                        lastStatus = liveEvent.status;
-                        lastContentLength = liveEvent.content_length;
-                        write({
-                            event: 'status',
-                            status: serializeJobStatus(
-                                {
-                                    ...initialJob,
-                                    status: liveEvent.status,
-                                    chunksReceived: liveEvent.chunksReceived,
-                                    completedAt: liveEvent.completedAt,
-                                    error: liveEvent.error,
-                                    content: liveEvent.content,
-                                },
-                                {
-                                    includeContent: true,
-                                    content: liveEvent.content,
-                                    content_length: liveEvent.content_length,
-                                }
-                            ),
-                        });
-                        if (liveEvent.status !== 'streaming') {
-                            closeStream();
-                        }
+                    lastStatus = liveEvent.status;
+                    lastContentLength = liveEvent.content_length;
+                    write({
+                        event: 'status',
+                        status: serializeJobStatus(
+                            {
+                                ...initialJob,
+                                status: liveEvent.status,
+                                chunksReceived: liveEvent.chunksReceived,
+                                completedAt: liveEvent.completedAt,
+                                error: liveEvent.error,
+                                content: liveEvent.content,
+                            },
+                            {
+                                includeContent: true,
+                                content: liveEvent.content,
+                                content_length: liveEvent.content_length,
+                            }
+                        ),
+                    });
+                    if (liveEvent.status !== 'streaming') {
+                        closeStream();
                     }
                 });
 
@@ -259,17 +257,16 @@ export default defineEventHandler(async (event) => {
             }
 
             const keepAlive = setInterval(() => {
-                if (closed) return;
+                if (isClosed()) return;
                 controller.enqueue(encoder.encode(': ping\n\n'));
             }, KEEPALIVE_INTERVAL_MS);
 
             try {
-                for (;;) {
-                    if (closed) break;
+                while (!isClosed()) {
                     await new Promise((resolve) =>
                         setTimeout(resolve, pollInterval)
                     );
-                    if (closed) break;
+                    if (isClosed()) break;
 
                     const job = await provider.getJob(jobId, userId);
                     if (!job) {
@@ -343,26 +340,25 @@ export default defineEventHandler(async (event) => {
                     lastStatus = job.status;
                 }
             } catch (err) {
-                if (!closed) {
-                    const message =
-                        err instanceof Error ? err.message : 'Stream error';
-                    write({
-                        event: 'status',
-                        status: {
-                            id: jobId,
-                            status: 'error',
-                            threadId: initialJob.threadId,
-                            messageId: initialJob.messageId,
-                            model: initialJob.model,
-                            chunksReceived: initialJob.chunksReceived,
-                            startedAt: initialJob.startedAt,
-                            completedAt: Date.now(),
-                            error: message,
-                            content: initialJob.content,
-                            content_length: initialJob.content.length,
-                        },
-                    });
-                }
+                if (isClosed()) return;
+                const message =
+                    err instanceof Error ? err.message : 'Stream error';
+                write({
+                    event: 'status',
+                    status: {
+                        id: jobId,
+                        status: 'error',
+                        threadId: initialJob.threadId,
+                        messageId: initialJob.messageId,
+                        model: initialJob.model,
+                        chunksReceived: initialJob.chunksReceived,
+                        startedAt: initialJob.startedAt,
+                        completedAt: Date.now(),
+                        error: message,
+                        content: initialJob.content,
+                        content_length: initialJob.content.length,
+                    },
+                });
             } finally {
                 clearInterval(keepAlive);
                 closeStream();

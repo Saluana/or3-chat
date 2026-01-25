@@ -80,7 +80,10 @@ const props = defineProps<{
 const router = useRouter();
 const hooks = useHooks();
 const hasMarkedRead = ref(false);
-const closePopover = inject<() => void>(NOTIFICATION_POPOVER_CLOSE_KEY, null);
+const closePopover = inject<(() => void) | null>(
+    NOTIFICATION_POPOVER_CLOSE_KEY,
+    null
+);
 
 // Pre-compute all possible icons at setup time to avoid calling useIcon inside computed
 // This follows Vue best practices - composables should only be called at setup, not in getters

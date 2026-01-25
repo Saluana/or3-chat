@@ -22,13 +22,20 @@ import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
  * Create a notification for system warnings and errors
  * Task 13.2: Helper function for system notification emission
  */
+function isClientRuntime(): boolean {
+    const override = (globalThis as { __OR3_TEST_CLIENT?: boolean })
+        ?.__OR3_TEST_CLIENT;
+    if (typeof override === 'boolean') return override;
+    return Boolean(import.meta.client);
+}
+
 export async function emitSystemNotification(payload: {
     title: string;
     body: string;
     threadId?: string;
     documentId?: string;
 }): Promise<void> {
-    if (!import.meta.client) return;
+    if (!isClientRuntime()) return;
     
     const runtimeConfig = useRuntimeConfig();
     const sessionContext =
@@ -51,7 +58,7 @@ export async function emitSystemNotification(payload: {
 }
 
 export default defineNuxtPlugin(() => {
-    if (!import.meta.client) return;
+    if (!isClientRuntime()) return;
     
     const runtimeConfig = useRuntimeConfig();
     const sessionContext =

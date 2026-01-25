@@ -275,21 +275,13 @@ watch(
         if (chat.value.loading.value) {
             return;
         }
-        const backgroundMode =
-            typeof chat.value.backgroundJobMode === 'object' &&
-            'value' in chat.value.backgroundJobMode
-                ? chat.value.backgroundJobMode.value
-                : 'none';
-        const backgroundJobId =
-            typeof chat.value.backgroundJobId === 'object' &&
-            'value' in chat.value.backgroundJobId
-                ? chat.value.backgroundJobId.value
-                : null;
+        const backgroundMode = backgroundJobMode.value;
+        const backgroundJobIdValue = backgroundJobId.value;
         if (import.meta.dev) {
             console.debug('[chat-ui] messageHistory update check', {
                 threadId: chat.value.threadId?.value,
                 backgroundMode,
-                backgroundJobId,
+                backgroundJobId: backgroundJobIdValue,
                 loading: chat.value.loading.value,
                 pendingCount: chat.value.messages.value.filter(
                     (m) => m.role === 'assistant' && m.pending
@@ -300,11 +292,11 @@ watch(
         const hasPendingBackground = chat.value.messages.value.some(
             (m) => m.role === 'assistant' && m.pending
         );
-        if (backgroundJobId && hasPendingBackground) {
+        if (backgroundJobIdValue && hasPendingBackground) {
             if (import.meta.dev) {
                 console.debug('[chat-ui] messageHistory skipped (backgroundJobId)', {
                     threadId: chat.value.threadId?.value,
-                    backgroundJobId,
+                    backgroundJobId: backgroundJobIdValue,
                 });
             }
             return;

@@ -384,7 +384,7 @@ async function handleBackgroundStatus(
     return true;
 }
 
-async function primeBackgroundJobUpdate(
+export async function primeBackgroundJobUpdate(
     tracker: BackgroundJobTracker
 ): Promise<void> {
     if (import.meta.dev) {
@@ -427,7 +427,7 @@ async function primeBackgroundJobUpdate(
             } else if (fullStatus.status === 'error') {
                 subscriber.onError?.(update);
             } else if (fullStatus.status === 'aborted') {
-                subscriber.onAbort?.();
+                subscriber.onAbort?.(update);
             }
         }
         return;
@@ -461,6 +461,7 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
     if (tracker.polling) return;
     tracker.polling = true;
     tracker.active = true;
+    const isActive = () => tracker.active;
     if (import.meta.dev) {
         console.debug('[bg-stream] pollBackgroundJob:start', {
             jobId: tracker.jobId,
@@ -469,14 +470,13 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
         });
     }
 
-    for (;;) {
-        if (!tracker.active) {
-            tracker.polling = false;
-            return;
-        }
+    while (isActive()) {
         let status: BackgroundJobStatus;
         try {
-            status = await pollJobStatus(tracker.jobId, tracker.lastContent.length);
+            status = await pollJobStatus(
+                tracker.jobId,
+                tracker.lastContent.length
+            );
         } catch (err) {
             const error = err instanceof Error ? err.message : 'Unknown error';
             status = {
@@ -494,7 +494,7 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
         }
 
         const shouldContinue = await handleBackgroundStatus(tracker, status);
-        if (!shouldContinue) return;
+        if (!shouldContinue) break;
 
         const pollInterval =
             tracker.subscribers.size > 0
@@ -502,6 +502,7 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
                 : BACKGROUND_JOB_POLL_INTERVAL_MS;
         await sleep(pollInterval);
     }
+    tracker.polling = false;
 }
 
 export function stopBackgroundJobTracking(
@@ -688,9 +689,7 @@ export function useChat(
     const { apiKey, setKey } = useUserApiKey();
     const runtimeConfig = useRuntimeConfig();
     const sessionContext =
-        runtimeConfig.public?.ssrAuthEnabled === true
-            ? useSessionContext()
-            : null;
+        runtimeConfig.public.ssrAuthEnabled === true ? useSessionContext() : null;
     const notificationUserId = computed(() =>
         resolveNotificationUserId(sessionContext?.data.value?.session)
     );
@@ -741,6 +740,7 @@ export function useChat(
     const backgroundJobDisposers: Array<() => void> = [];
     const attachedBackgroundJobs = new Set<string>();
     const detached = ref<boolean>(false);
+    const isDetached = () => detached.value;
     function resetStream() {
         streamAcc.reset();
         streamId.value = undefined;
@@ -1179,7 +1179,7 @@ export function useChat(
             tracker.lastPersistAt = 0;
             // Sync UI with DB content (don't clear it)
             const target = resolveUiMessage(params.messageId);
-            if (target && params.initialContent.length > (target.text?.length || 0)) {
+            if (target && params.initialContent.length > target.text.length) {
                 target.text = params.initialContent;
             }
         }
@@ -1205,7 +1205,7 @@ export function useChat(
                     }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
-                    const currentLen = target.text?.length || 0;
+                    const currentLen = target.text.length;
                     // Only update if server has MORE content than current UI
                     if (content.length < currentLen) {
                         if (import.meta.dev) {
@@ -1222,7 +1222,7 @@ export function useChat(
                         console.debug('[bg-stream] subscriber:update', {
                             jobId: params.jobId,
                             messageId: params.messageId,
-                            deltaLen: delta?.length ?? 0,
+                            deltaLen: delta.length,
                             totalLen: content.length,
                             contentPreview: content.slice(0, 50),
                         });
@@ -2569,12 +2569,8 @@ export function useChat(
             backgroundJobMode.value = 'none';
             backgroundJobInfo.value = null;
         } catch (err) {
-            if (
-                detached.value &&
-                err instanceof Error &&
-                err.name === 'AbortError'
-            ) {
-                return;
+            if (err instanceof Error && err.name === 'AbortError') {
+                if (isDetached()) return;
             }
             if (aborted.value) {
                 if (tailAssistant.value?.pending)

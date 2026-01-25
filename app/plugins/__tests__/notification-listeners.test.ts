@@ -5,6 +5,7 @@ function setClient(value: boolean) {
         value,
         configurable: true,
     });
+    (globalThis as { __OR3_TEST_CLIENT?: boolean }).__OR3_TEST_CLIENT = value;
 }
 
 const handlers = new Map<string, (payload: unknown) => Promise<void>>();

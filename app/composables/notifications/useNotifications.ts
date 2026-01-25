@@ -54,7 +54,7 @@ export function useNotifications() {
     const db = getDb();
     const hooks = useHooks();
     const runtimeConfig = useRuntimeConfig();
-    const ssrAuthEnabled = runtimeConfig.public?.ssrAuthEnabled === true;
+    const ssrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;
     const sessionContext = ssrAuthEnabled ? useSessionContext() : null;
     const userId = ref<string>(FALLBACK_NOTIFICATION_USER_ID);
 

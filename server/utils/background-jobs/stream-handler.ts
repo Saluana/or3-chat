@@ -135,6 +135,13 @@ export async function consumeBackgroundStream(params: {
 
     initJobLiveState(params.jobId);
 
+    const clearFlushTimer = () => {
+        if (!flushScheduled) return;
+        clearTimeout(flushTimer as ReturnType<typeof setTimeout>);
+        flushTimer = null;
+        flushScheduled = false;
+    };
+
     const scheduleFlush = (delayMs: number) => {
         if (flushScheduled) return;
         flushScheduled = true;
@@ -208,11 +215,7 @@ export async function consumeBackgroundStream(params: {
             }
         }
 
-        if (flushTimer) {
-            clearTimeout(flushTimer);
-            flushTimer = null;
-            flushScheduled = false;
-        }
+        clearFlushTimer();
         if (pendingChunk) {
             await flushPending();
         }
@@ -249,11 +252,7 @@ export async function consumeBackgroundStream(params: {
         }
 
     } catch (err) {
-        if (flushTimer) {
-            clearTimeout(flushTimer);
-            flushTimer = null;
-            flushScheduled = false;
-        }
+        clearFlushTimer();
         if (err instanceof Error && err.name === 'AbortError') {
             // Job was aborted (already marked in provider)
             emitJobStatus(params.jobId, 'aborted', {

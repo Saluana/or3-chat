@@ -144,4 +144,23 @@ describe('NotificationItem', () => {
 
         expect(pushMock).toHaveBeenCalledWith('/chat/thread-9');
     });
+
+    it('handles navigate action without popover provider', async () => {
+        const onMarkRead = vi.fn().mockResolvedValue(undefined);
+        const notification = baseNotification();
+        const wrapper = mount(NotificationItem, {
+            props: {
+                notification,
+                onMarkRead,
+            },
+            global: {
+                stubs: { UButton: UButtonStub, UIcon: UIconStub },
+            },
+        });
+
+        await wrapper.find('button').trigger('click');
+
+        expect(onMarkRead).toHaveBeenCalledTimes(1);
+        expect(pushMock).toHaveBeenCalledWith('/chat/123');
+    });
 });

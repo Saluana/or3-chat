@@ -15,6 +15,10 @@ vi.mock('~/composables/useIcon', () => ({
     useIcon: () => computed(() => 'icon-bell'),
 }));
 
+vi.mock('vue-router', () => ({
+    useRoute: () => ({ fullPath: '/' }),
+}));
+
 const UPopoverStub = defineComponent({
     setup(_props, { slots }) {
         return () =>

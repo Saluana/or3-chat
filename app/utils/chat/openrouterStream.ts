@@ -125,14 +125,16 @@ export async function* openRouterStream(params: {
     const { apiKey, model, orMessages, modalities, tools, signal } = params;
     const hasApiKey = Boolean(apiKey);
     const runtimeConfig = useRuntimeConfig() as {
-        public?: {
-            ssrAuthEnabled?: boolean;
-            backgroundStreaming?: { enabled?: boolean };
+        public: {
+            ssrAuthEnabled: boolean;
+            backgroundStreaming: { enabled: boolean };
         };
     };
-    const forceServerRoute =
-        runtimeConfig.public?.ssrAuthEnabled === true &&
-        runtimeConfig.public?.backgroundStreaming?.enabled === true;
+    const forceServerRoute = Boolean(
+        runtimeConfig.public.ssrAuthEnabled === true &&
+            runtimeConfig.public.backgroundStreaming.enabled === true
+    );
+    const shouldForceServerRoute = () => forceServerRoute;
 
     const body: OpenRouterRequestBody = {
         model,
@@ -198,7 +200,7 @@ export async function* openRouterStream(params: {
             ) {
                 throw error;
             }
-            if (forceServerRoute) {
+            if (shouldForceServerRoute()) {
                 throw error instanceof Error
                     ? error
                     : new Error('OpenRouter server route failed in SSR mode');
@@ -208,7 +210,7 @@ export async function* openRouterStream(params: {
         }
     }
 
-    if (forceServerRoute) {
+    if (shouldForceServerRoute()) {
         throw new Error('OpenRouter server route required in SSR mode');
     }
 
@@ -540,9 +542,7 @@ export function subscribeBackgroundJobStream(params: {
     es.onmessage = (event) => {
         try {
             const parsed = JSON.parse(event.data) as BackgroundJobStreamEvent;
-            if (parsed && typeof parsed === 'object' && parsed.status) {
-                params.onStatus(parsed.status);
-            }
+            params.onStatus(parsed.status);
         } catch (err) {
             if (params.onError) {
                 params.onError(

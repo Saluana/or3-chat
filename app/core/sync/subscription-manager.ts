@@ -444,11 +444,15 @@ export class SubscriptionManager {
     }
 
     private filterRecentOps(changes: SyncChange[]): SyncChange[] {
-        const filtered = changes.filter((c) => !isRecentOpId(c.stamp?.opId));
+        const filtered = changes.filter((c) => !isRecentOpId(c.stamp.opId));
         if (import.meta.dev) {
             const dropped = changes
                 .filter((c) => !filtered.includes(c))
-                .map((c) => ({ opId: c.stamp?.opId, table: c.tableName, pk: c.pk }));
+                .map((c) => ({
+                    opId: c.stamp.opId,
+                    table: c.tableName,
+                    pk: c.pk,
+                }));
             if (dropped.length) {
                 console.debug('[sync] filtered echoed ops', dropped);
             }
