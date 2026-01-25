@@ -1,7 +1,7 @@
 # tasks.md
 
 artifact_id: 3d56ebaa-75b0-4290-b066-2bb1b2993121
-date: 2026-01-11
+date: 2026-01-25
 
 ## Purpose
 
@@ -21,7 +21,7 @@ Execution guide for OR3 Cloud (SSR auth + sync + storage). Use this as the top-l
 -   Ensure locked decisions remain consistent across all planning docs.
 -   Update/remove deprecated docs if discovered.
 
-2. SSR auth foundation
+2. SSR auth foundation (COMPLETED)
 
 -   Execute `planning/ssr-auth-system/tasks.md`.
 -   Gate SSR-only modules in `nuxt.config.ts` (no Clerk in static builds).
@@ -41,7 +41,7 @@ Execution guide for OR3 Cloud (SSR auth + sync + storage). Use this as the top-l
 -   `auth.access:filter:decision` hook enforcement inside `can()` is deferred until we have a
     server-side hook engine available to Nitro routes (no Nuxt composables in `server/**`).
 
-3. Sync layer (metadata)
+3. Sync layer (metadata) (COMPLETED)
 
 -   Execute `planning/db-sync-layer/tasks.md`.
 -   Use per-workspace Dexie DB (`or3-db-${workspaceId}`).
@@ -54,7 +54,7 @@ Execution guide for OR3 Cloud (SSR auth + sync + storage). Use this as the top-l
 -   Conflicts resolve deterministically.
 -   Sync queue does not grow unbounded.
 
-4. Storage layer (blobs)
+4. Storage layer (blobs) (COMPLETED)
 
 -   Execute `planning/db-storage-system/tasks.md`.
 -   Keep transfer state local-only (`file_transfers`).
@@ -64,7 +64,7 @@ Execution guide for OR3 Cloud (SSR auth + sync + storage). Use this as the top-l
 -   Device A uploads → Device B downloads and caches.
 -   Missing blobs show placeholder without breaking sync.
 
-5. Integration and hardening
+5. Integration and hardening (COMPLETED)
 
 -   Add unit + integration tests (auth, sync, storage).
 -   Add E2E coverage for multi-device flows and offline recovery.
@@ -72,6 +72,23 @@ Execution guide for OR3 Cloud (SSR auth + sync + storage). Use this as the top-l
     Acceptance criteria:
 -   Static builds unchanged.
 -   SSR builds pass auth/sync/storage smoke tests.
+
+6. Notification Center (COMPLETED)
+
+-   Execute `planning/notification-center/tasks.md`.
+    Acceptance criteria:
+-   Notifications persist locally and sync when enabled.
+-   Hooks and UI work without breaking the hot path.
+
+7. Admin Dashboard (NEXT)
+
+-   Execute `planning/or3-cloud/admin-dashboard/tasks.md`.
+-   Keep admin SSR-only; never ship admin UI in static builds.
+-   Enforce all admin actions via `can()` and fail closed.
+    Acceptance criteria:
+-   Owner/editor can access `/admin/*` in SSR mode.
+-   Viewer/unauthenticated cannot access `/admin/*`.
+-   Owner can manage members, install extensions, apply config, and restart safely.
 
 ## Implementation checks (do not skip)
 

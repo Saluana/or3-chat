@@ -1,7 +1,7 @@
 # implementation-plan.md
 
 artifact_id: da046aa5-3175-46c8-8168-2a6121eafe42
-date: 2026-01-11
+date: 2026-01-25
 
 ## Goals
 
@@ -12,7 +12,7 @@ date: 2026-01-11
 
 ## Non-goals (for this plan)
 
-- Admin dashboard and notifications UI (explicitly deferred).
+- Marketplace UI and purchasing flows (explicitly deferred).
 - CRDT merging or collaborative editing.
 - Multi-provider runtime selection for sync or storage (v1: per-deployment).
 
@@ -134,3 +134,24 @@ Key tasks:
 Exit criteria:
 - Multi-device flows work with auth + sync + storage enabled.
 - Static builds remain unaffected.
+
+## Phase 7: Admin Dashboard (SSR-only control plane)
+
+Outputs:
+- SSR-only `/admin/*` area with its own layout/navigation.
+- Server-enforced admin APIs for workspace access management, extension install, config apply, and restart.
+- Parallel admin plugin system (pages/widgets) + admin lifecycle hooks.
+
+Key tasks (see `planning/or3-cloud/admin-dashboard/tasks.md`):
+- Gate admin UI from static builds and require SSR auth to be enabled.
+- Implement admin access policy (`owner` + `editor` can access; owners can mutate deployment).
+- Add workspace member management (Convex mutations + SSR endpoints) and guest access setting.
+- Add extension manager: install plugins/themes from zip, validate manifests, prevent zip slip.
+- Add workspace-scoped plugin enablement + settings (stored in synced `kv`).
+- Add config editing workflow (validate + apply) and server restart control provider.
+- Emit admin hooks for all privileged operations.
+
+Exit criteria:
+- Viewer cannot access admin routes.
+- Editor can access admin routes but cannot perform deployment mutations.
+- Owner can manage members, enable/disable plugins per workspace, and apply config + restart safely.
