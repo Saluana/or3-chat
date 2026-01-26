@@ -3,6 +3,10 @@ import {
     buildOr3CloudConfigFromEnv,
     buildOr3ConfigFromEnv,
 } from './resolve-config';
+import {
+    getConfigMetadata,
+    type EnrichedConfigEntry,
+} from './config-metadata';
 
 const WHITELIST = [
     'SSR_AUTH_ENABLED',
@@ -76,6 +80,27 @@ export async function readConfigEntries(): Promise<ConfigEntry[]> {
         const value = map[key] ?? null;
         const masked = value !== null && SECRET_PATTERN.test(key);
         return { key, value: masked ? '******' : value, masked };
+    });
+}
+
+const DEFAULT_CONFIG_GROUP = 'External Services' as const;
+const DEFAULT_CONFIG_ORDER = 999;
+
+export async function readEnrichedConfigEntries(): Promise<EnrichedConfigEntry[]> {
+    const { map } = await readEnvFile();
+    return WHITELIST.map((key) => {
+        const value = map[key] ?? null;
+        const masked = value !== null && SECRET_PATTERN.test(key);
+        const metadata = getConfigMetadata(key);
+        return {
+            key,
+            value: masked ? '******' : value,
+            masked,
+            label: metadata?.label ?? key,
+            description: metadata?.description ?? '',
+            group: metadata?.group ?? DEFAULT_CONFIG_GROUP,
+            order: metadata?.order ?? DEFAULT_CONFIG_ORDER,
+        };
     });
 }
 
