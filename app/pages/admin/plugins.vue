@@ -111,17 +111,11 @@
 </template>
 
 <script setup lang="ts">
+import { installExtension, uninstallExtension, useFileInput, ADMIN_HEADERS, type ExtensionItem } from '~/composables/admin/useAdminExtensions';
+
 definePageMeta({
     layout: 'admin',
 });
-
-type ExtensionItem = {
-    id: string;
-    name: string;
-    version: string;
-    kind: 'plugin' | 'theme' | 'admin_plugin';
-    description?: string;
-};
 
 // 1. Fetch Extensions
 const { data, status, refresh: refreshNuxtData } = await useLazyFetch<{ items: ExtensionItem[] }>(
@@ -147,7 +141,7 @@ const enabledSet = ref<Set<string>>(new Set());
 const role = computed(() => workspaceData.value?.role);
 const isOwner = computed(() => role.value === 'owner');
 const settingsByPlugin = reactive<Record<string, string>>({});
-const fileInput = ref<HTMLInputElement | null>(null);
+const { fileInput, triggerFileInput } = useFileInput();
 
 // Watcher
 watch(() => workspaceData.value, (val) => {
@@ -157,17 +151,13 @@ watch(() => workspaceData.value, (val) => {
 }, { immediate: true });
 
 // Actions
-function triggerFileInput() {
-    fileInput.value?.click();
-}
-
 async function setEnabled(pluginId: string, enabled: boolean) {
     const res = await $fetch<{ ok: boolean; enabled: string[] }>(
         '/api/admin/plugins/workspace-enable',
         {
             method: 'POST',
             body: { pluginId, enabled },
-            headers: { 'x-or3-admin-intent': 'admin' },
+            headers: ADMIN_HEADERS,
         }
     );
     enabledSet.value = new Set(res.enabled);
@@ -177,53 +167,16 @@ async function togglePlugin(pluginId: string) {
     await setEnabled(pluginId, !enabledSet.value.has(pluginId));
 }
 
-async function disablePlugin(pluginId: string) {
-    await setEnabled(pluginId, false);
-}
-
 async function installPlugin() {
     if (!isOwner.value) return;
     const file = fileInput.value?.files?.[0];
     if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-        await $fetch('/api/admin/extensions/install', {
-            method: 'POST',
-            body: formData,
-            headers: { 'x-or3-admin-intent': 'admin' },
-        });
-        await refresh();
-    } catch (error: unknown) {
-        const message =
-            (error as { data?: { statusMessage?: string } })?.data?.statusMessage ??
-            (error as Error)?.message ??
-            '';
-        if (message.toLowerCase().includes('already installed')) {
-            if (!confirm('Plugin already installed. Replace it?')) return;
-            const retryForm = new FormData();
-            retryForm.append('file', file);
-            retryForm.append('force', 'true');
-            await $fetch('/api/admin/extensions/install', {
-                method: 'POST',
-                body: retryForm,
-                headers: { 'x-or3-admin-intent': 'admin' },
-            });
-            await refresh();
-            return;
-        }
-        throw error;
-    }
+    await installExtension({ kind: 'plugin', file, onSuccess: refresh });
 }
 
 async function uninstallPlugin(pluginId: string) {
-    if (!confirm(`Uninstall ${pluginId}?`)) return;
-    await $fetch('/api/admin/extensions/uninstall', {
-        method: 'POST',
-        body: { id: pluginId, kind: 'plugin' },
-        headers: { 'x-or3-admin-intent': 'admin' },
-    });
-    await refresh();
+    if (!isOwner.value) return;
+    await uninstallExtension(pluginId, 'plugin', refresh);
 }
 
 async function loadSettings(pluginId: string) {
@@ -248,7 +201,7 @@ async function saveSettings(pluginId: string) {
     await $fetch('/api/admin/plugins/workspace-settings', {
         method: 'POST',
         body: { pluginId, settings: parsed },
-        headers: { 'x-or3-admin-intent': 'admin' },
+        headers: ADMIN_HEADERS,
     });
 }
 

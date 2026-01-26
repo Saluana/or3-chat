@@ -79,17 +79,11 @@
 </template>
 
 <script setup lang="ts">
+import { installExtension, uninstallExtension, useFileInput, ADMIN_HEADERS, type ExtensionItem } from '~/composables/admin/useAdminExtensions';
+
 definePageMeta({
     layout: 'admin',
 });
-
-type ExtensionItem = {
-    id: string;
-    name: string;
-    version: string;
-    kind: 'plugin' | 'theme' | 'admin_plugin';
-    description?: string;
-};
 
 const { data, status: extStatus, refresh: refreshExtensions } = await useLazyFetch<{ items: ExtensionItem[] }>('/api/admin/extensions');
 const { data: workspaceData, status: workspaceStatus, refresh: refreshWorkspace } = await useLazyFetch<{ role: string }>('/api/admin/workspace');
@@ -109,55 +103,18 @@ const defaultTheme = computed(() => {
     return entry?.value ?? '';
 });
 
-const fileInput = ref<HTMLInputElement | null>(null);
-
-function triggerFileInput() {
-    fileInput.value?.click();
-}
+const { fileInput, triggerFileInput } = useFileInput();
 
 async function installTheme() {
     if (!isOwner.value) return;
     const file = fileInput.value?.files?.[0];
     if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-        await $fetch('/api/admin/extensions/install', {
-            method: 'POST',
-            body: formData,
-            headers: { 'x-or3-admin-intent': 'admin' },
-        });
-        await refresh();
-    } catch (error: unknown) {
-        const message =
-            (error as { data?: { statusMessage?: string } })?.data?.statusMessage ??
-            (error as Error)?.message ??
-            '';
-        if (message.toLowerCase().includes('already installed')) {
-            if (!confirm('Theme already installed. Replace it?')) return;
-            const retryForm = new FormData();
-            retryForm.append('file', file);
-            retryForm.append('force', 'true');
-            await $fetch('/api/admin/extensions/install', {
-                method: 'POST',
-                body: retryForm,
-                headers: { 'x-or3-admin-intent': 'admin' },
-            });
-            await refresh();
-            return;
-        }
-        throw error;
-    }
+    await installExtension({ kind: 'theme', file, onSuccess: refresh });
 }
 
 async function uninstallTheme(themeId: string) {
-    if (!confirm(`Uninstall ${themeId}?`)) return;
-    await $fetch('/api/admin/extensions/uninstall', {
-        method: 'POST',
-        body: { id: themeId, kind: 'theme' },
-        headers: { 'x-or3-admin-intent': 'admin' },
-    });
-    await refresh();
+    if (!isOwner.value) return;
+    await uninstallExtension(themeId, 'theme', refresh);
 }
 
 async function setDefaultTheme(themeId: string) {
@@ -165,7 +122,7 @@ async function setDefaultTheme(themeId: string) {
     if (!confirm(`Set default theme to ${themeId}?`)) return;
     await $fetch('/api/admin/system/config/write', {
         method: 'POST',
-        headers: { 'x-or3-admin-intent': 'admin' },
+        headers: ADMIN_HEADERS,
         body: { entries: [{ key: 'OR3_DEFAULT_THEME', value: themeId }] },
     });
     await refresh();
