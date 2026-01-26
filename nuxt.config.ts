@@ -35,6 +35,25 @@ const legalConfig = {
     termsUrl: or3Config.legal.termsUrl,
     privacyUrl: or3Config.legal.privacyUrl,
 };
+const adminConfig = {
+    basePath: or3CloudConfig.admin?.basePath || '/admin',
+    allowedHosts: or3CloudConfig.admin?.allowedHosts || [],
+    allowRestart: Boolean(or3CloudConfig.admin?.allowRestart),
+    allowRebuild: Boolean(or3CloudConfig.admin?.allowRebuild),
+    rebuildCommand: or3CloudConfig.admin?.rebuildCommand || 'bun run build',
+    extensionMaxZipBytes: or3CloudConfig.admin?.extensionMaxZipBytes
+        ? String(or3CloudConfig.admin.extensionMaxZipBytes)
+        : undefined,
+    extensionMaxFiles: or3CloudConfig.admin?.extensionMaxFiles
+        ? String(or3CloudConfig.admin.extensionMaxFiles)
+        : undefined,
+    extensionMaxTotalBytes: or3CloudConfig.admin?.extensionMaxTotalBytes
+        ? String(or3CloudConfig.admin.extensionMaxTotalBytes)
+        : undefined,
+    extensionAllowedExtensions: or3CloudConfig.admin?.extensionAllowedExtensions
+        ? or3CloudConfig.admin.extensionAllowedExtensions.join(',')
+        : undefined,
+};
 
 export default defineNuxtConfig({
     // convex-nuxt module options (mirrors into runtimeConfig.public.convex)
@@ -103,6 +122,7 @@ export default defineNuxtConfig({
             allowedOrigins: or3CloudConfig.security!.allowedOrigins!,
             forceHttps: or3CloudConfig.security!.forceHttps!,
         },
+        admin: adminConfig,
         // Background streaming configuration (SSR mode only)
         backgroundJobs: {
             enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
@@ -137,6 +157,9 @@ export default defineNuxtConfig({
             legal: legalConfig,
             backgroundStreaming: {
                 enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
+            },
+            admin: {
+                basePath: adminConfig.basePath,
             },
             // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
             clerkPublishableKey: '',
@@ -485,6 +508,14 @@ export default defineNuxtConfig({
                   'app/plugins/examples/**',
                   'app/pages/_tests/**',
                   'app/pages/_test.vue',
+              ]
+            : []),
+        ...(!isSsrAuthEnabled
+            ? [
+                  'app/pages/admin/**',
+                  'app/layouts/admin.vue',
+                  'app/components/admin/**',
+                  'app/composables/admin/**',
               ]
             : []),
     ].filter(Boolean) as string[],

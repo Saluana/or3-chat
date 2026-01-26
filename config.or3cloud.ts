@@ -91,6 +91,34 @@ export const or3CloudConfig = defineOr3CloudConfig({
                 : process.env.NODE_ENV === 'production',
     },
     /**
+     * Admin dashboard routing constraints.
+     */
+    admin: {
+        basePath: process.env.OR3_ADMIN_BASE_PATH || '/admin',
+        allowedHosts: process.env.OR3_ADMIN_ALLOWED_HOSTS
+            ? process.env.OR3_ADMIN_ALLOWED_HOSTS.split(',')
+                  .map((host) => host.trim())
+                  .filter(Boolean)
+            : [],
+        allowRestart: process.env.OR3_ADMIN_ALLOW_RESTART === 'true',
+        allowRebuild: process.env.OR3_ADMIN_ALLOW_REBUILD === 'true',
+        rebuildCommand: process.env.OR3_ADMIN_REBUILD_COMMAND || 'bun run build',
+        extensionMaxZipBytes: process.env.OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES
+            ? Number(process.env.OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES)
+            : undefined,
+        extensionMaxFiles: process.env.OR3_ADMIN_EXTENSION_MAX_FILES
+            ? Number(process.env.OR3_ADMIN_EXTENSION_MAX_FILES)
+            : undefined,
+        extensionMaxTotalBytes: process.env.OR3_ADMIN_EXTENSION_MAX_TOTAL_BYTES
+            ? Number(process.env.OR3_ADMIN_EXTENSION_MAX_TOTAL_BYTES)
+            : undefined,
+        extensionAllowedExtensions: process.env.OR3_ADMIN_EXTENSION_ALLOWED_EXTENSIONS
+            ? process.env.OR3_ADMIN_EXTENSION_ALLOWED_EXTENSIONS.split(',')
+                  .map((ext) => ext.trim())
+                  .filter(Boolean)
+            : undefined,
+    },
+    /**
      * Background streaming configuration (SSR mode only).
      * Enables AI streaming to continue on the server when users navigate away.
      */

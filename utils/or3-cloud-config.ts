@@ -42,6 +42,43 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         allowedOrigins: [],
         forceHttps: process.env.NODE_ENV === 'production',
     },
+    admin: {
+        basePath: '/admin',
+        allowedHosts: [],
+        allowRestart: false,
+        allowRebuild: false,
+        rebuildCommand: 'bun run build',
+        extensionMaxZipBytes: 25 * 1024 * 1024,
+        extensionMaxFiles: 2000,
+        extensionMaxTotalBytes: 200 * 1024 * 1024,
+        extensionAllowedExtensions: [
+            '.js',
+            '.mjs',
+            '.cjs',
+            '.ts',
+            '.tsx',
+            '.vue',
+            '.json',
+            '.css',
+            '.scss',
+            '.sass',
+            '.less',
+            '.md',
+            '.txt',
+            '.svg',
+            '.png',
+            '.jpg',
+            '.jpeg',
+            '.gif',
+            '.webp',
+            '.ico',
+            '.ttf',
+            '.otf',
+            '.woff',
+            '.woff2',
+            '.map',
+        ],
+    },
     backgroundStreaming: {
         enabled: false,
         storageProvider: 'memory',
@@ -105,6 +142,19 @@ const cloudConfigSchema = z
                 forceHttps: z.boolean().optional(),
             })
             .optional(),
+        admin: z
+            .object({
+                basePath: z.string().optional(),
+                allowedHosts: z.array(z.string()).optional(),
+                allowRestart: z.boolean().optional(),
+                allowRebuild: z.boolean().optional(),
+                rebuildCommand: z.string().optional(),
+                extensionMaxZipBytes: z.number().int().min(1).optional(),
+                extensionMaxFiles: z.number().int().min(1).optional(),
+                extensionMaxTotalBytes: z.number().int().min(1).optional(),
+                extensionAllowedExtensions: z.array(z.string()).optional(),
+            })
+            .optional(),
         backgroundStreaming: z
             .object({
                 enabled: z.boolean().optional(),
@@ -164,6 +214,10 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
         security: {
             ...DEFAULT_OR3_CLOUD_CONFIG.security,
             ...config.security,
+        },
+        admin: {
+            ...DEFAULT_OR3_CLOUD_CONFIG.admin,
+            ...config.admin,
         },
         backgroundStreaming: {
             ...DEFAULT_OR3_CLOUD_CONFIG.backgroundStreaming,

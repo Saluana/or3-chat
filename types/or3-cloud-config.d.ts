@@ -179,6 +179,65 @@ export interface Or3CloudConfig {
          */
         forceHttps?: boolean;
     };
+
+    /**
+     * Admin dashboard routing and access constraints.
+     * SSR-only; ignored in static builds.
+     */
+    admin?: {
+        /**
+         * Base path for admin UI/routes.
+         * @default '/admin'
+         */
+        basePath?: string;
+
+        /**
+         * Allowed hostnames for admin routes (optional).
+         * If set, admin routes return 404 when Host does not match.
+         */
+        allowedHosts?: string[];
+
+        /**
+         * Allow admin-initiated restarts.
+         * @default false
+         */
+        allowRestart?: boolean;
+
+        /**
+         * Allow admin-initiated rebuild + restart.
+         * @default false
+         */
+        allowRebuild?: boolean;
+
+        /**
+         * Optional rebuild command (used when allowRebuild is true).
+         * @default 'bun run build'
+         */
+        rebuildCommand?: string;
+
+        /**
+         * Maximum zip size for extension installs (bytes).
+         * @default 26214400 (25MB)
+         */
+        extensionMaxZipBytes?: number;
+
+        /**
+         * Maximum number of files in an extension install.
+         * @default 2000
+         */
+        extensionMaxFiles?: number;
+
+        /**
+         * Maximum total unpacked bytes for an extension install.
+         * @default 209715200 (200MB)
+         */
+        extensionMaxTotalBytes?: number;
+
+        /**
+         * Allowed file extensions for extension installs.
+         */
+        extensionAllowedExtensions?: string[];
+    };
 }
 
 export interface Or3CloudConfigOptions {

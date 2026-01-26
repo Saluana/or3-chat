@@ -64,3 +64,7 @@ The three plans are directionally aligned, but there are several conflicts and m
 - Add a shared "Data Model Mapping" section across sync/storage docs.
 - Add a "Workspace source of truth" section in auth + sync + storage plans.
 - Align hook names and add them to hook catalog once finalized.
+
+## Admin Dashboard notes
+
+- Admin plugin enablement is stored in `kv`, but runtime loading of installed plugins in the main app still needs a dedicated loader that filters by `plugins.enabled`. Until that is wired, enabling a plugin will not activate its UI extensions.

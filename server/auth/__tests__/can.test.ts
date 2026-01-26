@@ -92,11 +92,11 @@ describe('can()', () => {
             expect(decision.reason).toBe('forbidden');
         });
 
-        it('denies admin.access for editor', () => {
+        it('allows admin.access for editor', () => {
             const decision = can(mockEditorSession, 'admin.access');
 
-            expect(decision.allowed).toBe(false);
-            expect(decision.reason).toBe('forbidden');
+            expect(decision.allowed).toBe(true);
+            expect(decision.role).toBe('editor');
         });
     });
 
@@ -127,7 +127,7 @@ describe('can()', () => {
 
         it('base decision starts as denied', () => {
             // If the role doesn't have the permission, it stays denied
-            const decision = can(mockEditorSession, 'admin.access');
+            const decision = can(mockEditorSession, 'plugins.manage');
             expect(decision.allowed).toBe(false);
         });
 
