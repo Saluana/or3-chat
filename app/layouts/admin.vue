@@ -36,7 +36,7 @@
                 </NuxtLink>
             </nav>
 
-            <div class="p-4 border-t border-[var(--md-outline-variant)] text-xs opacity-50" role="contentinfo">
+            <div class="p-4 border-t border-[var(--md-outline-variant)] text-xs text-[var(--md-on-surface-variant)]" role="contentinfo">
                 OR3 v1.0.0
             </div>
         </aside>

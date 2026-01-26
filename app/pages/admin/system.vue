@@ -307,19 +307,20 @@ function getEntriesForGroup(group: ConfigGroup): EnrichedConfigEntry[] {
     return enrichedEntries.value.filter((e) => e.group === group);
 }
 
+const GROUP_COLORS: Record<ConfigGroup, string> = {
+    'Auth': 'bg-[var(--md-sys-color-primary)]',
+    'Sync': 'bg-[var(--md-sys-color-secondary)]',
+    'Storage': 'bg-[var(--md-sys-color-tertiary)]',
+    'UI & Branding': 'bg-[var(--md-sys-color-primary-container)]',
+    'Features': 'bg-[var(--md-sys-color-secondary-container)]',
+    'Limits & Security': 'bg-[var(--md-sys-color-error)]',
+    'Background Processing': 'bg-[var(--md-sys-color-tertiary-container)]',
+    'Admin': 'bg-[var(--md-outline)]',
+    'External Services': 'bg-[var(--md-sys-color-surface-tint)]',
+};
+
 function getGroupColor(group: ConfigGroup): string {
-    const colors: Record<ConfigGroup, string> = {
-        'Auth': 'bg-[var(--md-sys-color-primary)]',
-        'Sync': 'bg-[var(--md-sys-color-secondary)]',
-        'Storage': 'bg-[var(--md-sys-color-tertiary)]',
-        'UI & Branding': 'bg-[var(--md-sys-color-primary-container)]',
-        'Features': 'bg-[var(--md-sys-color-secondary-container)]',
-        'Limits & Security': 'bg-[var(--md-sys-color-error)]',
-        'Background Processing': 'bg-[var(--md-sys-color-tertiary-container)]',
-        'Admin': 'bg-[var(--md-outline)]',
-        'External Services': 'bg-[var(--md-sys-color-surface-tint)]',
-    };
-    return colors[group] || 'bg-[var(--md-outline)]';
+    return GROUP_COLORS[group] || 'bg-[var(--md-outline)]';
 }
 
 async function saveConfig() {

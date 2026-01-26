@@ -371,8 +371,8 @@ export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
     },
 };
 
-export function getConfigMetadata(key: string): ConfigMetadata | null {
-    return CONFIG_METADATA[key] ?? null;
+export function getConfigMetadata(key: string): ConfigMetadata | undefined {
+    return CONFIG_METADATA[key];
 }
 
 export function getConfigGroups(): ConfigGroup[] {
