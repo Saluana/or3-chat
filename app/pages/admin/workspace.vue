@@ -1,103 +1,144 @@
 <template>
-    <div class="space-y-4">
-        <UCard v-if="workspace">
-            <template #header>
-                <h2 class="text-lg font-semibold">Workspace</h2>
-            </template>
-            <div class="text-sm space-y-1">
-                <div>ID: <span class="font-medium">{{ workspace.id }}</span></div>
-                <div>Name: <span class="font-medium">{{ workspace.name }}</span></div>
-                <div>Role: <span class="font-medium">{{ role }}</span></div>
-            </div>
-        </UCard>
+    <div class="space-y-8">
+        <div>
+            <h2 class="text-2xl font-semibold mb-1">Workspace</h2>
+            <p class="text-sm opacity-70">
+                Manage your workspace and team members.
+            </p>
+        </div>
 
-        <UCard>
-            <template #header>
-                <h3 class="text-base font-semibold">Members</h3>
-            </template>
-            <div v-if="isOwner" class="mb-4 space-y-2 text-sm">
-                <div class="font-medium">Add Member</div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                    <UInput
-                        v-model="newMemberId"
-                        size="sm"
-                        placeholder="email or provider id"
-                    />
-                    <USelectMenu
-                        v-model="newMemberRole"
-                        size="sm"
-                        :options="roleOptions"
-                    />
-                    <UInput
-                        v-model="newMemberProvider"
-                        size="sm"
-                        placeholder="provider (optional)"
-                    />
-                </div>
-                <UButton size="xs" @click="addMember">Add Member</UButton>
-            </div>
-            <div v-if="members.length === 0" class="text-sm opacity-70">
-                No members found.
-            </div>
-            <div v-else class="space-y-2 text-sm">
-                <div
-                    v-for="member in members"
-                    :key="member.userId"
-                    class="flex items-center justify-between border-b border-[var(--md-outline-variant)] pb-2"
-                >
+        <div v-if="pending" class="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-pulse">
+            <div class="lg:col-span-1 h-64 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
+            <div class="lg:col-span-2 h-96 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
+        </div>
+
+        <div v-else-if="workspace" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+             <!-- Info Card -->
+            <div class="lg:col-span-1 p-5 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] h-fit">
+                <h3 class="text-lg font-medium mb-4">Details</h3>
+                <div class="space-y-4 text-sm">
                     <div>
-                        <div class="font-medium">{{ member.email || member.userId }}</div>
-                        <div class="opacity-70">{{ member.userId }}</div>
+                        <div class="text-xs font-bold uppercase opacity-50 tracking-wider mb-1">Name</div>
+                        <div class="font-medium text-lg">{{ workspace.name }}</div>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <USelectMenu
-                            v-if="isOwner"
-                            v-model="memberRoles[member.userId]"
-                            size="sm"
-                            :options="roleOptions"
-                        />
-                        <div v-else class="font-medium capitalize">{{ member.role }}</div>
-                        <UButton
-                            v-if="isOwner"
-                            size="xs"
-                            @click="updateRole(member.userId)"
-                        >
-                            Update
-                        </UButton>
-                        <UButton
-                            v-if="isOwner"
-                            size="xs"
-                            color="error"
-                            variant="soft"
-                            @click="removeMember(member.userId)"
-                        >
-                            Remove
-                        </UButton>
+                    <div>
+                        <div class="text-xs font-bold uppercase opacity-50 tracking-wider mb-1">ID</div>
+                        <div class="font-mono text-xs p-1 bg-[var(--md-surface-container-highest)] rounded select-all">{{ workspace.id }}</div>
                     </div>
-                </div>
-            </div>
-        </UCard>
+                    <div>
+                        <div class="text-xs font-bold uppercase opacity-50 tracking-wider mb-1">Your Role</div>
+                        <UBadge color="primary" variant="subtle">{{ role }}</UBadge>
+                    </div>
 
-        <UCard>
-            <template #header>
-                <h3 class="text-base font-semibold">Guest Access</h3>
-            </template>
-            <div class="text-sm flex items-center gap-2">
-                <div>
-                    Guests are
-                    <span class="font-medium">
-                        {{ guestAccessEnabled ? 'enabled' : 'disabled' }}
-                    </span>
+                    <div class="pt-4 border-t border-[var(--md-outline-variant)]">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-medium">Guest Access</span>
+                            <UBadge :color="guestAccessEnabled ? 'success' : 'neutral'" variant="subtle">
+                                {{ guestAccessEnabled ? 'Enabled' : 'Disabled' }}
+                            </UBadge>
+                        </div>
+                        <UButton
+                            size="xs"
+                            block
+                            :color="guestAccessEnabled ? 'neutral' : 'primary'"
+                            :variant="guestAccessEnabled ? 'soft' : 'solid'"
+                            :disabled="!isOwner"
+                            @click="toggleGuestAccess"
+                        >
+                            {{ guestAccessEnabled ? 'Disable Guest Access' : 'Enable Guest Access' }}
+                        </UButton>
+                    </div>
                 </div>
-                <UButton
-                    size="xs"
-                    :disabled="!isOwner"
-                    @click="toggleGuestAccess"
-                >
-                    {{ guestAccessEnabled ? 'Disable' : 'Enable' }}
-                </UButton>
             </div>
-        </UCard>
+
+            <!-- Members Card -->
+            <div class="lg:col-span-2 p-5 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
+                 <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-lg font-medium">Team Members</h3>
+                    <div class="text-sm opacity-60">{{ members.length }} active</div>
+                 </div>
+
+                 <div v-if="isOwner" class="mb-6 p-4 rounded bg-[var(--md-surface-container-low)] border border-[var(--md-outline-variant)]/50">
+                    <div class="text-xs font-bold uppercase opacity-60 mb-3">Invite New Member</div>
+                    <div class="flex flex-col md:flex-row gap-2">
+                         <div class="flex-1">
+                            <UInput
+                                v-model="newMemberId"
+                                size="sm"
+                                placeholder="Email or Provider ID"
+                                icon="i-heroicons-user-plus"
+                            />
+                        </div>
+                        <div class="w-32">
+                             <USelectMenu
+                                v-model="newMemberRole"
+                                size="sm"
+                                :options="roleOptions"
+                            />
+                        </div>
+                        <div class="md:w-40">
+                             <UInput
+                                v-model="newMemberProvider"
+                                size="sm"
+                                placeholder="Provider (Optional)"
+                            />
+                        </div>
+                        <UButton size="sm" @click="addMember" color="primary">Add</UButton>
+                    </div>
+                 </div>
+
+                <div v-if="members.length === 0" class="text-sm opacity-70 text-center py-8">
+                    No members found.
+                </div>
+
+                <div v-else class="space-y-px bg-[var(--md-outline-variant)]/30 rounded overflow-hidden">
+                    <div
+                        v-for="member in members"
+                        :key="member.userId"
+                        class="flex flex-col md:flex-row md:items-center justify-between p-3 gap-3 bg-[var(--md-surface)] hover:bg-[var(--md-surface-container-lowest)] transition-colors"
+                    >
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] flex items-center justify-center text-xs font-bold">
+                                {{ (member.email || member.userId).substring(0, 2).toUpperCase() }}
+                            </div>
+                            <div>
+                                 <div class="font-medium text-sm">{{ member.email || member.userId }}</div>
+                                <div class="opacity-60 text-xs font-mono">{{ member.userId }}</div>
+                            </div>
+                        </div>
+
+                         <div class="flex items-center gap-2 self-end md:self-auto">
+                            <div v-if="!isOwner" class="text-sm font-medium px-2">{{ member.role }}</div>
+                            <template v-else>
+                                <USelectMenu
+                                    v-model="memberRoles[member.userId]"
+                                    size="xs"
+                                    :options="roleOptions"
+                                    class="w-24"
+                                />
+                                <UButton
+                                    size="xs"
+                                    color="neutral"
+                                    variant="ghost"
+                                    @click="updateRole(member.userId)"
+                                    :disabled="memberRoles[member.userId] === member.role"
+                                >
+                                    Save
+                                </UButton>
+                                <div class="w-px h-4 bg-[var(--md-outline-variant)] mx-1"></div>
+                                <UButton
+                                    size="xs"
+                                    color="error"
+                                    variant="ghost"
+                                    icon="i-heroicons-trash"
+                                    @click="removeMember(member.userId)"
+                                />
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -113,8 +154,9 @@ type WorkspaceResponse = {
     guestAccessEnabled: boolean;
 };
 
-const { data, refresh } = await useFetch<WorkspaceResponse>('/api/admin/workspace');
+const { data, refresh, status } = await useLazyFetch<WorkspaceResponse>('/api/admin/workspace');
 
+const pending = computed(() => status.value === 'pending');
 const workspace = computed(() => data.value?.workspace);
 const role = computed(() => data.value?.role);
 const members = computed(() => data.value?.members ?? []);

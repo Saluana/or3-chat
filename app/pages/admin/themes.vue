@@ -1,56 +1,80 @@
 <template>
-    <div class="space-y-4">
-        <UCard>
-            <template #header>
-                <h2 class="text-lg font-semibold">Installed Themes</h2>
-            </template>
-            <div class="mb-4 flex items-center gap-3">
-                <input
-                    ref="fileInput"
-                    type="file"
-                    accept=".zip"
-                    class="text-sm"
-                    :disabled="!isOwner"
-                />
-                <UButton size="xs" :disabled="!isOwner" @click="installTheme">
-                    Install .zip
-                </UButton>
-            </div>
-            <div v-if="themes.length === 0" class="text-sm opacity-70">
+    <div class="space-y-6">
+        <div>
+            <h2 class="text-2xl font-semibold mb-1">Themes</h2>
+            <p class="text-sm opacity-70">
+                Manage and switch active themes.
+            </p>
+        </div>
+
+        <div v-if="pending" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-pulse">
+            <div class="h-40 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
+            <div class="h-40 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
+            <div class="h-40 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
+        </div>
+
+        <div v-else-if="themes.length === 0" class="text-sm opacity-70 py-8 text-center bg-[var(--md-surface-container-low)] rounded">
                 No themes installed.
+        </div>
+
+        <div v-else class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
+            <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-lg font-medium">Installed</h3>
+                <div class="flex items-center gap-3">
+                     <!-- Hidden file input -->
+                    <input
+                        ref="fileInput"
+                        type="file"
+                        accept=".zip"
+                        class="hidden"
+                        @change="installTheme"
+                    />
+                    <UButton size="xs" :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
+                        Install .zip
+                    </UButton>
+                </div>
             </div>
-            <div v-else class="space-y-3 text-sm">
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div
                     v-for="theme in themes"
                     :key="theme.id"
-                    class="border-b border-[var(--md-outline-variant)] pb-3"
+                    class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] hover:bg-[var(--md-surface-container-low)] transition-colors flex flex-col h-full"
                 >
-                    <div class="font-medium">{{ theme.name }}</div>
-                    <div class="opacity-70">{{ theme.id }} • {{ theme.version }}</div>
-                    <div v-if="theme.description" class="mt-1 opacity-80">
-                        {{ theme.description }}
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between mb-2">
+                             <div class="font-semibold text-lg">{{ theme.name }}</div>
+                             <UBadge v-if="defaultTheme === theme.id" color="primary" variant="subtle">Default</UBadge>
+                        </div>
+                        <div class="text-xs opacity-70 font-mono mb-2">{{ theme.id }} • v{{ theme.version }}</div>
+                        <div v-if="theme.description" class="text-sm opacity-80 line-clamp-2 mb-4">
+                            {{ theme.description }}
+                        </div>
                     </div>
-                    <div class="mt-2 flex items-center gap-2">
+                    
+                    <div class="pt-4 mt-auto border-t border-[var(--md-outline-variant)]/50 flex items-center justify-between gap-2">
                         <UButton
                             size="xs"
+                            :color="defaultTheme === theme.id ? 'neutral' : 'primary'"
+                            :variant="defaultTheme === theme.id ? 'soft' : 'solid'"
+                            :disabled="!isOwner || defaultTheme === theme.id"
+                            @click="setDefaultTheme(theme.id)"
+                        >
+                            {{ defaultTheme === theme.id ? 'Active' : 'Set Default' }}
+                        </UButton>
+                         <UButton
+                            size="xs"
                             color="error"
-                            variant="soft"
+                            variant="ghost"
                             :disabled="!isOwner"
                             @click="uninstallTheme(theme.id)"
                         >
                             Uninstall
                         </UButton>
-                        <UButton
-                            size="xs"
-                            :disabled="!isOwner || defaultTheme === theme.id"
-                            @click="setDefaultTheme(theme.id)"
-                        >
-                            {{ defaultTheme === theme.id ? 'Default' : 'Set Default' }}
-                        </UButton>
                     </div>
                 </div>
             </div>
-        </UCard>
+        </div>
     </div>
 </template>
 
@@ -67,11 +91,13 @@ type ExtensionItem = {
     description?: string;
 };
 
-const { data } = await useFetch<{ items: ExtensionItem[] }>('/api/admin/extensions');
-const { data: workspaceData } = await useFetch<{ role: string }>('/api/admin/workspace');
-const { data: configData } = await useFetch<{ entries: Array<{ key: string; value: string | null }> }>(
+const { data, status: extStatus, refresh: refreshExtensions } = await useLazyFetch<{ items: ExtensionItem[] }>('/api/admin/extensions');
+const { data: workspaceData, status: workspaceStatus, refresh: refreshWorkspace } = await useLazyFetch<{ role: string }>('/api/admin/workspace');
+const { data: configData, status: configStatus, refresh: refreshConfig } = await useLazyFetch<{ entries: Array<{ key: string; value: string | null }> }>(
     '/api/admin/system/config'
 );
+
+const pending = computed(() => extStatus.value === 'pending' || workspaceStatus.value === 'pending' || configStatus.value === 'pending');
 
 const themes = computed(
     () => (data.value?.items ?? []).filter((i) => i.kind === 'theme')
@@ -85,6 +111,10 @@ const defaultTheme = computed(() => {
 
 const fileInput = ref<HTMLInputElement | null>(null);
 
+function triggerFileInput() {
+    fileInput.value?.click();
+}
+
 async function installTheme() {
     if (!isOwner.value) return;
     const file = fileInput.value?.files?.[0];
@@ -97,7 +127,7 @@ async function installTheme() {
             body: formData,
             headers: { 'x-or3-admin-intent': 'admin' },
         });
-        await refreshNuxtData();
+        await refresh();
     } catch (error: unknown) {
         const message =
             (error as { data?: { statusMessage?: string } })?.data?.statusMessage ??
@@ -113,7 +143,7 @@ async function installTheme() {
                 body: retryForm,
                 headers: { 'x-or3-admin-intent': 'admin' },
             });
-            await refreshNuxtData();
+            await refresh();
             return;
         }
         throw error;
@@ -127,7 +157,7 @@ async function uninstallTheme(themeId: string) {
         body: { id: themeId, kind: 'theme' },
         headers: { 'x-or3-admin-intent': 'admin' },
     });
-    await refreshNuxtData();
+    await refresh();
 }
 
 async function setDefaultTheme(themeId: string) {
@@ -138,6 +168,10 @@ async function setDefaultTheme(themeId: string) {
         headers: { 'x-or3-admin-intent': 'admin' },
         body: { entries: [{ key: 'OR3_DEFAULT_THEME', value: themeId }] },
     });
-    await refreshNuxtData();
+    await refresh();
+}
+
+async function refresh() {
+    await Promise.all([refreshExtensions(), refreshWorkspace(), refreshConfig()]);
 }
 </script>

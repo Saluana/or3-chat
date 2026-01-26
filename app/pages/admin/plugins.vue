@@ -1,85 +1,112 @@
 <template>
-    <div class="space-y-4">
-        <UCard>
-            <template #header>
-                <h2 class="text-lg font-semibold">Installed Plugins</h2>
-            </template>
-            <div class="mb-4 flex items-center gap-3">
-                <input
-                    ref="fileInput"
-                    type="file"
-                    accept=".zip"
-                    class="text-sm"
-                    :disabled="!isOwner"
-                />
-                <UButton size="xs" :disabled="!isOwner" @click="installPlugin">
-                    Install .zip
-                </UButton>
+    <div class="space-y-6">
+        <div>
+            <h2 class="text-2xl font-semibold mb-1">Plugins</h2>
+            <p class="text-sm opacity-70">
+                Manage installed extensions and plugins.
+            </p>
+        </div>
+
+        <div class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
+            <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-lg font-medium">Installed</h3>
+                <div class="flex items-center gap-3">
+                     <!-- Input hidden mostly, custom button triggers it -->
+                    <input
+                        ref="fileInput"
+                        type="file"
+                        accept=".zip"
+                        class="hidden"
+                        @change="installPlugin"
+                    />
+                    <UButton size="xs" :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
+                        Install .zip
+                    </UButton>
+                </div>
             </div>
-            <div v-if="plugins.length === 0" class="text-sm opacity-70">
+
+            <div v-if="pending" class="space-y-4 animate-pulse">
+                <div class="h-10 bg-[var(--md-surface-container-highest)] rounded w-full"></div>
+                <div class="h-24 bg-[var(--md-surface-container-highest)] rounded w-full"></div>
+                <div class="h-24 bg-[var(--md-surface-container-highest)] rounded w-full"></div>
+            </div>
+
+            <div v-else-if="plugins.length === 0" class="text-sm opacity-70 py-8 text-center bg-[var(--md-surface-container-low)] rounded">
                 No plugins installed.
             </div>
-            <div v-else class="space-y-3 text-sm">
+
+            <div v-else class="space-y-4">
                 <div
                     v-for="plugin in plugins"
                     :key="plugin.id"
-                    class="border-b border-[var(--md-outline-variant)] pb-3"
+                    class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] hover:bg-[var(--md-surface-container-low)] transition-colors"
                 >
-                    <div class="font-medium">{{ plugin.name }}</div>
-                    <div class="opacity-70">{{ plugin.id }} • {{ plugin.version }}</div>
-                    <div v-if="plugin.description" class="mt-1 opacity-80">
-                        {{ plugin.description }}
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <div class="font-semibold text-base">{{ plugin.name }}</div>
+                            <div class="text-xs opacity-70 font-mono mt-0.5">{{ plugin.id }} • v{{ plugin.version }}</div>
+                            <div v-if="plugin.description" class="mt-2 text-sm opacity-80 max-w-2xl">
+                                {{ plugin.description }}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                             <UBadge :color="enabledSet.has(plugin.id) ? 'success' : 'neutral'" variant="subtle">
+                                {{ enabledSet.has(plugin.id) ? 'Active' : 'Inactive' }}
+                            </UBadge>
+                        </div>
                     </div>
-                    <div class="mt-2 flex items-center gap-2">
+
+                    <div class="mt-4 pt-4 border-t border-[var(--md-outline-variant)]/50 flex flex-wrap items-center gap-2">
                         <UButton
                             size="xs"
-                            :color="enabledSet.has(plugin.id) ? 'primary' : 'neutral'"
+                            :color="enabledSet.has(plugin.id) ? 'neutral' : 'primary'"
+                            :variant="enabledSet.has(plugin.id) ? 'soft' : 'solid'"
                             :disabled="!isOwner"
                             @click="togglePlugin(plugin.id)"
                         >
-                            {{ enabledSet.has(plugin.id) ? 'Enabled' : 'Enable' }}
-                        </UButton>
-                        <UButton
-                            v-if="enabledSet.has(plugin.id)"
-                            size="xs"
-                            color="neutral"
-                            :disabled="!isOwner"
-                            @click="disablePlugin(plugin.id)"
-                        >
-                            Disable
+                            {{ enabledSet.has(plugin.id) ? 'Disable' : 'Enable' }}
                         </UButton>
                         <UButton
                             size="xs"
                             color="error"
-                            variant="soft"
+                            variant="ghost"
                             :disabled="!isOwner"
                             @click="uninstallPlugin(plugin.id)"
                         >
                             Uninstall
                         </UButton>
-                    </div>
-                    <div class="mt-3 space-y-2">
-                        <div class="text-xs uppercase opacity-60">Settings (JSON)</div>
-                        <UTextarea
-                            v-model="settingsByPlugin[plugin.id]"
-                            size="sm"
-                            :disabled="!isOwner"
-                            placeholder="{ }"
-                            @focus="loadSettings(plugin.id)"
-                        />
-                        <div class="flex items-center gap-2">
-                            <UButton
-                                size="xs"
-                                :disabled="!isOwner"
-                                @click="saveSettings(plugin.id)"
-                            >
-                                Save Settings
-                            </UButton>
-                        </div>
+                        
+                        <div class="flex-1"></div>
+
+                        <UPopover>
+                            <UButton color="neutral" variant="ghost" size="xs" label="Settings" trailing-icon="i-heroicons-chevron-down-20-solid" />
+                            <template #panel>
+                                <div class="p-4 w-96 space-y-3">
+                                    <div class="text-xs font-semibold uppercase opacity-60">Configuration (JSON)</div>
+                                    <UTextarea
+                                        v-model="settingsByPlugin[plugin.id]"
+                                        :rows="6"
+                                        size="xs"
+                                        :disabled="!isOwner"
+                                        placeholder="{}"
+                                        class="font-mono text-xs"
+                                        @focus="loadSettings(plugin.id)"
+                                    />
+                                    <UButton
+                                        size="xs"
+                                        block
+                                        :disabled="!isOwner"
+                                        @click="saveSettings(plugin.id)"
+                                    >
+                                        Save Configuration
+                                    </UButton>
+                                </div>
+                            </template>
+                        </UPopover>
                     </div>
                 </div>
             </div>
-        </UCard>
+        </div>
     </div>
 </template>
 
@@ -96,34 +123,42 @@ type ExtensionItem = {
     description?: string;
 };
 
-const { data } = await useFetch<{ items: ExtensionItem[] }>(
+// 1. Fetch Extensions
+const { data, status, refresh: refreshNuxtData } = await useLazyFetch<{ items: ExtensionItem[] }>(
     '/api/admin/extensions'
 );
 
+// 2. Fetch Workspace (for role and enabled plugins)
+const { data: workspaceData, refresh: refreshWorkspace } = await useLazyFetch<{
+    workspace: { id: string; name: string };
+    role: string;
+    members: Array<{ userId: string; email?: string; role: string }>;
+    enabledPlugins: string[];
+    guestAccessEnabled: boolean;
+}>('/api/admin/workspace');
+
+// Computed & State
+const pending = computed(() => status.value === 'pending');
 const plugins = computed(
     () => (data.value?.items ?? []).filter((i) => i.kind === 'plugin')
 );
 
 const enabledSet = ref<Set<string>>(new Set());
-const role = ref<string | undefined>();
+const role = computed(() => workspaceData.value?.role);
 const isOwner = computed(() => role.value === 'owner');
 const settingsByPlugin = reactive<Record<string, string>>({});
-
 const fileInput = ref<HTMLInputElement | null>(null);
 
-async function refreshEnabled() {
-    const res = await $fetch<{
-        workspace: { id: string; name: string };
-        role: string;
-        members: Array<{ userId: string; email?: string; role: string }>;
-        enabledPlugins: string[];
-        guestAccessEnabled: boolean;
-    }>('/api/admin/workspace');
-    const enabled = res?.enabledPlugins;
-    role.value = res?.role;
-    if (Array.isArray(enabled)) {
-        enabledSet.value = new Set(enabled);
+// Watcher
+watch(() => workspaceData.value, (val) => {
+    if (val?.enabledPlugins) {
+        enabledSet.value = new Set(val.enabledPlugins);
     }
+}, { immediate: true });
+
+// Actions
+function triggerFileInput() {
+    fileInput.value?.click();
 }
 
 async function setEnabled(pluginId: string, enabled: boolean) {
@@ -218,11 +253,6 @@ async function saveSettings(pluginId: string) {
 }
 
 async function refresh() {
-    await refreshEnabled();
-    await refreshNuxtData();
+    await Promise.all([refreshNuxtData(), refreshWorkspace()]);
 }
-
-onMounted(() => {
-    refreshEnabled();
-});
 </script>
