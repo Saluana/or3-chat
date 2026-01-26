@@ -68,6 +68,15 @@
                     <p class="text-sm opacity-70">
                         Manage server lifecycle. These actions may cause temporary downtime.
                     </p>
+                    
+                    <!-- Info about disabled buttons -->
+                    <div v-if="!status?.admin?.allowRestart && !status?.admin?.allowRebuild" class="p-3 rounded bg-blue-500/10 border border-blue-500/20">
+                        <div class="text-xs font-bold text-blue-600 uppercase mb-1">Info</div>
+                        <div class="text-sm text-blue-600 dark:text-blue-400">
+                            Server operations are disabled. To enable, set <code class="text-xs bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded">OR3_ADMIN_ALLOW_RESTART=true</code> or <code class="text-xs bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded">OR3_ADMIN_ALLOW_REBUILD=true</code> in your environment.
+                        </div>
+                    </div>
+
                     <div class="flex flex-col gap-3">
                          <UButton
                             color="error"
@@ -123,32 +132,51 @@
             </div>
         </div>
 
-        <div v-if="!pending && entries.length > 0">
+        <!-- Grouped Configuration -->
+        <div v-if="!pending && enrichedEntries.length > 0">
             <h3 class="text-lg font-semibold mb-3">Configuration</h3>
-            <div class="p-5 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
-                 <div class="space-y-4">
-                    <div
-                        v-for="entry in entries"
-                        :key="entry.key"
-                        class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center"
-                    >
-                        <div class="md:col-span-4 font-mono text-sm opacity-80 truncate" :title="entry.key">{{ entry.key }}</div>
-                        <div class="md:col-span-8">
-                            <UInput
-                                v-model="entry.value"
-                                size="sm"
-                                :disabled="!isOwner"
-                                :placeholder="entry.masked ? '******' : ''"
-                            >
-                                <template #trailing v-if="entry.masked">
-                                    <UBadge size="xs" color="neutral" variant="subtle">MASKED</UBadge>
-                                </template>
-                            </UInput>
+            <div class="space-y-6">
+                <div
+                    v-for="group in configGroups"
+                    :key="group"
+                    class="p-5 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]"
+                >
+                    <h4 class="text-base font-semibold mb-4 flex items-center gap-2">
+                        <span class="w-1 h-4 rounded-full" :class="getGroupColor(group)"></span>
+                        {{ group }}
+                    </h4>
+                    <div class="space-y-5">
+                        <div
+                            v-for="entry in getEntriesForGroup(group)"
+                            :key="entry.key"
+                            class="space-y-2"
+                        >
+                            <label class="block">
+                                <div class="flex items-start justify-between mb-1">
+                                    <div class="flex-1">
+                                        <div class="font-medium text-sm">{{ entry.label }}</div>
+                                        <div class="text-xs opacity-60 mt-0.5">{{ entry.description }}</div>
+                                    </div>
+                                    <code class="text-xs opacity-40 font-mono ml-2 mt-0.5">{{ entry.key }}</code>
+                                </div>
+                                <UInput
+                                    v-model="entry.value"
+                                    size="sm"
+                                    :disabled="!isOwner"
+                                    :placeholder="entry.masked ? '******' : ''"
+                                    class="w-full"
+                                >
+                                    <template #trailing v-if="entry.masked">
+                                        <UBadge size="xs" color="neutral" variant="subtle">MASKED</UBadge>
+                                    </template>
+                                </UInput>
+                            </label>
                         </div>
                     </div>
                 </div>
-                <div class="mt-6 flex justify-end">
-                    <UButton :disabled="!isOwner" @click="saveConfig" color="neutral" variant="solid">
+
+                <div class="flex justify-end">
+                    <UButton :disabled="!isOwner" @click="saveConfig" color="neutral" variant="solid" icon="i-heroicons-check">
                         Save Configuration
                     </UButton>
                 </div>
@@ -198,19 +226,52 @@ type ProviderAction = {
 
 type ConfigEntry = { key: string; value: string | null; masked: boolean };
 
+type EnrichedConfigEntry = {
+    key: string;
+    value: string | null;
+    masked: boolean;
+    label: string;
+    description: string;
+    group: string;
+    order: number;
+};
+
+type ConfigGroup = 
+    | 'Auth'
+    | 'Sync'
+    | 'Storage'
+    | 'UI & Branding'
+    | 'Features'
+    | 'Limits & Security'
+    | 'Background Processing'
+    | 'Admin'
+    | 'External Services';
+
 const { data: statusData, status: statusFetchStatus } = await useLazyFetch<StatusResponse>(
     '/api/admin/system/status'
 );
-const { data: configData, status: configFetchStatus } = await useLazyFetch<{ entries: ConfigEntry[] }>(
-    '/api/admin/system/config'
+const { data: enrichedConfigData, status: configFetchStatus } = await useLazyFetch<{ entries: EnrichedConfigEntry[] }>(
+    '/api/admin/system/config/enriched'
 );
 
 const pending = computed(() => statusFetchStatus.value === 'pending' || configFetchStatus.value === 'pending');
 const status = computed(() => statusData.value?.status);
 const warnings = computed(() => statusData.value?.warnings ?? []);
-const entries = ref<ConfigEntry[]>([]);
+const enrichedEntries = ref<EnrichedConfigEntry[]>([]);
 const role = computed(() => statusData.value?.session?.role);
 const isOwner = computed(() => role.value === 'owner');
+
+const configGroups: ConfigGroup[] = [
+    'Auth',
+    'Sync',
+    'Storage',
+    'UI & Branding',
+    'Features',
+    'Limits & Security',
+    'Background Processing',
+    'Admin',
+    'External Services',
+];
 
 const providerActions = computed(() => {
     if (!status.value) return [];
@@ -229,17 +290,42 @@ const providerActions = computed(() => {
 });
 
 watch(
-    () => configData.value?.entries,
+    () => enrichedConfigData.value?.entries,
     (next) => {
-        if (next) entries.value = next.map((e) => ({ ...e }));
+        if (next) {
+            enrichedEntries.value = next.map((e) => ({ ...e })).sort((a, b) => {
+                const groupCompare = configGroups.indexOf(a.group as ConfigGroup) - configGroups.indexOf(b.group as ConfigGroup);
+                if (groupCompare !== 0) return groupCompare;
+                return a.order - b.order;
+            });
+        }
     },
     { immediate: true }
 );
 
+function getEntriesForGroup(group: ConfigGroup): EnrichedConfigEntry[] {
+    return enrichedEntries.value.filter((e) => e.group === group);
+}
+
+function getGroupColor(group: ConfigGroup): string {
+    const colors: Record<ConfigGroup, string> = {
+        'Auth': 'bg-blue-500',
+        'Sync': 'bg-green-500',
+        'Storage': 'bg-purple-500',
+        'UI & Branding': 'bg-pink-500',
+        'Features': 'bg-yellow-500',
+        'Limits & Security': 'bg-red-500',
+        'Background Processing': 'bg-indigo-500',
+        'Admin': 'bg-gray-500',
+        'External Services': 'bg-teal-500',
+    };
+    return colors[group] || 'bg-gray-500';
+}
+
 async function saveConfig() {
     await $fetch('/api/admin/system/config/write', {
         method: 'POST',
-        body: { entries: entries.value.map((e) => ({ key: e.key, value: e.value })) },
+        body: { entries: enrichedEntries.value.map((e) => ({ key: e.key, value: e.value })) },
         headers: { 'x-or3-admin-intent': 'admin' },
     });
 }
