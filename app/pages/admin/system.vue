@@ -21,39 +21,39 @@
                         <span class="opacity-70">Auth Provider</span>
                         <div class="flex items-center gap-2">
                             <span class="font-medium">{{ status.auth.provider }}</span>
-                            <div class="w-2 h-2 rounded-full" :class="status.auth.enabled ? 'bg-green-500' : 'bg-gray-400'"></div>
+                            <div class="w-2 h-2 rounded-full" :class="status.auth.enabled ? 'bg-[var(--md-sys-color-success,#10b981)]' : 'bg-[var(--md-outline-variant)]'"></div>
                         </div>
                     </div>
                      <div class="flex justify-between items-center py-2 border-b border-[var(--md-outline-variant)]/50">
                         <span class="opacity-70">Sync Engine</span>
                         <div class="flex items-center gap-2">
                             <span class="font-medium">{{ status.sync.provider }}</span>
-                            <div class="w-2 h-2 rounded-full" :class="status.sync.enabled ? 'bg-green-500' : 'bg-gray-400'"></div>
+                            <div class="w-2 h-2 rounded-full" :class="status.sync.enabled ? 'bg-[var(--md-sys-color-success,#10b981)]' : 'bg-[var(--md-outline-variant)]'"></div>
                         </div>
                     </div>
                      <div class="flex justify-between items-center py-2 border-b border-[var(--md-outline-variant)]/50">
                         <span class="opacity-70">Storage</span>
                         <div class="flex items-center gap-2">
                             <span class="font-medium">{{ status.storage.provider }}</span>
-                            <div class="w-2 h-2 rounded-full" :class="status.storage.enabled ? 'bg-green-500' : 'bg-gray-400'"></div>
+                            <div class="w-2 h-2 rounded-full" :class="status.storage.enabled ? 'bg-[var(--md-sys-color-success,#10b981)]' : 'bg-[var(--md-outline-variant)]'"></div>
                         </div>
                     </div>
                      <div class="flex justify-between items-center py-2">
                         <span class="opacity-70">Background Streaming</span>
                         <div class="flex items-center gap-2">
                             <span class="font-medium">{{ status.backgroundStreaming.enabled ? 'Active' : 'Inactive' }}</span>
-                             <div class="w-2 h-2 rounded-full" :class="status.backgroundStreaming.enabled ? 'bg-green-500' : 'bg-gray-400'"></div>
+                             <div class="w-2 h-2 rounded-full" :class="status.backgroundStreaming.enabled ? 'bg-[var(--md-sys-color-success,#10b981)]' : 'bg-[var(--md-outline-variant)]'"></div>
                         </div>
                     </div>
                 </div>
 
-                 <div v-if="warnings.length > 0" class="mt-6 p-3 rounded bg-amber-500/10 border border-amber-500/20">
-                    <div class="text-xs font-bold text-amber-600 uppercase mb-2">Warnings</div>
+                 <div v-if="warnings.length > 0" class="mt-6 p-3 rounded bg-[var(--md-sys-color-warning-container,#fef3c7)] border border-[var(--md-sys-color-warning,#f59e0b)]/20">
+                    <div class="text-xs font-bold text-[var(--md-sys-color-on-warning-container,#92400e)] uppercase mb-2">Warnings</div>
                     <div class="space-y-1">
                         <div
                             v-for="(w, idx) in warnings"
                             :key="idx"
-                            class="text-sm text-amber-600 dark:text-amber-400"
+                            class="text-sm text-[var(--md-sys-color-on-warning-container,#92400e)]"
                         >
                             • {{ w.message }}
                         </div>
@@ -70,9 +70,9 @@
                     </p>
                     
                     <!-- Info about disabled buttons -->
-                    <div v-if="!status?.admin?.allowRestart && !status?.admin?.allowRebuild" class="p-3 rounded bg-blue-500/10 border border-blue-500/20">
-                        <div class="text-xs font-bold text-blue-600 uppercase mb-1">Info</div>
-                        <div class="text-sm text-blue-600 dark:text-blue-400">
+                    <div v-if="!status?.admin?.allowRestart && !status?.admin?.allowRebuild" class="p-3 rounded bg-[var(--md-sys-color-info-container,#dbeafe)] border border-[var(--md-sys-color-info,#3b82f6)]/20">
+                        <div class="text-xs font-bold text-[var(--md-sys-color-on-info-container,#1e3a8a)] uppercase mb-1">Info</div>
+                        <div class="text-sm text-[var(--md-sys-color-on-info-container,#1e40af)]">
                             Server operations are disabled. To enable, set <code class="text-xs bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded">OR3_ADMIN_ALLOW_RESTART=true</code> or <code class="text-xs bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded">OR3_ADMIN_ALLOW_REBUILD=true</code> in your environment.
                         </div>
                     </div>
@@ -309,17 +309,17 @@ function getEntriesForGroup(group: ConfigGroup): EnrichedConfigEntry[] {
 
 function getGroupColor(group: ConfigGroup): string {
     const colors: Record<ConfigGroup, string> = {
-        'Auth': 'bg-blue-500',
-        'Sync': 'bg-green-500',
-        'Storage': 'bg-purple-500',
-        'UI & Branding': 'bg-pink-500',
-        'Features': 'bg-yellow-500',
-        'Limits & Security': 'bg-red-500',
-        'Background Processing': 'bg-indigo-500',
-        'Admin': 'bg-gray-500',
-        'External Services': 'bg-teal-500',
+        'Auth': 'bg-[var(--md-sys-color-primary)]',
+        'Sync': 'bg-[var(--md-sys-color-secondary)]',
+        'Storage': 'bg-[var(--md-sys-color-tertiary)]',
+        'UI & Branding': 'bg-[var(--md-sys-color-primary-container)]',
+        'Features': 'bg-[var(--md-sys-color-secondary-container)]',
+        'Limits & Security': 'bg-[var(--md-sys-color-error)]',
+        'Background Processing': 'bg-[var(--md-sys-color-tertiary-container)]',
+        'Admin': 'bg-[var(--md-outline)]',
+        'External Services': 'bg-[var(--md-sys-color-surface-tint)]',
     };
-    return colors[group] || 'bg-gray-500';
+    return colors[group] || 'bg-[var(--md-outline)]';
 }
 
 async function saveConfig() {
