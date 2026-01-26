@@ -122,13 +122,13 @@ export default defineEventHandler(async (event) => {
             : null;
 
     // We'll check daily limit and record atomically
-    const provider = dailyConfig ? getRateLimitProvider() : null;
+    const rateLimitProvider = dailyConfig ? getRateLimitProvider() : null;
     let dailyLimitResult: { allowed: boolean; remaining: number; retryAfterMs?: number } | null = null;
 
-    if (dailyConfig && provider) {
+    if (dailyConfig && rateLimitProvider) {
         const dailyKey = `daily:${rateKey}`;
         // Atomic check-and-record to prevent race conditions
-        dailyLimitResult = await provider.checkAndRecord(dailyKey, dailyConfig);
+        dailyLimitResult = await rateLimitProvider.checkAndRecord(dailyKey, dailyConfig);
         if (!dailyLimitResult.allowed) {
             const retryAfterSec = Math.ceil(
                 (dailyLimitResult.retryAfterMs ?? 1000) / 1000

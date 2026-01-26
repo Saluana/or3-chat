@@ -29,6 +29,48 @@ const jobs = new Map<string, MemoryJob>();
 let cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
 /**
+ * Generate a unique job ID
+ */
+function generateJobId(): string {
+    return crypto.randomUUID();
+}
+
+/**
+ * Cleanup expired/stale jobs logic
+ * Extracted to avoid circular dependency in provider
+ */
+async function cleanupExpiredJobs(): Promise<number> {
+    const config = getJobConfig();
+    const now = Date.now();
+    let cleaned = 0;
+
+    for (const [id, job] of jobs) {
+        const age = now - job.startedAt;
+        const isStreaming = job.status === 'streaming';
+        const isTimedOut = isStreaming && age > config.jobTimeoutMs;
+
+        const isTerminal = ['complete', 'error', 'aborted'].includes(job.status);
+        const completedAge = now - (job.completedAt ?? job.startedAt);
+        const isStale = isTerminal && completedAge > config.completedJobRetentionMs;
+
+        if (isTimedOut) {
+            // Timeout streaming job
+            job.abortController.abort();
+            job.status = 'error';
+            job.error = 'Job timed out';
+            job.completedAt = now;
+            cleaned++;
+        } else if (isStale) {
+            // Remove old completed jobs
+            jobs.delete(id);
+            cleaned++;
+        }
+    }
+
+    return cleaned;
+}
+
+/**
  * Start periodic cleanup if not already running
  */
 function ensureCleanupInterval(): void {
@@ -36,7 +78,7 @@ function ensureCleanupInterval(): void {
 
     cleanupInterval = setInterval(
         () => {
-            void memoryJobProvider.cleanupExpired();
+            void cleanupExpiredJobs();
         },
         60_000 // Every minute
     );
@@ -45,13 +87,6 @@ function ensureCleanupInterval(): void {
     if (typeof cleanupInterval.unref === 'function') {
         cleanupInterval.unref();
     }
-}
-
-/**
- * Generate a unique job ID
- */
-function generateJobId(): string {
-    return crypto.randomUUID();
 }
 
 export const memoryJobProvider: BackgroundJobProvider = {
@@ -161,34 +196,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
     },
 
     async cleanupExpired(): Promise<number> {
-        const config = getJobConfig();
-        const now = Date.now();
-        let cleaned = 0;
-
-        for (const [id, job] of jobs) {
-            const age = now - job.startedAt;
-            const isStreaming = job.status === 'streaming';
-            const isTimedOut = isStreaming && age > config.jobTimeoutMs;
-
-            const isTerminal = ['complete', 'error', 'aborted'].includes(job.status);
-            const completedAge = now - (job.completedAt ?? job.startedAt);
-            const isStale = isTerminal && completedAge > config.completedJobRetentionMs;
-
-            if (isTimedOut) {
-                // Timeout streaming job
-                job.abortController.abort();
-                job.status = 'error';
-                job.error = 'Job timed out';
-                job.completedAt = now;
-                cleaned++;
-            } else if (isStale) {
-                // Remove old completed jobs
-                jobs.delete(id);
-                cleaned++;
-            }
-        }
-
-        return cleaned;
+        return await cleanupExpiredJobs();
     },
 
     async getActiveJobCount(): Promise<number> {

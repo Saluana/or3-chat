@@ -15,7 +15,7 @@ let cachedProvider: BackgroundJobProvider | null = null;
  * Get the active background job provider.
  * Caches the provider for performance.
  */
-export function getJobProvider(): BackgroundJobProvider {
+export async function getJobProvider(): Promise<BackgroundJobProvider> {
     if (cachedProvider) {
         return cachedProvider;
     }
@@ -29,10 +29,8 @@ export function getJobProvider(): BackgroundJobProvider {
             // Dynamically import to avoid loading if not used
             const convexUrl = config.public.sync.convexUrl;
             if (convexUrl) {
-                const { convexJobProvider } = require('./providers/convex') as {
-                    convexJobProvider: BackgroundJobProvider;
-                };
-                cachedProvider = convexJobProvider;
+                const module = await import('./providers/convex');
+                cachedProvider = module.convexJobProvider;
             } else {
                 console.warn('[background-jobs] Convex URL not configured, using memory');
                 cachedProvider = memoryJobProvider;

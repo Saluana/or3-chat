@@ -8,6 +8,7 @@
 import type { BackgroundJobProvider } from '../background-jobs/types';
 import { getJobProvider, isBackgroundStreamingEnabled } from '../background-jobs/store';
 import { checkJobAborted } from '../background-jobs/providers/convex';
+import { emitBackgroundComplete } from '../notifications/emit';
 import {
     parseOpenRouterSSE,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
@@ -64,7 +65,7 @@ export function validateBackgroundParams(body: Record<string, unknown>): {
 export async function startBackgroundStream(
     params: BackgroundStreamParams
 ): Promise<BackgroundStreamResult> {
-    const provider = getJobProvider();
+    const provider = await getJobProvider();
     const model = (params.body.model as string) || 'unknown';
 
     // Create job
@@ -148,7 +149,8 @@ async function streamInBackground(
         // Complete the job
         await provider.completeJob(jobId, fullContent);
 
-        // Notifications are emitted client-side when background jobs complete.
+        // Emit notification
+        await emitBackgroundComplete(jobId, params.userId, params.threadId);
 
     } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
