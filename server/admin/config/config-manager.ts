@@ -100,6 +100,7 @@ export async function readEnrichedConfigEntries(): Promise<EnrichedConfigEntry[]
             description: metadata?.description ?? '',
             group: metadata?.group ?? DEFAULT_CONFIG_GROUP,
             order: metadata?.order ?? DEFAULT_CONFIG_ORDER,
+            valueType: metadata?.valueType ?? 'string',
         };
     });
 }
@@ -115,6 +116,10 @@ export async function writeConfigEntries(
             throw new Error(`Key not allowed: ${update.key}`);
         }
         if (update.value === '******') {
+            continue;
+        }
+        if (update.value === '') {
+            updateMap[update.key] = null;
             continue;
         }
         updateMap[update.key] = update.value;
