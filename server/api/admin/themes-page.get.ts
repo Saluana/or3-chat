@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     // Parallel fetch instead of sequential
     const [extensions, configEntries] = await Promise.all([
         listInstalledExtensions(),
-        readConfigEntries(['OR3_DEFAULT_THEME'])
+        readConfigEntries()
     ]);
     
     const defaultThemeEntry = configEntries.find(e => e.key === 'OR3_DEFAULT_THEME');
