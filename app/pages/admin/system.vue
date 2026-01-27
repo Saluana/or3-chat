@@ -197,67 +197,12 @@
 </template>
 
 <script setup lang="ts">
+import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
+import type { StatusResponse, ConfigGroup, EnrichedConfigEntry, ProviderAction } from '~/composables/admin/useAdminTypes';
+
 definePageMeta({
     layout: 'admin',
 });
-
-type StatusResponse = {
-    status: {
-        auth: {
-            enabled: boolean;
-            provider: string;
-            details?: Record<string, unknown>;
-            actions?: ProviderAction[];
-        };
-        sync: {
-            enabled: boolean;
-            provider: string;
-            details?: Record<string, unknown>;
-            actions?: ProviderAction[];
-        };
-        storage: {
-            enabled: boolean;
-            provider: string;
-            details?: Record<string, unknown>;
-            actions?: ProviderAction[];
-        };
-        backgroundStreaming: { enabled: boolean; storageProvider: string };
-        admin?: { allowRestart: boolean; allowRebuild: boolean };
-    };
-    warnings: Array<{ level: 'warning' | 'error'; message: string }>;
-    session?: { role?: string };
-};
-
-type ProviderAction = {
-    id: string;
-    label: string;
-    description?: string;
-    danger?: boolean;
-};
-
-type ConfigEntry = { key: string; value: string | null; masked: boolean };
-
-	type EnrichedConfigEntry = {
-	    key: string;
-	    value: string | undefined;
-	    masked: boolean;
-	    label: string;
-	    description: string;
-	    group: string;
-	    order: number;
-	    valueType: 'string' | 'boolean' | 'number';
-	};
-
-type ConfigGroup = 
-    | 'Auth'
-    | 'Sync'
-    | 'Storage'
-    | 'UI & Branding'
-    | 'Features'
-    | 'Limits & Security'
-    | 'Background Processing'
-    | 'Admin'
-    | 'External Services';
 
 const { data: statusData, status: statusFetchStatus } = await useLazyFetch<StatusResponse>(
     '/api/admin/system/status'
@@ -391,7 +336,7 @@ async function restart() {
     if (!confirm('Restart the server now?')) return;
     await $fetch('/api/admin/system/restart', {
         method: 'POST',
-        headers: { 'x-or3-admin-intent': 'admin' },
+        headers: ADMIN_HEADERS,
     });
 }
 
@@ -399,7 +344,7 @@ async function rebuildRestart() {
     if (!confirm('Rebuild and restart the server now?')) return;
     await $fetch('/api/admin/system/rebuild-restart', {
         method: 'POST',
-        headers: { 'x-or3-admin-intent': 'admin' },
+        headers: ADMIN_HEADERS,
     });
 }
 
@@ -413,7 +358,7 @@ async function runProviderAction(action: {
     if (action.danger && !confirm(`Run ${action.label}?`)) return;
     await $fetch('/api/admin/system/provider-action', {
         method: 'POST',
-        headers: { 'x-or3-admin-intent': 'admin' },
+        headers: ADMIN_HEADERS,
         body: { kind: action.kind, actionId: action.id },
     });
 }

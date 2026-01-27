@@ -76,12 +76,13 @@ import {
     useAdminWidgets,
     resolveAdminComponent,
 } from '~/composables/admin/useAdminPlugins';
+import type { StatusResponse } from '~/composables/admin/useAdminTypes';
 
 definePageMeta({
     layout: 'admin',
 });
 
-const { data, status: fetchStatus } = await useLazyFetch('/api/admin/system/status');
+const { data, status: fetchStatus } = await useLazyFetch<StatusResponse>('/api/admin/system/status');
 const pending = computed(() => fetchStatus.value === 'pending');
 const status = computed(() => data.value?.status);
 const warnings = computed(() => data.value?.warnings ?? []);

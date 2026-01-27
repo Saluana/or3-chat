@@ -143,16 +143,12 @@
 </template>
 
 <script setup lang="ts">
+import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
+import type { WorkspaceResponse } from '~/composables/admin/useAdminTypes';
+
 definePageMeta({
     layout: 'admin',
 });
-
-type WorkspaceResponse = {
-    workspace: { id: string; name: string };
-    role: string;
-    members: Array<{ userId: string; email?: string; role: string }>;
-    guestAccessEnabled: boolean;
-};
 
 const { data, refresh, status } = await useLazyFetch<WorkspaceResponse>('/api/admin/workspace');
 
@@ -183,7 +179,7 @@ async function addMember() {
     if (!isOwner.value || !newMemberId.value.trim()) return;
     await $fetch('/api/admin/workspace/members/upsert', {
         method: 'POST',
-        headers: { 'x-or3-admin-intent': 'admin' },
+        headers: ADMIN_HEADERS,
         body: {
             emailOrProviderId: newMemberId.value.trim(),
             role: newMemberRole.value,
@@ -199,7 +195,7 @@ async function updateRole(userId: string) {
     const roleValue = memberRoles[userId];
     await $fetch('/api/admin/workspace/members/set-role', {
         method: 'POST',
-        headers: { 'x-or3-admin-intent': 'admin' },
+        headers: ADMIN_HEADERS,
         body: { userId, role: roleValue },
     });
     await refresh();
@@ -210,7 +206,7 @@ async function removeMember(userId: string) {
     if (!confirm('Remove member from workspace?')) return;
     await $fetch('/api/admin/workspace/members/remove', {
         method: 'POST',
-        headers: { 'x-or3-admin-intent': 'admin' },
+        headers: ADMIN_HEADERS,
         body: { userId },
     });
     await refresh();
@@ -221,7 +217,7 @@ async function toggleGuestAccess() {
     const next = !guestAccessEnabled.value;
     await $fetch('/api/admin/workspace/guest-access/set', {
         method: 'POST',
-        headers: { 'x-or3-admin-intent': 'admin' },
+        headers: ADMIN_HEADERS,
         body: { enabled: next },
     });
     await refresh();
