@@ -146,34 +146,45 @@
                         {{ group }}
                     </h4>
                     <div class="space-y-5">
-                        <div
-                            v-for="entry in getEntriesForGroup(group)"
-                            :key="entry.key"
-                            class="space-y-2"
-                        >
-                            <label class="block">
-                                <div class="flex items-start justify-between mb-1">
-                                    <div class="flex-1">
-                                        <div class="font-medium text-sm">{{ entry.label }}</div>
-                                        <div class="text-xs opacity-60 mt-0.5">{{ entry.description }}</div>
-                                    </div>
-                                    <code class="text-xs opacity-40 font-mono ml-2 mt-0.5">{{ entry.key }}</code>
-                                </div>
-                                <UInput
-                                    v-model="entry.value"
-                                    size="sm"
-                                    :disabled="!isOwner"
-                                    :placeholder="entry.masked ? '******' : ''"
-                                    class="w-full"
-                                >
-                                    <template #trailing v-if="entry.masked">
-                                        <UBadge size="xs" color="neutral" variant="subtle">MASKED</UBadge>
-                                    </template>
-                                </UInput>
-                            </label>
-                        </div>
-                    </div>
-                </div>
+	                        <div
+	                            v-for="entry in getEntriesForGroup(group)"
+	                            :key="entry.key"
+	                            class="space-y-2"
+	                        >
+	                            <label class="block">
+	                                <div class="flex items-start justify-between mb-1">
+	                                    <div class="flex-1">
+	                                        <div class="font-medium text-sm">{{ entry.label }}</div>
+	                                        <div class="text-xs opacity-60 mt-0.5">{{ entry.description }}</div>
+	                                    </div>
+	                                    <code class="text-xs opacity-40 font-mono ml-2 mt-0.5">{{ entry.key }}</code>
+	                                </div>
+	                                <USelectMenu
+	                                    v-if="entry.valueType === 'boolean' && !entry.masked"
+	                                    v-model="entry.value"
+	                                    size="sm"
+	                                    :disabled="!isOwner"
+	                                    :items="booleanItems"
+	                                    :value-key="'value'"
+	                                    class="w-full"
+	                                />
+	                                <UInput
+	                                    v-else
+	                                    v-model="entry.value"
+	                                    size="sm"
+	                                    :disabled="!isOwner"
+	                                    :type="entry.valueType === 'number' ? 'number' : 'text'"
+	                                    :placeholder="entry.masked ? '******' : ''"
+	                                    class="w-full"
+	                                >
+	                                    <template #trailing v-if="entry.masked">
+	                                        <UBadge size="xs" color="neutral" variant="subtle">MASKED</UBadge>
+	                                    </template>
+	                                </UInput>
+	                            </label>
+	                        </div>
+	                    </div>
+	                </div>
 
                 <div class="flex justify-end">
                     <UButton :disabled="!isOwner" @click="saveConfig" color="neutral" variant="solid" icon="i-heroicons-check">
@@ -204,8 +215,12 @@ const pending = computed(() => statusFetchStatus.value === 'pending' || configFe
 const status = computed(() => statusData.value?.status);
 const warnings = computed(() => statusData.value?.warnings ?? []);
 const enrichedEntries = ref<EnrichedConfigEntry[]>([]);
-const role = computed(() => statusData.value?.session?.role);
-const isOwner = computed(() => role.value === 'owner');
+	const role = computed(() => statusData.value?.session?.role);
+	const isOwner = computed(() => role.value === 'owner');
+	const booleanItems: Array<{ label: string; value: string }> = [
+	    { label: 'Enabled', value: 'true' },
+	    { label: 'Disabled', value: 'false' },
+	];
 
 const configGroups: ConfigGroup[] = [
     'Auth',
@@ -219,8 +234,8 @@ const configGroups: ConfigGroup[] = [
     'External Services',
 ];
 
-const providerActions = computed(() => {
-    if (!status.value) return [];
+	const providerActions = computed(() => {
+	    if (!status.value) return [];
     const actions: Array<
         ProviderAction & { kind: 'auth' | 'sync' | 'storage'; provider: string }
     > = [];
@@ -233,21 +248,44 @@ const providerActions = computed(() => {
         }
     }
     return actions;
-});
+	});
 
-watch(
-    () => enrichedConfigData.value?.entries,
-    (next) => {
-        if (next) {
-            enrichedEntries.value = next.map((e) => ({ ...e })).sort((a, b) => {
-                const groupCompare = configGroups.indexOf(a.group as ConfigGroup) - configGroups.indexOf(b.group as ConfigGroup);
-                if (groupCompare !== 0) return groupCompare;
-                return a.order - b.order;
-            });
-        }
-    },
-    { immediate: true }
-);
+	function normalizeUiValue(entry: EnrichedConfigEntry): string | undefined {
+	    if (entry.masked) return entry.value ?? undefined;
+	    if (entry.valueType === 'boolean') return entry.value ?? undefined;
+	    return entry.value ?? '';
+	}
+
+	function normalizeForSave(value: string | undefined, masked: boolean): string | null {
+	    if (masked && value === '******') return '******';
+	    if (value === undefined || value === '') return null;
+	    return value;
+	}
+
+	const originalValues = ref<Record<string, string | undefined>>({});
+
+	watch(
+	    () => enrichedConfigData.value?.entries,
+	    (next) => {
+	        if (next) {
+	            const uiEntries = next.map((e) => {
+	                const entry: EnrichedConfigEntry = { ...e, value: e.value ?? undefined };
+	                entry.value = normalizeUiValue(entry);
+	                return entry;
+	            });
+	            originalValues.value = Object.fromEntries(
+	                uiEntries.map((e) => [e.key, e.value])
+	            );
+
+	            enrichedEntries.value = uiEntries.sort((a, b) => {
+	                const groupCompare = configGroups.indexOf(a.group as ConfigGroup) - configGroups.indexOf(b.group as ConfigGroup);
+	                if (groupCompare !== 0) return groupCompare;
+	                return a.order - b.order;
+	            });
+	        }
+	    },
+	    { immediate: true }
+	);
 
 function getEntriesForGroup(group: ConfigGroup): EnrichedConfigEntry[] {
     return enrichedEntries.value.filter((e) => e.group === group);
@@ -269,13 +307,30 @@ function getGroupColor(group: ConfigGroup): string {
     return GROUP_COLORS[group] || 'bg-[var(--md-outline)]';
 }
 
-async function saveConfig() {
-    await $fetch('/api/admin/system/config/write', {
-        method: 'POST',
-        body: { entries: enrichedEntries.value.map((e) => ({ key: e.key, value: e.value })) },
-        headers: ADMIN_HEADERS,
-    });
-}
+	async function saveConfig() {
+	    const updates = enrichedEntries.value
+	        .map((entry) => {
+	            const prev = originalValues.value[entry.key];
+	            const prevNormalized = normalizeForSave(prev, entry.masked);
+	            const nextNormalized = normalizeForSave(entry.value, entry.masked);
+	            return prevNormalized === nextNormalized
+	                ? null
+	                : { key: entry.key, value: nextNormalized };
+	        })
+	        .filter(Boolean) as Array<{ key: string; value: string | null }>;
+
+	    await $fetch('/api/admin/system/config/write', {
+	        method: 'POST',
+	        body: {
+	            entries: updates,
+	        },
+	        headers: { 'x-or3-admin-intent': 'admin' },
+	    });
+
+	    originalValues.value = Object.fromEntries(
+	        enrichedEntries.value.map((e) => [e.key, e.value])
+	    );
+	}
 
 async function restart() {
     if (!confirm('Restart the server now?')) return;
