@@ -29,24 +29,7 @@ export default defineNuxtPlugin(() => {
 
     const hooks = useHooks();
 
-    // Register Workflow mini app
-
-    // Register the pane app with post type for score tracking
-    const { registerPaneApp } = usePaneApps();
-
-    try {
-        registerPaneApp({
-            id: 'or3-workflows',
-            label: 'Workflows',
-            component: WorkflowPane,
-            icon: 'tabler:binary-tree-2',
-            postType: 'workflow-entry',
-        });
-    } catch (e) {
-        console.error('[snake-game] Failed to register pane app:', e);
-    }
-
-    // Register the sidebar page
+    // Register the sidebar page (always shown when workflows enabled)
     let cleanup: (() => void) | undefined;
     try {
         cleanup = registerSidebarPage({
@@ -58,7 +41,24 @@ export default defineNuxtPlugin(() => {
             usesDefaultHeader: false,
         });
     } catch (e) {
-        console.error('[snake-game] Failed to register sidebar page:', e);
+        console.error('[workflows] Failed to register sidebar page:', e);
+    }
+
+    // Register the pane app ONLY if editor sub-feature is enabled
+    if (or3Config.features.workflows.editor) {
+        const { registerPaneApp } = usePaneApps();
+
+        try {
+            registerPaneApp({
+                id: 'or3-workflows',
+                label: 'Workflows',
+                component: WorkflowPane,
+                icon: 'tabler:binary-tree-2',
+                postType: 'workflow-entry',
+            });
+        } catch (e) {
+            console.error('[workflows] Failed to register pane app:', e);
+        }
     }
 
     const disposePaneCloseHook = hooks.on(
@@ -78,5 +78,5 @@ export default defineNuxtPlugin(() => {
         });
     }
 
-    // Snake Game mini app registered
+    // Workflows plugin registered
 });

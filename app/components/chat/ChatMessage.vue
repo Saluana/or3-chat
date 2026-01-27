@@ -12,7 +12,7 @@
     >
         <!-- Workflow Message Handling -->
         <WorkflowChatMessage
-            v-if="props.message.isWorkflow"
+            v-if="props.message.isWorkflow && workflowsEnabled"
             :message="props.message"
         />
 
@@ -356,6 +356,7 @@ import {
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
 import WorkflowChatMessage from './WorkflowChatMessage.vue';
+import { useOr3Config } from '~/composables/useOr3Config';
 import { parseHashes } from '~/utils/files/attachments';
 import { getFileMeta } from '~/db/files';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
@@ -388,6 +389,10 @@ const emit = defineEmits<{
     (e: 'cancel-edit', id: string): void;
     (e: 'save-edit', id: string): void;
 }>();
+
+// Feature flag check for workflows
+const or3Config = useOr3Config();
+const workflowsEnabled = computed(() => or3Config.features.workflows.enabled);
 
 // Theme overrides for message buttons
 const copyButtonProps = computed(() => {

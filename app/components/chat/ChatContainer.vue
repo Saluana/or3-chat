@@ -130,6 +130,7 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useToast, useHooks } from '#imports';
 import { MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
+import { useOr3Config } from '~/composables/useOr3Config';
 import type {
     ChatInstance,
     ImageAttachment,
@@ -144,6 +145,11 @@ import type { UiWorkflowState } from '~/utils/chat/workflow-types';
 
 const model = ref('openai/gpt-oss-120b');
 const pendingPromptId = ref<string | null>(null);
+
+// Feature flag check for workflows
+const or3Config = useOr3Config();
+const workflowsEnabled = computed(() => or3Config.features.workflows.enabled);
+
 // Resize (Req 3.4): useElementSize -> reactive width
 const containerRoot: Ref<HTMLElement | null> = ref(null);
 const { width: containerWidth } = useElementSize(containerRoot);
@@ -425,6 +431,12 @@ function deriveWorkflowText(wf: UiWorkflowState): string {
 function mergeWorkflowState(msg: UiChatMessage) {
     const wf = workflowStates.get(msg.id);
     if (!wf) return msg;
+    
+    // Don't mark as workflow if feature is disabled
+    if (!workflowsEnabled.value) {
+        return msg;
+    }
+    
     const version = wf.version ?? 0; // Depend on version for reactivity
     const workflowText = deriveWorkflowText(wf);
     const pending = wf.executionState === 'running';

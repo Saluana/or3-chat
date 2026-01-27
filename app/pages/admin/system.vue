@@ -138,6 +138,24 @@
                 <!-- Grouped Configuration -->
                 <div v-if="enrichedEntries.length > 0">
             <h3 class="text-lg font-semibold mb-3">Configuration</h3>
+            
+            <!-- Info banner about feature flag changes -->
+            <div class="mb-4 p-3 rounded bg-[var(--md-sys-color-info-container,#dbeafe)] border border-[var(--md-sys-color-info,#3b82f6)]/20">
+                <div class="flex items-start gap-2">
+                    <div class="text-[var(--md-sys-color-on-info-container,#1e3a8a)] mt-0.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <div class="text-xs font-bold text-[var(--md-sys-color-on-info-container,#1e3a8a)] uppercase mb-1">Info</div>
+                        <div class="text-sm text-[var(--md-sys-color-on-info-container,#1e40af)]">
+                            Changes to feature flags (workflows, documents, etc.) require a page reload to take full effect. Refresh your browser after saving configuration changes.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <div class="space-y-6">
                 <div
                     v-for="group in configGroups"
