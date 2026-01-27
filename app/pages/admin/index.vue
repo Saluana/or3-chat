@@ -16,6 +16,17 @@
             </div>
         </div>
 
+        <!-- Error -->
+        <div v-else-if="errorMessage" class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
+            <div class="text-sm font-semibold">Failed to load admin overview</div>
+            <div class="text-sm opacity-70 mt-1">{{ errorMessage }}</div>
+            <div class="mt-3">
+                <UButton size="xs" icon="i-heroicons-arrow-path" @click="refresh">
+                    Retry
+                </UButton>
+            </div>
+        </div>
+
         <!-- Status Cards Grid -->
         <div v-else-if="status" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
              <div 
@@ -42,7 +53,7 @@
         </div>
 
         <!-- Warnings -->
-        <div v-if="!pending && warnings.length > 0" class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-amber-500/30 bg-amber-500/5">
+        <div v-if="!pending && !errorMessage && warnings.length > 0" class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-amber-500/30 bg-amber-500/5">
             <h3 class="text-sm font-semibold text-amber-500 mb-2">System Warnings</h3>
             <div class="space-y-1">
                 <div
@@ -57,7 +68,7 @@
         </div>
 
         <!-- Overview Widgets -->
-        <div v-if="!pending && overviewWidgets.length > 0">
+        <div v-if="!pending && !errorMessage && overviewWidgets.length > 0">
              <h3 class="text-lg font-semibold mb-4">Dashboard Widgets</h3>
              <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <component
@@ -71,19 +82,24 @@
     </div>
 </template>
 
-<script setup lang="ts">
-import {
-    useAdminWidgets,
-    resolveAdminComponent,
-} from '~/composables/admin/useAdminPlugins';
-import type { StatusResponse } from '~/composables/admin/useAdminTypes';
+	<script setup lang="ts">
+        import { formatAdminError } from '~/composables/admin/formatAdminError';
+		import {
+		    useAdminWidgets,
+		    resolveAdminComponent,
+		} from '~/composables/admin/useAdminPlugins';
+		import { useAdminSystemStatus } from '~/composables/admin/useAdminData';
 
-definePageMeta({
-    layout: 'admin',
-});
+	definePageMeta({
+	    layout: 'admin',
+	});
 
-const { data, status: fetchStatus } = await useLazyFetch<StatusResponse>('/api/admin/system/status');
-const pending = computed(() => fetchStatus.value === 'pending');
+const { data, error, refresh, status: fetchStatus } = useAdminSystemStatus();
+const errorMessage = computed(() =>
+    error.value ? formatAdminError(error.value) : null
+);
+const hasStatus = computed(() => Boolean(data.value?.status));
+const pending = computed(() => !errorMessage.value && !hasStatus.value);
 const status = computed(() => data.value?.status);
 const warnings = computed(() => data.value?.warnings ?? []);
 const overviewWidgets = useAdminWidgets('overview');

@@ -63,4 +63,24 @@ describe('config manager', () => {
             OR3_SITE_NAME: 'New Name',
         });
     });
+
+    it('treats null updates as deletions during validation', async () => {
+        vi.mocked(readEnvFile).mockResolvedValue({
+            lines: [],
+            map: {
+                OR3_MAX_FILE_SIZE_BYTES: '123',
+            },
+        });
+
+        await writeConfigEntries([{ key: 'OR3_MAX_FILE_SIZE_BYTES', value: null }]);
+
+        const validationEnv = vi.mocked(buildOr3ConfigFromEnv).mock.calls[0]?.[0] as Record<
+            string,
+            unknown
+        >;
+        expect(validationEnv.OR3_MAX_FILE_SIZE_BYTES).toBeUndefined();
+        expect(writeEnvFile).toHaveBeenCalledWith({
+            OR3_MAX_FILE_SIZE_BYTES: null,
+        });
+    });
 });

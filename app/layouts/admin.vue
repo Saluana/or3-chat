@@ -57,9 +57,23 @@
 
 <script setup lang="ts">
 import { useAdminPages } from '~/composables/admin/useAdminPlugins';
+import {
+    useAdminExtensions,
+    useAdminSystemConfigEnriched,
+    useAdminSystemStatus,
+    useAdminWorkspace,
+} from '~/composables/admin/useAdminData';
 
 const route = useRoute();
 const adminPages = useAdminPages();
+
+// Warm common admin data on client to make page switches feel instant.
+if (import.meta.client) {
+    useAdminSystemStatus();
+    useAdminWorkspace();
+    useAdminExtensions();
+    useAdminSystemConfigEnriched();
+}
 
 const navLinks = computed(() => {
     const base = [

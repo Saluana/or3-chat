@@ -7,12 +7,15 @@
             </p>
         </div>
 
-        <div v-if="pending" class="grid grid-cols-1 md:grid-cols-2 gap-6 animate-pulse">
-            <div class="h-64 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
-            <div class="h-64 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
-        </div>
+        <ClientOnly>
+            <!-- Skeleton: show when pending OR when no data yet -->
+            <div v-if="pending || !status" class="grid grid-cols-1 md:grid-cols-2 gap-6 animate-pulse">
+                <div class="h-64 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
+                <div class="h-64 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
+            </div>
 
-        <div v-else-if="status" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <template v-else>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- Status Card -->
              <div class="p-5 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
                 <h3 class="text-lg font-medium mb-4">Status</h3>
@@ -101,8 +104,8 @@
             </div>
         </div>
 
-        <div v-if="!pending && providerActions.length > 0">
-            <h3 class="text-lg font-semibold mb-3">Provider Actions</h3>
+                <div v-if="providerActions.length > 0">
+                    <h3 class="text-lg font-semibold mb-3">Provider Actions</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div
                     v-for="action in providerActions"
@@ -132,8 +135,8 @@
             </div>
         </div>
 
-        <!-- Grouped Configuration -->
-        <div v-if="!pending && enrichedEntries.length > 0">
+                <!-- Grouped Configuration -->
+                <div v-if="enrichedEntries.length > 0">
             <h3 class="text-lg font-semibold mb-3">Configuration</h3>
             <div class="space-y-6">
                 <div
@@ -193,33 +196,48 @@
                 </div>
             </div>
         </div>
+            </template>
+
+            <!-- SSR fallback skeleton -->
+            <template #fallback>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 animate-pulse">
+                    <div class="h-64 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
+                    <div class="h-64 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
+                </div>
+            </template>
+        </ClientOnly>
     </div>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
-import type { StatusResponse, ConfigGroup, EnrichedConfigEntry, ProviderAction } from '~/composables/admin/useAdminTypes';
+import { useAdminSystemConfigEnriched, useAdminSystemStatus } from '~/composables/admin/useAdminData';
+import type { ConfigGroup, EnrichedConfigEntry, ProviderAction } from '~/composables/admin/useAdminTypes';
 
 definePageMeta({
     layout: 'admin',
 });
 
-const { data: statusData, status: statusFetchStatus } = await useLazyFetch<StatusResponse>(
-    '/api/admin/system/status'
-);
-const { data: enrichedConfigData, status: configFetchStatus } = await useLazyFetch<{ entries: EnrichedConfigEntry[] }>(
-    '/api/admin/system/config/enriched'
-);
+const { data: statusData, status: statusFetchStatus } = useAdminSystemStatus();
+const { data: enrichedConfigData, status: configFetchStatus } = useAdminSystemConfigEnriched();
 
-const pending = computed(() => statusFetchStatus.value === 'pending' || configFetchStatus.value === 'pending');
+// Use fetch status for pending state to avoid hydration mismatch.
+// With lazy: true, data may differ between SSR and client.
+const pending = computed(
+    () => statusFetchStatus.value === 'pending' || configFetchStatus.value === 'pending'
+);
 const status = computed(() => statusData.value?.status);
-const warnings = computed(() => statusData.value?.warnings ?? []);
-const enrichedEntries = ref<EnrichedConfigEntry[]>([]);
-	const role = computed(() => statusData.value?.session?.role);
-	const isOwner = computed(() => role.value === 'owner');
-	const booleanItems: Array<{ label: string; value: string }> = [
-	    { label: 'Enabled', value: 'true' },
-	    { label: 'Disabled', value: 'false' },
+	const warnings = computed(() => statusData.value?.warnings ?? []);
+	type EnrichedConfigEntryUi = Omit<EnrichedConfigEntry, 'value'> & {
+	    value: string | undefined;
+	};
+	const enrichedEntries = ref<EnrichedConfigEntryUi[]>([]);
+		const role = computed(() => statusData.value?.session?.role);
+		const isOwner = computed(() => role.value === 'owner');
+		const booleanItems: Array<{ label: string; value: string }> = [
+		    { label: 'Enabled', value: 'true' },
+		    { label: 'Disabled', value: 'false' },
 	];
 
 const configGroups: ConfigGroup[] = [
@@ -250,11 +268,11 @@ const configGroups: ConfigGroup[] = [
     return actions;
 	});
 
-	function normalizeUiValue(entry: EnrichedConfigEntry): string | undefined {
-	    if (entry.masked) return entry.value ?? undefined;
-	    if (entry.valueType === 'boolean') return entry.value ?? undefined;
-	    return entry.value ?? '';
-	}
+		function normalizeUiValue(entry: EnrichedConfigEntry): string | undefined {
+		    if (entry.masked) return entry.value ?? undefined;
+		    if (entry.valueType === 'boolean') return entry.value ?? undefined;
+		    return entry.value ?? '';
+		}
 
 	function normalizeForSave(value: string | undefined, masked: boolean): string | null {
 	    if (masked && value === '******') return '******';
@@ -264,18 +282,17 @@ const configGroups: ConfigGroup[] = [
 
 	const originalValues = ref<Record<string, string | undefined>>({});
 
-	watch(
-	    () => enrichedConfigData.value?.entries,
-	    (next) => {
-	        if (next) {
-	            const uiEntries = next.map((e) => {
-	                const entry: EnrichedConfigEntry = { ...e, value: e.value ?? undefined };
-	                entry.value = normalizeUiValue(entry);
-	                return entry;
-	            });
-	            originalValues.value = Object.fromEntries(
-	                uiEntries.map((e) => [e.key, e.value])
-	            );
+		watch(
+		    () => enrichedConfigData.value?.entries,
+		    (next) => {
+		        if (next) {
+		            const uiEntries: EnrichedConfigEntryUi[] = next.map((e) => ({
+		                ...e,
+		                value: normalizeUiValue(e),
+		            }));
+		            originalValues.value = Object.fromEntries(
+		                uiEntries.map((e) => [e.key, e.value])
+		            );
 
 	            enrichedEntries.value = uiEntries.sort((a, b) => {
 	                const groupCompare = configGroups.indexOf(a.group as ConfigGroup) - configGroups.indexOf(b.group as ConfigGroup);
@@ -284,12 +301,12 @@ const configGroups: ConfigGroup[] = [
 	            });
 	        }
 	    },
-	    { immediate: true }
-	);
+		    { immediate: true }
+		);
 
-function getEntriesForGroup(group: ConfigGroup): EnrichedConfigEntry[] {
-    return enrichedEntries.value.filter((e) => e.group === group);
-}
+	function getEntriesForGroup(group: ConfigGroup): EnrichedConfigEntryUi[] {
+	    return enrichedEntries.value.filter((e) => e.group === group);
+	}
 
 const GROUP_COLORS: Record<ConfigGroup, string> = {
     'Auth': 'bg-[var(--md-sys-color-primary)]',

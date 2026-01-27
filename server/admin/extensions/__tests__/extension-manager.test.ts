@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { ensureExtensionsDirs, EXTENSIONS_BASE_DIR } from '../paths';
 import { listInstalledExtensions, invalidateExtensionsCache } from '../extension-manager';
 
-const pluginDir = join(EXTENSIONS_BASE_DIR, 'plugins', 'test-plugin');
+const PLUGIN_ID = 'test-plugin-manager';
+const pluginDir = join(EXTENSIONS_BASE_DIR, 'plugins', PLUGIN_ID);
 const manifestPath = join(pluginDir, 'or3.manifest.json');
 
 async function writeManifest() {
@@ -15,7 +16,7 @@ async function writeManifest() {
         manifestPath,
         JSON.stringify({
             kind: 'plugin',
-            id: 'test-plugin',
+            id: PLUGIN_ID,
             name: 'Test Plugin',
             version: '0.0.1',
             capabilities: [],
@@ -34,16 +35,16 @@ async function cleanup() {
 	        invalidateExtensionsCache();
 	    });
 
-	    it('reflects changes after cache invalidation', async () => {
-	        // Ensure we don't inherit cache from other tests in the same worker
-	        invalidateExtensionsCache();
-	        await writeManifest();
-	        const first = await listInstalledExtensions();
-	        expect(first.some((item) => item.id === 'test-plugin')).toBe(true);
+    it('reflects changes after cache invalidation', async () => {
+        // Ensure we don't inherit cache from other tests in the same worker
+        invalidateExtensionsCache();
+        await writeManifest();
+        const first = await listInstalledExtensions();
+        expect(first.some((item) => item.id === PLUGIN_ID)).toBe(true);
 
         await cleanup();
         invalidateExtensionsCache();
         const second = await listInstalledExtensions();
-        expect(second.some((item) => item.id === 'test-plugin')).toBe(false);
+        expect(second.some((item) => item.id === PLUGIN_ID)).toBe(false);
     });
 });

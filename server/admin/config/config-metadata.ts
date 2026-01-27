@@ -332,7 +332,7 @@ export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
     // Admin
     'OR3_ADMIN_BASE_PATH': {
         label: 'Admin Base Path',
-        description: 'Base URL path for admin panel (e.g., /admin)',
+        description: 'Alias URL path for admin panel (redirects to /admin)',
         group: 'Admin',
         order: 1,
     },

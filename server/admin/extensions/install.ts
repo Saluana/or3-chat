@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
+import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, join, normalize, resolve, extname, sep } from 'node:path';
-import { unzipSync } from 'fflate';
+import { unzip, Unzip, UnzipInflate } from 'fflate';
 import type { ExtensionKind, Or3ExtensionManifest } from './types';
 import { Or3ExtensionManifestSchema } from './types';
 import { ensureExtensionsDirs, EXTENSIONS_BASE_DIR, getKindDir } from './paths';
@@ -60,33 +61,74 @@ function normalizeEntryKey(key: string): string {
     return normalized;
 }
 
-function normalizeEntries(
-    entries: Record<string, Uint8Array>
-): Record<string, Uint8Array> {
-    const normalized: Record<string, Uint8Array> = {};
-    for (const [key, value] of Object.entries(entries)) {
-        const normalizedKey = normalizeEntryKey(key);
-        if (!normalizedKey) continue;
-        if (normalized[normalizedKey]) {
-            throw new Error('Duplicate archive entry');
-        }
-        normalized[normalizedKey] = value;
-    }
-    return normalized;
-}
-
-function findManifestPath(entries: Record<string, Uint8Array>): string | null {
-    const keys = Object.keys(entries);
-    const match = keys.find(
-        (key) => key.split('/').pop() === 'or3.manifest.json'
-    );
-    return match || null;
-}
-
 function computePrefix(manifestPath: string): string {
     const dir = dirname(manifestPath);
     if (dir === '.' || dir === '/') return '';
     return dir.endsWith('/') ? dir : `${dir}/`;
+}
+
+async function extractManifestFromZip(buffer: Buffer): Promise<{
+    manifest: Or3ExtensionManifest;
+    manifestPath: string;
+    prefix: string;
+}> {
+    const zipData = new Uint8Array(buffer);
+    const extracted = await new Promise<Record<string, Uint8Array>>((resolvePromise, rejectPromise) => {
+        unzip(
+            zipData,
+            {
+                filter: (file) =>
+                    file.name.replace(/\\/g, '/').split('/').pop() ===
+                    'or3.manifest.json',
+            },
+            (err, data) => {
+                if (err) {
+                    rejectPromise(err);
+                    return;
+                }
+                resolvePromise(data);
+            }
+        );
+    });
+
+    const keys = Object.keys(extracted);
+    if (keys.length === 0) {
+        throw new Error('Missing or3.manifest.json');
+    }
+    if (keys.length > 1) {
+        throw new Error('Duplicate archive entry');
+    }
+
+    const rawPath = keys[0]!;
+    const manifestRaw = extracted[rawPath];
+    if (!manifestRaw) {
+        throw new Error('Missing manifest data');
+    }
+
+    const manifestPath = normalizeEntryKey(rawPath);
+    ensureSafePath(manifestPath);
+
+    let manifestJson: unknown;
+    try {
+        manifestJson = JSON.parse(
+            Buffer.from(manifestRaw).toString('utf8')
+        ) as unknown;
+    } catch {
+        throw new Error('Invalid manifest');
+    }
+
+    const parsed = Or3ExtensionManifestSchema.safeParse(manifestJson);
+    if (!parsed.success) {
+        throw new Error('Invalid manifest');
+    }
+
+    const prefix = computePrefix(manifestPath);
+
+    return {
+        manifest: parsed.data,
+        manifestPath,
+        prefix,
+    };
 }
 
 export async function installExtensionFromZip(
@@ -100,26 +142,7 @@ export async function installExtensionFromZip(
         throw new Error('Zip exceeds maximum allowed size');
     }
 
-    const rawEntries = unzipSync(new Uint8Array(buffer));
-    const entries = normalizeEntries(rawEntries);
-    const manifestPath = findManifestPath(entries);
-    if (!manifestPath) {
-        throw new Error('Missing or3.manifest.json');
-    }
-
-    const manifestRaw = entries[manifestPath];
-    if (!manifestRaw) {
-        throw new Error('Missing manifest data');
-    }
-
-    const manifestJson = JSON.parse(Buffer.from(manifestRaw).toString('utf8')) as unknown;
-    const parsed = Or3ExtensionManifestSchema.safeParse(manifestJson);
-    if (!parsed.success) {
-        throw new Error('Invalid manifest');
-    }
-
-    const manifest = parsed.data;
-    const prefix = computePrefix(manifestPath);
+    const { manifest, prefix } = await extractManifestFromZip(buffer);
 
     const kindDir = getKindDir(manifest.kind);
     const targetDir = join(EXTENSIONS_BASE_DIR, kindDir, manifest.id);
@@ -141,41 +164,105 @@ export async function installExtensionFromZip(
     try {
         let fileCount = 0;
         let totalBytes = 0;
+        const seenPaths = new Set<string>();
+        let extractionError: Error | null = null;
 
-        for (const [pathKey, data] of Object.entries(entries)) {
-            if (pathKey.endsWith('/')) continue;
-            if (prefix && !pathKey.startsWith(prefix)) continue;
-            const relative = prefix ? pathKey.slice(prefix.length) : pathKey;
+        const shouldWrite = (entryKey: string): string | null => {
+            if (entryKey.endsWith('/')) return null;
+            if (prefix && !entryKey.startsWith(prefix)) return null;
+            const relative = prefix ? entryKey.slice(prefix.length) : entryKey;
             ensureSafePath(relative);
-            const normalized = normalize(relative);
-            ensureSafePath(normalized);
-            const extension = extname(normalized).toLowerCase();
+            const normalizedRel = normalize(relative);
+            ensureSafePath(normalizedRel);
+            if (seenPaths.has(normalizedRel)) {
+                throw new Error('Duplicate archive entry');
+            }
+            const extension = extname(normalizedRel).toLowerCase();
             if (extension) {
                 if (!limits.allowedExtensions.includes(extension)) {
                     throw new Error(`Extension type not allowed: ${extension}`);
                 }
             } else {
-                const base = normalized.split('/').pop()?.toLowerCase() ?? '';
+                const base = normalizedRel.split('/').pop()?.toLowerCase() ?? '';
                 const allowedNames = ['readme', 'license', 'notice', 'changelog'];
                 if (!allowedNames.includes(base)) {
                     throw new Error('Extension type not allowed');
                 }
             }
+            seenPaths.add(normalizedRel);
+            return normalizedRel;
+        };
+
+        const unzipper = new Unzip((file) => {
+            if (!file || typeof file.name !== 'string') return;
+
+            const normalizedKey = normalizeEntryKey(file.name);
+
+            const writeRel =
+                extractionError === null ? shouldWrite(normalizedKey) : null;
+
+            // Always start files with data to avoid buffering in memory.
+            // For files outside the install prefix (or after an error), discard output.
+            if (!writeRel) {
+                file.ondata = (err) => {
+                    if (extractionError) return;
+                    if (err) {
+                        extractionError =
+                            err instanceof Error
+                                ? err
+                                : new Error(String(err));
+                    }
+                };
+                file.start();
+                return;
+            }
+
             fileCount += 1;
-            totalBytes += data.byteLength;
             if (fileCount > limits.maxFiles) {
-                throw new Error('Too many files in extension');
+                extractionError = new Error('Too many files in extension');
             }
-            if (totalBytes > limits.maxTotalBytes) {
-                throw new Error('Extension exceeds unpacked size limit');
-            }
-            const filePath = join(tmpDir, normalized);
-            const resolvedPath = resolve(tmpDir, normalized);
+
+            const filePath = join(tmpDir, writeRel);
+            const resolvedPath = resolve(tmpDir, writeRel);
             if (!resolvedPath.startsWith(tmpDir + sep)) {
-                throw new Error('Invalid archive path');
+                extractionError = new Error('Invalid archive path');
             }
-            await fs.mkdir(dirname(filePath), { recursive: true });
-            await fs.writeFile(filePath, Buffer.from(data));
+
+            mkdirSync(dirname(filePath), { recursive: true });
+
+            file.ondata = (err, data, final) => {
+                if (extractionError) return;
+                if (err) {
+                    extractionError =
+                        err instanceof Error ? err : new Error(String(err));
+                    return;
+                }
+                if (data?.length) {
+                    if (totalBytes + data.length > limits.maxTotalBytes) {
+                        extractionError = new Error(
+                            'Extension exceeds unpacked size limit'
+                        );
+                        return;
+                    }
+                    totalBytes += data.length;
+                    appendFileSync(filePath, Buffer.from(data));
+                }
+                if (final) return;
+            };
+
+            file.start();
+        });
+        unzipper.register(UnzipInflate);
+
+        try {
+            unzipper.push(new Uint8Array(buffer), true);
+        } catch (error) {
+            extractionError =
+                error instanceof Error ? error : new Error(String(error));
+        }
+
+        if (extractionError) {
+            throw extractionError;
         }
 
         const finalManifestPath = join(tmpDir, 'or3.manifest.json');

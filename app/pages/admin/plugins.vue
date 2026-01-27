@@ -112,24 +112,17 @@
 
 <script setup lang="ts">
 import { installExtension, uninstallExtension, useFileInput, ADMIN_HEADERS, type ExtensionItem } from '~/composables/admin/useAdminExtensions';
+import { useAdminExtensions, useAdminWorkspace } from '~/composables/admin/useAdminData';
 
 definePageMeta({
     layout: 'admin',
 });
 
 // 1. Fetch Extensions
-const { data, status, refresh: refreshNuxtData } = await useLazyFetch<{ items: ExtensionItem[] }>(
-    '/api/admin/extensions'
-);
+const { data, status, refresh: refreshNuxtData } = useAdminExtensions();
 
 // 2. Fetch Workspace (for role and enabled plugins)
-const { data: workspaceData, refresh: refreshWorkspace } = await useLazyFetch<{
-    workspace: { id: string; name: string };
-    role: string;
-    members: Array<{ userId: string; email?: string; role: string }>;
-    enabledPlugins: string[];
-    guestAccessEnabled: boolean;
-}>('/api/admin/workspace');
+const { data: workspaceData, refresh: refreshWorkspace } = useAdminWorkspace();
 
 // Computed & State
 const pending = computed(() => status.value === 'pending');

@@ -70,12 +70,19 @@ export async function resolveSessionContext(
     // Map provider session to internal user/workspace via Convex
     try {
         const convex = getConvexClient();
-        const workspaceInfo = await convex.mutation(api.workspaces.ensure, {
+        const resolved = await convex.query(api.workspaces.resolveSession, {
             provider: providerSession.provider,
             provider_user_id: providerSession.user.id,
-            email: providerSession.user.email,
-            name: providerSession.user.displayName,
         });
+
+        const workspaceInfo =
+            resolved ??
+            (await convex.mutation(api.workspaces.ensure, {
+                provider: providerSession.provider,
+                provider_user_id: providerSession.user.id,
+                email: providerSession.user.email,
+                name: providerSession.user.displayName,
+            }));
 
         const sessionContext: SessionContext = {
             authenticated: true,

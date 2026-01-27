@@ -40,8 +40,9 @@ export type ConfigEntry = {
 export type EnrichedConfigEntry = ConfigEntry & {
     label: string;
     description: string;
-    group: string;
+    group: ConfigGroup;
     order: number;
+    valueType: 'string' | 'boolean' | 'number';
 };
 
 export type ConfigGroup =

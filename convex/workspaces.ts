@@ -392,3 +392,71 @@ export const ensure = mutation({
     },
 });
 
+/**
+ * Resolve an existing user/workspace session without mutating data.
+ * Returns null when the user or workspace cannot be found.
+ */
+export const resolveSession = query({
+    args: {
+        provider: v.string(),
+        provider_user_id: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const authAccount = await ctx.db
+            .query('auth_accounts')
+            .withIndex('by_provider', (q) =>
+                q.eq('provider', args.provider).eq('provider_user_id', args.provider_user_id)
+            )
+            .first();
+
+        if (!authAccount) return null;
+
+        const userId = authAccount.user_id;
+        const user = await ctx.db.get(userId);
+
+        let workspaceId = user?.active_workspace_id ?? undefined;
+
+        if (workspaceId) {
+            const activeWorkspaceId = workspaceId as Id<'workspaces'>;
+            const activeMembership = await ctx.db
+                .query('workspace_members')
+                .withIndex('by_workspace_user', (q) =>
+                    q.eq('workspace_id', activeWorkspaceId).eq('user_id', userId)
+                )
+                .first();
+            if (!activeMembership) {
+                workspaceId = undefined;
+            }
+        }
+
+        if (!workspaceId) {
+            const firstMembership = await ctx.db
+                .query('workspace_members')
+                .withIndex('by_user', (q) => q.eq('user_id', userId))
+                .order('asc')
+                .first();
+            workspaceId = firstMembership?.workspace_id;
+        }
+
+        if (!workspaceId) return null;
+
+        const workspace = await ctx.db.get(workspaceId);
+        if (!workspace) return null;
+
+        const membership = await ctx.db
+            .query('workspace_members')
+            .withIndex('by_workspace_user', (q) =>
+                q.eq('workspace_id', workspaceId).eq('user_id', userId)
+            )
+            .first();
+
+        if (!membership) return null;
+
+        return {
+            id: workspaceId,
+            name: workspace.name,
+            description: workspace.description ?? null,
+            role: membership.role,
+        };
+    },
+});

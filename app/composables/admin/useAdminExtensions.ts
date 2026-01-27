@@ -3,6 +3,8 @@
  * Consolidates common patterns from plugins.vue and themes.vue.
  */
 
+import { ref } from 'vue';
+
 /**
  * Standard admin intent header for admin API calls.
  */

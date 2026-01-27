@@ -125,7 +125,14 @@ export async function writeConfigEntries(
         updateMap[update.key] = update.value;
     }
 
-    const nextEnv = { ...map, ...updateMap } as Record<string, string | undefined>;
+    const nextEnv: Record<string, string | undefined> = { ...map };
+    for (const [key, value] of Object.entries(updateMap)) {
+        if (value === null) {
+            delete nextEnv[key];
+        } else {
+            nextEnv[key] = value;
+        }
+    }
 
     buildOr3ConfigFromEnv(nextEnv);
     buildOr3CloudConfigFromEnv(nextEnv);

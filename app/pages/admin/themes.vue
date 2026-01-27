@@ -80,16 +80,15 @@
 
 <script setup lang="ts">
 import { installExtension, uninstallExtension, useFileInput, ADMIN_HEADERS, type ExtensionItem } from '~/composables/admin/useAdminExtensions';
+import { useAdminExtensions, useAdminSystemConfig, useAdminWorkspace } from '~/composables/admin/useAdminData';
 
 definePageMeta({
     layout: 'admin',
 });
 
-const { data, status: extStatus, refresh: refreshExtensions } = await useLazyFetch<{ items: ExtensionItem[] }>('/api/admin/extensions');
-const { data: workspaceData, status: workspaceStatus, refresh: refreshWorkspace } = await useLazyFetch<{ role: string }>('/api/admin/workspace');
-const { data: configData, status: configStatus, refresh: refreshConfig } = await useLazyFetch<{ entries: Array<{ key: string; value: string | null }> }>(
-    '/api/admin/system/config'
-);
+const { data, status: extStatus, refresh: refreshExtensions } = useAdminExtensions();
+const { data: workspaceData, status: workspaceStatus, refresh: refreshWorkspace } = useAdminWorkspace();
+const { data: configData, status: configStatus, refresh: refreshConfig } = useAdminSystemConfig();
 
 const pending = computed(() => extStatus.value === 'pending' || workspaceStatus.value === 'pending' || configStatus.value === 'pending');
 

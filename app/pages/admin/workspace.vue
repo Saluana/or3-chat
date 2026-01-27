@@ -12,6 +12,16 @@
             <div class="lg:col-span-2 h-96 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
         </div>
 
+        <div v-else-if="errorMessage" class="p-5 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
+            <div class="text-sm font-semibold">Failed to load workspace</div>
+            <div class="text-sm opacity-70 mt-1">{{ errorMessage }}</div>
+            <div class="mt-3">
+                <UButton size="xs" icon="i-heroicons-arrow-path" @click="refresh">
+                    Retry
+                </UButton>
+            </div>
+        </div>
+
         <div v-else-if="workspace" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
              <!-- Info Card -->
             <div class="lg:col-span-1 p-5 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] h-fit">
@@ -143,16 +153,21 @@
 </template>
 
 <script setup lang="ts">
+import { formatAdminError } from '~/composables/admin/formatAdminError';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
-import type { WorkspaceResponse } from '~/composables/admin/useAdminTypes';
+import { useAdminWorkspace } from '~/composables/admin/useAdminData';
 
 definePageMeta({
     layout: 'admin',
 });
 
-const { data, refresh, status } = await useLazyFetch<WorkspaceResponse>('/api/admin/workspace');
+const { data, error, refresh, status } = useAdminWorkspace();
 
-const pending = computed(() => status.value === 'pending');
+const errorMessage = computed(() =>
+    error.value ? formatAdminError(error.value) : null
+);
+const hasWorkspace = computed(() => Boolean(data.value?.workspace?.id));
+const pending = computed(() => !errorMessage.value && !hasWorkspace.value);
 const workspace = computed(() => data.value?.workspace);
 const role = computed(() => data.value?.role);
 const members = computed(() => data.value?.members ?? []);

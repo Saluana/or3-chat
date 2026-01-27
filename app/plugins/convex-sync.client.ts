@@ -162,6 +162,27 @@ export default defineNuxtPlugin(async () => {
     if (import.meta.server) return;
 
     const runtimeConfig = useRuntimeConfig();
+    // Admin pages are currently mounted at `/admin/*` (canonical).
+    // `admin.basePath` is treated as an alias that redirects to `/admin/*`.
+    const defaultAdminBasePath = '/admin';
+    const adminBasePath = runtimeConfig.public.admin?.basePath || defaultAdminBasePath;
+
+    function isPrefix(path: string, base: string): boolean {
+        if (base === '/') return true;
+        if (path === base) return true;
+        return path.startsWith(`${base}/`);
+    }
+
+    function isAdminPath(path: string): boolean {
+        return (
+            isPrefix(path, defaultAdminBasePath) || isPrefix(path, adminBasePath)
+        );
+    }
+
+    function getCurrentPath(): string {
+        if (typeof window === 'undefined') return '/';
+        return window.location.pathname || '/';
+    }
 
     // Only run when SSR auth and sync are enabled
     if (
@@ -195,31 +216,62 @@ export default defineNuxtPlugin(async () => {
 
     // Watch for session changes
     const { data: sessionData } = useSessionContext();
+    const nuxtApp = useNuxtApp();
+    const router = useRouter();
+
+    let currentPath = getCurrentPath();
+
+    function updateSyncForRouteAndSession(session: unknown, path: string): void {
+        const isAdmin = isAdminPath(path);
+        const isAuthenticated =
+            typeof session === 'object' &&
+            session !== null &&
+            (session as { authenticated?: unknown }).authenticated === true;
+        const workspaceId = isAuthenticated
+            ? ((session as { workspace?: { id?: string } }).workspace?.id ?? null)
+            : null;
+
+        if (isAdmin) {
+            // Admin routes shouldn't run the user sync engine (heavy + irrelevant).
+            setActiveWorkspaceDb(null);
+            if (authRetryTimeout) {
+                clearTimeout(authRetryTimeout);
+                authRetryTimeout = null;
+            }
+            void stopSyncEngine().catch((error) => {
+                console.error('[convex-sync] Failed to stop sync engine:', error);
+            });
+            return;
+        }
+
+        setActiveWorkspaceDb(workspaceId);
+        if (workspaceId) {
+            void startSyncEngine(workspaceId).catch((error) => {
+                console.error('[convex-sync] Failed to start sync engine:', error);
+            });
+        } else {
+            if (authRetryTimeout) {
+                clearTimeout(authRetryTimeout);
+                authRetryTimeout = null;
+            }
+            void stopSyncEngine().catch((error) => {
+                console.error('[convex-sync] Failed to stop sync engine:', error);
+            });
+        }
+    }
+
+    const removeAfterEach = router.afterEach((to) => {
+        currentPath = to.path;
+        updateSyncForRouteAndSession(sessionData.value?.session, currentPath);
+    });
+
     watch(
         () => sessionData.value?.session,
-        (session) => {
-            const workspaceId = session?.authenticated ? session.workspace?.id ?? null : null;
-            setActiveWorkspaceDb(workspaceId);
-            if (workspaceId) {
-                void startSyncEngine(workspaceId).catch((error) => {
-                    console.error('[convex-sync] Failed to start sync engine:', error);
-                });
-            } else {
-                if (authRetryTimeout) {
-                    clearTimeout(authRetryTimeout);
-                    authRetryTimeout = null;
-                }
-                void stopSyncEngine().catch((error) => {
-                    console.error('[convex-sync] Failed to stop sync engine:', error);
-                });
-            }
-        },
+        (session) => updateSyncForRouteAndSession(session, currentPath),
         { immediate: true }
     );
 
     // Expose sync control functions for advanced callers
-    const nuxtApp = useNuxtApp();
-
     // Expose sync control functions
     nuxtApp.provide('syncEngine', {
         start: startSyncEngine,
@@ -230,6 +282,7 @@ export default defineNuxtPlugin(async () => {
     // Handle HMR cleanup
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
+            removeAfterEach();
             stopSyncEngine();
         });
     }
