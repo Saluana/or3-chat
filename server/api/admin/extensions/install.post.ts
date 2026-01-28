@@ -13,6 +13,7 @@ import {
     resolveExtensionInstallLimits,
 } from '../../../admin/extensions/install';
 import { invalidateExtensionsCache } from '../../../admin/extensions/extension-manager';
+import { checkRateLimit } from '../../../utils/rate-limit';
 
 const BodySchema = z.object({
     zipBase64: z.string().min(1),
@@ -41,6 +42,21 @@ async function readZipPayload(event: H3Event) {
 
 export default defineEventHandler(async (event) => {
     await requireAdminApi(event, { ownerOnly: true, mutation: true });
+
+    // Rate limit: 5 extension installs per hour per user
+    const clientId = getRequestHeader(event, 'x-forwarded-for') 
+        || event.node.req.socket.remoteAddress 
+        || 'unknown';
+    const allowed = await checkRateLimit(`extension:install:${clientId}`, {
+        max: 5,
+        window: 3600,
+    });
+    if (!allowed) {
+        throw createError({ 
+            statusCode: 429, 
+            statusMessage: 'Rate limit exceeded. Maximum 5 extension installs per hour.' 
+        });
+    }
 
     const payload = await readZipPayload(event);
     if (!payload) {

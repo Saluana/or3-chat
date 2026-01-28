@@ -21,7 +21,7 @@
             <div class="text-sm font-semibold">Failed to load admin overview</div>
             <div class="text-sm opacity-70 mt-1">{{ errorMessage }}</div>
             <div class="mt-3">
-                <UButton size="xs" icon="i-heroicons-arrow-path" @click="refresh">
+                <UButton size="xs" icon="i-heroicons-arrow-path" @click="() => refresh()">
                     Retry
                 </UButton>
             </div>

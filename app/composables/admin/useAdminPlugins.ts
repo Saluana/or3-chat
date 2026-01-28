@@ -29,12 +29,21 @@ export interface AdminPluginApi {
     registerAdminWidget: (def: AdminWidgetDef) => void;
 }
 
-const state = reactive({
+export const state = reactive({
     pages: [] as AdminPageDef[],
     widgets: [] as AdminWidgetDef[],
 });
 
+const MAX_CACHE_SIZE = 50;
 const componentCache = new Map<string, ReturnType<typeof defineAsyncComponent>>();
+
+function setComponentCache(id: string, component: ReturnType<typeof defineAsyncComponent>) {
+    if (componentCache.size >= MAX_CACHE_SIZE) {
+        const firstKey = componentCache.keys().next().value;
+        if (firstKey) componentCache.delete(firstKey);
+    }
+    componentCache.set(id, component);
+}
 
 function normalizePage(def: AdminPageDef): AdminPageDef {
     return {
@@ -86,7 +95,7 @@ export function resolveAdminComponent(def: { id: string; component: AdminCompone
             const mod = await loader();
             return (mod as { default?: Component }).default ?? mod;
         });
-        componentCache.set(def.id, asyncComponent);
+        setComponentCache(def.id, asyncComponent);
         return asyncComponent;
     }
 

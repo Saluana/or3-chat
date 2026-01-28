@@ -184,7 +184,7 @@
 	                                </div>
 	                                <USelectMenu
 	                                    v-if="entry.valueType === 'boolean' && !entry.masked"
-	                                    v-model="entry.value"
+	                                    :model-value="entry.value ?? undefined"\n                                    @update:model-value="entry.value = $event ?? null"
 	                                    size="sm"
 	                                    :disabled="!isOwner"
 	                                    :items="booleanItems"
@@ -233,6 +233,9 @@
 import { ref } from 'vue';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
 import { useAdminSystemConfigEnriched, useAdminSystemStatus } from '~/composables/admin/useAdminData';
+import { useServerRestart } from '~/composables/admin/useServerRestart';
+import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
+import { parseErrorMessage } from '~/utils/admin/parse-error';
 import type { ConfigGroup, EnrichedConfigEntry, ProviderAction } from '~/composables/admin/useAdminTypes';
 
 definePageMeta({
@@ -250,7 +253,7 @@ const pending = computed(
 const status = computed(() => statusData.value?.status);
 	const warnings = computed(() => statusData.value?.warnings ?? []);
 	type EnrichedConfigEntryUi = Omit<EnrichedConfigEntry, 'value'> & {
-	    value: string | undefined;
+	    value: string | null;
 	};
 	const enrichedEntries = ref<EnrichedConfigEntryUi[]>([]);
 	const restartRequired = ref(false);
@@ -289,19 +292,19 @@ const configGroups: ConfigGroup[] = [
     return actions;
 	});
 
-		function normalizeUiValue(entry: EnrichedConfigEntry): string | undefined {
-		    if (entry.masked) return entry.value ?? undefined;
-		    if (entry.valueType === 'boolean') return entry.value ?? undefined;
+		function normalizeUiValue(entry: EnrichedConfigEntry): string | null {
+		    if (entry.masked) return entry.value ?? null;
+		    if (entry.valueType === 'boolean') return entry.value ?? null;
 		    return entry.value ?? '';
 		}
 
-	function normalizeForSave(value: string | undefined, masked: boolean): string | null {
+	function normalizeForSave(value: string | null | undefined, masked: boolean): string | null {
 	    if (masked && value === '******') return '******';
-	    if (value === undefined || value === '') return null;
+	    if (value === null || value === undefined || value === '') return null;
 	    return value;
 	}
 
-	const originalValues = ref<Record<string, string | undefined>>({});
+	const originalValues = ref<Record<string, string | null | undefined>>({});
 
 		watch(
 		    () => enrichedConfigData.value?.entries,
@@ -374,20 +377,43 @@ function getGroupColor(group: ConfigGroup): string {
 	    );
 	}
 
+const { confirm } = useConfirmDialog();
+const toast = useToast();
+
+// Use composable for basic restart, but system page has extra rebuild functionality
+const serverRestart = useServerRestart(
+    isOwner,
+    computed(() => status.value?.admin?.allowRestart)
+);
+
+// Override restart to use composable's implementation
 async function restart() {
-    if (!confirm('Restart the server now?')) return;
-    await $fetch('/api/admin/system/restart', {
-        method: 'POST',
-        headers: ADMIN_HEADERS,
-    });
+    await serverRestart.restart();
 }
 
 async function rebuildRestart() {
-    if (!confirm('Rebuild and restart the server now?')) return;
-    await $fetch('/api/admin/system/rebuild-restart', {
-        method: 'POST',
-        headers: ADMIN_HEADERS,
+    const confirmed = await confirm({
+        title: 'Rebuild & Restart Server',
+        message: 'Are you sure you want to rebuild and restart the server now? This process may take several minutes.',
+        danger: true,
+        confirmText: 'Rebuild & Restart',
     });
+    if (!confirmed) return;
+    
+    try {
+        await $fetch('/api/admin/system/rebuild-restart', {
+            method: 'POST',
+            headers: ADMIN_HEADERS,
+        });
+        toast.add({
+            title: 'Rebuild initiated',
+            description: 'The server is rebuilding and will restart...',
+            color: 'success',
+        });
+    } catch (error: unknown) {
+        const message = parseErrorMessage(error, 'Rebuild failed');
+        toast.add({ title: 'Error', description: message, color: 'error' });
+    }
 }
 
 async function runProviderAction(action: {
@@ -397,11 +423,30 @@ async function runProviderAction(action: {
     provider: string;
     danger?: boolean;
 }) {
-    if (action.danger && !confirm(`Run ${action.label}?`)) return;
-    await $fetch('/api/admin/system/provider-action', {
-        method: 'POST',
-        headers: ADMIN_HEADERS,
-        body: { kind: action.kind, actionId: action.id },
-    });
+    if (action.danger) {
+        const confirmed = await confirm({
+            title: 'Run Provider Action',
+            message: `Are you sure you want to run "${action.label}"? This action cannot be undone.`,
+            danger: true,
+            confirmText: 'Run',
+        });
+        if (!confirmed) return;
+    }
+    
+    try {
+        await $fetch('/api/admin/system/provider-action', {
+            method: 'POST',
+            headers: ADMIN_HEADERS,
+            body: { kind: action.kind, actionId: action.id },
+        });
+        toast.add({
+            title: 'Action completed',
+            description: `${action.label} executed successfully`,
+            color: 'success',
+        });
+    } catch (error: unknown) {
+        const message = parseErrorMessage(error, 'Action failed');
+        toast.add({ title: 'Error', description: message, color: 'error' });
+    }
 }
 </script>

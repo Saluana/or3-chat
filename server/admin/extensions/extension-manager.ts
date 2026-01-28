@@ -4,12 +4,14 @@ import type { ExtensionKind, InstalledExtensionRecord } from './types';
 import { Or3ExtensionManifestSchema } from './types';
 import { ensureExtensionsDirs, EXTENSIONS_BASE_DIR, getKindDir } from './paths';
 
-let cache:
-    | {
-          at: number;
-          items: InstalledExtensionRecord[];
-      }
-    | undefined;
+type CacheEntry = {
+    at: number;
+    items: InstalledExtensionRecord[];
+    version: number;
+};
+
+let cache: CacheEntry | undefined;
+let cacheVersion = 0;
 
 const CACHE_TTL_MS = 15_000;
 
@@ -58,7 +60,7 @@ async function listExtensionsInDir(
 }
 
 export async function listInstalledExtensions(): Promise<InstalledExtensionRecord[]> {
-    if (cache && Date.now() - cache.at < CACHE_TTL_MS) {
+    if (cache && Date.now() - cache.at < CACHE_TTL_MS && cache.version === cacheVersion) {
         return cache.items;
     }
 
@@ -74,11 +76,12 @@ export async function listInstalledExtensions(): Promise<InstalledExtensionRecor
     ]);
 
     const items = [...plugins, ...themes, ...adminPlugins];
-    cache = { at: Date.now(), items };
+    cache = { at: Date.now(), items, version: cacheVersion };
     return items;
 }
 
 export function invalidateExtensionsCache(): void {
+    cacheVersion++;
     cache = undefined;
 }
 

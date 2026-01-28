@@ -4,6 +4,7 @@
  */
 
 import { ref } from 'vue';
+import { useConfirmDialog } from './useConfirmDialog';
 
 /**
  * Standard admin intent header for admin API calls.
@@ -47,12 +48,17 @@ export async function installExtension(options: ExtensionInstallOptions): Promis
         });
         if (onSuccess) await onSuccess();
     } catch (error: unknown) {
-        const message = extractErrorMessage(error);
+        const message = parseErrorMessage(error, '');
         
         if (message.toLowerCase().includes('already installed')) {
-            if (!confirm(`${options.kind === 'plugin' ? 'Plugin' : 'Theme'} already installed. Replace it?`)) {
-                return;
-            }
+            const { confirm } = useConfirmDialog();
+            const confirmed = await confirm({
+                title: `${options.kind === 'plugin' ? 'Plugin' : 'Theme'} Already Installed`,
+                message: `This ${options.kind === 'plugin' ? 'plugin' : 'theme'} is already installed. Do you want to replace it with the new version?`,
+                danger: true,
+                confirmText: 'Replace',
+            });
+            if (!confirmed) return;
             // Retry with force flag
             await installExtension({ ...options, force: true });
         } else {
@@ -69,8 +75,15 @@ export async function uninstallExtension(
     kind: ExtensionKind,
     onSuccess?: () => Promise<void>
 ): Promise<void> {
+    const { confirm } = useConfirmDialog();
     const label = kind === 'plugin' ? 'Plugin' : 'Theme';
-    if (!confirm(`Uninstall ${label} "${id}"?`)) return;
+    const confirmed = await confirm({
+        title: `Uninstall ${label}`,
+        message: `Are you sure you want to uninstall "${id}"?`,
+        danger: true,
+        confirmText: 'Uninstall',
+    });
+    if (!confirmed) return;
 
     await $fetch('/api/admin/extensions/uninstall', {
         method: 'POST',
@@ -81,16 +94,7 @@ export async function uninstallExtension(
     if (onSuccess) await onSuccess();
 }
 
-/**
- * Extract error message from various error shapes.
- */
-function extractErrorMessage(error: unknown): string {
-    if (typeof error === 'object' && error !== null) {
-        const e = error as { data?: { statusMessage?: string }; message?: string };
-        return e.data?.statusMessage ?? e.message ?? '';
-    }
-    return '';
-}
+import { parseErrorMessage } from '~/utils/admin/parse-error';
 
 /**
  * Composable for file input handling.

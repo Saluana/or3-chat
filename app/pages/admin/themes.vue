@@ -101,8 +101,13 @@
 </template>
 
 <script setup lang="ts">
-import { installExtension, uninstallExtension, useFileInput, ADMIN_HEADERS, type ExtensionItem } from '~/composables/admin/useAdminExtensions';
-import { useAdminExtensions, useAdminSystemConfig, useAdminWorkspace } from '~/composables/admin/useAdminData';
+import { installExtension, uninstallExtension, ADMIN_HEADERS, type ExtensionItem } from '~/composables/admin/useAdminExtensions';
+import { useAdminExtensions, useAdminSystemConfig, useAdminWorkspace, useAdminSystemStatus } from '~/composables/admin/useAdminData';
+import { useAdminAuth } from '~/composables/admin/useAdminAuth';
+import { useExtensionManagement } from '~/composables/admin/useExtensionManagement';
+import { useServerRestart } from '~/composables/admin/useServerRestart';
+import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
+import { parseErrorMessage } from '~/utils/admin/parse-error';
 
 definePageMeta({
     layout: 'admin',
@@ -113,37 +118,42 @@ const { data: workspaceData, status: workspaceStatus, refresh: refreshWorkspace 
 const { data: configData, status: configStatus, refresh: refreshConfig } = useAdminSystemConfig();
 const { data: statusData } = useAdminSystemStatus();
 
-const restartRequired = ref(false);
-
 const pending = computed(() => extStatus.value === 'pending' || workspaceStatus.value === 'pending' || configStatus.value === 'pending');
 
 const themes = computed(
     () => (data.value?.items ?? []).filter((i) => i.kind === 'theme')
 );
-const role = computed(() => workspaceData.value?.role);
-const isOwner = computed(() => role.value === 'owner');
+
+const { isOwner } = useAdminAuth(workspaceData);
+const { fileInput, triggerFileInput, install, uninstall } = useExtensionManagement(isOwner);
+const { restart, restartRequired } = useServerRestart(
+    isOwner,
+    computed(() => statusData.value?.status?.admin?.allowRestart)
+);
+const { confirm } = useConfirmDialog();
+const toast = useToast();
+
 const defaultTheme = computed(() => {
     const entry = configData.value?.entries?.find((e) => e.key === 'OR3_DEFAULT_THEME');
     return entry?.value ?? '';
 });
 
-const { fileInput, triggerFileInput } = useFileInput();
-
 async function installTheme() {
-    if (!isOwner.value) return;
-    const file = fileInput.value?.files?.[0];
-    if (!file) return;
-    await installExtension({ kind: 'theme', file, onSuccess: refresh });
+    await install('theme', refresh);
 }
 
 async function uninstallTheme(themeId: string) {
-    if (!isOwner.value) return;
-    await uninstallExtension(themeId, 'theme', refresh);
+    await uninstall(themeId, 'theme', refresh);
 }
 
 async function setDefaultTheme(themeId: string) {
     if (!isOwner.value) return;
-    if (!confirm(`Set default theme to ${themeId}?`)) return;
+    const confirmed = await confirm({
+        title: 'Set Default Theme',
+        message: `Are you sure you want to set "${themeId}" as the default theme?`,
+        confirmText: 'Set Default',
+    });
+    if (!confirmed) return;
     const res = await $fetch<{ ok: boolean; restartRequired?: boolean }>('/api/admin/system/config/write', {
         method: 'POST',
         headers: ADMIN_HEADERS,
@@ -157,13 +167,7 @@ async function setDefaultTheme(themeId: string) {
     await refresh();
 }
 
-async function restart() {
-    if (!confirm('Restart the server now?')) return;
-    await $fetch('/api/admin/system/restart', {
-        method: 'POST',
-        headers: ADMIN_HEADERS,
-    });
-}
+
 
 async function refresh() {
     await Promise.all([refreshExtensions(), refreshWorkspace(), refreshConfig()]);

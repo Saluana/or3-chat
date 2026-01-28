@@ -5,18 +5,14 @@ import {
     sendRedirect,
 } from 'h3';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
-
-function normalizeHost(host: string): string {
-    const lower = host.trim().toLowerCase();
-    const withoutPort = lower.includes(':') ? lower.split(':')[0] || lower : lower;
-    return withoutPort;
-}
+import { normalizeHost } from '../utils/normalize-host';
 
 function isAdminPath(path: string, basePath: string): boolean {
     if (basePath === '/') return true;
     if (path === basePath) return true;
     return path.startsWith(basePath + '/');
 }
+
 
 export default defineEventHandler((event) => {
     const config = useRuntimeConfig();

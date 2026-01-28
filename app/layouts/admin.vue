@@ -52,6 +52,18 @@
                 <NuxtPage />
             </div>
         </main>
+
+        <!-- Global Confirm Dialog -->
+        <ConfirmDialog
+            v-if="confirmOptions"
+            v-model="isConfirmOpen"
+            :title="confirmOptions.title"
+            :message="confirmOptions.message"
+            :confirm-text="confirmOptions.confirmText"
+            :danger="confirmOptions.danger"
+            @confirm="onConfirm"
+            @cancel="onCancel"
+        />
     </div>
 </template>
 
@@ -63,9 +75,12 @@ import {
     useAdminSystemStatus,
     useAdminWorkspace,
 } from '~/composables/admin/useAdminData';
+import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
+import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
 
 const route = useRoute();
 const adminPages = useAdminPages();
+const { isOpen: isConfirmOpen, options: confirmOptions, onConfirm, onCancel } = useConfirmDialog();
 
 // Warm common admin data on client to make page switches feel instant.
 if (import.meta.client) {

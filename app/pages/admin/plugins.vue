@@ -111,8 +111,11 @@
 </template>
 
 <script setup lang="ts">
-import { installExtension, uninstallExtension, useFileInput, ADMIN_HEADERS, type ExtensionItem } from '~/composables/admin/useAdminExtensions';
+import { installExtension, uninstallExtension, ADMIN_HEADERS, type ExtensionItem } from '~/composables/admin/useAdminExtensions';
 import { useAdminExtensions, useAdminWorkspace } from '~/composables/admin/useAdminData';
+import { useAdminAuth } from '~/composables/admin/useAdminAuth';
+import { useExtensionManagement } from '~/composables/admin/useExtensionManagement';
+import { parseErrorMessage } from '~/utils/admin/parse-error';
 
 definePageMeta({
     layout: 'admin',
@@ -124,6 +127,12 @@ const { data, status, refresh: refreshNuxtData } = useAdminExtensions();
 // 2. Fetch Workspace (for role and enabled plugins)
 const { data: workspaceData, refresh: refreshWorkspace } = useAdminWorkspace();
 
+// 3. Auth & Permissions
+const { isOwner } = useAdminAuth(workspaceData);
+
+// 4. Extension Management
+const { fileInput, triggerFileInput, install, uninstall } = useExtensionManagement(isOwner);
+
 // Computed & State
 const pending = computed(() => status.value === 'pending');
 const plugins = computed(
@@ -131,10 +140,8 @@ const plugins = computed(
 );
 
 const enabledSet = ref<Set<string>>(new Set());
-const role = computed(() => workspaceData.value?.role);
-const isOwner = computed(() => role.value === 'owner');
 const settingsByPlugin = reactive<Record<string, string>>({});
-const { fileInput, triggerFileInput } = useFileInput();
+const toast = useToast();
 
 // Watcher
 watch(() => workspaceData.value, (val) => {
@@ -161,15 +168,11 @@ async function togglePlugin(pluginId: string) {
 }
 
 async function installPlugin() {
-    if (!isOwner.value) return;
-    const file = fileInput.value?.files?.[0];
-    if (!file) return;
-    await installExtension({ kind: 'plugin', file, onSuccess: refresh });
+    await install('plugin', refresh);
 }
 
 async function uninstallPlugin(pluginId: string) {
-    if (!isOwner.value) return;
-    await uninstallExtension(pluginId, 'plugin', refresh);
+    await uninstall(pluginId, 'plugin', refresh);
 }
 
 async function loadSettings(pluginId: string) {
@@ -188,14 +191,29 @@ async function saveSettings(pluginId: string) {
     try {
         parsed = JSON.parse(raw) as Record<string, unknown>;
     } catch {
-        alert('Settings must be valid JSON.');
+        toast.add({
+            title: 'Invalid JSON',
+            description: 'Settings must be valid JSON.',
+            color: 'error',
+        });
         return;
     }
-    await $fetch('/api/admin/plugins/workspace-settings', {
-        method: 'POST',
-        body: { pluginId, settings: parsed },
-        headers: ADMIN_HEADERS,
-    });
+    
+    try {
+        await $fetch('/api/admin/plugins/workspace-settings', {
+            method: 'POST',
+            body: { pluginId, settings: parsed },
+            headers: ADMIN_HEADERS,
+        });
+        toast.add({
+            title: 'Settings saved',
+            description: 'Plugin configuration has been updated.',
+            color: 'success',
+        });
+    } catch (error: unknown) {
+        const message = parseErrorMessage(error, 'Failed to save settings');
+        toast.add({ title: 'Error', description: message, color: 'error' });
+    }
 }
 
 async function refresh() {

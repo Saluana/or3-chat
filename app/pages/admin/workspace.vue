@@ -16,7 +16,7 @@
             <div class="text-sm font-semibold">Failed to load workspace</div>
             <div class="text-sm opacity-70 mt-1">{{ errorMessage }}</div>
             <div class="mt-3">
-                <UButton size="xs" icon="i-heroicons-arrow-path" @click="refresh">
+                <UButton size="xs" icon="i-heroicons-arrow-path" @click="() => refresh()">
                     Retry
                 </UButton>
             </div>
@@ -156,6 +156,9 @@
 import { formatAdminError } from '~/composables/admin/formatAdminError';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
 import { useAdminWorkspace } from '~/composables/admin/useAdminData';
+import { useAdminAuth } from '~/composables/admin/useAdminAuth';
+import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
+import { parseErrorMessage } from '~/utils/admin/parse-error';
 
 definePageMeta({
     layout: 'admin',
@@ -169,16 +172,18 @@ const errorMessage = computed(() =>
 const hasWorkspace = computed(() => Boolean(data.value?.workspace?.id));
 const pending = computed(() => !errorMessage.value && !hasWorkspace.value);
 const workspace = computed(() => data.value?.workspace);
-const role = computed(() => data.value?.role);
 const members = computed(() => data.value?.members ?? []);
 const guestAccessEnabled = computed(() => data.value?.guestAccessEnabled ?? false);
-const isOwner = computed(() => role.value === 'owner');
+
+const { role, isOwner } = useAdminAuth(data);
 
 const roleOptions = ['owner', 'editor', 'viewer'];
 const memberRoles = reactive<Record<string, string>>({});
 const newMemberId = ref('');
 const newMemberRole = ref('editor');
 const newMemberProvider = ref('');
+const { confirm } = useConfirmDialog();
+const toast = useToast();
 
 watch(
     () => members.value,
@@ -218,13 +223,30 @@ async function updateRole(userId: string) {
 
 async function removeMember(userId: string) {
     if (!isOwner.value) return;
-    if (!confirm('Remove member from workspace?')) return;
-    await $fetch('/api/admin/workspace/members/remove', {
-        method: 'POST',
-        headers: ADMIN_HEADERS,
-        body: { userId },
+    const confirmed = await confirm({
+        title: 'Remove Member',
+        message: `Are you sure you want to remove this member from the workspace? This action cannot be undone.`,
+        danger: true,
+        confirmText: 'Remove',
     });
-    await refresh();
+    if (!confirmed) return;
+    
+    try {
+        await $fetch('/api/admin/workspace/members/remove', {
+            method: 'POST',
+            headers: ADMIN_HEADERS,
+            body: { userId },
+        });
+        toast.add({
+            title: 'Member removed',
+            description: 'The member has been removed from the workspace.',
+            color: 'success',
+        });
+        await refresh();
+    } catch (error: unknown) {
+        const message = parseErrorMessage(error, 'Failed to remove member');
+        toast.add({ title: 'Error', description: message, color: 'error' });
+    }
 }
 
 async function toggleGuestAccess() {

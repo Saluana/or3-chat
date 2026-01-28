@@ -1,12 +1,7 @@
 import { createError, getRequestHeader } from 'h3';
 import type { H3Event } from 'h3';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
-
-function normalizeHost(host: string): string {
-    const lower = host.trim().toLowerCase();
-    const withoutPort = lower.includes(':') ? lower.split(':')[0] || lower : lower;
-    return withoutPort;
-}
+import { normalizeHost } from '../utils/normalize-host';
 
 function isMutationMethod(method?: string): boolean {
     const normalized = (method || 'GET').toUpperCase();
