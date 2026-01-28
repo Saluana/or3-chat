@@ -2,7 +2,7 @@ import { ref, type Ref, type ComputedRef } from 'vue';
 import { useToast } from '#imports';
 import { ADMIN_HEADERS } from './useAdminExtensions';
 import { useConfirmDialog } from './useConfirmDialog';
-import { parseErrorMessage } from '~/utils/admin/parse-error';
+import { errorContains, parseErrorMessage } from '~/utils/admin/parse-error';
 
 export type ServerRestart = {
     restart: () => Promise<void>;
@@ -51,6 +51,15 @@ export function useServerRestart(
                 color: 'success',
             });
         } catch (error: unknown) {
+            if (errorContains(error, 'development mode')) {
+                toast.add({
+                    title: 'Restart unavailable in dev',
+                    description:
+                        'Please restart the dev server manually (Ctrl+C, then `bun run dev`).',
+                    color: 'info',
+                });
+                return;
+            }
             const message = parseErrorMessage(error, 'Restart failed');
             toast.add({ title: 'Error', description: message, color: 'error' });
         }
