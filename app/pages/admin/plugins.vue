@@ -61,7 +61,8 @@
                             size="xs"
                             :color="enabledSet.has(plugin.id) ? 'neutral' : 'primary'"
                             :variant="enabledSet.has(plugin.id) ? 'soft' : 'solid'"
-                            :disabled="!isOwner"
+                            :disabled="!isOwner || toggleLoading[plugin.id]"
+                            :loading="toggleLoading[plugin.id]"
                             @click="togglePlugin(plugin.id)"
                         >
                             {{ enabledSet.has(plugin.id) ? 'Disable' : 'Enable' }}
@@ -141,6 +142,7 @@ const plugins = computed(
 
 const enabledSet = ref<Set<string>>(new Set());
 const settingsByPlugin = reactive<Record<string, string>>({});
+const toggleLoading = reactive<Record<string, boolean>>({});
 const toast = useToast();
 
 // Watcher
@@ -164,7 +166,13 @@ async function setEnabled(pluginId: string, enabled: boolean) {
 }
 
 async function togglePlugin(pluginId: string) {
-    await setEnabled(pluginId, !enabledSet.value.has(pluginId));
+    if (toggleLoading[pluginId]) return;
+    toggleLoading[pluginId] = true;
+    try {
+        await setEnabled(pluginId, !enabledSet.value.has(pluginId));
+    } finally {
+        toggleLoading[pluginId] = false;
+    }
 }
 
 async function installPlugin() {
