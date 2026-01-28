@@ -184,7 +184,8 @@
 	                                </div>
 	                                <USelectMenu
 	                                    v-if="entry.valueType === 'boolean' && !entry.masked"
-	                                    :model-value="entry.value ?? undefined"\n                                    @update:model-value="entry.value = $event ?? null"
+	                                    :model-value="entry.value ?? undefined"
+	                                    @update:model-value="entry.value = $event ?? null"
 	                                    size="sm"
 	                                    :disabled="!isOwner"
 	                                    :items="booleanItems"

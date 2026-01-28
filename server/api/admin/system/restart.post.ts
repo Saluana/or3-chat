@@ -10,6 +10,12 @@ export default defineEventHandler(async (event) => {
     if (!adminConfig?.allowRestart) {
         throw createError({ statusCode: 501, statusMessage: 'Restart disabled' });
     }
+    if (process.env.NODE_ENV !== 'production') {
+        throw createError({
+            statusCode: 409,
+            statusMessage: 'Restart not supported in development mode',
+        });
+    }
 
     await requestRestart();
     return { ok: true };

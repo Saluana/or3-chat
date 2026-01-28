@@ -13,6 +13,12 @@ export default defineEventHandler(async (event) => {
     if (!adminConfig?.allowRebuild) {
         throw createError({ statusCode: 501, statusMessage: 'Rebuild disabled' });
     }
+    if (process.env.NODE_ENV !== 'production') {
+        throw createError({
+            statusCode: 409,
+            statusMessage: 'Rebuild not supported in development mode',
+        });
+    }
 
     const command = adminConfig.rebuildCommand || 'bun run build';
     try {

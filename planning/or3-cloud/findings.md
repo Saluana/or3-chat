@@ -74,3 +74,4 @@ The three plans are directionally aligned, but there are several conflicts and m
 ## Admin Dashboard notes
 
 - Admin plugin enablement is stored in `kv`, but runtime loading of installed plugins in the main app still needs a dedicated loader that filters by `plugins.enabled`. Until that is wired, enabling a plugin will not activate its UI extensions.
+- Restart/rebuild endpoints now block in development mode to avoid Nitro worker exits; operators should restart the dev server manually.
