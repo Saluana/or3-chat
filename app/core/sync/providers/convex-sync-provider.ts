@@ -20,6 +20,7 @@ import type {
 import { PullResponseSchema, SyncChangeSchema, PushResultSchema } from '~~/shared/sync/schemas';
 import { z } from 'zod';
 import type { Id } from '~~/convex/_generated/dataModel';
+import { CONVEX_JWT_TEMPLATE, CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 /** Tables to sync */
 const SYNCED_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'];
@@ -36,11 +37,11 @@ export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
     const subscriptions = new Map<string, () => void>();
 
     return {
-        id: 'convex',
+        id: CONVEX_PROVIDER_ID,
         mode: 'direct',
         auth: {
-            providerId: 'convex',
-            template: 'convex', // Clerk JWT template name
+            providerId: CONVEX_PROVIDER_ID,
+            template: CONVEX_JWT_TEMPLATE, // Clerk JWT template name
         },
 
         async subscribe(

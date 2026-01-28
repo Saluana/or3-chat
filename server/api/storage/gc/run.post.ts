@@ -14,6 +14,7 @@ import {
     getClerkProviderToken,
     getConvexGatewayClient,
 } from '../../../utils/sync/convex-gateway';
+import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -65,7 +66,7 @@ export default defineEventHandler(async (event) => {
     }
     recordGcRun(body.data.workspace_id, now);
 
-    const token = await getClerkProviderToken(event, 'convex');
+    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
     if (!token) {
         throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
     }

@@ -17,6 +17,7 @@ import { getDb } from '~/db/client';
 import { newId } from '~/db/util';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
+import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 /**
  * Create a notification for system warnings and errors
@@ -70,7 +71,7 @@ export default defineNuxtPlugin(() => {
     const serverNotificationsEnabled =
         runtimeConfig.public?.ssrAuthEnabled === true &&
         syncConfig?.enabled === true &&
-        syncConfig?.provider === 'convex' &&
+        syncConfig?.provider === CONVEX_PROVIDER_ID &&
         Boolean(syncConfig?.convexUrl);
     const getNotificationUserId = () =>
         resolveNotificationUserId(sessionContext?.data.value?.session);

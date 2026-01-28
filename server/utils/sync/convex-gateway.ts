@@ -34,9 +34,15 @@ export async function getClerkProviderToken(
 }
 
 type RuntimeConfigWithConvex = {
+    sync?: {
+        convexUrl?: string;
+    };
     public?: {
         convex?: {
             url?: string;
+        };
+        sync?: {
+            convexUrl?: string;
         };
     };
     convex?: {
@@ -44,9 +50,16 @@ type RuntimeConfigWithConvex = {
     };
 };
 
+const gatewayClientCache = new Map<string, ConvexHttpClient>();
+const MAX_GATEWAY_CLIENTS = 50;
+
 export function getConvexGatewayClient(event: H3Event, token: string): ConvexHttpClient {
     const config = useRuntimeConfig() as RuntimeConfigWithConvex;
-    const url = config.public?.convex?.url || config.convex?.url;
+    const url =
+        config.sync?.convexUrl ||
+        config.public?.sync?.convexUrl ||
+        config.public?.convex?.url ||
+        config.convex?.url;
 
     if (!url) {
         throw createError({
@@ -55,7 +68,22 @@ export function getConvexGatewayClient(event: H3Event, token: string): ConvexHtt
         });
     }
 
+    const cacheKey = `${url}:${token}`;
+    const cached = gatewayClientCache.get(cacheKey);
+    if (cached) {
+        return cached;
+    }
+
     const client = new ConvexHttpClient(url);
     client.setAuth(token);
+    gatewayClientCache.set(cacheKey, client);
+
+    if (gatewayClientCache.size > MAX_GATEWAY_CLIENTS) {
+        const oldestKey = gatewayClientCache.keys().next().value;
+        if (oldestKey) {
+            gatewayClientCache.delete(oldestKey);
+        }
+    }
+
     return client;
 }

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ObjectStorageProvider, PresignedUrlResult } from '../types';
+import { CONVEX_STORAGE_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 const PresignedUrlResponseSchema = z
     .object({
@@ -32,7 +33,7 @@ async function postJson<T extends z.ZodTypeAny>(
 
 export function createConvexStorageProvider(): ObjectStorageProvider {
     return {
-        id: 'convex',
+        id: CONVEX_STORAGE_PROVIDER_ID,
         displayName: 'Convex Storage',
         supports: {
             presignedUpload: true,
@@ -76,7 +77,7 @@ export function createConvexStorageProvider(): ObjectStorageProvider {
                     workspace_id: input.workspaceId,
                     hash: input.hash,
                     storage_id: input.storageId,
-                    storage_provider_id: input.storageProviderId ?? 'convex',
+                    storage_provider_id: input.storageProviderId ?? CONVEX_STORAGE_PROVIDER_ID,
                     name: input.meta.name,
                     mime_type: input.meta.mimeType,
                     size_bytes: input.meta.sizeBytes,

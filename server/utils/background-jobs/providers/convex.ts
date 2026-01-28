@@ -17,24 +17,20 @@ import type {
   JobUpdate,
 } from "../types";
 import { getJobConfig } from "../store";
-import { ConvexHttpClient } from "convex/browser";
 import { api } from "~~/convex/_generated/api";
 import type { Id } from "~~/convex/_generated/dataModel";
+import { getConvexClient } from "../../convex-client";
+import { CONVEX_PROVIDER_ID } from "~~/shared/cloud/provider-ids";
 
 /**
  * Get a Convex HTTP client for server-side calls
  */
-function getClient(): ConvexHttpClient {
-  const config = useRuntimeConfig();
-  const url = config.public.sync.convexUrl as string | undefined;
-  if (!url) {
-    throw new Error("Convex URL not configured");
-  }
-  return new ConvexHttpClient(url);
+function getClient() {
+  return getConvexClient();
 }
 
 export const convexJobProvider: BackgroundJobProvider = {
-  name: "convex",
+  name: CONVEX_PROVIDER_ID,
 
   async createJob(params: CreateJobParams): Promise<string> {
     const client = getClient();

@@ -3,11 +3,25 @@ import type {
     Or3CloudConfig,
     Or3CloudConfigOptions,
 } from '../types/or3-cloud-config';
+import {
+    AUTH_PROVIDER_ID_LIST,
+    BACKGROUND_PROVIDER_ID_LIST,
+    CLERK_PROVIDER_ID,
+    CONVEX_PROVIDER_ID,
+    DEFAULT_AUTH_PROVIDER_ID,
+    DEFAULT_BACKGROUND_PROVIDER_ID,
+    DEFAULT_LIMITS_PROVIDER_ID,
+    DEFAULT_STORAGE_PROVIDER_ID,
+    DEFAULT_SYNC_PROVIDER_ID,
+    LIMITS_PROVIDER_ID_LIST,
+    STORAGE_PROVIDER_ID_LIST,
+    SYNC_PROVIDER_ID_LIST,
+} from '../shared/cloud/provider-ids';
 
 const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
     auth: {
         enabled: false,
-        provider: 'clerk',
+        provider: DEFAULT_AUTH_PROVIDER_ID,
         clerk: {
             publishableKey: undefined,
             secretKey: undefined,
@@ -15,14 +29,14 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
     },
     sync: {
         enabled: false,
-        provider: 'convex',
+        provider: DEFAULT_SYNC_PROVIDER_ID,
         convex: {
             url: undefined,
         },
     },
     storage: {
         enabled: false,
-        provider: 'convex',
+        provider: DEFAULT_STORAGE_PROVIDER_ID,
     },
     services: {
         llm: {
@@ -37,6 +51,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         requestsPerMinute: 20,
         maxConversations: 0,
         maxMessagesPerDay: 0,
+        storageProvider: DEFAULT_LIMITS_PROVIDER_ID,
     },
     security: {
         allowedOrigins: [],
@@ -81,7 +96,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
     },
     backgroundStreaming: {
         enabled: false,
-        storageProvider: 'memory',
+        storageProvider: DEFAULT_BACKGROUND_PROVIDER_ID,
         maxConcurrentJobs: 20,
         jobTimeoutSeconds: 300,
     },
@@ -91,7 +106,7 @@ const cloudConfigSchema = z
     .object({
         auth: z.object({
             enabled: z.boolean(),
-            provider: z.enum(['clerk', 'custom']),
+            provider: z.enum(AUTH_PROVIDER_ID_LIST),
             clerk: z
                 .object({
                     publishableKey: z.string().optional(),
@@ -101,7 +116,7 @@ const cloudConfigSchema = z
         }),
         sync: z.object({
             enabled: z.boolean(),
-            provider: z.enum(['convex', 'firebase', 'custom']),
+            provider: z.enum(SYNC_PROVIDER_ID_LIST),
             convex: z
                 .object({
                     url: z.string().optional(),
@@ -110,7 +125,7 @@ const cloudConfigSchema = z
         }),
         storage: z.object({
             enabled: z.boolean(),
-            provider: z.enum(['convex', 's3', 'custom']),
+            provider: z.enum(STORAGE_PROVIDER_ID_LIST),
         }),
         services: z
             .object({
@@ -133,7 +148,7 @@ const cloudConfigSchema = z
                 requestsPerMinute: z.number().int().min(1).optional(),
                 maxConversations: z.number().int().min(0).optional(),
                 maxMessagesPerDay: z.number().int().min(0).optional(),
-                storageProvider: z.enum(['memory', 'convex', 'redis', 'postgres']).optional(),
+                storageProvider: z.enum(LIMITS_PROVIDER_ID_LIST).optional(),
             })
             .optional(),
         security: z
@@ -158,7 +173,7 @@ const cloudConfigSchema = z
         backgroundStreaming: z
             .object({
                 enabled: z.boolean().optional(),
-                storageProvider: z.enum(['memory', 'convex', 'redis']).optional(),
+                storageProvider: z.enum(BACKGROUND_PROVIDER_ID_LIST).optional(),
                 maxConcurrentJobs: z.number().int().min(1).optional(),
                 jobTimeoutSeconds: z.number().int().min(1).optional(),
             })
@@ -241,7 +256,7 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
 
     const errors: string[] = [];
 
-    if (config.auth.enabled && config.auth.provider === 'clerk') {
+    if (config.auth.enabled && config.auth.provider === CLERK_PROVIDER_ID) {
         if (!config.auth.clerk?.publishableKey) {
             errors.push('auth.clerk.publishableKey is required when auth is enabled.');
         }
@@ -250,7 +265,7 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
         }
     }
 
-    if (config.sync.enabled && config.sync.provider === 'convex') {
+    if (config.sync.enabled && config.sync.provider === CONVEX_PROVIDER_ID) {
         if (!config.sync.convex?.url) {
             errors.push('sync.convex.url is required when sync is enabled.');
         }

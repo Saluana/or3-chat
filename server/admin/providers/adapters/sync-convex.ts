@@ -6,6 +6,11 @@ import {
     getClerkProviderToken,
     getConvexGatewayClient,
 } from '../../../utils/sync/convex-gateway';
+import {
+    CLERK_PROVIDER_ID,
+    CONVEX_JWT_TEMPLATE,
+    CONVEX_PROVIDER_ID,
+} from '~~/shared/cloud/provider-ids';
 import type {
     ProviderAdminAdapter,
     ProviderAdminStatusResult,
@@ -25,7 +30,7 @@ function resolveRetentionSeconds(payload?: Record<string, unknown>): number {
 }
 
 export const convexSyncAdminAdapter: ProviderAdminAdapter = {
-    id: 'convex',
+    id: CONVEX_PROVIDER_ID,
     kind: 'sync',
     async getStatus(_event: H3Event, ctx: ProviderStatusContext): Promise<ProviderAdminStatusResult> {
         const config = useRuntimeConfig();
@@ -37,7 +42,7 @@ export const convexSyncAdminAdapter: ProviderAdminAdapter = {
                 message: 'Convex sync is enabled but no Convex URL is configured.',
             });
         }
-        if (ctx.enabled && config.auth.provider !== 'clerk') {
+        if (ctx.enabled && config.auth.provider !== CLERK_PROVIDER_ID) {
             warnings.push({
                 level: 'warning',
                 message:
@@ -79,7 +84,7 @@ export const convexSyncAdminAdapter: ProviderAdminAdapter = {
             });
         }
 
-        const token = await getClerkProviderToken(event, 'convex');
+        const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
         if (!token) {
             throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
         }

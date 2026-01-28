@@ -1,5 +1,18 @@
 import 'dotenv/config';
 import { defineOr3CloudConfig } from './utils/or3-cloud-config';
+import {
+    AUTH_PROVIDER_IDS,
+    BACKGROUND_PROVIDER_IDS,
+    DEFAULT_BACKGROUND_PROVIDER_ID,
+    DEFAULT_STORAGE_PROVIDER_ID,
+    DEFAULT_SYNC_PROVIDER_ID,
+    LIMITS_PROVIDER_IDS,
+    type AuthProviderId,
+    type BackgroundProviderId,
+    type LimitsProviderId,
+    type StorageProviderId,
+    type SyncProviderId,
+} from './shared/cloud/provider-ids';
 
 const authEnabled = process.env.SSR_AUTH_ENABLED === 'true';
 // Auth is the gate - sync/storage require auth but can be individually disabled
@@ -12,7 +25,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
      */
     auth: {
         enabled: authEnabled,
-        provider: (process.env.AUTH_PROVIDER ?? 'clerk') as 'clerk' | 'custom',
+        provider: (process.env.AUTH_PROVIDER ?? AUTH_PROVIDER_IDS.clerk) as AuthProviderId,
         clerk: {
             publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
             secretKey: process.env.NUXT_CLERK_SECRET_KEY,
@@ -23,10 +36,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
      */
     sync: {
         enabled: syncEnabled,
-        provider: (process.env.OR3_SYNC_PROVIDER ?? 'convex') as
-            | 'convex'
-            | 'firebase'
-            | 'custom',
+        provider: (process.env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) as SyncProviderId,
         convex: {
             url:
                 process.env.VITE_CONVEX_URL ||
@@ -38,10 +48,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
      */
     storage: {
         enabled: storageEnabled,
-        provider: (process.env.NUXT_PUBLIC_STORAGE_PROVIDER ?? 'convex') as
-            | 'convex'
-            | 's3'
-            | 'custom',
+        provider: (process.env.NUXT_PUBLIC_STORAGE_PROVIDER ?? DEFAULT_STORAGE_PROVIDER_ID) as StorageProviderId,
     },
     /**
      * Service integrations (LLM, etc.).
@@ -70,11 +77,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
             ? Number(process.env.OR3_MAX_MESSAGES_PER_DAY)
             : 0,
         // Use Convex for persistent limits when sync is enabled, otherwise memory
-        storageProvider: (process.env.OR3_LIMITS_STORAGE_PROVIDER ?? (syncEnabled ? 'convex' : 'memory')) as
-            | 'memory'
-            | 'convex'
-            | 'redis'
-            | 'postgres',
+        storageProvider: (process.env.OR3_LIMITS_STORAGE_PROVIDER ?? (syncEnabled ? LIMITS_PROVIDER_IDS.convex : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
     },
     /**
      * Security options (CORS + HTTPS redirects).
@@ -124,10 +127,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
      */
     backgroundStreaming: {
         enabled: process.env.OR3_BACKGROUND_STREAMING_ENABLED === 'true',
-        storageProvider: (process.env.OR3_BACKGROUND_STREAMING_PROVIDER ?? (syncEnabled ? 'convex' : 'memory')) as
-            | 'memory'
-            | 'convex'
-            | 'redis',
+        storageProvider: (process.env.OR3_BACKGROUND_STREAMING_PROVIDER ?? (syncEnabled ? BACKGROUND_PROVIDER_IDS.convex : DEFAULT_BACKGROUND_PROVIDER_ID)) as BackgroundProviderId,
         maxConcurrentJobs: process.env.OR3_BACKGROUND_MAX_JOBS
             ? Number(process.env.OR3_BACKGROUND_MAX_JOBS)
             : 20,
