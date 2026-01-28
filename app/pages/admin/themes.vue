@@ -17,7 +17,28 @@
                 No themes installed.
         </div>
 
-        <div v-else class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
+        <div v-else class="space-y-6">
+            <!-- Restart Required Banner -->
+            <div v-if="restartRequired" class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)] flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <UIcon name="i-heroicons-exclamation-triangle" class="w-5 h-5 flex-shrink-0" />
+                    <div>
+                        <div class="font-semibold text-sm">Restart Required</div>
+                        <div class="text-xs opacity-80">Default theme change will only take effect after a server restart.</div>
+                    </div>
+                </div>
+                <UButton
+                    size="xs"
+                    color="error"
+                    variant="solid"
+                    :disabled="!isOwner || !statusData?.status?.admin?.allowRestart"
+                    @click="restart"
+                >
+                    Restart Now
+                </UButton>
+            </div>
+
+            <div class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
             <div class="mb-4 flex items-center justify-between">
                 <h3 class="text-lg font-medium">Installed</h3>
                 <div class="flex items-center gap-3">
@@ -74,6 +95,7 @@
                     </div>
                 </div>
             </div>
+            </div>
         </div>
     </div>
 </template>
@@ -89,6 +111,9 @@ definePageMeta({
 const { data, status: extStatus, refresh: refreshExtensions } = useAdminExtensions();
 const { data: workspaceData, status: workspaceStatus, refresh: refreshWorkspace } = useAdminWorkspace();
 const { data: configData, status: configStatus, refresh: refreshConfig } = useAdminSystemConfig();
+const { data: statusData } = useAdminSystemStatus();
+
+const restartRequired = ref(false);
 
 const pending = computed(() => extStatus.value === 'pending' || workspaceStatus.value === 'pending' || configStatus.value === 'pending');
 
@@ -119,12 +144,25 @@ async function uninstallTheme(themeId: string) {
 async function setDefaultTheme(themeId: string) {
     if (!isOwner.value) return;
     if (!confirm(`Set default theme to ${themeId}?`)) return;
-    await $fetch('/api/admin/system/config/write', {
+    const res = await $fetch<{ ok: boolean; restartRequired?: boolean }>('/api/admin/system/config/write', {
         method: 'POST',
         headers: ADMIN_HEADERS,
         body: { entries: [{ key: 'OR3_DEFAULT_THEME', value: themeId }] },
     });
+    
+    if (res.restartRequired) {
+        restartRequired.value = true;
+    }
+    
     await refresh();
+}
+
+async function restart() {
+    if (!confirm('Restart the server now?')) return;
+    await $fetch('/api/admin/system/restart', {
+        method: 'POST',
+        headers: ADMIN_HEADERS,
+    });
 }
 
 async function refresh() {

@@ -43,7 +43,7 @@ export default defineNuxtPlugin(() => {
             postType: 'workflow-entry',
         });
     } catch (e) {
-        console.error('[snake-game] Failed to register pane app:', e);
+        console.error('[workflows] Failed to register pane app:', e);
     }
 
     // Register the sidebar page
@@ -58,7 +58,7 @@ export default defineNuxtPlugin(() => {
             usesDefaultHeader: false,
         });
     } catch (e) {
-        console.error('[snake-game] Failed to register sidebar page:', e);
+        console.error('[workflows] Failed to register sidebar page:', e);
     }
 
     const disposePaneCloseHook = hooks.on(

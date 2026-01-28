@@ -135,6 +135,26 @@
             </div>
         </div>
 
+                <!-- Restart Required Banner -->
+                <div v-if="restartRequired" class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)] flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <UIcon name="i-heroicons-exclamation-triangle" class="w-5 h-5 flex-shrink-0" />
+                        <div>
+                            <div class="font-semibold text-sm">Restart Required</div>
+                            <div class="text-xs opacity-80">Some changes will only take effect after a server restart.</div>
+                        </div>
+                    </div>
+                    <UButton
+                        size="xs"
+                        color="error"
+                        variant="solid"
+                        :disabled="!isOwner || !status?.admin?.allowRestart"
+                        @click="restart"
+                    >
+                        Restart Now
+                    </UButton>
+                </div>
+
                 <!-- Grouped Configuration -->
                 <div v-if="enrichedEntries.length > 0">
             <h3 class="text-lg font-semibold mb-3">Configuration</h3>
@@ -233,6 +253,7 @@ const status = computed(() => statusData.value?.status);
 	    value: string | undefined;
 	};
 	const enrichedEntries = ref<EnrichedConfigEntryUi[]>([]);
+	const restartRequired = ref(false);
 		const role = computed(() => statusData.value?.session?.role);
 		const isOwner = computed(() => role.value === 'owner');
 		const booleanItems: Array<{ label: string; value: string }> = [
@@ -336,13 +357,17 @@ function getGroupColor(group: ConfigGroup): string {
 	        })
 	        .filter(Boolean) as Array<{ key: string; value: string | null }>;
 
-	    await $fetch('/api/admin/system/config/write', {
+	    const res = await $fetch<{ ok: boolean; restartRequired?: boolean }>('/api/admin/system/config/write', {
 	        method: 'POST',
 	        body: {
 	            entries: updates,
 	        },
 	        headers: { 'x-or3-admin-intent': 'admin' },
 	    });
+
+	    if (res.restartRequired) {
+	        restartRequired.value = true;
+	    }
 
 	    originalValues.value = Object.fromEntries(
 	        enrichedEntries.value.map((e) => [e.key, e.value])
