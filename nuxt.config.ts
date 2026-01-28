@@ -161,6 +161,29 @@ export default defineNuxtConfig({
             admin: {
                 basePath: adminConfig.basePath,
             },
+            // Feature toggles from OR3 config - exposed for client-side gating
+            features: {
+                workflows: {
+                    enabled: or3Config.features.workflows.enabled,
+                    editor: or3Config.features.workflows.editor,
+                    slashCommands: or3Config.features.workflows.slashCommands,
+                    execution: or3Config.features.workflows.execution,
+                },
+                documents: {
+                    enabled: or3Config.features.documents.enabled,
+                },
+                backup: {
+                    enabled: or3Config.features.backup.enabled,
+                },
+                mentions: {
+                    enabled: or3Config.features.mentions.enabled,
+                    documents: or3Config.features.mentions.documents,
+                    conversations: or3Config.features.mentions.conversations,
+                },
+                dashboard: {
+                    enabled: or3Config.features.dashboard.enabled,
+                },
+            },
             // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
             clerkPublishableKey: '',
         },
