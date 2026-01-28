@@ -139,11 +139,31 @@ const defaultTheme = computed(() => {
 });
 
 async function installTheme() {
-    await install('theme', refresh);
+    try {
+        await install('theme', refresh);
+        toast.add({
+            title: 'Theme installed',
+            description: 'The theme has been installed successfully.',
+            color: 'success',
+        });
+    } catch (error: unknown) {
+        const message = parseErrorMessage(error, 'Failed to install theme');
+        toast.add({ title: 'Error', description: message, color: 'error' });
+    }
 }
 
 async function uninstallTheme(themeId: string) {
-    await uninstall(themeId, 'theme', refresh);
+    try {
+        await uninstall(themeId, 'theme', refresh);
+        toast.add({
+            title: 'Theme uninstalled',
+            description: 'The theme has been removed.',
+            color: 'success',
+        });
+    } catch (error: unknown) {
+        const message = parseErrorMessage(error, 'Failed to uninstall theme');
+        toast.add({ title: 'Error', description: message, color: 'error' });
+    }
 }
 
 async function setDefaultTheme(themeId: string) {
@@ -154,17 +174,27 @@ async function setDefaultTheme(themeId: string) {
         confirmText: 'Set Default',
     });
     if (!confirmed) return;
-    const res = await $fetch<{ ok: boolean; restartRequired?: boolean }>('/api/admin/system/config/write', {
-        method: 'POST',
-        headers: ADMIN_HEADERS,
-        body: { entries: [{ key: 'OR3_DEFAULT_THEME', value: themeId }] },
-    });
-    
-    if (res.restartRequired) {
-        restartRequired.value = true;
+    try {
+        const res = await $fetch<{ ok: boolean; restartRequired?: boolean }>('/api/admin/system/config/write', {
+            method: 'POST',
+            headers: ADMIN_HEADERS,
+            body: { entries: [{ key: 'OR3_DEFAULT_THEME', value: themeId }] },
+        });
+        
+        if (res.restartRequired) {
+            restartRequired.value = true;
+        }
+        
+        toast.add({
+            title: 'Default theme updated',
+            description: `Default theme set to "${themeId}".`,
+            color: 'success',
+        });
+        await refresh();
+    } catch (error: unknown) {
+        const message = parseErrorMessage(error, 'Failed to update default theme');
+        toast.add({ title: 'Error', description: message, color: 'error' });
     }
-    
-    await refresh();
 }
 
 

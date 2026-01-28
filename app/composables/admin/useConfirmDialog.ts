@@ -35,12 +35,14 @@ export function useConfirmDialog() {
         state.resolve?.(true);
         state.isOpen = false;
         state.resolve = null;
+        state.options = null;
     }
 
     function onCancel() {
         state.resolve?.(false);
         state.isOpen = false;
         state.resolve = null;
+        state.options = null;
     }
 
     return {

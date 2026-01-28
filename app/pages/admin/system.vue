@@ -210,7 +210,14 @@
 	                </div>
 
                 <div class="flex justify-end">
-                    <UButton :disabled="!isOwner" @click="saveConfig" color="neutral" variant="solid" icon="i-heroicons-check">
+                    <UButton
+                        :disabled="!isOwner || isSaving"
+                        :loading="isSaving"
+                        @click="saveConfig"
+                        color="neutral"
+                        variant="solid"
+                        icon="i-heroicons-check"
+                    >
                         Save Configuration
                     </UButton>
                 </div>
@@ -257,6 +264,7 @@ const status = computed(() => statusData.value?.status);
 	};
 	const enrichedEntries = ref<EnrichedConfigEntryUi[]>([]);
 	const restartRequired = ref(false);
+    const isSaving = ref(false);
 		const role = computed(() => statusData.value?.session?.role);
 		const isOwner = computed(() => role.value === 'owner');
 		const booleanItems: Array<{ label: string; value: string }> = [
@@ -349,6 +357,7 @@ function getGroupColor(group: ConfigGroup): string {
 }
 
 	async function saveConfig() {
+        if (isSaving.value) return;
 	    const updates = enrichedEntries.value
 	        .map((entry) => {
 	            const prev = originalValues.value[entry.key];
@@ -360,21 +369,44 @@ function getGroupColor(group: ConfigGroup): string {
 	        })
 	        .filter(Boolean) as Array<{ key: string; value: string | null }>;
 
-	    const res = await $fetch<{ ok: boolean; restartRequired?: boolean }>('/api/admin/system/config/write', {
-	        method: 'POST',
-	        body: {
-	            entries: updates,
-	        },
-	        headers: { 'x-or3-admin-intent': 'admin' },
-	    });
+        if (updates.length === 0) {
+            toast.add({
+                title: 'No changes detected',
+                description: 'Update a setting before saving.',
+                color: 'neutral',
+            });
+            return;
+        }
 
-	    if (res.restartRequired) {
-	        restartRequired.value = true;
-	    }
+        isSaving.value = true;
+        try {
+	        const res = await $fetch<{ ok: boolean; restartRequired?: boolean }>('/api/admin/system/config/write', {
+	            method: 'POST',
+	            body: {
+	                entries: updates,
+	            },
+	            headers: { 'x-or3-admin-intent': 'admin' },
+	        });
 
-	    originalValues.value = Object.fromEntries(
-	        enrichedEntries.value.map((e) => [e.key, e.value])
-	    );
+	        if (res.restartRequired) {
+	            restartRequired.value = true;
+	        }
+
+	        originalValues.value = Object.fromEntries(
+	            enrichedEntries.value.map((e) => [e.key, e.value])
+	        );
+
+            toast.add({
+                title: 'Configuration saved',
+                description: 'Settings have been updated successfully.',
+                color: 'success',
+            });
+        } catch (error: unknown) {
+            const message = parseErrorMessage(error, 'Failed to save configuration');
+            toast.add({ title: 'Error', description: message, color: 'error' });
+        } finally {
+            isSaving.value = false;
+        }
 	}
 
 const { confirm } = useConfirmDialog();
@@ -422,11 +454,18 @@ async function runProviderAction(action: {
     kind: 'auth' | 'sync' | 'storage';
     provider: string;
     danger?: boolean;
+    description?: string;
 }) {
     if (action.danger) {
         const confirmed = await confirm({
             title: 'Run Provider Action',
-            message: `Are you sure you want to run "${action.label}"? This action cannot be undone.`,
+            message: [
+                `Are you sure you want to run "${action.label}"?`,
+                action.description ? action.description : null,
+                'This action cannot be undone.',
+            ]
+                .filter(Boolean)
+                .join(' '),
             danger: true,
             confirmText: 'Run',
         });

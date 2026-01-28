@@ -142,6 +142,10 @@ export function useUserThemeOverrides() {
         if (mode === 'light') store.light.value = merged;
         else store.dark.value = merged;
 
+        if (patch.backgrounds) {
+            revokeBackgroundBlobs();
+        }
+
         void applyMergedTheme(mode, merged);
         saveToStorage(mode, merged);
     }
@@ -221,6 +225,7 @@ export function useUserThemeOverrides() {
         }
 
         if (target === store.activeMode.value) {
+            revokeBackgroundBlobs();
             void applyMergedTheme(target, empty);
         }
     }
