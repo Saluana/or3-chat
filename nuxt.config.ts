@@ -3,6 +3,11 @@ import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
 import { resolve } from 'path';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
+import {
+    AUTH_PROVIDER_IDS,
+    CONVEX_PROVIDER_ID,
+    CONVEX_STORAGE_PROVIDER_ID,
+} from './shared/cloud/provider-ids';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
@@ -10,9 +15,9 @@ const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
 const convexEnabled =
     (or3CloudConfig.sync.enabled &&
-        or3CloudConfig.sync.provider === 'convex') ||
+        or3CloudConfig.sync.provider === CONVEX_PROVIDER_ID) ||
     (or3CloudConfig.storage.enabled &&
-        or3CloudConfig.storage.provider === 'convex');
+        or3CloudConfig.storage.provider === CONVEX_STORAGE_PROVIDER_ID);
 
 // Branding defaults (sourced from or3Config)
 const appName = or3Config.site.name;
@@ -25,6 +30,12 @@ const limitsConfig = {
     maxConversations: or3CloudConfig.limits!.maxConversations!,
     maxMessagesPerDay: or3CloudConfig.limits!.maxMessagesPerDay!,
     storageProvider: or3CloudConfig.limits!.storageProvider || 'memory',
+};
+const publicLimitsConfig = {
+    enabled: limitsConfig.enabled,
+    requestsPerMinute: limitsConfig.requestsPerMinute,
+    maxConversations: limitsConfig.maxConversations,
+    maxMessagesPerDay: limitsConfig.maxMessagesPerDay,
 };
 const brandingConfig = {
     appName: or3Config.site.name,
@@ -152,7 +163,7 @@ export default defineNuxtConfig({
                 provider: or3CloudConfig.sync.provider,
                 convexUrl,
             },
-            limits: limitsConfig,
+            limits: publicLimitsConfig,
             branding: brandingConfig,
             legal: legalConfig,
             backgroundStreaming: {
@@ -213,7 +224,7 @@ export default defineNuxtConfig({
         '@vite-pwa/nuxt',
         ...(convexEnabled ? ['convex-nuxt'] : []),
         // Only include Clerk when SSR auth is enabled to preserve static builds
-        ...(isSsrAuthEnabled && or3CloudConfig.auth.provider === 'clerk'
+        ...(isSsrAuthEnabled && or3CloudConfig.auth.provider === AUTH_PROVIDER_IDS.clerk
             ? ['@clerk/nuxt']
             : []),
     ],

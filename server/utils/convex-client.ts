@@ -10,8 +10,10 @@ export function getConvexClient() {
     if (client) return client;
 
     const runtimeConfig = useRuntimeConfig();
-    const convexConfig = runtimeConfig.public.convex as { url?: string } | undefined;
-    const url = convexConfig?.url || (runtimeConfig.public.sync as { convexUrl?: string } | undefined)?.convexUrl;
+    const serverSync = runtimeConfig.sync as { convexUrl?: string } | undefined;
+    const publicSync = runtimeConfig.public.sync as { convexUrl?: string } | undefined;
+    const publicConvex = runtimeConfig.public.convex as { url?: string } | undefined;
+    const url = serverSync?.convexUrl || publicSync?.convexUrl || publicConvex?.url;
 
     if (typeof url !== 'string' || url.length === 0) {
         throw new Error('CONVEX_URL is not defined in runtime config');

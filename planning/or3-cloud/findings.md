@@ -12,6 +12,12 @@ This review covers:
 
 The three plans are directionally aligned, but there are several conflicts and missing edge cases that will cause data corruption, auth mismatches, or sync loops if not resolved before implementation.
 
+## Implementation updates (resolved)
+
+- Public runtime config now exposes only non-sensitive values; server-only storage providers stay private.
+- Provider identifiers are centralized in shared constants to reduce string drift across adapters.
+- Convex gateway clients are cached by token to avoid per-request client creation.
+
 ## Critical conflicts and gaps
 
 1) Dual source of truth for users/workspaces
@@ -68,3 +74,4 @@ The three plans are directionally aligned, but there are several conflicts and m
 ## Admin Dashboard notes
 
 - Admin plugin enablement is stored in `kv`, but runtime loading of installed plugins in the main app still needs a dedicated loader that filters by `plugins.enabled`. Until that is wired, enabling a plugin will not activate its UI extensions.
+- Restart/rebuild endpoints now block in development mode to avoid Nitro worker exits; operators should restart the dev server manually.

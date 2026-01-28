@@ -9,6 +9,7 @@ import { getAuthProvider } from './registry';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
 import { getConvexClient, api } from '../utils/convex-client';
 import { recordSessionResolution, recordProviderError } from './metrics';
+import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 const SESSION_CONTEXT_KEY_PREFIX = '__or3_session_context_';
 
@@ -24,7 +25,7 @@ export async function resolveSessionContext(
 ): Promise<SessionContext> {
     // Get provider from config for cache key
     const config = useRuntimeConfig();
-    const providerId = config.auth.provider || 'clerk';
+    const providerId = config.auth.provider || CLERK_PROVIDER_ID;
     const cacheKey = `${SESSION_CONTEXT_KEY_PREFIX}${providerId}`;
 
     // Check cache first

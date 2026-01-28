@@ -4,6 +4,7 @@
  */
 import { registerAuthProvider } from '../auth/registry';
 import { clerkAuthProvider } from '../auth/providers/clerk';
+import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 export default defineNitroPlugin(() => {
     const config = useRuntimeConfig();
@@ -15,7 +16,7 @@ export default defineNitroPlugin(() => {
 
     // Register Clerk as the default provider
     registerAuthProvider({
-        id: 'clerk',
+        id: CLERK_PROVIDER_ID,
         order: 100,
         create: () => clerkAuthProvider,
     });

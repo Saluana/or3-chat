@@ -7,9 +7,10 @@ import {
     getClerkProviderToken,
     getConvexGatewayClient,
 } from '../../../utils/sync/convex-gateway';
+import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
 
 async function getConvexClientWithAuth(event: H3Event) {
-    const token = await getClerkProviderToken(event, 'convex');
+    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
     if (!token) {
         throw createError({
             statusCode: 401,

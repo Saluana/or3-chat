@@ -1,8 +1,9 @@
 import type { H3Event } from 'h3';
 import type { ProviderAdminAdapter, ProviderAdminStatusResult, ProviderStatusContext } from '../types';
+import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 export const clerkAdminAdapter: ProviderAdminAdapter = {
-    id: 'clerk',
+    id: CLERK_PROVIDER_ID,
     kind: 'auth',
     async getStatus(_event: H3Event, ctx: ProviderStatusContext): Promise<ProviderAdminStatusResult> {
         const config = useRuntimeConfig();

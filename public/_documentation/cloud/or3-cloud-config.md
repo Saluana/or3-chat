@@ -167,6 +167,9 @@ if (config.public.sync.enabled) {
 }
 ```
 
+> [!NOTE]
+> `runtimeConfig.public` only includes **non-sensitive** values for client gating. For example, `limits.storageProvider` remains server-only and is intentionally omitted from the public runtime config.
+
 ### Direct Import
 
 ```typescript

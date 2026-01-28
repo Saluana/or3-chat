@@ -14,9 +14,10 @@ import type {
     RateLimitStats,
 } from '../types';
 import { memoryRateLimitProvider } from './memory';
+import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 export class ConvexRateLimitProvider implements RateLimitProvider {
-    readonly name = 'convex';
+    readonly name = CONVEX_PROVIDER_ID;
     private client: ConvexHttpClient | null = null;
     private initialized = false;
 
@@ -27,7 +28,9 @@ export class ConvexRateLimitProvider implements RateLimitProvider {
         this.initialized = true;
 
         const config = useRuntimeConfig();
-        const convexUrl = config.public.sync.convexUrl;
+        const convexUrl =
+            (config.sync as { convexUrl?: string } | undefined)?.convexUrl ??
+            config.public.sync.convexUrl;
 
         if (!convexUrl) {
             return null;

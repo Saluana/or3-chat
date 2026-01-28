@@ -6,6 +6,11 @@ import {
     getClerkProviderToken,
     getConvexGatewayClient,
 } from '../../../utils/sync/convex-gateway';
+import {
+    CLERK_PROVIDER_ID,
+    CONVEX_JWT_TEMPLATE,
+    CONVEX_STORAGE_PROVIDER_ID,
+} from '~~/shared/cloud/provider-ids';
 import type {
     ProviderAdminAdapter,
     ProviderAdminStatusResult,
@@ -25,18 +30,18 @@ function resolveRetentionSeconds(payload?: Record<string, unknown>): number {
 }
 
 export const convexStorageAdminAdapter: ProviderAdminAdapter = {
-    id: 'convex',
+    id: CONVEX_STORAGE_PROVIDER_ID,
     kind: 'storage',
     async getStatus(_event: H3Event, ctx: ProviderStatusContext): Promise<ProviderAdminStatusResult> {
         const warnings: ProviderAdminStatusResult['warnings'] = [];
-        if (ctx.enabled && ctx.provider !== 'convex') {
+        if (ctx.enabled && ctx.provider !== CONVEX_STORAGE_PROVIDER_ID) {
             warnings.push({
                 level: 'warning',
                 message: 'Storage provider mismatch.',
             });
         }
         const config = useRuntimeConfig();
-        if (ctx.enabled && config.auth.provider !== 'clerk') {
+        if (ctx.enabled && config.auth.provider !== CLERK_PROVIDER_ID) {
             warnings.push({
                 level: 'warning',
                 message:
@@ -68,7 +73,7 @@ export const convexStorageAdminAdapter: ProviderAdminAdapter = {
             });
         }
 
-        const token = await getClerkProviderToken(event, 'convex');
+        const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
         if (!token) {
             throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
         }

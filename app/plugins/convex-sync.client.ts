@@ -25,6 +25,10 @@ import {
 import { watch } from 'vue';
 import type { SyncProvider, SyncScope } from '~~/shared/sync/types';
 import { useConvexClient } from 'convex-vue';
+import {
+    CONVEX_GATEWAY_PROVIDER_ID,
+    CONVEX_PROVIDER_ID,
+} from '~~/shared/cloud/provider-ids';
 
 /** Sync engine state */
 interface SyncEngineState {
@@ -188,7 +192,7 @@ export default defineNuxtPlugin(async () => {
     if (
         !runtimeConfig.public.ssrAuthEnabled ||
         !runtimeConfig.public.sync?.enabled ||
-        runtimeConfig.public.sync?.provider !== 'convex'
+        runtimeConfig.public.sync?.provider !== CONVEX_PROVIDER_ID
     ) {
         console.log('[convex-sync] Sync disabled, skipping sync');
         return;
@@ -206,7 +210,7 @@ export default defineNuxtPlugin(async () => {
     try {
         const convexProvider = createConvexSyncProvider(convexClient);
         registerSyncProvider(convexProvider);
-        const gatewayProvider = createGatewaySyncProvider({ id: 'convex-gateway' });
+        const gatewayProvider = createGatewaySyncProvider({ id: CONVEX_GATEWAY_PROVIDER_ID });
         registerSyncProvider(gatewayProvider);
         console.log('[convex-sync] Registered Convex sync provider');
     } catch (error) {
@@ -297,7 +301,7 @@ async function ensureProviderAuth(provider: SyncProvider): Promise<SyncProvider 
     const providerAuth = provider.auth as ProviderTokenRequest;
     const token = await tokenBroker.getProviderToken(providerAuth);
     if (!token) {
-        const gatewayFallback = getSyncProvider(`${provider.id}-gateway`);
+        const gatewayFallback = getSyncProvider(CONVEX_GATEWAY_PROVIDER_ID);
         if (gatewayFallback) {
             console.warn(
                 '[convex-sync] Provider token unavailable, falling back to gateway mode'
@@ -311,7 +315,7 @@ async function ensureProviderAuth(provider: SyncProvider): Promise<SyncProvider 
         return null;
     }
 
-    if (provider.id === 'convex') {
+    if (provider.id === CONVEX_PROVIDER_ID) {
         if (!convexClient) {
             console.warn('[convex-sync] Convex client unavailable for auth');
         } else if (providerAuth) {

@@ -4,6 +4,7 @@
  */
 import type { H3Event } from 'h3';
 import type { AuthProvider, ProviderSession } from '../../types';
+import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 interface ClerkAuthContext {
     userId: string | null;
@@ -11,7 +12,7 @@ interface ClerkAuthContext {
 }
 
 export const clerkAuthProvider: AuthProvider = {
-    name: 'clerk',
+    name: CLERK_PROVIDER_ID,
 
     async getSession(event: H3Event): Promise<ProviderSession | null> {
         // Clerk middleware populates event.context.auth
@@ -19,7 +20,7 @@ export const clerkAuthProvider: AuthProvider = {
         if (!auth.userId) return null;
 
         return {
-            provider: 'clerk',
+            provider: CLERK_PROVIDER_ID,
             user: {
                 id: auth.userId,
                 // Email and displayName can be fetched via clerkClient().users.getUser()

@@ -1,6 +1,14 @@
 import { defineOr3Config } from '~~/utils/or3-config';
 import { defineOr3CloudConfig } from '~~/utils/or3-cloud-config';
 import type { Or3CloudConfig } from '~~/types/or3-cloud-config';
+import {
+    AUTH_PROVIDER_IDS,
+    BACKGROUND_PROVIDER_IDS,
+    DEFAULT_BACKGROUND_PROVIDER_ID,
+    DEFAULT_STORAGE_PROVIDER_ID,
+    DEFAULT_SYNC_PROVIDER_ID,
+    LIMITS_PROVIDER_IDS,
+} from '~~/shared/cloud/provider-ids';
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -94,7 +102,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
     const config: Or3CloudConfig = {
         auth: {
             enabled: authEnabled,
-            provider: (env.AUTH_PROVIDER ?? 'clerk') as 'clerk' | 'custom',
+            provider: (env.AUTH_PROVIDER ?? AUTH_PROVIDER_IDS.clerk) as 'clerk' | 'custom',
             clerk: {
                 publishableKey: env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY || undefined,
                 secretKey: env.NUXT_CLERK_SECRET_KEY || undefined,
@@ -102,7 +110,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
         },
         sync: {
             enabled: syncEnabled,
-            provider: (env.OR3_SYNC_PROVIDER ?? 'convex') as
+            provider: (env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) as
                 | 'convex'
                 | 'firebase'
                 | 'custom',
@@ -112,7 +120,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
         },
         storage: {
             enabled: storageEnabled,
-            provider: (env.NUXT_PUBLIC_STORAGE_PROVIDER ?? 'convex') as
+            provider: (env.NUXT_PUBLIC_STORAGE_PROVIDER ?? DEFAULT_STORAGE_PROVIDER_ID) as
                 | 'convex'
                 | 's3'
                 | 'custom',
@@ -132,7 +140,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
             maxConversations: envNum(env.OR3_MAX_CONVERSATIONS, 0) ?? 0,
             maxMessagesPerDay: envNum(env.OR3_MAX_MESSAGES_PER_DAY, 0) ?? 0,
             storageProvider: (env.OR3_LIMITS_STORAGE_PROVIDER ??
-                (syncEnabled ? 'convex' : 'memory')) as
+                (syncEnabled ? LIMITS_PROVIDER_IDS.convex : LIMITS_PROVIDER_IDS.memory)) as
                 | 'memory'
                 | 'convex'
                 | 'redis'
@@ -171,7 +179,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
         backgroundStreaming: {
             enabled: env.OR3_BACKGROUND_STREAMING_ENABLED === 'true',
             storageProvider: (env.OR3_BACKGROUND_STREAMING_PROVIDER ??
-                (syncEnabled ? 'convex' : 'memory')) as 'memory' | 'convex' | 'redis',
+                (syncEnabled ? BACKGROUND_PROVIDER_IDS.convex : DEFAULT_BACKGROUND_PROVIDER_ID)) as 'memory' | 'convex' | 'redis',
             maxConcurrentJobs: envNum(env.OR3_BACKGROUND_MAX_JOBS, 20) ?? 20,
             jobTimeoutSeconds: envNum(env.OR3_BACKGROUND_JOB_TIMEOUT, 300) ?? 300,
         },
