@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "license": "GPL-3.0",
     "scripts": {
-        "build": "nuxt build",
+        "build": "NODE_OPTIONS='--max-old-space-size=8192' nuxt build",
         "dev": "nuxt dev",
         "dev:ssr": "SSR_AUTH_ENABLED=true bun run dev",
         "convex-dev": "bunx convex dev",
