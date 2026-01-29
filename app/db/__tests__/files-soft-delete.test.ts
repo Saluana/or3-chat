@@ -29,6 +29,13 @@ vi.mock('../client', () => {
         async bulkGet(hashes: string[]) {
             return hashes.map((h) => rows.find((r) => r.hash === h));
         },
+        async bulkPut(metas: FileMeta[]) {
+            for (const meta of metas) {
+                const idx = rows.findIndex((row) => row.hash === meta.hash);
+                if (idx >= 0) rows[idx] = meta;
+                else rows.push(meta);
+            }
+        },
     };
 
     const mockDb = {

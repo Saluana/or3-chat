@@ -309,20 +309,32 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
     const hooks = useHooks();
     await getDb().transaction('rw', getDb().file_meta, async () => {
         const metas = await getDb().file_meta.bulkGet(unique);
+        const updates: FileMeta[] = [];
+        const payloads: DbDeletePayload<FileEntity>[] = [];
+
         for (let i = 0; i < unique.length; i++) {
             const hash = unique[i]!;
             const meta = metas[i];
             if (!meta || meta.deleted) continue;
             const payload = createFileDeletePayload(meta, hash);
             await hooks.doAction('db.files.delete:action:soft:before', payload);
+
             const now = nowSec();
-            await getDb().file_meta.put({
+            updates.push({
                 ...meta,
                 deleted: true,
                 deleted_at: now,
                 updated_at: now,
                 clock: nextClock(meta.clock),
             });
+            payloads.push(payload);
+        }
+
+        if (updates.length > 0) {
+            await getDb().file_meta.bulkPut(updates);
+        }
+
+        for (const payload of payloads) {
             await hooks.doAction('db.files.delete:action:soft:after', payload);
         }
     });
