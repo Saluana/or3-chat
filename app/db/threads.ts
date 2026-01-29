@@ -240,23 +240,21 @@ export async function forkThread(
                         action: 'forkCopyMessages',
                     }
                 )) || [];
-            for (const m of msgs) {
-                await dbTry(
-                    () =>
-                        getDb().messages.put({
-                            ...m,
-                            id: newId(),
-                            thread_id: forkId,
-                            clock: nextClock(),
-                        }),
-                    {
-                        op: 'write',
-                        entity: 'messages',
-                        action: 'forkCopyMessage',
-                    },
-                    { rethrow: true }
-                );
-            }
+            const newMessages = msgs.map((m) => ({
+                ...m,
+                id: newId(),
+                thread_id: forkId,
+                clock: nextClock(),
+            }));
+            await dbTry(
+                () => getDb().messages.bulkPut(newMessages),
+                {
+                    op: 'write',
+                    entity: 'messages',
+                    action: 'forkCopyMessages',
+                },
+                { rethrow: true }
+            );
             if (msgs.length > 0) {
                 await dbTry(
                     () =>
