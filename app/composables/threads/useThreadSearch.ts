@@ -32,6 +32,7 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
     const idToThread = ref<Record<string, Thread>>({});
 
     async function ensureIndex() {
+        if (import.meta.server) return;
         if (busy.value) return;
 
         busy.value = true;
@@ -100,6 +101,10 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
     }
 
     async function runSearch() {
+        if (import.meta.server) {
+            results.value = threads.value;
+            return;
+        }
         if (!dbInstance) await ensureIndex();
         if (!dbInstance) return;
         const raw = query.value.trim();
