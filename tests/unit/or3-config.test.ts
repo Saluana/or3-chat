@@ -106,4 +106,87 @@ describe('defineOr3Config', () => {
             expect(maxFiles).toBe(10);
         });
     });
+
+    describe('boundary conditions', () => {
+        it('throws on maxPanes exceeding max (8)', () => {
+            expect(() =>
+                defineOr3Config({ ui: { maxPanes: 9 } })
+            ).toThrow();
+        });
+
+        it('throws on defaultPaneCount below min (1)', () => {
+            expect(() =>
+                defineOr3Config({ ui: { defaultPaneCount: 0 } })
+            ).toThrow();
+        });
+
+        it('throws on negative file size limits', () => {
+            expect(() =>
+                defineOr3Config({ limits: { maxFileSizeBytes: -100 } })
+            ).toThrow();
+        });
+
+        it('accepts maxPanes at upper boundary (8)', () => {
+            const config = defineOr3Config({ ui: { maxPanes: 8 } });
+            expect(config.ui.maxPanes).toBe(8);
+        });
+
+        it('accepts defaultPaneCount at lower boundary (1)', () => {
+            const config = defineOr3Config({ ui: { defaultPaneCount: 1 } });
+            expect(config.ui.defaultPaneCount).toBe(1);
+        });
+
+        it('throws on localStorageQuotaMB as negative', () => {
+            expect(() =>
+                defineOr3Config({ limits: { localStorageQuotaMB: -10 } })
+            ).toThrow();
+        });
+
+        it('accepts maxCloudFileSizeBytes at reasonable values', () => {
+            const config = defineOr3Config({
+                limits: { maxCloudFileSizeBytes: 500 * 1024 * 1024 },
+            });
+            expect(config.limits.maxCloudFileSizeBytes).toBe(500 * 1024 * 1024);
+        });
+
+        it('throws on zero maxFilesPerMessage', () => {
+            expect(() =>
+                defineOr3Config({ limits: { maxFilesPerMessage: 0 } })
+            ).toThrow();
+        });
+    });
+
+    describe('error messages', () => {
+        it('produces readable error for validation failures', () => {
+            try {
+                defineOr3Config({ site: { name: '' } });
+                expect.fail('should have thrown');
+            } catch (err: any) {
+                expect(err.message).toContain('[or3-config]');
+                expect(err.message).toContain('site.name');
+            }
+        });
+
+        it('lists multiple errors when multiple fields invalid', () => {
+            try {
+                defineOr3Config({
+                    site: { name: '' },
+                    limits: { maxFilesPerMessage: 0 },
+                });
+                expect.fail('should have thrown');
+            } catch (err: any) {
+                expect(err.message).toContain('site.name');
+                expect(err.message).toContain('maxFilesPerMessage');
+            }
+        });
+
+        it('includes path in error messages', () => {
+            try {
+                defineOr3Config({ ui: { maxPanes: 10 } });
+                expect.fail('should have thrown');
+            } catch (err: any) {
+                expect(err.message).toContain('ui.maxPanes');
+            }
+        });
+    });
 });
