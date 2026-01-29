@@ -298,13 +298,20 @@ export async function hardDeleteMany(hashes: string[]): Promise<void> {
     const hooks = useHooks();
     await db.transaction('rw', db.file_meta, db.file_blobs, async () => {
         const metas = await db.file_meta.bulkGet(unique);
-        for (let i = 0; i < unique.length; i++) {
-            const hash = unique[i]!;
-            const meta = metas[i];
-            const payload = createFileDeletePayload(meta ?? undefined, hash);
+        const payloads = unique.map((hash, i) =>
+            createFileDeletePayload(metas[i] ?? undefined, hash)
+        );
+
+        for (const payload of payloads) {
             await hooks.doAction('db.files.delete:action:hard:before', payload);
-            await db.file_meta.delete(hash);
-            await db.file_blobs.delete(hash);
+        }
+
+        await Promise.all([
+            db.file_meta.bulkDelete(unique),
+            db.file_blobs.bulkDelete(unique),
+        ]);
+
+        for (const payload of payloads) {
             await hooks.doAction('db.files.delete:action:hard:after', payload);
         }
     });
