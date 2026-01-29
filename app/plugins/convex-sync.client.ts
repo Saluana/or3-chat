@@ -45,6 +45,7 @@ let engineState: SyncEngineState | null = null;
 let convexClient: ReturnType<typeof useConvexClient> | null = null;
 let authRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 const AUTH_RETRY_DELAYS = [500, 1000, 2000, 5000];
+let stopInFlight: Promise<void> | null = null;
 
 function getActiveWorkspaceId(): string | null {
     return engineState?.scope.workspaceId ?? null;
@@ -134,6 +135,7 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
  */
 async function stopSyncEngine(): Promise<void> {
     if (!engineState) return;
+    if (stopInFlight) return stopInFlight;
 
     console.log('[convex-sync] Stopping sync engine');
 
@@ -142,23 +144,33 @@ async function stopSyncEngine(): Promise<void> {
         authRetryTimeout = null;
     }
 
-    // Stop outbox
-    engineState.outboxManager.stop();
-    engineState.hookBridge.stop();
-    await engineState.subscriptionManager.stop();
-    engineState.gcManager.stop();
+    stopInFlight = (async () => {
+        // Stop outbox
+        engineState?.outboxManager.stop();
+        engineState?.hookBridge.stop();
+        await engineState?.subscriptionManager.stop();
+        engineState?.gcManager.stop();
 
-    // Dispose provider
-    await engineState.provider.dispose();
+        // Dispose provider
+        try {
+            await engineState?.provider.dispose();
+        } catch (error) {
+            console.warn('[convex-sync] Provider dispose failed:', error);
+        }
 
-    const scopeKey = `${engineState.scope.workspaceId}:${engineState.scope.projectId ?? 'default'}`;
-    cleanupSubscriptionManager(scopeKey);
-    cleanupCursorManager(engineState.db.name);
-    cleanupHookBridge(engineState.db.name);
+        if (engineState) {
+            const scopeKey = `${engineState.scope.workspaceId}:${engineState.scope.projectId ?? 'default'}`;
+            cleanupSubscriptionManager(scopeKey);
+            cleanupCursorManager(engineState.db.name);
+            cleanupHookBridge(engineState.db.name);
+        }
 
-    engineState = null;
+        engineState = null;
+        stopInFlight = null;
+        console.log('[convex-sync] Sync engine stopped');
+    })();
 
-    console.log('[convex-sync] Sync engine stopped');
+    return stopInFlight;
 }
 
 export default defineNuxtPlugin(async () => {

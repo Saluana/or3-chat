@@ -61,19 +61,141 @@ Matches the default architecture.
 *   **Proxy**: All requests go through the Nuxt server (`/api/storage/*`) to handle rate limiting and session validation before hitting Convex.
 
 ### Custom Providers
+
 To implement S3, Cloudflare R2, or others:
-1.  Implement `ObjectStorageProvider` (`core/storage/types.ts`).
-2.  Register via `registerStorageProvider`.
-3.  Update `nuxt.config.ts` or runtime config to select it.
+
+#### 1. Implement the Interface
 
 ```typescript
-export interface ObjectStorageProvider {
-    id: string;
-    getPresignedUploadUrl(input): Promise<PresignedUrlResult>;
-    getPresignedDownloadUrl(input): Promise<PresignedUrlResult>;
-    commitUpload?(input): Promise<void>;
+// providers/s3-storage-provider.ts
+import { registerStorageProvider } from '~/core/storage/sync-provider-registry';
+import type { ObjectStorageProvider, PresignedUrlResult } from '~/core/storage/types';
+
+export class S3StorageProvider implements ObjectStorageProvider {
+    id = 's3';
+    
+    private s3Client: S3Client;
+    private bucket: string;
+    
+    constructor(config: { region: string; bucket: string; credentials: Credentials }) {
+        this.s3Client = new S3Client({
+            region: config.region,
+            credentials: config.credentials,
+        });
+        this.bucket = config.bucket;
+    }
+    
+    async getPresignedUploadUrl(input: {
+        hash: string;
+        mimeType: string;
+        sizeBytes: number;
+        workspaceId: string;
+    }): Promise<PresignedUrlResult> {
+        const command = new PutObjectCommand({
+            Bucket: this.bucket,
+            Key: `${input.workspaceId}/${input.hash}`,
+            ContentType: input.mimeType,
+            ContentLength: input.sizeBytes,
+        });
+        
+        const url = await getSignedUrl(this.s3Client, command, {
+            expiresIn: 3600, // 1 hour
+        });
+        
+        return {
+            url,
+            method: 'PUT',
+            headers: {
+                'Content-Type': input.mimeType,
+            },
+        };
+    }
+    
+    async getPresignedDownloadUrl(input: {
+        hash: string;
+        workspaceId: string;
+    }): Promise<PresignedUrlResult> {
+        const command = new GetObjectCommand({
+            Bucket: this.bucket,
+            Key: `${input.workspaceId}/${input.hash}`,
+        });
+        
+        const url = await getSignedUrl(this.s3Client, command, {
+            expiresIn: 3600,
+        });
+        
+        return {
+            url,
+            method: 'GET',
+        };
+    }
 }
 ```
+
+#### 2. Register the Provider
+
+```typescript
+// plugins/s3-storage.client.ts
+import { registerStorageProvider } from '~/core/storage/sync-provider-registry';
+import { S3StorageProvider } from '~/providers/s3-storage-provider';
+
+export default defineNuxtPlugin(() => {
+    const config = useRuntimeConfig();
+    
+    if (config.public.storageProvider !== 's3') return;
+    
+    const provider = new S3StorageProvider({
+        region: config.s3.region,
+        bucket: config.s3.bucket,
+        credentials: {
+            accessKeyId: config.s3.accessKeyId,
+            secretAccessKey: config.s3.secretAccessKey,
+        },
+    });
+    
+    registerStorageProvider(provider);
+});
+```
+
+#### 3. Configure Environment Variables
+
+```bash
+# .env
+OR3_STORAGE_ENABLED=true
+NUXT_PUBLIC_STORAGE_PROVIDER=s3
+S3_REGION=us-east-1
+S3_BUCKET=my-or3-bucket
+S3_ACCESS_KEY_ID=AKIA...
+S3_SECRET_ACCESS_KEY=...
+```
+
+#### 4. Update Runtime Config
+
+```typescript
+// nuxt.config.ts
+export default defineNuxtConfig({
+    runtimeConfig: {
+        s3: {
+            region: process.env.S3_REGION,
+            bucket: process.env.S3_BUCKET,
+            accessKeyId: process.env.S3_ACCESS_KEY_ID,
+            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+        },
+        public: {
+            storageProvider: process.env.NUXT_PUBLIC_STORAGE_PROVIDER,
+        },
+    },
+});
+```
+
+### Provider Comparison
+
+| Provider | Best For | Setup Complexity | Cost |
+|----------|----------|------------------|------|
+| **Convex** | Default, simple setup | Low | Included with OR3 Cloud |
+| **S3** | Enterprise, large files | Medium | Pay per GB |
+| **Cloudflare R2** | No egress fees | Medium | Pay per GB stored |
+| **Backblaze B2** | Budget option | Medium | Very low cost |
 
 ---
 
@@ -83,3 +205,5 @@ export interface ObjectStorageProvider {
 *   **Size Limits**: Enforced at the Gateway level (default 100MB).
 *   **Permissions**: `requireCan(session, 'workspace.write')` checks on all operations.
 *   **Rate Limiting**: Per-user limits on upload/download generation endpoints.
+*   **Hash Verification**: Files verified against SHA-256 hash after download.
+*   **Presigned URLs**: Short-lived URLs (1 hour default) prevent unauthorized access.

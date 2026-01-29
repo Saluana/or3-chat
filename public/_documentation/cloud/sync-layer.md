@@ -17,7 +17,11 @@ The sync layer operates on a "local-first" principle. All UI reads and writes ta
 | **SubscriptionManager** | Manages real-time subscriptions to server changes and performs bootstrap/rescan operations. |
 | **ConflictResolver** | Applies remote changes to the local DB using Last-Write-Wins (LWW) and Hybrid Logical Clocks (HLC). |
 | **GcManager** | Periodically cleans up tombstones and old change logs to manage storage. |
+| **CursorManager** | Tracks the sync cursor (server version) per workspace for incremental sync. |
+| **RecentOpCache** | Prevents echoing of recently pushed operations back from the server. |
+| **SyncPayloadNormalizer** | Handles snake_case/camelCase field mapping and payload validation. |
 | **ConvexSyncProvider** | Adapter that communicates with the Convex backend APIs using the shared Sync Protocol. |
+| **GatewaySyncProvider** | Alternative provider that routes sync through SSR server endpoints. |
 
 ---
 
@@ -59,14 +63,62 @@ We use a **Last-Write-Wins (LWW)** strategy driven by **Hybrid Logical Clocks (H
 
 The sync engine emits lifecycle hooks that plugins can listen to:
 
+### Write Path Hooks
+
 | Hook Key | Description |
 |----------|-------------|
 | `sync.op:action:captured` | A local write was intercepted and queued. |
+| `sync.capture:action:failed` | Failed to capture a write (transaction error). |
 | `sync.push:action:after` | A batch of operations was successfully pushed. |
-| `sync.pull:action:received` | Remote changes were received from the server. |
-| `sync.conflict:action:detected` | A conflict occurred (local and remote modified same record). |
 | `sync.error:action` | A sync operation failed (retryable or permanent). |
+
+### Read Path Hooks
+
+| Hook Key | Description |
+|----------|-------------|
+| `sync.pull:action:received` | Remote changes were received from the server. |
+| `sync.pull:action:applied` | Remote changes were successfully applied to local DB. |
+| `sync.pull:action:error` | Failed to apply remote changes. |
+| `sync.conflict:action:detected` | A conflict occurred (local and remote modified same record). |
+
+### Bootstrap/Rescan Hooks
+
+| Hook Key | Description |
+|----------|-------------|
+| `sync.bootstrap:action:start` | Bootstrap (initial sync) has started. |
+| `sync.bootstrap:action:progress` | Bootstrap progress update (cursor, pulled count). |
+| `sync.bootstrap:action:complete` | Bootstrap has completed. |
+| `sync.rescan:action:starting` | Rescan (cursor reset) has started. |
+| `sync.rescan:action:progress` | Rescan progress update. |
+| `sync.rescan:action:completed` | Rescan has completed. |
+
+### Subscription Hooks
+
+| Hook Key | Description |
+|----------|-------------|
 | `sync.subscription:action:statusChange` | Connection status changed (connected, disconnected, syncing). |
+| `sync.subscription:action:maxRetriesExceeded` | Max reconnection attempts reached. |
+
+### Notification Suppression During Bootstrap
+
+**Important:** During bootstrap and rescan operations, certain notifications are automatically suppressed to avoid overwhelming the user:
+
+- **Sync conflict notifications** - Not created during bootstrap/rescan
+- **Sync error notifications** - Not created during bootstrap/rescan
+- **Historical conflicts** - Conflicts older than 24 hours never generate notifications
+
+This prevents the "notification storm" that would otherwise occur when loading a workspace for the first time or after a cursor reset.
+
+```typescript
+// These hooks are useful for showing loading indicators
+hooks.addAction('sync.bootstrap:action:start', () => {
+    showLoadingState('Syncing workspace data...');
+});
+
+hooks.addAction('sync.bootstrap:action:complete', () => {
+    hideLoadingState();
+});
+```
 
 
 ## Implementing a Custom Provider
@@ -175,3 +227,94 @@ To activate your provider:
 4.  Ensure `activeProviderId` is set to your provider's ID (or relying on default behavior if it's the only one).
 
 The `ConvexSyncClient` (`plugins/convex-sync.client.ts`) is a reference implementation showing how to hook into session state and start/stop the engine.
+
+---
+
+## Troubleshooting Sync Issues
+
+### Sync Not Working
+
+**Symptoms:** Changes don't appear on other devices, no sync activity visible.
+
+**Checks:**
+```bash
+# 1. Verify environment variables
+echo $SSR_AUTH_ENABLED  # Should be "true"
+echo $OR3_SYNC_ENABLED   # Should be "true"
+echo $VITE_CONVEX_URL    # Should be set
+```
+
+**Solutions:**
+- Ensure OR3 Cloud is enabled (see [or3-cloud-config](./or3-cloud-config))
+- Check network connectivity
+- Verify user is authenticated
+- Check browser console for sync errors
+
+### Too Many Conflict Notifications
+
+**Symptoms:** Dozens of "Sync conflict resolved" notifications on first load.
+
+**This is now fixed** - The system automatically:
+- Suppresses conflict notifications during bootstrap/rescan
+- Filters out historical conflicts (older than 24 hours)
+- Deduplicates conflicts within a 15-second window
+
+If you still see many notifications:
+- Check that `notification-listeners.client.ts` is loaded
+- Look for debug logs: `[notify] Skipping historical conflict notification`
+
+### Bootstrap Taking Too Long
+
+**Symptoms:** Initial workspace load is very slow.
+
+**Solutions:**
+- This is normal for large workspaces (1000+ records)
+- Bootstrap is paginated (100 records per batch)
+- Monitor progress via `sync.bootstrap:action:progress` hook
+- Consider implementing a loading indicator
+
+### Cursor Reset / Rescan Loop
+
+**Symptoms:** Sync keeps restarting, data re-downloads frequently.
+
+**Causes:**
+- Cursor expiration (default 7 days)
+- Device cursor tracking issues
+- Server-side garbage collection
+
+**Solutions:**
+- Check `sync.rescan:action:starting` hook frequency
+- Verify device cursor is being updated via `updateDeviceCursor`
+- Review GC retention settings
+
+### Data Not Appearing After Sync
+
+**Symptoms:** Sync completes but data doesn't show in UI.
+
+**Checks:**
+```typescript
+// 1. Verify sync completed
+hooks.addAction('sync.bootstrap:action:complete', (data) => {
+    console.log('Bootstrap complete:', data);
+    // Check totalPulled count
+});
+
+// 2. Check Dexie directly
+const db = getDb();
+const count = await db.messages.count();
+console.log('Local message count:', count);
+```
+
+**Solutions:**
+- Verify live queries are set up correctly
+- Check for filter predicates that might exclude data
+- Ensure user_id matches between synced data and queries
+
+---
+
+## Related
+
+- [Notifications](./notifications) - Notification system that integrates with sync
+- [Auth System](./auth-system) - Authentication required for sync
+- [Troubleshooting](./troubleshooting) - General troubleshooting guide
+- [Hooks](../hooks/hooks) - Hook system for sync events

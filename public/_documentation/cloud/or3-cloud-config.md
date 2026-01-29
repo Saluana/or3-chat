@@ -2,6 +2,10 @@
 
 Server-side configuration for authentication, sync, storage, rate limiting, and security. **Requires SSR mode.**
 
+For a complete, setting-by-setting deep dive (including defaults, strict-mode requirements, and how env vars are interpreted), see:
+
+- [Configuration Reference](./config-reference)
+
 ## Quick Start
 
 ```typescript

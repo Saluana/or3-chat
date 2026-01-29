@@ -2,6 +2,10 @@
 
 Local-first configuration for site branding, feature toggles, and client-side limits. Works with both static and SSR builds.
 
+For a complete, setting-by-setting deep dive (including defaults, validation rules, and how each setting affects behavior), see:
+
+- [Configuration Reference](./config-reference)
+
 ## Quick Start
 
 ```typescript
@@ -27,7 +31,7 @@ export const or3Config = defineOr3Config({
 |-----|--------------|---------|-------------|
 | `site.name` | `OR3_SITE_NAME` | `"OR3"` | Display name in UI and PWA manifest |
 | `site.description` | `OR3_SITE_DESCRIPTION` | `""` | Meta description |
-| `site.logoUrl` | `OR3_LOGO_URL` | `"/logos/logo-svg.svg"` | Custom logo URL |
+| `site.logoUrl` | `OR3_LOGO_URL` | `""` | Custom logo URL |
 | `site.faviconUrl` | `OR3_FAVICON_URL` | `""` | Custom favicon URL |
 | `site.defaultTheme` | `OR3_DEFAULT_THEME` | `"blank"` | Default theme name |
 
@@ -67,7 +71,7 @@ All features are **enabled by default**. Set env to `'false'` to disable.
 | `limits.maxFileSizeBytes` | `OR3_MAX_FILE_SIZE_BYTES` | `20MB` | Max upload size |
 | `limits.maxCloudFileSizeBytes` | `OR3_MAX_CLOUD_FILE_SIZE_BYTES` | `100MB` | Max cloud upload size |
 | `limits.maxFilesPerMessage` | `OR3_MAX_FILES_PER_MESSAGE` | `10` | Max attachments per message |
-| `limits.localStorageQuotaMB` | `OR3_LOCAL_STORAGE_QUOTA_MB` | `500` | Storage warning threshold |
+| `limits.localStorageQuotaMB` | `OR3_LOCAL_STORAGE_QUOTA_MB` | `null` | Storage warning threshold |
 
 ### UI Defaults
 
