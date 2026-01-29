@@ -95,6 +95,14 @@ export interface Or3CloudConfig {
                  * @default true
                  */
                 allowUserOverride?: boolean;
+
+                /**
+                 * If true, requires users to provide their own key and ignores
+                 * the instance key even if it is set.
+                 * @env OR3_OPENROUTER_REQUIRE_USER_KEY
+                 * @default false
+                 */
+                requireUserKey?: boolean;
             };
         };
     };

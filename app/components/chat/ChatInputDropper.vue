@@ -380,11 +380,14 @@ const webSearchEnabled = ref<boolean>(false);
 const LAST_MODEL_KEY = 'last_selected_model';
 const runtimeConfig = useRuntimeConfig();
 const openRouterConfig = computed(() => runtimeConfig.public?.openRouter ?? {});
+const requireUserKey = computed(
+    () => openRouterConfig.value.requireUserKey === true
+);
 const allowUserOverride = computed(
-    () => openRouterConfig.value.allowUserOverride !== false
+    () => openRouterConfig.value.allowUserOverride !== false || requireUserKey.value
 );
 const hasInstanceKey = computed(
-    () => openRouterConfig.value.hasInstanceKey === true
+    () => openRouterConfig.value.hasInstanceKey === true && !requireUserKey.value
 );
 
 // Use VueUse's useLocalStorage for persisted model selection

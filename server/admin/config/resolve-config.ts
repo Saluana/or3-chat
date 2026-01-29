@@ -131,6 +131,8 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
                     instanceApiKey: env.OPENROUTER_API_KEY || undefined,
                     allowUserOverride:
                         env.OR3_OPENROUTER_ALLOW_USER_OVERRIDE !== 'false',
+                    requireUserKey:
+                        env.OR3_OPENROUTER_REQUIRE_USER_KEY === 'true',
                 },
             },
         },

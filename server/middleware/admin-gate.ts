@@ -6,6 +6,8 @@ import {
 } from 'h3';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
 import { normalizeHost } from '../utils/normalize-host';
+import { resolveSessionContext } from '../auth/session';
+import { requireCan } from '../auth/can';
 
 function isAdminPath(path: string, basePath: string): boolean {
     if (basePath === '/') return true;
@@ -14,7 +16,7 @@ function isAdminPath(path: string, basePath: string): boolean {
 }
 
 
-export default defineEventHandler((event) => {
+export default defineEventHandler(async (event) => {
     const config = useRuntimeConfig();
     const adminConfig = config.admin as { basePath?: string; allowedHosts?: string[] } | undefined;
     const basePath = adminConfig?.basePath || '/admin';
@@ -40,6 +42,10 @@ export default defineEventHandler((event) => {
             throw createError({ statusCode: 404, statusMessage: 'Not Found' });
         }
     }
+
+    // Check admin permission using can()
+    const session = await resolveSessionContext(event);
+    requireCan(session, 'admin.access');
 
     if (basePath !== defaultPath && isBasePath && !isDefaultPath) {
         const rest =

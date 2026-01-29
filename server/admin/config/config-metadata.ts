@@ -404,6 +404,13 @@ export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
         order: 2,
         valueType: 'boolean',
     },
+    'OR3_OPENROUTER_REQUIRE_USER_KEY': {
+        label: 'Require User API Key',
+        description: 'Require users to provide their own OpenRouter API keys (ignore instance key)',
+        group: 'External Services',
+        order: 3,
+        valueType: 'boolean',
+    },
 };
 
 export function getConfigMetadata(key: string): ConfigMetadata | undefined {

@@ -57,6 +57,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
 |-----|--------------|---------|-------------|
 | `services.llm.openRouter.instanceApiKey` | `OPENROUTER_API_KEY` | — | Managed API key (optional) |
 | `services.llm.openRouter.allowUserOverride` | `OR3_OPENROUTER_ALLOW_USER_OVERRIDE` | `true` | Allow user-provided keys |
+| `services.llm.openRouter.requireUserKey` | `OR3_OPENROUTER_REQUIRE_USER_KEY` | `false` | Require user keys and ignore instance key |
 
 ### Rate Limiting
 

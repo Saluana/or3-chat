@@ -43,6 +43,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
             openRouter: {
                 instanceApiKey: undefined,
                 allowUserOverride: true,
+                requireUserKey: false,
             },
         },
     },
@@ -135,6 +136,7 @@ const cloudConfigSchema = z
                             .object({
                                 instanceApiKey: z.string().optional(),
                                 allowUserOverride: z.boolean().optional(),
+                                requireUserKey: z.boolean().optional(),
                             })
                             .optional(),
                     })
@@ -272,6 +274,11 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
     }
 
     const openRouter = config.services.llm?.openRouter;
+    if (openRouter?.requireUserKey === true && openRouter.allowUserOverride === false) {
+        errors.push(
+            'services.llm.openRouter.allowUserOverride must be true when requireUserKey is true.'
+        );
+    }
     if (openRouter?.allowUserOverride === false && !openRouter.instanceApiKey) {
         errors.push(
             'services.llm.openRouter.instanceApiKey is required when allowUserOverride is false.'

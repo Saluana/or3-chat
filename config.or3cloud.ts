@@ -59,6 +59,8 @@ export const or3CloudConfig = defineOr3CloudConfig({
                 instanceApiKey: process.env.OPENROUTER_API_KEY,
                 allowUserOverride:
                     process.env.OR3_OPENROUTER_ALLOW_USER_OVERRIDE !== 'false',
+                requireUserKey:
+                    process.env.OR3_OPENROUTER_REQUIRE_USER_KEY === 'true',
             },
         },
     },

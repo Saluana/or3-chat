@@ -112,6 +112,8 @@ export default defineNuxtConfig({
             or3CloudConfig.services.llm?.openRouter?.instanceApiKey || '',
         openrouterAllowUserOverride:
             or3CloudConfig.services.llm?.openRouter?.allowUserOverride ?? true,
+        openrouterRequireUserKey:
+            or3CloudConfig.services.llm?.openRouter?.requireUserKey ?? false,
         clerkSecretKey: '', // Auto-mapped from NUXT_CLERK_SECRET_KEY
         auth: {
             enabled: isSsrAuthEnabled,
@@ -153,6 +155,9 @@ export default defineNuxtConfig({
                 hasInstanceKey: Boolean(
                     or3CloudConfig.services.llm?.openRouter?.instanceApiKey
                 ),
+                requireUserKey:
+                    or3CloudConfig.services.llm?.openRouter?.requireUserKey ??
+                    false,
             },
             storage: {
                 enabled: or3CloudConfig.storage.enabled,
