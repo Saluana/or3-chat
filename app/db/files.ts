@@ -1,3 +1,4 @@
+import Dexie from 'dexie';
 import { getDb } from './client';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, nextClock } from './util';
@@ -346,24 +347,32 @@ export async function restoreMany(hashes: string[]): Promise<void> {
     const hooks = useHooks();
     await getDb().transaction('rw', getDb().file_meta, async () => {
         const metas = await getDb().file_meta.bulkGet(unique);
+        const updates: FileMeta[] = [];
+
         for (let i = 0; i < unique.length; i++) {
             const meta = metas[i];
             if (!meta || meta.deleted !== true) continue;
-            await hooks.doAction(
-                'db.files.restore:action:before',
-                toFileEntity(meta)
+            await Dexie.waitFor(
+                hooks.doAction('db.files.restore:action:before', toFileEntity(meta))
             );
-            const updatedMeta = {
+            updates.push({
                 ...meta,
                 deleted: false,
                 updated_at: nowSec(),
                 clock: nextClock(meta.clock),
-            } as FileMeta;
-            await getDb().file_meta.put(updatedMeta);
-            await hooks.doAction(
-                'db.files.restore:action:after',
-                toFileEntity(updatedMeta)
-            );
+            } as FileMeta);
+        }
+
+        if (updates.length > 0) {
+            await getDb().file_meta.bulkPut(updates);
+            for (const updatedMeta of updates) {
+                await Dexie.waitFor(
+                    hooks.doAction(
+                        'db.files.restore:action:after',
+                        toFileEntity(updatedMeta)
+                    )
+                );
+            }
         }
     });
 }

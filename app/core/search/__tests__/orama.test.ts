@@ -5,6 +5,9 @@ const mockOramaModule = {
     create: vi.fn(),
     insertMultiple: vi.fn(),
     search: vi.fn(),
+    insert: vi.fn(),
+    remove: vi.fn(),
+    update: vi.fn(),
 };
 
 // Store original window for SSR test
@@ -176,6 +179,53 @@ describe('Orama search helpers', () => {
             
             expect(isStale1).toBe(true);
             expect(isStale2).toBe(false);
+        });
+    });
+
+    describe('insertDoc', () => {
+        it('should insert a single document', async () => {
+            const mockDb = { id: 'test-db' };
+            mockOramaModule.insert.mockResolvedValue('new-id');
+            vi.doMock('@orama/orama', () => mockOramaModule);
+
+            const { insertDoc } = await import('../orama');
+            const doc = { title: 'New Doc' };
+            const result = await insertDoc(mockDb, doc);
+
+            expect(mockOramaModule.insert).toHaveBeenCalledWith(mockDb, doc);
+            expect(result).toBe('new-id');
+        });
+    });
+
+    describe('removeDoc', () => {
+        it('should remove a document by id', async () => {
+            const mockDb = { id: 'test-db' };
+            mockOramaModule.remove.mockResolvedValue(undefined);
+            vi.doMock('@orama/orama', () => mockOramaModule);
+
+            const { removeDoc } = await import('../orama');
+            await removeDoc(mockDb, 'doc-1');
+
+            expect(mockOramaModule.remove).toHaveBeenCalledWith(mockDb, 'doc-1');
+        });
+    });
+
+    describe('updateDoc', () => {
+        it('should update a document', async () => {
+            const mockDb = { id: 'test-db' };
+            mockOramaModule.update.mockResolvedValue('doc-1');
+            vi.doMock('@orama/orama', () => mockOramaModule);
+
+            const { updateDoc } = await import('../orama');
+            const doc = { title: 'Updated' };
+            const result = await updateDoc(mockDb, 'doc-1', doc);
+
+            expect(mockOramaModule.update).toHaveBeenCalledWith(
+                mockDb,
+                'doc-1',
+                doc
+            );
+            expect(result).toBe('doc-1');
         });
     });
 });

@@ -407,9 +407,10 @@ export async function normalizeThreadIndexes(
             .toArray();
         msgs.sort((a, b) => a.index - b.index);
         let idx = start;
+        const updates: Message[] = [];
         for (const m of msgs) {
             if (m.index !== idx) {
-                await getDb().messages.put({
+                updates.push({
                     ...m,
                     index: idx,
                     updated_at: nowSec(),
@@ -417,6 +418,9 @@ export async function normalizeThreadIndexes(
                 });
             }
             idx += step;
+        }
+        if (updates.length > 0) {
+            await getDb().messages.bulkPut(updates);
         }
         await hooks.doAction('db.messages.normalize:action:after', {
             threadId,
