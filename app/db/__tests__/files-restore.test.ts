@@ -94,7 +94,7 @@ describe('restoreMany', () => {
                 ref_count: 1
             }
         ];
-        await db.file_meta.put(metas[0]);
+        await db.file_meta.put(metas[0]!);
 
         await restoreMany(['h3']);
 
