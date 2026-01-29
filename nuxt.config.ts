@@ -216,6 +216,9 @@ export default defineNuxtConfig({
             },
         },
     },
+    build: {
+        transpile: ['@clerk/nuxt'],
+    },
     devtools: {
         enabled: true,
 
