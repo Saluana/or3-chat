@@ -20,29 +20,40 @@ export function useOr3Config(): Readonly<ResolvedOr3Config> {
     if (process.client) {
         const runtimeConfig = useRuntimeConfig();
         const publicFeatures = runtimeConfig.public.features;
-        
+
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (publicFeatures) {
             return {
                 ...or3Config,
                 features: {
                     workflows: {
+                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                         enabled: publicFeatures.workflows?.enabled ?? or3Config.features.workflows.enabled,
+                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                         editor: publicFeatures.workflows?.editor ?? or3Config.features.workflows.editor,
+                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                         slashCommands: publicFeatures.workflows?.slashCommands ?? or3Config.features.workflows.slashCommands,
+                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                         execution: publicFeatures.workflows?.execution ?? or3Config.features.workflows.execution,
                     },
                     documents: {
+                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                         enabled: publicFeatures.documents?.enabled ?? or3Config.features.documents.enabled,
                     },
                     backup: {
+                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                         enabled: publicFeatures.backup?.enabled ?? or3Config.features.backup.enabled,
                     },
                     mentions: {
+                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                         enabled: publicFeatures.mentions?.enabled ?? or3Config.features.mentions.enabled,
+                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                         documents: publicFeatures.mentions?.documents ?? or3Config.features.mentions.documents,
+                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                         conversations: publicFeatures.mentions?.conversations ?? or3Config.features.mentions.conversations,
                     },
                     dashboard: {
+                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                         enabled: publicFeatures.dashboard?.enabled ?? or3Config.features.dashboard.enabled,
                     },
                 },
@@ -72,6 +83,7 @@ export function isFeatureEnabled(
 ): boolean {
     if (process.client) {
         const runtimeConfig = useRuntimeConfig();
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         return runtimeConfig.public.features?.[feature]?.enabled ?? or3Config.features[feature].enabled;
     }
     return or3Config.features[feature].enabled;
@@ -89,8 +101,11 @@ export function isWorkflowFeatureEnabled(
 ): boolean {
     if (process.client) {
         const runtimeConfig = useRuntimeConfig();
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         const workflows = runtimeConfig.public.features?.workflows;
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (workflows) {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
             return workflows.enabled && (workflows[subFeature] ?? true);
         }
     }
@@ -108,8 +123,11 @@ export function isWorkflowFeatureEnabled(
 export function isMentionSourceEnabled(source: 'documents' | 'conversations'): boolean {
     if (process.client) {
         const runtimeConfig = useRuntimeConfig();
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         const mentions = runtimeConfig.public.features?.mentions;
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (mentions) {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
             return mentions.enabled && (mentions[source] ?? true);
         }
     }

@@ -194,6 +194,7 @@ export async function installExtensionFromZip(
         };
 
         const unzipper = new Unzip((file) => {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
             if (!file || typeof file.name !== 'string') return;
 
             const normalizedKey = normalizeEntryKey(file.name);
@@ -237,7 +238,7 @@ export async function installExtensionFromZip(
                         err instanceof Error ? err : new Error(String(err));
                     return;
                 }
-                if (data?.length) {
+                if (data.length) {
                     if (totalBytes + data.length > limits.maxTotalBytes) {
                         extractionError = new Error(
                             'Extension exceeds unpacked size limit'
