@@ -71,6 +71,9 @@
   "trustedDependencies": [
     "@parcel/watcher",
   ],
+  "patchedDependencies": {
+    "@clerk/nuxt@1.13.12": "patches/@clerk%2Fnuxt@1.13.12.patch",
+  },
   "packages": {
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
 

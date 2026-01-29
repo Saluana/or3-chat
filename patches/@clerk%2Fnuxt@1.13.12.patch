@@ -1,0 +1,17 @@
+diff --git a/dist/runtime/server/index.js b/dist/runtime/server/index.js
+index 29ac60059e9203b2001b0f48d9bf98c3ea8b4e37..08c7955d5ef8b9a570f9765843830a25c5cefa4d 100644
+--- a/dist/runtime/server/index.js
++++ b/dist/runtime/server/index.js
+@@ -1,8 +1,8 @@
+ export * from "@clerk/backend";
+-import { clerkClient } from "./clerkClient";
+-import { clerkMiddleware } from "./clerkMiddleware";
+-import { createRouteMatcher } from "./routeMatcher";
+-import { getAuth } from "./getAuth";
++import { clerkClient } from "./clerkClient.js";
++import { clerkMiddleware } from "./clerkMiddleware.js";
++import { createRouteMatcher } from "./routeMatcher.js";
++import { getAuth } from "./getAuth.js";
+ export {
+   clerkClient,
+   clerkMiddleware,

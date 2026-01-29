@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "license": "GPL-3.0",
     "scripts": {
-        "build": "NODE_OPTIONS='--max-old-space-size=4096' nuxt build",
+        "build": "NODE_OPTIONS='--max-old-space-size=3072' nuxt build",
         "dev": "nuxt dev",
         "dev:ssr": "SSR_AUTH_ENABLED=true bun run dev",
         "convex-dev": "bunx convex dev",
@@ -88,5 +88,8 @@
     },
     "trustedDependencies": [
         "@parcel/watcher"
-    ]
+    ],
+    "patchedDependencies": {
+        "@clerk/nuxt@1.13.12": "patches/@clerk%2Fnuxt@1.13.12.patch"
+    }
 }
