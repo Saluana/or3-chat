@@ -329,6 +329,7 @@ export default defineNuxtConfig({
             format: 'es',
         },
         build: {
+            sourcemap: false, // Disable sourcemaps to save memory during build
             rollupOptions: {
                 output: {
                     manualChunks(id) {
