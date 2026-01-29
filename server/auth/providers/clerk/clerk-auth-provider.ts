@@ -23,23 +23,30 @@ export const clerkAuthProvider: AuthProvider = {
             return null;
         }
 
+        // Validate session expiry claim
+        if (typeof auth.sessionClaims.exp !== 'number' || auth.sessionClaims.exp <= 0) {
+            throw new Error('Invalid or missing session expiry claim');
+        }
+
         // Fetch full user details from Clerk
         const clerkUser = await clerkClient(event).users.getUser(auth.userId);
         const primaryEmail = clerkUser.emailAddresses.find(
             (email) => email.id === clerkUser.primaryEmailAddressId
         );
 
+        // Require valid primary email
+        if (!primaryEmail?.emailAddress) {
+            throw new Error('User has no verified primary email address');
+        }
+
         return {
             provider: CLERK_PROVIDER_ID,
             user: {
                 id: auth.userId,
-                email: primaryEmail?.emailAddress ?? '',
-                displayName: clerkUser.firstName || clerkUser.username || '',
+                email: primaryEmail.emailAddress,
+                displayName: clerkUser.firstName || clerkUser.username || primaryEmail.emailAddress,
             },
-            expiresAt: new Date(
-                ((auth.sessionClaims.exp) || 0) * 1000 ||
-                    Date.now() + 3600000
-            ),
+            expiresAt: new Date(auth.sessionClaims.exp * 1000),
             claims: auth.sessionClaims,
         };
     },

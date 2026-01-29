@@ -5,30 +5,51 @@ import type { H3Event } from 'h3';
 import { createError } from 'h3';
 import { ConvexHttpClient } from 'convex/browser';
 import { useRuntimeConfig } from '#imports';
+import { z } from 'zod';
+
+// Validate Clerk auth context structure
+const ClerkAuthContextSchema = z.object({
+    getToken: z.function()
+        .args(z.object({
+            template: z.string().optional(),
+            skipCache: z.boolean().optional(),
+        }).optional())
+        .returns(z.promise(z.string().nullable())),
+});
 
 export async function getClerkProviderToken(
     event: H3Event,
     template?: string
 ): Promise<string | null> {
-    const auth: unknown = event.context.auth?.();
-    const getToken =
-        auth && typeof (auth as { getToken?: unknown }).getToken === 'function'
-            ? ((auth as {
-                  getToken: (options?: {
-                      template?: string;
-                      skipCache?: boolean;
-                  }) => Promise<string | null>;
-              }).getToken)
-            : undefined;
+    const authResult = event.context.auth?.();
+    if (!authResult) {
+        return null;
+    }
 
-    if (!getToken) {
+    // Validate auth context structure
+    const parsed = ClerkAuthContextSchema.safeParse(authResult);
+    if (!parsed.success) {
+        console.error('[sync-gateway] Invalid auth context structure:', {
+            error: parsed.error.message,
+        });
         return null;
     }
 
     try {
-        return await getToken({ template, skipCache: false });
+        const token = await parsed.data.getToken({ template, skipCache: false });
+        
+        // Validate token is non-empty
+        if (!token || token.trim().length === 0) {
+            console.warn('[sync-gateway] Empty or whitespace-only token returned');
+            return null;
+        }
+        
+        return token;
     } catch (error) {
-        console.error('[sync-gateway] Failed to mint provider token:', error);
+        console.error('[sync-gateway] Failed to mint provider token:', {
+            template,
+            error: error instanceof Error ? error.message : String(error),
+        });
         return null;
     }
 }
