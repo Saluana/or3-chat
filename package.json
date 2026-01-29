@@ -17,7 +17,7 @@
         "analyze": "bun run build && npx vite-bundle-visualizer dist/stats.html",
         "eslint": "eslint",
         "lint": "echo 'Lint script would go here'",
-        "type-check": "nuxt typecheck",
+        "type-check": "SSR_AUTH_ENABLED=true nuxt typecheck",
         "theme:validate": "tsx scripts/cli/validate-theme.ts",
         "theme:create": "tsx scripts/cli/create-theme.ts",
         "theme:switch": "tsx scripts/cli/switch-theme.ts",
