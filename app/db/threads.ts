@@ -8,6 +8,7 @@ import {
     ThreadSchema,
     type Thread,
     type ThreadCreate,
+    type Message,
 } from './schema';
 
 export async function createThread(input: ThreadCreate): Promise<Thread> {
@@ -240,7 +241,7 @@ export async function forkThread(
                         action: 'forkCopyMessages',
                     }
                 )) || [];
-            const newMessages = msgs.map((m) => ({
+            const newMessages: Message[] = msgs.map((m) => ({
                 ...m,
                 id: newId(),
                 thread_id: forkId,

@@ -66,7 +66,7 @@ const dbState = vi.hoisted(() => {
     const tables = {
         threads: createTable('threads', 'id'),
         messages: createTable('messages', 'id'),
-        // Add others to satisfy dependencies if any, though forkThread mainly touches these
+        // Add others to satisfy dependencies if any
         projects: createTable('projects', 'id'),
         posts: createTable('posts', 'id'),
         kv: createTable('kv', 'id'),
@@ -176,9 +176,6 @@ describe('forkThread optimization', () => {
         const messageBulkPutCount = dbState.bulkPutCounts.get('messages');
 
         console.log(`Message Puts: ${messagePutCount}, Message BulkPuts: ${messageBulkPutCount}`);
-
-        // Current behavior (Unoptimized): Expect 1 put per message, 0 bulkPut
-        // Optimized behavior: Expect 0 put per message, 1 bulkPut
 
         // Assert optimized behavior
         expect(messagePutCount).toBe(0);
