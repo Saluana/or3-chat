@@ -36,6 +36,21 @@
                     autoresize
                     class="w-full"
                 />
+                <div class="flex flex-col gap-1">
+                    <label class="text-xs font-semibold">On sign out</label>
+                    <USelectMenu
+                        v-model="createLogoutPolicy"
+                        :items="logoutPolicyItems"
+                        :value-key="'value'"
+                        :label-key="'label'"
+                        size="sm"
+                        class="w-full"
+                        v-bind="logoutPolicySelectProps"
+                    />
+                    <p class="text-[11px] opacity-70">
+                        Choose whether this workspace stays on this device after you sign out.
+                    </p>
+                </div>
             </div>
             <div class="flex flex-wrap items-center justify-between gap-3 text-xs opacity-70">
                 <span>
@@ -91,6 +106,12 @@
                             <p class="text-[11px] opacity-60">
                                 Role: {{ workspace.role }}
                             </p>
+                            <p class="text-[11px] opacity-60">
+                                On sign out:
+                                <span class="font-medium">
+                                    {{ formatLogoutPolicy(workspacePolicies[workspace._id]) }}
+                                </span>
+                            </p>
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <UButton
@@ -133,6 +154,21 @@
                             autoresize
                             class="w-full"
                         />
+                        <div class="flex flex-col gap-1">
+                            <label class="text-xs font-semibold">On sign out</label>
+                            <USelectMenu
+                                v-model="editLogoutPolicy"
+                                :items="logoutPolicyItems"
+                                :value-key="'value'"
+                                :label-key="'label'"
+                                size="sm"
+                                class="w-full"
+                                v-bind="logoutPolicySelectProps"
+                            />
+                            <p class="text-[11px] opacity-70">
+                                Keep or clear this workspace on this device after you sign out.
+                            </p>
+                        </div>
                         <div class="flex gap-2">
                             <UButton
                                 size="sm"
@@ -170,10 +206,12 @@ import {
     getWorkspaceDb,
 } from '~/db/client';
 import { getKvByName, setKvByName } from '~/db/kv';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const toast = useToast();
 const baseDb = getDefaultDb();
 const cacheKey = 'workspace.manager.cache';
+const logoutPolicyPrefix = 'workspace.logout.policy.';
 
 type WorkspaceSummary = {
     _id: Id<'workspaces'>;
@@ -199,6 +237,31 @@ const creating = ref(false);
 const selecting = ref(false);
 const saving = ref(false);
 const deletingWorkspaceId = ref<Id<'workspaces'> | null>(null);
+type LogoutPolicy = 'keep' | 'clear';
+const createLogoutPolicy = ref<LogoutPolicy>('keep');
+const editLogoutPolicy = ref<LogoutPolicy>('keep');
+const workspacePolicies = ref<Record<string, LogoutPolicy>>({});
+const logoutPolicyItems: Array<{ label: string; value: LogoutPolicy }> = [
+    { label: 'Keep on this device', value: 'keep' },
+    { label: 'Clear from this device', value: 'clear' },
+];
+
+const logoutPolicySelectProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'selectmenu',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.logout-policy',
+        isNuxtUI: true,
+    });
+    const overrideValue: Record<string, unknown> = overrides.value || {};
+    const mergedClass = ['w-full', overrideValue.class || '']
+        .filter(Boolean)
+        .join(' ');
+    return {
+        ...overrideValue,
+        class: mergedClass,
+    };
+});
 
 const cachedWorkspaces = ref<WorkspaceSummary[]>([]);
 const cachedActiveId = ref<Id<'workspaces'> | null>(null);
@@ -318,13 +381,17 @@ watch(
         if (!list) return;
         cachedWorkspaces.value = list as WorkspaceSummary[];
         await saveCache(cachedWorkspaces.value);
+        await loadWorkspacePolicies(cachedWorkspaces.value);
     },
     { immediate: true }
 );
 
-onMounted(() => {
-    loadCache();
-    loadLegacyStats();
+onMounted(async () => {
+    await loadCache();
+    await loadLegacyStats();
+    if (cachedWorkspaces.value.length > 0) {
+        await loadWorkspacePolicies(cachedWorkspaces.value);
+    }
 });
 
 const editingWorkspaceId = ref<Id<'workspaces'> | null>(null);
@@ -335,12 +402,33 @@ function startEdit(workspace: WorkspaceSummary) {
     editingWorkspaceId.value = workspace._id;
     editName.value = workspace.name;
     editDescription.value = workspace.description ?? '';
+    editLogoutPolicy.value = workspacePolicies.value[workspace._id] ?? 'keep';
 }
 
 function cancelEdit() {
     editingWorkspaceId.value = null;
     editName.value = '';
     editDescription.value = '';
+}
+
+function formatLogoutPolicy(policy: LogoutPolicy | undefined) {
+    return policy === 'clear' ? 'Clear from this device' : 'Keep on this device';
+}
+
+async function loadWorkspacePolicies(list: WorkspaceSummary[]) {
+    const entries = await Promise.all(
+        list.map(async (workspace) => {
+            const res = await getKvByName(`${logoutPolicyPrefix}${workspace._id}`, baseDb);
+            const value = res?.value === 'clear' ? 'clear' : 'keep';
+            return [workspace._id, value] as const;
+        })
+    );
+    workspacePolicies.value = Object.fromEntries(entries);
+}
+
+async function saveWorkspacePolicy(workspaceId: Id<'workspaces'>, policy: LogoutPolicy) {
+    await setKvByName(`${logoutPolicyPrefix}${workspaceId}`, policy, baseDb);
+    workspacePolicies.value = { ...workspacePolicies.value, [workspaceId]: policy };
 }
 
 async function createWorkspace() {
@@ -351,6 +439,7 @@ async function createWorkspace() {
             name: createName.value.trim(),
             description: createDescription.value.trim() || undefined,
         });
+        await saveWorkspacePolicy(workspaceId, createLogoutPolicy.value);
         await setActiveWorkspaceMutation.mutate({ workspace_id: workspaceId });
         // Update cache before reload so UI shows correctly immediately after
         cachedActiveId.value = workspaceId;
@@ -414,6 +503,7 @@ async function saveEdit(workspace: WorkspaceSummary) {
             name: editName.value.trim(),
             description: editDescription.value.trim() || undefined,
         });
+        await saveWorkspacePolicy(workspace._id, editLogoutPolicy.value);
         editingWorkspaceId.value = null;
         toast.add({ title: 'Workspace updated', description: 'Changes saved.' });
     } catch (error) {

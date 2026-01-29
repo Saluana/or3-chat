@@ -270,6 +270,33 @@
 	.cm-action-group {
 		@apply border-none!;
 	}
+
+	/* Workflow editor drag/select toggle buttons */
+	.workflow-toggle-active,
+	.workflow-validation-active {
+		box-shadow: none !important;
+		transform: none !important;
+		border: var(--md-border-width) solid var(--md-border-color) !important;
+	}
+
+	.workflow-toggle-active:hover,
+	.workflow-toggle-active:active,
+	.workflow-validation-active:hover,
+	.workflow-validation-active:active {
+		box-shadow: none !important;
+		transform: none !important;
+		border: var(--md-border-width) solid var(--md-border-color) !important;
+	}
+
+	/* Remove right border from first button in group to avoid double border */
+	.workflow-toolbar .theme-btn:first-child:not(:only-child) {
+		border-right: none !important;
+	}
+
+	/* Ensure non-active toggle buttons have proper border */
+	.workflow-toolbar .theme-btn:not(.workflow-toggle-active):not(.workflow-validation-active) {
+		border: var(--md-border-width) solid var(--md-border-color);
+	}
 }
 
 .cm-assistant {

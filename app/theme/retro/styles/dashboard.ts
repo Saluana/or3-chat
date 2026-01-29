@@ -13,6 +13,13 @@ export const dashboardOverrides = {
         variant: 'solid',
         class: 'retro-press',
     },
+    'selectmenu#dashboard.workspace.logout-policy': {
+        class: 'w-full',
+        ui: {
+            content:
+                'z-[30] ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[14px]!',
+        },
+    },
     'button#dashboard.back': {
         variant: 'basic' as const,
         ui: {
