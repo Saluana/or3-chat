@@ -12,54 +12,54 @@ date: 2026-01-29
 
 ## 1. Config + Runtime Wiring
 
-- [ ] Add admin-auth env vars to config (`config.or3cloud.ts`). Requirements: 1.1, 1.3, 7.1
-  - [ ] Add `OR3_ADMIN_USERNAME`, `OR3_ADMIN_PASSWORD`, `OR3_ADMIN_JWT_SECRET`, `OR3_ADMIN_JWT_EXPIRY`, `OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS`.
-  - [ ] Ensure values appear only in server runtimeConfig (never public).
+- [x] Add admin-auth env vars to config (`config.or3cloud.ts`). Requirements: 1.1, 1.3, 7.1
+  - [x] Add `OR3_ADMIN_USERNAME`, `OR3_ADMIN_PASSWORD`, `OR3_ADMIN_JWT_SECRET`, `OR3_ADMIN_JWT_EXPIRY`, `OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS`.
+  - [x] Ensure values appear only in server runtimeConfig (never public).
   - [ ] Update server/admin/config metadata pages if needed.
 
-- [ ] Add `isAdminEnabled()` utility (server-only) and use it consistently for 404 gating. Requirements: 1.1, 7.2
+- [x] Add `isAdminEnabled()` utility (server-only) and use it consistently for 404 gating. Requirements: 1.1, 7.2
 
 ## 2. Super Admin Auth (JWT)
 
-- [ ] Implement credentials store at `.data/admin-credentials.json` (atomic write; 0600). Requirements: 1.1, 5.1, 5.5
-- [ ] Implement bcrypt hashing + verification. Requirements: 5.1
-- [ ] Implement JWT sign/verify + cookie helpers (httpOnly, sameSite=strict, path=/admin). Requirements: 1.3, 5.2, 5.4
-- [ ] Implement login rate limiting (IP + username). Requirements: 5.3
+- [x] Implement credentials store at `.data/admin-credentials.json` (atomic write; 0600). Requirements: 1.1, 5.1, 5.5
+- [x] Implement bcrypt hashing + verification. Requirements: 5.1
+- [x] Implement JWT sign/verify + cookie helpers (httpOnly, sameSite=strict, path=/admin). Requirements: 1.3, 5.2, 5.4
+- [x] Implement login rate limiting (IP + username). Requirements: 5.3
 
-- [ ] Add admin auth API routes. Requirements: 1.1, 1.3, 1.4
-  - [ ] `POST server/api/admin/auth/login.post.ts`
-  - [ ] `POST server/api/admin/auth/logout.post.ts`
-  - [ ] `POST server/api/admin/auth/change-password.post.ts` (super admin only)
+- [x] Add admin auth API routes. Requirements: 1.1, 1.3, 1.4
+  - [x] `POST server/api/admin/auth/login.post.ts`
+  - [x] `POST server/api/admin/auth/logout.post.ts`
+  - [x] `POST server/api/admin/auth/change-password.post.ts` (super admin only)
 
 ## 3. Hybrid Admin Session Resolution
 
-- [ ] Add `resolveAdminRequestContext(event)` that returns super-admin principal OR workspace-admin principal. Requirements: 1.2, 1.3
-  - [ ] Super admin path: JWT cookie -> principal.
-  - [ ] Workspace admin path: `resolveSessionContext(event)` -> check `admin.access` -> principal.
+- [x] Add `resolveAdminRequestContext(event)` that returns super-admin principal OR workspace-admin principal. Requirements: 1.2, 1.3
+  - [x] Super admin path: JWT cookie -> principal.
+  - [x] Workspace admin path: `resolveSessionContext(event)` -> check `admin.access` -> principal.
 
-- [ ] Update `server/middleware/admin-gate.ts`.
-  - [ ] Replace SSR-auth-only gate with `isAdminEnabled()` gate. Requirements: 1.1, 7.2
-  - [ ] Allow unauthenticated access to `/admin/login` and `/api/admin/auth/login`.
-  - [ ] For other `/admin/*`, require resolved admin context, otherwise redirect to `/admin/login`.
-  - [ ] Keep `OR3_ADMIN_ALLOWED_HOSTS` behavior.
+- [x] Update `server/middleware/admin-gate.ts`.
+  - [x] Replace SSR-auth-only gate with `isAdminEnabled()` gate. Requirements: 1.1, 7.2
+  - [x] Allow unauthenticated access to `/admin/login` and `/api/admin/auth/login`.
+  - [x] For other `/admin/*`, require resolved admin context, otherwise redirect to `/admin/login`.
+  - [x] Keep `OR3_ADMIN_ALLOWED_HOSTS` behavior.
 
 - [ ] Update `server/admin/api.ts` to accept the new admin context, not only `SessionContext`. Requirements: 1.2
-  - [ ] Keep `can()` / `requireCan()` as the central authorization gate for workspace-admin requests.
-  - [ ] For super admin requests, apply explicit policy checks (owner-only operations, destructive operations).
+  - [x] Keep `can()` / `requireCan()` as the central authorization gate for workspace-admin requests.
+  - [x] For super admin requests, apply explicit policy checks (owner-only operations, destructive operations).
 
 ## 4. Canonical Store: Admin Grants (Multi-admin)
 
-- [ ] Add canonical-store schema for deployment admin grants (Convex: add `admin_users` table, **hard-delete on revoke**). Requirements: 1.2, 3.2
-- [ ] Add Convex functions to list/grant/revoke admin grants (**revoke = hard-delete**). Requirements: 3.2
+- [x] Add canonical-store schema for deployment admin grants (Convex: add `admin_users` table, **hard-delete on revoke**). Requirements: 1.2, 3.2
+- [x] Add Convex functions to list/grant/revoke admin grants (**revoke = hard-delete**). Requirements: 3.2
 - [ ] Add `AdminUserStore` interface + registry in `server/admin/stores/*`. Requirements: 1.2, 3.2
-- [ ] Extend session resolution to include deployment-admin flag.
-  - [ ] Update `resolveSessionContext(event)` to set `deploymentAdmin` based on store lookup. Requirements: 1.2
-  - [ ] Update `app/core/hooks/hook-types.ts` SessionContext type to include `deploymentAdmin?: boolean`.
-  - [ ] Update `server/auth/can.ts` so `admin.access` can be granted based on `deploymentAdmin`. Requirements: 1.2
+- [x] Extend session resolution to include deployment-admin flag.
+  - [x] Update `resolveSessionContext(event)` to set `deploymentAdmin` based on store lookup. Requirements: 1.2
+  - [x] Update `app/core/hooks/hook-types.ts` SessionContext type to include `deploymentAdmin?: boolean`.
+  - [x] Update `server/auth/can.ts` so `admin.access` can be granted based on `deploymentAdmin`. Requirements: 1.2
 
 ## 5. Canonical Store: Workspace List + Soft Delete
 
-- [ ] Extend canonical workspace schema with soft delete fields (Convex: `workspaces.deleted`, `workspaces.deleted_at`). Requirements: 2.5
+- [x] Extend canonical workspace schema with soft delete fields (Convex: `workspaces.deleted`, `workspaces.deleted_at`). Requirements: 2.5
 - [ ] Extend `WorkspaceAccessStore` to support:
   - [ ] `listWorkspaces` (search + pagination + includeDeleted)
   - [ ] `getWorkspace`

@@ -45,7 +45,9 @@ export default defineSchema({
         description: v.optional(v.string()),
         owner_user_id: v.id('users'),
         created_at: v.number(),
-    }),
+        deleted: v.optional(v.boolean()),
+        deleted_at: v.optional(v.number()),
+    }).index('by_deleted', ['deleted']),
 
     /**
      * Workspace members - role-based access per workspace
@@ -59,6 +61,18 @@ export default defineSchema({
         .index('by_workspace', ['workspace_id'])
         .index('by_user', ['user_id'])
         .index('by_workspace_user', ['workspace_id', 'user_id']),
+
+    /**
+     * Admin users - deployment-scoped admin grants
+     * Users in this table have admin access to the admin dashboard
+     */
+    admin_users: defineTable({
+        user_id: v.id('users'),
+        created_at: v.number(),
+        created_by_user_id: v.optional(v.id('users')),
+    })
+        .index('by_user', ['user_id'])
+        .index('by_created_by', ['created_by_user_id']),
 
     // ============================================================
     // SYNC INFRASTRUCTURE

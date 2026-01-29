@@ -64,6 +64,16 @@ const adminConfig = {
     extensionAllowedExtensions: or3CloudConfig.admin?.extensionAllowedExtensions
         ? or3CloudConfig.admin.extensionAllowedExtensions.join(',')
         : undefined,
+    // Admin auth configuration (server-only, never expose secrets to client)
+    auth: {
+        username: or3CloudConfig.admin?.auth?.username ?? '',
+        password: or3CloudConfig.admin?.auth?.password ?? '',
+        jwtSecret: or3CloudConfig.admin?.auth?.jwtSecret ?? '',
+        jwtExpiry: or3CloudConfig.admin?.auth?.jwtExpiry || '24h',
+        deletedWorkspaceRetentionDays: or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays !== undefined
+            ? String(or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays)
+            : '',
+    },
 };
 
 export default defineNuxtConfig({

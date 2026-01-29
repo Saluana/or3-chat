@@ -7,9 +7,9 @@ import type { SessionContext } from '~/core/hooks/hook-types';
 import type { ProviderSession } from './types';
 import { getAuthProvider } from './registry';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
-import { getConvexClient, api } from '../utils/convex-client';
 import { recordSessionResolution, recordProviderError } from './metrics';
 import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
+import { getDeploymentAdminChecker } from './deployment-admin';
 
 const SESSION_CONTEXT_KEY_PREFIX = '__or3_session_context_';
 
@@ -68,9 +68,15 @@ export async function resolveSessionContext(
         return nullSession;
     }
 
-    // Map provider session to internal user/workspace via Convex
+    // Map provider session to internal user/workspace via the configured sync provider
+    // TODO: Abstract this into a provider-agnostic SessionStore interface
     try {
+        // For now, we use Convex directly as it's the only supported sync provider
+        // When adding new providers, this should be abstracted similar to AuthProvider
+        const { getConvexClient } = await import('../utils/convex-client');
+        const { api } = await import('~~/convex/_generated/api');
         const convex = getConvexClient();
+
         const resolved = await convex.query(api.workspaces.resolveSession, {
             provider: providerSession.provider,
             provider_user_id: providerSession.user.id,
@@ -84,6 +90,13 @@ export async function resolveSessionContext(
                 email: providerSession.user.email,
                 name: providerSession.user.displayName,
             }));
+
+        // Check if user has deployment admin access using the provider-agnostic checker
+        const adminChecker = getDeploymentAdminChecker(event);
+        const deploymentAdmin = await adminChecker.checkDeploymentAdmin(
+            providerSession.user.id,
+            providerSession.provider
+        );
 
         const sessionContext: SessionContext = {
             authenticated: true,
@@ -100,6 +113,7 @@ export async function resolveSessionContext(
             },
             role: workspaceInfo.role,
             expiresAt: providerSession.expiresAt.toISOString(),
+            deploymentAdmin,
         };
 
         recordSessionResolution(true);

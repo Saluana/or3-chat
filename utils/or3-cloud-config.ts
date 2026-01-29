@@ -95,6 +95,13 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
             '.woff2',
             '.map',
         ],
+        auth: {
+            username: undefined,
+            password: undefined,
+            jwtSecret: undefined,
+            jwtExpiry: '24h',
+            deletedWorkspaceRetentionDays: undefined,
+        },
     },
     backgroundStreaming: {
         enabled: false,
@@ -172,6 +179,15 @@ const cloudConfigSchema = z
                 extensionMaxFiles: z.number().int().min(1).optional(),
                 extensionMaxTotalBytes: z.number().int().min(1).optional(),
                 extensionAllowedExtensions: z.array(z.string()).optional(),
+                auth: z
+                    .object({
+                        username: z.string().optional(),
+                        password: z.string().optional(),
+                        jwtSecret: z.string().optional(),
+                        jwtExpiry: z.string().optional(),
+                        deletedWorkspaceRetentionDays: z.number().int().min(0).optional(),
+                    })
+                    .optional(),
             })
             .optional(),
         backgroundStreaming: z
@@ -237,6 +253,10 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
         admin: {
             ...DEFAULT_OR3_CLOUD_CONFIG.admin,
             ...config.admin,
+            auth: {
+                ...DEFAULT_OR3_CLOUD_CONFIG.admin?.auth,
+                ...config.admin?.auth,
+            },
         },
         backgroundStreaming: {
             ...DEFAULT_OR3_CLOUD_CONFIG.backgroundStreaming,

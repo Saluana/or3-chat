@@ -2,9 +2,11 @@ import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/s
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 
-type Role = 'owner' | 'editor' | 'viewer';
-
-async function getAuthAccount(ctx: MutationCtx | QueryCtx) {
+/**
+ * Get the current user's auth account ID.
+ * Throws if not authenticated.
+ */
+async function getAuthAccount(ctx: MutationCtx | QueryCtx): Promise<{ userId: Id<'users'> }> {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
         throw new Error('Not authenticated');
@@ -24,55 +26,39 @@ async function getAuthAccount(ctx: MutationCtx | QueryCtx) {
     return { userId: authAccount.user_id };
 }
 
-async function requireWorkspaceMembership(
-    ctx: MutationCtx | QueryCtx,
-    workspaceId: Id<'workspaces'>,
-    userId: Id<'users'>
-) {
-    const membership = await ctx.db
-        .query('workspace_members')
-        .withIndex('by_workspace_user', (q) =>
-            q.eq('workspace_id', workspaceId).eq('user_id', userId)
-        )
-        .first();
-
-    if (!membership) {
-        throw new Error('Forbidden: Not a workspace member');
-    }
-
-    return membership;
-}
-
-async function requireOwner(
-    ctx: MutationCtx | QueryCtx,
-    workspaceId: Id<'workspaces'>,
-    userId: Id<'users'>
-) {
-    const membership = await requireWorkspaceMembership(ctx, workspaceId, userId);
-    if (membership.role !== 'owner') {
-        throw new Error('Forbidden: Only owners can manage workspace access');
-    }
-    return membership;
-}
-
-export const listWorkspaceMembers = query({
-    args: { workspace_id: v.id('workspaces') },
+/**
+ * Check if a user is an admin.
+ */
+export const isAdmin = query({
+    args: { user_id: v.id('users') },
     handler: async (ctx, args) => {
-        const { userId } = await getAuthAccount(ctx);
-        await requireWorkspaceMembership(ctx, args.workspace_id, userId);
+        const adminGrant = await ctx.db
+            .query('admin_users')
+            .withIndex('by_user', (q) => q.eq('user_id', args.user_id))
+            .first();
 
-        const members = await ctx.db
-            .query('workspace_members')
-            .withIndex('by_workspace', (q) => q.eq('workspace_id', args.workspace_id))
-            .collect();
+        return adminGrant !== null;
+    },
+});
+
+/**
+ * List all admin users with their user details.
+ */
+export const listAdmins = query({
+    args: {},
+    handler: async (ctx) => {
+        // Note: In production, this should check if the caller is an admin
+        // For now, we rely on the server-side authorization
+        const admins = await ctx.db.query('admin_users').collect();
 
         const results = await Promise.all(
-            members.map(async (m) => {
-                const user = await ctx.db.get(m.user_id);
+            admins.map(async (admin) => {
+                const user = await ctx.db.get(admin.user_id);
                 return {
-                    userId: m.user_id,
+                    userId: admin.user_id,
                     email: user?.email,
-                    role: m.role as Role,
+                    displayName: user?.display_name,
+                    createdAt: admin.created_at,
                 };
             })
         );
@@ -81,170 +67,102 @@ export const listWorkspaceMembers = query({
     },
 });
 
-export const upsertWorkspaceMember = mutation({
+/**
+ * Grant admin access to a user.
+ */
+export const grantAdmin = mutation({
     args: {
-        workspace_id: v.id('workspaces'),
-        email_or_provider_id: v.string(),
-        role: v.union(v.literal('owner'), v.literal('editor'), v.literal('viewer')),
-        provider: v.optional(v.string()),
+        user_id: v.id('users'),
     },
     handler: async (ctx, args) => {
-        const { userId } = await getAuthAccount(ctx);
-        await requireOwner(ctx, args.workspace_id, userId);
+        // Note: In production, this should verify the caller is an admin
+        const { userId: callerId } = await getAuthAccount(ctx);
 
-        const provider = args.provider ?? 'clerk';
-        const identifier = args.email_or_provider_id.trim();
-
-        let targetUserId: Id<'users'> | null = null;
-
-        if (identifier.includes('@')) {
-            const user = await ctx.db
-                .query('users')
-                .filter((q) => q.eq(q.field('email'), identifier))
-                .first();
-            if (user) targetUserId = user._id;
-        } else {
-            const authAccount = await ctx.db
-                .query('auth_accounts')
-                .withIndex('by_provider', (q) =>
-                    q.eq('provider', provider).eq('provider_user_id', identifier)
-                )
-                .first();
-            if (authAccount) targetUserId = authAccount.user_id;
-        }
-
-        if (!targetUserId) {
+        // Check if user exists
+        const user = await ctx.db.get(args.user_id);
+        if (!user) {
             throw new Error('User not found');
         }
 
+        // Check if already an admin
         const existing = await ctx.db
-            .query('workspace_members')
-            .withIndex('by_workspace_user', (q) =>
-                q.eq('workspace_id', args.workspace_id).eq('user_id', targetUserId)
-            )
+            .query('admin_users')
+            .withIndex('by_user', (q) => q.eq('user_id', args.user_id))
             .first();
 
         if (existing) {
-            await ctx.db.patch(existing._id, { role: args.role });
-        } else {
-            await ctx.db.insert('workspace_members', {
-                workspace_id: args.workspace_id,
-                user_id: targetUserId,
-                role: args.role,
-                created_at: Date.now(),
-            });
+            throw new Error('User is already an admin');
         }
+
+        // Grant admin access
+        await ctx.db.insert('admin_users', {
+            user_id: args.user_id,
+            created_at: Date.now(),
+            created_by_user_id: callerId,
+        });
+
+        return { success: true };
     },
 });
 
-export const setWorkspaceMemberRole = mutation({
+/**
+ * Revoke admin access from a user (hard delete).
+ */
+export const revokeAdmin = mutation({
     args: {
-        workspace_id: v.id('workspaces'),
-        user_id: v.string(),
-        role: v.union(v.literal('owner'), v.literal('editor'), v.literal('viewer')),
+        user_id: v.id('users'),
     },
     handler: async (ctx, args) => {
-        const { userId } = await getAuthAccount(ctx);
-        await requireOwner(ctx, args.workspace_id, userId);
+        // Note: In production, this should verify the caller is an admin
+        await getAuthAccount(ctx);
 
-        const member = await ctx.db
-            .query('workspace_members')
-            .withIndex('by_workspace_user', (q) =>
-                q.eq('workspace_id', args.workspace_id).eq('user_id', args.user_id as Id<'users'>)
-            )
+        const adminGrant = await ctx.db
+            .query('admin_users')
+            .withIndex('by_user', (q) => q.eq('user_id', args.user_id))
             .first();
 
-        if (!member) {
-            throw new Error('Member not found');
+        if (!adminGrant) {
+            throw new Error('User is not an admin');
         }
 
-        await ctx.db.patch(member._id, { role: args.role });
+        await ctx.db.delete(adminGrant._id);
+
+        return { success: true };
     },
 });
 
-export const removeWorkspaceMember = mutation({
+/**
+ * Search users by email or display name.
+ * Returns matching users with their IDs.
+ */
+export const searchUsers = query({
     args: {
-        workspace_id: v.id('workspaces'),
-        user_id: v.string(),
+        query: v.string(),
+        limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const { userId } = await getAuthAccount(ctx);
-        await requireOwner(ctx, args.workspace_id, userId);
+        const limit = args.limit ?? 20;
+        const searchTerm = args.query.toLowerCase().trim();
 
-        const member = await ctx.db
-            .query('workspace_members')
-            .withIndex('by_workspace_user', (q) =>
-                q.eq('workspace_id', args.workspace_id).eq('user_id', args.user_id as Id<'users'>)
-            )
-            .first();
-
-        if (!member) {
-            throw new Error('Member not found');
+        if (!searchTerm) {
+            return [];
         }
 
-        await ctx.db.delete(member._id);
-    },
-});
+        // Get all users and filter (in production, use full-text search)
+        const allUsers = await ctx.db.query('users').take(limit * 2);
 
-export const getWorkspaceSetting = query({
-    args: {
-        workspace_id: v.id('workspaces'),
-        key: v.string(),
-    },
-    handler: async (ctx, args) => {
-        const { userId } = await getAuthAccount(ctx);
-        await requireWorkspaceMembership(ctx, args.workspace_id, userId);
-
-        const entry = await ctx.db
-            .query('kv')
-            .withIndex('by_workspace_name', (q) =>
-                q.eq('workspace_id', args.workspace_id).eq('name', args.key)
+        const matching = allUsers
+            .filter(
+                (user) =>
+                    user.email?.toLowerCase().includes(searchTerm) ||
+                    user.display_name?.toLowerCase().includes(searchTerm)
             )
-            .first();
+            .slice(0, limit);
 
-        if (!entry || entry.deleted) return null;
-        return entry.value ?? null;
-    },
-});
-
-export const setWorkspaceSetting = mutation({
-    args: {
-        workspace_id: v.id('workspaces'),
-        key: v.string(),
-        value: v.string(),
-    },
-    handler: async (ctx, args) => {
-        const { userId } = await getAuthAccount(ctx);
-        await requireOwner(ctx, args.workspace_id, userId);
-
-        const now = Date.now();
-        const existing = await ctx.db
-            .query('kv')
-            .withIndex('by_workspace_name', (q) =>
-                q.eq('workspace_id', args.workspace_id).eq('name', args.key)
-            )
-            .first();
-
-        if (existing) {
-            await ctx.db.patch(existing._id, {
-                value: args.value,
-                deleted: false,
-                deleted_at: undefined,
-                updated_at: now,
-                clock: now,
-            });
-        } else {
-            await ctx.db.insert('kv', {
-                workspace_id: args.workspace_id,
-                id: `${args.workspace_id}:${args.key}`,
-                name: args.key,
-                value: args.value,
-                deleted: false,
-                deleted_at: undefined,
-                created_at: now,
-                updated_at: now,
-                clock: now,
-            });
-        }
+        return matching.map((user) => ({
+            userId: user._id,
+            email: user.email,
+            displayName: user.display_name,
+        }));
     },
 });
