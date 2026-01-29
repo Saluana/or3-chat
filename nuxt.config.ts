@@ -22,6 +22,10 @@ export default defineNuxtConfig({
         // Server-only env variables
         openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
     },
+    // Explicitly disable type checking during build to save memory (CI runs it separately)
+    typescript: {
+        typeCheck: false,
+    },
     experimental: {
         defaults: {
             nuxtLink: {
