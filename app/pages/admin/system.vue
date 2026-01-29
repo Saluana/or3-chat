@@ -82,7 +82,7 @@
 
                     <div class="flex flex-col gap-3">
                          <UButton
-                            color="error"
+                            color="neutral"
                             variant="soft"
                             icon="i-heroicons-arrow-path"
                             :disabled="!isOwner || !status?.admin?.allowRestart"
@@ -91,7 +91,7 @@
                             Restart Server
                         </UButton>
                         <UButton
-                            color="error"
+                            color="neutral"
                             variant="soft"
                             icon="i-heroicons-wrench-screwdriver"
                             :disabled="!isOwner || !status?.admin?.allowRebuild"
@@ -124,7 +124,7 @@
                     <UButton
                         size="xs"
                         block
-                        :color="action.danger ? 'error' : 'primary'"
+                        :color="action.danger ? 'warning' : 'primary'"
                         :variant="action.danger ? 'soft' : 'solid'"
                         :disabled="!isOwner"
                         @click="runProviderAction(action)"
@@ -146,7 +146,7 @@
                     </div>
                     <UButton
                         size="xs"
-                        color="error"
+                        color="warning"
                         variant="solid"
                         :disabled="!isOwner || !status?.admin?.allowRestart"
                         @click="restart"
@@ -168,20 +168,20 @@
                         <span class="w-1 h-4 rounded-full" :class="getGroupColor(group)"></span>
                         {{ group }}
                     </h4>
-                    <div class="space-y-5">
+                    <div class="space-y-6 sm:space-y-5">
 	                        <div
 	                            v-for="entry in getEntriesForGroup(group)"
 	                            :key="entry.key"
 	                            class="space-y-2"
 	                        >
-	                            <label class="block">
-	                                <div class="flex items-start justify-between mb-1">
-	                                    <div class="flex-1">
-	                                        <div class="font-medium text-sm">{{ entry.label }}</div>
-	                                        <div class="text-xs opacity-60 mt-0.5">{{ entry.description }}</div>
-	                                    </div>
-	                                    <code class="text-xs opacity-40 font-mono ml-2 mt-0.5">{{ entry.key }}</code>
-	                                </div>
+                            <label class="block">
+                                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-1 gap-1">
+                                    <div class="flex-1 min-w-0">
+                                        <div class="font-medium text-sm">{{ entry.label }}</div>
+                                        <div class="text-xs opacity-60 mt-0.5 leading-relaxed">{{ entry.description }}</div>
+                                    </div>
+                                    <code class="text-xs opacity-40 font-mono mt-0.5 sm:ml-2 sm:mt-0.5 shrink-0">{{ entry.key }}</code>
+                                </div>
 	                                <USelectMenu
 	                                    v-if="entry.valueType === 'boolean' && !entry.masked"
 	                                    :model-value="entry.value ?? undefined"
