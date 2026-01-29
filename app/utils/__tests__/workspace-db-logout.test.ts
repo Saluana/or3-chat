@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const getDatabaseNames = vi.fn<[], Promise<string[]>>();
-const deleteDb = vi.fn<[string], Promise<void>>();
+const getDatabaseNames = vi.fn<() => Promise<string[]>>();
+const deleteDb = vi.fn<(name: string) => Promise<void>>();
 
 vi.mock('dexie', () => ({
     default: {

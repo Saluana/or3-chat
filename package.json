@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "license": "GPL-3.0",
     "scripts": {
-        "build": "NODE_OPTIONS='--max-old-space-size=4096' nuxt build",
+        "build": "NODE_OPTIONS='--max-old-space-size=2560' nuxt build",
         "dev": "nuxt dev",
         "dev:ssr": "SSR_AUTH_ENABLED=true bun run dev",
         "convex-dev": "bunx convex dev",
@@ -17,7 +17,7 @@
         "analyze": "bun run build && npx vite-bundle-visualizer dist/stats.html",
         "eslint": "eslint",
         "lint": "echo 'Lint script would go here'",
-        "type-check": "nuxt typecheck",
+        "type-check": "SSR_AUTH_ENABLED=true nuxt typecheck",
         "theme:validate": "tsx scripts/cli/validate-theme.ts",
         "theme:create": "tsx scripts/cli/create-theme.ts",
         "theme:switch": "tsx scripts/cli/switch-theme.ts",

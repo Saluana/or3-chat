@@ -4,9 +4,10 @@ import { clearWorkspaceDbsOnLogout } from '~/utils/workspace-db-logout';
 
 type SyncEngine = { stop?: () => Promise<void> | void };
 
-export async function logoutCleanup(nuxtApp?: { $syncEngine?: SyncEngine }) {
+// Use 'any' for nuxtApp to avoid weak type detection errors against NuxtApp interface
+export async function logoutCleanup(nuxtApp?: any) {
     try {
-        await nuxtApp?.$syncEngine?.stop?.();
+        await (nuxtApp as { $syncEngine?: SyncEngine })?.$syncEngine?.stop?.();
     } catch {
         // Best-effort; sync engine may already be stopped.
     }
