@@ -170,16 +170,14 @@ export async function forkThread({
                 )
                 .sortBy('index');
 
-            let i = 0;
-            for (const m of ancestors) {
-                await getDb().messages.put({
-                    ...m,
-                    id: newId(),
-                    thread_id: forkId,
-                    index: i++, // normalize sequential indexes starting at 0
-                    clock: nextClock(),
-                });
-            }
+            const newMessages = ancestors.map((m, i) => ({
+                ...m,
+                id: newId(),
+                thread_id: forkId,
+                index: i, // normalize sequential indexes starting at 0
+                clock: nextClock(),
+            }));
+            await getDb().messages.bulkPut(newMessages);
             await getDb().threads.put({
                 ...fork,
                 last_message_at: anchor.created_at,
