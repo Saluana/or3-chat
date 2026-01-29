@@ -21,9 +21,9 @@ Key constraints honored:
 
 ## Current State (Why `/admin/workspace` is wrong)
 
-Today, `server/api/admin/workspace.get.ts` uses `requireAdminApi(event)` which resolves the *active* workspace via `resolveSessionContext(event)` and then loads members/settings for `session.workspace.id`.
+Today, `server/api/admin/workspace.get.ts` uses `requireAdminApi(event)` which resolves the _active_ workspace via `resolveSessionContext(event)` and then loads members/settings for `session.workspace.id`.
 
-That behavior is correct for “manage *my* workspace”, but incorrect for a deployment admin dashboard.
+That behavior is correct for “manage _my_ workspace”, but incorrect for a deployment admin dashboard.
 
 ## High-Level Architecture
 
@@ -60,8 +60,8 @@ flowchart TB
 
 Admin access is granted via one of two identities:
 
-1) **Super admin**: local credentials set via env; session is a JWT cookie.
-2) **Workspace admin**: normal SSR auth session (Clerk/etc.) plus a deployment-scoped admin grant stored in the canonical store.
+1. **Super admin**: local credentials set via env; session is a JWT cookie.
+2. **Workspace admin**: normal SSR auth session (Clerk/etc.) plus a deployment-scoped admin grant stored in the canonical store.
 
 Both identities allow listing all workspaces, but admin endpoints still enforce capability boundaries (read vs mutate vs destructive).
 
@@ -75,9 +75,11 @@ Admin is enabled only when `OR3_ADMIN_USERNAME` and `OR3_ADMIN_PASSWORD` are con
 
 ### Super Admin Credentials
 
-- credentials are sourced from env at boot
+- credentials are sourced from env **only at initial bootstrap**
 - passwords are hashed with bcrypt and persisted at `.data/admin-credentials.json` (to avoid keeping cleartext in memory longer than needed)
-- env is treated as the bootstrap source; changing env later does not automatically rotate credentials (rotation is done via admin UI)
+- **`.data/admin-credentials.json` is the source of truth once created**; env vars are ignored after bootstrap
+- password rotation is done **exclusively via admin UI** (requires re-entering current password to change)
+- if `admin-credentials.json` exists, env vars (`OR3_ADMIN_USERNAME`, `OR3_ADMIN_PASSWORD`) are not re-read
 
 File format:
 
@@ -103,7 +105,7 @@ Payload:
 
 ```ts
 export type AdminJwtClaims = {
-  kind: 'super_admin';
+  kind: "super_admin";
   username: string;
   iat: number;
   exp: number;
@@ -124,8 +126,6 @@ admin_users: {
   user_id: Id<'users'>;
   created_at: number;
   created_by_admin_user_id?: Id<'users'>; // optional
-  revoked_at?: number;
-  revoked_by_admin_user_id?: Id<'users'>;
 }
 ```
 
@@ -188,13 +188,13 @@ Explicitly out of scope:
 
 ```ts
 export type AdminPrincipal =
-  | { kind: 'super_admin'; username: string }
-  | { kind: 'workspace_admin'; userId: string };
+  | { kind: "super_admin"; username: string }
+  | { kind: "workspace_admin"; userId: string };
 
 export type AdminRequestContext = {
   principal: AdminPrincipal;
   // if present, this is the workspace session that can be used by can()
-  session?: import('~/core/hooks/hook-types').SessionContext;
+  session?: import("~/core/hooks/hook-types").SessionContext;
 };
 ```
 
@@ -216,26 +216,64 @@ export interface WorkspaceSummary {
 
 export interface WorkspaceAccessStore {
   listMembers(input: { workspaceId: string }): Promise<WorkspaceMemberInfo[]>;
-  upsertMember(input: { workspaceId: string; emailOrProviderId: string; role: 'owner'|'editor'|'viewer'; provider?: string }): Promise<void>;
-  setMemberRole(input: { workspaceId: string; userId: string; role: 'owner'|'editor'|'viewer' }): Promise<void>;
+  upsertMember(input: {
+    workspaceId: string;
+    emailOrProviderId: string;
+    role: "owner" | "editor" | "viewer";
+    provider?: string;
+  }): Promise<void>;
+  setMemberRole(input: {
+    workspaceId: string;
+    userId: string;
+    role: "owner" | "editor" | "viewer";
+  }): Promise<void>;
   removeMember(input: { workspaceId: string; userId: string }): Promise<void>;
 
   // new
-  listWorkspaces(input: { search?: string; includeDeleted?: boolean; page: number; perPage: number }): Promise<{ items: WorkspaceSummary[]; total: number }>;
-  getWorkspace(input: { workspaceId: string }): Promise<WorkspaceSummary | null>;
-  createWorkspace(input: { name: string; description?: string; ownerUserId: string }): Promise<{ workspaceId: string }>;
-  softDeleteWorkspace(input: { workspaceId: string; deletedAt: number }): Promise<void>;
+  listWorkspaces(input: {
+    search?: string;
+    includeDeleted?: boolean;
+    page: number;
+    perPage: number;
+  }): Promise<{ items: WorkspaceSummary[]; total: number }>;
+  getWorkspace(input: {
+    workspaceId: string;
+  }): Promise<WorkspaceSummary | null>;
+  createWorkspace(input: {
+    name: string;
+    description?: string;
+    ownerUserId: string;
+  }): Promise<{ workspaceId: string }>;
+  softDeleteWorkspace(input: {
+    workspaceId: string;
+    deletedAt: number;
+  }): Promise<void>;
   restoreWorkspace(input: { workspaceId: string }): Promise<void>;
+
+  // User lookup for admin operations (search across all users)
+  searchUsers(input: {
+    query: string; // searches email and display_name
+    limit?: number;
+  }): Promise<Array<{ userId: string; email?: string; displayName?: string }>>;
 }
 ```
+
+**Note**: When creating a workspace, the `ownerUserId` must be specified. The UI should provide a user picker (search by email or display name) so the admin doesn't have to work with raw IDs.
 
 Admin users are managed via a separate store (deployment-scoped):
 
 ```ts
 export interface AdminUserStore {
-  listAdmins(): Promise<Array<{ userId: string; email?: string; createdAt: number; revokedAt?: number }>>;
+  listAdmins(): Promise<
+    Array<{
+      userId: string;
+      email?: string;
+      displayName?: string;
+      createdAt: number;
+    }>
+  >;
   grantAdmin(input: { userId: string; createdAt: number }): Promise<void>;
-  revokeAdmin(input: { userId: string; revokedAt: number }): Promise<void>;
+  revokeAdmin(input: { userId: string }): Promise<void>; // hard-deletes the grant
   isAdmin(input: { userId: string }): Promise<boolean>;
 }
 ```
@@ -273,12 +311,25 @@ Pages:
 
 - `app/pages/admin/login.vue` (super admin login)
 - `app/pages/admin/workspaces/index.vue` (workspace list)
-- `app/pages/admin/workspaces/[id].vue` (workspace detail)
+- `app/pages/admin/workspaces/[id].vue` (workspace detail with editable settings)
 - `app/pages/admin/admin-users.vue` (grant/revoke deployment admins)
 
 Route behavior:
 
 - `app/pages/admin/workspace.vue` is removed or replaced with a redirect to `/admin/workspaces`.
+- **Workspace-authenticated users with `deploymentAdmin` access bypass `/admin/login`** and are redirected directly to `/admin/workspaces`.
+
+Workspace Detail Settings (editable by admins):
+
+- Guest access toggle
+- Enabled plugins list
+- Member management: add/remove/change roles
+
+User Picker Component:
+
+- Used when creating workspaces (to select owner) and granting admin access
+- Searches users by email or display name via `searchUsers()` method
+- If user doesn't exist in the system, the operation fails with a clear error
 
 ## Security Notes
 
@@ -299,6 +350,41 @@ Design choice:
 
 - v1: allow super-admin login independent of SSR auth, but allow “workspace management” features only when the sync provider supports server-side admin store access.
 - When unsupported: show a clear warning on `/admin/system` and disable workspace mutations.
+
+### Provider Capability Detection
+
+Each sync provider implementation exposes a capability object:
+
+```ts
+export interface AdminStoreCapabilities {
+  supportsServerSideAdmin: boolean; // Can super-admin JWT perform mutations?
+  supportsUserSearch: boolean; // Can search users across the deployment?
+  supportsWorkspaceList: boolean; // Can list all workspaces?
+}
+```
+
+The `getAdminStoreCapabilities(providerId)` function returns the capability object. The UI uses this to:
+
+- Show warnings when features are unavailable
+- Disable mutation buttons when `supportsServerSideAdmin` is false
+- Hide user search when `supportsUserSearch` is false
+
+### Memory Provider Support
+
+The memory sync provider (local-only mode) **does support admin functionality**:
+
+- Workspaces exist in-memory and can be listed/managed
+- Admin grants are stored in-memory
+- **Note**: Data is ephemeral and lost on restart (acceptable for local dev)
+
+### Rate Limiting Storage
+
+Login rate limiting (5 attempts per 15 minutes per IP) uses **in-memory storage with sliding window**:
+
+- Simple Map-based storage: `Map<string, { count: number; windowStart: number }>`
+- Key format: `admin-login:${ip}:${username}`
+- Cleared on server restart (acceptable trade-off for simplicity)
+- If Redis is needed in the future, the rate limiter interface can be extended
 
 ## Testing Strategy
 

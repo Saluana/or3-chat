@@ -26,6 +26,7 @@ This document outlines the requirements for two major changes to the OR3 Cloud a
 **1.1** As a deployment operator, I want to bootstrap the admin dashboard with a super admin account via environment variables so that I can set up a new deployment without external auth configuration.
 
 **Acceptance Criteria:**
+
 - WHEN `OR3_ADMIN_USERNAME` and `OR3_ADMIN_PASSWORD` are set THEN the super admin account SHALL be created on first boot
 - WHEN the super admin logs in THEN they SHALL receive a JWT signed with `OR3_ADMIN_JWT_SECRET`
 - WHEN the JWT is valid THEN the super admin SHALL have full admin access to all features
@@ -34,6 +35,7 @@ This document outlines the requirements for two major changes to the OR3 Cloud a
 **1.2** As a super admin, I want to grant admin access to other users via a deployment-scoped permission in the canonical backend so that team members can access the admin dashboard.
 
 **Acceptance Criteria:**
+
 - WHEN a user is granted deployment admin access in the canonical backend THEN they SHALL be able to access the admin dashboard while authenticated via the main app auth provider
 - WHEN accessing `/admin/*` THEN the system SHALL check for EITHER:
   - Valid super admin JWT, OR
@@ -43,6 +45,7 @@ This document outlines the requirements for two major changes to the OR3 Cloud a
 **1.3** As an admin user (super or permission-based), I want my session to be secure and time-limited so that unauthorized access is prevented.
 
 **Acceptance Criteria:**
+
 - WHEN logging in as super admin THEN a JWT SHALL be issued with configurable expiration (default: 24 hours, via `OR3_ADMIN_JWT_EXPIRY`)
 - WHEN the JWT expires THEN the user SHALL be redirected to the login page
 - WHEN logging out THEN the JWT SHALL be invalidated client-side
@@ -51,9 +54,11 @@ This document outlines the requirements for two major changes to the OR3 Cloud a
 **1.4** As a super admin, I want to change my password from within the admin dashboard so that I can maintain security.
 
 **Acceptance Criteria:**
+
 - WHEN authenticated as super admin THEN I SHALL be able to change my password
+- WHEN changing password THEN I SHALL be required to re-enter my current password first
 - WHEN changing password THEN the new password SHALL be validated (min 12 characters, at least one uppercase, one lowercase, one number)
-- WHEN password is changed THEN the change SHALL be persisted to the admin credentials file
+- WHEN password is changed THEN the change SHALL be persisted to the admin credentials file (which is the source of truth once set; env vars are not re-read)
 - WHEN password is changed THEN existing JWTs SHALL remain valid until expiry (no forced logout)
 
 ---
@@ -63,6 +68,7 @@ This document outlines the requirements for two major changes to the OR3 Cloud a
 **2.1** As an admin, I want to see a list of all workspaces in the deployment so that I can understand the full scope of the system.
 
 **Acceptance Criteria:**
+
 - WHEN viewing the Workspaces section THEN the UI SHALL show all workspaces (not just the active one)
 - WHEN listing workspaces THEN each workspace SHALL show: ID, name, member count, creation date, owner email
 - WHEN there are many workspaces THEN the list SHALL support pagination (default: 20 per page)
@@ -71,6 +77,7 @@ This document outlines the requirements for two major changes to the OR3 Cloud a
 **2.2** As an admin, I want to view details of any workspace so that I can understand its configuration.
 
 **Acceptance Criteria:**
+
 - WHEN clicking on a workspace THEN the UI SHALL navigate to a workspace detail view (`/admin/workspaces/[id]`)
 - WHEN viewing workspace details THEN I SHALL see: name, ID, creation date, owner, members list with roles
 - WHEN viewing workspace details THEN I SHALL see guest access status and enabled plugins
@@ -80,6 +87,7 @@ This document outlines the requirements for two major changes to the OR3 Cloud a
 **2.3** As an admin, I want to manage members of any workspace so that I can control access.
 
 **Acceptance Criteria:**
+
 - WHEN viewing a workspace's details THEN I SHALL see all members and their roles
 - WHEN adding a member THEN the server SHALL upsert a membership entry in the canonical workspace store
 - WHEN changing a member's role THEN the server SHALL persist the new role and it SHALL affect subsequent `can()` decisions
@@ -89,14 +97,17 @@ This document outlines the requirements for two major changes to the OR3 Cloud a
 **2.4** As an admin, I want to create new workspaces so that teams can be onboarded.
 
 **Acceptance Criteria:**
-- WHEN clicking "Create Workspace" THEN a form SHALL appear for workspace name and optional description
-- WHEN submitting the form THEN the workspace SHALL be created in the canonical store
-- WHEN a workspace is created THEN the admin SHALL be added as owner
+
+- WHEN clicking "Create Workspace" THEN a form SHALL appear for workspace name, optional description, and owner selection
+- WHEN selecting an owner THEN a user picker SHALL search users by email or display name
+- WHEN submitting the form THEN the workspace SHALL be created in the canonical store with the selected owner
+- WHEN the selected owner user doesn't exist in the system THEN the creation SHALL fail with a clear error
 - WHEN a workspace is created THEN the server SHALL emit `admin.workspace:action:created` hook
 
 **2.5** As an admin, I want to soft-delete workspaces so that I can clean up unused workspaces with the ability to recover.
 
 **Acceptance Criteria:**
+
 - WHEN viewing workspace details THEN a "Delete Workspace" option SHALL be available with explicit confirmation
 - WHEN deleting a workspace THEN the server SHALL mark it as deleted (soft delete) with a timestamp
 - WHEN a workspace is soft-deleted THEN all members SHALL lose access immediately
@@ -111,6 +122,7 @@ This document outlines the requirements for two major changes to the OR3 Cloud a
 **3.1** As a super admin, I want to view the current super admin configuration so that I can verify the setup.
 
 **Acceptance Criteria:**
+
 - WHEN viewing Admin Settings THEN I SHALL see the super admin username (read-only)
 - WHEN viewing Admin Settings THEN I SHALL see when the super admin was created
 - WHEN viewing Admin Settings THEN I SHALL see the option to change the super admin password
@@ -118,9 +130,10 @@ This document outlines the requirements for two major changes to the OR3 Cloud a
 **3.2** As a super admin, I want to see which users have deployment admin access so that I can understand the admin landscape.
 
 **Acceptance Criteria:**
+
 - WHEN viewing Admin Users section THEN I SHALL see all users with deployment admin grants
-- WHEN viewing the list THEN each entry SHALL show: user email (if available), granted date, and current status (active/revoked)
-- WHEN viewing the list THEN I SHALL be able to revoke deployment admin access
+- WHEN viewing the list THEN each entry SHALL show: user email or display name, and granted date
+- WHEN viewing the list THEN I SHALL be able to revoke deployment admin access (which hard-deletes the grant)
 
 ---
 
@@ -129,6 +142,7 @@ This document outlines the requirements for two major changes to the OR3 Cloud a
 **4.1** As an existing OR3 Cloud user, I want the admin dashboard to use the new auth system immediately so that there's no confusion about which auth to use.
 
 **Acceptance Criteria:**
+
 - WHEN upgrading to the new admin system THEN the old auth integration SHALL be removed from admin routes
 - WHEN the new auth system is enabled THEN admin routes SHALL only accept super admin JWT OR workspace sessions with `admin.access`
 - WHEN no admin credentials are configured AND no workspace session exists THEN the admin dashboard SHALL return 404
@@ -186,11 +200,11 @@ This document outlines the requirements for two major changes to the OR3 Cloud a
 
 ## Configuration Summary
 
-| Environment Variable | Description | Default |
-|---------------------|-------------|---------|
-| `OR3_ADMIN_USERNAME` | Super admin username (required to enable admin) | - |
-| `OR3_ADMIN_PASSWORD` | Super admin password (required to enable admin) | - |
-| `OR3_ADMIN_JWT_SECRET` | JWT signing secret (auto-generated if not set) | - |
-| `OR3_ADMIN_JWT_EXPIRY` | JWT expiration time | `24h` |
-| `OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS` | Days to retain soft-deleted workspaces | unset (retain indefinitely) |
-| `OR3_ADMIN_ALLOWED_HOSTS` | Allowed hosts for admin (existing) | - |
+| Environment Variable                         | Description                                     | Default                     |
+| -------------------------------------------- | ----------------------------------------------- | --------------------------- |
+| `OR3_ADMIN_USERNAME`                         | Super admin username (required to enable admin) | -                           |
+| `OR3_ADMIN_PASSWORD`                         | Super admin password (required to enable admin) | -                           |
+| `OR3_ADMIN_JWT_SECRET`                       | JWT signing secret (auto-generated if not set)  | -                           |
+| `OR3_ADMIN_JWT_EXPIRY`                       | JWT expiration time                             | `24h`                       |
+| `OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS` | Days to retain soft-deleted workspaces          | unset (retain indefinitely) |
+| `OR3_ADMIN_ALLOWED_HOSTS`                    | Allowed hosts for admin (existing)              | -                           |

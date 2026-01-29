@@ -49,8 +49,8 @@ date: 2026-01-29
 
 ## 4. Canonical Store: Admin Grants (Multi-admin)
 
-- [ ] Add canonical-store schema for deployment admin grants (Convex: add `admin_users` table). Requirements: 1.2, 3.2
-- [ ] Add Convex functions to list/grant/revoke admin grants. Requirements: 3.2
+- [ ] Add canonical-store schema for deployment admin grants (Convex: add `admin_users` table, **hard-delete on revoke**). Requirements: 1.2, 3.2
+- [ ] Add Convex functions to list/grant/revoke admin grants (**revoke = hard-delete**). Requirements: 3.2
 - [ ] Add `AdminUserStore` interface + registry in `server/admin/stores/*`. Requirements: 1.2, 3.2
 - [ ] Extend session resolution to include deployment-admin flag.
   - [ ] Update `resolveSessionContext(event)` to set `deploymentAdmin` based on store lookup. Requirements: 1.2
@@ -63,12 +63,19 @@ date: 2026-01-29
 - [ ] Extend `WorkspaceAccessStore` to support:
   - [ ] `listWorkspaces` (search + pagination + includeDeleted)
   - [ ] `getWorkspace`
-  - [ ] `createWorkspace`
+  - [ ] `createWorkspace` (requires `ownerUserId` - must be an existing user)
   - [ ] `softDeleteWorkspace`
   - [ ] `restoreWorkspace`
-  Requirements: 2.1, 2.2, 2.4, 2.5
+  - [ ] `searchUsers` (search by email/display_name for user picker UI)
+        Requirements: 2.1, 2.2, 2.4, 2.5
 
 - [ ] Implement Convex store methods and Convex functions for these operations. Requirements: 2.1, 2.4, 2.5
+
+## 5.1 Provider Capability Detection
+
+- [ ] Add `AdminStoreCapabilities` interface with flags: `supportsServerSideAdmin`, `supportsUserSearch`, `supportsWorkspaceList`
+- [ ] Add `getAdminStoreCapabilities(providerId)` function in store registry
+- [ ] Add memory provider implementation with admin support (ephemeral data, for local dev)
 
 ## 6. Admin API: Workspaces
 
@@ -78,10 +85,10 @@ date: 2026-01-29
   - [ ] `POST server/api/admin/workspaces.post.ts` (create)
   - [ ] `POST server/api/admin/workspaces/[id]/soft-delete.post.ts`
   - [ ] `POST server/api/admin/workspaces/[id]/restore.post.ts`
-  Requirements: 2.1, 2.2, 2.4, 2.5
+        Requirements: 2.1, 2.2, 2.4, 2.5
 
 - [ ] Add member management endpoints under workspace id (or reuse existing with path change).
-  Requirements: 2.3
+      Requirements: 2.3
 
 - [ ] Ensure responses include only metadata (no workspace contents). Requirements: 2.2
 
@@ -94,7 +101,7 @@ date: 2026-01-29
   - [ ] guest access toggle
   - [ ] enabled plugins list
   - [ ] soft delete / restore actions
-  Requirements: 2.2, 2.3, 2.5
+        Requirements: 2.2, 2.3, 2.5
 
 - [ ] Deprecate or redirect `app/pages/admin/workspace.vue` to `/admin/workspaces`. Requirements: 2.1
 
@@ -110,7 +117,7 @@ date: 2026-01-29
   - [ ] `admin.workspace:action:created`
   - [ ] `admin.workspace:action:deleted`
   - [ ] `admin.user:action:role_changed` (already in requirements)
-  Requirements: 2.3, 2.4, 2.5
+        Requirements: 2.3, 2.4, 2.5
 
 ## 10. Tests
 
@@ -118,7 +125,7 @@ date: 2026-01-29
   - [ ] admin auth (hash/verify, jwt sign/verify)
   - [ ] `can()` allows `admin.access` when `deploymentAdmin` true
   - [ ] retention config parsing (unset retains indefinitely)
-  Requirements: 1.3, 5.1, 5.2, 2.5
+        Requirements: 1.3, 5.1, 5.2, 2.5
 
 - [ ] Integration tests:
   - [ ] admin disabled -> 404
@@ -126,7 +133,7 @@ date: 2026-01-29
   - [ ] workspace admin without grant -> 403
   - [ ] workspace admin with grant -> 200
   - [ ] list workspaces returns metadata only
-  Requirements: 1.1, 1.2, 2.1, 2.2
+        Requirements: 1.1, 1.2, 2.1, 2.2
 
 ## 11. Manual Checklist
 
