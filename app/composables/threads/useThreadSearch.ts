@@ -5,6 +5,9 @@ import {
     createDb,
     buildIndex as buildOramaIndex,
     searchWithIndex,
+    insertDoc,
+    removeDoc,
+    updateDoc,
 } from '~/core/search/orama';
 
 interface ThreadDoc {
@@ -16,47 +19,81 @@ interface ThreadDoc {
 // OramaInstance is typed as any from the orama module
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type OramaInstance = any;
- 
-let dbInstance: OramaInstance | null = null;
-let lastQueryToken = 0;
 
-async function buildIndex(threads: Thread[]) {
-     
-    dbInstance = await createDb({
-        id: 'string',
-        title: 'string',
-        updated_at: 'number',
-    });
-    if (!dbInstance) return null;
-    const docs: ThreadDoc[] = threads.map((t) => ({
-        id: t.id,
-        title: t.title || 'Untitled Thread',
-        updated_at: t.updated_at,
-    }));
-    await buildOramaIndex(dbInstance, docs);
-     
-    return dbInstance;
-}
+let dbInstance: OramaInstance | null = null;
+const indexedState = new Map<string, number>(); // id -> updated_at
+let lastQueryToken = 0;
 
 export function useThreadSearch(threads: Ref<Thread[]>) {
     const query = ref('');
     const results = ref<Thread[]>([]);
     const ready = ref(false);
     const busy = ref(false);
-    const lastIndexedCount = ref(0);
     const idToThread = ref<Record<string, Thread>>({});
 
     async function ensureIndex() {
+        if (import.meta.server) return;
         if (busy.value) return;
-        if (threads.value.length === lastIndexedCount.value && dbInstance)
-            return;
+
         busy.value = true;
         try {
             idToThread.value = Object.fromEntries(
                 threads.value.map((t) => [t.id, t])
             );
-            await buildIndex(threads.value);
-            lastIndexedCount.value = threads.value.length;
+
+            if (!dbInstance) {
+                dbInstance = await createDb({
+                    id: 'string',
+                    title: 'string',
+                    updated_at: 'number',
+                });
+                if (!dbInstance) return;
+
+                const docs: ThreadDoc[] = threads.value.map((t) => ({
+                    id: t.id,
+                    title: t.title || 'Untitled Thread',
+                    updated_at: t.updated_at,
+                }));
+                await buildOramaIndex(dbInstance, docs);
+
+                indexedState.clear();
+                docs.forEach((d) => indexedState.set(d.id, d.updated_at));
+            } else {
+                // Incremental update
+                const currentThreads = threads.value;
+                const incomingIds = new Set<string>();
+
+                for (const t of currentThreads) {
+                    incomingIds.add(t.id);
+                    const existingTimestamp = indexedState.get(t.id);
+                    const doc: ThreadDoc = {
+                        id: t.id,
+                        title: t.title || 'Untitled Thread',
+                        updated_at: t.updated_at,
+                    };
+
+                    if (existingTimestamp === undefined) {
+                        await insertDoc(dbInstance, doc);
+                        indexedState.set(t.id, t.updated_at);
+                    } else if (existingTimestamp !== t.updated_at) {
+                        await updateDoc(dbInstance, t.id, doc);
+                        indexedState.set(t.id, t.updated_at);
+                    }
+                }
+
+                // Remove deleted threads
+                const toRemove: string[] = [];
+                for (const id of indexedState.keys()) {
+                    if (!incomingIds.has(id)) {
+                        toRemove.push(id);
+                    }
+                }
+
+                for (const id of toRemove) {
+                    await removeDoc(dbInstance, id);
+                    indexedState.delete(id);
+                }
+            }
             ready.value = true;
         } finally {
             busy.value = false;
@@ -64,6 +101,10 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
     }
 
     async function runSearch() {
+        if (import.meta.server) {
+            results.value = threads.value;
+            return;
+        }
         if (!dbInstance) await ensureIndex();
         if (!dbInstance) return;
         const raw = query.value.trim();
@@ -79,7 +120,10 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
             const mapped = hits
                 .map((h) => {
                     const hit = h as { document?: ThreadDoc } | ThreadDoc;
-                    const doc: ThreadDoc = 'document' in hit && hit.document ? hit.document : hit as ThreadDoc;
+                    const doc: ThreadDoc =
+                        'document' in hit && hit.document
+                            ? hit.document
+                            : (hit as ThreadDoc);
                     return idToThread.value[doc.id];
                 })
                 .filter((t: Thread | undefined): t is Thread => !!t);
@@ -96,7 +140,7 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
             results.value = threads.value.filter((t) =>
                 (t.title || '').toLowerCase().includes(ql)
             );
-             
+
             console.warn('[useThreadSearch] fallback substring search used', e);
         }
     }
@@ -106,11 +150,7 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
         await runSearch();
     });
 
-    watchDebounced(
-        query,
-        () => void runSearch(),
-        { debounce: 120 }
-    );
+    watchDebounced(query, () => void runSearch(), { debounce: 120 });
 
     // Cleanup on component unmount
     onBeforeUnmount(() => {
