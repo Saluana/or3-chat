@@ -34,11 +34,16 @@ export default defineNuxtConfig({
             },
         },
     },
+    // Explicitly disable sourcemaps for all builds to save memory
+    sourcemap: {
+        server: false,
+        client: false,
+    },
     devtools: {
-        enabled: true,
+        enabled: process.env.NODE_ENV !== 'production',
 
         timeline: {
-            enabled: true,
+            enabled: process.env.NODE_ENV !== 'production',
         },
     },
     modules: ['@nuxt/ui', '@nuxt/fonts', '@vite-pwa/nuxt'],
