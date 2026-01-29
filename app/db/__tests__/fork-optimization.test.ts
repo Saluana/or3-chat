@@ -66,7 +66,6 @@ const dbState = vi.hoisted(() => {
     const tables = {
         threads: createTable('threads', 'id'),
         messages: createTable('messages', 'id'),
-        // Add others to satisfy dependencies if any
         projects: createTable('projects', 'id'),
         posts: createTable('posts', 'id'),
         kv: createTable('kv', 'id'),
