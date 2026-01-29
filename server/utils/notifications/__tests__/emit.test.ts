@@ -22,7 +22,7 @@ describe('notification emit helpers', () => {
         mutationMock.mockClear();
         ConvexHttpClientMock.mockClear();
         (globalThis as typeof globalThis & { useRuntimeConfig?: () => unknown }).useRuntimeConfig =
-            () => ({ sync: { convexUrl: 'https://convex.test' } });
+            () => ({ public: { sync: { convexUrl: 'https://convex.test' } } });
     });
 
     afterEach(() => {
@@ -31,11 +31,11 @@ describe('notification emit helpers', () => {
 
     it('throws when convex url is missing', async () => {
         (globalThis as typeof globalThis & { useRuntimeConfig?: () => unknown }).useRuntimeConfig =
-            () => ({ sync: {} });
+            () => ({ public: { sync: {} } });
 
         await expect(
             emitBackgroundJobComplete('ws-1', 'user-1', 'thread-1', 'job-1')
-        ).rejects.toThrow('Convex URL not configured');
+        ).rejects.toThrow('CONVEX_URL is not defined in runtime config');
     });
 
     it('emits background completion notifications', async () => {

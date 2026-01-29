@@ -49,6 +49,13 @@ export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
         group: 'Auth',
         order: 4,
     },
+    'OR3_GUEST_ACCESS_ENABLED': {
+        label: 'Allow Guest Access',
+        description: 'Allow unauthenticated users to chat using their own OpenRouter key',
+        group: 'Auth',
+        order: 5,
+        valueType: 'boolean',
+    },
 
     // Sync
     'OR3_SYNC_ENABLED': {

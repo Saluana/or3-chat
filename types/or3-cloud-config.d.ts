@@ -16,6 +16,12 @@ export interface Or3CloudConfig {
          */
         provider: 'clerk' | 'custom';
         /**
+         * Allow unauthenticated users to use the app with their own OpenRouter key.
+         * Requires allowUserOverride to also be true.
+         * @default false
+         */
+        guestAccessEnabled?: boolean;
+        /**
          * Provider-specific configuration.
          */
         clerk?: {

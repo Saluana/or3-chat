@@ -22,6 +22,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
     auth: {
         enabled: false,
         provider: DEFAULT_AUTH_PROVIDER_ID,
+        guestAccessEnabled: false,
         clerk: {
             publishableKey: undefined,
             secretKey: undefined,
@@ -108,6 +109,7 @@ const cloudConfigSchema = z
         auth: z.object({
             enabled: z.boolean(),
             provider: z.enum(AUTH_PROVIDER_ID_LIST),
+            guestAccessEnabled: z.boolean().optional(),
             clerk: z
                 .object({
                     publishableKey: z.string().optional(),

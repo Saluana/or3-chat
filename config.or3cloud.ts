@@ -26,6 +26,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
     auth: {
         enabled: authEnabled,
         provider: (process.env.AUTH_PROVIDER ?? AUTH_PROVIDER_IDS.clerk) as AuthProviderId,
+        guestAccessEnabled: process.env.OR3_GUEST_ACCESS_ENABLED === 'true',
         clerk: {
             publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
             secretKey: process.env.NUXT_CLERK_SECRET_KEY,
