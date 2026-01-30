@@ -64,6 +64,16 @@ const adminConfig = {
     extensionAllowedExtensions: or3CloudConfig.admin?.extensionAllowedExtensions
         ? or3CloudConfig.admin.extensionAllowedExtensions.join(',')
         : undefined,
+    // Admin auth configuration (server-only, never expose secrets to client)
+    auth: {
+        username: or3CloudConfig.admin?.auth?.username ?? '',
+        password: or3CloudConfig.admin?.auth?.password ?? '',
+        jwtSecret: or3CloudConfig.admin?.auth?.jwtSecret ?? '',
+        jwtExpiry: or3CloudConfig.admin?.auth?.jwtExpiry || '24h',
+        deletedWorkspaceRetentionDays: or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays !== undefined
+            ? String(or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays)
+            : '',
+    },
 };
 
 export default defineNuxtConfig({
@@ -550,13 +560,8 @@ export default defineNuxtConfig({
                   'app/pages/_test.vue',
               ]
             : []),
-        ...(!isSsrAuthEnabled
-            ? [
-                  'app/pages/admin/**',
-                  'app/layouts/admin.vue',
-                  'app/components/admin/**',
-                  'app/composables/admin/**',
-              ]
-            : []),
+        // Note: Admin pages are no longer excluded based on ssrAuthEnabled.
+        // The new super admin feature uses JWT-based authentication and is gated
+        // at runtime via isAdminEnabled() check in server/middleware/admin-gate.ts.
     ].filter(Boolean) as string[],
 });

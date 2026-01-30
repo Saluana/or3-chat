@@ -90,9 +90,10 @@
 		} from '~/composables/admin/useAdminPlugins';
 		import { useAdminSystemStatus } from '~/composables/admin/useAdminData';
 
-	definePageMeta({
-	    layout: 'admin',
-	});
+definePageMeta({
+    layout: 'admin',
+    middleware: ['admin-auth'],
+});
 
 const { data, error, refresh, status: fetchStatus } = useAdminSystemStatus();
 const errorMessage = computed(() =>

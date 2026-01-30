@@ -434,6 +434,11 @@ export interface SessionContext {
     workspace?: { id: string; name: string };
     role?: WorkspaceRole;
     expiresAt?: string;
+    /**
+     * Indicates if this user has deployment-wide admin access.
+     * Set by the canonical store based on admin_users table.
+     */
+    deploymentAdmin?: boolean;
 }
 
 // ============================================================================

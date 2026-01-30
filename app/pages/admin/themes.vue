@@ -1,5 +1,10 @@
 <template>
     <div class="space-y-6">
+        <!-- Workspace Selector Modal - shown if no workspace selected -->
+        <WorkspaceSelector
+            v-model="showWorkspaceSelector"
+            @select="onWorkspaceSelected"
+        />
         <div>
             <h2 class="text-2xl font-semibold mb-1">Themes</h2>
             <p class="text-sm opacity-70">
@@ -108,13 +113,35 @@ import { useExtensionManagement } from '~/composables/admin/useExtensionManageme
 import { useServerRestart } from '~/composables/admin/useServerRestart';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
+import { useAdminWorkspaceContext } from '~/composables/admin/useAdminWorkspaceContext';
+import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
 
 definePageMeta({
     layout: 'admin',
+    middleware: ['admin-auth'],
 });
 
+const { hasWorkspace, selectWorkspace, selectedWorkspaceId } = useAdminWorkspaceContext();
+const showWorkspaceSelector = ref(false);
+
+// Show workspace selector if no workspace selected
+if (!hasWorkspace.value) {
+    showWorkspaceSelector.value = true;
+}
+
+// Handle workspace selection
+function onWorkspaceSelected(workspace: any) {
+    selectWorkspace(workspace);
+}
+
 const { data, status: extStatus, refresh: refreshExtensions } = useAdminExtensions();
-const { data: workspaceData, status: workspaceStatus, refresh: refreshWorkspace } = useAdminWorkspace();
+const { data: workspaceData, status: workspaceStatus, refresh: refreshWorkspace } = useAdminWorkspace(selectedWorkspaceId.value ?? undefined);
+
+watch(selectedWorkspaceId, (newId) => {
+    if (newId) {
+        refreshWorkspace();
+    }
+});
 const { data: configData, status: configStatus, refresh: refreshConfig } = useAdminSystemConfig();
 const { data: statusData } = useAdminSystemStatus();
 

@@ -24,7 +24,10 @@ export default defineSchema({
         display_name: v.optional(v.string()),
         active_workspace_id: v.optional(v.id('workspaces')),
         created_at: v.number(),
-    }),
+    })
+        .index('by_email', ['email'])
+        .index('by_display_name', ['display_name']),
+
 
     /**
      * Auth accounts - links provider identities to users
@@ -45,7 +48,9 @@ export default defineSchema({
         description: v.optional(v.string()),
         owner_user_id: v.id('users'),
         created_at: v.number(),
-    }),
+        deleted: v.optional(v.boolean()),
+        deleted_at: v.optional(v.number()),
+    }).index('by_deleted', ['deleted']),
 
     /**
      * Workspace members - role-based access per workspace
@@ -59,6 +64,34 @@ export default defineSchema({
         .index('by_workspace', ['workspace_id'])
         .index('by_user', ['user_id'])
         .index('by_workspace_user', ['workspace_id', 'user_id']),
+
+    /**
+     * Admin users - deployment-scoped admin grants
+     * Users in this table have admin access to the admin dashboard
+     */
+    admin_users: defineTable({
+        user_id: v.id('users'),
+        created_at: v.number(),
+        created_by_user_id: v.optional(v.id('users')),
+    })
+        .index('by_user', ['user_id'])
+        .index('by_created_by', ['created_by_user_id']),
+
+    /**
+     * Audit log - tracks admin actions for security and compliance
+     */
+    audit_log: defineTable({
+        action: v.string(), // e.g., 'workspace.create', 'workspace.delete', 'admin.grant'
+        actor_id: v.string(), // User ID or super admin username
+        actor_type: v.union(v.literal('super_admin'), v.literal('workspace_admin')),
+        target_type: v.optional(v.string()), // e.g., 'workspace', 'user'
+        target_id: v.optional(v.string()), // ID of the affected resource
+        details: v.optional(v.any()), // Additional action-specific data
+        created_at: v.number(),
+    })
+        .index('by_actor', ['actor_id'])
+        .index('by_target', ['target_type', 'target_id'])
+        .index('by_created_at', ['created_at']),
 
     // ============================================================
     // SYNC INFRASTRUCTURE

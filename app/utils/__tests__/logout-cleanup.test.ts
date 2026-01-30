@@ -73,7 +73,7 @@ describe('logoutCleanup', () => {
         localStorage.setItem('last_selected_model', 'openai/test');
         sessionStorage.setItem('openrouter_state', 'state');
         const { logoutCleanup } = await import('~/utils/logout-cleanup');
-        await logoutCleanup({ $syncEngine: { stop } });
+        await logoutCleanup({ $syncEngine: { stop } } as unknown as Parameters<typeof logoutCleanup>[0]);
 
         expect(stop).toHaveBeenCalledTimes(1);
         expect(clearWorkspaceDbsOnLogout).toHaveBeenCalledTimes(1);

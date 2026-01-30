@@ -123,6 +123,15 @@ export const or3CloudConfig = defineOr3CloudConfig({
                   .map((ext) => ext.trim())
                   .filter(Boolean)
             : undefined,
+        auth: {
+            username: process.env.OR3_ADMIN_USERNAME,
+            password: process.env.OR3_ADMIN_PASSWORD,
+            jwtSecret: process.env.OR3_ADMIN_JWT_SECRET,
+            jwtExpiry: process.env.OR3_ADMIN_JWT_EXPIRY || '24h',
+            deletedWorkspaceRetentionDays: process.env.OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS
+                ? Number(process.env.OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS)
+                : undefined,
+        },
     },
     /**
      * Background streaming configuration (SSR mode only).

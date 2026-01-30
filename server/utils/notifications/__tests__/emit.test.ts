@@ -17,21 +17,23 @@ vi.mock('~~/convex/_generated/api', () => ({
     api: { notifications: { create: 'notifications.create' } },
 }));
 
+const mocks = vi.hoisted(() => ({
+    config: { sync: { convexUrl: 'https://convex.test' } } as any
+}));
+
+vi.mock('#imports', () => ({
+    useRuntimeConfig: () => mocks.config,
+}));
+
 describe('notification emit helpers', () => {
     beforeEach(() => {
         mutationMock.mockClear();
         ConvexHttpClientMock.mockClear();
-        (globalThis as typeof globalThis & { useRuntimeConfig?: () => unknown }).useRuntimeConfig =
-            () => ({ public: { sync: { convexUrl: 'https://convex.test' } } });
-    });
-
-    afterEach(() => {
-        delete (globalThis as typeof globalThis & { useRuntimeConfig?: () => unknown }).useRuntimeConfig;
+        mocks.config = { sync: { convexUrl: 'https://convex.test' } };
     });
 
     it('throws when convex url is missing', async () => {
-        (globalThis as typeof globalThis & { useRuntimeConfig?: () => unknown }).useRuntimeConfig =
-            () => ({ public: { sync: {} } });
+        mocks.config = { sync: {} };
 
         await expect(
             emitBackgroundJobComplete('ws-1', 'user-1', 'thread-1', 'job-1')
