@@ -24,7 +24,10 @@ export default defineSchema({
         display_name: v.optional(v.string()),
         active_workspace_id: v.optional(v.id('workspaces')),
         created_at: v.number(),
-    }),
+    })
+        .index('by_email', ['email'])
+        .index('by_display_name', ['display_name']),
+
 
     /**
      * Auth accounts - links provider identities to users

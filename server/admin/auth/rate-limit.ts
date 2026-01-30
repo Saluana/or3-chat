@@ -1,13 +1,17 @@
+import { getRequestHeaders, type H3Event } from 'h3';
+
 /**
  * Rate limiting for admin login attempts.
  * Uses in-memory storage with sliding window (15 minutes).
  * 5 attempts per IP + username combination.
  * 
  * Storage is cleared on server restart (acceptable for simplicity).
+ * Includes periodic cleanup to prevent memory growth.
  */
 
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_ATTEMPTS = 5;
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Clean up every 5 minutes
 
 interface RateLimitEntry {
     count: number;
@@ -16,6 +20,21 @@ interface RateLimitEntry {
 
 // In-memory storage: Map<key, RateLimitEntry>
 const rateLimitStore = new Map<string, RateLimitEntry>();
+
+// Periodic cleanup to prevent unbounded memory growth
+setInterval(() => {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [key, entry] of rateLimitStore) {
+        if (now - entry.windowStart > WINDOW_MS) {
+            rateLimitStore.delete(key);
+            cleaned++;
+        }
+    }
+    if (cleaned > 0) {
+        console.log(`[rate-limit] Cleaned up ${cleaned} expired rate limit entries`);
+    }
+}, CLEANUP_INTERVAL_MS);
 
 /**
  * Generate the rate limit key from IP and username.
@@ -117,14 +136,12 @@ export function clearRateLimit(ip: string, username: string): void {
  * Get client IP from H3 event.
  * Falls back to 'unknown' if cannot be determined.
  */
-export function getClientIp(event: import('h3').H3Event): string {
+export function getClientIp(event: H3Event): string {
     const headers = getRequestHeaders(event);
     const forwarded = headers['x-forwarded-for'];
     if (forwarded) {
-        return forwarded.split(',')[0].trim();
+        const firstIp = forwarded.split(',')[0];
+        return firstIp?.trim() ?? 'unknown';
     }
     return headers['x-real-ip'] ?? 'unknown';
 }
-
-// Import for headers
-import { getRequestHeaders } from 'h3';

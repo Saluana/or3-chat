@@ -1,3 +1,5 @@
+import type { Ref } from 'vue';
+
 /**
  * Global workspace selection state for admin pages.
  * In-memory only (no localStorage persistence as per requirements).
@@ -11,6 +13,11 @@ interface Workspace {
 }
 
 const WORKSPACE_STATE_KEY = 'admin-selected-workspace';
+
+// Use global Nuxt/Vue composables (auto-imported)
+declare const useState: <T>(key: string, init?: () => T) => Ref<T>;
+declare const computed: <T>(getter: () => T) => { readonly value: T };
+declare const readonly: <T>(ref: { value: T }) => Readonly<{ value: T }>;
 
 export function useAdminWorkspaceContext() {
     // Use useState for shared state across components
@@ -45,11 +52,17 @@ export function useAdminWorkspaceContext() {
 }
 
 export function getSelectedWorkspaceId(): string | null {
-    const id = useState<string | null>(`${WORKSPACE_STATE_KEY}-id`);
+    // These standalone functions should only be called within Vue/Nuxt context
+    // where useState is auto-imported
+    const state = (globalThis as unknown as { useState?: Function }).useState;
+    if (!state) return null;
+    const id = state(`${WORKSPACE_STATE_KEY}-id`) as { value: string | null };
     return id.value;
 }
 
 export function setSelectedWorkspaceId(id: string) {
-    const selectedId = useState<string | null>(`${WORKSPACE_STATE_KEY}-id`);
+    const state = (globalThis as unknown as { useState?: Function }).useState;
+    if (!state) return;
+    const selectedId = state(`${WORKSPACE_STATE_KEY}-id`) as { value: string | null };
     selectedId.value = id;
 }

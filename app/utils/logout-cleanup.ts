@@ -1,10 +1,11 @@
+import type { NuxtApp } from 'nuxt/app';
 import { kv } from '~/db';
 import { state } from '~/state/global';
 import { clearWorkspaceDbsOnLogout } from '~/utils/workspace-db-logout';
 
 type SyncEngine = { stop?: () => Promise<void> | void };
 
-interface NuxtAppWithSync {
+interface NuxtAppWithSync extends NuxtApp {
     $syncEngine?: SyncEngine;
 }
 

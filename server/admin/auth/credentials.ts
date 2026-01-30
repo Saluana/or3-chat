@@ -23,8 +23,10 @@ export type AdminCredentialsFile = {
 async function ensureDataDir(): Promise<void> {
     try {
         await mkdir(DATA_DIR, { mode: 0o700, recursive: true });
-    } catch {
-        // Directory may already exist
+    } catch (err: any) {
+        if (err.code !== 'EEXIST') {
+            throw err;
+        }
     }
 }
 
@@ -48,8 +50,11 @@ export async function readAdminCredentials(): Promise<AdminCredentialsFile | nul
     try {
         const content = await readFile(CREDENTIALS_FILE, 'utf-8');
         return JSON.parse(content) as AdminCredentialsFile;
-    } catch {
-        return null;
+    } catch (err: any) {
+        if (err.code === 'ENOENT') {
+            return null; // File doesn't exist - expected
+        }
+        throw err; // Re-throw unexpected errors
     }
 }
 

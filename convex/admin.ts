@@ -27,6 +27,25 @@ async function getAuthAccount(ctx: MutationCtx | QueryCtx): Promise<{ userId: Id
 }
 
 /**
+ * Require admin authorization for the current user.
+ * Throws if not authenticated or not an admin.
+ */
+async function requireAdmin(ctx: MutationCtx | QueryCtx): Promise<{ userId: Id<'users'> }> {
+    const { userId } = await getAuthAccount(ctx);
+
+    const adminGrant = await ctx.db
+        .query('admin_users')
+        .withIndex('by_user', (q) => q.eq('user_id', userId))
+        .first();
+
+    if (!adminGrant) {
+        throw new Error('Forbidden: Admin access required');
+    }
+
+    return { userId };
+}
+
+/**
  * Check if a user is an admin.
  */
 export const isAdmin = query({
@@ -43,12 +62,14 @@ export const isAdmin = query({
 
 /**
  * List all admin users with their user details.
+ * Requires admin authorization.
  */
 export const listAdmins = query({
     args: {},
     handler: async (ctx) => {
-        // Note: In production, this should check if the caller is an admin
-        // For now, we rely on the server-side authorization
+        // Verify caller is an admin
+        await requireAdmin(ctx);
+
         const admins = await ctx.db.query('admin_users').collect();
 
         const results = await Promise.all(
@@ -69,14 +90,15 @@ export const listAdmins = query({
 
 /**
  * Grant admin access to a user.
+ * Requires admin authorization.
  */
 export const grantAdmin = mutation({
     args: {
         user_id: v.id('users'),
     },
     handler: async (ctx, args) => {
-        // Note: In production, this should verify the caller is an admin
-        const { userId: callerId } = await getAuthAccount(ctx);
+        // Verify caller is an admin
+        const { userId: callerId } = await requireAdmin(ctx);
 
         // Check if user exists
         const user = await ctx.db.get(args.user_id);
@@ -107,14 +129,15 @@ export const grantAdmin = mutation({
 
 /**
  * Revoke admin access from a user (hard delete).
+ * Requires admin authorization.
  */
 export const revokeAdmin = mutation({
     args: {
         user_id: v.id('users'),
     },
     handler: async (ctx, args) => {
-        // Note: In production, this should verify the caller is an admin
-        await getAuthAccount(ctx);
+        // Verify caller is an admin
+        await requireAdmin(ctx);
 
         const adminGrant = await ctx.db
             .query('admin_users')
@@ -148,22 +171,40 @@ export const searchUsers = query({
             return [];
         }
 
-        // Get all users and filter (in production, use full-text search)
-        const allUsers = await ctx.db.query('users').take(limit * 2);
-
-        const matching = allUsers
-            .filter(
-                (user) =>
-                    user.email?.toLowerCase().includes(searchTerm) ||
-                    user.display_name?.toLowerCase().includes(searchTerm)
+        // Use indexed queries for efficient prefix matching
+        // Query users by email (prefix match using index range)
+        const usersByEmail = await ctx.db
+            .query('users')
+            .withIndex('by_email', (q) =>
+                q.gte('email', searchTerm).lt('email', searchTerm + '\uffff')
             )
-            .slice(0, limit);
+            .take(limit);
 
-        return matching.map((user) => ({
-            userId: user._id,
-            email: user.email,
-            displayName: user.display_name,
-        }));
+        // Query users by display name (prefix match using index range)
+        const usersByName = await ctx.db
+            .query('users')
+            .withIndex('by_display_name', (q) =>
+                q.gte('display_name', searchTerm).lt('display_name', searchTerm + '\uffff')
+            )
+            .take(limit);
+
+        // Combine and deduplicate results
+        const seen = new Set<string>();
+        const results: { userId: string; email?: string; displayName?: string }[] = [];
+
+        for (const user of [...usersByEmail, ...usersByName]) {
+            if (!seen.has(user._id)) {
+                seen.add(user._id);
+                results.push({
+                    userId: user._id,
+                    email: user.email,
+                    displayName: user.display_name,
+                });
+                if (results.length >= limit) break;
+            }
+        }
+
+        return results;
     },
 });
 
@@ -207,30 +248,50 @@ export const listWorkspaces = query({
         // Paginate
         const paginated = workspaces.slice(skip, skip + per_page);
 
-        // Get owner and member info
-        const results = await Promise.all(
-            paginated.map(async (workspace) => {
-                const owner = await ctx.db.get(workspace.owner_user_id);
-                const members = await ctx.db
+        // Batch fetch owners and members to avoid N+1 queries
+        const workspaceIds = paginated.map((w) => w._id);
+        const ownerIds = paginated.map((w) => w.owner_user_id);
+
+        // Fetch all owners in parallel
+        const owners = await Promise.all(
+            ownerIds.map((id) => ctx.db.get(id))
+        );
+        const ownerMap = new Map(
+            owners.filter(Boolean).map((o) => [o!._id, o!])
+        );
+
+        // Fetch all members in parallel using indexed queries
+        const allMembers = await Promise.all(
+            workspaceIds.map((id) =>
+                ctx.db
                     .query('workspace_members')
                     .withIndex('by_workspace', (q) =>
-                        q.eq('workspace_id', workspace._id)
+                        q.eq('workspace_id', id)
                     )
-                    .collect();
-
-                return {
-                    id: workspace._id,
-                    name: workspace.name,
-                    description: workspace.description,
-                    createdAt: workspace.created_at,
-                    deleted: workspace.deleted ?? false,
-                    deletedAt: workspace.deleted_at,
-                    ownerUserId: workspace.owner_user_id,
-                    ownerEmail: owner?.email,
-                    memberCount: members.length,
-                };
-            })
+                    .collect()
+            )
         );
+        const memberCounts = new Map<string, number>();
+        for (let i = 0; i < workspaceIds.length; i++) {
+            const workspaceId = workspaceIds[i];
+            const members = allMembers[i];
+            if (workspaceId && members) {
+                memberCounts.set(workspaceId, members.length);
+            }
+        }
+
+        // Map results without additional queries
+        const results = paginated.map((workspace) => ({
+            id: workspace._id,
+            name: workspace.name,
+            description: workspace.description,
+            createdAt: workspace.created_at,
+            deleted: workspace.deleted ?? false,
+            deletedAt: workspace.deleted_at,
+            ownerUserId: workspace.owner_user_id,
+            ownerEmail: ownerMap.get(workspace.owner_user_id)?.email,
+            memberCount: memberCounts.get(workspace._id) || 0,
+        }));
 
         return { items: results, total };
     },

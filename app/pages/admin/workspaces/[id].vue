@@ -82,7 +82,7 @@
                     <div class="text-sm opacity-70">{{ workspace.members?.length || 0 }} total</div>
                 </div>
 
-                <div v-if="workspace.members?.length > 0" class="space-y-2">
+                <div v-if="(workspace.members?.length ?? 0) > 0" class="space-y-2">
                     <div
                         v-for="member in workspace.members"
                         :key="member.userId"

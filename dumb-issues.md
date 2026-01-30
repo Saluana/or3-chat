@@ -2206,3 +2206,41 @@ This code has **50 issues** ranging from minor annoyances to serious security vu
 - Implement proper rate limiting
 
 This code is not production-ready.
+
+---
+
+## FIX PROGRESS
+
+**Status:** Issues 1-15 completed
+
+**Completed by:** opencode  
+**Date:** 2026-01-29  
+**Next issue to fix:** Issue 16
+
+### Fixed Issues:
+
+1. **Issues 1-5** - Removed all debug console.log statements from JWT verification, cookie handling, login handler, admin gate middleware, and cookie clearing
+
+2. **Issue 6** - Added periodic cleanup (every 5 minutes) to in-memory rate limiting to prevent unbounded memory growth
+
+3. **Issue 7** - Moved import statement from bottom to top of rate-limit.ts file
+
+4. **Issues 8-9** - Fixed silent failures in credentials.ts by only catching expected errors (EEXIST, ENOENT) and rethrowing unexpected errors
+
+5. **Issues 10-11** - Added TTL (1 minute) to global caches in registry.ts and deployment-admin.ts to prevent stale data and memory leaks
+
+6. **Issue 12** - Replaced unsafe type assertions with validation functions that check ID format before casting
+
+7. **Issue 13** - Fixed N+1 query problem in listWorkspaces by batching owner and member queries
+
+8. **Issue 14** - Added search indexes on users table (by_email, by_display_name) and updated searchUsers to use indexed queries with prefix matching
+
+9. **Issue 15** - Added proper authorization checks to Convex admin functions (listAdmins, grantAdmin, revokeAdmin) using new requireAdmin() helper
+
+### Remaining Issues (16-50):
+
+Issues 16-50 still need to be addressed. The next issue is:
+
+**Issue 16:** Redundant method check in login.post.ts (file is already named .post.ts)
+
+**Next developer should start with:** Issue 16

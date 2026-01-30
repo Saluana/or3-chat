@@ -180,7 +180,6 @@
                     :key="link.to"
                     :to="link.to"
                     :aria-current="isActive(link.to) ? 'page' : undefined"
-                    @click="link.onClick?.()"
                     class="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-[var(--md-sys-shape-corner-small,4px)] transition-all duration-200 hover:bg-[var(--md-primary)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)] group relative"
                     :class="[
                         isActive(link.to)
@@ -253,7 +252,7 @@
                         <UIcon name="i-heroicons-building-office" class="w-5 h-5 text-[var(--md-on-surface-variant)]" />
                         <div>
                             <span class="text-sm text-[var(--md-on-surface-variant)]">Working in:</span>
-                            <span class="text-sm font-medium text-[var(--md-on-surface)] ml-1">{{ selectedWorkspace.name }}</span>
+                            <span class="text-sm font-medium text-[var(--md-on-surface)] ml-1">{{ selectedWorkspace.value?.name }}</span>
                         </div>
                     </div>
                     <UButton
@@ -368,8 +367,14 @@ async function handleLogout() {
 
 // Avoid eager admin API calls in layout to prevent unnecessary errors
 
-const navLinks = computed(() => {
-    const base = [
+interface NavLink {
+    label: string;
+    to: string;
+    icon: string;
+}
+
+const navLinks = computed<NavLink[]>(() => {
+    const base: NavLink[] = [
         { label: 'Overview', to: '/admin', icon: useIcon('dashboard.home').value },
         { label: 'Workspaces', to: '/admin/workspaces', icon: useIcon('sidebar.user').value },
         { label: 'Plugins', to: '/admin/plugins', icon: useIcon('dashboard.plugins').value },

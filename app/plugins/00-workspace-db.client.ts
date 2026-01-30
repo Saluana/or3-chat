@@ -20,7 +20,7 @@ export default defineNuxtPlugin(async () => {
 
     await refresh();
     if (!data.value?.session?.authenticated) {
-        await logoutCleanup(nuxtApp);
+        await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
     }
 
     const resolveWorkspaceId = () =>
@@ -39,7 +39,7 @@ export default defineNuxtPlugin(async () => {
                 cleanupSubscriptionManager(`${oldWorkspaceId}:default`);
             }
             if (oldSession?.authenticated && !newSession?.authenticated) {
-                await logoutCleanup(nuxtApp);
+                await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
             }
             setActiveWorkspaceDb(resolveWorkspaceId());
         }

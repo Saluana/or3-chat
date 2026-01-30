@@ -30,7 +30,7 @@ export default defineNuxtPlugin(async () => {
     const unsubscribe = clerk.addListener(async () => {
         await refresh();
         if (!data.value?.session?.authenticated) {
-            await logoutCleanup(nuxtApp);
+            await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
         }
     });
 

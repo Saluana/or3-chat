@@ -20,6 +20,8 @@ export interface DeploymentAdminChecker {
 
 let cachedChecker: DeploymentAdminChecker | null = null;
 let cachedProviderId: string | null = null;
+let cacheTimestamp: number = 0;
+const CACHE_TTL_MS = 60000; // 1 minute
 
 /**
  * Get the deployment admin checker for the current sync provider.
@@ -27,9 +29,12 @@ let cachedProviderId: string | null = null;
 export function getDeploymentAdminChecker(event?: H3Event): DeploymentAdminChecker {
     const config = useRuntimeConfig(event);
     const syncProviderId = config.sync?.provider || CONVEX_PROVIDER_ID;
+    const now = Date.now();
 
-    // Return cached checker if provider hasn't changed
-    if (cachedChecker && cachedProviderId === syncProviderId) {
+    // Return cached checker if valid and provider hasn't changed
+    if (cachedChecker && 
+        cachedProviderId === syncProviderId && 
+        now - cacheTimestamp < CACHE_TTL_MS) {
         return cachedChecker;
     }
 
@@ -37,6 +42,7 @@ export function getDeploymentAdminChecker(event?: H3Event): DeploymentAdminCheck
     const checker = createChecker(syncProviderId);
     cachedChecker = checker;
     cachedProviderId = syncProviderId;
+    cacheTimestamp = now;
 
     return checker;
 }
@@ -102,4 +108,5 @@ class NoOpDeploymentAdminChecker implements DeploymentAdminChecker {
 export function clearDeploymentAdminCache(): void {
     cachedChecker = null;
     cachedProviderId = null;
+    cacheTimestamp = 0;
 }

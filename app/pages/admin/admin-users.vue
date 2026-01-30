@@ -73,7 +73,7 @@
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-lg font-medium">Current Admins</h2>
                     <UButton
-                        @click="refreshAdmins"
+                        @click="() => refreshAdmins()"
                         variant="ghost"
                         color="neutral"
                         icon="i-heroicons-arrow-path"

@@ -5,7 +5,7 @@
         @click="emit('click')"
     >
         <UIcon name="i-heroicons-building-office" class="w-4 h-4" />
-        <span class="max-w-[150px] truncate">{{ selectedWorkspace.name }}</span>
+        <span class="max-w-[150px] truncate">{{ selectedWorkspace.value?.name }}</span>
         <UIcon name="i-heroicons-chevron-down" class="w-3 h-3 opacity-70" />
     </div>
 </template>

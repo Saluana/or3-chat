@@ -15,6 +15,8 @@ import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 let cachedCapabilities: AdminStoreCapabilities | null = null;
 let cachedProviderId: string | null = null;
+let cacheTimestamp: number = 0;
+const CACHE_TTL_MS = 60000; // 1 minute
 
 export function getWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore {
     const config = useRuntimeConfig();
@@ -65,15 +67,19 @@ export function getAdminUserStore(event: H3Event): AdminUserStore {
 export function getAdminStoreCapabilities(event?: H3Event): AdminStoreCapabilities {
     const config = useRuntimeConfig(event);
     const provider = config.sync.provider as string | undefined;
+    const now = Date.now();
 
-    // Return cached capabilities if provider hasn't changed
-    if (cachedCapabilities && cachedProviderId === provider) {
+    // Return cached capabilities if valid and provider hasn't changed
+    if (cachedCapabilities && 
+        cachedProviderId === provider && 
+        now - cacheTimestamp < CACHE_TTL_MS) {
         return cachedCapabilities;
     }
 
     const capabilities = getCapabilitiesForProvider(provider);
     cachedCapabilities = capabilities;
     cachedProviderId = provider || null;
+    cacheTimestamp = now;
 
     return capabilities;
 }
@@ -108,4 +114,5 @@ function getCapabilitiesForProvider(
 export function clearAdminStoreCache(): void {
     cachedCapabilities = null;
     cachedProviderId = null;
+    cacheTimestamp = 0;
 }
