@@ -6,6 +6,38 @@
 
 ---
 
+## FIX PROGRESS
+
+### Issues 1-15: ✅ COMPLETED
+
+All security and code quality issues from the initial batch have been resolved:
+- Debug logging removed from JWT verification (Issues 1-5)
+- Rate limiting cleanup implemented (Issue 6)
+- Import statement moved to top of file (Issue 7)
+- Silent failures now properly handled with specific error codes (Issues 8-9)
+- TTL added to global caches with automatic invalidation (Issues 10-11)
+- Type assertions replaced with validation functions (Issue 12)
+- N+1 query problem fixed with batched queries (Issue 13)
+- Search indexes added for efficient user search (Issue 14)
+- Authorization checks added to Convex functions (Issue 15)
+
+### Issues 16-25: ✅ COMPLETED
+
+- Issue 16: Removed redundant POST method check from login.post.ts (file naming handles this)
+- Issue 17: Removed redundant POST method check from change-password.post.ts
+- Issue 18: Cookie maxAge now matches JWT expiry via `parseExpiryToSeconds()` function
+- Issue 19: Cookie path changed from `/` to `/admin` for security
+- Issue 20: Removed client-side cookie manipulation (httpOnly cookies can't be cleared client-side)
+- Issue 21: Extracted pagination magic numbers to named constants
+- Issue 22: Added comprehensive input validation for workspace creation (name/description length, owner ID format)
+- Issue 23: Extracted Workspace interface to shared types in global.d.ts with WorkspaceSummary and WorkspaceMemberInfo
+- Issue 24: Added specific error handling for 404/403 cases in workspace soft delete
+- Issue 25: Added loading state for workspace navigation with `navigatingTo` ref
+
+### Next: Issues 26-50 (PENDING)
+
+---
+
 ## Issue 1: Debug Logging Left in Production Code
 
 **File:** `server/admin/auth/jwt.ts`  
@@ -2206,41 +2238,3 @@ This code has **50 issues** ranging from minor annoyances to serious security vu
 - Implement proper rate limiting
 
 This code is not production-ready.
-
----
-
-## FIX PROGRESS
-
-**Status:** Issues 1-15 completed
-
-**Completed by:** opencode  
-**Date:** 2026-01-29  
-**Next issue to fix:** Issue 16
-
-### Fixed Issues:
-
-1. **Issues 1-5** - Removed all debug console.log statements from JWT verification, cookie handling, login handler, admin gate middleware, and cookie clearing
-
-2. **Issue 6** - Added periodic cleanup (every 5 minutes) to in-memory rate limiting to prevent unbounded memory growth
-
-3. **Issue 7** - Moved import statement from bottom to top of rate-limit.ts file
-
-4. **Issues 8-9** - Fixed silent failures in credentials.ts by only catching expected errors (EEXIST, ENOENT) and rethrowing unexpected errors
-
-5. **Issues 10-11** - Added TTL (1 minute) to global caches in registry.ts and deployment-admin.ts to prevent stale data and memory leaks
-
-6. **Issue 12** - Replaced unsafe type assertions with validation functions that check ID format before casting
-
-7. **Issue 13** - Fixed N+1 query problem in listWorkspaces by batching owner and member queries
-
-8. **Issue 14** - Added search indexes on users table (by_email, by_display_name) and updated searchUsers to use indexed queries with prefix matching
-
-9. **Issue 15** - Added proper authorization checks to Convex admin functions (listAdmins, grantAdmin, revokeAdmin) using new requireAdmin() helper
-
-### Remaining Issues (16-50):
-
-Issues 16-50 still need to be addressed. The next issue is:
-
-**Issue 16:** Redundant method check in login.post.ts (file is already named .post.ts)
-
-**Next developer should start with:** Issue 16
