@@ -13,6 +13,7 @@ import { useRuntimeConfig } from '#imports';
  * @returns true if SSR auth is enabled
  */
 export function isSsrAuthEnabled(_event?: H3Event): boolean {
-    const config = useRuntimeConfig() || {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+    const config = (useRuntimeConfig() || {}) as any;
     return config.auth?.enabled === true;
 }

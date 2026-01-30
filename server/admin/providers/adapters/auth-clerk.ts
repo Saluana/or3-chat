@@ -7,11 +7,14 @@ export const clerkAdminAdapter: ProviderAdminAdapter = {
     id: CLERK_PROVIDER_ID,
     kind: 'auth',
     async getStatus(_event: H3Event, ctx: ProviderStatusContext): Promise<ProviderAdminStatusResult> {
-        const config = useRuntimeConfig();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+        const config = (useRuntimeConfig() || {}) as any;
         const warnings: ProviderAdminStatusResult['warnings'] = [];
 
         if (ctx.enabled) {
-            const publishable = config.public.clerkPublishableKey;
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+            const publishable = config.public?.clerkPublishableKey;
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             const secret = config.clerkSecretKey;
             if (!publishable) {
                 warnings.push({
@@ -29,7 +32,9 @@ export const clerkAdminAdapter: ProviderAdminAdapter = {
 
         return {
             details: {
-                publishableConfigured: Boolean(config.public.clerkPublishableKey),
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+                publishableConfigured: Boolean(config.public?.clerkPublishableKey),
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
                 secretConfigured: Boolean(config.clerkSecretKey),
             },
             warnings,

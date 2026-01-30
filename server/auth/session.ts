@@ -25,8 +25,10 @@ export async function resolveSessionContext(
     event: H3Event
 ): Promise<SessionContext> {
     // Get provider from config for cache key
-    const config = useRuntimeConfig();
-    const providerId = config.auth.provider || CLERK_PROVIDER_ID;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unnecessary-condition
+    const config = (useRuntimeConfig() || {}) as any;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const providerId = config.auth?.provider || CLERK_PROVIDER_ID;
     const cacheKey = `${SESSION_CONTEXT_KEY_PREFIX}${providerId}`;
 
     // Check cache first

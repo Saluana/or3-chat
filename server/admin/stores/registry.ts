@@ -20,7 +20,8 @@ let cacheTimestamp: number = 0;
 const CACHE_TTL_MS = 60000; // 1 minute
 
 export function getWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore {
-    const config = useRuntimeConfig();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+    const config = (useRuntimeConfig() || {}) as any;
     const provider = config.sync.provider as string | undefined;
 
     if (provider === CONVEX_PROVIDER_ID) {
@@ -34,7 +35,8 @@ export function getWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore {
 }
 
 export function getWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStore {
-    const config = useRuntimeConfig();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+    const config = (useRuntimeConfig() || {}) as any;
     const provider = config.sync.provider as string | undefined;
 
     if (provider === CONVEX_PROVIDER_ID) {
@@ -48,7 +50,8 @@ export function getWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStor
 }
 
 export function getAdminUserStore(event: H3Event): AdminUserStore {
-    const config = useRuntimeConfig();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+    const config = (useRuntimeConfig() || {}) as any;
     const provider = config.sync.provider as string | undefined;
 
     if (provider === CONVEX_PROVIDER_ID) {
@@ -66,7 +69,8 @@ export function getAdminUserStore(event: H3Event): AdminUserStore {
  * Capabilities are cached per provider.
  */
 export function getAdminStoreCapabilities(event?: H3Event): AdminStoreCapabilities {
-    const config = useRuntimeConfig(event);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+    const config = (useRuntimeConfig(event) || {}) as any;
     const provider = config.sync.provider as string | undefined;
     const now = Date.now();
 

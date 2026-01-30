@@ -34,16 +34,17 @@ export const convexSyncAdminAdapter: ProviderAdminAdapter = {
     id: CONVEX_PROVIDER_ID,
     kind: 'sync',
     async getStatus(_event: H3Event, ctx: ProviderStatusContext): Promise<ProviderAdminStatusResult> {
-        const config = useRuntimeConfig();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+        const config = (useRuntimeConfig() || {}) as any;
         const warnings: ProviderAdminStatusResult['warnings'] = [];
 
-        if (ctx.enabled && !config.sync.convexUrl) {
+        if (ctx.enabled && !config.sync?.convexUrl) {
             warnings.push({
                 level: 'error',
                 message: 'Convex sync is enabled but no Convex URL is configured.',
             });
         }
-        if (ctx.enabled && config.auth.provider !== CLERK_PROVIDER_ID) {
+        if (ctx.enabled && config.auth?.provider !== CLERK_PROVIDER_ID) {
             warnings.push({
                 level: 'warning',
                 message:
@@ -53,7 +54,7 @@ export const convexSyncAdminAdapter: ProviderAdminAdapter = {
 
         return {
             details: {
-                convexUrl: config.sync.convexUrl,
+                convexUrl: config.sync?.convexUrl,
             },
             warnings,
             actions: [

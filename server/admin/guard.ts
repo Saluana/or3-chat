@@ -23,7 +23,8 @@ export function requireAdminRequest(event: H3Event): void {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
 
-    const config = useRuntimeConfig(event) || {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+    const config = (useRuntimeConfig(event) || {}) as any;
     const adminConfig = config.admin as { allowedHosts?: string[] } | undefined;
     const allowedHosts = (adminConfig?.allowedHosts || [])
         .map((host) => host.trim())

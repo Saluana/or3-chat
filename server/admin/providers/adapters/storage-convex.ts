@@ -41,8 +41,9 @@ export const convexStorageAdminAdapter: ProviderAdminAdapter = {
                 message: 'Storage provider mismatch.',
             });
         }
-        const config = useRuntimeConfig();
-        if (ctx.enabled && config.auth.provider !== CLERK_PROVIDER_ID) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+        const config = (useRuntimeConfig() || {}) as any;
+        if (ctx.enabled && config.auth?.provider !== CLERK_PROVIDER_ID) {
             warnings.push({
                 level: 'warning',
                 message:
