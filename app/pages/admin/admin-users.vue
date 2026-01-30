@@ -56,7 +56,7 @@
                         
                         <UButton
                             v-if="!user.isAdmin"
-                            @click="() => grantAdmin(user.userId)"
+                            @click="() => grantAdmin(user.userId, user.email)"
                             :loading="grantingUserId === user.userId"
                             color="primary"
                             size="sm"
@@ -65,6 +65,9 @@
                         </UButton>
                         <UBadge v-else color="success" variant="soft">Already Admin</UBadge>
                     </div>
+                </div>
+                <div v-else-if="hasSearched && !isSearching" class="mt-4 text-center py-4 text-sm opacity-50">
+                    No users found matching "{{ searchQuery }}"
                 </div>
             </div>
 
@@ -132,6 +135,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '~/utils/date';
 interface User {
     userId: string;
     email?: string;
@@ -156,6 +160,7 @@ const toast = useToast();
 const searchQuery = ref('');
 const searchResults = ref<User[]>([]);
 const isSearching = ref(false);
+const hasSearched = ref(false);
 const grantingUserId = ref<string | null>(null);
 const revokingUserId = ref<string | null>(null);
 
@@ -173,6 +178,7 @@ async function searchUsers() {
     if (!searchQuery.value.trim()) return;
 
     isSearching.value = true;
+    hasSearched.value = true;
     try {
         const results = await $fetch<User[]>('/api/admin/search-users', {
             query: { q: searchQuery.value },
@@ -195,7 +201,11 @@ async function searchUsers() {
     }
 }
 
-async function grantAdmin(userId: string) {
+async function grantAdmin(userId: string, email?: string) {
+    const confirmed = confirm(`Are you sure you want to grant admin access to ${email || userId}?`);
+    
+    if (!confirmed) return;
+    
     grantingUserId.value = userId;
     try {
         await $fetch('/api/admin/admin-users/grant', {
@@ -210,6 +220,7 @@ async function grantAdmin(userId: string) {
         refreshAdmins();
         searchResults.value = [];
         searchQuery.value = '';
+        hasSearched.value = false;
     } catch (err: any) {
         toast.add({
             title: 'Failed to grant access',
@@ -245,9 +256,5 @@ async function revokeAdmin(userId: string) {
     } finally {
         revokingUserId.value = null;
     }
-}
-
-function formatDate(timestamp: number): string {
-    return new Date(timestamp).toLocaleDateString();
 }
 </script>

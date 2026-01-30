@@ -46,6 +46,7 @@
         "dexie": "^4.2.1",
         "dexie-export-import": "^4.1.4",
         "gpt-tokenizer": "^3.4.0",
+        "isomorphic-dompurify": "^2.35.0",
         "jsonwebtoken": "^9.0.3",
         "lru-cache": "^11.2.4",
         "nuxt": "^4.2.1",

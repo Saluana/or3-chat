@@ -57,11 +57,22 @@ function validateUserId(id: string): Id<'users'> {
 }
 
 async function getConvexClientWithAuth(event: H3Event) {
+    const config = useRuntimeConfig(event);
+    const authProvider = config.public?.auth?.provider;
+    
+    // Check if Clerk is configured
+    if (authProvider !== 'clerk') {
+        throw createError({
+            statusCode: 501,
+            statusMessage: `Admin dashboard requires Clerk auth provider. Current: ${authProvider || 'none'}`,
+        });
+    }
+    
     const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
     if (!token) {
         throw createError({
             statusCode: 401,
-            statusMessage: 'Missing provider token',
+            statusMessage: 'Missing Clerk authentication token',
         });
     }
     return getConvexGatewayClient(event, token);

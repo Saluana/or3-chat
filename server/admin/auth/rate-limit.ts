@@ -145,3 +145,69 @@ export function getClientIp(event: H3Event): string {
     }
     return headers['x-real-ip'] ?? 'unknown';
 }
+
+/**
+ * Generic rate limiter for admin API endpoints.
+ * Uses IP-based rate limiting with 20 requests per minute per IP.
+ * 
+ * @param ip - Client IP address
+ * @param category - Rate limit category (e.g., 'admin-api', 'admin-mutation')
+ * @returns Rate limit status
+ */
+export function checkGenericRateLimit(
+    ip: string,
+    category: string
+): {
+    allowed: boolean;
+    remaining: number;
+    resetAt: number;
+} {
+    const key = `${category}:${ip}`;
+    const now = Date.now();
+    const entry = rateLimitStore.get(key);
+    
+    // 20 requests per minute for generic admin API operations
+    const maxRequests = 20;
+    const windowMs = 60 * 1000; // 1 minute
+
+    if (!entry) {
+        // First attempt
+        return {
+            allowed: true,
+            remaining: maxRequests - 1,
+            resetAt: now + windowMs,
+        };
+    }
+
+    // Check if window has expired
+    if (now - entry.windowStart > windowMs) {
+        // Reset the window
+        rateLimitStore.set(key, {
+            count: 1,
+            windowStart: now,
+        });
+        return {
+            allowed: true,
+            remaining: maxRequests - 1,
+            resetAt: now + windowMs,
+        };
+    }
+
+    // Within window - check count
+    if (entry.count >= maxRequests) {
+        return {
+            allowed: false,
+            remaining: 0,
+            resetAt: entry.windowStart + windowMs,
+        };
+    }
+
+    // Increment count
+    entry.count++;
+
+    return {
+        allowed: true,
+        remaining: maxRequests - entry.count,
+        resetAt: entry.windowStart + windowMs,
+    };
+}

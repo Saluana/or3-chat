@@ -62,7 +62,7 @@
                     </div>
                     <div>
                         <div class="opacity-50">Created</div>
-                        <div>{{ formatDate(workspace.createdAt) }}</div>
+                        <div>{{ formatDate(workspace.createdAt, true) }}</div>
                     </div>
                     <div>
                         <div class="opacity-50">Members</div>
@@ -70,7 +70,7 @@
                     </div>
                     <div v-if="workspace.deleted">
                         <div class="opacity-50">Deleted</div>
-                        <div>{{ formatDate(workspace.deletedAt!) }}</div>
+                        <div>{{ formatDate(workspace.deletedAt!, true) }}</div>
                     </div>
                 </div>
             </div>
@@ -117,6 +117,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '~/utils/date';
 interface Member {
     userId: string;
     email?: string;
@@ -156,10 +157,6 @@ const { data: workspace, pending, error, refresh } = await useFetch<Workspace>(
         credentials: 'include',
     }
 );
-
-function formatDate(timestamp: number): string {
-    return new Date(timestamp).toLocaleString();
-}
 
 async function handleSoftDelete() {
     if (!confirm('Are you sure you want to delete this workspace?')) return;
