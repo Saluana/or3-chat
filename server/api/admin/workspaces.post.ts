@@ -2,6 +2,8 @@ import { defineEventHandler, readBody, createError } from 'h3';
 import { requireAdminApiContext } from '../../admin/api';
 import { getWorkspaceAccessStore } from '../../admin/stores/registry';
 import { isAdminEnabled } from '../../utils/admin/is-admin-enabled';
+import { checkGenericRateLimit, getClientIp } from '../../admin/auth/rate-limit';
+import DOMPurify from 'isomorphic-dompurify';
 
 interface CreateWorkspaceBody {
     name: string;
@@ -24,13 +26,24 @@ export default defineEventHandler(async (event) => {
         });
     }
 
+    // Rate limit check
+    const clientIp = getClientIp(event);
+    const rateLimit = checkGenericRateLimit(clientIp, 'admin-api');
+    
+    if (!rateLimit.allowed) {
+        throw createError({
+            statusCode: 429,
+            statusMessage: 'Too many requests',
+        });
+    }
+
     // Require admin context
     await requireAdminApiContext(event);
 
     const body = await readBody<CreateWorkspaceBody>(event);
     const { name, description, ownerUserId } = body;
 
-    // Validate input
+    // Validate workspace name
     if (!name || !name.trim()) {
         throw createError({
             statusCode: 400,
@@ -38,20 +51,41 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    if (!ownerUserId) {
+    const trimmedName = name.trim();
+    if (trimmedName.length > 100) {
         throw createError({
             statusCode: 400,
-            statusMessage: 'Owner user ID is required',
+            statusMessage: 'Workspace name must be under 100 characters',
         });
     }
+
+    // Validate description
+    if (description && description.length > 1000) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'Description must be under 1000 characters',
+        });
+    }
+
+    // Validate owner user ID format (Convex ID pattern: users:<base36-id>)
+    if (!ownerUserId || !/^users:[a-zA-Z0-9_-]+$/.test(ownerUserId)) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'Valid owner user ID is required',
+        });
+    }
+
+    // Sanitize inputs to prevent XSS
+    const sanitizedName = DOMPurify.sanitize(name.trim());
+    const sanitizedDescription = description ? DOMPurify.sanitize(description.trim()) : undefined;
 
     // Get workspace store
     const store = getWorkspaceAccessStore(event);
 
     // Create workspace
     const result = await store.createWorkspace({
-        name: name.trim(),
-        description: description?.trim(),
+        name: sanitizedName,
+        description: sanitizedDescription,
         ownerUserId,
     });
 

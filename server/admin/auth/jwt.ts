@@ -7,7 +7,30 @@ import { getCookie, setCookie, deleteCookie } from 'h3';
 import jwt from 'jsonwebtoken';
 
 const COOKIE_NAME = 'or3_admin';
-const COOKIE_PATH = '/';
+const COOKIE_PATH = '/admin';
+
+/**
+ * Parse JWT expiry string to seconds.
+ * Supports: s (seconds), m (minutes), h (hours), d (days)
+ * Defaults to 24 hours if parsing fails.
+ */
+function parseExpiryToSeconds(expiry: string): number {
+    const match = expiry.match(/^(\d+)([smhd])$/);
+    if (!match) {
+        return 24 * 60 * 60; // Default: 24 hours
+    }
+    
+    const value = parseInt(match[1]!, 10);
+    const unit = match[2]!;
+    
+    switch (unit) {
+        case 's': return value;
+        case 'm': return value * 60;
+        case 'h': return value * 60 * 60;
+        case 'd': return value * 24 * 60 * 60;
+        default: return 24 * 60 * 60;
+    }
+}
 
 export type AdminJwtClaims = {
     kind: 'super_admin';
@@ -107,14 +130,15 @@ export async function setAdminCookie(
 ): Promise<void> {
     const token = await signAdminJwt(event, username);
     const config = useRuntimeConfig(event);
+    const expiry = config.admin?.auth?.jwtExpiry || '24h';
+    const maxAgeSeconds = parseExpiryToSeconds(expiry);
 
     setCookie(event, COOKIE_NAME, token, {
         httpOnly: true,
         secure: config.security?.forceHttps ?? process.env.NODE_ENV === 'production',
         sameSite: 'strict',
         path: COOKIE_PATH,
-        // Max age is handled by JWT expiry, but we set a cookie maxAge too
-        maxAge: 60 * 60 * 24, // 1 day default
+        maxAge: maxAgeSeconds,
     });
 }
 

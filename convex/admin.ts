@@ -61,6 +61,29 @@ export const isAdmin = query({
 });
 
 /**
+ * Log an admin action to the audit log.
+ */
+async function logAudit(
+    ctx: MutationCtx,
+    action: string,
+    actorId: string,
+    actorType: 'super_admin' | 'workspace_admin',
+    targetType?: string,
+    targetId?: string,
+    details?: Record<string, unknown>
+): Promise<void> {
+    await ctx.db.insert('audit_log', {
+        action,
+        actor_id: actorId,
+        actor_type: actorType,
+        target_type: targetType,
+        target_id: targetId,
+        details,
+        created_at: Date.now(),
+    });
+}
+
+/**
  * List all admin users with their user details.
  * Requires admin authorization.
  */
@@ -123,6 +146,17 @@ export const grantAdmin = mutation({
             created_by_user_id: callerId,
         });
 
+        // Log audit entry
+        await logAudit(
+            ctx,
+            'admin.grant',
+            callerId,
+            'workspace_admin',
+            'user',
+            args.user_id,
+            { email: user.email }
+        );
+
         return { success: true };
     },
 });
@@ -137,7 +171,7 @@ export const revokeAdmin = mutation({
     },
     handler: async (ctx, args) => {
         // Verify caller is an admin
-        await requireAdmin(ctx);
+        const { userId: callerId } = await requireAdmin(ctx);
 
         const adminGrant = await ctx.db
             .query('admin_users')
@@ -148,7 +182,21 @@ export const revokeAdmin = mutation({
             throw new Error('User is not an admin');
         }
 
+        // Get user info for audit
+        const user = await ctx.db.get(args.user_id);
+
         await ctx.db.delete(adminGrant._id);
+
+        // Log audit entry
+        await logAudit(
+            ctx,
+            'admin.revoke',
+            callerId,
+            'workspace_admin',
+            'user',
+            args.user_id,
+            { email: user?.email }
+        );
 
         return { success: true };
     },
@@ -343,38 +391,68 @@ export const createWorkspace = mutation({
         owner_user_id: v.id('users'),
     },
     handler: async (ctx, args) => {
+        // Admin authorization
+        const { userId: adminUserId } = await requireAdmin(ctx);
+        
         // Verify owner exists
         const owner = await ctx.db.get(args.owner_user_id);
         if (!owner) {
             throw new Error('Owner user not found');
         }
 
+        // Check if workspace with same name already exists
+        const existing = await ctx.db
+            .query('workspaces')
+            .filter((q) => q.eq(q.field('name'), args.name))
+            .first();
+            
+        if (existing && !existing.deleted) {
+            throw new Error('Workspace with this name already exists');
+        }
+
         const now = Date.now();
 
-        // Create workspace
-        const workspaceId = await ctx.db.insert('workspaces', {
-            name: args.name,
-            description: args.description,
-            owner_user_id: args.owner_user_id,
-            created_at: now,
-            deleted: false,
-        });
+        try {
+            // Create workspace
+            const workspaceId = await ctx.db.insert('workspaces', {
+                name: args.name,
+                description: args.description,
+                owner_user_id: args.owner_user_id,
+                created_at: now,
+                deleted: false,
+            });
 
-        // Add owner as member
-        await ctx.db.insert('workspace_members', {
-            workspace_id: workspaceId,
-            user_id: args.owner_user_id,
-            role: 'owner',
-            created_at: now,
-        });
+            // Add owner as member
+            await ctx.db.insert('workspace_members', {
+                workspace_id: workspaceId,
+                user_id: args.owner_user_id,
+                role: 'owner',
+                created_at: now,
+            });
 
-        // Initialize server version counter
-        await ctx.db.insert('server_version_counter', {
-            workspace_id: workspaceId,
-            value: 0,
-        });
+            // Initialize server version counter
+            await ctx.db.insert('server_version_counter', {
+                workspace_id: workspaceId,
+                value: 0,
+            });
 
-        return { workspace_id: workspaceId };
+            // Log audit entry
+            await logAudit(
+                ctx,
+                'workspace.create',
+                adminUserId,
+                'workspace_admin',
+                'workspace',
+                workspaceId,
+                { name: args.name, owner_user_id: args.owner_user_id }
+            );
+
+            return { workspace_id: workspaceId };
+        } catch (err) {
+            // Convex transactions are atomic, so this shouldn't happen,
+            // but if it does, we want a clear error
+            throw new Error(`Failed to create workspace: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
     },
 });
 
@@ -387,6 +465,9 @@ export const softDeleteWorkspace = mutation({
         deleted_at: v.number(),
     },
     handler: async (ctx, args) => {
+        // Admin authorization
+        const { userId: adminUserId } = await requireAdmin(ctx);
+        
         const workspace = await ctx.db.get(args.workspace_id);
 
         if (!workspace) {
@@ -397,6 +478,17 @@ export const softDeleteWorkspace = mutation({
             deleted: true,
             deleted_at: args.deleted_at,
         });
+
+        // Log audit entry
+        await logAudit(
+            ctx,
+            'workspace.delete',
+            adminUserId,
+            'workspace_admin',
+            'workspace',
+            args.workspace_id,
+            { name: workspace.name }
+        );
     },
 });
 

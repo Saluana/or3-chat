@@ -33,14 +33,6 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    // Only POST allowed
-    if (event.method !== 'POST') {
-        throw createError({
-            statusCode: 405,
-            statusMessage: 'Method Not Allowed',
-        });
-    }
-
     // Require valid admin session
     const adminClaims = await getAdminFromCookie(event);
     if (!adminClaims) {

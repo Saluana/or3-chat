@@ -60,7 +60,7 @@
 
             <!-- Loading State -->
             <div v-if="pending" class="space-y-4">
-                <div v-for="i in 3" :key="i" class="h-20 bg-[var(--md-surface-container-highest)] rounded-lg animate-pulse" />
+                <div v-for="i in perPage" :key="i" class="h-20 bg-[var(--md-surface-container-highest)] rounded-lg animate-pulse" />
             </div>
 
             <!-- Error State -->
@@ -98,7 +98,8 @@
                         </div>
                         
                         <UButton
-                            :to="`/admin/workspaces/${workspace.id}`"
+                            @click="navigateToWorkspace(workspace.id)"
+                            :loading="navigatingTo === workspace.id"
                             variant="ghost"
                             color="neutral"
                             icon="i-heroicons-arrow-right"
@@ -145,19 +146,9 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '~/utils/date';
 import { refDebounced } from '@vueuse/core';
-
-interface Workspace {
-    id: string;
-    name: string;
-    description?: string;
-    createdAt: number;
-    deleted: boolean;
-    deletedAt?: number;
-    ownerUserId?: string;
-    ownerEmail?: string;
-    memberCount: number;
-}
+import type { WorkspaceSummary } from '~/types/global';
 
 definePageMeta({
     layout: 'admin',
@@ -168,9 +159,20 @@ const search = ref('');
 const showDeleted = ref(false);
 const page = ref(1);
 const perPage = ref(20);
+const navigatingTo = ref<string | null>(null);
 
 // Debounce search
 const debouncedSearch = refDebounced(search, 300);
+
+// Navigation handler with loading state
+async function navigateToWorkspace(id: string) {
+    navigatingTo.value = id;
+    try {
+        await navigateTo(`/admin/workspaces/${id}`);
+    } finally {
+        navigatingTo.value = null;
+    }
+}
 
 const { data, pending, error, refresh } = await useFetch('/api/admin/workspaces', {
     query: computed(() => ({
@@ -183,12 +185,8 @@ const { data, pending, error, refresh } = await useFetch('/api/admin/workspaces'
     credentials: 'include',
 });
 
-const workspaces = computed(() => data.value?.items ?? []);
+const workspaces = computed<WorkspaceSummary[]>(() => data.value?.items ?? []);
 const total = computed(() => data.value?.total ?? 0);
-
-function formatDate(timestamp: number): string {
-    return new Date(timestamp).toLocaleDateString();
-}
 
 // Reset page when filters change
 watch([debouncedSearch, showDeleted], () => {

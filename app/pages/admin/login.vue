@@ -106,6 +106,7 @@ definePageMeta({
 
 const router = useRouter();
 const toast = useToast();
+const { getMessage } = useApiError();
 
 // Icon tokens
 const shieldIcon = useIcon('ui.shield');
@@ -144,7 +145,7 @@ async function handleLogin() {
         // Redirect to workspaces page
         router.push('/admin/workspaces');
     } catch (err: any) {
-        error.value = err?.data?.statusMessage || 'Login failed';
+        error.value = getMessage(err, 'Login failed');
     } finally {
         isLoading.value = false;
     }
