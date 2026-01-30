@@ -3,9 +3,21 @@ import { createHash } from 'crypto';
 import { requireAdminApiContext } from '../../admin/api';
 import { getWorkspaceAccessStore } from '../../admin/stores/registry';
 import { isAdminEnabled } from '../../utils/admin/is-admin-enabled';
+import { getAdminFromCookie } from '../../admin/auth/jwt';
 
 const CACHE_TTL = 30000; // 30 seconds
+const CLEANUP_INTERVAL = 60000; // 1 minute
 const cache = new Map<string, { data: any; timestamp: number }>();
+
+// Periodic cleanup to prevent unbounded cache growth
+setInterval(() => {
+    const cutoff = Date.now() - (CACHE_TTL * 2);
+    for (const [key, value] of cache.entries()) {
+        if (value.timestamp < cutoff) {
+            cache.delete(key);
+        }
+    }
+}, CLEANUP_INTERVAL);
 
 /**
  * GET /api/admin/workspaces
@@ -17,7 +29,7 @@ const cache = new Map<string, { data: any; timestamp: number }>();
  * - page: page number (default: 1)
  * - perPage: items per page (default: 20)
  *
- * Workspace list is cached for 30 seconds to reduce database load.
+ * Workspace list is cached for 30 seconds per admin to reduce database load.
  */
 export default defineEventHandler(async (event) => {
     // Admin must be enabled
@@ -31,6 +43,10 @@ export default defineEventHandler(async (event) => {
     // Require admin context
     await requireAdminApiContext(event);
 
+    // Get admin username for cache scoping
+    const adminClaims = await getAdminFromCookie(event);
+    const adminUsername = adminClaims?.username || 'unknown';
+
     // Get query parameters
     const query = getQuery(event);
     const search = query.search?.toString();
@@ -38,9 +54,9 @@ export default defineEventHandler(async (event) => {
     const page = Math.max(1, parseInt(query.page?.toString() || '1', 10));
     const perPage = Math.min(100, Math.max(1, parseInt(query.perPage?.toString() || '20', 10)));
 
-    // Generate cache key from query params
+    // Generate cache key scoped to admin and query params
     const cacheKey = createHash('md5')
-        .update(JSON.stringify({ search, includeDeleted, page, perPage }))
+        .update(JSON.stringify({ admin: adminUsername, search, includeDeleted, page, perPage }))
         .digest('hex');
 
     // Check cache
@@ -62,14 +78,6 @@ export default defineEventHandler(async (event) => {
 
     // Cache result
     cache.set(cacheKey, { data: result, timestamp: Date.now() });
-
-    // Clean up old cache entries (simple cleanup: remove entries older than TTL * 2)
-    const cutoff = Date.now() - (CACHE_TTL * 2);
-    for (const [key, value] of cache.entries()) {
-        if (value.timestamp < cutoff) {
-            cache.delete(key);
-        }
-    }
 
     return result;
 });

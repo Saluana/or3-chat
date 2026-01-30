@@ -372,11 +372,8 @@ async function handleLogout() {
         // Clear workspace context (per requirements: don't persist across sessions)
         clearWorkspace();
         
-        // Call server logout
+        // Call server logout (this will clear httpOnly cookie server-side)
         await $fetch('/api/admin/auth/logout', { method: 'POST', credentials: 'include' });
-        
-        // Force clear the cookie client-side as well
-        document.cookie = 'or3_admin=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
         
         toast.add({
             title: 'Logged out',
