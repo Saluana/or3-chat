@@ -26,13 +26,6 @@
                         icon="i-heroicons-magnifying-glass"
                         class="flex-1"
                     />
-                    <UButton
-                        @click="searchUsers"
-                        :loading="isSearching"
-                        color="primary"
-                    >
-                        Search
-                    </UButton>
                 </div>
 
                 <!-- Search Results -->
@@ -136,6 +129,8 @@
 
 <script setup lang="ts">
 import { formatDate } from '~/utils/date';
+import { refDebounced } from '@vueuse/core';
+
 interface User {
     userId: string;
     email?: string;
@@ -156,6 +151,8 @@ definePageMeta({
 });
 
 const toast = useToast();
+const { getMessage } = useApiError();
+const { confirm } = useConfirmDialog();
 
 const searchQuery = ref('');
 const searchResults = ref<User[]>([]);
@@ -174,14 +171,24 @@ const { data: adminsData, pending, error, refresh: refreshAdmins } = await useFe
 
 const admins = computed(() => adminsData.value?.admins ?? []);
 
-async function searchUsers() {
-    if (!searchQuery.value.trim()) return;
+// Issue 30: Debounce search query
+const debouncedQuery = refDebounced(searchQuery, 300);
 
+// Watch debounced query and trigger search
+watch(debouncedQuery, (query) => {
+    if (query.trim()) {
+        searchUsers(query);
+    } else {
+        searchResults.value = [];
+    }
+});
+
+async function searchUsers(query: string) {
     isSearching.value = true;
     hasSearched.value = true;
     try {
         const results = await $fetch<User[]>('/api/admin/search-users', {
-            query: { q: searchQuery.value },
+            query: { q: query },
             credentials: 'include',
         });
         
@@ -193,7 +200,7 @@ async function searchUsers() {
     } catch (err: any) {
         toast.add({
             title: 'Search failed',
-            description: err?.data?.statusMessage || 'Unknown error',
+            description: getMessage(err, 'Unable to search users'),
             color: 'error',
         });
     } finally {
@@ -224,7 +231,7 @@ async function grantAdmin(userId: string, email?: string) {
     } catch (err: any) {
         toast.add({
             title: 'Failed to grant access',
-            description: err?.data?.statusMessage || 'Unknown error',
+            description: getMessage(err, 'Unable to grant admin access'),
             color: 'error',
         });
     } finally {
@@ -233,7 +240,15 @@ async function grantAdmin(userId: string, email?: string) {
 }
 
 async function revokeAdmin(userId: string) {
-    if (!confirm('Are you sure you want to revoke admin access?')) return;
+    // Issue 26: Use accessible ConfirmDialog instead of native confirm()
+    const confirmed = await confirm({
+        title: 'Revoke Admin Access',
+        message: 'Are you sure you want to revoke admin access for this user?',
+        confirmText: 'Revoke',
+        danger: true,
+    });
+    
+    if (!confirmed) return;
 
     revokingUserId.value = userId;
     try {
@@ -250,7 +265,7 @@ async function revokeAdmin(userId: string) {
     } catch (err: any) {
         toast.add({
             title: 'Failed to revoke access',
-            description: err?.data?.statusMessage || 'Unknown error',
+            description: getMessage(err, 'Unable to revoke admin access'),
             color: 'error',
         });
     } finally {

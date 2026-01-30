@@ -123,18 +123,10 @@ interface Member {
     email?: string;
     role: 'owner' | 'editor' | 'viewer';
 }
+import type { WorkspaceSummary, WorkspaceMemberInfo } from '~/types/global';
 
-interface Workspace {
-    id: string;
-    name: string;
-    description?: string;
-    createdAt: number;
-    deleted: boolean;
-    deletedAt?: number;
-    ownerUserId?: string;
-    ownerEmail?: string;
-    memberCount: number;
-    members?: Member[];
+interface Workspace extends WorkspaceSummary {
+    members?: WorkspaceMemberInfo[];
 }
 
 definePageMeta({
@@ -145,6 +137,8 @@ definePageMeta({
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
+const { getMessage } = useApiError();
+const { confirm } = useConfirmDialog();
 const workspaceId = route.params.id as string;
 
 const isDeleting = ref(false);
@@ -159,7 +153,15 @@ const { data: workspace, pending, error, refresh } = await useFetch<Workspace>(
 );
 
 async function handleSoftDelete() {
-    if (!confirm('Are you sure you want to delete this workspace?')) return;
+    // Issue 26: Use accessible ConfirmDialog instead of native confirm()
+    const confirmed = await confirm({
+        title: 'Delete Workspace',
+        message: 'Are you sure you want to delete this workspace? You can restore it later from the deleted workspaces list.',
+        confirmText: 'Delete',
+        danger: true,
+    });
+    
+    if (!confirmed) return;
 
     isDeleting.value = true;
     try {
@@ -175,7 +177,7 @@ async function handleSoftDelete() {
     } catch (err: any) {
         toast.add({
             title: 'Failed to delete workspace',
-            description: err?.data?.statusMessage || 'Unknown error',
+            description: getMessage(err, 'Unable to delete workspace'),
             color: 'error',
         });
     } finally {
@@ -198,7 +200,7 @@ async function handleRestore() {
     } catch (err: any) {
         toast.add({
             title: 'Failed to restore workspace',
-            description: err?.data?.statusMessage || 'Unknown error',
+            description: getMessage(err, 'Unable to restore workspace'),
             color: 'error',
         });
     } finally {
