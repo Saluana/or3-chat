@@ -319,6 +319,13 @@ const expandIcon = useIcon('ui.chevron.right');
 const activeIndicatorIcon = useIcon('ui.check');
 const logoutIcon = useIcon('ui.logout');
 
+// Nav link icons (Issue 27: Move useIcon calls to top level)
+const homeIcon = useIcon('dashboard.home');
+const userIcon = useIcon('sidebar.user');
+const pluginsIcon = useIcon('dashboard.plugins');
+const settingsIcon = useIcon('dashboard.settings');
+const systemIcon = useIcon('ui.settings');
+
 const router = useRouter();
 const toast = useToast();
 
@@ -375,18 +382,18 @@ interface NavLink {
 
 const navLinks = computed<NavLink[]>(() => {
     const base: NavLink[] = [
-        { label: 'Overview', to: '/admin', icon: useIcon('dashboard.home').value },
-        { label: 'Workspaces', to: '/admin/workspaces', icon: useIcon('sidebar.user').value },
-        { label: 'Plugins', to: '/admin/plugins', icon: useIcon('dashboard.plugins').value },
-        { label: 'Themes', to: '/admin/themes', icon: useIcon('dashboard.settings').value },
-        { label: 'System', to: '/admin/system', icon: useIcon('ui.settings').value },
+        { label: 'Overview', to: '/admin', icon: homeIcon.value },
+        { label: 'Workspaces', to: '/admin/workspaces', icon: userIcon.value },
+        { label: 'Plugins', to: '/admin/plugins', icon: pluginsIcon.value },
+        { label: 'Themes', to: '/admin/themes', icon: settingsIcon.value },
+        { label: 'System', to: '/admin/system', icon: systemIcon.value },
     ];
     
     // Sort logic or visual separators could be added here
     const pluginLinks = adminPages.value.map((page) => ({
         label: page.label,
         to: `/admin/extensions/${page.path ?? page.id}`,
-        icon: useIcon('dashboard.plugins').value,
+        icon: pluginsIcon.value,
     }));
     
     return [...base, ...pluginLinks];
@@ -399,19 +406,28 @@ function isActive(path: string) {
     return route.path.startsWith(path);
 }
 
+// Issue 29: Track whether we modified overflow to avoid conflicts
+const didModifyOverflow = ref(false);
+
+// Issue 28: Use watcher instead of direct DOM manipulation
+watch(isMobileMenuOpen, (isOpen) => {
+    if (import.meta.client) {
+        if (isOpen && !didModifyOverflow.value) {
+            document.body.style.overflow = 'hidden';
+            didModifyOverflow.value = true;
+        } else if (!isOpen && didModifyOverflow.value) {
+            document.body.style.overflow = '';
+            didModifyOverflow.value = false;
+        }
+    }
+});
+
 function toggleMobileMenu() {
     isMobileMenuOpen.value = !isMobileMenuOpen.value;
-    // Prevent body scroll when menu is open
-    if (import.meta.client) {
-        document.body.style.overflow = isMobileMenuOpen.value ? 'hidden' : '';
-    }
 }
 
 function closeMobileMenu() {
     isMobileMenuOpen.value = false;
-    if (import.meta.client) {
-        document.body.style.overflow = '';
-    }
 }
 
 function toggleDesktopCollapse() {
@@ -423,9 +439,9 @@ watch(() => route.path, () => {
     closeMobileMenu();
 });
 
-// Cleanup on unmount
+// Issue 29: Cleanup only if we modified overflow
 onUnmounted(() => {
-    if (import.meta.client) {
+    if (import.meta.client && didModifyOverflow.value) {
         document.body.style.overflow = '';
     }
 });
