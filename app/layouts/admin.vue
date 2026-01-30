@@ -1,5 +1,6 @@
 <template>
-    <div class="flex h-screen bg-[var(--md-surface)] text-[var(--md-on-surface)] overflow-hidden">
+    <NuxtErrorBoundary @error="handleError">
+        <div class="flex h-screen bg-[var(--md-surface)] text-[var(--md-on-surface)] overflow-hidden">
         <!-- Workspace Selector - controlled via v-model -->
         <WorkspaceSelector
             v-model="showWorkspaceSelector"
@@ -36,7 +37,7 @@
             </div>
             <div class="flex items-center gap-2">
                 <div class="w-2 h-2 rounded-full bg-[var(--md-sys-color-success,#10b981)]"></div>
-                <span class="text-xs text-[var(--md-on-surface-variant)] font-medium">v1.0</span>
+                <span class="text-xs text-[var(--md-on-surface-variant)] font-medium">v{{ appVersion }}</span>
                 <WorkspaceIndicator v-if="hasWorkspace" @click="openWorkspaceSelector" class="hidden sm:flex" />
             </div>
         </header>
@@ -138,7 +139,7 @@
                 <!-- Mobile Drawer Footer -->
                 <div class="p-4 border-t border-[var(--md-outline-variant)] text-xs text-[var(--md-on-surface-variant)]" role="contentinfo">
                     <div class="flex items-center justify-between">
-                        <span>OR3 v1.0.0</span>
+                        <span>OR3 v{{ appVersion }}</span>
                         <div class="flex items-center gap-2">
                             <div class="w-2 h-2 rounded-full bg-[var(--md-sys-color-success,#10b981)]"></div>
                             <span class="opacity-70">Online</span>
@@ -230,8 +231,8 @@
 
             <!-- Desktop Sidebar Footer -->
             <div class="p-4 border-t border-[var(--md-outline-variant)] text-xs text-[var(--md-on-surface-variant)]" role="contentinfo" :class="{ 'text-center': isDesktopCollapsed }">
-                <span v-if="!isDesktopCollapsed">OR3 v1.0.0</span>
-                <span v-else>v1.0</span>
+                <span v-if="!isDesktopCollapsed">OR3 v{{ appVersion }}</span>
+                <span v-else>v{{ appVersion }}</span>
             </div>
         </aside>
 
@@ -284,6 +285,22 @@
             @cancel="onCancel"
         />
     </div>
+
+    <template #error="{ error, clearError }">
+        <div class="flex items-center justify-center h-screen bg-[var(--md-surface)]">
+            <div class="text-center max-w-md mx-auto p-8">
+                <div class="mb-6">
+                    <UIcon name="i-heroicons-exclamation-triangle" class="w-16 h-16 mx-auto text-[var(--md-sys-color-error)]" />
+                </div>
+                <h1 class="text-2xl font-bold mb-4 text-[var(--md-on-surface)]">Something went wrong</h1>
+                <p class="text-[var(--md-on-surface-variant)] mb-6">{{ error?.message || 'An unexpected error occurred' }}</p>
+                <UButton @click="clearError" color="primary" size="lg">
+                    Try again
+                </UButton>
+            </div>
+        </div>
+    </template>
+</NuxtErrorBoundary>
 </template>
 
 <script setup lang="ts">
@@ -300,6 +317,9 @@ import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
 import WorkspaceIndicator from '~/components/admin/WorkspaceIndicator.vue';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
 import { useAdminWorkspaceContext } from '~/composables/admin/useAdminWorkspaceContext';
+import { APP_VERSION } from '~~/config.or3';
+
+const appVersion = APP_VERSION;
 
 const route = useRoute();
 const adminPages = useAdminPages();
@@ -340,6 +360,16 @@ function onWorkspaceSelected(workspace: any) {
     selectWorkspace(workspace);
 }
 
+// Handle errors
+function handleError(error: Error) {
+    console.error('Admin layout error:', error);
+    toast.add({
+        title: 'Error',
+        description: error?.message || 'An unexpected error occurred',
+        color: 'error',
+    });
+}
+
 // Handle logout
 async function handleLogout() {
     try {
@@ -349,7 +379,7 @@ async function handleLogout() {
         // Clear workspace context (per requirements: don't persist across sessions)
         clearWorkspace();
         
-        // Call server logout - server clears the httpOnly cookie
+        // Call server logout (this will clear httpOnly cookie server-side)
         await $fetch('/api/admin/auth/logout', { method: 'POST', credentials: 'include' });
         
         toast.add({
