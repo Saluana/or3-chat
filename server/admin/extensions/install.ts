@@ -194,8 +194,7 @@ export async function installExtensionFromZip(
         };
 
         const unzipper = new Unzip((file) => {
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-            if (!file || typeof file.name !== 'string') return;
+            if (typeof file.name !== 'string') return;
 
             const normalizedKey = normalizeEntryKey(file.name);
 

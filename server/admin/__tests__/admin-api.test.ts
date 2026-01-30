@@ -13,11 +13,34 @@ const mocks = vi.hoisted(() => {
         auth: { enabled: true, provider: 'clerk' },
         sync: { enabled: true, provider: 'convex', convexUrl: 'https://convex.test' },
         storage: { enabled: true, provider: 'convex' },
-        backgroundJobs: { enabled: false, storageProvider: 'memory' },
-        admin: { allowedHosts: [] },
-        public: { ssrAuthEnabled: true },
+        backgroundJobs: { enabled: false, storageProvider: 'memory', maxConcurrentJobs: 20, jobTimeoutMs: 300000, completedJobRetentionMs: 300000 },
+        admin: { 
+            allowedHosts: [],
+            allowRestart: false,
+            allowRebuild: false,
+            rebuildCommand: 'bun run build',
+            basePath: '/admin',
+            auth: {
+                username: '',
+                password: '',
+                jwtSecret: '',
+                jwtExpiry: '24h',
+                deletedWorkspaceRetentionDays: '',
+            },
+        },
+        branding: { appName: 'Test', logoUrl: '', defaultTheme: 'dark' },
+        legal: { termsUrl: '', privacyUrl: '' },
+        security: { allowedOrigins: [], forceHttps: false },
+        limits: { enabled: false, requestsPerMinute: 20, maxConversations: 0, maxMessagesPerDay: 0, storageProvider: 'memory' },
+        public: { 
+            ssrAuthEnabled: true,
+            branding: { appName: 'Test', logoUrl: '', defaultTheme: 'dark' },
+            legal: { termsUrl: '', privacyUrl: '' },
+        },
         clerkSecretKey: 'secret',
-        publicRuntimeConfig: {},
+        openrouterApiKey: '',
+        openrouterAllowUserOverride: true,
+        openrouterRequireUserKey: false,
     };
     return {
         baseConfig: base,
@@ -26,7 +49,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('#imports', () => ({
-    useRuntimeConfig: mocks.configMock,
+    useRuntimeConfig: (_event?: unknown) => mocks.configMock(),
 }));
 
 function makeEvent(headers: Record<string, string>, method = 'GET'): H3Event {

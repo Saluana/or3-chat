@@ -2,8 +2,7 @@ import { defineEventHandler, getHeader, setHeader, setResponseStatus } from 'h3'
 
 export default defineEventHandler((event) => {
     const config = useRuntimeConfig();
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive fallback for undefined config
-    const allowedOrigins = config.security.allowedOrigins || [];
+    const allowedOrigins = config.security.allowedOrigins;
     const origin = getHeader(event, 'origin');
 
     if (!origin) return;
