@@ -128,6 +128,7 @@ definePageMeta({
 
 const router = useRouter();
 const toast = useToast();
+const { getMessage } = useApiError();
 
 const form = reactive<FormState>({
     name: '',
@@ -158,7 +159,7 @@ async function searchOwner() {
     } catch (err: any) {
         toast.add({
             title: 'Search failed',
-            description: err?.data?.statusMessage || 'Unknown error',
+            description: getMessage(err, 'Unable to search users'),
             color: 'error',
         });
     } finally {
@@ -196,7 +197,7 @@ async function handleSubmit() {
     } catch (err: any) {
         toast.add({
             title: 'Failed to create workspace',
-            description: err?.data?.statusMessage || 'Unknown error',
+            description: getMessage(err, 'Unable to create workspace'),
             color: 'error',
         });
     } finally {

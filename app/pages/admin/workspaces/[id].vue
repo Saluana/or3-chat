@@ -131,6 +131,8 @@ definePageMeta({
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
+const { getMessage } = useApiError();
+const { confirm } = useConfirmDialog();
 const workspaceId = route.params.id as string;
 
 const isDeleting = ref(false);
@@ -149,7 +151,15 @@ function formatDate(timestamp: number): string {
 }
 
 async function handleSoftDelete() {
-    if (!confirm('Are you sure you want to delete this workspace?')) return;
+    // Issue 26: Use accessible ConfirmDialog instead of native confirm()
+    const confirmed = await confirm({
+        title: 'Delete Workspace',
+        message: 'Are you sure you want to delete this workspace? You can restore it later from the deleted workspaces list.',
+        confirmText: 'Delete',
+        danger: true,
+    });
+    
+    if (!confirmed) return;
 
     isDeleting.value = true;
     try {
@@ -163,29 +173,11 @@ async function handleSoftDelete() {
         });
         refresh();
     } catch (err: any) {
-        const status = err?.statusCode || err?.status;
-        const message = err?.data?.statusMessage || 'Unknown error';
-
-        if (status === 404) {
-            toast.add({
-                title: 'Workspace not found',
-                description: 'The workspace may have been deleted by another admin.',
-                color: 'warning',
-            });
-            router.push('/admin/workspaces');
-        } else if (status === 403) {
-            toast.add({
-                title: 'Permission denied',
-                description: 'You do not have permission to delete this workspace.',
-                color: 'error',
-            });
-        } else {
-            toast.add({
-                title: 'Failed to delete workspace',
-                description: message,
-                color: 'error',
-            });
-        }
+        toast.add({
+            title: 'Failed to delete workspace',
+            description: getMessage(err, 'Unable to delete workspace'),
+            color: 'error',
+        });
     } finally {
         isDeleting.value = false;
     }
@@ -206,7 +198,7 @@ async function handleRestore() {
     } catch (err: any) {
         toast.add({
             title: 'Failed to restore workspace',
-            description: err?.data?.statusMessage || 'Unknown error',
+            description: getMessage(err, 'Unable to restore workspace'),
             color: 'error',
         });
     } finally {
