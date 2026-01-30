@@ -8,6 +8,27 @@ vi.mock('../../auth/session', () => ({
     resolveSessionContext: resolveSessionContextMock,
 }));
 
+const mocks = vi.hoisted(() => {
+    const base = {
+        auth: { enabled: true, provider: 'clerk' },
+        sync: { enabled: true, provider: 'convex', convexUrl: 'https://convex.test' },
+        storage: { enabled: true, provider: 'convex' },
+        backgroundJobs: { enabled: false, storageProvider: 'memory' },
+        admin: { allowedHosts: [] },
+        public: { ssrAuthEnabled: true },
+        clerkSecretKey: 'secret',
+        publicRuntimeConfig: {},
+    };
+    return {
+        baseConfig: base,
+        configMock: vi.fn(),
+    };
+});
+
+vi.mock('#imports', () => ({
+    useRuntimeConfig: mocks.configMock,
+}));
+
 function makeEvent(headers: Record<string, string>, method = 'GET'): H3Event {
     return {
         method,
@@ -15,31 +36,14 @@ function makeEvent(headers: Record<string, string>, method = 'GET'): H3Event {
     } as unknown as H3Event;
 }
 
-const baseConfig = {
-    auth: { enabled: true, provider: 'clerk' },
-    sync: { enabled: true, provider: 'convex', convexUrl: 'https://convex.test' },
-    storage: { enabled: true, provider: 'convex' },
-    backgroundJobs: { enabled: false, storageProvider: 'memory' },
-    admin: { allowedHosts: [] },
-    public: { ssrAuthEnabled: true },
-    clerkSecretKey: 'secret',
-    publicRuntimeConfig: {},
-};
-
 describe('requireAdminApi', () => {
     beforeEach(() => {
         resolveSessionContextMock.mockReset();
-        (globalThis as typeof globalThis & { useRuntimeConfig?: () => unknown }).useRuntimeConfig =
-            () => baseConfig;
-    });
-
-    afterEach(() => {
-        delete (globalThis as typeof globalThis & { useRuntimeConfig?: () => unknown }).useRuntimeConfig;
+        mocks.configMock.mockReturnValue(mocks.baseConfig);
     });
 
     it('returns 404 when SSR auth disabled', async () => {
-        (globalThis as typeof globalThis & { useRuntimeConfig?: () => unknown }).useRuntimeConfig =
-            () => ({ ...baseConfig, auth: { ...baseConfig.auth, enabled: false } });
+        mocks.configMock.mockReturnValue({ ...mocks.baseConfig, auth: { ...mocks.baseConfig.auth, enabled: false } });
         resolveSessionContextMock.mockResolvedValue({ authenticated: true, role: 'owner' });
 
         await expect(requireAdminApi(makeEvent({ host: 'admin.test' }))).rejects.toMatchObject({

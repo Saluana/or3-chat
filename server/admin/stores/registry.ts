@@ -12,6 +12,7 @@ import {
     createConvexAdminUserStore,
 } from './convex/convex-store';
 import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
+import { useRuntimeConfig } from '#imports';
 
 let cachedCapabilities: AdminStoreCapabilities | null = null;
 let cachedProviderId: string | null = null;

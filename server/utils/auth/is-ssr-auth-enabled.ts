@@ -3,6 +3,7 @@
  * Use this to gate SSR-only auth functionality.
  */
 import type { H3Event } from 'h3';
+import { useRuntimeConfig } from '#imports';
 
 /**
  * Check if SSR auth is enabled.
@@ -12,6 +13,6 @@ import type { H3Event } from 'h3';
  * @returns true if SSR auth is enabled
  */
 export function isSsrAuthEnabled(_event?: H3Event): boolean {
-    const config = useRuntimeConfig();
-    return config.auth.enabled === true;
+    const config = useRuntimeConfig() || {};
+    return config.auth?.enabled === true;
 }

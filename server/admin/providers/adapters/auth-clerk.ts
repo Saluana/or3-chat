@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3';
 import type { ProviderAdminAdapter, ProviderAdminStatusResult, ProviderStatusContext } from '../types';
 import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
+import { useRuntimeConfig } from '#imports';
 
 export const clerkAdminAdapter: ProviderAdminAdapter = {
     id: CLERK_PROVIDER_ID,

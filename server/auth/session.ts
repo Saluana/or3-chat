@@ -6,6 +6,7 @@ import type { H3Event } from 'h3';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import type { ProviderSession } from './types';
 import { getAuthProvider } from './registry';
+import { useRuntimeConfig } from '#imports';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
 import { recordSessionResolution, recordProviderError } from './metrics';
 import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';

@@ -5,6 +5,7 @@
 import type { H3Event } from 'h3';
 import { getCookie, setCookie, deleteCookie } from 'h3';
 import jwt from 'jsonwebtoken';
+import { useRuntimeConfig } from '#imports';
 
 const COOKIE_NAME = 'or3_admin';
 const COOKIE_PATH = '/admin';

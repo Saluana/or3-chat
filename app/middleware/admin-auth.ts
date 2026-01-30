@@ -29,7 +29,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
         }
 
         return navigateTo('/admin/login');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const status = error?.statusCode || error?.status || error?.response?.status;
 
         if (status === 404) {

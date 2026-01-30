@@ -13,6 +13,23 @@ vi.mock('h3', async () => {
     };
 });
 
+// Mock #imports to support useRuntimeConfig with event context
+vi.mock('#imports', () => ({
+    useRuntimeConfig: (event?: any) => {
+        if (event && event.context?._nitro?.runtimeConfig) {
+            return event.context._nitro.runtimeConfig;
+        }
+        return {
+            admin: {
+                auth: {
+                    jwtSecret: 'test-secret-key-for-testing-purposes-only',
+                    jwtExpiry: '24h',
+                },
+            },
+        };
+    },
+}));
+
 // Create a mock H3Event with proper structure
 function createMockEvent(runtimeConfig: any = {}): H3Event {
     return {
@@ -35,21 +52,6 @@ function createMockEvent(runtimeConfig: any = {}): H3Event {
         },
     } as any;
 }
-
-// Mock useRuntimeConfig to return the event context
-global.useRuntimeConfig = (event?: H3Event) => {
-    if (event && event.context?._nitro?.runtimeConfig) {
-        return event.context._nitro.runtimeConfig;
-    }
-    return {
-        admin: {
-            auth: {
-                jwtSecret: 'test-secret-key-for-testing-purposes-only',
-                jwtExpiry: '24h',
-            },
-        },
-    };
-};
 
 describe('Admin Auth - JWT', () => {
     let mockEvent: H3Event;

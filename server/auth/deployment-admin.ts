@@ -6,6 +6,7 @@
  */
 import type { H3Event } from 'h3';
 import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
+import { useRuntimeConfig } from '#imports';
 
 export interface DeploymentAdminChecker {
     /**

@@ -8,6 +8,7 @@
  * This is the central function for admin authorization.
  */
 import type { H3Event } from 'h3';
+import { createError } from 'h3';
 import type { SessionContext } from '../../app/core/hooks/hook-types';
 import { getAdminFromCookie, type AdminJwtClaims } from './auth/jwt';
 import { resolveSessionContext } from '../auth/session';
