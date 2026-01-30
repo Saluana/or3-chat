@@ -93,7 +93,7 @@ export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
                 if (typeof unwatch === 'function') {
                 try {
                     unwatch();
-                } catch (err: any) {
+                } catch (err: unknown) {
                     // Suppress known race condition in Convex SDK where removing a subscriber
                     // from an already-cleared query map throws "Cannot read properties of undefined (reading 'numSubscribers')"
                     const isKnownRaceCondition =
