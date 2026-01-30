@@ -31,81 +31,42 @@ type AdminApiOptions = {
  * 
  * @deprecated Use requireAdminContext instead for new code
  */
+/**
+ * @deprecated Use requireAdminApiContext instead
+ * This is now a thin wrapper around requireAdminApiContext for backward compatibility.
+ */
 export async function requireAdminApi(
     event: H3Event,
     options: AdminApiOptions = {}
 ): Promise<SessionContext> {
-    requireAdminRequest(event);
-    if (options.mutation ?? false) {
-        requireAdminMutation(event);
-    }
-
-    // Check if we have the new admin context (from middleware), otherwise resolve it
-    let adminContext = event.context.admin as AdminRequestContext | undefined;
-    if (!adminContext) {
-        adminContext = await resolveAdminRequestContext(event) ?? undefined;
-        if (adminContext) {
-            event.context.admin = adminContext;
-        }
+    const context = await requireAdminApiContext(event, options);
+    
+    // Return session if available (workspace admin)
+    if (context.session) {
+        return context.session;
     }
     
-    if (adminContext) {
-        // Super admin check
-        if (options.superAdminOnly && !isSuperAdmin(adminContext)) {
-            throw createError({
-                statusCode: 403,
-                statusMessage: 'Forbidden: Super admin access required',
-            });
-        }
-
-        // For workspace admin, we need a session
-        if (adminContext.session) {
-            if (options.ownerOnly) {
-                requireAdminOwner(adminContext.session);
-                return adminContext.session;
-            }
-
-            if (options.permission) {
-                requireCan(adminContext.session, options.permission, options.resource);
-                return adminContext.session;
-            }
-
-            requireAdminAccess(adminContext.session);
-            return adminContext.session;
-        }
-
-        // Super admin without workspace session - create a minimal session
-        if (adminContext.principal.kind === 'super_admin') {
-            return {
-                authenticated: true,
-                provider: 'admin',
-                providerUserId: adminContext.principal.username,
-                user: {
-                    id: adminContext.principal.username,
-                    email: undefined,
-                    displayName: `Super Admin: ${adminContext.principal.username}`,
-                },
-                role: 'owner',
-                deploymentAdmin: true,
-            } as SessionContext;
-        }
+    // For super admin without workspace session, create a minimal session
+    if (context.principal.kind === 'super_admin') {
+        return {
+            authenticated: true,
+            provider: 'admin',
+            providerUserId: context.principal.username,
+            user: {
+                id: context.principal.username,
+                email: undefined,
+                displayName: `Super Admin: ${context.principal.username}`,
+            },
+            role: 'owner',
+            deploymentAdmin: true,
+        } as SessionContext;
     }
-
-    // Fallback to legacy session resolution
-    const session = await resolveSessionContext(event);
-
-    if (options.ownerOnly) {
-        requireAdminOwner(session);
-        return session;
-    }
-
-    if (options.permission) {
-        requireCan(session, options.permission, options.resource);
-        return session;
-    }
-
-    requireAdminAccess(session);
-    return session;
+    
+    // This shouldn't happen as requireAdminApiContext should throw
+    throw createError({
+        statusCode: 401,
+        statusMessage: 'Unauthorized: No valid session',
+    });
 }
 
 /**

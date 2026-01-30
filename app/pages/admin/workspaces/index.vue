@@ -60,7 +60,7 @@
 
             <!-- Loading State -->
             <div v-if="pending" class="space-y-4">
-                <div v-for="i in 3" :key="i" class="h-20 bg-[var(--md-surface-container-highest)] rounded-lg animate-pulse" />
+                <div v-for="i in perPage" :key="i" class="h-20 bg-[var(--md-surface-container-highest)] rounded-lg animate-pulse" />
             </div>
 
             <!-- Error State -->
@@ -146,6 +146,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '~/utils/date';
 import { refDebounced } from '@vueuse/core';
 import type { WorkspaceSummary } from '~/types/global';
 
@@ -186,10 +187,6 @@ const { data, pending, error, refresh } = await useFetch('/api/admin/workspaces'
 
 const workspaces = computed<WorkspaceSummary[]>(() => data.value?.items ?? []);
 const total = computed(() => data.value?.total ?? 0);
-
-function formatDate(timestamp: number): string {
-    return new Date(timestamp).toLocaleDateString();
-}
 
 // Reset page when filters change
 watch([debouncedSearch, showDeleted], () => {
