@@ -86,5 +86,7 @@ export function useAdminWorkspacesList() {
         query: { perPage: '100' },
         ...adminFetchOptions,
         server: false,
+        retry: 3,
+        retryDelay: 1000,
     });
 }

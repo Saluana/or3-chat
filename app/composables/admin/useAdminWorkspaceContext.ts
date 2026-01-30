@@ -12,7 +12,7 @@ interface Workspace {
     ownerEmail?: string;
 }
 
-const WORKSPACE_STATE_KEY = 'admin-selected-workspace';
+export const ADMIN_WORKSPACE_STATE_KEY = 'admin-selected-workspace';
 
 // Use global Nuxt/Vue composables (auto-imported)
 declare const useState: <T>(key: string, init?: () => T) => Ref<T>;
@@ -22,11 +22,11 @@ declare const readonly: <T>(ref: { value: T }) => Readonly<{ value: T }>;
 export function useAdminWorkspaceContext() {
     // Use useState for shared state across components
     const selectedWorkspaceId = useState<string | null>(
-        `${WORKSPACE_STATE_KEY}-id`,
+        `${ADMIN_WORKSPACE_STATE_KEY}-id`,
         () => null
     );
     const selectedWorkspace = useState<Workspace | null>(
-        `${WORKSPACE_STATE_KEY}-data`,
+        `${ADMIN_WORKSPACE_STATE_KEY}-data`,
         () => null
     );
 
@@ -49,20 +49,4 @@ export function useAdminWorkspaceContext() {
         clearWorkspace,
         hasWorkspace,
     };
-}
-
-export function getSelectedWorkspaceId(): string | null {
-    // These standalone functions should only be called within Vue/Nuxt context
-    // where useState is auto-imported
-    const state = (globalThis as unknown as { useState?: Function }).useState;
-    if (!state) return null;
-    const id = state(`${WORKSPACE_STATE_KEY}-id`) as { value: string | null };
-    return id.value;
-}
-
-export function setSelectedWorkspaceId(id: string) {
-    const state = (globalThis as unknown as { useState?: Function }).useState;
-    if (!state) return;
-    const selectedId = state(`${WORKSPACE_STATE_KEY}-id`) as { value: string | null };
-    selectedId.value = id;
 }
