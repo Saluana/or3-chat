@@ -1,6 +1,12 @@
 import { defineOr3Config } from './utils/or3-config';
 
 /**
+ * Application version
+ * Update this when releasing a new version, or use process.env.npm_package_version
+ */
+export const APP_VERSION = '0.1.0';
+
+/**
  * OR3 Base Configuration
  *
  * This file configures site branding, feature toggles, and client-side limits.
