@@ -2,7 +2,13 @@ import type { H3Event } from 'h3';
 import { createError } from 'h3';
 import { api } from '~~/convex/_generated/api';
 import type { Id } from '~~/convex/_generated/dataModel';
-import type { WorkspaceAccessStore, WorkspaceSettingsStore } from '../types';
+import type {
+    WorkspaceAccessStore,
+    WorkspaceSettingsStore,
+    AdminUserStore,
+    WorkspaceSummary,
+    AdminUserInfo,
+} from '../types';
 import {
     getClerkProviderToken,
     getConvexGatewayClient,
@@ -54,6 +60,51 @@ export function createConvexWorkspaceAccessStore(
                 user_id: userId,
             });
         },
+        async listWorkspaces({ search, includeDeleted, page, perPage }) {
+            const client = await getConvexClientWithAuth(event);
+            return await client.query(api.admin.listWorkspaces, {
+                search,
+                include_deleted: includeDeleted,
+                page,
+                per_page: perPage,
+            });
+        },
+        async getWorkspace({ workspaceId }) {
+            const client = await getConvexClientWithAuth(event);
+            const result = await client.query(api.admin.getWorkspace, {
+                workspace_id: workspaceId as Id<'workspaces'>,
+            });
+            return result as WorkspaceSummary | null;
+        },
+        async createWorkspace({ name, description, ownerUserId }) {
+            const client = await getConvexClientWithAuth(event);
+            const result = await client.mutation(api.admin.createWorkspace, {
+                name,
+                description,
+                owner_user_id: ownerUserId as Id<'users'>,
+            });
+            return { workspaceId: result.workspace_id };
+        },
+        async softDeleteWorkspace({ workspaceId, deletedAt }) {
+            const client = await getConvexClientWithAuth(event);
+            await client.mutation(api.admin.softDeleteWorkspace, {
+                workspace_id: workspaceId as Id<'workspaces'>,
+                deleted_at: deletedAt,
+            });
+        },
+        async restoreWorkspace({ workspaceId }) {
+            const client = await getConvexClientWithAuth(event);
+            await client.mutation(api.admin.restoreWorkspace, {
+                workspace_id: workspaceId as Id<'workspaces'>,
+            });
+        },
+        async searchUsers({ query, limit }) {
+            const client = await getConvexClientWithAuth(event);
+            return await client.query(api.admin.searchUsers, {
+                query,
+                limit,
+            });
+        },
     };
 }
 
@@ -74,6 +125,40 @@ export function createConvexWorkspaceSettingsStore(
                 workspace_id: workspaceId as Id<'workspaces'>,
                 key,
                 value,
+            });
+        },
+    };
+}
+
+export function createConvexAdminUserStore(event: H3Event): AdminUserStore {
+    return {
+        async listAdmins(): Promise<AdminUserInfo[]> {
+            const client = await getConvexClientWithAuth(event);
+            return await client.query(api.admin.listAdmins, {});
+        },
+        async grantAdmin({ userId }) {
+            const client = await getConvexClientWithAuth(event);
+            await client.mutation(api.admin.grantAdmin, {
+                user_id: userId as Id<'users'>,
+            });
+        },
+        async revokeAdmin({ userId }) {
+            const client = await getConvexClientWithAuth(event);
+            await client.mutation(api.admin.revokeAdmin, {
+                user_id: userId as Id<'users'>,
+            });
+        },
+        async isAdmin({ userId }) {
+            const client = await getConvexClientWithAuth(event);
+            return await client.query(api.admin.isAdmin, {
+                user_id: userId as Id<'users'>,
+            });
+        },
+        async searchUsers({ query, limit }) {
+            const client = await getConvexClientWithAuth(event);
+            return await client.query(api.admin.searchUsers, {
+                query,
+                limit,
             });
         },
     };

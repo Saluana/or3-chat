@@ -90,7 +90,13 @@ export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
             const key = `${scope.workspaceId}:${tablesToWatch.join(',')}:${cursor}:${limit}`;
             const cleanup = () => {
                 disposed = true;
-                unwatch();
+                if (typeof unwatch === 'function') {
+                    try {
+                        unwatch();
+                    } catch (err) {
+                        console.warn('[convex-sync] Cleanup unwatch failed:', err);
+                    }
+                }
             };
             subscriptions.set(key, cleanup);
 
@@ -172,8 +178,14 @@ export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
         },
 
         async dispose(): Promise<void> {
-            // Clean up all subscriptions
-            subscriptions.forEach((cleanup) => cleanup());
+            // Clean up all subscriptions with error handling
+            subscriptions.forEach((cleanup, key) => {
+                try {
+                    cleanup();
+                } catch (err) {
+                    console.warn('[convex-sync] Subscription cleanup failed:', key, err);
+                }
+            });
             subscriptions.clear();
         },
     };

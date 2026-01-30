@@ -1,5 +1,11 @@
 <template>
     <div class="flex h-screen bg-[var(--md-surface)] text-[var(--md-on-surface)] overflow-hidden">
+        <!-- Workspace Selector - controlled via v-model -->
+        <WorkspaceSelector
+            v-model="showWorkspaceSelector"
+            @select="onWorkspaceSelected"
+        />
+
         <!-- Skip Link for Accessibility -->
         <a 
             href="#main-content" 
@@ -31,6 +37,7 @@
             <div class="flex items-center gap-2">
                 <div class="w-2 h-2 rounded-full bg-[var(--md-sys-color-success,#10b981)]"></div>
                 <span class="text-xs text-[var(--md-on-surface-variant)] font-medium">v1.0</span>
+                <WorkspaceIndicator v-if="hasWorkspace" @click="openWorkspaceSelector" class="hidden sm:flex" />
             </div>
         </header>
 
@@ -93,8 +100,8 @@
                         :aria-current="isActive(link.to) ? 'page' : undefined"
                         class="flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-[var(--md-sys-shape-corner-small,4px)] transition-all duration-200 hover:bg-[var(--md-primary)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)]"
                         :class="[
-                            isActive(link.to) 
-                                ? 'bg-[var(--md-primary)]/15 text-[var(--md-primary)] shadow-sm' 
+                            isActive(link.to)
+                                ? 'bg-[var(--md-primary)]/15 text-[var(--md-primary)] shadow-sm'
                                 : 'text-[var(--md-on-surface-variant)]'
                         ]"
                         @click="closeMobileMenu"
@@ -113,6 +120,20 @@
                         />
                     </NuxtLink>
                 </nav>
+
+                <!-- Mobile Logout -->
+                <div class="p-2 border-t border-[var(--md-outline-variant)]">
+                    <button
+                        class="w-full flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-[var(--md-sys-shape-corner-small,4px)] transition-all duration-200 text-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-sys-color-error)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)]"
+                        @click="handleLogout"
+                    >
+                        <UIcon
+                            :name="logoutIcon"
+                            class="w-5 h-5 flex-shrink-0 opacity-70"
+                        />
+                        <span class="flex-1 text-left">Logout</span>
+                    </button>
+                </div>
 
                 <!-- Mobile Drawer Footer -->
                 <div class="p-4 border-t border-[var(--md-outline-variant)] text-xs text-[var(--md-on-surface-variant)]" role="contentinfo">
@@ -159,6 +180,7 @@
                     :key="link.to"
                     :to="link.to"
                     :aria-current="isActive(link.to) ? 'page' : undefined"
+                    @click="link.onClick?.()"
                     class="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-[var(--md-sys-shape-corner-small,4px)] transition-all duration-200 hover:bg-[var(--md-primary)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)] group relative"
                     :class="[
                         isActive(link.to)
@@ -185,6 +207,28 @@
                 </NuxtLink>
             </nav>
 
+            <!-- Desktop Logout -->
+            <div class="p-2 border-t border-[var(--md-outline-variant)]">
+                <button
+                    class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-[var(--md-sys-shape-corner-small,4px)] transition-all duration-200 text-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-sys-color-error)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)] group relative"
+                    :class="{ 'justify-center': isDesktopCollapsed }"
+                    @click="handleLogout"
+                >
+                    <UIcon
+                        :name="logoutIcon"
+                        class="w-5 h-5 flex-shrink-0 opacity-70 group-hover:opacity-100"
+                    />
+                    <span v-if="!isDesktopCollapsed" class="flex-1 text-left">Logout</span>
+                    <!-- Tooltip for collapsed state -->
+                    <div
+                        v-if="isDesktopCollapsed"
+                        class="absolute left-full ml-2 px-2 py-1 bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface)] text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity duration-150"
+                    >
+                        Logout
+                    </div>
+                </button>
+            </div>
+
             <!-- Desktop Sidebar Footer -->
             <div class="p-4 border-t border-[var(--md-outline-variant)] text-xs text-[var(--md-on-surface-variant)]" role="contentinfo" :class="{ 'text-center': isDesktopCollapsed }">
                 <span v-if="!isDesktopCollapsed">OR3 v1.0.0</span>
@@ -199,6 +243,31 @@
             class="flex-1 overflow-y-auto bg-[var(--md-surface)] pt-16 lg:pt-0"
             tabindex="-1"
         >
+            <!-- Workspace Indicator Banner -->
+            <div
+                v-if="hasWorkspace && selectedWorkspace"
+                class="sticky top-0 z-10 px-4 sm:px-6 lg:px-8 py-3 bg-[var(--md-surface-container-low)] border-b border-[var(--md-outline-variant)]"
+            >
+                <div class="max-w-5xl mx-auto flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <UIcon name="i-heroicons-building-office" class="w-5 h-5 text-[var(--md-on-surface-variant)]" />
+                        <div>
+                            <span class="text-sm text-[var(--md-on-surface-variant)]">Working in:</span>
+                            <span class="text-sm font-medium text-[var(--md-on-surface)] ml-1">{{ selectedWorkspace.name }}</span>
+                        </div>
+                    </div>
+                    <UButton
+                        size="sm"
+                        color="neutral"
+                        variant="soft"
+                        icon="i-heroicons-arrow-path"
+                        @click="openWorkspaceSelector"
+                    >
+                        Change
+                    </UButton>
+                </div>
+            </div>
+            
             <div class="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
                 <NuxtPage />
             </div>
@@ -229,6 +298,9 @@ import {
 } from '~/composables/admin/useAdminData';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
 import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
+import WorkspaceIndicator from '~/components/admin/WorkspaceIndicator.vue';
+import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
+import { useAdminWorkspaceContext } from '~/composables/admin/useAdminWorkspaceContext';
 
 const route = useRoute();
 const adminPages = useAdminPages();
@@ -246,19 +318,60 @@ const closeIcon = useIcon('ui.close');
 const collapseIcon = useIcon('ui.chevron.left');
 const expandIcon = useIcon('ui.chevron.right');
 const activeIndicatorIcon = useIcon('ui.check');
+const logoutIcon = useIcon('ui.logout');
 
-// Warm common admin data on client to make page switches feel instant.
-if (import.meta.client) {
-    useAdminSystemStatus();
-    useAdminWorkspace();
-    useAdminExtensions();
-    useAdminSystemConfigEnriched();
+const router = useRouter();
+const toast = useToast();
+
+const { hasWorkspace, selectedWorkspace, selectWorkspace, clearWorkspace } = useAdminWorkspaceContext();
+const showWorkspaceSelector = ref(false);
+
+function openWorkspaceSelector() {
+    showWorkspaceSelector.value = !showWorkspaceSelector.value;
 }
+
+function onWorkspaceSelected(workspace: any) {
+    selectWorkspace(workspace);
+}
+
+// Handle logout
+async function handleLogout() {
+    try {
+        // Clear localStorage items
+        localStorage.removeItem('admin-sidebar-collapsed');
+        
+        // Clear workspace context (per requirements: don't persist across sessions)
+        clearWorkspace();
+        
+        // Call server logout
+        await $fetch('/api/admin/auth/logout', { method: 'POST', credentials: 'include' });
+        
+        // Force clear the cookie client-side as well
+        document.cookie = 'or3_admin=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+        
+        toast.add({
+            title: 'Logged out',
+            description: 'You have been logged out successfully',
+            color: 'success',
+        });
+        
+        // Full page reload to clear all state
+        window.location.href = '/admin/login';
+    } catch (err: any) {
+        toast.add({
+            title: 'Logout failed',
+            description: err?.data?.statusMessage || 'An error occurred',
+            color: 'error',
+        });
+    }
+}
+
+// Avoid eager admin API calls in layout to prevent unnecessary errors
 
 const navLinks = computed(() => {
     const base = [
         { label: 'Overview', to: '/admin', icon: useIcon('dashboard.home').value },
-        { label: 'Workspace', to: '/admin/workspace', icon: useIcon('sidebar.user').value },
+        { label: 'Workspaces', to: '/admin/workspaces', icon: useIcon('sidebar.user').value },
         { label: 'Plugins', to: '/admin/plugins', icon: useIcon('dashboard.plugins').value },
         { label: 'Themes', to: '/admin/themes', icon: useIcon('dashboard.settings').value },
         { label: 'System', to: '/admin/system', icon: useIcon('ui.settings').value },

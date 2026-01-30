@@ -1,5 +1,11 @@
 <template>
     <div class="space-y-6">
+        <!-- Workspace Selector Modal - shown if no workspace selected -->
+        <WorkspaceSelector
+            v-model="showWorkspaceSelector"
+            @select="onWorkspaceSelected"
+        />
+
         <div>
             <h2 class="text-2xl font-semibold mb-1">Plugins</h2>
             <p class="text-sm opacity-70">
@@ -117,16 +123,39 @@ import { useAdminExtensions, useAdminWorkspace } from '~/composables/admin/useAd
 import { useAdminAuth } from '~/composables/admin/useAdminAuth';
 import { useExtensionManagement } from '~/composables/admin/useExtensionManagement';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
+import { useAdminWorkspaceContext } from '~/composables/admin/useAdminWorkspaceContext';
+import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
 
 definePageMeta({
     layout: 'admin',
+    middleware: ['admin-auth'],
 });
+
+const { hasWorkspace, selectWorkspace, selectedWorkspaceId } = useAdminWorkspaceContext();
+const showWorkspaceSelector = ref(false);
+
+// Show workspace selector if no workspace selected
+if (!hasWorkspace.value) {
+    showWorkspaceSelector.value = true;
+}
+
+// Handle workspace selection
+function onWorkspaceSelected(workspace: any) {
+    selectWorkspace(workspace);
+}
 
 // 1. Fetch Extensions
 const { data, status, refresh: refreshNuxtData } = useAdminExtensions();
 
 // 2. Fetch Workspace (for role and enabled plugins)
-const { data: workspaceData, refresh: refreshWorkspace } = useAdminWorkspace();
+const { data: workspaceData, refresh: refreshWorkspace } = useAdminWorkspace(selectedWorkspaceId.value ?? undefined);
+
+// Watch for workspace changes and refresh
+watch(selectedWorkspaceId, (newId) => {
+    if (newId) {
+        refreshWorkspace();
+    }
+});
 
 // 3. Auth & Permissions
 const { isOwner } = useAdminAuth(workspaceData);

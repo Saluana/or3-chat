@@ -1,4 +1,4 @@
-import { defineEventHandler, createError } from 'h3';
+import { defineEventHandler, createError, getCookie } from 'h3';
 import { clearAdminCookie } from '../../../admin/auth/jwt';
 import { isAdminEnabled } from '../../../utils/admin/is-admin-enabled';
 
@@ -24,6 +24,10 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'Method Not Allowed',
         });
     }
+
+    // Debug: Check if cookie was received
+    const receivedCookie = getCookie(event, 'or3_admin');
+    console.log('[admin:logout] Received cookie:', receivedCookie ? 'yes' : 'no');
 
     // Clear the cookie
     clearAdminCookie(event);

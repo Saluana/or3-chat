@@ -560,13 +560,8 @@ export default defineNuxtConfig({
                   'app/pages/_test.vue',
               ]
             : []),
-        ...(!isSsrAuthEnabled
-            ? [
-                  'app/pages/admin/**',
-                  'app/layouts/admin.vue',
-                  'app/components/admin/**',
-                  'app/composables/admin/**',
-              ]
-            : []),
+        // Note: Admin pages are no longer excluded based on ssrAuthEnabled.
+        // The new super admin feature uses JWT-based authentication and is gated
+        // at runtime via isAdminEnabled() check in server/middleware/admin-gate.ts.
     ].filter(Boolean) as string[],
 });

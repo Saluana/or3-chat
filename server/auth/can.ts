@@ -26,9 +26,9 @@ const ROLE_PERMISSIONS: Record<WorkspaceRole, Permission[]> = {
         'workspace.settings.manage',
         'users.manage',
         'plugins.manage',
-        'admin.access',
+        // Note: 'admin.access' is NOT included here - it's only for deployment admins
     ],
-    editor: ['workspace.read', 'workspace.write', 'admin.access'],
+    editor: ['workspace.read', 'workspace.write'],
     viewer: ['workspace.read'],
 };
 

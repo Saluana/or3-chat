@@ -166,3 +166,403 @@ export const searchUsers = query({
         }));
     },
 });
+
+// ============================================================================
+// WORKSPACE MANAGEMENT
+// ============================================================================
+
+/**
+ * List all workspaces (admin only).
+ * Supports search, pagination, and deleted filter.
+ */
+export const listWorkspaces = query({
+    args: {
+        search: v.optional(v.string()),
+        include_deleted: v.optional(v.boolean()),
+        page: v.number(),
+        per_page: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const { search, include_deleted, page, per_page } = args;
+        const skip = (page - 1) * per_page;
+
+        // Get all workspaces
+        let workspaces = await ctx.db.query('workspaces').collect();
+
+        // Filter by deleted status
+        if (!include_deleted) {
+            workspaces = workspaces.filter((w) => !w.deleted);
+        }
+
+        // Filter by search term
+        if (search) {
+            const searchTerm = search.toLowerCase();
+            workspaces = workspaces.filter((w) =>
+                w.name.toLowerCase().includes(searchTerm)
+            );
+        }
+
+        const total = workspaces.length;
+
+        // Paginate
+        const paginated = workspaces.slice(skip, skip + per_page);
+
+        // Get owner and member info
+        const results = await Promise.all(
+            paginated.map(async (workspace) => {
+                const owner = await ctx.db.get(workspace.owner_user_id);
+                const members = await ctx.db
+                    .query('workspace_members')
+                    .withIndex('by_workspace', (q) =>
+                        q.eq('workspace_id', workspace._id)
+                    )
+                    .collect();
+
+                return {
+                    id: workspace._id,
+                    name: workspace.name,
+                    description: workspace.description,
+                    createdAt: workspace.created_at,
+                    deleted: workspace.deleted ?? false,
+                    deletedAt: workspace.deleted_at,
+                    ownerUserId: workspace.owner_user_id,
+                    ownerEmail: owner?.email,
+                    memberCount: members.length,
+                };
+            })
+        );
+
+        return { items: results, total };
+    },
+});
+
+/**
+ * Get a single workspace by ID (admin only).
+ */
+export const getWorkspace = query({
+    args: {
+        workspace_id: v.id('workspaces'),
+    },
+    handler: async (ctx, args) => {
+        const workspace = await ctx.db.get(args.workspace_id);
+
+        if (!workspace) {
+            return null;
+        }
+
+        const owner = await ctx.db.get(workspace.owner_user_id);
+        const members = await ctx.db
+            .query('workspace_members')
+            .withIndex('by_workspace', (q) =>
+                q.eq('workspace_id', workspace._id)
+            )
+            .collect();
+
+        return {
+            id: workspace._id,
+            name: workspace.name,
+            description: workspace.description,
+            createdAt: workspace.created_at,
+            deleted: workspace.deleted ?? false,
+            deletedAt: workspace.deleted_at,
+            ownerUserId: workspace.owner_user_id,
+            ownerEmail: owner?.email,
+            memberCount: members.length,
+        };
+    },
+});
+
+/**
+ * Create a new workspace (admin only).
+ */
+export const createWorkspace = mutation({
+    args: {
+        name: v.string(),
+        description: v.optional(v.string()),
+        owner_user_id: v.id('users'),
+    },
+    handler: async (ctx, args) => {
+        // Verify owner exists
+        const owner = await ctx.db.get(args.owner_user_id);
+        if (!owner) {
+            throw new Error('Owner user not found');
+        }
+
+        const now = Date.now();
+
+        // Create workspace
+        const workspaceId = await ctx.db.insert('workspaces', {
+            name: args.name,
+            description: args.description,
+            owner_user_id: args.owner_user_id,
+            created_at: now,
+            deleted: false,
+        });
+
+        // Add owner as member
+        await ctx.db.insert('workspace_members', {
+            workspace_id: workspaceId,
+            user_id: args.owner_user_id,
+            role: 'owner',
+            created_at: now,
+        });
+
+        // Initialize server version counter
+        await ctx.db.insert('server_version_counter', {
+            workspace_id: workspaceId,
+            value: 0,
+        });
+
+        return { workspace_id: workspaceId };
+    },
+});
+
+/**
+ * Soft delete a workspace (admin only).
+ */
+export const softDeleteWorkspace = mutation({
+    args: {
+        workspace_id: v.id('workspaces'),
+        deleted_at: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const workspace = await ctx.db.get(args.workspace_id);
+
+        if (!workspace) {
+            throw new Error('Workspace not found');
+        }
+
+        await ctx.db.patch(args.workspace_id, {
+            deleted: true,
+            deleted_at: args.deleted_at,
+        });
+    },
+});
+
+/**
+ * Restore a soft-deleted workspace (admin only).
+ */
+export const restoreWorkspace = mutation({
+    args: {
+        workspace_id: v.id('workspaces'),
+    },
+    handler: async (ctx, args) => {
+        const workspace = await ctx.db.get(args.workspace_id);
+
+        if (!workspace) {
+            throw new Error('Workspace not found');
+        }
+
+        await ctx.db.patch(args.workspace_id, {
+            deleted: false,
+            deleted_at: undefined,
+        });
+    },
+});
+
+// ============================================================================
+// WORKSPACE MEMBERS
+// ============================================================================
+
+/**
+ * List workspace members (admin only).
+ */
+export const listWorkspaceMembers = query({
+    args: {
+        workspace_id: v.id('workspaces'),
+    },
+    handler: async (ctx, args) => {
+        const members = await ctx.db
+            .query('workspace_members')
+            .withIndex('by_workspace', (q) =>
+                q.eq('workspace_id', args.workspace_id)
+            )
+            .collect();
+
+        const results = await Promise.all(
+            members.map(async (m) => {
+                const user = await ctx.db.get(m.user_id);
+                return {
+                    userId: m.user_id,
+                    email: user?.email,
+                    role: m.role,
+                };
+            })
+        );
+
+        return results;
+    },
+});
+
+/**
+ * Upsert a workspace member (admin only).
+ */
+export const upsertWorkspaceMember = mutation({
+    args: {
+        workspace_id: v.id('workspaces'),
+        email_or_provider_id: v.string(),
+        role: v.union(v.literal('owner'), v.literal('editor'), v.literal('viewer')),
+        provider: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const provider = args.provider ?? 'clerk';
+        const identifier = args.email_or_provider_id.trim();
+
+        let targetUserId: Id<'users'> | null = null;
+
+        // Find user by email or provider ID
+        if (identifier.includes('@')) {
+            const user = await ctx.db
+                .query('users')
+                .filter((q) => q.eq(q.field('email'), identifier))
+                .first();
+            if (user) targetUserId = user._id;
+        } else {
+            const authAccount = await ctx.db
+                .query('auth_accounts')
+                .withIndex('by_provider', (q) =>
+                    q.eq('provider', provider).eq('provider_user_id', identifier)
+                )
+                .first();
+            if (authAccount) targetUserId = authAccount.user_id;
+        }
+
+        if (!targetUserId) {
+            throw new Error('User not found');
+        }
+
+        // Check for existing membership
+        const existing = await ctx.db
+            .query('workspace_members')
+            .withIndex('by_workspace_user', (q) =>
+                q.eq('workspace_id', args.workspace_id).eq('user_id', targetUserId!)
+            )
+            .first();
+
+        if (existing) {
+            await ctx.db.patch(existing._id, { role: args.role });
+        } else {
+            await ctx.db.insert('workspace_members', {
+                workspace_id: args.workspace_id,
+                user_id: targetUserId,
+                role: args.role,
+                created_at: Date.now(),
+            });
+        }
+    },
+});
+
+/**
+ * Set workspace member role (admin only).
+ */
+export const setWorkspaceMemberRole = mutation({
+    args: {
+        workspace_id: v.id('workspaces'),
+        user_id: v.string(),
+        role: v.union(v.literal('owner'), v.literal('editor'), v.literal('viewer')),
+    },
+    handler: async (ctx, args) => {
+        const member = await ctx.db
+            .query('workspace_members')
+            .withIndex('by_workspace_user', (q) =>
+                q.eq('workspace_id', args.workspace_id).eq('user_id', args.user_id as Id<'users'>)
+            )
+            .first();
+
+        if (!member) {
+            throw new Error('Member not found');
+        }
+
+        await ctx.db.patch(member._id, { role: args.role });
+    },
+});
+
+/**
+ * Remove a workspace member (admin only).
+ */
+export const removeWorkspaceMember = mutation({
+    args: {
+        workspace_id: v.id('workspaces'),
+        user_id: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const member = await ctx.db
+            .query('workspace_members')
+            .withIndex('by_workspace_user', (q) =>
+                q.eq('workspace_id', args.workspace_id).eq('user_id', args.user_id as Id<'users'>)
+            )
+            .first();
+
+        if (!member) {
+            throw new Error('Member not found');
+        }
+
+        await ctx.db.delete(member._id);
+    },
+});
+
+// ============================================================================
+// WORKSPACE SETTINGS
+// ============================================================================
+
+/**
+ * Get a workspace setting (admin only).
+ */
+export const getWorkspaceSetting = query({
+    args: {
+        workspace_id: v.id('workspaces'),
+        key: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const entry = await ctx.db
+            .query('kv')
+            .withIndex('by_workspace_name', (q) =>
+                q.eq('workspace_id', args.workspace_id).eq('name', args.key)
+            )
+            .first();
+
+        if (!entry || entry.deleted) return null;
+        return entry.value ?? null;
+    },
+});
+
+/**
+ * Set a workspace setting (admin only).
+ */
+export const setWorkspaceSetting = mutation({
+    args: {
+        workspace_id: v.id('workspaces'),
+        key: v.string(),
+        value: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        const existing = await ctx.db
+            .query('kv')
+            .withIndex('by_workspace_name', (q) =>
+                q.eq('workspace_id', args.workspace_id).eq('name', args.key)
+            )
+            .first();
+
+        if (existing) {
+            await ctx.db.patch(existing._id, {
+                value: args.value,
+                deleted: false,
+                deleted_at: undefined,
+                updated_at: now,
+                clock: now,
+            });
+        } else {
+            await ctx.db.insert('kv', {
+                workspace_id: args.workspace_id,
+                id: `${args.workspace_id}:${args.key}`,
+                name: args.key,
+                value: args.value,
+                deleted: false,
+                created_at: now,
+                updated_at: now,
+                clock: now,
+            });
+        }
+    },
+});

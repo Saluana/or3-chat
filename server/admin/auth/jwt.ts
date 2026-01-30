@@ -7,7 +7,7 @@ import { getCookie, setCookie, deleteCookie } from 'h3';
 import jwt from 'jsonwebtoken';
 
 const COOKIE_NAME = 'or3_admin';
-const COOKIE_PATH = '/admin';
+const COOKIE_PATH = '/';
 
 export type AdminJwtClaims = {
     kind: 'super_admin';
@@ -29,7 +29,7 @@ async function getJwtSecret(event: H3Event): Promise<string> {
     }
 
     // Auto-generate and persist a secret
-    const { readFile, writeFile } = await import('fs/promises');
+    const { readFile, writeFile, mkdir } = await import('fs/promises');
     const { join } = await import('path');
     const { randomBytes } = await import('crypto');
 
@@ -39,9 +39,15 @@ async function getJwtSecret(event: H3Event): Promise<string> {
         const secret = await readFile(secretFile, 'utf-8');
         return secret.trim();
     } catch {
-        // Generate new secret
+        // Generate new secret - ensure .data directory exists
+        try {
+            await mkdir('.data', { recursive: true });
+        } catch {
+            // Directory might already exist
+        }
         const secret = randomBytes(32).toString('hex');
         await writeFile(secretFile, secret, { mode: 0o600 });
+        console.log('[admin] Generated new JWT secret');
         return secret;
     }
 }
@@ -76,6 +82,8 @@ export async function verifyAdminJwt(
     token: string
 ): Promise<AdminJwtClaims | null> {
     const secret = await getJwtSecret(event);
+    console.log('[admin:verifyAdminJwt] Token length:', token.length);
+    console.log('[admin:verifyAdminJwt] Secret length:', secret.length);
 
     try {
         const decoded = jwt.verify(token, secret, {
@@ -84,11 +92,14 @@ export async function verifyAdminJwt(
 
         // Validate the claims structure
         if (decoded.kind !== 'super_admin' || !decoded.username) {
+            console.log('[admin:verifyAdminJwt] Invalid claims structure:', decoded);
             return null;
         }
 
+        console.log('[admin:verifyAdminJwt] Token verified successfully for:', decoded.username);
         return decoded;
-    } catch {
+    } catch (err) {
+        console.log('[admin:verifyAdminJwt] Token verification failed:', err instanceof Error ? err.message : String(err));
         return null;
     }
 }
@@ -121,20 +132,34 @@ export async function getAdminFromCookie(
     event: H3Event
 ): Promise<AdminJwtClaims | null> {
     const token = getCookie(event, COOKIE_NAME);
+    console.log('[admin:getAdminFromCookie] Path:', event.path);
+    console.log('[admin:getAdminFromCookie] Cookie name:', COOKIE_NAME);
+    console.log('[admin:getAdminFromCookie] Token found:', !!token);
+    console.log('[admin:getAdminFromCookie] All cookies:', getCookie(event, COOKIE_NAME) ? 'present' : 'missing');
+
     if (!token) {
+        console.log('[admin:getAdminFromCookie] No token found, returning null');
         return null;
     }
 
-    return verifyAdminJwt(event, token);
+    const result = await verifyAdminJwt(event, token);
+    console.log('[admin:getAdminFromCookie] Verification result:', result ? 'success' : 'failed');
+    return result;
 }
 
 /**
  * Clear the admin JWT cookie (logout).
  */
 export function clearAdminCookie(event: H3Event): void {
+    console.log('[admin:clearAdminCookie] Clearing cookie:', COOKIE_NAME, 'with path:', COOKIE_PATH);
     deleteCookie(event, COOKIE_NAME, {
         path: COOKIE_PATH,
     });
+    // Clear legacy cookie path (/admin) from earlier versions
+    deleteCookie(event, COOKIE_NAME, {
+        path: '/admin',
+    });
+    console.log('[admin:clearAdminCookie] Cookie cleared (/, /admin)');
 }
 
 /**

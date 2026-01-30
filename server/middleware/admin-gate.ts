@@ -67,9 +67,13 @@ export default defineEventHandler(async (event) => {
     }
 
     // Require admin authentication for all other admin paths
+    console.log('[admin-gate] Resolving admin context for:', event.path);
     const adminContext = await resolveAdminRequestContext(event);
+    console.log('[admin-gate] Admin context resolved:', adminContext ? `kind=${adminContext.principal.kind}` : 'null');
+
     if (!adminContext) {
         // Redirect to login page for UI routes, 401 for API routes
+        console.log('[admin-gate] No admin context, returning 401/redirect');
         if (event.path.startsWith('/api/')) {
             throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
         } else {
@@ -79,6 +83,7 @@ export default defineEventHandler(async (event) => {
 
     // Store admin context in event for downstream use
     event.context.admin = adminContext;
+    console.log('[admin-gate] Admin context stored in event.context.admin');
 
     if (basePath !== defaultPath && isBasePath && !isDefaultPath) {
         const rest =

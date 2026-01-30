@@ -116,6 +116,10 @@ export default defineEventHandler(async (event) => {
     clearRateLimit(clientIp, username);
     await setAdminCookie(event, username);
 
+    console.log('[admin:login] Cookie set successfully for user:', credentials.username);
+    console.log('[admin:login] Request path:', event.path);
+    console.log('[admin:login] Response headers:', event.node.res.getHeader('set-cookie'));
+
     return {
         success: true,
         username: credentials.username,
