@@ -14,6 +14,10 @@ export function isAdminEnabled(event?: H3Event): boolean {
     // If event is provided, use runtime config
     if (event) {
         const config = useRuntimeConfig(event);
+        // In test environments, config might be undefined during specific test scenarios
+        if (!config || !config.admin) {
+            return false;
+        }
         const username = config.admin.auth.username;
         const password = config.admin.auth.password;
         return Boolean(username && password);

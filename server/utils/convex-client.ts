@@ -11,6 +11,10 @@ export function getConvexClient() {
     if (client) return client;
 
     const runtimeConfig = useRuntimeConfig();
+    // In test environments, config might be undefined during specific test scenarios
+    if (!runtimeConfig || !runtimeConfig.sync) {
+        throw new Error('CONVEX_URL is not defined in runtime config');
+    }
     const url = runtimeConfig.sync.convexUrl;
 
     if (typeof url !== 'string' || url.length === 0) {
