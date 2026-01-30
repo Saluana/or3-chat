@@ -88,6 +88,45 @@ vi.mock('~/composables/useThemeResolver', () => ({
     }),
 }));
 
+// Global test-configurable runtime config
+const defaultTestConfig = {
+    auth: { enabled: true, provider: 'clerk' },
+    sync: { enabled: true, provider: 'convex', convexUrl: 'https://convex.test' },
+    storage: { enabled: true, provider: 'convex' },
+    backgroundJobs: { enabled: false, storageProvider: 'memory', maxConcurrentJobs: 20, jobTimeoutMs: 300000, completedJobRetentionMs: 300000 },
+    admin: { 
+        allowedHosts: [],
+        allowRestart: false,
+        allowRebuild: false,
+        rebuildCommand: 'bun run build',
+        basePath: '/admin',
+        auth: {
+            username: '',
+            password: '',
+            jwtSecret: '',
+            jwtExpiry: '24h',
+            deletedWorkspaceRetentionDays: '',
+        },
+    },
+    branding: { appName: 'Test', logoUrl: '', defaultTheme: 'dark' },
+    legal: { termsUrl: '', privacyUrl: '' },
+    security: { allowedOrigins: [], forceHttps: false },
+    limits: { enabled: false, requestsPerMinute: 20, maxConversations: 0, maxMessagesPerDay: 0, storageProvider: 'memory' },
+    public: { 
+        ssrAuthEnabled: true,
+        branding: { appName: 'Test', logoUrl: '', defaultTheme: 'dark' },
+        legal: { termsUrl: '', privacyUrl: '' },
+    },
+    clerkSecretKey: 'secret',
+    openrouterApiKey: '',
+    openrouterAllowUserOverride: true,
+    openrouterRequireUserKey: false,
+} as any;
+
+export const testRuntimeConfig = {
+    value: defaultTestConfig,
+};
+
 // Mock #imports
 vi.mock('#imports', () => ({
     useNuxtApp: () => ({
@@ -114,9 +153,14 @@ vi.mock('#imports', () => ({
         off: vi.fn(),
         doAction: vi.fn(),
     }),
-    useRuntimeConfig: () => ({
-        public: {},
-    }),
+    useRuntimeConfig: vi.fn(() => testRuntimeConfig.value),
+    useState: (key: string, init?: () => unknown) => {
+        const state = new Map();
+        if (!state.has(key) && init) {
+            state.set(key, init());
+        }
+        return { value: state.get(key) };
+    },
     useHead: vi.fn(),
     useColorMode: () => ({ value: 'light' }),
     useIcon: (token: string) => ({ value: token }),

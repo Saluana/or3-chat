@@ -17,14 +17,14 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
     try {
         const requestFetch = useRequestFetch();
-        const data = await requestFetch('/api/admin/auth/session', {
+        const data = await requestFetch<{ authenticated: boolean; kind: string }>('/api/admin/auth/session', {
             credentials: 'include',
             headers: {
                 Accept: 'application/json',
             },
         });
 
-        if (data?.authenticated) {
+        if (data.authenticated) {
             return;
         }
 

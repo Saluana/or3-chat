@@ -91,11 +91,20 @@ export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
             const cleanup = () => {
                 disposed = true;
                 if (typeof unwatch === 'function') {
-                    try {
-                        unwatch();
-                    } catch (err) {
+                try {
+                    unwatch();
+                } catch (err: any) {
+                    // Suppress known race condition in Convex SDK where removing a subscriber
+                    // from an already-cleared query map throws "Cannot read properties of undefined (reading 'numSubscribers')"
+                    const isKnownRaceCondition =
+                        err instanceof TypeError &&
+                        err.message.includes("Cannot read properties of undefined") &&
+                        err.message.includes("numSubscribers");
+
+                    if (!isKnownRaceCondition) {
                         console.warn('[convex-sync] Cleanup unwatch failed:', err);
                     }
+                }
                 }
             };
             subscriptions.set(key, cleanup);

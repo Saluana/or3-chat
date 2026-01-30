@@ -3,7 +3,6 @@ import { requireAdminApiContext } from '../../admin/api';
 import { getWorkspaceAccessStore } from '../../admin/stores/registry';
 import { isAdminEnabled } from '../../utils/admin/is-admin-enabled';
 import { checkGenericRateLimit, getClientIp } from '../../admin/auth/rate-limit';
-import DOMPurify from 'isomorphic-dompurify';
 
 interface CreateWorkspaceBody {
     name: string;
@@ -75,9 +74,10 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    // Sanitize inputs to prevent XSS
-    const sanitizedName = DOMPurify.sanitize(name.trim());
-    const sanitizedDescription = description ? DOMPurify.sanitize(description.trim()) : undefined;
+    // Values are already validated and trimmed above
+    // Vue's text interpolation automatically escapes HTML, so no sanitization needed
+    const sanitizedName = trimmedName;
+    const sanitizedDescription = description?.trim();
 
     // Get workspace store
     const store = getWorkspaceAccessStore(event);

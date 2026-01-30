@@ -58,10 +58,8 @@ function validateUserId(id: string): Id<'users'> {
 }
 
 async function getConvexClientWithAuth(event: H3Event) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unnecessary-condition
-    const config = (useRuntimeConfig(event) || {}) as any;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-    const authProvider = config.auth?.provider || config.public?.auth?.provider;
+    const config = useRuntimeConfig(event);
+    const authProvider = config.auth.provider;
     
     // Check if Clerk is configured
     if (authProvider !== 'clerk') {
@@ -104,7 +102,7 @@ export function createConvexWorkspaceAccessStore(
                 email_or_provider_id: emailOrProviderId,
                 role,
                 provider,
-            } as any);
+            });
         },
         async setMemberRole({ workspaceId, userId, role }) {
             const client = await getConvexClientWithAuth(event);

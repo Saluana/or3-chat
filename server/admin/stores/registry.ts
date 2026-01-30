@@ -20,9 +20,8 @@ let cacheTimestamp: number = 0;
 const CACHE_TTL_MS = 60000; // 1 minute
 
 export function getWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-    const config = (useRuntimeConfig() || {}) as any;
-    const provider = config.sync.provider as string | undefined;
+    const config = useRuntimeConfig(event);
+    const provider = config.sync.provider;
 
     if (provider === CONVEX_PROVIDER_ID) {
         return createConvexWorkspaceAccessStore(event);
@@ -35,9 +34,8 @@ export function getWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore {
 }
 
 export function getWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStore {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-    const config = (useRuntimeConfig() || {}) as any;
-    const provider = config.sync.provider as string | undefined;
+    const config = useRuntimeConfig(event);
+    const provider = config.sync.provider;
 
     if (provider === CONVEX_PROVIDER_ID) {
         return createConvexWorkspaceSettingsStore(event);
@@ -50,9 +48,8 @@ export function getWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStor
 }
 
 export function getAdminUserStore(event: H3Event): AdminUserStore {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-    const config = (useRuntimeConfig() || {}) as any;
-    const provider = config.sync.provider as string | undefined;
+    const config = useRuntimeConfig(event);
+    const provider = config.sync.provider;
 
     if (provider === CONVEX_PROVIDER_ID) {
         return createConvexAdminUserStore(event);
@@ -69,9 +66,8 @@ export function getAdminUserStore(event: H3Event): AdminUserStore {
  * Capabilities are cached per provider.
  */
 export function getAdminStoreCapabilities(event?: H3Event): AdminStoreCapabilities {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-    const config = (useRuntimeConfig(event) || {}) as any;
-    const provider = config.sync.provider as string | undefined;
+    const config = useRuntimeConfig(event);
+    const provider = config.sync.provider;
     const now = Date.now();
 
     // Return cached capabilities if valid and provider hasn't changed
