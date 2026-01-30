@@ -117,23 +117,10 @@
 </template>
 
 <script setup lang="ts">
-interface Member {
-    userId: string;
-    email?: string;
-    role: 'owner' | 'editor' | 'viewer';
-}
+import type { WorkspaceSummary, WorkspaceMemberInfo } from '~/types/global';
 
-interface Workspace {
-    id: string;
-    name: string;
-    description?: string;
-    createdAt: number;
-    deleted: boolean;
-    deletedAt?: number;
-    ownerUserId?: string;
-    ownerEmail?: string;
-    memberCount: number;
-    members?: Member[];
+interface Workspace extends WorkspaceSummary {
+    members?: WorkspaceMemberInfo[];
 }
 
 definePageMeta({

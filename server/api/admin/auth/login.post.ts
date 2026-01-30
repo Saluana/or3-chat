@@ -36,14 +36,6 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    // Only POST allowed
-    if (event.method !== 'POST') {
-        throw createError({
-            statusCode: 405,
-            statusMessage: 'Method Not Allowed',
-        });
-    }
-
     const body = await readBody<LoginBody>(event);
     const { username, password } = body;
 

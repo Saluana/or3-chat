@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
     const body = await readBody<CreateWorkspaceBody>(event);
     const { name, description, ownerUserId } = body;
 
-    // Validate input
+    // Validate workspace name
     if (!name || !name.trim()) {
         throw createError({
             statusCode: 400,
@@ -38,10 +38,27 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    if (!ownerUserId) {
+    const trimmedName = name.trim();
+    if (trimmedName.length > 100) {
         throw createError({
             statusCode: 400,
-            statusMessage: 'Owner user ID is required',
+            statusMessage: 'Workspace name must be under 100 characters',
+        });
+    }
+
+    // Validate description
+    if (description && description.length > 1000) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'Description must be under 1000 characters',
+        });
+    }
+
+    // Validate owner user ID format (Convex ID pattern: users:<base36-id>)
+    if (!ownerUserId || !/^users:[a-zA-Z0-9_-]+$/.test(ownerUserId)) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'Valid owner user ID is required',
         });
     }
 
@@ -50,7 +67,7 @@ export default defineEventHandler(async (event) => {
 
     // Create workspace
     const result = await store.createWorkspace({
-        name: name.trim(),
+        name: trimmedName,
         description: description?.trim(),
         ownerUserId,
     });

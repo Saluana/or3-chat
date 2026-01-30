@@ -3,6 +3,11 @@ import { requireAdminApiContext } from '../../admin/api';
 import { getAdminUserStore } from '../../admin/stores/registry';
 import { isAdminEnabled } from '../../utils/admin/is-admin-enabled';
 
+// Search pagination limits
+const DEFAULT_SEARCH_LIMIT = 20;
+const MAX_SEARCH_LIMIT = 50;
+const MIN_SEARCH_LIMIT = 1;
+
 /**
  * GET /api/admin/search-users
  *
@@ -22,7 +27,10 @@ export default defineEventHandler(async (event) => {
 
     const query = getQuery(event);
     const search = query.q?.toString();
-    const limit = Math.min(50, Math.max(1, parseInt(query.limit?.toString() || '20', 10)));
+    const limit = Math.min(
+        MAX_SEARCH_LIMIT,
+        Math.max(MIN_SEARCH_LIMIT, parseInt(query.limit?.toString() || String(DEFAULT_SEARCH_LIMIT), 10))
+    );
 
     if (!search || !search.trim()) {
         return [];
