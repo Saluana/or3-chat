@@ -167,7 +167,7 @@ async function handleSoftDelete() {
     // Issue 26: Use accessible ConfirmDialog instead of native confirm()
     const confirmed = await confirm({
         title: 'Delete Workspace',
-        message: 'Are you sure you want to delete this workspace? This action can be undone.',
+        message: 'Are you sure you want to delete this workspace? You can restore it later from the deleted workspaces list.',
         confirmText: 'Delete',
         danger: true,
     });

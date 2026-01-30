@@ -125,6 +125,8 @@
 </template>
 
 <script setup lang="ts">
+import { refDebounced } from '@vueuse/core';
+
 interface User {
     userId: string;
     email?: string;
@@ -165,7 +167,6 @@ const { data: adminsData, pending, error, refresh: refreshAdmins } = await useFe
 const admins = computed(() => adminsData.value?.admins ?? []);
 
 // Issue 30: Debounce search query
-const { refDebounced } = await import('@vueuse/core');
 const debouncedQuery = refDebounced(searchQuery, 300);
 
 // Watch debounced query and trigger search
