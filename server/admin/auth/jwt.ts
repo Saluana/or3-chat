@@ -5,6 +5,7 @@
 import type { H3Event } from 'h3';
 import { getCookie, setCookie, deleteCookie } from 'h3';
 import jwt from 'jsonwebtoken';
+import { useRuntimeConfig } from '#imports';
 
 const COOKIE_NAME = 'or3_admin';
 const COOKIE_PATH = '/admin';
@@ -45,7 +46,7 @@ export type AdminJwtClaims = {
  */
 async function getJwtSecret(event: H3Event): Promise<string> {
     const config = useRuntimeConfig(event);
-    const configuredSecret = config.admin?.auth?.jwtSecret;
+    const configuredSecret = config.admin.auth.jwtSecret;
 
     if (configuredSecret) {
         return configuredSecret;
@@ -83,7 +84,7 @@ export async function signAdminJwt(
 ): Promise<string> {
     const config = useRuntimeConfig(event);
     const secret = await getJwtSecret(event);
-    const expiry = config.admin?.auth?.jwtExpiry || '24h';
+    const expiry = config.admin.auth.jwtExpiry || '24h';
 
     const claims: Omit<AdminJwtClaims, 'iat' | 'exp'> = {
         kind: 'super_admin',
@@ -108,14 +109,22 @@ export async function verifyAdminJwt(
     try {
         const decoded = jwt.verify(token, secret, {
             algorithms: ['HS256'],
-        }) as AdminJwtClaims;
+        }) as unknown;
 
-        // Validate the claims structure
-        if (decoded.kind !== 'super_admin' || !decoded.username) {
+        // Validate the claims structure at runtime
+        if (
+            typeof decoded !== 'object' ||
+            decoded === null ||
+            !('kind' in decoded) ||
+            decoded.kind !== 'super_admin' ||
+            !('username' in decoded) ||
+            typeof decoded.username !== 'string' ||
+            !decoded.username
+        ) {
             return null;
         }
 
-        return decoded;
+        return decoded as AdminJwtClaims;
     } catch {
         return null;
     }
@@ -130,12 +139,12 @@ export async function setAdminCookie(
 ): Promise<void> {
     const token = await signAdminJwt(event, username);
     const config = useRuntimeConfig(event);
-    const expiry = config.admin?.auth?.jwtExpiry || '24h';
+    const expiry = config.admin.auth.jwtExpiry || '24h';
     const maxAgeSeconds = parseExpiryToSeconds(expiry);
 
     setCookie(event, COOKIE_NAME, token, {
         httpOnly: true,
-        secure: config.security?.forceHttps ?? process.env.NODE_ENV === 'production',
+        secure: config.security.forceHttps,
         sameSite: 'strict',
         path: COOKIE_PATH,
         maxAge: maxAgeSeconds,

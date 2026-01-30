@@ -6,6 +6,7 @@
  */
 import type { H3Event } from 'h3';
 import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
+import { useRuntimeConfig } from '#imports';
 
 export interface DeploymentAdminChecker {
     /**
@@ -28,7 +29,7 @@ const CACHE_TTL_MS = 60000; // 1 minute
  */
 export function getDeploymentAdminChecker(event?: H3Event): DeploymentAdminChecker {
     const config = useRuntimeConfig(event);
-    const syncProviderId = config.sync?.provider || CONVEX_PROVIDER_ID;
+    const syncProviderId = config.sync.provider || CONVEX_PROVIDER_ID;
     const now = Date.now();
 
     // Return cached checker if valid and provider hasn't changed

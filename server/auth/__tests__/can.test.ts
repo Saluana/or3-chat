@@ -55,7 +55,6 @@ describe('can()', () => {
             'workspace.settings.manage',
             'users.manage',
             'plugins.manage',
-            'admin.access',
         ];
 
         it.each(ownerPermissions)(
@@ -92,11 +91,11 @@ describe('can()', () => {
             expect(decision.reason).toBe('forbidden');
         });
 
-        it('allows admin.access for editor', () => {
+        it('denies admin.access for editor', () => {
             const decision = can(mockEditorSession, 'admin.access');
 
-            expect(decision.allowed).toBe(true);
-            expect(decision.role).toBe('editor');
+            expect(decision.allowed).toBe(false);
+            expect(decision.reason).toBe('forbidden');
         });
     });
 
@@ -132,7 +131,7 @@ describe('can()', () => {
         });
 
         it('decision is granted only when role has permission', () => {
-            const decision = can(mockOwnerSession, 'admin.access');
+            const decision = can(mockOwnerSession, 'workspace.read');
             expect(decision.allowed).toBe(true);
         });
     });

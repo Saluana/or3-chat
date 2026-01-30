@@ -209,7 +209,11 @@ async function searchUsers(query: string) {
 }
 
 async function grantAdmin(userId: string, email?: string) {
-    const confirmed = confirm(`Are you sure you want to grant admin access to ${email || userId}?`);
+    const confirmed = await confirm({
+        title: 'Grant Admin Access',
+        message: `Are you sure you want to grant admin access to ${email || userId}?`,
+        confirmText: 'Grant',
+    });
     
     if (!confirmed) return;
     

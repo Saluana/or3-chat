@@ -60,8 +60,8 @@ export default defineEventHandler(async (event) => {
 
     // Bootstrap credentials from env if needed (first boot)
     const config = useRuntimeConfig(event);
-    const envUsername = config.admin?.auth?.username;
-    const envPassword = config.admin?.auth?.password;
+    const envUsername = config.admin.auth.username;
+    const envPassword = config.admin.auth.password;
 
     if (envUsername && envPassword) {
         await bootstrapAdminCredentialsFromEnv(envUsername, envPassword);

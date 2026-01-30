@@ -17,19 +17,21 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
     try {
         const requestFetch = useRequestFetch();
-        const data = await requestFetch('/api/admin/auth/session', {
+        const data = await requestFetch<{ authenticated: boolean; kind: string }>('/api/admin/auth/session', {
             credentials: 'include',
             headers: {
                 Accept: 'application/json',
             },
         });
 
-        if (data?.authenticated) {
+        if (data.authenticated) {
             return;
         }
 
         return navigateTo('/admin/login');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const status = error?.statusCode || error?.status || error?.response?.status;
 
         if (status === 404) {

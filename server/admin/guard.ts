@@ -2,6 +2,7 @@ import { createError, getRequestHeader } from 'h3';
 import type { H3Event } from 'h3';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
 import { normalizeHost } from '../utils/normalize-host';
+import { useRuntimeConfig } from '#imports';
 
 function isMutationMethod(method?: string): boolean {
     const normalized = (method || 'GET').toUpperCase();
@@ -22,9 +23,9 @@ export function requireAdminRequest(event: H3Event): void {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
 
-    const config = useRuntimeConfig();
-    const adminConfig = config.admin as { allowedHosts?: string[] } | undefined;
-    const allowedHosts = (adminConfig?.allowedHosts || [])
+    const config = useRuntimeConfig(event);
+    
+    const allowedHosts = config.admin.allowedHosts
         .map((host) => host.trim())
         .filter(Boolean)
         .map((host) => normalizeHost(host));

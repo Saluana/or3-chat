@@ -14,6 +14,7 @@ import {
     getConvexGatewayClient,
 } from '../../../utils/sync/convex-gateway';
 import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+import { useRuntimeConfig } from '#imports';
 
 /**
  * Validate and convert a workspace ID string to Convex Id type.
@@ -58,7 +59,7 @@ function validateUserId(id: string): Id<'users'> {
 
 async function getConvexClientWithAuth(event: H3Event) {
     const config = useRuntimeConfig(event);
-    const authProvider = config.public?.auth?.provider;
+    const authProvider = config.auth.provider;
     
     // Check if Clerk is configured
     if (authProvider !== 'clerk') {
@@ -88,7 +89,13 @@ export function createConvexWorkspaceAccessStore(
                 workspace_id: validateWorkspaceId(workspaceId),
             });
         },
-        async upsertMember({ workspaceId, emailOrProviderId, role, provider }) {
+        async upsertMember(input: {
+            workspaceId: string;
+            emailOrProviderId: string;
+            role: 'owner' | 'editor' | 'viewer';
+            provider?: string;
+        }) {
+            const { workspaceId, emailOrProviderId, role, provider } = input;
             const client = await getConvexClientWithAuth(event);
             await client.mutation(api.admin.upsertWorkspaceMember, {
                 workspace_id: validateWorkspaceId(workspaceId),

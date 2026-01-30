@@ -7,7 +7,23 @@ import { getAdminFromCookie } from '../../admin/auth/jwt';
 
 const CACHE_TTL = 30000; // 30 seconds
 const CLEANUP_INTERVAL = 60000; // 1 minute
-const cache = new Map<string, { data: any; timestamp: number }>();
+
+interface WorkspaceListResult {
+    items: Array<{
+        id: string;
+        name: string;
+        description?: string;
+        createdAt: number;
+        deleted: boolean;
+        deletedAt?: number;
+        ownerUserId?: string;
+        ownerEmail?: string;
+        memberCount: number;
+    }>;
+    total: number;
+}
+
+const cache = new Map<string, { data: WorkspaceListResult; timestamp: number }>();
 
 // Periodic cleanup to prevent unbounded cache growth
 setInterval(() => {

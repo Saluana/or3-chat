@@ -12,6 +12,7 @@ import {
     createConvexAdminUserStore,
 } from './convex/convex-store';
 import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
+import { useRuntimeConfig } from '#imports';
 
 let cachedCapabilities: AdminStoreCapabilities | null = null;
 let cachedProviderId: string | null = null;
@@ -19,8 +20,8 @@ let cacheTimestamp: number = 0;
 const CACHE_TTL_MS = 60000; // 1 minute
 
 export function getWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore {
-    const config = useRuntimeConfig();
-    const provider = config.sync.provider as string | undefined;
+    const config = useRuntimeConfig(event);
+    const provider = config.sync.provider;
 
     if (provider === CONVEX_PROVIDER_ID) {
         return createConvexWorkspaceAccessStore(event);
@@ -33,8 +34,8 @@ export function getWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore {
 }
 
 export function getWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStore {
-    const config = useRuntimeConfig();
-    const provider = config.sync.provider as string | undefined;
+    const config = useRuntimeConfig(event);
+    const provider = config.sync.provider;
 
     if (provider === CONVEX_PROVIDER_ID) {
         return createConvexWorkspaceSettingsStore(event);
@@ -47,8 +48,8 @@ export function getWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStor
 }
 
 export function getAdminUserStore(event: H3Event): AdminUserStore {
-    const config = useRuntimeConfig();
-    const provider = config.sync.provider as string | undefined;
+    const config = useRuntimeConfig(event);
+    const provider = config.sync.provider;
 
     if (provider === CONVEX_PROVIDER_ID) {
         return createConvexAdminUserStore(event);
@@ -66,7 +67,7 @@ export function getAdminUserStore(event: H3Event): AdminUserStore {
  */
 export function getAdminStoreCapabilities(event?: H3Event): AdminStoreCapabilities {
     const config = useRuntimeConfig(event);
-    const provider = config.sync.provider as string | undefined;
+    const provider = config.sync.provider;
     const now = Date.now();
 
     // Return cached capabilities if valid and provider hasn't changed
