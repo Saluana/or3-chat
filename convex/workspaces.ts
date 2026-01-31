@@ -68,17 +68,23 @@ async function deleteWorkspaceData(ctx: MutationCtx, workspaceId: Id<'workspaces
 
     const deleteByIndexBatched = async (table: TableNames, indexName: string) => {
         let totalDeleted = 0;
-        while (true) {
+        let hasMore = true;
+        while (hasMore) {
             const rows = await (ctx.db.query(table) as unknown as QueryByIndex)
                 .withIndex(indexName, (q) => q.eq('workspace_id', workspaceId))
                 .take(DELETE_BATCH_SIZE);
 
-            if (rows.length === 0) break;
+            if (rows.length === 0) {
+                hasMore = false;
+                break;
+            }
 
             await Promise.all(rows.map((r) => ctx.db.delete(r._id)));
             totalDeleted += rows.length;
 
-            if (rows.length < DELETE_BATCH_SIZE) break;
+            if (rows.length < DELETE_BATCH_SIZE) {
+                hasMore = false;
+            }
         }
         return totalDeleted;
     };
