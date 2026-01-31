@@ -2,6 +2,17 @@ import { v } from 'convex/values';
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
 
+// ============================================================
+// CONSTANTS
+// ============================================================
+
+/** Maximum file size in bytes (100MB) */
+const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+
+// ============================================================
+// HELPERS
+// ============================================================
+
 const nowSec = (): number => Math.floor(Date.now() / 1000);
 
 async function verifyWorkspaceMembership(
@@ -48,11 +59,10 @@ export const generateUploadUrl = mutation({
     handler: async (ctx, args) => {
         await verifyWorkspaceMembership(ctx, args.workspace_id);
 
-        // Enforce file size limit (100MB)
-        const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
-        if (args.size_bytes > MAX_FILE_SIZE) {
+        // Enforce file size limit
+        if (args.size_bytes > MAX_FILE_SIZE_BYTES) {
             throw new Error(
-                `File size ${args.size_bytes} exceeds maximum allowed size of ${MAX_FILE_SIZE} bytes (100MB)`
+                `File size ${args.size_bytes} exceeds maximum allowed size of ${MAX_FILE_SIZE_BYTES} bytes (100MB)`
             );
         }
 

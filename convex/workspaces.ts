@@ -6,8 +6,19 @@ import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/s
 import { v } from 'convex/values';
 import type { Id, TableNames } from './_generated/dataModel';
 
+// ============================================================
+// CONSTANTS
+// ============================================================
+
 // Valid auth provider - only Clerk is supported
 const VALID_AUTH_PROVIDER = 'clerk';
+
+/** Batch size for workspace data deletion operations */
+const DELETE_BATCH_SIZE = 100;
+
+// ============================================================
+// HELPERS
+// ============================================================
 
 async function getAuthAccount(
     ctx: MutationCtx | QueryCtx
@@ -63,8 +74,6 @@ async function deleteWorkspaceData(ctx: MutationCtx, workspaceId: Id<'workspaces
             cb: (q: IndexQueryBuilder) => IndexQueryBuilder
         ) => { collect: () => Promise<ConvexDoc[]>; take: (n: number) => Promise<ConvexDoc[]> };
     };
-
-    const DELETE_BATCH_SIZE = 100;
 
     const deleteByIndexBatched = async (table: TableNames, indexName: string) => {
         let totalDeleted = 0;

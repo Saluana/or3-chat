@@ -2,6 +2,20 @@ import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/s
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 
+// ============================================================
+// CONSTANTS
+// ============================================================
+
+/** Maximum results returned by search queries */
+const MAX_SEARCH_LIMIT = 100;
+
+/** Maximum items per page in paginated queries */
+const MAX_PER_PAGE = 100;
+
+// ============================================================
+// HELPERS
+// ============================================================
+
 /**
  * Get the current user's auth account ID.
  * Throws if not authenticated.
@@ -219,7 +233,6 @@ export const searchUsers = query({
         // Verify caller is an admin
         await requireAdmin(ctx);
 
-        const MAX_SEARCH_LIMIT = 100;
         const limit = Math.min(args.limit ?? 20, MAX_SEARCH_LIMIT);
         const searchTerm = args.query.toLowerCase().trim();
 
@@ -283,7 +296,6 @@ export const listWorkspaces = query({
         // Verify caller is an admin
         await requireAdmin(ctx);
 
-        const MAX_PER_PAGE = 100;
         const { search, include_deleted, page } = args;
         const per_page = Math.min(args.per_page, MAX_PER_PAGE);
         const skip = (page - 1) * per_page;
