@@ -6,6 +6,9 @@ import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/s
 import { v } from 'convex/values';
 import type { Id, TableNames } from './_generated/dataModel';
 
+// Valid auth provider - only Clerk is supported
+const VALID_AUTH_PROVIDER = 'clerk';
+
 async function getAuthAccount(
     ctx: MutationCtx | QueryCtx
 ): Promise<{ userId: Id<'users'>; authAccountId: Id<'auth_accounts'> }> {
@@ -290,6 +293,17 @@ export const ensure = mutation({
         name: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        // Validate provider
+        if (args.provider !== VALID_AUTH_PROVIDER) {
+            throw new Error(`Invalid provider: ${args.provider}. Only '${VALID_AUTH_PROVIDER}' is supported.`);
+        }
+
+        // Verify JWT subject matches provider_user_id
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity || identity.subject !== args.provider_user_id) {
+            throw new Error('Provider user ID mismatch: JWT subject does not match request');
+        }
+
         const now = Date.now();
 
         let authAccount = await ctx.db

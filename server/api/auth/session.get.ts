@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
     
     if (!rateLimitResult.allowed) {
         const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
-        setResponseHeader(event, 'Retry-After', String(retryAfterSec));
+        setResponseHeader(event, 'Retry-After', retryAfterSec);
         throw createError({
             statusCode: 429,
             statusMessage: `Rate limit exceeded. Retry after ${retryAfterSec}s`,

@@ -128,43 +128,48 @@ export const testRuntimeConfig = {
 };
 
 // Mock #imports
-vi.mock('#imports', () => ({
-    useNuxtApp: () => ({
-        $iconRegistry: {
-            resolve: (token: string) => {
-                if (token === 'sidebar.page.home') return 'pixelarticons:home';
-                return token;
+vi.mock('#imports', async (importOriginal) => {
+    // Return the actual module first to allow @clerk/nuxt to resolve it
+    const actual = await importOriginal<typeof import('#imports')>();
+    return {
+        ...actual,
+        useNuxtApp: () => ({
+            $iconRegistry: {
+                resolve: (token: string) => {
+                    if (token === 'sidebar.page.home') return 'pixelarticons:home';
+                    return token;
+                },
             },
+            $theme: {
+                activeTheme: { value: 'light' },
+                getResolver: () => ({ resolve: () => ({ props: {} }) }),
+                setActiveTheme: vi.fn(),
+            },
+        }),
+        useChat: (...args: unknown[]) => {
+            const g = globalThis as Record<string, unknown>;
+            const fn = g.useChat as ((...a: unknown[]) => unknown) | undefined;
+            return fn ? fn(...args) : undefined;
         },
-        $theme: {
-            activeTheme: { value: 'light' },
-            getResolver: () => ({ resolve: () => ({ props: {} }) }),
-            setActiveTheme: vi.fn(),
+        useToast: () => ({ add: vi.fn() }),
+        useHooks: () => ({
+            on: vi.fn().mockReturnValue(() => {}),
+            off: vi.fn(),
+            doAction: vi.fn(),
+        }),
+        useRuntimeConfig: vi.fn(() => testRuntimeConfig.value),
+        useState: (key: string, init?: () => unknown) => {
+            const state = new Map();
+            if (!state.has(key) && init) {
+                state.set(key, init());
+            }
+            return { value: state.get(key) };
         },
-    }),
-    useChat: (...args: unknown[]) => {
-        const g = globalThis as Record<string, unknown>;
-        const fn = g.useChat as ((...a: unknown[]) => unknown) | undefined;
-        return fn ? fn(...args) : undefined;
-    },
-    useToast: () => ({ add: vi.fn() }),
-    useHooks: () => ({
-        on: vi.fn().mockReturnValue(() => {}),
-        off: vi.fn(),
-        doAction: vi.fn(),
-    }),
-    useRuntimeConfig: vi.fn(() => testRuntimeConfig.value),
-    useState: (key: string, init?: () => unknown) => {
-        const state = new Map();
-        if (!state.has(key) && init) {
-            state.set(key, init());
-        }
-        return { value: state.get(key) };
-    },
-    useHead: vi.fn(),
-    useColorMode: () => ({ value: 'light' }),
-    useIcon: (token: string) => ({ value: token }),
-}));
+        useHead: vi.fn(),
+        useColorMode: () => ({ value: 'light' }),
+        useIcon: (token: string) => ({ value: token }),
+    };
+});
 
 vi.mock('virtua/vue', () => {
     const Base = defineComponent({
@@ -224,3 +229,5 @@ vi.mock('or3-scroll', () => {
         Or3Scroll: Base,
     };
 });
+
+

@@ -24,10 +24,17 @@ export function useSessionContext() {
     const data = computed<SessionPayload | null>(() => state.value);
 
     const refresh = async () => {
+        // Check-and-assign atomically to prevent race conditions
         if (inFlight) return inFlight;
+        
+        // Create the promise immediately before any async gap
+        const fetchPromise = $fetch<SessionPayload>('/api/auth/session');
+        inFlight = fetchPromise;
+        
         pending.value = true;
         error.value = null;
-        inFlight = $fetch<SessionPayload>('/api/auth/session')
+        
+        return fetchPromise
             .then((res) => {
                 state.value = res;
                 return res;
@@ -40,7 +47,6 @@ export function useSessionContext() {
                 pending.value = false;
                 inFlight = null;
             });
-        return inFlight;
     };
 
     if (import.meta.server) {

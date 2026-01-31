@@ -13,6 +13,7 @@ import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { getDeploymentAdminChecker } from './deployment-admin';
 
 const SESSION_CONTEXT_KEY_PREFIX = '__or3_session_context_';
+const REQUEST_ID_KEY = '__or3_request_id';
 
 /**
  * Resolve the session context for an H3 event.
@@ -24,10 +25,17 @@ const SESSION_CONTEXT_KEY_PREFIX = '__or3_session_context_';
 export async function resolveSessionContext(
     event: H3Event
 ): Promise<SessionContext> {
+    // Generate or retrieve request ID for cache isolation
+    let requestId = event.context[REQUEST_ID_KEY] as string | undefined;
+    if (!requestId) {
+        requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+        event.context[REQUEST_ID_KEY] = requestId;
+    }
+
     // Get provider from config for cache key
     const config = useRuntimeConfig();
     const providerId = config.auth.provider || CLERK_PROVIDER_ID;
-    const cacheKey = `${SESSION_CONTEXT_KEY_PREFIX}${providerId}`;
+    const cacheKey = `${SESSION_CONTEXT_KEY_PREFIX}${requestId}_${providerId}`;
 
     // Check cache first
     if (event.context[cacheKey]) {
