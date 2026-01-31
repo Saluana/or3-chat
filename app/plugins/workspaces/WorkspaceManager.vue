@@ -207,6 +207,7 @@ import {
 } from '~/db/client';
 import { getKvByName, setKvByName } from '~/db/kv';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useSessionContext } from '~/composables/auth/useSessionContext';
 
 const toast = useToast();
 const baseDb = getDefaultDb();
@@ -267,6 +268,23 @@ const cachedWorkspaces = ref<WorkspaceSummary[]>([]);
 const cachedActiveId = ref<Id<'workspaces'> | null>(null);
 const legacyStats = ref({ threads: 0, messages: 0, projects: 0 });
 const importing = ref(false);
+
+const sessionContext = useSessionContext();
+
+async function refreshSessionUntilWorkspace(workspaceId: string): Promise<boolean> {
+    // Keep this tight: we just need to beat eventual consistency + any client caches.
+    // The server endpoint is now `no-store`, but retries handle backend propagation.
+    const delaysMs = [0, 100, 200, 400, 800];
+    for (const delay of delaysMs) {
+        if (delay) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+        await sessionContext.refresh();
+        const current = sessionContext.data.value?.session?.workspace?.id ?? null;
+        if (current === workspaceId) return true;
+    }
+    return false;
+}
 
 const legacyHasData = computed(
     () =>
@@ -441,6 +459,10 @@ async function createWorkspace() {
         });
         await saveWorkspacePolicy(workspaceId, createLogoutPolicy.value);
         await setActiveWorkspaceMutation.mutate({ workspace_id: workspaceId });
+
+        // Ensure the next reload resolves into the newly active workspace.
+        await refreshSessionUntilWorkspace(workspaceId);
+
         // Update cache before reload so UI shows correctly immediately after
         cachedActiveId.value = workspaceId;
         await saveCache([
@@ -473,6 +495,10 @@ async function selectWorkspace(workspace: WorkspaceSummary) {
     selecting.value = true;
     try {
         await setActiveWorkspaceMutation.mutate({ workspace_id: workspace._id });
+
+        // Ensure the next reload resolves into the selected workspace.
+        await refreshSessionUntilWorkspace(workspace._id);
+
         // Update cache before reload
         cachedActiveId.value = workspace._id;
         cachedWorkspaces.value = cachedWorkspaces.value.map((item) => ({

@@ -28,7 +28,10 @@ export function useSessionContext() {
         if (inFlight) return inFlight;
         
         // Create the promise immediately before any async gap
-        const fetchPromise = $fetch<SessionPayload>('/api/auth/session');
+        const fetchPromise = $fetch<SessionPayload>('/api/auth/session', {
+            // Always bypass caches; workspace switching depends on fresh session reads.
+            cache: 'no-store',
+        });
         inFlight = fetchPromise;
         
         pending.value = true;

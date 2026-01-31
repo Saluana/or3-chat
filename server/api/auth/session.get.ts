@@ -38,15 +38,10 @@ export default defineEventHandler(async (event) => {
     }
 
     const session = await resolveSessionContext(event);
-    
-    // Set cache headers to reduce server load
-    if (session.authenticated) {
-        // Cache authenticated sessions for 60s
-        setResponseHeader(event, 'Cache-Control', 'private, max-age=60');
-    } else {
-        // Don't cache unauthenticated responses
-        setResponseHeader(event, 'Cache-Control', 'no-store');
-    }
+
+    // Session responses must never be cached.
+    // Caching here causes stale workspace selection after switching workspaces.
+    setResponseHeader(event, 'Cache-Control', 'no-store');
 
     // Record successful request for rate limiting
     recordSyncRequest(clientIP, 'auth:session');
@@ -55,3 +50,5 @@ export default defineEventHandler(async (event) => {
         session: session.authenticated ? session : null,
     };
 });
+
+export const SESSION_CACHE_CONTROL = 'no-store';
