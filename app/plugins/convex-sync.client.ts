@@ -258,9 +258,9 @@ export default defineNuxtPlugin(async () => {
             return;
         }
 
-        // Start or stop sync engine based on workspace ID
-        // Note: setActiveWorkspaceDb is handled by useWorkspaceManager for non-admin routes,
-        // which watches activeWorkspaceId and updates the DB automatically
+        // Manage sync engine based on workspace ID
+        // Note: Workspace DB switching is handled separately by useWorkspaceManager
+        // in 00-workspace-db.client.ts. This function only starts/stops the sync engine.
         if (workspaceId) {
             void startSyncEngine(workspaceId).catch((error) => {
                 console.error('[convex-sync] Failed to start sync engine:', error);

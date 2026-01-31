@@ -8,11 +8,16 @@
  * - Single source of truth for active workspace ID
  * - Coordinates workspace changes between DB and sync engine
  * - Prevents duplicate workspace switches
+ * 
+ * NOTE: This composable uses a module-level flag to prevent concurrent changes.
+ * It's designed to be called once per application lifecycle in plugin initialization.
+ * Multiple instances will share the same flag, which is intentional for coordination.
  */
 import { computed, watch } from 'vue';
 import { setActiveWorkspaceDb } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 
+// Module-level flag shared across all instances (intentional for singleton behavior)
 let workspaceChangeInProgress = false;
 
 export function useWorkspaceManager() {

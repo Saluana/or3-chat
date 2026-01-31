@@ -360,14 +360,7 @@ async function importLocalData() {
     try {
         const targetDb = getWorkspaceDb(activeWorkspaceId);
         
-        // Helper to safely access tables with proper types
-        const getTable = (db: typeof baseDb | typeof targetDb, tableName: string) => {
-            // Type assertion is needed because table names are dynamic strings
-            // In the future, this could be replaced with a type-safe table accessor
-            return (db as any)[tableName];
-        };
-        
-        // Define tables with their types - no `any` casts
+        // Define tables with their types
         const tableDefinitions = {
             projects: targetDb.projects,
             threads: targetDb.threads,
@@ -385,13 +378,10 @@ async function importLocalData() {
             Object.values(tableDefinitions),
             async () => {
                 for (const [tableName, targetTable] of Object.entries(tableDefinitions)) {
-                    // Access source table using helper
-                    const sourceTable = getTable(baseDb, tableName);
-                    if (!sourceTable) {
-                        console.warn(`[import] Table ${tableName} not found in source DB, skipping`);
-                        continue;
-                    }
-
+                    // Access source table using dynamic property access
+                    // TypeScript can't verify these at compile time, but they match the target tables
+                    const sourceTable = baseDb[tableName as keyof typeof tableDefinitions];
+                    
                     const sourceRows = await sourceTable.toArray();
                     if (sourceRows.length === 0) {
                         continue;
