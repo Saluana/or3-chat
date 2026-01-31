@@ -792,10 +792,11 @@ export default defineNuxtPlugin(() => {
 - [x] Force client session fetches to bypass caches (`cache: 'no-store'`).
 - [x] Refresh session until it reflects the selected workspace before reload.
 
-- [ ] Consolidate active workspace DB ownership into a single plugin/composable (remove double-watcher race).
+- [x] Consolidate active workspace DB ownership into a single plugin/composable (remove double-watcher race).
 - [ ] Decide policy for workspace fallback in `resolveSession` (keep with explicit UX or remove).
 - [ ] If keeping SSR session hydration, ensure SSR payloads for session cannot be cached; otherwise consider minimizing SSR usage for session display to avoid flashes.
-- [ ] Remove duplicated issues from this document (Issue 6/9) to avoid confusion.
+
+**Note:** Issues 6, 7, 8, and 9 are duplicates of Issues 1, 2, 3, and 4 respectively and can be ignored.
 ---
 ## Summary: Root Causes of "Wrong Workspace Loading" Issues
 The user-reported issues stem from:
