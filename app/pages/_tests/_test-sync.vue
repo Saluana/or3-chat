@@ -14,7 +14,7 @@ definePageMeta({ ssr: false });
 
 import { useConvexQuery, useConvexMutation } from 'convex-vue';
 import { api } from '~~/convex/_generated/api';
-import { db } from '~/db/client';
+import { getDb } from '~/db/client';
 import type { Id } from '~~/convex/_generated/dataModel';
 
 // ----- Auth Status -----
@@ -64,6 +64,7 @@ const stats = ref({
 
 async function loadStats() {
     try {
+        const db = getDb();
         stats.value = {
             threads: await db.threads.count(),
             messages: await db.messages.count(),
@@ -81,6 +82,7 @@ const threadsLoading = ref(false);
 async function loadRecentThreads() {
     threadsLoading.value = true;
     try {
+        const db = getDb();
         const threads = await db.threads.orderBy('created_at').reverse().limit(5).toArray();
         recentThreads.value = threads.map((t) => ({
             id: t.id,
@@ -101,6 +103,7 @@ const messagesLoading = ref(false);
 async function loadRecentMessages() {
     messagesLoading.value = true;
     try {
+        const db = getDb();
         const messages = await db.messages.orderBy('created_at').reverse().limit(5).toArray();
         recentMessages.value = messages.map((m) => ({
             id: m.id,
@@ -140,6 +143,7 @@ async function createTestThread() {
     creating.value = true;
     createResult.value = null;
     try {
+        const db = getDb();
         const threadId = `test-${Date.now()}`;
         const nowSec = Math.floor(Date.now() / 1000);
         const deviceId = 'test-device-' + Math.random().toString(36).slice(2, 8);
@@ -196,6 +200,7 @@ async function createTestMessage() {
     creating.value = true;
     createResult.value = null;
     try {
+        const db = getDb();
         const messageId = `msg-${Date.now()}`;
         const nowSec = Math.floor(Date.now() / 1000);
         const deviceId = 'test-device-' + Math.random().toString(36).slice(2, 8);
@@ -267,6 +272,7 @@ async function syncAllLocalData() {
     let skipped = 0;
 
     try {
+        const db = getDb();
         const deviceId = 'sync-all-' + Math.random().toString(36).slice(2, 8);
         const nowSec = Math.floor(Date.now() / 1000);
 
@@ -360,6 +366,7 @@ const pendingOps = ref<{ id: string; tableName: string; pk: string; status: stri
 
 async function loadPendingOps() {
     try {
+        const db = getDb();
         const ops = await db.pending_ops.where('status').equals('pending').limit(10).toArray();
         pendingOps.value = ops.map((op) => ({
             id: op.id,
@@ -376,6 +383,7 @@ async function loadPendingOps() {
 async function clearTestData() {
     creating.value = true;
     try {
+        const db = getDb();
         // Only clear test data (items with 'test-' or 'msg-' prefix)
         const testThreads = await db.threads.filter((t) => t.id.startsWith('test-')).toArray();
         const testMessages = await db.messages.filter((m) => m.id.startsWith('msg-')).toArray();

@@ -14,7 +14,7 @@ definePageMeta({ ssr: false });
 
 import { useConvexQuery, useConvexMutation } from 'convex-vue';
 import { api } from '~~/convex/_generated/api';
-import { db } from '~/db/client';
+import { getDb } from '~/db/client';
 import type { Id } from '~~/convex/_generated/dataModel';
 
 // ----- Auth State -----
@@ -35,6 +35,7 @@ async function checkAllLayers() {
 
     // Sync layer
     try {
+        const db = getDb();
         const pendingCount = await db.pending_ops.count();
         layerStatus.value.sync = {
             status: 'ok',
@@ -49,6 +50,7 @@ async function checkAllLayers() {
 
     // Storage layer
     try {
+        const db = getDb();
         const queueCount = await db.file_transfers.where('state').equals('queued').count();
         const runningCount = await db.file_transfers.where('state').equals('running').count();
         layerStatus.value.storage = {
@@ -84,6 +86,8 @@ async function runE2ETest() {
     ];
 
     try {
+        const db = getDb();
+        
         // Step 1: Check Auth
         e2eResults.value[0]!.status = 'running';
         await new Promise((r) => setTimeout(r, 500));
@@ -169,6 +173,7 @@ async function runE2ETest() {
 const stats = ref({ threads: 0, messages: 0, files: 0, pendingOps: 0 });
 
 async function loadStats() {
+    const db = getDb();
     stats.value = {
         threads: await db.threads.count(),
         messages: await db.messages.count(),
