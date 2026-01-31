@@ -248,6 +248,7 @@ import type { ConfigGroup, EnrichedConfigEntry, ProviderAction } from '~/composa
 
 definePageMeta({
     layout: 'admin',
+    middleware: ['admin-auth'],
 });
 
 const { data: statusData, status: statusFetchStatus } = useAdminSystemStatus();

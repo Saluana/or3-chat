@@ -26,6 +26,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
     auth: {
         enabled: authEnabled,
         provider: (process.env.AUTH_PROVIDER ?? AUTH_PROVIDER_IDS.clerk) as AuthProviderId,
+        guestAccessEnabled: process.env.OR3_GUEST_ACCESS_ENABLED === 'true',
         clerk: {
             publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
             secretKey: process.env.NUXT_CLERK_SECRET_KEY,
@@ -122,6 +123,15 @@ export const or3CloudConfig = defineOr3CloudConfig({
                   .map((ext) => ext.trim())
                   .filter(Boolean)
             : undefined,
+        auth: {
+            username: process.env.OR3_ADMIN_USERNAME,
+            password: process.env.OR3_ADMIN_PASSWORD,
+            jwtSecret: process.env.OR3_ADMIN_JWT_SECRET,
+            jwtExpiry: process.env.OR3_ADMIN_JWT_EXPIRY || '24h',
+            deletedWorkspaceRetentionDays: process.env.OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS
+                ? Number(process.env.OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS)
+                : undefined,
+        },
     },
     /**
      * Background streaming configuration (SSR mode only).

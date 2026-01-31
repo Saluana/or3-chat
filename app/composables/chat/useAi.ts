@@ -48,6 +48,7 @@ import {
     composeSystemPrompt,
 } from '~/utils/chat/prompt-utils';
 import { createStreamAccumulator } from '~/composables/chat/useStreamAccumulator';
+import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { resolveDefaultModel } from '~/core/auth/models-service';
@@ -655,6 +656,9 @@ export function useChat(
     );
     const effectiveApiKey = computed(() =>
         allowUserOverride.value ? apiKey.value : null
+    );
+    const guestAccessEnabled = computed(
+        () => runtimeConfig.public.guestAccessEnabled === true
     );
     const limitsConfig = computed(() => runtimeConfig.public.limits);
     const hooks = useHooks();
@@ -1299,12 +1303,26 @@ export function useChat(
         const hasKey =
             Boolean(effectiveApiKey.value) || hasInstanceKey.value;
         if (!hasKey) {
-            if (!allowUserOverride.value) {
+            if (allowUserOverride.value && guestAccessEnabled.value) {
+                // Guest access enabled - trigger OpenRouter login
+                const openrouter = useOpenRouterAuth();
+                openrouter.startLogin();
+            } else if (!allowUserOverride.value) {
                 useToast().add({
                     title: 'Instance key required',
                     description:
                         'This deployment requires a managed OpenRouter key. Contact your administrator.',
                     color: 'warning',
+                    duration: 4000,
+                });
+            } else {
+                // allowUserOverride is true but guestAccessEnabled is false - no action
+                // User must authenticate via SSR auth first
+                useToast().add({
+                    title: 'Sign in required',
+                    description:
+                        'Please sign in to continue chatting.',
+                    color: 'info',
                     duration: 4000,
                 });
             }

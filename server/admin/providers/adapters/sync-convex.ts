@@ -17,6 +17,7 @@ import type {
     ProviderStatusContext,
     ProviderActionContext,
 } from '../types';
+import { useRuntimeConfig } from '#imports';
 
 const DEFAULT_RETENTION_SECONDS = 30 * 24 * 3600;
 

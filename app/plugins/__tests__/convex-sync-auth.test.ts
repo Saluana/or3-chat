@@ -111,15 +111,21 @@ vi.mock('#app', () => ({
         },
     }),
     useNuxtApp: () => ({ provide: vi.fn() }),
+    useRouter: () => ({
+        afterEach: vi.fn(() => () => undefined),
+    }),
 }));
 
 describe('convex-sync auth retry', () => {
     beforeEach(() => {
         vi.useFakeTimers();
+        vi.resetModules();
         outboxStart.mockClear();
         subscriptionStart.mockClear();
         gcStart.mockClear();
         tokenBroker.getProviderToken.mockClear();
+        providerRegistryMock.getActiveSyncProvider.mockClear();
+        providerRegistryMock.getSyncProvider.mockClear();
         tokenState.token = null;
         sessionState.value.session = {
             authenticated: true,
@@ -142,21 +148,28 @@ describe('convex-sync auth retry', () => {
         });
         (globalThis as typeof globalThis & { useNuxtApp?: () => { provide: (key: string, value: unknown) => void } }).useNuxtApp =
             () => ({ provide: vi.fn() });
+        (globalThis as typeof globalThis & { useRouter?: () => { afterEach: (cb: (to: { path: string }) => void) => () => void } }).useRouter =
+            () => ({ afterEach: vi.fn(() => () => undefined) });
     });
 
     it('retries start until token is available', async () => {
-        providerRegistryMock.getSyncProvider.mockReturnValueOnce(null);
+        // First: no active provider available - sync should not start
+        providerRegistryMock.getActiveSyncProvider.mockReturnValueOnce(null as unknown as typeof providerRegistry.active);
         await import('~/plugins/convex-sync.client');
 
-        expect(tokenBroker.getProviderToken).toHaveBeenCalled();
+        // No provider, so no token check and no sync
+        expect(tokenBroker.getProviderToken).not.toHaveBeenCalled();
         expect(outboxStart).not.toHaveBeenCalled();
 
+        // Second: provider becomes available and token is set
         tokenState.token = 'token-1';
-        providerRegistryMock.getSyncProvider.mockReturnValueOnce(providerRegistry.gateway);
+        providerRegistryMock.getActiveSyncProvider.mockReturnValueOnce(providerRegistry.active);
 
         await vi.advanceTimersByTimeAsync(500);
         await vi.runOnlyPendingTimersAsync();
 
+        // Now token broker should be called and sync should start
+        expect(tokenBroker.getProviderToken).toHaveBeenCalled();
         expect(outboxStart).toHaveBeenCalled();
         expect(subscriptionStart).toHaveBeenCalled();
         expect(gcStart).toHaveBeenCalled();

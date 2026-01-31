@@ -16,6 +16,12 @@ export interface Or3CloudConfig {
          */
         provider: 'clerk' | 'custom';
         /**
+         * Allow unauthenticated users to use the app with their own OpenRouter key.
+         * Requires allowUserOverride to also be true.
+         * @default false
+         */
+        guestAccessEnabled?: boolean;
+        /**
          * Provider-specific configuration.
          */
         clerk?: {
@@ -245,6 +251,43 @@ export interface Or3CloudConfig {
          * Allowed file extensions for extension installs.
          */
         extensionAllowedExtensions?: string[];
+
+        /**
+         * Admin authentication configuration.
+         * Enables dedicated super-admin authentication for the admin dashboard.
+         */
+        auth?: {
+            /**
+             * Super admin username (required to enable admin auth).
+             * @env OR3_ADMIN_USERNAME
+             */
+            username?: string;
+
+            /**
+             * Super admin password (required to enable admin auth).
+             * @env OR3_ADMIN_PASSWORD
+             */
+            password?: string;
+
+            /**
+             * JWT signing secret (auto-generated if not provided).
+             * @env OR3_ADMIN_JWT_SECRET
+             */
+            jwtSecret?: string;
+
+            /**
+             * JWT expiration time (e.g., '24h', '7d').
+             * @default '24h'
+             * @env OR3_ADMIN_JWT_EXPIRY
+             */
+            jwtExpiry?: string;
+
+            /**
+             * Days to retain soft-deleted workspaces (unset = retain indefinitely).
+             * @env OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS
+             */
+            deletedWorkspaceRetentionDays?: number;
+        };
     };
 }
 
