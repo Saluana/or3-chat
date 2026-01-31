@@ -47,6 +47,15 @@ export const generateUploadUrl = mutation({
     },
     handler: async (ctx, args) => {
         await verifyWorkspaceMembership(ctx, args.workspace_id);
+
+        // Enforce file size limit (100MB)
+        const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+        if (args.size_bytes > MAX_FILE_SIZE) {
+            throw new Error(
+                `File size ${args.size_bytes} exceeds maximum allowed size of ${MAX_FILE_SIZE} bytes (100MB)`
+            );
+        }
+
         const uploadUrl = await ctx.storage.generateUploadUrl();
         return { uploadUrl };
     },
@@ -104,12 +113,14 @@ export const commitUpload = mutation({
             clock: 0,
         });
 
+        // Cleanup any race condition duplicates (should be rare with .first() check above)
+        // Use .take() instead of .collect() for safety
         const matches = await ctx.db
             .query('file_meta')
             .withIndex('by_workspace_hash', (q) =>
                 q.eq('workspace_id', args.workspace_id).eq('hash', args.hash)
             )
-            .collect();
+            .take(10); // Limit to prevent abuse
 
         if (matches.length > 1) {
             const sorted = [...matches].sort(

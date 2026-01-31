@@ -120,18 +120,24 @@ export const cleanup = internalMutation({
     args: {},
     handler: async (ctx) => {
         const cutoff = Date.now() - 48 * 60 * 60 * 1000; // 48 hours ago
+        const BATCH_SIZE = 500;
+        let totalDeleted = 0;
 
-        // Find old records
-        const oldRecords = await ctx.db
-            .query('rate_limits')
-            .filter((q) => q.lt(q.field('updated_at'), cutoff))
-            .take(100);
+        // Process multiple batches per cleanup run (up to 5x)
+        for (let i = 0; i < 5; i++) {
+            const oldRecords = await ctx.db
+                .query('rate_limits')
+                .filter((q) => q.lt(q.field('updated_at'), cutoff))
+                .take(BATCH_SIZE);
 
-        // Delete them
-        for (const record of oldRecords) {
-            await ctx.db.delete(record._id);
+            if (oldRecords.length === 0) break;
+
+            await Promise.all(oldRecords.map((r) => ctx.db.delete(r._id)));
+            totalDeleted += oldRecords.length;
+
+            if (oldRecords.length < BATCH_SIZE) break;
         }
 
-        return { deleted: oldRecords.length };
+        return { deleted: totalDeleted };
     },
 });

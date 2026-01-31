@@ -192,13 +192,14 @@ export const cleanup = mutation({
         const timeoutMs = args.timeout_ms ?? 5 * 60 * 1000; // 5 minutes
         const retentionMs = args.retention_ms ?? 5 * 60 * 1000; // 5 minutes
         const now = Date.now();
+        const BATCH_SIZE = 100;
         let cleaned = 0;
 
-        // Get all streaming jobs that have timed out
+        // Get streaming jobs that have timed out (batched)
         const streamingJobs = await ctx.db
             .query('background_jobs')
             .withIndex('by_status', (q) => q.eq('status', 'streaming'))
-            .collect();
+            .take(BATCH_SIZE);
 
         for (const job of streamingJobs) {
             const age = now - job.started_at;
@@ -212,12 +213,12 @@ export const cleanup = mutation({
             }
         }
 
-        // Get all completed jobs that are stale
+        // Get completed jobs that are stale (batched)
         for (const status of ['complete', 'error', 'aborted'] as const) {
             const jobs = await ctx.db
                 .query('background_jobs')
                 .withIndex('by_status', (q) => q.eq('status', status))
-                .collect();
+                .take(BATCH_SIZE);
 
             for (const job of jobs) {
                 const completedAge = now - (job.completed_at ?? job.started_at);
