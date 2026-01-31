@@ -57,6 +57,16 @@ export async function resolveSessionContext(
     } catch (error) {
         recordProviderError();
         recordSessionResolution(false);
+        // Log structured error for diagnostics
+        console.error('[auth:session] Provider session fetch failed:', {
+            provider: providerId,
+            error: error instanceof Error ? error.message : String(error),
+            stage: 'provider.getSession',
+        });
+        // Fail fast in dev for immediate feedback
+        if (import.meta.dev) {
+            throw error;
+        }
         const nullSession: SessionContext = { authenticated: false };
         event.context[cacheKey] = nullSession;
         return nullSession;
@@ -123,6 +133,13 @@ export async function resolveSessionContext(
         return sessionContext;
     } catch (error) {
         recordSessionResolution(false);
+        // Log structured error for workspace provisioning failures
+        console.error('[auth:session] Workspace provisioning failed:', {
+            provider: providerSession.provider,
+            userId: providerSession.user.id,
+            error: error instanceof Error ? error.message : String(error),
+            stage: 'workspace.provision',
+        });
         throw error;
     }
 }
