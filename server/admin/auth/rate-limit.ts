@@ -12,6 +12,7 @@ import { getRequestHeaders, type H3Event } from 'h3';
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_ATTEMPTS = 5;
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Clean up every 5 minutes
+const MAX_STORE_SIZE = 10000; // Bound memory usage - evict oldest when full
 
 interface RateLimitEntry {
     count: number;
@@ -109,6 +110,14 @@ export function recordFailedAttempt(ip: string, username: string): void {
     const key = getRateLimitKey(ip, username);
     const now = Date.now();
     const entry = rateLimitStore.get(key);
+
+    // Evict oldest entry if at capacity (LRU-style: Map preserves insertion order)
+    if (rateLimitStore.size >= MAX_STORE_SIZE && !rateLimitStore.has(key)) {
+        const oldestKey = rateLimitStore.keys().next().value;
+        if (oldestKey) {
+            rateLimitStore.delete(oldestKey);
+        }
+    }
 
     if (!entry || now - entry.windowStart > WINDOW_MS) {
         // Start new window

@@ -52,7 +52,15 @@ async function getJwtSecret(event: H3Event): Promise<string> {
         return configuredSecret;
     }
 
-    // Auto-generate and persist a secret
+    // Require explicit configuration in production
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+            'OR3_ADMIN_JWT_SECRET is required in production. ' +
+            'Generate a secret with: openssl rand -hex 32'
+        );
+    }
+
+    // Development-only: auto-generate and persist a secret
     const { readFile, writeFile, mkdir } = await import('fs/promises');
     const { join } = await import('path');
     const { randomBytes } = await import('crypto');
@@ -71,6 +79,7 @@ async function getJwtSecret(event: H3Event): Promise<string> {
         }
         const secret = randomBytes(32).toString('hex');
         await writeFile(secretFile, secret, { mode: 0o600 });
+        console.log('[admin] Auto-generated JWT secret for development. Set OR3_ADMIN_JWT_SECRET for production.');
         return secret;
     }
 }

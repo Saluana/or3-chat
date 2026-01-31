@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Require admin context
-    await requireAdminApiContext(event);
+    const adminCtx = await requireAdminApiContext(event);
 
     // Get workspace ID
     const workspaceId = getRouterParam(event, 'id');
@@ -48,6 +48,15 @@ export default defineEventHandler(async (event) => {
     await store.softDeleteWorkspace({
         workspaceId,
         deletedAt: Date.now(),
+    });
+
+    const actorId = adminCtx.principal.kind === 'super_admin' 
+        ? adminCtx.principal.username 
+        : adminCtx.principal.userId;
+
+    await event.context.adminHooks?.doAction('admin.workspace:action:deleted', {
+        workspaceId,
+        deletedBy: { kind: adminCtx.principal.kind, id: actorId },
     });
 
     return { success: true };

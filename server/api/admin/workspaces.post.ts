@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Require admin context
-    await requireAdminApiContext(event);
+    const adminCtx = await requireAdminApiContext(event);
 
     const body = await readBody<CreateWorkspaceBody>(event);
     const { name, description, ownerUserId } = body;
@@ -87,6 +87,17 @@ export default defineEventHandler(async (event) => {
         name: sanitizedName,
         description: sanitizedDescription,
         ownerUserId,
+    });
+
+    const actorId = adminCtx.principal.kind === 'super_admin' 
+        ? adminCtx.principal.username 
+        : adminCtx.principal.userId;
+
+    await event.context.adminHooks?.doAction('admin.workspace:action:created', {
+        workspaceId: result.workspaceId,
+        name: sanitizedName,
+        ownerUserId,
+        createdBy: { kind: adminCtx.principal.kind, id: actorId },
     });
 
     return result;

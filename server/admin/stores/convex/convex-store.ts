@@ -61,11 +61,13 @@ async function getConvexClientWithAuth(event: H3Event) {
     const config = useRuntimeConfig(event);
     const authProvider = config.auth.provider;
     
-    // Check if Clerk is configured
+    // Check if Clerk is configured (Convex store requires Clerk JWT for server-to-server auth)
     if (authProvider !== 'clerk') {
         throw createError({
             statusCode: 501,
-            statusMessage: `Admin dashboard requires Clerk auth provider. Current: ${authProvider || 'none'}`,
+            statusMessage: `Convex-based admin dashboard requires Clerk auth. ` +
+                `For local development without Clerk, use the memory provider. ` +
+                `Current provider: ${authProvider || 'none'}`,
         });
     }
     
