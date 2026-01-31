@@ -88,6 +88,14 @@ vi.mock('~/db/client', () => ({
     setActiveWorkspaceDb: vi.fn(),
 }));
 
+const workspaceManagerMock = {
+    activeWorkspaceId: { value: 'ws-1' },
+};
+
+vi.mock('~/composables/workspace/useWorkspaceManager', () => ({
+    useWorkspaceManager: () => workspaceManagerMock,
+}));
+
 vi.mock('convex-vue', () => ({
     useConvexClient: () => ({ setAuth: vi.fn() }),
 }));
@@ -96,8 +104,26 @@ vi.mock('vue', async () => {
     const actual = await vi.importActual<typeof import('vue')>('vue');
     return {
         ...actual,
-        watch: (source: () => unknown, cb: (value: unknown) => void) => {
-            cb(source());
+        watch: (source: unknown, cb: (value: unknown, oldValue?: unknown) => void, options?: { immediate?: boolean }) => {
+            // Handle different source types (ref, computed, function, array)
+            let currentValue: unknown;
+            
+            if (typeof source === 'function') {
+                currentValue = (source as () => unknown)();
+            } else if (source && typeof source === 'object' && 'value' in source) {
+                // Ref or computed
+                currentValue = (source as { value: unknown }).value;
+            } else {
+                currentValue = source;
+            }
+            
+            // Call callback immediately if immediate option is set (Vue default behavior)
+            if (options?.immediate !== false) {
+                cb(currentValue, undefined);
+            }
+            
+            // Return cleanup function
+            return () => {};
         },
     };
 });

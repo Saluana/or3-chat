@@ -35,7 +35,10 @@ export default defineNuxtRouteMiddleware(async (to) => {
         const status = error?.statusCode || error?.status || error?.response?.status;
 
         if (status === 404) {
-            return;
+            // Admin endpoint not available (admin disabled or not configured)
+            // Redirect to home to avoid showing a broken page
+            console.log('[admin-auth middleware] Admin not available (404), redirecting to home');
+            return navigateTo('/');
         }
 
         if (status === 401 || status === 403) {

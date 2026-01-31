@@ -377,24 +377,26 @@ async function importLocalData() {
             'rw',
             Object.values(tableDefinitions),
             async () => {
-                for (const [tableName, targetTable] of Object.entries(tableDefinitions)) {
-                    // Access source table using dynamic property access
-                    // Assumption: baseDb has the same table structure as targetDb
-                    // This is safe because both are instances of Or3DB with the same schema
-                    const sourceTable = baseDb[tableName as keyof typeof tableDefinitions];
-                    
+                
+                async function copyTable<T>(
+                    tableName: string,
+                    sourceTable: { toArray: () => Promise<T[]> },
+                    targetTable: { bulkPut: (items: readonly T[]) => Promise<any> }
+                ) {
                     const sourceRows = await sourceTable.toArray();
-                    if (sourceRows.length === 0) {
-                        continue;
-                    }
-
-                    // Note: In the future, if tables gain workspace_id fields,
-                    // we should rewrite them here to avoid cross-workspace pollution.
-                    // For now, these tables are implicitly scoped by the DB name.
-                    
+                    if (sourceRows.length === 0) return;
                     await targetTable.bulkPut(sourceRows);
                     console.log(`[import] Copied ${sourceRows.length} rows from ${tableName}`);
                 }
+
+                await copyTable('projects', baseDb.projects, targetDb.projects);
+                await copyTable('threads', baseDb.threads, targetDb.threads);
+                await copyTable('messages', baseDb.messages, targetDb.messages);
+                await copyTable('kv', baseDb.kv, targetDb.kv);
+                await copyTable('attachments', baseDb.attachments, targetDb.attachments);
+                await copyTable('file_meta', baseDb.file_meta, targetDb.file_meta);
+                await copyTable('file_blobs', baseDb.file_blobs, targetDb.file_blobs);
+                await copyTable('posts', baseDb.posts, targetDb.posts);
             }
         );
 

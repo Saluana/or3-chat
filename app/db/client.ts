@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { LRUCache } from 'lru-cache';
 import type {
     Attachment,
     Kv,
@@ -11,6 +12,11 @@ import type {
 } from './schema';
 import type { PendingOp, Tombstone, SyncState, SyncRun } from '~~/shared/sync/types';
 import type { FileTransfer } from '~~/shared/storage/types';
+
+/** Maximum number of workspace DBs to keep open (prevents IndexedDB connection exhaustion) */
+const MAX_CACHED_WORKSPACE_DBS = 10;
+/** TTL for inactive workspace DBs in ms (5 minutes) */
+const WORKSPACE_DB_TTL_MS = 5 * 60 * 1000;
 
 export interface FileBlobRow {
     hash: string; // primary key
@@ -141,7 +147,26 @@ export class Or3DB extends Dexie {
 }
 
 const defaultDb = new Or3DB();
-const workspaceDbCache = new Map<string, Or3DB>();
+
+/**
+ * LRU cache for workspace DBs to prevent memory leaks and IndexedDB connection exhaustion.
+ * Automatically evicts least-recently-used DBs when capacity is reached.
+ */
+const workspaceDbCache = new LRUCache<string, Or3DB>({
+    max: MAX_CACHED_WORKSPACE_DBS,
+    ttl: WORKSPACE_DB_TTL_MS,
+    updateAgeOnGet: true,
+    dispose: (db, workspaceId) => {
+        // Close the DB when evicted to free IndexedDB connection
+        try {
+            db.close();
+            console.debug(`[db:client] Closed evicted workspace DB: ${workspaceId}`);
+        } catch (error) {
+            console.warn(`[db:client] Failed to close workspace DB ${workspaceId}:`, error);
+        }
+    },
+});
+
 let activeWorkspaceId: string | null = null;
 let activeDb: Or3DB = defaultDb;
 
@@ -170,9 +195,35 @@ export function getActiveWorkspaceId(): string | null {
 export function getWorkspaceDb(workspaceId: string): Or3DB {
     const existing = workspaceDbCache.get(workspaceId);
     if (existing) return existing;
+    
+    // Check if we're at capacity and will evict
+    if (workspaceDbCache.size >= MAX_CACHED_WORKSPACE_DBS) {
+        console.debug(`[db:client] Workspace DB cache full (${workspaceDbCache.size}/${MAX_CACHED_WORKSPACE_DBS}), will evict LRU`);
+    }
+    
     const created = new Or3DB(`or3-db-${workspaceId}`);
     workspaceDbCache.set(workspaceId, created);
+    console.debug(`[db:client] Created workspace DB: ${workspaceId} (cache: ${workspaceDbCache.size}/${MAX_CACHED_WORKSPACE_DBS})`);
     return created;
+}
+
+/**
+ * Manually evict a workspace DB from cache and close it.
+ * Useful when switching away from a workspace to free resources.
+ */
+export function evictWorkspaceDb(workspaceId: string): void {
+    workspaceDbCache.delete(workspaceId);
+}
+
+/**
+ * Get current workspace DB cache stats for debugging/monitoring.
+ */
+export function getWorkspaceDbCacheStats(): { size: number; max: number; keys: string[] } {
+    return {
+        size: workspaceDbCache.size,
+        max: MAX_CACHED_WORKSPACE_DBS,
+        keys: [...workspaceDbCache.keys()],
+    };
 }
 
 export function setActiveWorkspaceDb(workspaceId: string | null): Or3DB {
