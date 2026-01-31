@@ -217,3 +217,18 @@ await (targetDb as any).table(tableName).bulkPut(sourceRows);
 
 - Keep rate limiting, remove caching (implemented).
 
+---
+
+# Task list
+
+- [x] Remove caching from `/api/auth/session` response headers (must be `no-store`).
+- [x] Force client session fetches to bypass caches (`cache: 'no-store'`).
+- [x] Make workspace switching wait until session reflects the selected workspace before reload.
+- [x] Add a regression test to lock the session cache policy.
+
+- [ ] Unify ownership of `setActiveWorkspaceDb()` (stop multiple plugins from fighting over the active DB).
+- [ ] Audit and eliminate stale Dexie table references caused by importing `db` directly (replace with `getDb()` usage end-to-end).
+- [ ] Reduce or remove `reloadNuxtApp()` dependence for workspace switching (make scope changes reactive + restart sync engines cleanly).
+- [ ] Harden “Import local data”: wrap in a Dexie transaction, remove `any`, and add workspace-safety rules for future `workspace_id` fields.
+- [ ] Add an integration test that simulates switching workspaces and verifies visible data actually changes (catches “toast says switched, content didn’t”).
+

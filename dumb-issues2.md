@@ -70,6 +70,8 @@ export default defineEventHandler(async (event) => {
 });
 ```
 
+**Validity:** ✅ **Valid.** This was a real bug. Session responses must be `no-store` or workspace switches will hydrate with stale workspace IDs.
+
 ---
 
 ## Issue 2: SSR useState Persistence Shows Stale Workspace
@@ -145,6 +147,8 @@ export function useSessionContext() {
 }
 ```
 
+**Validity:** ⚠️ **Partially valid.** SSR state can cause a brief flash of stale workspace if the session endpoint or SSR payload is cached. However, the primary bug was HTTP caching. Disabling SSR entirely is heavy-handed; better to keep SSR but ensure `no-store` + client refresh after switching.
+
 ---
 
 ## Issue 3: No Cache Busting After Workspace Switch
@@ -219,6 +223,8 @@ async function selectWorkspace(workspace: WorkspaceSummary) {
     }
 }
 ```
+
+**Validity:** ⚠️ **Mostly superseded.** Cache-busting was needed because the endpoint was cacheable. Now that `/api/auth/session` is `no-store` and client fetch uses `cache: 'no-store'`, this is no longer necessary. The remaining requirement is to refresh session before reload (already implemented).
 
 ---
 
@@ -345,6 +351,8 @@ export default defineNuxtPlugin(async () => {
 });
 ```
 
+**Validity:** ✅ **Valid.** Multiple plugins mutating active workspace is a real race footgun. This isn’t the main cause of the reported issue, but it’s a legitimate architectural problem that can cause hard-to-reproduce bugs.
+
 ---
 
 ## Issue 5: resolveSession Falls Back to First Membership Without User Consent
@@ -470,6 +478,8 @@ if (!resolved) {
 }
 ```
 
+**Validity:** ✅ **Valid.** Silent fallback can put users into unexpected workspaces. It’s a product decision but contributes to “wrong workspace” reports. If you keep it, you need explicit UX to explain the fallback.
+
 ---
 
 ## Summary: Why Workspaces Load Wrong
@@ -488,6 +498,8 @@ The user-reported issues ("loads wrong workspace", "says it switched but content
 3. **HIGH**: Consolidate workspace watchers into single composable
 4. **MEDIUM**: Skip SSR for session, fetch client-side only
 5. **LOW**: Remove auto-fallback, require explicit workspace selection
+
+**Validity:** ⚠️ **Mixed.** The summary correctly identifies caching as critical. The SSR/payload and cache-busting points are secondary once caching is fixed. The double-watcher and fallback issues are real but not necessarily the primary “wrong workspace on switch” symptom.
 
 
 ## Issue 6: HTTP Cache Catastrophe - Session API Cached for 60 Seconds
@@ -537,6 +549,8 @@ const etag = `W/"${session.workspace.id}-${session.expiresAt}"`;
 setResponseHeader(event, 'ETag', etag);
 setResponseHeader(event, 'Cache-Control', 'private, no-cache');
 ```
+
+**Validity:** ❌ **Duplicate of Issue 1.** Same root cause, same fix. Keep one.
 ---
 ## Issue 7: SSR useState Persistence Across Reloads
 **File:** `app/composables/auth/useSessionContext.ts`  
@@ -598,6 +612,8 @@ export function useSessionContext() {
     // ...
 }
 ```
+
+**Validity:** ⚠️ **Partially valid, same as Issue 2.** The caching fix addresses most of this; full SSR disable isn’t required.
 ---
 ## Issue 8: No Cache Busting on Workspace Switch
 **File:** `app/plugins/workspaces/WorkspaceManager.vue`  
@@ -664,6 +680,8 @@ export default defineEventHandler(async (event) => {
     // ... rest of handler
 });
 ```
+
+**Validity:** ❌ **Redundant after fixing cache headers.** Cache-busting isn’t needed when the response is `no-store` and client fetch uses `cache: 'no-store'`.
 ---
 ## Issue 9: Double Session Watchers Race Condition
 **File:** `app/plugins/00-workspace-db.client.ts`  
@@ -763,6 +781,21 @@ export default defineNuxtPlugin(() => {
     useWorkspaceManager(); // Just initialize it
 });
 ```
+
+**Validity:** ✅ **Valid.** This is the same architectural problem as Issue 4; keep one.
+
+---
+
+# Task list
+
+- [x] Set `/api/auth/session` to `Cache-Control: no-store`.
+- [x] Force client session fetches to bypass caches (`cache: 'no-store'`).
+- [x] Refresh session until it reflects the selected workspace before reload.
+
+- [ ] Consolidate active workspace DB ownership into a single plugin/composable (remove double-watcher race).
+- [ ] Decide policy for workspace fallback in `resolveSession` (keep with explicit UX or remove).
+- [ ] If keeping SSR session hydration, ensure SSR payloads for session cannot be cached; otherwise consider minimizing SSR usage for session display to avoid flashes.
+- [ ] Remove duplicated issues from this document (Issue 6/9) to avoid confusion.
 ---
 ## Summary: Root Causes of "Wrong Workspace Loading" Issues
 The user-reported issues stem from:
