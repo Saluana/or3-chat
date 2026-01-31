@@ -12,6 +12,9 @@ import type {
 } from './schema';
 import type { PendingOp, Tombstone, SyncState, SyncRun } from '~~/shared/sync/types';
 import type { FileTransfer } from '~~/shared/storage/types';
+import { cleanupCursorManager } from '~/core/sync/cursor-manager';
+import { cleanupHookBridge } from '~/core/sync/hook-bridge';
+import { cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
 
 /** Maximum number of workspace DBs to keep open (prevents IndexedDB connection exhaustion) */
 const MAX_CACHED_WORKSPACE_DBS = 10;
@@ -157,6 +160,11 @@ const workspaceDbCache = new LRUCache<string, Or3DB>({
     ttl: WORKSPACE_DB_TTL_MS,
     updateAgeOnGet: true,
     dispose: (db, workspaceId) => {
+        const dbName = db.name;
+        cleanupCursorManager(dbName);
+        cleanupHookBridge(dbName);
+        cleanupSubscriptionManager(`${workspaceId}:default`);
+
         // Close the DB when evicted to free IndexedDB connection
         try {
             db.close();
@@ -227,6 +235,10 @@ export function getWorkspaceDbCacheStats(): { size: number; max: number; keys: s
 }
 
 export function setActiveWorkspaceDb(workspaceId: string | null): Or3DB {
+    if (activeWorkspaceId && activeWorkspaceId !== workspaceId) {
+        evictWorkspaceDb(activeWorkspaceId);
+    }
+
     if (!workspaceId) {
         activeWorkspaceId = null;
         activeDb = defaultDb;

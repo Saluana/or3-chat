@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LRUCache } from 'lru-cache';
+import {
+    evictWorkspaceDb,
+    getWorkspaceDb,
+    getWorkspaceDbCacheStats,
+    setActiveWorkspaceDb,
+} from '~/db/client';
+import * as cursorManager from '~/core/sync/cursor-manager';
+import * as hookBridge from '~/core/sync/hook-bridge';
+import * as subscriptionManager from '~/core/sync/subscription-manager';
 
 // Mock Dexie
 const mockClose = vi.fn();
@@ -11,6 +20,15 @@ const mockDb = {
 // We'll test the LRU cache logic separately since we can't easily mock the module
 
 describe('Workspace DB Cache LRU', () => {
+    afterEach(() => {
+        const { keys } = getWorkspaceDbCacheStats();
+        for (const key of keys) {
+            evictWorkspaceDb(key);
+        }
+        setActiveWorkspaceDb(null);
+        vi.restoreAllMocks();
+    });
+
     it('should evict oldest entries when capacity is reached', () => {
         const disposeFn = vi.fn();
         const cache = new LRUCache<string, { name: string; close: () => void }>({
@@ -70,6 +88,38 @@ describe('Workspace DB Cache LRU', () => {
         // Item should be expired (but LRUCache doesn't auto-delete on check)
         // It deletes on next access or when size constraints require it
         expect(cache.get('key1')).toBeUndefined();
+    });
+
+    it('should evict previous workspace on switch and cleanup sync singletons', () => {
+        const cleanupCursorSpy = vi.spyOn(cursorManager, 'cleanupCursorManager');
+        const cleanupHookSpy = vi.spyOn(hookBridge, 'cleanupHookBridge');
+        const cleanupSubscriptionSpy = vi.spyOn(
+            subscriptionManager,
+            'cleanupSubscriptionManager'
+        );
+
+        setActiveWorkspaceDb('ws-a');
+        setActiveWorkspaceDb('ws-b');
+
+        expect(cleanupCursorSpy).toHaveBeenCalledWith('or3-db-ws-a');
+        expect(cleanupHookSpy).toHaveBeenCalledWith('or3-db-ws-a');
+        expect(cleanupSubscriptionSpy).toHaveBeenCalledWith('ws-a:default');
+
+        const { keys } = getWorkspaceDbCacheStats();
+        expect(keys.includes('ws-a')).toBe(false);
+        expect(keys.includes('ws-b')).toBe(true);
+    });
+
+    it('can evict active workspace if many DBs are created without switching', () => {
+        setActiveWorkspaceDb('ws-active');
+        const { max } = getWorkspaceDbCacheStats();
+
+        for (let i = 0; i < max; i += 1) {
+            getWorkspaceDb(`ws-other-${i}`);
+        }
+
+        const { keys } = getWorkspaceDbCacheStats();
+        expect(keys.includes('ws-active')).toBe(false);
     });
 });
 
