@@ -15,7 +15,7 @@ definePageMeta({ ssr: false });
 
 import { useConvexQuery, useConvexMutation } from 'convex-vue';
 import { api } from '~~/convex/_generated/api';
-import { db } from '~/db/client';
+import { getDb } from '~/db/client';
 import type { FileMeta } from '~/db/schema';
 
 // ----- Convex User Identity -----
@@ -45,6 +45,7 @@ async function loadTransfers() {
     transfersLoading.value = true;
     transfersError.value = null;
     try {
+        const db = getDb();
         const all = await db.file_transfers.orderBy('created_at').reverse().limit(20).toArray();
         transfers.value = all;
     } catch (e) {
@@ -61,6 +62,7 @@ const fileMetaLoading = ref(false);
 async function loadFileMeta() {
     fileMetaLoading.value = true;
     try {
+        const db = getDb();
         const all = await db.file_meta.limit(20).toArray();
         fileMeta.value = all;
     } catch {
@@ -88,6 +90,8 @@ async function handleFileSelect(event: Event) {
     uploadResult.value = null;
 
     try {
+        const db = getDb();
+        
         // Read file and compute hash
         const buffer = await file.arrayBuffer();
         const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
@@ -181,6 +185,7 @@ function formatBytes(bytes: number): string {
 
 // ----- Clear Transfers -----
 async function clearTransfers() {
+    const db = getDb();
     await db.file_transfers.clear();
     await loadTransfers();
 }

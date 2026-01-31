@@ -1,6 +1,7 @@
 import { watch } from 'vue';
 import { setActiveWorkspaceDb } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useWorkspaceManager } from '~/composables/workspace/useWorkspaceManager';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { cleanupHookBridge } from '~/core/sync/hook-bridge';
 import { cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
@@ -23,25 +24,31 @@ export default defineNuxtPlugin(async () => {
         await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
     }
 
-    const resolveWorkspaceId = () =>
-        data.value?.session?.authenticated ? data.value?.session?.workspace?.id ?? null : null;
+    // Initialize the unified workspace manager
+    // This will handle setting the active workspace DB automatically
+    const { activeWorkspaceId } = useWorkspaceManager();
 
-    setActiveWorkspaceDb(resolveWorkspaceId());
-
+    // Watch for workspace changes to handle cleanup
     watch(
-        () => data.value?.session,
-        async (newSession, oldSession) => {
-            const oldWorkspaceId = oldSession?.workspace?.id;
+        activeWorkspaceId,
+        async (newWorkspaceId, oldWorkspaceId) => {
+            // Clean up resources from old workspace
             if (oldWorkspaceId) {
                 const dbName = `or3-db-${oldWorkspaceId}`;
                 cleanupCursorManager(dbName);
                 cleanupHookBridge(dbName);
                 cleanupSubscriptionManager(`${oldWorkspaceId}:default`);
             }
+        }
+    );
+
+    // Watch for logout to clean up
+    watch(
+        () => data.value?.session,
+        async (newSession, oldSession) => {
             if (oldSession?.authenticated && !newSession?.authenticated) {
                 await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
             }
-            setActiveWorkspaceDb(resolveWorkspaceId());
         }
     );
 });

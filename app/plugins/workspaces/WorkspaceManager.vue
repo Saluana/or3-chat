@@ -359,23 +359,44 @@ async function importLocalData() {
     importing.value = true;
     try {
         const targetDb = getWorkspaceDb(activeWorkspaceId);
-        const tables = [
-            'projects',
-            'threads',
-            'messages',
-            'kv',
-            'attachments',
-            'file_meta',
-            'file_blobs',
-            'posts',
-        ];
+        
+        // Define tables with their types
+        const tableDefinitions = {
+            projects: targetDb.projects,
+            threads: targetDb.threads,
+            messages: targetDb.messages,
+            kv: targetDb.kv,
+            attachments: targetDb.attachments,
+            file_meta: targetDb.file_meta,
+            file_blobs: targetDb.file_blobs,
+            posts: targetDb.posts,
+        } as const;
 
-        for (const tableName of tables) {
-            const sourceRows = await (baseDb as any).table(tableName).toArray();
-            if (sourceRows.length) {
-                await (targetDb as any).table(tableName).bulkPut(sourceRows);
+        // Wrap entire import in a single transaction for atomicity
+        await targetDb.transaction(
+            'rw',
+            Object.values(tableDefinitions),
+            async () => {
+                for (const [tableName, targetTable] of Object.entries(tableDefinitions)) {
+                    // Access source table using dynamic property access
+                    // Assumption: baseDb has the same table structure as targetDb
+                    // This is safe because both are instances of Or3DB with the same schema
+                    const sourceTable = baseDb[tableName as keyof typeof tableDefinitions];
+                    
+                    const sourceRows = await sourceTable.toArray();
+                    if (sourceRows.length === 0) {
+                        continue;
+                    }
+
+                    // Note: In the future, if tables gain workspace_id fields,
+                    // we should rewrite them here to avoid cross-workspace pollution.
+                    // For now, these tables are implicitly scoped by the DB name.
+                    
+                    await targetTable.bulkPut(sourceRows);
+                    console.log(`[import] Copied ${sourceRows.length} rows from ${tableName}`);
+                }
             }
-        }
+        );
 
         await loadLegacyStats();
         toast.add({

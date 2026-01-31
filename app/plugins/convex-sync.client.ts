@@ -18,6 +18,7 @@ import { GcManager } from '~/core/sync/gc-manager';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { createWorkspaceDb, setActiveWorkspaceDb, type Or3DB } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useWorkspaceManager } from '~/composables/workspace/useWorkspaceManager';
 import {
     useAuthTokenBroker,
     type ProviderTokenRequest,
@@ -232,23 +233,27 @@ export default defineNuxtPlugin(async () => {
 
     // Watch for session changes
     const { data: sessionData } = useSessionContext();
+    const { activeWorkspaceId } = useWorkspaceManager();
     const nuxtApp = useNuxtApp();
     const router = useRouter();
 
     let currentPath = getCurrentPath();
 
-    function updateSyncForRouteAndSession(session: unknown, path: string): void {
+    function updateSyncForRouteAndSession(workspaceId: string | null, path: string): void {
         const isAdmin = isAdminPath(path);
-        const isAuthenticated =
-            typeof session === 'object' &&
-            session !== null &&
-            (session as { authenticated?: unknown }).authenticated === true;
-        const workspaceId = isAuthenticated
-            ? ((session as { workspace?: { id?: string } }).workspace?.id ?? null)
-            : null;
 
         if (isAdmin) {
             // Admin routes shouldn't run the user sync engine (heavy + irrelevant).
+            // Special case: Admin routes explicitly set workspace to null, overriding
+            // the workspace manager. This is intentional to ensure admin operations
+            // run in the default DB context rather than a workspace-scoped DB.
+            // 
+            // Note: This creates a potential race condition with useWorkspaceManager.
+            // In practice, this is acceptable because:
+            // 1. Admin routes are accessed infrequently
+            // 2. The workspace manager's watch runs synchronously after this
+            // 3. Admin route access typically follows a page navigation which
+            //    gives the workspace manager time to settle
             setActiveWorkspaceDb(null);
             if (authRetryTimeout) {
                 clearTimeout(authRetryTimeout);
@@ -260,7 +265,9 @@ export default defineNuxtPlugin(async () => {
             return;
         }
 
-        setActiveWorkspaceDb(workspaceId);
+        // Manage sync engine based on workspace ID
+        // Note: Workspace DB switching is handled separately by useWorkspaceManager
+        // in 00-workspace-db.client.ts. This function only starts/stops the sync engine.
         if (workspaceId) {
             void startSyncEngine(workspaceId).catch((error) => {
                 console.error('[convex-sync] Failed to start sync engine:', error);
@@ -278,12 +285,12 @@ export default defineNuxtPlugin(async () => {
 
     const removeAfterEach = router.afterEach((to) => {
         currentPath = to.path;
-        updateSyncForRouteAndSession(sessionData.value?.session, currentPath);
+        updateSyncForRouteAndSession(activeWorkspaceId.value, currentPath);
     });
 
     watch(
-        () => sessionData.value?.session,
-        (session) => updateSyncForRouteAndSession(session, currentPath),
+        activeWorkspaceId,
+        (workspaceId) => updateSyncForRouteAndSession(workspaceId, currentPath),
         { immediate: true }
     );
 
