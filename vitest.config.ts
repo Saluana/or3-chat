@@ -29,6 +29,7 @@ export default defineConfig({
             'server/**/__tests__/**/*.test.ts',
             'scripts/__tests__/**/*.test.ts',
             'tests/unit/**/*.test.ts',
+            'tests/integration/**/*.test.ts',
             'shared/**/__tests__/**/*.test.ts',
         ],
         exclude: ['node_modules', 'dist', '.nuxt'],

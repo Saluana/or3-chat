@@ -7,7 +7,7 @@
 /**
  * Available theme names
  */
-export type ThemeName = 'blank' | 'retro';
+export type ThemeName = 'test';
 
 /**
  * Available theme identifiers for v-theme directive
@@ -17,7 +17,7 @@ export type ThemeIdentifier = 'sidebar.header' | 'sidebar.bottom-nav.connect' | 
 /**
  * Available context names
  */
-export type ThemeContext = 'message' | 'settings' | 'image-viewer' | 'document' | 'chat' | 'sidebar' | 'dashboard' | 'header' | 'global' | 'shell' | 'modal' | 'images' | 'prompt' | 'docs' | 'ui';
+export type ThemeContext = 'chat' | 'sidebar' | 'dashboard' | 'header' | 'global' | 'settings' | 'shell' | 'message' | 'modal' | 'document' | 'image-viewer' | 'images' | 'prompt' | 'docs' | 'ui';
 
 /**
  * Theme directive value
