@@ -135,7 +135,7 @@ function onWorkspaceSelected(workspace: any) {
 }
 
 const { data, status: extStatus, refresh: refreshExtensions } = useAdminExtensions();
-const { data: workspaceData, status: workspaceStatus, refresh: refreshWorkspace } = useAdminWorkspace(selectedWorkspaceId.value ?? undefined);
+const { data: workspaceData, status: workspaceStatus, refresh: refreshWorkspace } = useAdminWorkspace(selectedWorkspaceId);
 
 watch(selectedWorkspaceId, (newId) => {
     if (newId) {

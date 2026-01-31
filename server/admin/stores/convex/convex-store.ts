@@ -18,7 +18,7 @@ import { useRuntimeConfig } from '#imports';
 
 /**
  * Validate and convert a workspace ID string to Convex Id type.
- * Throws if the ID format is invalid.
+ * Throws if the ID is empty/invalid.
  */
 function validateWorkspaceId(id: string): Id<'workspaces'> {
     if (!id || typeof id !== 'string') {
@@ -27,19 +27,13 @@ function validateWorkspaceId(id: string): Id<'workspaces'> {
             statusMessage: 'Invalid workspace ID: must be a non-empty string',
         });
     }
-    // Convex IDs have format "tableName:identifier"
-    if (!id.startsWith('workspaces:')) {
-        throw createError({
-            statusCode: 400,
-            statusMessage: `Invalid workspace ID format: ${id}`,
-        });
-    }
+    // Convex Ids are opaque strings; some deployments prefix with "workspaces:"
     return id as Id<'workspaces'>;
 }
 
 /**
  * Validate and convert a user ID string to Convex Id type.
- * Throws if the ID format is invalid.
+ * Throws if the ID is empty/invalid.
  */
 function validateUserId(id: string): Id<'users'> {
     if (!id || typeof id !== 'string') {
@@ -48,12 +42,7 @@ function validateUserId(id: string): Id<'users'> {
             statusMessage: 'Invalid user ID: must be a non-empty string',
         });
     }
-    if (!id.startsWith('users:')) {
-        throw createError({
-            statusCode: 400,
-            statusMessage: `Invalid user ID format: ${id}`,
-        });
-    }
+    // Convex Ids are opaque strings; some deployments prefix with "users:"
     return id as Id<'users'>;
 }
 

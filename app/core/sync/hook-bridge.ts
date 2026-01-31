@@ -23,12 +23,17 @@ import { markRecentOpId } from './recent-op-cache';
 const SYNCED_TABLES = [
     'threads',
     'messages',
+    'chats',
     'projects',
     'posts',
     'kv',
     'file_meta',
     'notifications',
 ] as const;
+
+// ... (clean up constant re-declaration manually if tool doesn't handle partial well, but I will just replace the constant and the methods)
+// Actually, I can use multi_replace for safer editing.
+
 
 /**
  * KV keys that should NOT be synced.
@@ -178,6 +183,14 @@ export class HookBridge {
         const pkField = getPkField(tableName);
         const pk = String(primKey ?? (payload as Record<string, unknown>)[pkField] ?? '');
 
+        // Strict PK check: don't capture if PK is empty (garbage)
+        if (!pk) {
+             if (import.meta.dev) {
+                 console.warn('[HookBridge] Skipping capture for empty PK:', tableName, payload);
+             }
+             return;
+        }
+
         // Filter out blocked KV keys (large caches, secrets, device-local data)
         if (tableName === 'kv') {
             const kvName = (payload as { name?: string }).name ?? pk.replace('kv:', '');
@@ -230,7 +243,14 @@ export class HookBridge {
             tableName,
             operation,
             pk,
-            payload: operation === 'put' ? payloadForSync : undefined,
+            // For delete, include deleted_at in payload (sanitized) to sync deletion time
+            payload: operation === 'put' 
+                ? payloadForSync 
+                : sanitizePayloadForSync(tableName, { 
+                    [pkField]: pk, 
+                    deleted_at: nowSec(),
+                    deleted: true 
+                  }, 'delete'),
             stamp,
             createdAt: Date.now(),
             attempts: 0,

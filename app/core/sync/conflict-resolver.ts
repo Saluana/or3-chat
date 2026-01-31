@@ -133,9 +133,12 @@ export class ConflictResolver {
 
         if (stamp.clock > localClock) {
             // Remote wins
+            const remotePayload = change.payload as { deleted_at?: number } | undefined;
+            const deletedAt = remotePayload?.deleted_at ?? nowSec();
+
             await table.update(pk, {
                 deleted: true,
-                deleted_at: nowSec(),
+                deleted_at: deletedAt,
                 clock: stamp.clock,
                 hlc: stamp.hlc,
             });
@@ -145,9 +148,12 @@ export class ConflictResolver {
             // Tie-break with HLC
             const localHlc = local.hlc ?? '';
             if (compareHLC(stamp.hlc, localHlc) > 0) {
+                const remotePayload = change.payload as { deleted_at?: number } | undefined;
+                const deletedAt = remotePayload?.deleted_at ?? nowSec();
+
                 await table.update(pk, {
                     deleted: true,
-                    deleted_at: nowSec(),
+                    deleted_at: deletedAt,
                     clock: stamp.clock,
                     hlc: stamp.hlc,
                 });

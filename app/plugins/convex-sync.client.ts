@@ -162,7 +162,7 @@ async function stopSyncEngine(): Promise<void> {
         if (engineState) {
             const scopeKey = `${engineState.scope.workspaceId}:${engineState.scope.projectId ?? 'default'}`;
             cleanupSubscriptionManager(scopeKey);
-            cleanupCursorManager(engineState.db.name);
+            cleanupCursorManager(engineState.db.name, engineState.scope);
             cleanupHookBridge(engineState.db.name);
         }
 

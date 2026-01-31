@@ -23,7 +23,7 @@ import type { Id } from '~~/convex/_generated/dataModel';
 import { CONVEX_JWT_TEMPLATE, CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 /** Tables to sync */
-const SYNCED_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'];
+const SYNCED_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta', 'notifications'];
 
 /** Type for the Convex client */
 type ConvexClient = ReturnType<typeof useConvexClient>;

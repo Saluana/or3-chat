@@ -8,19 +8,25 @@
  * - Detect cursor expiry scenarios
  */
 import type { Or3DB } from '~/db/client';
-import type { SyncState } from '~~/shared/sync/types';
+// ... imports
+import type { SyncScope, SyncState } from '~~/shared/sync/types';
 import { getDeviceId } from './hlc';
-
-/** Default sync state ID */
-const SYNC_STATE_ID = 'default';
 
 export class CursorManager {
     private db: Or3DB;
+    private scope: SyncScope;
     private deviceId: string;
+    private syncStateId: string;
 
-    constructor(db: Or3DB) {
+    constructor(db: Or3DB, scope: SyncScope) {
         this.db = db;
+        this.scope = scope;
         this.deviceId = getDeviceId();
+        this.syncStateId = this.getSyncStateId(scope);
+    }
+
+    private getSyncStateId(scope: SyncScope): string {
+        return `sync_state:${scope.workspaceId}:${scope.projectId ?? 'default'}`;
     }
 
     /**
@@ -38,7 +44,7 @@ export class CursorManager {
     async setCursor(version: number): Promise<void> {
         const existing = await this.getState();
         const state: SyncState = {
-            id: SYNC_STATE_ID,
+            id: this.syncStateId,
             cursor: version,
             lastSyncAt: existing?.lastSyncAt ?? Date.now(),
             deviceId: this.deviceId,
@@ -69,7 +75,7 @@ export class CursorManager {
     async markSyncComplete(): Promise<void> {
         const existing = await this.getState();
         const state: SyncState = {
-            id: SYNC_STATE_ID,
+            id: this.syncStateId,
             cursor: existing?.cursor ?? 0,
             lastSyncAt: Date.now(),
             deviceId: this.deviceId,
@@ -94,7 +100,7 @@ export class CursorManager {
      * Reset cursor (for testing or recovery scenarios)
      */
     async reset(): Promise<void> {
-        await this.db.table('sync_state').delete(SYNC_STATE_ID);
+        await this.db.table('sync_state').delete(this.syncStateId);
     }
 
     /**
@@ -115,22 +121,26 @@ export class CursorManager {
      * Get current sync state from DB
      */
     private async getState(): Promise<SyncState | undefined> {
-        return this.db.table('sync_state').get(SYNC_STATE_ID) as Promise<SyncState | undefined>;
+        return this.db.table('sync_state').get(this.syncStateId) as Promise<SyncState | undefined>;
     }
 }
 
-// Singleton instances per DB
+// Singleton instances per DB + Scope
 const cursorManagerInstances = new Map<string, CursorManager>();
 
+function getInstanceKey(dbName: string, scope: SyncScope): string {
+    return `${dbName}:${scope.workspaceId}:${scope.projectId ?? 'default'}`;
+}
+
 /**
- * Get or create CursorManager for a database
+ * Get or create CursorManager for a database and scope
  */
-export function getCursorManager(db: Or3DB): CursorManager {
-    const key = db.name;
+export function getCursorManager(db: Or3DB, scope: SyncScope): CursorManager {
+    const key = getInstanceKey(db.name, scope);
     const existing = cursorManagerInstances.get(key);
     if (existing) return existing;
 
-    const created = new CursorManager(db);
+    const created = new CursorManager(db, scope);
     cursorManagerInstances.set(key, created);
     return created;
 }
@@ -143,8 +153,19 @@ export function _resetCursorManagers(): void {
 }
 
 /**
- * Cleanup CursorManager instance for a database
+ * Cleanup CursorManager instance for a database and scope
  */
-export function cleanupCursorManager(dbName: string): void {
-    cursorManagerInstances.delete(dbName);
+export function cleanupCursorManager(dbName: string, scope?: SyncScope): void {
+    if (scope) {
+        const key = getInstanceKey(dbName, scope);
+        cursorManagerInstances.delete(key);
+    } else {
+        // Cleanup all managers for this DB
+        const prefix = `${dbName}:`;
+        for (const key of cursorManagerInstances.keys()) {
+            if (key.startsWith(prefix)) {
+                cursorManagerInstances.delete(key);
+            }
+        }
+    }
 }

@@ -8,7 +8,7 @@ import jwt from 'jsonwebtoken';
 import { useRuntimeConfig } from '#imports';
 
 const COOKIE_NAME = 'or3_admin';
-const COOKIE_PATH = '/admin';
+const COOKIE_PATH = '/';
 
 /**
  * Parse JWT expiry string to seconds.

@@ -88,26 +88,37 @@ export function createPendingOpsTable(initial: PendingOp[] = []) {
         where<K extends keyof PendingOp>(field: K) {
             return {
                 equals(value: PendingOp[K]) {
-                    return {
+                    const getMatches = () => matchField(field, value);
+
+                    const collection = {
                         async sortBy(sortField: keyof PendingOp) {
-                            return matchField(field, value).sort((a, b) => {
+                            return getMatches().sort((a, b) => {
                                 const left = a[sortField] as number;
                                 const right = b[sortField] as number;
                                 return left - right;
                             });
                         },
                         async count() {
-                            return matchField(field, value).length;
+                            return getMatches().length;
                         },
                         async toArray() {
-                            return matchField(field, value);
+                            return getMatches();
                         },
                         async modify(patch: Partial<PendingOp>) {
-                            for (const row of matchField(field, value)) {
+                            for (const row of getMatches()) {
                                 rows.set(row.id, { ...row, ...patch });
                             }
                         },
+                        limit(n: number) {
+                            return {
+                                ...collection,
+                                async toArray() {
+                                    return getMatches().slice(0, n);
+                                },
+                            };
+                        },
                     };
+                    return collection;
                 },
             };
         },

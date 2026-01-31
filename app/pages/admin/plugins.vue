@@ -148,7 +148,7 @@ function onWorkspaceSelected(workspace: any) {
 const { data, status, refresh: refreshNuxtData } = useAdminExtensions();
 
 // 2. Fetch Workspace (for role and enabled plugins)
-const { data: workspaceData, refresh: refreshWorkspace } = useAdminWorkspace(selectedWorkspaceId.value ?? undefined);
+const { data: workspaceData, refresh: refreshWorkspace } = useAdminWorkspace(selectedWorkspaceId);
 
 // Watch for workspace changes and refresh
 watch(selectedWorkspaceId, (newId) => {

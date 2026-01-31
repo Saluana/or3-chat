@@ -253,7 +253,7 @@
                         <UIcon name="i-heroicons-building-office" class="w-5 h-5 text-[var(--md-on-surface-variant)]" />
                         <div>
                             <span class="text-sm text-[var(--md-on-surface-variant)]">Working in:</span>
-                            <span class="text-sm font-medium text-[var(--md-on-surface)] ml-1">{{ selectedWorkspace.value?.name }}</span>
+                            <span class="text-sm font-medium text-[var(--md-on-surface)] ml-1">{{ selectedWorkspace?.name }}</span>
                         </div>
                     </div>
                     <UButton

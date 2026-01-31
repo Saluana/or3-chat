@@ -34,6 +34,7 @@ export class SyncCircuitBreaker {
     private lastFailureTime = 0;
     private openedAt = 0;
     private state: CircuitState = 'closed';
+    private probeInFlight = false;
 
     private readonly failureThreshold: number;
     private readonly resetTimeoutMs: number;
@@ -51,7 +52,16 @@ export class SyncCircuitBreaker {
      */
     canRetry(): boolean {
         this.updateState();
-        return this.state !== 'open';
+        
+        if (this.state === 'closed') return true;
+        if (this.state === 'open') return false;
+        
+        // In half-open state (implied), only allow one probe at a time
+        if (this.probeInFlight) return false;
+        this.probeInFlight = true;
+        return true;
+
+        return false;
     }
 
     /**
@@ -62,6 +72,7 @@ export class SyncCircuitBreaker {
         this.failureCount = 0;
         this.state = 'closed';
         this.openedAt = 0;
+        this.probeInFlight = false;
     }
 
     /**
@@ -71,10 +82,15 @@ export class SyncCircuitBreaker {
     recordFailure(): void {
         this.failureCount++;
         this.lastFailureTime = Date.now();
+        this.probeInFlight = false;
 
         if (this.failureCount >= this.failureThreshold) {
             this.state = 'open';
             this.openedAt = Date.now();
+        } else if (this.state === 'half-open') {
+             // If we failed in half-open, immediately reopen
+             this.state = 'open';
+             this.openedAt = Date.now();
         }
     }
 
@@ -111,6 +127,7 @@ export class SyncCircuitBreaker {
         this.state = 'closed';
         this.openedAt = 0;
         this.lastFailureTime = 0;
+        this.probeInFlight = false;
     }
 
     /**

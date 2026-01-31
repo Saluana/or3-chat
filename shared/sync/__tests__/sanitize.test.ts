@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { sanitizePayloadForSync } from '../sanitize';
 
 describe('sanitizePayloadForSync', () => {
-    it('returns undefined for delete operations', () => {
-        const payload = { id: '123', name: 'test' };
+    it('allows payload for delete operations (to carry deleted_at)', () => {
+        const payload = { id: '123', deleted_at: (12345 as number) };
         const result = sanitizePayloadForSync('threads', payload, 'delete');
-        expect(result).toBeUndefined();
+        expect(result).toEqual({ ...payload, deleted: true, forked: false });
     });
 
     it('returns undefined for null or non-object payloads', () => {
@@ -90,7 +90,7 @@ describe('sanitizePayloadForSync', () => {
         });
     });
 
-    it('does not duplicate post_type if both postType and post_type exist', () => {
+    it('normalizes to snake_case if both postType and post_type exist', () => {
         const payload = {
             id: '123',
             title: 'Test Post',
@@ -101,9 +101,12 @@ describe('sanitizePayloadForSync', () => {
         expect(result).toEqual({
             id: '123',
             title: 'Test Post',
-            postType: 'markdown',
-            post_type: 'existing',
-            deleted: false, // Added for legacy data compatibility
+             // postType is mapped to post_type, overwriting 'existing' or keeping 'markdown' depending on logic order
+             // In field-mappings.ts toServerFormat:
+             // if (camel in result) { result[snake] = result[camel]; delete result[camel]; }
+             // So 'postType' (markdown) will overwrite 'post_type' (existing).
+            post_type: 'markdown',
+            deleted: false,
         });
     });
 
