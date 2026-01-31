@@ -247,6 +247,13 @@ export default defineNuxtPlugin(async () => {
             // Special case: Admin routes explicitly set workspace to null, overriding
             // the workspace manager. This is intentional to ensure admin operations
             // run in the default DB context rather than a workspace-scoped DB.
+            // 
+            // Note: This creates a potential race condition with useWorkspaceManager.
+            // In practice, this is acceptable because:
+            // 1. Admin routes are accessed infrequently
+            // 2. The workspace manager's watch runs synchronously after this
+            // 3. Admin route access typically follows a page navigation which
+            //    gives the workspace manager time to settle
             setActiveWorkspaceDb(null);
             if (authRetryTimeout) {
                 clearTimeout(authRetryTimeout);

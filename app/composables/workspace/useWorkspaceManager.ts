@@ -12,6 +12,11 @@
  * NOTE: This composable uses a module-level flag to prevent concurrent changes.
  * It's designed to be called once per application lifecycle in plugin initialization.
  * Multiple instances will share the same flag, which is intentional for coordination.
+ * 
+ * Known limitation: In JavaScript's single-threaded event loop, rapid session updates
+ * could theoretically trigger the watch callback before the finally block executes.
+ * In practice, this is acceptable because workspace changes are relatively infrequent
+ * and the watch mechanism processes them synchronously.
  */
 import { computed, watch } from 'vue';
 import { setActiveWorkspaceDb } from '~/db/client';

@@ -379,7 +379,8 @@ async function importLocalData() {
             async () => {
                 for (const [tableName, targetTable] of Object.entries(tableDefinitions)) {
                     // Access source table using dynamic property access
-                    // TypeScript can't verify these at compile time, but they match the target tables
+                    // Assumption: baseDb has the same table structure as targetDb
+                    // This is safe because both are instances of Or3DB with the same schema
                     const sourceTable = baseDb[tableName as keyof typeof tableDefinitions];
                     
                     const sourceRows = await sourceTable.toArray();
