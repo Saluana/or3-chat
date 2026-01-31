@@ -360,6 +360,13 @@ async function importLocalData() {
     try {
         const targetDb = getWorkspaceDb(activeWorkspaceId);
         
+        // Helper to safely access tables with proper types
+        const getTable = (db: typeof baseDb | typeof targetDb, tableName: string) => {
+            // Type assertion is needed because table names are dynamic strings
+            // In the future, this could be replaced with a type-safe table accessor
+            return (db as any)[tableName];
+        };
+        
         // Define tables with their types - no `any` casts
         const tableDefinitions = {
             projects: targetDb.projects,
@@ -378,8 +385,8 @@ async function importLocalData() {
             Object.values(tableDefinitions),
             async () => {
                 for (const [tableName, targetTable] of Object.entries(tableDefinitions)) {
-                    // Type-safe access to source table
-                    const sourceTable = (baseDb as any)[tableName];
+                    // Access source table using helper
+                    const sourceTable = getTable(baseDb, tableName);
                     if (!sourceTable) {
                         console.warn(`[import] Table ${tableName} not found in source DB, skipping`);
                         continue;

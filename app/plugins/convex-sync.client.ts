@@ -244,7 +244,9 @@ export default defineNuxtPlugin(async () => {
 
         if (isAdmin) {
             // Admin routes shouldn't run the user sync engine (heavy + irrelevant).
-            // Override the workspace manager by explicitly setting to null for admin
+            // Special case: Admin routes explicitly set workspace to null, overriding
+            // the workspace manager. This is intentional to ensure admin operations
+            // run in the default DB context rather than a workspace-scoped DB.
             setActiveWorkspaceDb(null);
             if (authRetryTimeout) {
                 clearTimeout(authRetryTimeout);
@@ -257,7 +259,8 @@ export default defineNuxtPlugin(async () => {
         }
 
         // Start or stop sync engine based on workspace ID
-        // Note: setActiveWorkspaceDb is handled by useWorkspaceManager for non-admin routes
+        // Note: setActiveWorkspaceDb is handled by useWorkspaceManager for non-admin routes,
+        // which watches activeWorkspaceId and updates the DB automatically
         if (workspaceId) {
             void startSyncEngine(workspaceId).catch((error) => {
                 console.error('[convex-sync] Failed to start sync engine:', error);
