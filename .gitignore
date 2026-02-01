@@ -29,3 +29,10 @@ package-lock.json
 bun.lockb
 
 .champion-prompt.md
+
+# Deployment extensions (installed at runtime)
+extensions/**
+!extensions/.gitkeep
+!extensions/plugins/.gitkeep
+!extensions/themes/.gitkeep
+!extensions/admin-plugins/.gitkeep

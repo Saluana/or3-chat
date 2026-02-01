@@ -9,13 +9,20 @@ import type {
     AccessDecision,
     SessionContext,
 } from '~/core/hooks/hook-types';
+import { getAuthHookEngine, isAuthHookEngineInitialized } from './hooks';
 
-function applyDecisionFilters(base: AccessDecision): AccessDecision {
-    // Deferred: server-side hook engine wiring.
-    // The planning docs require `auth.access:filter:decision` enforcement, but Nitro routes
-    // must not depend on Nuxt app composables. We'll apply this once we have a server hook
-    // engine available (likely via a Nitro plugin + event.context).
-    return base;
+function applyDecisionFilters(
+    base: AccessDecision,
+    session: SessionContext | null
+): AccessDecision {
+    // If auth hook engine is not initialized, return base decision unchanged
+    // This allows can() to work even before the Nitro plugin loads
+    if (!isAuthHookEngineInitialized()) {
+        return base;
+    }
+
+    const engine = getAuthHookEngine();
+    return engine.applyAccessDecisionFilters(base, { session });
 }
 
 /** Role to permissions mapping. */
@@ -26,7 +33,7 @@ const ROLE_PERMISSIONS: Record<WorkspaceRole, Permission[]> = {
         'workspace.settings.manage',
         'users.manage',
         'plugins.manage',
-        'admin.access',
+        // Note: 'admin.access' is NOT included here - it's only for deployment admins
     ],
     editor: ['workspace.read', 'workspace.write'],
     viewer: ['workspace.read'],
@@ -67,7 +74,12 @@ export function can(
     }
 
     const allowedPermissions = ROLE_PERMISSIONS[role];
-    const allowed = allowedPermissions.includes(permission);
+    let allowed = allowedPermissions.includes(permission);
+
+    // Special case: deployment admin grants admin.access regardless of role
+    if (permission === 'admin.access' && session.deploymentAdmin) {
+        allowed = true;
+    }
 
     const base: AccessDecision = {
         ...baseDecision,
@@ -78,7 +90,7 @@ export function can(
         role,
     };
 
-    return applyDecisionFilters(base);
+    return applyDecisionFilters(base, session);
 }
 
 /**

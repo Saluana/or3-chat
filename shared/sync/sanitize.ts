@@ -26,7 +26,7 @@ export function sanitizePayloadForSync(
     operation: 'put' | 'delete'
 ): Record<string, unknown> | undefined {
     // Delete operations don't need payload
-    if (operation === 'delete' || !payload || typeof payload !== 'object') {
+    if (!payload || typeof payload !== 'object') {
         return undefined;
     }
 
@@ -50,7 +50,7 @@ export function sanitizePayloadForSync(
     // Ensure required `deleted` field exists for synced tables
     // Legacy local data may not have this field
     if (TABLES_WITH_DELETED.includes(tableName) && sanitized.deleted === undefined) {
-        sanitized.deleted = false;
+        sanitized.deleted = operation === 'delete' ? true : false;
     }
 
     // Ensure required `forked` field exists for threads

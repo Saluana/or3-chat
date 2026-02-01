@@ -3,11 +3,40 @@ import type {
     Or3CloudConfig,
     Or3CloudConfigOptions,
 } from '../types/or3-cloud-config';
+import {
+    AUTH_PROVIDER_ID_LIST,
+    BACKGROUND_PROVIDER_ID_LIST,
+    CLERK_PROVIDER_ID,
+    CONVEX_PROVIDER_ID,
+    DEFAULT_AUTH_PROVIDER_ID,
+    DEFAULT_BACKGROUND_PROVIDER_ID,
+    DEFAULT_LIMITS_PROVIDER_ID,
+    DEFAULT_STORAGE_PROVIDER_ID,
+    DEFAULT_SYNC_PROVIDER_ID,
+    LIMITS_PROVIDER_ID_LIST,
+    STORAGE_PROVIDER_ID_LIST,
+    SYNC_PROVIDER_ID_LIST,
+} from '../shared/cloud/provider-ids';
+import {
+    DEFAULT_REQUESTS_PER_MINUTE,
+    DEFAULT_MAX_CONVERSATIONS,
+    DEFAULT_MAX_MESSAGES_PER_DAY,
+    DEFAULT_ADMIN_BASE_PATH,
+    DEFAULT_REBUILD_COMMAND,
+    DEFAULT_EXTENSION_MAX_ZIP_BYTES,
+    DEFAULT_EXTENSION_MAX_FILES,
+    DEFAULT_EXTENSION_MAX_TOTAL_BYTES,
+    DEFAULT_JWT_EXPIRY,
+    DEFAULT_BACKGROUND_MAX_JOBS,
+    DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
+} from '../shared/config/constants';
 
 const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
     auth: {
         enabled: false,
-        provider: 'clerk',
+        provider: DEFAULT_AUTH_PROVIDER_ID,
+        guestAccessEnabled: false,
+        sessionProvisioningFailure: 'throw',
         clerk: {
             publishableKey: undefined,
             secretKey: undefined,
@@ -15,38 +44,89 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
     },
     sync: {
         enabled: false,
-        provider: 'convex',
+        provider: DEFAULT_SYNC_PROVIDER_ID,
         convex: {
             url: undefined,
         },
     },
     storage: {
         enabled: false,
-        provider: 'convex',
+        provider: DEFAULT_STORAGE_PROVIDER_ID,
     },
     services: {
         llm: {
             openRouter: {
                 instanceApiKey: undefined,
                 allowUserOverride: true,
+                requireUserKey: false,
             },
         },
     },
     limits: {
         enabled: true,
-        requestsPerMinute: 20,
-        maxConversations: 0,
-        maxMessagesPerDay: 0,
+        requestsPerMinute: DEFAULT_REQUESTS_PER_MINUTE,
+        maxConversations: DEFAULT_MAX_CONVERSATIONS,
+        maxMessagesPerDay: DEFAULT_MAX_MESSAGES_PER_DAY,
+        storageProvider: DEFAULT_LIMITS_PROVIDER_ID,
     },
     security: {
         allowedOrigins: [],
         forceHttps: process.env.NODE_ENV === 'production',
+        proxy: {
+            trustProxy: false,
+            forwardedForHeader: 'x-forwarded-for',
+            forwardedHostHeader: 'x-forwarded-host',
+        },
+    },
+    admin: {
+        basePath: DEFAULT_ADMIN_BASE_PATH,
+        allowedHosts: [],
+        allowRestart: false,
+        allowRebuild: false,
+        rebuildCommand: DEFAULT_REBUILD_COMMAND,
+        extensionMaxZipBytes: DEFAULT_EXTENSION_MAX_ZIP_BYTES,
+        extensionMaxFiles: DEFAULT_EXTENSION_MAX_FILES,
+        extensionMaxTotalBytes: DEFAULT_EXTENSION_MAX_TOTAL_BYTES,
+        extensionAllowedExtensions: [
+            '.js',
+            '.mjs',
+            '.cjs',
+            '.ts',
+            '.tsx',
+            '.vue',
+            '.json',
+            '.css',
+            '.scss',
+            '.sass',
+            '.less',
+            '.md',
+            '.txt',
+            '.svg',
+            '.png',
+            '.jpg',
+            '.jpeg',
+            '.gif',
+            '.webp',
+            '.ico',
+            '.ttf',
+            '.otf',
+            '.woff',
+            '.woff2',
+            '.map',
+        ],
+        auth: {
+            username: undefined,
+            password: undefined,
+            jwtSecret: undefined,
+            jwtExpiry: DEFAULT_JWT_EXPIRY,
+            deletedWorkspaceRetentionDays: undefined,
+        },
     },
     backgroundStreaming: {
         enabled: false,
-        storageProvider: 'memory',
-        maxConcurrentJobs: 20,
-        jobTimeoutSeconds: 300,
+        storageProvider: DEFAULT_BACKGROUND_PROVIDER_ID,
+        maxConcurrentJobs: DEFAULT_BACKGROUND_MAX_JOBS,
+        jobTimeoutSeconds: DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
     },
 };
 
@@ -54,7 +134,11 @@ const cloudConfigSchema = z
     .object({
         auth: z.object({
             enabled: z.boolean(),
-            provider: z.enum(['clerk', 'custom']),
+            provider: z.enum(AUTH_PROVIDER_ID_LIST),
+            guestAccessEnabled: z.boolean().optional(),
+            sessionProvisioningFailure: z
+                .enum(['throw', 'unauthenticated', 'service-unavailable'])
+                .optional(),
             clerk: z
                 .object({
                     publishableKey: z.string().optional(),
@@ -64,7 +148,7 @@ const cloudConfigSchema = z
         }),
         sync: z.object({
             enabled: z.boolean(),
-            provider: z.enum(['convex', 'firebase', 'custom']),
+            provider: z.enum(SYNC_PROVIDER_ID_LIST),
             convex: z
                 .object({
                     url: z.string().optional(),
@@ -73,7 +157,7 @@ const cloudConfigSchema = z
         }),
         storage: z.object({
             enabled: z.boolean(),
-            provider: z.enum(['convex', 's3', 'custom']),
+            provider: z.enum(STORAGE_PROVIDER_ID_LIST),
         }),
         services: z
             .object({
@@ -83,6 +167,7 @@ const cloudConfigSchema = z
                             .object({
                                 instanceApiKey: z.string().optional(),
                                 allowUserOverride: z.boolean().optional(),
+                                requireUserKey: z.boolean().optional(),
                             })
                             .optional(),
                     })
@@ -96,19 +181,50 @@ const cloudConfigSchema = z
                 requestsPerMinute: z.number().int().min(1).optional(),
                 maxConversations: z.number().int().min(0).optional(),
                 maxMessagesPerDay: z.number().int().min(0).optional(),
-                storageProvider: z.enum(['memory', 'convex', 'redis', 'postgres']).optional(),
+                storageProvider: z.enum(LIMITS_PROVIDER_ID_LIST).optional(),
             })
             .optional(),
         security: z
             .object({
                 allowedOrigins: z.array(z.string()).optional(),
                 forceHttps: z.boolean().optional(),
+                proxy: z
+                    .object({
+                        trustProxy: z.boolean().optional(),
+                        forwardedForHeader: z
+                            .enum(['x-forwarded-for', 'x-real-ip'])
+                            .optional(),
+                        forwardedHostHeader: z.enum(['x-forwarded-host']).optional(),
+                    })
+                    .optional(),
+            })
+            .optional(),
+        admin: z
+            .object({
+                basePath: z.string().optional(),
+                allowedHosts: z.array(z.string()).optional(),
+                allowRestart: z.boolean().optional(),
+                allowRebuild: z.boolean().optional(),
+                rebuildCommand: z.string().optional(),
+                extensionMaxZipBytes: z.number().int().min(1).optional(),
+                extensionMaxFiles: z.number().int().min(1).optional(),
+                extensionMaxTotalBytes: z.number().int().min(1).optional(),
+                extensionAllowedExtensions: z.array(z.string()).optional(),
+                auth: z
+                    .object({
+                        username: z.string().optional(),
+                        password: z.string().optional(),
+                        jwtSecret: z.string().optional(),
+                        jwtExpiry: z.string().optional(),
+                        deletedWorkspaceRetentionDays: z.number().int().min(0).optional(),
+                    })
+                    .optional(),
             })
             .optional(),
         backgroundStreaming: z
             .object({
                 enabled: z.boolean().optional(),
-                storageProvider: z.enum(['memory', 'convex', 'redis']).optional(),
+                storageProvider: z.enum(BACKGROUND_PROVIDER_ID_LIST).optional(),
                 maxConcurrentJobs: z.number().int().min(1).optional(),
                 jobTimeoutSeconds: z.number().int().min(1).optional(),
             })
@@ -165,6 +281,14 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
             ...DEFAULT_OR3_CLOUD_CONFIG.security,
             ...config.security,
         },
+        admin: {
+            ...DEFAULT_OR3_CLOUD_CONFIG.admin,
+            ...config.admin,
+            auth: {
+                ...DEFAULT_OR3_CLOUD_CONFIG.admin?.auth,
+                ...config.admin?.auth,
+            },
+        },
         backgroundStreaming: {
             ...DEFAULT_OR3_CLOUD_CONFIG.backgroundStreaming,
             ...config.backgroundStreaming,
@@ -187,7 +311,7 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
 
     const errors: string[] = [];
 
-    if (config.auth.enabled && config.auth.provider === 'clerk') {
+    if (config.auth.enabled && config.auth.provider === CLERK_PROVIDER_ID) {
         if (!config.auth.clerk?.publishableKey) {
             errors.push('auth.clerk.publishableKey is required when auth is enabled.');
         }
@@ -196,13 +320,24 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
         }
     }
 
-    if (config.sync.enabled && config.sync.provider === 'convex') {
+    if (config.sync.enabled && config.sync.provider === CONVEX_PROVIDER_ID) {
         if (!config.sync.convex?.url) {
             errors.push('sync.convex.url is required when sync is enabled.');
+        } else {
+            try {
+                new URL(config.sync.convex.url);
+            } catch {
+                errors.push('sync.convex.url must be a valid URL.');
+            }
         }
     }
 
     const openRouter = config.services.llm?.openRouter;
+    if (openRouter?.requireUserKey === true && openRouter.allowUserOverride === false) {
+        errors.push(
+            'services.llm.openRouter.allowUserOverride must be true when requireUserKey is true.'
+        );
+    }
     if (openRouter?.allowUserOverride === false && !openRouter.instanceApiKey) {
         errors.push(
             'services.llm.openRouter.instanceApiKey is required when allowUserOverride is false.'

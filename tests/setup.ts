@@ -88,39 +88,88 @@ vi.mock('~/composables/useThemeResolver', () => ({
     }),
 }));
 
-// Mock #imports
-vi.mock('#imports', () => ({
-    useNuxtApp: () => ({
-        $iconRegistry: {
-            resolve: (token: string) => {
-                if (token === 'sidebar.page.home') return 'pixelarticons:home';
-                return token;
-            },
+// Global test-configurable runtime config
+const defaultTestConfig = {
+    auth: { enabled: true, provider: 'clerk', sessionProvisioningFailure: 'throw' },
+    sync: { enabled: true, provider: 'convex', convexUrl: 'https://convex.test' },
+    storage: { enabled: true, provider: 'convex' },
+    backgroundJobs: { enabled: false, storageProvider: 'memory', maxConcurrentJobs: 20, jobTimeoutMs: 300000, completedJobRetentionMs: 300000 },
+    admin: { 
+        allowedHosts: [],
+        allowRestart: false,
+        allowRebuild: false,
+        rebuildCommand: 'bun run build',
+        basePath: '/admin',
+        auth: {
+            username: '',
+            password: '',
+            jwtSecret: '',
+            jwtExpiry: '24h',
+            deletedWorkspaceRetentionDays: '',
         },
-        $theme: {
-            activeTheme: { value: 'light' },
-            getResolver: () => ({ resolve: () => ({ props: {} }) }),
-            setActiveTheme: vi.fn(),
-        },
-    }),
-    useChat: (...args: unknown[]) => {
-        const g = globalThis as Record<string, unknown>;
-        const fn = g.useChat as ((...a: unknown[]) => unknown) | undefined;
-        return fn ? fn(...args) : undefined;
     },
-    useToast: () => ({ add: vi.fn() }),
-    useHooks: () => ({
-        on: vi.fn().mockReturnValue(() => {}),
-        off: vi.fn(),
-        doAction: vi.fn(),
-    }),
-    useRuntimeConfig: () => ({
-        public: {},
-    }),
-    useHead: vi.fn(),
-    useColorMode: () => ({ value: 'light' }),
-    useIcon: (token: string) => ({ value: token }),
-}));
+    branding: { appName: 'Test', logoUrl: '', defaultTheme: 'dark' },
+    legal: { termsUrl: '', privacyUrl: '' },
+    security: { allowedOrigins: [], forceHttps: false },
+    limits: { enabled: false, requestsPerMinute: 20, maxConversations: 0, maxMessagesPerDay: 0, storageProvider: 'memory' },
+    public: { 
+        ssrAuthEnabled: true,
+        branding: { appName: 'Test', logoUrl: '', defaultTheme: 'dark' },
+        legal: { termsUrl: '', privacyUrl: '' },
+    },
+    clerkSecretKey: 'secret',
+    openrouterApiKey: '',
+    openrouterAllowUserOverride: true,
+    openrouterRequireUserKey: false,
+} as any;
+
+export const testRuntimeConfig = {
+    value: defaultTestConfig,
+};
+
+// Mock #imports
+vi.mock('#imports', async (importOriginal) => {
+    // Return the actual module first to allow @clerk/nuxt to resolve it
+    const actual = await importOriginal<typeof import('#imports')>();
+    return {
+        ...actual,
+        useNuxtApp: () => ({
+            $iconRegistry: {
+                resolve: (token: string) => {
+                    if (token === 'sidebar.page.home') return 'pixelarticons:home';
+                    return token;
+                },
+            },
+            $theme: {
+                activeTheme: { value: 'light' },
+                getResolver: () => ({ resolve: () => ({ props: {} }) }),
+                setActiveTheme: vi.fn(),
+            },
+        }),
+        useChat: (...args: unknown[]) => {
+            const g = globalThis as Record<string, unknown>;
+            const fn = g.useChat as ((...a: unknown[]) => unknown) | undefined;
+            return fn ? fn(...args) : undefined;
+        },
+        useToast: () => ({ add: vi.fn() }),
+        useHooks: () => ({
+            on: vi.fn().mockReturnValue(() => {}),
+            off: vi.fn(),
+            doAction: vi.fn(),
+        }),
+        useRuntimeConfig: vi.fn(() => testRuntimeConfig.value),
+        useState: (key: string, init?: () => unknown) => {
+            const state = new Map();
+            if (!state.has(key) && init) {
+                state.set(key, init());
+            }
+            return { value: state.get(key) };
+        },
+        useHead: vi.fn(),
+        useColorMode: () => ({ value: 'light' }),
+        useIcon: (token: string) => ({ value: token }),
+    };
+});
 
 vi.mock('virtua/vue', () => {
     const Base = defineComponent({
@@ -180,3 +229,5 @@ vi.mock('or3-scroll', () => {
         Or3Scroll: Base,
     };
 });
+
+

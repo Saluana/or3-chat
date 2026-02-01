@@ -3,9 +3,9 @@
  * Only runs when SSR auth is enabled.
  */
 import { registerAuthProvider } from '../auth/registry';
-import { clerkAuthProvider } from '../auth/providers/clerk';
+import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
-export default defineNitroPlugin(() => {
+export default defineNitroPlugin(async () => {
     const config = useRuntimeConfig();
 
     // Only register provider when SSR auth is enabled
@@ -13,9 +13,12 @@ export default defineNitroPlugin(() => {
         return;
     }
 
+    // Dynamic import to avoid loading Clerk when disabled
+    const { clerkAuthProvider } = await import('../auth/providers/clerk');
+
     // Register Clerk as the default provider
     registerAuthProvider({
-        id: 'clerk',
+        id: CLERK_PROVIDER_ID,
         order: 100,
         create: () => clerkAuthProvider,
     });

@@ -2,6 +2,17 @@ import { v } from 'convex/values';
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
 
+// ============================================================
+// CONSTANTS
+// ============================================================
+
+/** Maximum file size in bytes (100MB) */
+const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+
+// ============================================================
+// HELPERS
+// ============================================================
+
 const nowSec = (): number => Math.floor(Date.now() / 1000);
 
 async function verifyWorkspaceMembership(
@@ -47,6 +58,14 @@ export const generateUploadUrl = mutation({
     },
     handler: async (ctx, args) => {
         await verifyWorkspaceMembership(ctx, args.workspace_id);
+
+        // Enforce file size limit
+        if (args.size_bytes > MAX_FILE_SIZE_BYTES) {
+            throw new Error(
+                `File size ${args.size_bytes} exceeds maximum allowed size of ${MAX_FILE_SIZE_BYTES} bytes (100MB)`
+            );
+        }
+
         const uploadUrl = await ctx.storage.generateUploadUrl();
         return { uploadUrl };
     },
@@ -104,12 +123,14 @@ export const commitUpload = mutation({
             clock: 0,
         });
 
+        // Cleanup any race condition duplicates (should be rare with .first() check above)
+        // Use .take() instead of .collect() for safety
         const matches = await ctx.db
             .query('file_meta')
             .withIndex('by_workspace_hash', (q) =>
                 q.eq('workspace_id', args.workspace_id).eq('hash', args.hash)
             )
-            .collect();
+            .take(10); // Limit to prevent abuse
 
         if (matches.length > 1) {
             const sorted = [...matches].sort(

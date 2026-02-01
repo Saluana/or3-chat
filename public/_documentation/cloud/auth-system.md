@@ -77,3 +77,208 @@ Two flags control the auth system in `nuxt.config.ts`:
 *   `CONVEX_URL`: Points to the backend instance for workspace data.
 
 If `SSR_AUTH_ENABLED` is false, the app runs in "Local Mode" (no sync, local storage only).
+
+---
+
+## Implementing Custom Auth Providers
+
+While Clerk is the default provider, you can implement custom authentication (Firebase Auth, Auth0, custom JWT, etc.) by implementing the `AuthProvider` interface.
+
+### 1. The AuthProvider Interface
+
+```typescript
+// server/auth/types.ts
+export interface AuthProvider {
+    id: string;
+    
+    // Extract and verify session from request
+    getSession(event: H3Event): Promise<ProviderSession | null>;
+    
+    // Optional: Handle token refresh
+    refreshSession?(event: H3Event): Promise<ProviderSession | null>;
+}
+
+export interface ProviderSession {
+    user: {
+        id: string;
+        email?: string;
+        displayName?: string;
+    };
+    token: string;
+    expiresAt?: number;
+}
+```
+
+### 2. Implementation Example
+
+```typescript
+// server/auth/firebase-provider.ts
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import type { AuthProvider, ProviderSession } from './types';
+
+export class FirebaseAuthProvider implements AuthProvider {
+    id = 'firebase';
+    
+    constructor() {
+        // Initialize Firebase Admin if not already done
+        if (getApps().length === 0) {
+            initializeApp({
+                credential: applicationDefault(),
+            });
+        }
+    }
+    
+    async getSession(event: H3Event): Promise<ProviderSession | null> {
+        const token = getHeader(event, 'authorization')?.replace('Bearer ', '');
+        if (!token) return null;
+        
+        try {
+            const decoded = await getAuth().verifyIdToken(token);
+            
+            return {
+                user: {
+                    id: decoded.uid,
+                    email: decoded.email,
+                    displayName: decoded.name,
+                },
+                token,
+                expiresAt: decoded.exp * 1000,
+            };
+        } catch (error) {
+            console.error('Firebase auth error:', error);
+            return null;
+        }
+    }
+}
+```
+
+### 3. Register the Provider
+
+```typescript
+// server/auth/providers.ts
+import { FirebaseAuthProvider } from './firebase-provider';
+import { registerAuthProvider } from './registry';
+
+export function registerAuthProviders() {
+    registerAuthProvider(new FirebaseAuthProvider());
+}
+```
+
+### 4. Configure Environment
+
+```bash
+# .env
+SSR_AUTH_ENABLED=true
+AUTH_PROVIDER=firebase
+FIREBASE_PROJECT_ID=your-project
+# Firebase Admin SDK credentials
+GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
+```
+
+### 5. Client-Side Integration
+
+```typescript
+// plugins/firebase-auth.client.ts
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+
+export default defineNuxtPlugin(() => {
+    const config = useRuntimeConfig();
+    
+    if (config.public.authProvider !== 'firebase') return;
+    
+    const app = initializeApp({
+        apiKey: config.public.firebaseApiKey,
+        authDomain: config.public.firebaseAuthDomain,
+        projectId: config.public.firebaseProjectId,
+    });
+    
+    const auth = getAuth(app);
+    
+    // Watch auth state and sync to session
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            const token = await user.getIdToken();
+            // Send token to server
+            await $fetch('/api/auth/session', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+        }
+    });
+});
+```
+
+### Provider Comparison
+
+| Provider | Best For | Setup Complexity | Features |
+|----------|----------|------------------|----------|
+| **Clerk** | Default, modern UX | Low | Sessions, MFA, orgs |
+| **Firebase** | Google ecosystem | Medium | Realtime, analytics |
+| **Auth0** | Enterprise | Medium | SSO, compliance |
+| **Custom JWT** | Full control | High | Maximum flexibility |
+
+---
+
+## Session Lifecycle
+
+### Token Refresh
+
+Sessions are automatically refreshed:
+- Clerk: Handled by Clerk SDK
+- Custom: Implement `refreshSession` in provider
+
+### Session Expiration
+
+```typescript
+// Check session validity
+const session = useSessionContext();
+const isValid = computed(() => {
+    if (!session.data.value?.session) return false;
+    // Check expiration if available
+    return true;
+});
+```
+
+### Logout Flow
+
+1. Client calls logout endpoint
+2. Server clears session cookie
+3. Client clears local state
+4. Auth provider signs out (e.g., Clerk signOut)
+5. Workspace data remains in Dexie (local-first)
+
+---
+
+## Troubleshooting Auth
+
+### "Unauthorized: No identity"
+- User not authenticated
+- Check Clerk session
+- Verify auth provider is configured
+
+### "Workspace not found"
+- Session valid but workspace provisioning failed
+- Check Convex connection
+- Verify `workspaces.ensure` mutation
+
+### "Session expired"
+- Token expired and refresh failed
+- Check token refresh implementation
+- Verify user still exists in auth provider
+
+### CORS errors
+- Check `allowedOrigins` configuration
+- Verify Clerk allowed origins
+- Check redirect URLs match
+
+---
+
+## Related
+
+- [or3-cloud-config](./or3-cloud-config) - Configuration reference
+- [Sync Layer](./sync-layer) - Sync depends on auth
+- [Troubleshooting](./troubleshooting) - Common issues

@@ -7,6 +7,41 @@
         "
         class="bottomnav-root absolute bottom-0 w-[63.5px] border-t-[var(--md-border-width)] border-[color:var(--md-border-color)] bg-transparent px-1 flex flex-col items-center justify-between"
     >
+        <!-- DASHBOARD -->
+        <UTooltip
+            v-if="dashboardEnabled"
+            id="tooltip-dashboard"
+            :delay-duration="0"
+            :content="{
+                side: 'right',
+            }"
+            text="Dashboard"
+        >
+            <UButton
+                v-bind="dashboardButtonProps"
+                @click="emit('toggleDashboard')"
+                type="button"
+                aria-label="Dashboard"
+            >
+                <template #default>
+                    <span class="flex flex-col items-center gap-1 w-full">
+                        <UIcon
+                            class="w-[24px] h-[24px]"
+                            :name="iconDashboard"
+                        />
+                    </span>
+                </template>
+            </UButton>
+        </UTooltip>
+
+        <!-- Visual separator between app tools and personal section -->
+        <div
+            class="w-[40px] h-[var(--md-border-width)] bg-[var(--md-border-color)]/50 my-1 sb-bottom-border"
+        />
+
+        <!-- Auth Button (Clerk SSR or OpenRouter) - placed above user info -->
+        <SidebarAuthButton />
+
         <!-- MY INFO (OpenRouter only - hidden in SSR auth mode) -->
         <UPopover
             v-if="!isSsrAuthEnabled"
@@ -53,41 +88,6 @@
                 </div>
             </template>
         </UPopover>
-
-        <!-- DASHBOARD -->
-        <UTooltip
-            v-if="dashboardEnabled"
-            id="tooltip-dashboard"
-            :delay-duration="0"
-            :content="{
-                side: 'right',
-            }"
-            text="Dashboard"
-        >
-            <UButton
-                v-bind="dashboardButtonProps"
-                @click="emit('toggleDashboard')"
-                type="button"
-                aria-label="Dashboard"
-            >
-                <template #default>
-                    <span class="flex flex-col items-center gap-1 w-full">
-                        <UIcon
-                            class="w-[24px] h-[24px]"
-                            :name="iconDashboard"
-                        />
-                    </span>
-                </template>
-            </UButton>
-        </UTooltip>
-
-        <!-- Visual separator between app tools and personal section -->
-        <div
-            class="w-[40px] h-[var(--md-border-width)] bg-[var(--md-border-color)]/50 my-1 sb-bottom-border"
-        />
-
-        <!-- Auth Button (Clerk SSR or OpenRouter) -->
-        <SidebarAuthButton />
     </div>
     <lazy-modal-model-catalog
         hydrate-on-visible

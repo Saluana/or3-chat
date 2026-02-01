@@ -14,11 +14,13 @@ import {
     getClerkProviderToken,
     getConvexGatewayClient,
 } from '../../utils/sync/convex-gateway';
+import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
 import {
     checkSyncRateLimit,
     recordSyncRequest,
 } from '../../utils/sync/rate-limiter';
 import { recordDownloadStart } from '../../utils/storage/metrics';
+import { resolvePresignExpiresAt } from '../../utils/storage/presign-expiry';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -59,7 +61,7 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const token = await getClerkProviderToken(event, 'convex');
+    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
     if (!token) {
         throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
     }
@@ -74,14 +76,14 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 404, statusMessage: 'File not found' });
     }
 
-    const expiryMs = Math.min(body.data.expires_in_ms ?? 3600_000, 3600_000);
+    const expiresAt = resolvePresignExpiresAt(result, body.data.expires_in_ms);
 
     recordSyncRequest(userId, 'storage:download');
     recordDownloadStart();
 
     return {
         url: result.url,
-        expiresAt: Date.now() + expiryMs,
+        expiresAt,
         disposition: body.data.disposition,
     };
 });

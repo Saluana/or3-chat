@@ -1,5 +1,9 @@
 import { onUnmounted, ref } from 'vue';
 import { useAuthTokenBroker } from './useAuthTokenBroker.client';
+import {
+    CONVEX_JWT_TEMPLATE,
+    CONVEX_PROVIDER_ID,
+} from '~~/shared/cloud/provider-ids';
 
 /**
  * Periodically refresh the session token to ensure it remains valid.
@@ -14,11 +18,11 @@ export function useSessionRefresh() {
         refreshInterval.value = setInterval(async () => {
             try {
                 // Refresh token from provider
-                // Note: The template ID depends on the provider (e.g. 'convex')
-                // We use 'convex' here aligning with the hardcoded usage in server/auth/session.ts
+                // Note: The template ID depends on the provider (e.g. Convex).
+                // Keep this aligned with server session resolution and provider constants.
                 const token = await tokenBroker.getProviderToken({
-                    providerId: 'convex',
-                    template: 'convex',
+                    providerId: CONVEX_PROVIDER_ID,
+                    template: CONVEX_JWT_TEMPLATE,
                 });
 
                 if (!token) {

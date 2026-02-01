@@ -10,9 +10,12 @@ export function toClientFormat(tableName: string, payload: Record<string, unknow
 
     const result = { ...payload };
     for (const [snake, camel] of Object.entries(mappings)) {
-        if (snake in result && !(camel in result)) {
+        if (snake in result) {
             result[camel] = result[snake];
             delete result[snake];
+        } else if (camel in result && snake in result) {
+            // Should be unreachable due to first check, but for safety:
+             delete result[snake];
         }
     }
     return result;
@@ -24,9 +27,11 @@ export function toServerFormat(tableName: string, payload: Record<string, unknow
 
     const result = { ...payload };
     for (const [snake, camel] of Object.entries(mappings)) {
-        if (camel in result && !(snake in result)) {
+        if (camel in result) {
             result[snake] = result[camel];
             delete result[camel];
+        }   else if (snake in result && camel in result) {
+             delete result[camel];
         }
     }
     return result;

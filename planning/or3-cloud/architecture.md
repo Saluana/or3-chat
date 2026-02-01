@@ -32,6 +32,7 @@ Key properties:
 - Local workspace scoping: one Dexie DB per workspace (`or3-db-${workspaceId}`).
 - Field mapping contract: snake_case wire schema aligned with Dexie.
 - Sync providers support `direct` and `gateway` modes for DB-agnostic operation.
+- Provider identifiers are centralized in shared constants to avoid string drift across adapters and registries.
 
 ## System context
 

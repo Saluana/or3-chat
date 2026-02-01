@@ -3,6 +3,7 @@ import { registerStorageProvider } from '~/core/storage/provider-registry';
 import { getStorageTransferQueue } from '~/core/storage/transfer-queue';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { watch } from 'vue';
+import { CONVEX_STORAGE_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 export default defineNuxtPlugin(() => {
     if (import.meta.server) return;
@@ -11,7 +12,7 @@ export default defineNuxtPlugin(() => {
     if (
         !runtimeConfig.public.ssrAuthEnabled ||
         !runtimeConfig.public.storage?.enabled ||
-        runtimeConfig.public.storage?.provider !== 'convex'
+        runtimeConfig.public.storage?.provider !== CONVEX_STORAGE_PROVIDER_ID
     ) {
         console.log('[storage] Storage disabled, storage queue paused');
         return;
@@ -19,7 +20,7 @@ export default defineNuxtPlugin(() => {
 
     try {
         registerStorageProvider({
-            id: 'convex',
+            id: CONVEX_STORAGE_PROVIDER_ID,
             create: createConvexStorageProvider,
         });
     } catch (error) {

@@ -8,6 +8,11 @@ import type { WorkspaceRole } from '~/core/hooks/hook-types';
 /**
  * Store interface for auth-related workspace and user persistence.
  * The actual implementation will use the selected SyncProvider backend.
+ * 
+ * TODO: Implement this interface when abstracting session resolution
+ * Currently, session resolution in server/auth/session.ts directly uses Convex.
+ * When adding support for other sync providers, this interface should be
+ * implemented and a registry pattern similar to AuthProvider should be used.
  */
 export interface AuthWorkspaceStore {
     /**

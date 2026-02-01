@@ -231,11 +231,14 @@ const runtimeConfig = useRuntimeConfig();
 const openRouterConfig = computed(
     () => runtimeConfig.public?.openRouter ?? {}
 );
+const requireUserKey = computed(
+    () => openRouterConfig.value.requireUserKey === true
+);
 const allowUserOverride = computed(
-    () => openRouterConfig.value.allowUserOverride !== false
+    () => openRouterConfig.value.allowUserOverride !== false || requireUserKey.value
 );
 const hasInstanceKey = computed(
-    () => openRouterConfig.value.hasInstanceKey === true
+    () => openRouterConfig.value.hasInstanceKey === true && !requireUserKey.value
 );
 const { apiKey } = useUserApiKey();
 const effectiveApiKey = computed(() =>

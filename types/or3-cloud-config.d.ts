@@ -16,6 +16,20 @@ export interface Or3CloudConfig {
          */
         provider: 'clerk' | 'custom';
         /**
+         * Allow unauthenticated users to use the app with their own OpenRouter key.
+         * Requires allowUserOverride to also be true.
+         * @default false
+         */
+        guestAccessEnabled?: boolean;
+        /**
+         * Behavior when workspace provisioning fails during session resolution.
+         * - 'throw': preserve current behavior and throw (default)
+         * - 'unauthenticated': return unauthenticated session
+         * - 'service-unavailable': throw 503 for session endpoint
+         * @default 'throw'
+         */
+        sessionProvisioningFailure?: 'throw' | 'unauthenticated' | 'service-unavailable';
+        /**
          * Provider-specific configuration.
          */
         clerk?: {
@@ -95,6 +109,14 @@ export interface Or3CloudConfig {
                  * @default true
                  */
                 allowUserOverride?: boolean;
+
+                /**
+                 * If true, requires users to provide their own key and ignores
+                 * the instance key even if it is set.
+                 * @env OR3_OPENROUTER_REQUIRE_USER_KEY
+                 * @default false
+                 */
+                requireUserKey?: boolean;
             };
         };
     };
@@ -178,6 +200,127 @@ export interface Or3CloudConfig {
          * @default true in production
          */
         forceHttps?: boolean;
+
+        /**
+         * Proxy trust configuration for secure deployments behind reverse proxies.
+         * When trustProxy is true, the server uses X-Forwarded-* headers for
+         * client IP and host resolution instead of socket addresses.
+         */
+        proxy?: {
+            /**
+             * Trust X-Forwarded-* headers from proxies.
+             * @default false
+             */
+            trustProxy?: boolean;
+
+            /**
+             * Header name for client IP resolution.
+             * @default 'x-forwarded-for'
+             */
+            forwardedForHeader?: 'x-forwarded-for' | 'x-real-ip';
+
+            /**
+             * Header name for forwarded host.
+             * @default 'x-forwarded-host'
+             */
+            forwardedHostHeader?: 'x-forwarded-host';
+        };
+    };
+
+    /**
+     * Admin dashboard routing and access constraints.
+     * SSR-only; ignored in static builds.
+     */
+    admin?: {
+        /**
+         * Base path for admin UI/routes.
+         * @default '/admin'
+         */
+        basePath?: string;
+
+        /**
+         * Allowed hostnames for admin routes (optional).
+         * If set, admin routes return 404 when Host does not match.
+         */
+        allowedHosts?: string[];
+
+        /**
+         * Allow admin-initiated restarts.
+         * @default false
+         */
+        allowRestart?: boolean;
+
+        /**
+         * Allow admin-initiated rebuild + restart.
+         * @default false
+         */
+        allowRebuild?: boolean;
+
+        /**
+         * Optional rebuild command (used when allowRebuild is true).
+         * @default 'bun run build'
+         */
+        rebuildCommand?: string;
+
+        /**
+         * Maximum zip size for extension installs (bytes).
+         * @default 26214400 (25MB)
+         */
+        extensionMaxZipBytes?: number;
+
+        /**
+         * Maximum number of files in an extension install.
+         * @default 2000
+         */
+        extensionMaxFiles?: number;
+
+        /**
+         * Maximum total unpacked bytes for an extension install.
+         * @default 209715200 (200MB)
+         */
+        extensionMaxTotalBytes?: number;
+
+        /**
+         * Allowed file extensions for extension installs.
+         */
+        extensionAllowedExtensions?: string[];
+
+        /**
+         * Admin authentication configuration.
+         * Enables dedicated super-admin authentication for the admin dashboard.
+         */
+        auth?: {
+            /**
+             * Super admin username (required to enable admin auth).
+             * @env OR3_ADMIN_USERNAME
+             */
+            username?: string;
+
+            /**
+             * Super admin password (required to enable admin auth).
+             * @env OR3_ADMIN_PASSWORD
+             */
+            password?: string;
+
+            /**
+             * JWT signing secret (auto-generated if not provided).
+             * @env OR3_ADMIN_JWT_SECRET
+             */
+            jwtSecret?: string;
+
+            /**
+             * JWT expiration time (e.g., '24h', '7d').
+             * @default '24h'
+             * @env OR3_ADMIN_JWT_EXPIRY
+             */
+            jwtExpiry?: string;
+
+            /**
+             * Days to retain soft-deleted workspaces (unset = retain indefinitely).
+             * @env OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS
+             */
+            deletedWorkspaceRetentionDays?: number;
+        };
     };
 }
 

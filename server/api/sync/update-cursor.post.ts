@@ -12,6 +12,7 @@ import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
 import { api } from '~~/convex/_generated/api';
 import type { Id } from '~~/convex/_generated/dataModel';
 import { getClerkProviderToken, getConvexGatewayClient } from '../../utils/sync/convex-gateway';
+import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
 import {
     checkSyncRateLimit,
     recordSyncRequest,
@@ -64,7 +65,7 @@ export default defineEventHandler(async (event) => {
         setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
     }
 
-    const token = await getClerkProviderToken(event, 'convex');
+    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
     if (!token) {
         throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
     }

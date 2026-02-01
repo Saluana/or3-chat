@@ -128,3 +128,62 @@ export function createTokenCounter(): {
         current: () => counter,
     };
 }
+
+/**
+ * Insert a single document into the Orama index.
+ *
+ * @param db - Orama database instance
+ * @param doc - Document to insert
+ * @returns Promise resolving to the new document ID
+ */
+export async function insertDoc<T = unknown>(
+    db: OramaInstance,
+    doc: T
+): Promise<string> {
+    const orama = await importOrama();
+    const insert = orama.insert as (
+        db: OramaInstance,
+        doc: T
+    ) => Promise<string>;
+    return insert(db, doc);
+}
+
+/**
+ * Remove a document from the Orama index by ID.
+ *
+ * @param db - Orama database instance
+ * @param id - ID of the document to remove
+ */
+export async function removeDoc(
+    db: OramaInstance,
+    id: string
+): Promise<void> {
+    const orama = await importOrama();
+    const remove = orama.remove as (
+        db: OramaInstance,
+        id: string
+    ) => Promise<void>;
+    await remove(db, id);
+}
+
+/**
+ * Update a document in the Orama index by ID.
+ *
+ * @param db - Orama database instance
+ * @param id - ID of the document to update
+ * @param doc - New document content
+ * @returns Promise resolving to the updated document ID
+ */
+export async function updateDoc<T = unknown>(
+    db: OramaInstance,
+    id: string,
+    doc: T
+): Promise<string> {
+    const orama = await importOrama();
+    const update = orama.update as (
+        db: OramaInstance,
+        id: string,
+        doc: T
+    ) => Promise<string>;
+    return update(db, id, doc);
+}

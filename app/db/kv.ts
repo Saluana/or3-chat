@@ -1,10 +1,18 @@
-import { db, type Or3DB } from './client';
+import { getDb, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, nextClock } from './util';
 import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
 
+async function ensureDbOpen(targetDb: Or3DB): Promise<void> {
+    if (!targetDb.isOpen()) {
+        await targetDb.open();
+    }
+}
+
 export async function createKv(input: KvCreate): Promise<Kv> {
+    const db = getDb();
+    await ensureDbOpen(db);
     const hooks = useHooks();
     const filtered = await hooks.applyFilters(
         'db.kv.create:filter:input',
@@ -32,6 +40,8 @@ export async function createKv(input: KvCreate): Promise<Kv> {
 }
 
 export async function upsertKv(value: Kv): Promise<void> {
+    const db = getDb();
+    await ensureDbOpen(db);
     const hooks = useHooks();
     const filtered = await hooks.applyFilters(
         'db.kv.upsert:filter:input',
@@ -63,6 +73,8 @@ export async function upsertKv(value: Kv): Promise<void> {
 }
 
 export async function hardDeleteKv(id: string): Promise<void> {
+    const db = getDb();
+    await ensureDbOpen(db);
     const hooks = useHooks();
     const existing = await dbTry(() => db.kv.get(id), {
         op: 'read',
@@ -83,6 +95,8 @@ export async function hardDeleteKv(id: string): Promise<void> {
 }
 
 export async function getKv(id: string) {
+    const db = getDb();
+    await ensureDbOpen(db);
     const hooks = useHooks();
     const res = await dbTry(() => db.kv.get(id), {
         op: 'read',
@@ -93,7 +107,8 @@ export async function getKv(id: string) {
     return hooks.applyFilters('db.kv.get:filter:output', res);
 }
 
-export async function getKvByName(name: string, targetDb: Or3DB = db) {
+export async function getKvByName(name: string, targetDb: Or3DB = getDb()) {
+    await ensureDbOpen(targetDb);
     const hooks = useHooks();
     const res = await dbTry(() => targetDb.kv.where('name').equals(name).first(), {
         op: 'read',
@@ -107,8 +122,9 @@ export async function getKvByName(name: string, targetDb: Or3DB = db) {
 export async function setKvByName(
     name: string,
     value: string | null,
-    targetDb: Or3DB = db
+    targetDb: Or3DB = getDb()
 ): Promise<Kv> {
+    await ensureDbOpen(targetDb);
     const hooks = useHooks();
     const existing = await dbTry(
         () => targetDb.kv.where('name').equals(name).first(),
@@ -144,8 +160,9 @@ export async function setKvByName(
 
 export async function hardDeleteKvByName(
     name: string,
-    targetDb: Or3DB = db
+    targetDb: Or3DB = getDb()
 ): Promise<void> {
+    await ensureDbOpen(targetDb);
     const hooks = useHooks();
     const existing = await dbTry(
         () => targetDb.kv.where('name').equals(name).first(),

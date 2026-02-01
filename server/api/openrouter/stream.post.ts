@@ -38,28 +38,35 @@ export default defineEventHandler(async (event) => {
         return 'Invalid request body';
     }
 
-    // Req 1, 4: Select API key: env > Authorization header. Never log keys.
+    // Req 1, 4: Select API key. Prefer user key when connected.
     const config = useRuntimeConfig(event);
     const allowUserOverride = config.openrouterAllowUserOverride !== false;
+    const requireUserKey = config.openrouterRequireUserKey === true;
     const authHeader = getHeader(event, 'authorization');
     const clientKey = authHeader?.startsWith('Bearer ')
         ? authHeader.slice(7)
         : undefined;
 
-    const apiKey =
-        config.openrouterApiKey ||
-        process.env.OPENROUTER_API_KEY ||
-        (allowUserOverride ? clientKey : undefined);
+    const apiKey = requireUserKey
+        ? clientKey
+        : (allowUserOverride ? clientKey : undefined) ||
+          config.openrouterApiKey ||
+          process.env.OPENROUTER_API_KEY;
 
     if (!apiKey && process.env.NODE_ENV !== 'production') {
         console.warn('[openrouter][stream] missing api key', {
             hasRuntimeConfigKey: Boolean(config.openrouterApiKey),
             hasEnvKey: Boolean(process.env.OPENROUTER_API_KEY),
             allowUserOverride,
+            requireUserKey,
             hasAuthHeader: Boolean(authHeader),
         });
     }
     if (!apiKey) {
+        if (requireUserKey) {
+            setResponseStatus(event, 400);
+            return 'User OpenRouter API key required';
+        }
         setResponseStatus(event, 400);
         return 'Missing OpenRouter API key';
     }

@@ -3,6 +3,7 @@
  * Use this to gate SSR-only auth functionality.
  */
 import type { H3Event } from 'h3';
+import { useRuntimeConfig } from '#imports';
 
 /**
  * Check if SSR auth is enabled.

@@ -14,6 +14,7 @@
  */
 
 import { useConvexClient } from 'convex-vue';
+import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
 
 // Full Clerk client type with load promise
 interface ClerkClient {
@@ -74,7 +75,7 @@ export default defineNuxtPlugin(async () => {
             if (!clerk.session) {
                 return null;
             }
-            return await clerk.session.getToken({ template: 'convex' });
+            return await clerk.session.getToken({ template: CONVEX_JWT_TEMPLATE });
         } catch (error) {
             console.error('[convex-clerk] Failed to get auth token:', error);
             return null;

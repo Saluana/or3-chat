@@ -20,9 +20,10 @@ import type {
 import { PullResponseSchema, SyncChangeSchema, PushResultSchema } from '~~/shared/sync/schemas';
 import { z } from 'zod';
 import type { Id } from '~~/convex/_generated/dataModel';
+import { CONVEX_JWT_TEMPLATE, CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 /** Tables to sync */
-const SYNCED_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'];
+const SYNCED_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta', 'notifications'];
 
 /** Type for the Convex client */
 type ConvexClient = ReturnType<typeof useConvexClient>;
@@ -36,11 +37,11 @@ export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
     const subscriptions = new Map<string, () => void>();
 
     return {
-        id: 'convex',
+        id: CONVEX_PROVIDER_ID,
         mode: 'direct',
         auth: {
-            providerId: 'convex',
-            template: 'convex', // Clerk JWT template name
+            providerId: CONVEX_PROVIDER_ID,
+            template: CONVEX_JWT_TEMPLATE, // Clerk JWT template name
         },
 
         async subscribe(
@@ -89,7 +90,22 @@ export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
             const key = `${scope.workspaceId}:${tablesToWatch.join(',')}:${cursor}:${limit}`;
             const cleanup = () => {
                 disposed = true;
-                unwatch();
+                if (typeof unwatch === 'function') {
+                try {
+                    unwatch();
+                } catch (err: unknown) {
+                    // Suppress known race condition in Convex SDK where removing a subscriber
+                    // from an already-cleared query map throws "Cannot read properties of undefined (reading 'numSubscribers')"
+                    const isKnownRaceCondition =
+                        err instanceof TypeError &&
+                        err.message.includes("Cannot read properties of undefined") &&
+                        err.message.includes("numSubscribers");
+
+                    if (!isKnownRaceCondition) {
+                        console.warn('[convex-sync] Cleanup unwatch failed:', err);
+                    }
+                }
+                }
             };
             subscriptions.set(key, cleanup);
 
@@ -171,8 +187,14 @@ export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
         },
 
         async dispose(): Promise<void> {
-            // Clean up all subscriptions
-            subscriptions.forEach((cleanup) => cleanup());
+            // Clean up all subscriptions with error handling
+            subscriptions.forEach((cleanup, key) => {
+                try {
+                    cleanup();
+                } catch (err) {
+                    console.warn('[convex-sync] Subscription cleanup failed:', key, err);
+                }
+            });
             subscriptions.clear();
         },
     };

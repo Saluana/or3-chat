@@ -2,6 +2,10 @@
 
 Server-side configuration for authentication, sync, storage, rate limiting, and security. **Requires SSR mode.**
 
+For a complete, setting-by-setting deep dive (including defaults, strict-mode requirements, and how env vars are interpreted), see:
+
+- [Configuration Reference](./config-reference)
+
 ## Quick Start
 
 ```typescript
@@ -44,6 +48,35 @@ export const or3CloudConfig = defineOr3CloudConfig({
 | `sync.provider` | `OR3_SYNC_PROVIDER` | `"convex"` | Backend (`convex` / `firebase` / `custom`) |
 | `sync.convex.url` | `VITE_CONVEX_URL` | — | Convex deployment URL |
 
+#### Convex Environment Variables
+
+When using Convex as the sync/storage backend, set these environment variables:
+
+- `VITE_CONVEX_URL` (required): Convex deployment URL used by OR3 for sync + storage.
+- `CLERK_ISSUER_URL` (required for Clerk auth): Issuer URL from your Clerk JWT template. This is read by [convex/auth.config.ts](../../convex/auth.config.ts) so Convex can validate Clerk tokens.
+
+If you are self-hosting Convex, you may also need Convex runtime variables (outside OR3):
+
+- `CONVEX_SELF_HOSTED_URL`
+- `CONVEX_SELF_HOSTED_ADMIN_KEY`
+
+> [!NOTE]
+> OR3 only reads `VITE_CONVEX_URL` for the Convex URL. The other values are consumed by Convex itself.
+
+#### Setting Convex env vars (Convex backend)
+
+Convex needs these set in its environment:
+
+- `CLERK_ISSUER_URL`
+- `OR3_ADMIN_JWT_SECRET`
+
+Set them with:
+
+```
+bunx convex env set CLERK_ISSUER_URL=<your-clerk-issuer-url>
+bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
+```
+
 ### Storage (File Uploads)
 
 | Key | Env Variable | Default | Description |
@@ -57,6 +90,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
 |-----|--------------|---------|-------------|
 | `services.llm.openRouter.instanceApiKey` | `OPENROUTER_API_KEY` | — | Managed API key (optional) |
 | `services.llm.openRouter.allowUserOverride` | `OR3_OPENROUTER_ALLOW_USER_OVERRIDE` | `true` | Allow user-provided keys |
+| `services.llm.openRouter.requireUserKey` | `OR3_OPENROUTER_REQUIRE_USER_KEY` | `false` | Require user keys and ignore instance key |
 
 ### Rate Limiting
 
@@ -166,6 +200,9 @@ if (config.public.sync.enabled) {
     // Show sync status UI
 }
 ```
+
+> [!NOTE]
+> `runtimeConfig.public` only includes **non-sensitive** values for client gating. For example, `limits.storageProvider` remains server-only and is intentionally omitted from the public runtime config.
 
 ### Direct Import
 

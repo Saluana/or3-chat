@@ -36,6 +36,21 @@
                     autoresize
                     class="w-full"
                 />
+                <div class="flex flex-col gap-1">
+                    <label class="text-xs font-semibold">On sign out</label>
+                    <USelectMenu
+                        v-model="createLogoutPolicy"
+                        :items="logoutPolicyItems"
+                        :value-key="'value'"
+                        :label-key="'label'"
+                        size="sm"
+                        class="w-full"
+                        v-bind="logoutPolicySelectProps"
+                    />
+                    <p class="text-[11px] opacity-70">
+                        Choose whether this workspace stays on this device after you sign out.
+                    </p>
+                </div>
             </div>
             <div class="flex flex-wrap items-center justify-between gap-3 text-xs opacity-70">
                 <span>
@@ -91,6 +106,12 @@
                             <p class="text-[11px] opacity-60">
                                 Role: {{ workspace.role }}
                             </p>
+                            <p class="text-[11px] opacity-60">
+                                On sign out:
+                                <span class="font-medium">
+                                    {{ formatLogoutPolicy(workspacePolicies[workspace._id]) }}
+                                </span>
+                            </p>
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <UButton
@@ -133,6 +154,21 @@
                             autoresize
                             class="w-full"
                         />
+                        <div class="flex flex-col gap-1">
+                            <label class="text-xs font-semibold">On sign out</label>
+                            <USelectMenu
+                                v-model="editLogoutPolicy"
+                                :items="logoutPolicyItems"
+                                :value-key="'value'"
+                                :label-key="'label'"
+                                size="sm"
+                                class="w-full"
+                                v-bind="logoutPolicySelectProps"
+                            />
+                            <p class="text-[11px] opacity-70">
+                                Keep or clear this workspace on this device after you sign out.
+                            </p>
+                        </div>
                         <div class="flex gap-2">
                             <UButton
                                 size="sm"
@@ -170,10 +206,13 @@ import {
     getWorkspaceDb,
 } from '~/db/client';
 import { getKvByName, setKvByName } from '~/db/kv';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useSessionContext } from '~/composables/auth/useSessionContext';
 
 const toast = useToast();
 const baseDb = getDefaultDb();
 const cacheKey = 'workspace.manager.cache';
+const logoutPolicyPrefix = 'workspace.logout.policy.';
 
 type WorkspaceSummary = {
     _id: Id<'workspaces'>;
@@ -199,11 +238,53 @@ const creating = ref(false);
 const selecting = ref(false);
 const saving = ref(false);
 const deletingWorkspaceId = ref<Id<'workspaces'> | null>(null);
+type LogoutPolicy = 'keep' | 'clear';
+const createLogoutPolicy = ref<LogoutPolicy>('keep');
+const editLogoutPolicy = ref<LogoutPolicy>('keep');
+const workspacePolicies = ref<Record<string, LogoutPolicy>>({});
+const logoutPolicyItems: Array<{ label: string; value: LogoutPolicy }> = [
+    { label: 'Keep on this device', value: 'keep' },
+    { label: 'Clear from this device', value: 'clear' },
+];
+
+const logoutPolicySelectProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'selectmenu',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.logout-policy',
+        isNuxtUI: true,
+    });
+    const overrideValue: Record<string, unknown> = overrides.value || {};
+    const mergedClass = ['w-full', overrideValue.class || '']
+        .filter(Boolean)
+        .join(' ');
+    return {
+        ...overrideValue,
+        class: mergedClass,
+    };
+});
 
 const cachedWorkspaces = ref<WorkspaceSummary[]>([]);
 const cachedActiveId = ref<Id<'workspaces'> | null>(null);
 const legacyStats = ref({ threads: 0, messages: 0, projects: 0 });
 const importing = ref(false);
+
+const sessionContext = useSessionContext();
+
+async function refreshSessionUntilWorkspace(workspaceId: string): Promise<boolean> {
+    // Keep this tight: we just need to beat eventual consistency + any client caches.
+    // The server endpoint is now `no-store`, but retries handle backend propagation.
+    const delaysMs = [0, 100, 200, 400, 800];
+    for (const delay of delaysMs) {
+        if (delay) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+        await sessionContext.refresh();
+        const current = sessionContext.data.value?.session?.workspace?.id ?? null;
+        if (current === workspaceId) return true;
+    }
+    return false;
+}
 
 const legacyHasData = computed(
     () =>
@@ -278,23 +359,46 @@ async function importLocalData() {
     importing.value = true;
     try {
         const targetDb = getWorkspaceDb(activeWorkspaceId);
-        const tables = [
-            'projects',
-            'threads',
-            'messages',
-            'kv',
-            'attachments',
-            'file_meta',
-            'file_blobs',
-            'posts',
-        ];
+        
+        // Define tables with their types
+        const tableDefinitions = {
+            projects: targetDb.projects,
+            threads: targetDb.threads,
+            messages: targetDb.messages,
+            kv: targetDb.kv,
+            attachments: targetDb.attachments,
+            file_meta: targetDb.file_meta,
+            file_blobs: targetDb.file_blobs,
+            posts: targetDb.posts,
+        } as const;
 
-        for (const tableName of tables) {
-            const sourceRows = await (baseDb as any).table(tableName).toArray();
-            if (sourceRows.length) {
-                await (targetDb as any).table(tableName).bulkPut(sourceRows);
+        // Wrap entire import in a single transaction for atomicity
+        await targetDb.transaction(
+            'rw',
+            Object.values(tableDefinitions),
+            async () => {
+                
+                async function copyTable<T>(
+                    tableName: string,
+                    sourceTable: { toArray: () => Promise<T[]> },
+                    targetTable: { bulkPut: (items: readonly T[]) => Promise<any> }
+                ) {
+                    const sourceRows = await sourceTable.toArray();
+                    if (sourceRows.length === 0) return;
+                    await targetTable.bulkPut(sourceRows);
+                    console.log(`[import] Copied ${sourceRows.length} rows from ${tableName}`);
+                }
+
+                await copyTable('projects', baseDb.projects, targetDb.projects);
+                await copyTable('threads', baseDb.threads, targetDb.threads);
+                await copyTable('messages', baseDb.messages, targetDb.messages);
+                await copyTable('kv', baseDb.kv, targetDb.kv);
+                await copyTable('attachments', baseDb.attachments, targetDb.attachments);
+                await copyTable('file_meta', baseDb.file_meta, targetDb.file_meta);
+                await copyTable('file_blobs', baseDb.file_blobs, targetDb.file_blobs);
+                await copyTable('posts', baseDb.posts, targetDb.posts);
             }
-        }
+        );
 
         await loadLegacyStats();
         toast.add({
@@ -318,13 +422,17 @@ watch(
         if (!list) return;
         cachedWorkspaces.value = list as WorkspaceSummary[];
         await saveCache(cachedWorkspaces.value);
+        await loadWorkspacePolicies(cachedWorkspaces.value);
     },
     { immediate: true }
 );
 
-onMounted(() => {
-    loadCache();
-    loadLegacyStats();
+onMounted(async () => {
+    await loadCache();
+    await loadLegacyStats();
+    if (cachedWorkspaces.value.length > 0) {
+        await loadWorkspacePolicies(cachedWorkspaces.value);
+    }
 });
 
 const editingWorkspaceId = ref<Id<'workspaces'> | null>(null);
@@ -335,12 +443,33 @@ function startEdit(workspace: WorkspaceSummary) {
     editingWorkspaceId.value = workspace._id;
     editName.value = workspace.name;
     editDescription.value = workspace.description ?? '';
+    editLogoutPolicy.value = workspacePolicies.value[workspace._id] ?? 'keep';
 }
 
 function cancelEdit() {
     editingWorkspaceId.value = null;
     editName.value = '';
     editDescription.value = '';
+}
+
+function formatLogoutPolicy(policy: LogoutPolicy | undefined) {
+    return policy === 'clear' ? 'Clear from this device' : 'Keep on this device';
+}
+
+async function loadWorkspacePolicies(list: WorkspaceSummary[]) {
+    const entries = await Promise.all(
+        list.map(async (workspace) => {
+            const res = await getKvByName(`${logoutPolicyPrefix}${workspace._id}`, baseDb);
+            const value = res?.value === 'clear' ? 'clear' : 'keep';
+            return [workspace._id, value] as const;
+        })
+    );
+    workspacePolicies.value = Object.fromEntries(entries);
+}
+
+async function saveWorkspacePolicy(workspaceId: Id<'workspaces'>, policy: LogoutPolicy) {
+    await setKvByName(`${logoutPolicyPrefix}${workspaceId}`, policy, baseDb);
+    workspacePolicies.value = { ...workspacePolicies.value, [workspaceId]: policy };
 }
 
 async function createWorkspace() {
@@ -351,7 +480,12 @@ async function createWorkspace() {
             name: createName.value.trim(),
             description: createDescription.value.trim() || undefined,
         });
+        await saveWorkspacePolicy(workspaceId, createLogoutPolicy.value);
         await setActiveWorkspaceMutation.mutate({ workspace_id: workspaceId });
+
+        // Ensure the next reload resolves into the newly active workspace.
+        await refreshSessionUntilWorkspace(workspaceId);
+
         // Update cache before reload so UI shows correctly immediately after
         cachedActiveId.value = workspaceId;
         await saveCache([
@@ -384,6 +518,10 @@ async function selectWorkspace(workspace: WorkspaceSummary) {
     selecting.value = true;
     try {
         await setActiveWorkspaceMutation.mutate({ workspace_id: workspace._id });
+
+        // Ensure the next reload resolves into the selected workspace.
+        await refreshSessionUntilWorkspace(workspace._id);
+
         // Update cache before reload
         cachedActiveId.value = workspace._id;
         cachedWorkspaces.value = cachedWorkspaces.value.map((item) => ({
@@ -414,6 +552,7 @@ async function saveEdit(workspace: WorkspaceSummary) {
             name: editName.value.trim(),
             description: editDescription.value.trim() || undefined,
         });
+        await saveWorkspacePolicy(workspace._id, editLogoutPolicy.value);
         editingWorkspaceId.value = null;
         toast.add({ title: 'Workspace updated', description: 'Changes saved.' });
     } catch (error) {

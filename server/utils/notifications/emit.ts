@@ -4,21 +4,14 @@
  * Utilities for emitting notifications from the server to the Convex notifications table.
  */
 
-import { ConvexHttpClient } from 'convex/browser';
 import { api } from '~~/convex/_generated/api';
 import type { Id } from '~~/convex/_generated/dataModel';
+import { getConvexClient } from '../convex-client';
 
 /**
  * Get a Convex HTTP client for server-side calls
  */
-function getConvexClient(): ConvexHttpClient {
-    const config = useRuntimeConfig();
-    const url = config.public.sync.convexUrl as string | undefined;
-    if (!url) {
-        throw new Error('Convex URL not configured');
-    }
-    return new ConvexHttpClient(url);
-}
+const getNotificationsClient = () => getConvexClient();
 
 /**
  * Emit a notification when a background job completes
@@ -29,7 +22,7 @@ export async function emitBackgroundJobComplete(
     threadId: string,
     jobId: string
 ): Promise<string> {
-    const client = getConvexClient();
+    const client = getNotificationsClient();
 
     const notificationId = await client.mutation(api.notifications.create, {
         workspace_id: workspaceId as Id<'workspaces'>,
@@ -53,7 +46,7 @@ export async function emitBackgroundJobError(
     jobId: string,
     error: string
 ): Promise<string> {
-    const client = getConvexClient();
+    const client = getNotificationsClient();
 
     const notificationId = await client.mutation(api.notifications.create, {
         workspace_id: workspaceId as Id<'workspaces'>,

@@ -632,6 +632,12 @@
                     "summary": "Server-side configuration for cloud features. Covers authentication (Clerk), sync (Convex), storage providers, LLM services (OpenRouter managed keys), rate limiting with pluggable backends, legal URLs, and security (CORS, HTTPS). Includes dependency chain and validation rules."
                 },
                 {
+                    "name": "config-reference.md",
+                    "path": "/cloud/config-reference",
+                    "category": "Reference",
+                    "summary": "Authoritative reference for every OR3 configuration setting (base + cloud). Documents all config paths and environment variables with defaults, validation rules, and how each setting affects behavior."
+                },
+                {
                     "name": "sync-layer.md",
                     "path": "/cloud/sync-layer",
                     "category": "Architecture",
@@ -648,6 +654,18 @@
                     "path": "/cloud/storage-layer",
                     "category": "Architecture",
                     "summary": "Overview of the CAS (Content-Addressable Storage) system for large assets. Details the local-first 'Blob' architecture, FileTransferQueue for offline support, and pluggable ObjectStorageProvider interface."
+                },
+                {
+                    "name": "notifications.md",
+                    "path": "/cloud/notifications",
+                    "category": "Features",
+                    "summary": "Complete guide to the OR3 Notification Center. Covers AI streaming notifications, sync conflict alerts, system warnings, and custom plugin notifications. Explains local-first architecture, cross-device sync, creating custom notifications via hooks/composables, filtering, and troubleshooting notification issues."
+                },
+                {
+                    "name": "troubleshooting.md",
+                    "path": "/cloud/troubleshooting",
+                    "category": "Guide",
+                    "summary": "Comprehensive troubleshooting guide for OR3 Cloud features. Covers authentication issues (login, session persistence), sync problems (changes not syncing, conflict notifications, bootstrap delays), storage failures (uploads, downloads, quotas), notification issues, and build/deployment problems. Includes diagnostic checklists, debug logging, and common error messages."
                 }
             ]
         }

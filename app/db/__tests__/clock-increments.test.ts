@@ -1,5 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Mock dependencies before other imports
+vi.mock('../../utils/errors', () => ({
+    reportError: vi.fn(),
+    err: vi.fn((_code: string, _message: string, meta: any) => meta),
+}));
+
+vi.mock('../../core/sync/cursor-manager', () => ({
+    cleanupCursorManager: vi.fn(),
+    getCursorManager: vi.fn(() => ({})),
+}));
+
 type TableRecord = Record<string, unknown>;
 
 const dbState = vi.hoisted(() => {
@@ -63,6 +74,7 @@ const dbState = vi.hoisted(() => {
 vi.mock('../client', () => {
     const db = {
         ...dbState.tables,
+        isOpen: () => true,
         async transaction(_mode: string, ...args: Array<unknown>) {
             const fn = args[args.length - 1];
             if (typeof fn === 'function') {

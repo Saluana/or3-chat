@@ -9,8 +9,25 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     // Use a Set to track lazy components (regular Set, not WeakSet)
     // This allows us to iterate and force update when theme changes
+    const MAX_TRACKED_COMPONENTS = 1000;
     const lazyComponents = new Set<any>();
     let scheduledFrame: number | null = null;
+
+    const isComponentStale = (component: any) => {
+        if (!component) return true;
+        const instance = component.$;
+        if (instance?.isUnmounted) return true;
+        const el = component.$el as HTMLElement | undefined;
+        return Boolean(el && !el.isConnected);
+    };
+
+    const pruneLazyComponents = () => {
+        for (const component of lazyComponents) {
+            if (isComponentStale(component)) {
+                lazyComponents.delete(component);
+            }
+        }
+    };
 
     const getUpdateToken = () => {
         const version = theme.resolversVersion?.value ?? 0;
@@ -24,6 +41,7 @@ export default defineNuxtPlugin((nuxtApp) => {
 
         scheduledFrame = requestAnimationFrame(() => {
             scheduledFrame = null;
+            pruneLazyComponents();
             lazyComponents.forEach((component) => {
                 // Check if component is still mounted
                 if (component && component.$forceUpdate) {
@@ -53,6 +71,9 @@ export default defineNuxtPlugin((nuxtApp) => {
             }
 
             // Track lazy component for theme updates
+            if (lazyComponents.size >= MAX_TRACKED_COMPONENTS) {
+                pruneLazyComponents();
+            }
             lazyComponents.add(this);
         },
         beforeUnmount() {

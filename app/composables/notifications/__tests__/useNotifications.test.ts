@@ -1,5 +1,16 @@
-import { describe, it, expect } from 'vitest';
-import { effectScope, nextTick } from 'vue';
+import { describe, it, expect, vi } from 'vitest';
+import { effectScope, nextTick, ref } from 'vue';
+
+// Mock useSessionContext to prevent fetch calls in test environment
+vi.mock('~/composables/auth/useSessionContext', () => ({
+    useSessionContext: () => ({
+        data: ref({ session: null }),
+        pending: ref(false),
+        error: ref(null),
+        refresh: vi.fn(),
+    }),
+}));
+
 import { setActiveWorkspaceDb, getDb } from '~/db/client';
 import { useNotifications } from '~/composables/notifications/useNotifications';
 

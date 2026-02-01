@@ -126,11 +126,16 @@ export class OutboxManager {
                 .equals('syncing')
                 .modify({ status: 'pending', nextAttemptAt: Date.now() });
 
-            // Get pending ops
+            // Get pending ops (limited to prevent O(N) memory usage)
+            // We fetch more than maxBatchSize to allow for some coalescing
             const pendingOps = await this.db.pending_ops
                 .where('status')
                 .equals('pending')
-                .sortBy('createdAt');
+                .limit(this.config.maxBatchSize * 10) 
+                .toArray();
+            
+            // Sort by createdAt to ensure correct order
+            pendingOps.sort((a, b) => a.createdAt - b.createdAt);
 
             if (!pendingOps.length) return false;
 

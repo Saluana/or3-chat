@@ -6,6 +6,20 @@ import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/s
 import { v } from 'convex/values';
 import type { Id, TableNames } from './_generated/dataModel';
 
+// ============================================================
+// CONSTANTS
+// ============================================================
+
+// Valid auth provider - only Clerk is supported
+const VALID_AUTH_PROVIDER = 'clerk';
+
+/** Batch size for workspace data deletion operations */
+const DELETE_BATCH_SIZE = 100;
+
+// ============================================================
+// HELPERS
+// ============================================================
+
 async function getAuthAccount(
     ctx: MutationCtx | QueryCtx
 ): Promise<{ userId: Id<'users'>; authAccountId: Id<'auth_accounts'> }> {
@@ -58,29 +72,43 @@ async function deleteWorkspaceData(ctx: MutationCtx, workspaceId: Id<'workspaces
         withIndex: (
             index: string,
             cb: (q: IndexQueryBuilder) => IndexQueryBuilder
-        ) => { collect: () => Promise<ConvexDoc[]> };
+        ) => { collect: () => Promise<ConvexDoc[]>; take: (n: number) => Promise<ConvexDoc[]> };
     };
 
-    const deleteByIndex = async (table: TableNames, indexName: string) => {
-        const rows = await (ctx.db.query(table) as unknown as QueryByIndex)
-            .withIndex(indexName, (q) => q.eq('workspace_id', workspaceId))
-            .collect();
-        for (const row of rows) {
-            await ctx.db.delete(row._id);
+    const deleteByIndexBatched = async (table: TableNames, indexName: string) => {
+        let totalDeleted = 0;
+        let hasMore = true;
+        while (hasMore) {
+            const rows = await (ctx.db.query(table) as unknown as QueryByIndex)
+                .withIndex(indexName, (q) => q.eq('workspace_id', workspaceId))
+                .take(DELETE_BATCH_SIZE);
+
+            if (rows.length === 0) {
+                hasMore = false;
+                break;
+            }
+
+            await Promise.all(rows.map((r) => ctx.db.delete(r._id)));
+            totalDeleted += rows.length;
+
+            if (rows.length < DELETE_BATCH_SIZE) {
+                hasMore = false;
+            }
         }
+        return totalDeleted;
     };
 
-    await deleteByIndex('threads', 'by_workspace_id');
-    await deleteByIndex('messages', 'by_workspace_id');
-    await deleteByIndex('projects', 'by_workspace_id');
-    await deleteByIndex('posts', 'by_workspace_id');
-    await deleteByIndex('kv', 'by_workspace_name');
-    await deleteByIndex('file_meta', 'by_workspace_hash');
-    await deleteByIndex('change_log', 'by_workspace_version');
-    await deleteByIndex('tombstones', 'by_workspace_version');
-    await deleteByIndex('device_cursors', 'by_workspace_device');
-    await deleteByIndex('workspace_members', 'by_workspace');
-    await deleteByIndex('server_version_counter', 'by_workspace');
+    await deleteByIndexBatched('threads', 'by_workspace_id');
+    await deleteByIndexBatched('messages', 'by_workspace_id');
+    await deleteByIndexBatched('projects', 'by_workspace_id');
+    await deleteByIndexBatched('posts', 'by_workspace_id');
+    await deleteByIndexBatched('kv', 'by_workspace_name');
+    await deleteByIndexBatched('file_meta', 'by_workspace_hash');
+    await deleteByIndexBatched('change_log', 'by_workspace_version');
+    await deleteByIndexBatched('tombstones', 'by_workspace_version');
+    await deleteByIndexBatched('device_cursors', 'by_workspace_device');
+    await deleteByIndexBatched('workspace_members', 'by_workspace');
+    await deleteByIndexBatched('server_version_counter', 'by_workspace');
 }
 
 /**
@@ -113,9 +141,16 @@ export const listMyWorkspaces = query({
             .withIndex('by_user', (q) => q.eq('user_id', authAccount.user_id))
             .collect();
 
-        const workspaces = await Promise.all(
-            memberships.map(async (m) => {
-                const workspace = await ctx.db.get(m.workspace_id);
+        // Batch fetch all workspaces at once to avoid N+1 queries
+        const workspaceIds = memberships.map((m) => m.workspace_id);
+        const allWorkspaces = await Promise.all(workspaceIds.map((id) => ctx.db.get(id)));
+        const workspaceMap = new Map(
+            allWorkspaces.filter(Boolean).map((w) => [w!._id, w!] as const)
+        );
+
+        const workspaces = memberships
+            .map((m) => {
+                const workspace = workspaceMap.get(m.workspace_id);
                 if (!workspace) return null;
                 return {
                     _id: workspace._id,
@@ -126,9 +161,9 @@ export const listMyWorkspaces = query({
                     is_active: activeWorkspaceId === workspace._id,
                 };
             })
-        );
+            .filter(Boolean);
 
-        return workspaces.filter(Boolean);
+        return workspaces;
     },
 });
 
@@ -290,6 +325,17 @@ export const ensure = mutation({
         name: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        // Validate provider
+        if (args.provider !== VALID_AUTH_PROVIDER) {
+            throw new Error(`Invalid provider: ${args.provider}. Only '${VALID_AUTH_PROVIDER}' is supported.`);
+        }
+
+        // Verify JWT subject matches provider_user_id
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity || identity.subject !== args.provider_user_id) {
+            throw new Error('Provider user ID mismatch: JWT subject does not match request');
+        }
+
         const now = Date.now();
 
         let authAccount = await ctx.db
@@ -392,3 +438,71 @@ export const ensure = mutation({
     },
 });
 
+/**
+ * Resolve an existing user/workspace session without mutating data.
+ * Returns null when the user or workspace cannot be found.
+ */
+export const resolveSession = query({
+    args: {
+        provider: v.string(),
+        provider_user_id: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const authAccount = await ctx.db
+            .query('auth_accounts')
+            .withIndex('by_provider', (q) =>
+                q.eq('provider', args.provider).eq('provider_user_id', args.provider_user_id)
+            )
+            .first();
+
+        if (!authAccount) return null;
+
+        const userId = authAccount.user_id;
+        const user = await ctx.db.get(userId);
+
+        let workspaceId = user?.active_workspace_id ?? undefined;
+
+        if (workspaceId) {
+            const activeWorkspaceId = workspaceId as Id<'workspaces'>;
+            const activeMembership = await ctx.db
+                .query('workspace_members')
+                .withIndex('by_workspace_user', (q) =>
+                    q.eq('workspace_id', activeWorkspaceId).eq('user_id', userId)
+                )
+                .first();
+            if (!activeMembership) {
+                workspaceId = undefined;
+            }
+        }
+
+        if (!workspaceId) {
+            const firstMembership = await ctx.db
+                .query('workspace_members')
+                .withIndex('by_user', (q) => q.eq('user_id', userId))
+                .order('asc')
+                .first();
+            workspaceId = firstMembership?.workspace_id;
+        }
+
+        if (!workspaceId) return null;
+
+        const workspace = await ctx.db.get(workspaceId);
+        if (!workspace) return null;
+
+        const membership = await ctx.db
+            .query('workspace_members')
+            .withIndex('by_workspace_user', (q) =>
+                q.eq('workspace_id', workspaceId).eq('user_id', userId)
+            )
+            .first();
+
+        if (!membership) return null;
+
+        return {
+            id: workspaceId,
+            name: workspace.name,
+            description: workspace.description ?? null,
+            role: membership.role,
+        };
+    },
+});

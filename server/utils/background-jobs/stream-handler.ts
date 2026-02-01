@@ -21,6 +21,7 @@ import {
     hasJobViewers,
     initJobLiveState,
 } from './viewers';
+import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -124,7 +125,7 @@ export async function consumeBackgroundStream(params: {
             : flushEveryChunk
             ? 30
             : 120;
-    const isConvexProvider = params.provider.name === 'convex';
+    const isConvexProvider = params.provider.name === CONVEX_PROVIDER_ID;
     const shouldNotify = params.shouldNotify ?? (() => true);
     let pendingChunk = '';
     let lastUpdateAt = 0;

@@ -1,6 +1,12 @@
 import { defineOr3Config } from './utils/or3-config';
 
 /**
+ * Application version
+ * Update this when releasing a new version, or use process.env.npm_package_version
+ */
+export const APP_VERSION = '0.1.0';
+
+/**
  * OR3 Base Configuration
  *
  * This file configures site branding, feature toggles, and client-side limits.
@@ -40,9 +46,6 @@ import { defineOr3Config } from './utils/or3-config';
  * For cloud features (auth, sync, storage), see config.or3cloud.ts
  */
 export const or3Config = defineOr3Config({
-    /**
-     * Site branding and identity.
-     */
     site: {
         name: process.env.OR3_SITE_NAME || 'OR3',
         description: process.env.OR3_SITE_DESCRIPTION || '',
@@ -51,42 +54,30 @@ export const or3Config = defineOr3Config({
         defaultTheme: process.env.OR3_DEFAULT_THEME || 'blank',
     },
 
-    /**
-     * Feature toggles.
-     * All features are enabled by default.
-     * Set to false to disable specific capabilities.
-     */
+    // All features enabled by default. Set OR3_*_ENABLED=false to disable.
     features: {
-        // Workflow automation
         workflows: {
             enabled: process.env.OR3_WORKFLOWS_ENABLED !== 'false',
             editor: process.env.OR3_WORKFLOWS_EDITOR !== 'false',
             slashCommands: process.env.OR3_WORKFLOWS_SLASH_COMMANDS !== 'false',
             execution: process.env.OR3_WORKFLOWS_EXECUTION !== 'false',
         },
-        // Document editor
         documents: {
             enabled: process.env.OR3_DOCUMENTS_ENABLED !== 'false',
         },
-        // Workspace backup
         backup: {
             enabled: process.env.OR3_BACKUP_ENABLED !== 'false',
         },
-        // @mentions system
         mentions: {
             enabled: process.env.OR3_MENTIONS_ENABLED !== 'false',
             documents: process.env.OR3_MENTIONS_DOCUMENTS !== 'false',
             conversations: process.env.OR3_MENTIONS_CONVERSATIONS !== 'false',
         },
-        // Dashboard settings panel
         dashboard: {
             enabled: process.env.OR3_DASHBOARD_ENABLED !== 'false',
         },
     },
 
-    /**
-     * Upload and storage limits.
-     */
     limits: {
         maxFileSizeBytes: process.env.OR3_MAX_FILE_SIZE_BYTES
             ? Number(process.env.OR3_MAX_FILE_SIZE_BYTES)
@@ -102,9 +93,6 @@ export const or3Config = defineOr3Config({
             : undefined,
     },
 
-    /**
-     * UI experience defaults.
-     */
     ui: {
         defaultPaneCount: process.env.OR3_DEFAULT_PANE_COUNT
             ? Number(process.env.OR3_DEFAULT_PANE_COUNT)
@@ -113,9 +101,6 @@ export const or3Config = defineOr3Config({
         sidebarCollapsedByDefault: process.env.OR3_SIDEBAR_COLLAPSED === 'true',
     },
 
-    /**
-     * Legal URLs for compliance and footer links.
-     */
     legal: {
         termsUrl: process.env.OR3_TERMS_URL || '',
         privacyUrl: process.env.OR3_PRIVACY_URL || '',

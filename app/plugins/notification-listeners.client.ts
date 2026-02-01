@@ -17,6 +17,7 @@ import { getDb } from '~/db/client';
 import { newId } from '~/db/util';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
+import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 /**
  * Create a notification for system warnings and errors
@@ -70,7 +71,7 @@ export default defineNuxtPlugin(() => {
     const serverNotificationsEnabled =
         runtimeConfig.public?.ssrAuthEnabled === true &&
         syncConfig?.enabled === true &&
-        syncConfig?.provider === 'convex' &&
+        syncConfig?.provider === CONVEX_PROVIDER_ID &&
         Boolean(syncConfig?.convexUrl);
     const getNotificationUserId = () =>
         resolveNotificationUserId(sessionContext?.data.value?.session);
@@ -78,6 +79,26 @@ export default defineNuxtPlugin(() => {
     const errorDedupe = new Map<string, number>();
     const streamDedupe = new Map<string, number>();
     const DEDUPE_WINDOW_MS = 15_000;
+
+    // Track bootstrap/rescan state to suppress notifications during initial sync
+    let isInitialSyncing = false;
+
+    // Listen for bootstrap/rescan start/complete to suppress notifications
+    hooks.addAction('sync.bootstrap:action:start', () => {
+        isInitialSyncing = true;
+    });
+
+    hooks.addAction('sync.bootstrap:action:complete', () => {
+        isInitialSyncing = false;
+    });
+
+    hooks.addAction('sync.rescan:action:starting', () => {
+        isInitialSyncing = true;
+    });
+
+    hooks.addAction('sync.rescan:action:completed', () => {
+        isInitialSyncing = false;
+    });
 
     function isThreadOpen(threadId?: string): boolean {
         if (!threadId) return false;
@@ -100,14 +121,35 @@ export default defineNuxtPlugin(() => {
     // Task 12.1 & 12.2: Listen for sync conflicts and create notifications
     hooks.addAction('sync.conflict:action:detected', async (conflict) => {
         try {
+            // Skip conflict notifications during bootstrap/rescan to avoid noise
+            if (isInitialSyncing) return;
+
             const { tableName, pk, local, remote, winner } = conflict;
+
+            // Skip notifications for historical conflicts (older than 24 hours)
+            // Historical conflicts are not actionable and create noise on first load
+            const localClock = (local as { clock?: number })?.clock;
+            const remoteClock = (remote as { clock?: number })?.clock;
+            const conflictClock = Math.max(localClock ?? 0, remoteClock ?? 0);
+            const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+            if (Date.now() - conflictClock * 1000 > ONE_DAY_MS) {
+                if (import.meta.dev) {
+                    console.debug('[notify] Skipping historical conflict notification', {
+                        tableName,
+                        pk,
+                        ageHours: Math.round((Date.now() - conflictClock * 1000) / 1000 / 60 / 60),
+                    });
+                }
+                return;
+            }
+
             if (import.meta.dev) {
                 console.debug('[notify] sync.conflict:detected', {
                     tableName,
                     pk,
                     winner,
-                    localClock: (local as { clock?: number })?.clock,
-                    remoteClock: (remote as { clock?: number })?.clock,
+                    localClock,
+                    remoteClock,
                 });
             }
             const conflictKey = `${tableName}:${pk}:${winner}`;
@@ -154,6 +196,10 @@ export default defineNuxtPlugin(() => {
     hooks.addAction('sync.error:action', async ({ op, error, permanent }) => {
         try {
             if (!permanent) return;
+
+            // Skip error notifications during bootstrap/rescan to avoid noise
+            if (isInitialSyncing) return;
+
             if (op.tableName === 'notifications' || op.tableName === 'pending_ops') {
                 return;
             }
@@ -177,6 +223,9 @@ export default defineNuxtPlugin(() => {
     // Task 13.1: Listen for sync errors
     hooks.addAction('sync:action:error', async (error) => {
         try {
+            // Skip error notifications during bootstrap/rescan to avoid noise
+            if (isInitialSyncing) return;
+
             await emitSystemNotification({
                 title: 'Sync error',
                 body: error?.message || 'An error occurred during synchronization.',

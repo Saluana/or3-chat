@@ -3,6 +3,11 @@ import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
 import { resolve } from 'path';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
+import {
+    AUTH_PROVIDER_IDS,
+    CONVEX_PROVIDER_ID,
+    CONVEX_STORAGE_PROVIDER_ID,
+} from './shared/cloud/provider-ids';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
@@ -10,9 +15,9 @@ const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
 const convexEnabled =
     (or3CloudConfig.sync.enabled &&
-        or3CloudConfig.sync.provider === 'convex') ||
+        or3CloudConfig.sync.provider === CONVEX_PROVIDER_ID) ||
     (or3CloudConfig.storage.enabled &&
-        or3CloudConfig.storage.provider === 'convex');
+        or3CloudConfig.storage.provider === CONVEX_STORAGE_PROVIDER_ID);
 
 // Branding defaults (sourced from or3Config)
 const appName = or3Config.site.name;
@@ -26,6 +31,12 @@ const limitsConfig = {
     maxMessagesPerDay: or3CloudConfig.limits!.maxMessagesPerDay!,
     storageProvider: or3CloudConfig.limits!.storageProvider || 'memory',
 };
+const publicLimitsConfig = {
+    enabled: limitsConfig.enabled,
+    requestsPerMinute: limitsConfig.requestsPerMinute,
+    maxConversations: limitsConfig.maxConversations,
+    maxMessagesPerDay: limitsConfig.maxMessagesPerDay,
+};
 const brandingConfig = {
     appName: or3Config.site.name,
     logoUrl: or3Config.site.logoUrl,
@@ -34,6 +45,35 @@ const brandingConfig = {
 const legalConfig = {
     termsUrl: or3Config.legal.termsUrl,
     privacyUrl: or3Config.legal.privacyUrl,
+};
+const adminConfig = {
+    basePath: or3CloudConfig.admin?.basePath || '/admin',
+    allowedHosts: or3CloudConfig.admin?.allowedHosts || [],
+    allowRestart: Boolean(or3CloudConfig.admin?.allowRestart),
+    allowRebuild: Boolean(or3CloudConfig.admin?.allowRebuild),
+    rebuildCommand: or3CloudConfig.admin?.rebuildCommand || 'bun run build',
+    extensionMaxZipBytes: or3CloudConfig.admin?.extensionMaxZipBytes
+        ? String(or3CloudConfig.admin.extensionMaxZipBytes)
+        : undefined,
+    extensionMaxFiles: or3CloudConfig.admin?.extensionMaxFiles
+        ? String(or3CloudConfig.admin.extensionMaxFiles)
+        : undefined,
+    extensionMaxTotalBytes: or3CloudConfig.admin?.extensionMaxTotalBytes
+        ? String(or3CloudConfig.admin.extensionMaxTotalBytes)
+        : undefined,
+    extensionAllowedExtensions: or3CloudConfig.admin?.extensionAllowedExtensions
+        ? or3CloudConfig.admin.extensionAllowedExtensions.join(',')
+        : undefined,
+    // Admin auth configuration (server-only, never expose secrets to client)
+    auth: {
+        username: or3CloudConfig.admin?.auth?.username ?? '',
+        password: or3CloudConfig.admin?.auth?.password ?? '',
+        jwtSecret: or3CloudConfig.admin?.auth?.jwtSecret ?? '',
+        jwtExpiry: or3CloudConfig.admin?.auth?.jwtExpiry || '24h',
+        deletedWorkspaceRetentionDays: or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays !== undefined
+            ? String(or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays)
+            : '',
+    },
 };
 
 export default defineNuxtConfig({
@@ -82,10 +122,14 @@ export default defineNuxtConfig({
             or3CloudConfig.services.llm?.openRouter?.instanceApiKey || '',
         openrouterAllowUserOverride:
             or3CloudConfig.services.llm?.openRouter?.allowUserOverride ?? true,
+        openrouterRequireUserKey:
+            or3CloudConfig.services.llm?.openRouter?.requireUserKey ?? false,
         clerkSecretKey: '', // Auto-mapped from NUXT_CLERK_SECRET_KEY
         auth: {
             enabled: isSsrAuthEnabled,
             provider: or3CloudConfig.auth.provider,
+            sessionProvisioningFailure:
+                or3CloudConfig.auth.sessionProvisioningFailure ?? 'throw',
         },
         sync: {
             enabled: or3CloudConfig.sync.enabled,
@@ -102,7 +146,13 @@ export default defineNuxtConfig({
         security: {
             allowedOrigins: or3CloudConfig.security!.allowedOrigins!,
             forceHttps: or3CloudConfig.security!.forceHttps!,
+            proxy: {
+                trustProxy: or3CloudConfig.security?.proxy?.trustProxy ?? false,
+                forwardedForHeader: or3CloudConfig.security?.proxy?.forwardedForHeader ?? 'x-forwarded-for',
+                forwardedHostHeader: or3CloudConfig.security?.proxy?.forwardedHostHeader ?? 'x-forwarded-host',
+            },
         },
+        admin: adminConfig,
         // Background streaming configuration (SSR mode only)
         backgroundJobs: {
             enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
@@ -115,6 +165,7 @@ export default defineNuxtConfig({
             // Single source of truth for client gating.
             // Avoid inferring enablement from presence of publishable keys.
             ssrAuthEnabled: isSsrAuthEnabled,
+            guestAccessEnabled: or3CloudConfig.auth.guestAccessEnabled ?? false,
             openRouter: {
                 allowUserOverride:
                     or3CloudConfig.services.llm?.openRouter?.allowUserOverride ??
@@ -122,6 +173,9 @@ export default defineNuxtConfig({
                 hasInstanceKey: Boolean(
                     or3CloudConfig.services.llm?.openRouter?.instanceApiKey
                 ),
+                requireUserKey:
+                    or3CloudConfig.services.llm?.openRouter?.requireUserKey ??
+                    false,
             },
             storage: {
                 enabled: or3CloudConfig.storage.enabled,
@@ -132,11 +186,37 @@ export default defineNuxtConfig({
                 provider: or3CloudConfig.sync.provider,
                 convexUrl,
             },
-            limits: limitsConfig,
+            limits: publicLimitsConfig,
             branding: brandingConfig,
             legal: legalConfig,
             backgroundStreaming: {
                 enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
+            },
+            admin: {
+                basePath: adminConfig.basePath,
+            },
+            // Feature toggles from OR3 config - exposed for client-side gating
+            features: {
+                workflows: {
+                    enabled: or3Config.features.workflows.enabled,
+                    editor: or3Config.features.workflows.editor,
+                    slashCommands: or3Config.features.workflows.slashCommands,
+                    execution: or3Config.features.workflows.execution,
+                },
+                documents: {
+                    enabled: or3Config.features.documents.enabled,
+                },
+                backup: {
+                    enabled: or3Config.features.backup.enabled,
+                },
+                mentions: {
+                    enabled: or3Config.features.mentions.enabled,
+                    documents: or3Config.features.mentions.documents,
+                    conversations: or3Config.features.mentions.conversations,
+                },
+                dashboard: {
+                    enabled: or3Config.features.dashboard.enabled,
+                },
             },
             // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
             clerkPublishableKey: '',
@@ -167,7 +247,7 @@ export default defineNuxtConfig({
         '@vite-pwa/nuxt',
         ...(convexEnabled ? ['convex-nuxt'] : []),
         // Only include Clerk when SSR auth is enabled to preserve static builds
-        ...(isSsrAuthEnabled && or3CloudConfig.auth.provider === 'clerk'
+        ...(isSsrAuthEnabled && or3CloudConfig.auth.provider === AUTH_PROVIDER_IDS.clerk
             ? ['@clerk/nuxt']
             : []),
     ],
@@ -487,5 +567,8 @@ export default defineNuxtConfig({
                   'app/pages/_test.vue',
               ]
             : []),
+        // Note: Admin pages are no longer excluded based on ssrAuthEnabled.
+        // The new super admin feature uses JWT-based authentication and is gated
+        // at runtime via isAdminEnabled() check in server/middleware/admin-gate.ts.
     ].filter(Boolean) as string[],
 });

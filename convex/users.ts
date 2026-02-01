@@ -2,6 +2,37 @@
  * User identity queries for testing auth integration
  */
 import { query } from './_generated/server';
+import { v } from 'convex/values';
+import type { Id } from './_generated/dataModel';
+
+/**
+ * Get auth account by provider and provider user ID.
+ * Returns the internal user ID if found.
+ */
+export const getAuthAccountByProvider = query({
+    args: {
+        provider: v.string(),
+        provider_user_id: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const authAccount = await ctx.db
+            .query('auth_accounts')
+            .withIndex('by_provider', (q) =>
+                q.eq('provider', args.provider).eq('provider_user_id', args.provider_user_id)
+            )
+            .first();
+
+        if (!authAccount) {
+            return null;
+        }
+
+        return {
+            user_id: authAccount.user_id as Id<'users'>,
+            provider: authAccount.provider,
+            provider_user_id: authAccount.provider_user_id,
+        };
+    },
+});
 
 /**
  * Get the current authenticated user's identity.

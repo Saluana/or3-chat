@@ -55,7 +55,6 @@ describe('can()', () => {
             'workspace.settings.manage',
             'users.manage',
             'plugins.manage',
-            'admin.access',
         ];
 
         it.each(ownerPermissions)(
@@ -127,12 +126,12 @@ describe('can()', () => {
 
         it('base decision starts as denied', () => {
             // If the role doesn't have the permission, it stays denied
-            const decision = can(mockEditorSession, 'admin.access');
+            const decision = can(mockEditorSession, 'plugins.manage');
             expect(decision.allowed).toBe(false);
         });
 
         it('decision is granted only when role has permission', () => {
-            const decision = can(mockOwnerSession, 'admin.access');
+            const decision = can(mockOwnerSession, 'workspace.read');
             expect(decision.allowed).toBe(true);
         });
     });

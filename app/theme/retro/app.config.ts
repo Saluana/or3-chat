@@ -60,6 +60,7 @@ export default {
                     'on-surface':
                         'bg-[var(--md-surface)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
                     error: 'text-[var(--md-on-error)] hover:bg-[var(--md-error-hover)] active:bg-[var(--md-error-active)]',
+                    neutral: 'bg-[var(--md-surface-container-lowest)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
                 },
                 // Override size variant so padding wins over defaults
                 size: {
@@ -93,6 +94,14 @@ export default {
                         'first:rounded-t-[var(--md-border-radius)]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[var(--md-border-radius)]!',
                 },
             },
+            compoundVariants: [
+                // Override neutral + soft variant to use theme colors instead of accented
+                {
+                    color: 'neutral',
+                    variant: 'soft',
+                    class: 'bg-[var(--md-surface-container-lowest)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
+                },
+            ],
         },
         // Global input overrides
         input: {

@@ -27,13 +27,13 @@ describe('normalizeSyncPayload', () => {
             expect(result.payload.post_type).toBeUndefined();
         });
 
-        it('should not overwrite existing postType with post_type', () => {
+        it('should overwrite existing postType with post_type (server source of truth)', () => {
             const rawPayload = {
                 id: 'post-1',
                 title: 'Test Post',
                 content: 'Test content',
-                post_type: 'old_value',
-                postType: 'correct_value',
+                post_type: 'server_value',
+                postType: 'client_value',
                 deleted: false,
                 created_at: 1000,
                 updated_at: 1000,
@@ -43,7 +43,9 @@ describe('normalizeSyncPayload', () => {
             const result = normalizeSyncPayload('posts', 'post-1', rawPayload, stamp);
 
             expect(result.isValid).toBe(true);
-            expect(result.payload.postType).toBe('correct_value');
+            // In toClientFormat, we assume the input (snake_case) is the source of truth from the server,
+            // so it should overwrite any existing camelCase value.
+            expect(result.payload.postType).toBe('server_value');
         });
 
         it('should not apply post mapping to other tables', () => {

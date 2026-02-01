@@ -18,7 +18,7 @@ import { isRecentOpId } from './recent-op-cache';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 
 /** Default tables to sync */
-const DEFAULT_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'];
+const DEFAULT_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta', 'notifications'];
 
 /** Bootstrap pull page size */
 const BOOTSTRAP_PAGE_SIZE = 100;
@@ -71,15 +71,16 @@ export class SubscriptionManager {
             reconnectDelays: config.reconnectDelays ?? RECONNECT_DELAYS,
         };
 
-        this.cursorManager = getCursorManager(db);
+        this.cursorManager = getCursorManager(db, this.scope);
         this.conflictResolver = new ConflictResolver(db);
 
         // Defensive cleanup for browser close/navigation
-        if (typeof window !== 'undefined') {
+        const win = this.getWindow();
+        if (win) {
             this.boundBeforeUnload = () => {
                 this.stop().catch(() => {});
             };
-            window.addEventListener('beforeunload', this.boundBeforeUnload);
+            (win as Window & typeof globalThis).addEventListener('beforeunload', this.boundBeforeUnload);
         }
     }
 
@@ -134,8 +135,9 @@ export class SubscriptionManager {
         }
 
         // Clean up beforeunload listener
-        if (typeof window !== 'undefined' && this.boundBeforeUnload) {
-            window.removeEventListener('beforeunload', this.boundBeforeUnload);
+        const win = this.getWindow();
+        if (win && this.boundBeforeUnload) {
+            (win as Window & typeof globalThis).removeEventListener('beforeunload', this.boundBeforeUnload);
             this.boundBeforeUnload = null;
         }
 
@@ -200,6 +202,20 @@ export class SubscriptionManager {
                         await this.applyChanges(filtered);
                     }
                     totalPulled += response.changes.length;
+                }
+
+                // Loop guard: If cursor doesn't advance but hasMore is true, we are stuck
+                // Note: hasMore is guaranteed true by while loop condition
+                if (response.nextCursor <= cursor) {
+                    console.error('[SubscriptionManager] Infinite loop detected during bootstrap: cursor not advancing', {
+                        cursor,
+                        nextCursor: response.nextCursor,
+                    });
+                     await useHooks().doAction('sync.bootstrap:action:error', {
+                        scope: this.scope,
+                        error: 'Infinite loop detected: cursor not advancing',
+                    });
+                    break;
                 }
 
                 cursor = response.nextCursor;
@@ -276,6 +292,15 @@ export class SubscriptionManager {
                     if (filtered.length) {
                         await this.conflictResolver.applyChanges(filtered);
                     }
+                }
+
+                // Loop guard
+                if (response.hasMore && response.nextCursor <= cursor) {
+                    console.error('[SubscriptionManager] Infinite loop detected during rescan', {
+                        cursor,
+                        nextCursor: response.nextCursor,
+                    });
+                    break;
                 }
 
                 cursor = response.nextCursor;
@@ -572,6 +597,12 @@ export class SubscriptionManager {
                     console.error('[SubscriptionManager] Hook error:', error);
                 });
         }
+    }
+
+    private getWindow(): Window | null {
+        if (typeof globalThis === 'undefined') return null;
+        const globalWithWindow = globalThis as { window?: Window & typeof globalThis };
+        return globalWithWindow.window ?? null;
     }
 }
 
