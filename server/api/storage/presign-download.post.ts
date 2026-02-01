@@ -20,6 +20,7 @@ import {
     recordSyncRequest,
 } from '../../utils/sync/rate-limiter';
 import { recordDownloadStart } from '../../utils/storage/metrics';
+import { resolvePresignExpiresAt } from '../../utils/storage/presign-expiry';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -75,14 +76,14 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 404, statusMessage: 'File not found' });
     }
 
-    const expiryMs = Math.min(body.data.expires_in_ms ?? 3600_000, 3600_000);
+    const expiresAt = resolvePresignExpiresAt(result, body.data.expires_in_ms);
 
     recordSyncRequest(userId, 'storage:download');
     recordDownloadStart();
 
     return {
         url: result.url,
-        expiresAt: Date.now() + expiryMs,
+        expiresAt,
         disposition: body.data.disposition,
     };
 });

@@ -24,6 +24,11 @@ export const or3CloudConfig = defineOr3CloudConfig({
         enabled: authEnabled,
         provider: (process.env.AUTH_PROVIDER ?? AUTH_PROVIDER_IDS.clerk) as AuthProviderId,
         guestAccessEnabled: process.env.OR3_GUEST_ACCESS_ENABLED === 'true',
+        sessionProvisioningFailure: process.env.OR3_SESSION_PROVISIONING_FAILURE as
+            | 'throw'
+            | 'unauthenticated'
+            | 'service-unavailable'
+            | undefined,
         clerk: {
             publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
             secretKey: process.env.NUXT_CLERK_SECRET_KEY,
@@ -77,6 +82,11 @@ export const or3CloudConfig = defineOr3CloudConfig({
             process.env.OR3_FORCE_HTTPS !== undefined
                 ? process.env.OR3_FORCE_HTTPS === 'true'
                 : process.env.NODE_ENV === 'production',
+        proxy: {
+            trustProxy: process.env.OR3_TRUST_PROXY === 'true',
+            forwardedForHeader: (process.env.OR3_FORWARDED_FOR_HEADER as 'x-forwarded-for' | 'x-real-ip') ?? 'x-forwarded-for',
+            forwardedHostHeader: 'x-forwarded-host' as const,
+        },
     },
     admin: {
         basePath: process.env.OR3_ADMIN_BASE_PATH || '/admin',

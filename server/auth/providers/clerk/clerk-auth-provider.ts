@@ -17,15 +17,26 @@ export const clerkAuthProvider: AuthProvider = {
 
     async getSession(event: H3Event): Promise<ProviderSession | null> {
         // Clerk middleware populates event.context.auth as a function
+        const authFn = event.context.auth as (() => unknown) | undefined;
+        if (typeof authFn !== 'function') {
+            if (import.meta.dev) {
+                throw new Error('Clerk auth context missing. Ensure Clerk middleware is configured.');
+            }
+            return null;
+        }
+
         // Get auth context by calling it directly
-        const auth = event.context.auth() as ClerkAuthContext;
+        const auth = authFn() as ClerkAuthContext;
         if (!auth.userId) {
             return null;
         }
 
         // Validate session expiry claim
         if (typeof auth.sessionClaims.exp !== 'number' || auth.sessionClaims.exp <= 0) {
-            throw new Error('Invalid or missing session expiry claim');
+            if (import.meta.dev) {
+                throw new Error('Invalid or missing session expiry claim');
+            }
+            return null;
         }
 
         // Fetch full user details from Clerk

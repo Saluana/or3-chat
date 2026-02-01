@@ -320,6 +320,21 @@ Important default behavior when using env:
 - Purpose: Convex deployment URL.
 - Required: yes when `sync.enabled=true` and provider is `convex` (strict mode).
 
+#### Convex Auth (Clerk) Environment
+
+Convex validates Clerk JWTs via [convex/auth.config.ts](../../convex/auth.config.ts). Set:
+
+- `CLERK_ISSUER_URL` (required when using Clerk): Issuer URL from your Clerk JWT template.
+
+These are consumed by Convex (not OR3 runtime config), but they are required for the Convex backend to accept auth tokens.
+
+Set them using Convex CLI:
+
+```
+bunx convex env set CLERK_ISSUER_URL=<your-clerk-issuer-url>
+bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
+```
+
 ### `storage`
 
 #### `storage.enabled`

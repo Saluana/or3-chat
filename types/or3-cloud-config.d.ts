@@ -22,6 +22,14 @@ export interface Or3CloudConfig {
          */
         guestAccessEnabled?: boolean;
         /**
+         * Behavior when workspace provisioning fails during session resolution.
+         * - 'throw': preserve current behavior and throw (default)
+         * - 'unauthenticated': return unauthenticated session
+         * - 'service-unavailable': throw 503 for session endpoint
+         * @default 'throw'
+         */
+        sessionProvisioningFailure?: 'throw' | 'unauthenticated' | 'service-unavailable';
+        /**
          * Provider-specific configuration.
          */
         clerk?: {
@@ -192,6 +200,31 @@ export interface Or3CloudConfig {
          * @default true in production
          */
         forceHttps?: boolean;
+
+        /**
+         * Proxy trust configuration for secure deployments behind reverse proxies.
+         * When trustProxy is true, the server uses X-Forwarded-* headers for
+         * client IP and host resolution instead of socket addresses.
+         */
+        proxy?: {
+            /**
+             * Trust X-Forwarded-* headers from proxies.
+             * @default false
+             */
+            trustProxy?: boolean;
+
+            /**
+             * Header name for client IP resolution.
+             * @default 'x-forwarded-for'
+             */
+            forwardedForHeader?: 'x-forwarded-for' | 'x-real-ip';
+
+            /**
+             * Header name for forwarded host.
+             * @default 'x-forwarded-host'
+             */
+            forwardedHostHeader?: 'x-forwarded-host';
+        };
     };
 
     /**

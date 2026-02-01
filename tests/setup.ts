@@ -90,7 +90,7 @@ vi.mock('~/composables/useThemeResolver', () => ({
 
 // Global test-configurable runtime config
 const defaultTestConfig = {
-    auth: { enabled: true, provider: 'clerk' },
+    auth: { enabled: true, provider: 'clerk', sessionProvisioningFailure: 'throw' },
     sync: { enabled: true, provider: 'convex', convexUrl: 'https://convex.test' },
     storage: { enabled: true, provider: 'convex' },
     backgroundJobs: { enabled: false, storageProvider: 'memory', maxConcurrentJobs: 20, jobTimeoutMs: 300000, completedJobRetentionMs: 300000 },

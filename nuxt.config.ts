@@ -128,6 +128,8 @@ export default defineNuxtConfig({
         auth: {
             enabled: isSsrAuthEnabled,
             provider: or3CloudConfig.auth.provider,
+            sessionProvisioningFailure:
+                or3CloudConfig.auth.sessionProvisioningFailure ?? 'throw',
         },
         sync: {
             enabled: or3CloudConfig.sync.enabled,
@@ -144,6 +146,11 @@ export default defineNuxtConfig({
         security: {
             allowedOrigins: or3CloudConfig.security!.allowedOrigins!,
             forceHttps: or3CloudConfig.security!.forceHttps!,
+            proxy: {
+                trustProxy: or3CloudConfig.security?.proxy?.trustProxy ?? false,
+                forwardedForHeader: or3CloudConfig.security?.proxy?.forwardedForHeader ?? 'x-forwarded-for',
+                forwardedHostHeader: or3CloudConfig.security?.proxy?.forwardedHostHeader ?? 'x-forwarded-host',
+            },
         },
         admin: adminConfig,
         // Background streaming configuration (SSR mode only)

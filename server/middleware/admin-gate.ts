@@ -1,12 +1,13 @@
 import {
     defineEventHandler,
     createError,
-    getRequestHeader,
     sendRedirect,
 } from 'h3';
+import { useRuntimeConfig } from '#imports';
 import { isAdminEnabled } from '../utils/admin/is-admin-enabled';
 import { normalizeHost } from '../utils/normalize-host';
 import { resolveAdminRequestContext } from '../admin/context';
+import { getProxyRequestHost, normalizeProxyTrustConfig } from '../utils/net/request-identity';
 
 function isAdminPath(path: string, basePath: string): boolean {
     if (basePath === '/') return true;
@@ -70,8 +71,14 @@ export default defineEventHandler(async (event) => {
         .map((host) => normalizeHost(host));
 
     if (allowedHosts.length > 0) {
-        const hostHeader = getRequestHeader(event, 'host') || '';
-        const normalizedHost = normalizeHost(hostHeader);
+        const proxyConfig = normalizeProxyTrustConfig(config.security?.proxy);
+        const requestHost = getProxyRequestHost(event, proxyConfig);
+
+        if (!requestHost) {
+            throw createError({ statusCode: 404, statusMessage: 'Not Found' });
+        }
+
+        const normalizedHost = normalizeHost(requestHost);
         if (!allowedHosts.includes(normalizedHost)) {
             throw createError({ statusCode: 404, statusMessage: 'Not Found' });
         }

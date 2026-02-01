@@ -10,6 +10,7 @@ import {
     recordSyncRequest,
     getSyncRateLimitStats,
 } from '../../utils/sync/rate-limiter';
+import { getClientIp, normalizeProxyTrustConfig } from '../../utils/net/request-identity';
 
 export default defineEventHandler(async (event) => {
     // If SSR auth is disabled, always return null session
@@ -17,8 +18,15 @@ export default defineEventHandler(async (event) => {
         return { session: null };
     }
 
+    // Get proxy-safe client IP
+    const config = useRuntimeConfig();
+    const proxyConfig = normalizeProxyTrustConfig(config.security.proxy);
+    
+    const clientIP = getClientIp(event, proxyConfig) || 
+        event.node.req.socket.remoteAddress || 
+        'unknown';
+
     // Rate limit per IP to prevent session enumeration and DOS
-    const clientIP = event.node.req.socket.remoteAddress || 'unknown';
     const rateLimitResult = checkSyncRateLimit(clientIP, 'auth:session');
     
     if (!rateLimitResult.allowed) {

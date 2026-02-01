@@ -21,6 +21,7 @@ import {
     recordSyncRequest,
 } from '../../utils/sync/rate-limiter';
 import { recordUploadStart } from '../../utils/storage/metrics';
+import { resolvePresignExpiresAt } from '../../utils/storage/presign-expiry';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -102,14 +103,14 @@ export default defineEventHandler(async (event) => {
         size_bytes: body.data.size_bytes,
     });
 
-    const expiryMs = Math.min(body.data.expires_in_ms ?? 3600_000, 3600_000);
+    const expiresAt = resolvePresignExpiresAt(result, body.data.expires_in_ms);
 
     recordSyncRequest(userId, 'storage:upload');
     recordUploadStart();
 
     return {
         url: result.uploadUrl,
-        expiresAt: Date.now() + expiryMs,
+        expiresAt,
         disposition: body.data.disposition,
     };
 });

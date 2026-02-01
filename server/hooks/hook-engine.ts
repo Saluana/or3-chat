@@ -210,6 +210,7 @@ export function createHookEngine(): HookEngine {
         }
         for (let i = wildcards.length - 1; i >= 0; i--) {
             const wc = wildcards[i];
+            if (!wc) continue;
             if (wc.entry.priority === priority) wildcards.splice(i, 1);
         }
     }

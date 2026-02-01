@@ -48,6 +48,35 @@ export const or3CloudConfig = defineOr3CloudConfig({
 | `sync.provider` | `OR3_SYNC_PROVIDER` | `"convex"` | Backend (`convex` / `firebase` / `custom`) |
 | `sync.convex.url` | `VITE_CONVEX_URL` | — | Convex deployment URL |
 
+#### Convex Environment Variables
+
+When using Convex as the sync/storage backend, set these environment variables:
+
+- `VITE_CONVEX_URL` (required): Convex deployment URL used by OR3 for sync + storage.
+- `CLERK_ISSUER_URL` (required for Clerk auth): Issuer URL from your Clerk JWT template. This is read by [convex/auth.config.ts](../../convex/auth.config.ts) so Convex can validate Clerk tokens.
+
+If you are self-hosting Convex, you may also need Convex runtime variables (outside OR3):
+
+- `CONVEX_SELF_HOSTED_URL`
+- `CONVEX_SELF_HOSTED_ADMIN_KEY`
+
+> [!NOTE]
+> OR3 only reads `VITE_CONVEX_URL` for the Convex URL. The other values are consumed by Convex itself.
+
+#### Setting Convex env vars (Convex backend)
+
+Convex needs these set in its environment:
+
+- `CLERK_ISSUER_URL`
+- `OR3_ADMIN_JWT_SECRET`
+
+Set them with:
+
+```
+bunx convex env set CLERK_ISSUER_URL=<your-clerk-issuer-url>
+bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
+```
+
 ### Storage (File Uploads)
 
 | Key | Env Variable | Default | Description |

@@ -3,6 +3,7 @@
  * Resolves ProviderSession to internal SessionContext.
  */
 import type { H3Event } from 'h3';
+import { createError } from 'h3';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import type { ProviderSession } from './types';
 import { getAuthProvider } from './registry';
@@ -148,6 +149,26 @@ export async function resolveSessionContext(
             error: error instanceof Error ? error.message : String(error),
             stage: 'workspace.provision',
         });
+        const provisioningFailure =
+            config.auth?.sessionProvisioningFailure ?? 'throw';
+
+        if (provisioningFailure === 'unauthenticated') {
+            console.error('[auth:session] Provisioning failure mode: unauthenticated', {
+                provider: providerSession.provider,
+                userId: providerSession.user.id,
+            });
+            const nullSession: SessionContext = { authenticated: false };
+            event.context[cacheKey] = nullSession;
+            return nullSession;
+        }
+
+        if (provisioningFailure === 'service-unavailable') {
+            throw createError({
+                statusCode: 503,
+                statusMessage: 'Service Unavailable',
+            });
+        }
+
         throw error;
     }
 }

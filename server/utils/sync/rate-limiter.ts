@@ -4,10 +4,11 @@ import { LRUCache } from 'lru-cache';
  * Sync Rate Limiter
  *
  * In-memory sliding window rate limiter for sync and storage operations.
- * Limits are per-user to prevent abuse while allowing normal usage.
+ * Limits are per-subject (userId, IP address, or other identifier) to prevent 
+ * abuse while allowing normal usage.
  *
  * Memory bounds:
- * - Maximum 10,000 users tracked concurrently (LRU eviction)
+ * - Maximum 10,000 subjects tracked concurrently (LRU eviction)
  * - Entries expire after 10 minutes of inactivity
  * - Each entry stores ~100 bytes (timestamps array)
  * - Total memory: ~1MB worst case
@@ -43,12 +44,20 @@ export const SYNC_RATE_LIMITS: Record<string, RateLimitConfig> = {
 export const STORAGE_RATE_LIMITS: Record<string, RateLimitConfig> = {
     'storage:upload': { windowMs: 60_000, maxRequests: 50 },
     'storage:download': { windowMs: 60_000, maxRequests: 100 },
+    // Storage commit: 30/min per user to prevent spam
+    'storage:commit': { windowMs: 60_000, maxRequests: 30 },
 };
 
-// Merge with existing SYNC_RATE_LIMITS
+export const AUTH_RATE_LIMITS: Record<string, RateLimitConfig> = {
+    // Auth session: 60/min per IP to prevent enumeration attacks
+    'auth:session': { windowMs: 60_000, maxRequests: 60 },
+};
+
+// Merge all rate limit configurations
 export const ALL_RATE_LIMITS = {
     ...SYNC_RATE_LIMITS,
     ...STORAGE_RATE_LIMITS,
+    ...AUTH_RATE_LIMITS,
 };
 
 /** Maximum age for entries before cleanup (10 minutes) */
@@ -66,28 +75,29 @@ const rateLimitStore = new LRUCache<string, RateLimitEntry>({
 });
 
 /**
- * Get the rate limit key for a user and operation
+ * Get the rate limit key for a subject and operation.
+ * Subject can be a userId, IP address, or other identifier.
  */
-function getRateLimitKey(userId: string, operation: string): string {
-    return `${userId}:${operation}`;
+function getRateLimitKey(subjectKey: string, operation: string): string {
+    return `${subjectKey}:${operation}`;
 }
 
 /**
  * Check if a request is allowed under rate limits.
  * Does NOT record the request - call recordSyncRequest separately if allowed.
  *
- * @param userId - The user making the request
- * @param operation - The operation type (e.g., 'sync:push', 'sync:pull')
+ * @param subjectKey - The subject making the request (userId, IP, etc.)
+ * @param operation - The operation type (e.g., 'sync:push', 'auth:session')
  * @returns Rate limit result with allowed status and remaining requests
  */
-export function checkSyncRateLimit(userId: string, operation: string): RateLimitResult {
+export function checkSyncRateLimit(subjectKey: string, operation: string): RateLimitResult {
     const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
     if (!config) {
         // Unknown operation - allow by default
         return { allowed: true, remaining: Infinity };
     }
 
-    const key = getRateLimitKey(userId, operation);
+    const key = getRateLimitKey(subjectKey, operation);
     const entry = rateLimitStore.get(key);
     const now = Date.now();
     const windowStart = now - config.windowMs;
@@ -120,16 +130,16 @@ export function checkSyncRateLimit(userId: string, operation: string): RateLimit
  * Record a request for rate limiting.
  * Call this AFTER the request is allowed and processed.
  *
- * @param userId - The user making the request
+ * @param subjectKey - The subject making the request (userId, IP, etc.)
  * @param operation - The operation type
  */
-export function recordSyncRequest(userId: string, operation: string): void {
+export function recordSyncRequest(subjectKey: string, operation: string): void {
     const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
     if (!config) {
         return;
     }
 
-    const key = getRateLimitKey(userId, operation);
+    const key = getRateLimitKey(subjectKey, operation);
     const now = Date.now();
     const windowStart = now - config.windowMs;
 
@@ -148,14 +158,14 @@ export function recordSyncRequest(userId: string, operation: string): void {
 }
 
 /**
- * Reset rate limits for a user (useful for testing)
+ * Reset rate limits for a subject (useful for testing)
  *
- * @param userId - The user to reset, or undefined to reset all
+ * @param subjectKey - The subject to reset, or undefined to reset all
  */
-export function resetSyncRateLimits(userId?: string): void {
-    if (userId) {
+export function resetSyncRateLimits(subjectKey?: string): void {
+    if (subjectKey) {
         for (const operation of Object.keys(ALL_RATE_LIMITS)) {
-            rateLimitStore.delete(getRateLimitKey(userId, operation));
+            rateLimitStore.delete(getRateLimitKey(subjectKey, operation));
         }
     } else {
         rateLimitStore.clear();
@@ -163,13 +173,13 @@ export function resetSyncRateLimits(userId?: string): void {
 }
 
 /**
- * Get current rate limit stats for a user (useful for debugging/headers)
+ * Get current rate limit stats for a subject (useful for debugging/headers)
  *
- * @param userId - The user to check
+ * @param subjectKey - The subject to check (userId, IP, etc.)
  * @param operation - The operation type
  */
 export function getSyncRateLimitStats(
-    userId: string,
+    subjectKey: string,
     operation: string
 ): { limit: number; remaining: number; resetMs: number } | null {
     const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
@@ -177,7 +187,7 @@ export function getSyncRateLimitStats(
         return null;
     }
 
-    const result = checkSyncRateLimit(userId, operation);
+    const result = checkSyncRateLimit(subjectKey, operation);
     return {
         limit: config.maxRequests,
         remaining: result.remaining,

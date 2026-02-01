@@ -2,7 +2,7 @@
  * POST /api/storage/commit
  * Link uploaded storage ID to file metadata.
  */
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { z } from 'zod';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
@@ -16,6 +16,10 @@ import {
 } from '../../utils/sync/convex-gateway';
 import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
 import { recordUploadComplete } from '../../utils/storage/metrics';
+import {
+    checkSyncRateLimit,
+    recordSyncRequest,
+} from '../../utils/sync/rate-limiter';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -47,6 +51,22 @@ export default defineEventHandler(async (event) => {
         id: body.data.workspace_id,
     });
 
+    const userId = session.user?.id;
+    if (!userId) {
+        throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
+    }
+
+    // Rate limiting
+    const rateLimitResult = checkSyncRateLimit(userId, 'storage:commit');
+    if (!rateLimitResult.allowed) {
+        const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
+        setResponseHeader(event, 'Retry-After', retryAfterSec);
+        throw createError({
+            statusCode: 429,
+            statusMessage: `Rate limit exceeded. Retry after ${retryAfterSec}s`,
+        });
+    }
+
     const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
     if (!token) {
         throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
@@ -67,6 +87,7 @@ export default defineEventHandler(async (event) => {
         page_count: body.data.page_count,
     });
 
+    recordSyncRequest(userId, 'storage:commit');
     recordUploadComplete(body.data.size_bytes);
 
     return { ok: true };

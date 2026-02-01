@@ -36,6 +36,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         enabled: false,
         provider: DEFAULT_AUTH_PROVIDER_ID,
         guestAccessEnabled: false,
+        sessionProvisioningFailure: 'throw',
         clerk: {
             publishableKey: undefined,
             secretKey: undefined,
@@ -71,6 +72,11 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
     security: {
         allowedOrigins: [],
         forceHttps: process.env.NODE_ENV === 'production',
+        proxy: {
+            trustProxy: false,
+            forwardedForHeader: 'x-forwarded-for',
+            forwardedHostHeader: 'x-forwarded-host',
+        },
     },
     admin: {
         basePath: DEFAULT_ADMIN_BASE_PATH,
@@ -130,6 +136,9 @@ const cloudConfigSchema = z
             enabled: z.boolean(),
             provider: z.enum(AUTH_PROVIDER_ID_LIST),
             guestAccessEnabled: z.boolean().optional(),
+            sessionProvisioningFailure: z
+                .enum(['throw', 'unauthenticated', 'service-unavailable'])
+                .optional(),
             clerk: z
                 .object({
                     publishableKey: z.string().optional(),
@@ -179,6 +188,15 @@ const cloudConfigSchema = z
             .object({
                 allowedOrigins: z.array(z.string()).optional(),
                 forceHttps: z.boolean().optional(),
+                proxy: z
+                    .object({
+                        trustProxy: z.boolean().optional(),
+                        forwardedForHeader: z
+                            .enum(['x-forwarded-for', 'x-real-ip'])
+                            .optional(),
+                        forwardedHostHeader: z.enum(['x-forwarded-host']).optional(),
+                    })
+                    .optional(),
             })
             .optional(),
         admin: z
