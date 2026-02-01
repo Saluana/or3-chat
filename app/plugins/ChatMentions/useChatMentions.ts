@@ -85,7 +85,7 @@ interface DocPostRow {
  */
 interface ThreadRow {
     id: string;
-    title?: string;
+    title?: string | null;
     deleted?: boolean;
 }
 
@@ -289,19 +289,20 @@ export async function searchMentions(query: string): Promise<MentionItem[]> {
         const { getByID } = await import('@orama/orama');
 
         const enriched = await Promise.all(
-            results.hits.map(async (hit: OramaHit) => {
-                let id: string | null = hit?.id ?? hit?.document?.id ?? null;
+            results.hits.map(async (hit: unknown) => {
+                const h = hit as { id?: string; document?: { id?: string; source?: string; title?: string; snippet?: string }; score?: number };
+                let id: string | null = h?.id ?? h?.document?.id ?? null;
                 let source: 'document' | 'chat' | null =
-                    (hit?.document?.source as 'document' | 'chat') ?? null;
-                let title: string = hit?.document?.title ?? '';
+                    (h?.document?.source as 'document' | 'chat') ?? null;
+                let title: string = h?.document?.title ?? '';
                 let subtitle: string | undefined =
-                    hit?.document?.snippet || undefined;
+                    h?.document?.snippet || undefined;
 
                 if (!id || !source || !title) {
                     try {
-                        const stored = (await getByID(mentionsDb!, hit?.id ?? id!)) as IndexRecord | null;
+                        const stored = await getByID(mentionsDb as unknown as Parameters<typeof getByID>[0], h?.id ?? id!) as unknown as IndexRecord | null;
                         if (stored) {
-                            id = id ?? stored.id ?? hit?.id ?? null;
+                            id = id ?? stored.id ?? h?.id ?? null;
                             source = (source ?? stored.source ?? null) as 'document' | 'chat' | null;
                             title = title || stored.title || '';
                             subtitle =
@@ -338,7 +339,7 @@ export async function searchMentions(query: string): Promise<MentionItem[]> {
                     source,
                     label: title,
                     subtitle,
-                    score: hit.score,
+                    score: (hit as { score?: number }).score,
                 } as Partial<MentionItem> & { score?: number };
             })
         );
@@ -541,7 +542,7 @@ export async function upsertDocument(doc: Partial<DocPostRow>) {
 
         try {
             // Try insert first - note: Orama uses the id field from the record
-            await insert(mentionsDb, record);
+            await insert(mentionsDb as Parameters<typeof insert>[0], record);
         } catch (insertError: unknown) {
             const errMsg = insertError instanceof Error ? insertError.message : '';
             // If insert fails (duplicate ID), try update
@@ -550,7 +551,7 @@ export async function upsertDocument(doc: Partial<DocPostRow>) {
                 errMsg.includes('duplicate')
             ) {
                 try {
-                    await update(mentionsDb, doc.id!, record);
+                    await update(mentionsDb as Parameters<typeof update>[0], doc.id!, record);
                 } catch (updateError) {
                     reportError(updateError, {
                         code: 'ERR_INTERNAL',
@@ -586,7 +587,7 @@ export async function updateDocument(doc: Partial<DocPostRow>) {
     if (!mentionsDb || !indexReady) return;
     try {
         const { update } = await import('@orama/orama');
-        await update(mentionsDb, doc.id!, {
+        await update(mentionsDb as Parameters<typeof update>[0], doc.id!, {
             title: doc.title || 'Untitled',
         });
     } catch (e) {
@@ -620,7 +621,7 @@ export async function upsertThread(thread: Partial<ThreadRow>) {
         };
         try {
             // Try insert first
-            await insert(mentionsDb, record);
+            await insert(mentionsDb as Parameters<typeof insert>[0], record);
         } catch (insertError: unknown) {
             const errMsg = insertError instanceof Error ? insertError.message : '';
             // If insert fails (duplicate ID), try update
@@ -629,7 +630,7 @@ export async function upsertThread(thread: Partial<ThreadRow>) {
                 errMsg.includes('duplicate')
             ) {
                 try {
-                    await update(mentionsDb, thread.id!, record);
+                    await update(mentionsDb as Parameters<typeof update>[0], thread.id!, record);
                 } catch (updateError) {
                     reportError(updateError, {
                         code: 'ERR_INTERNAL',
@@ -665,7 +666,7 @@ export async function updateThread(thread: Partial<ThreadRow>) {
     if (!mentionsDb || !indexReady) return;
     try {
         const { update } = await import('@orama/orama');
-        await update(mentionsDb, thread.id!, {
+        await update(mentionsDb as Parameters<typeof update>[0], thread.id!, {
             title: thread.title || 'Untitled Chat',
         });
     } catch (e) {
@@ -692,7 +693,7 @@ export async function removeDocument(payload: { id?: string; entity?: { id?: str
         const { remove } = await import('@orama/orama');
         const docId = payload.id || payload.entity?.id;
         if (docId) {
-            await remove(mentionsDb, docId);
+            await remove(mentionsDb as Parameters<typeof remove>[0], docId);
         }
     } catch (e) {
         reportError(e, {
@@ -723,7 +724,7 @@ export async function removeThread(payload: { id?: string; entity?: { id?: strin
         const { remove } = await import('@orama/orama');
         const threadId = payload.id || payload.entity?.id;
         if (threadId) {
-            await remove(mentionsDb, threadId);
+            await remove(mentionsDb as Parameters<typeof remove>[0], threadId);
         }
     } catch (e) {
         reportError(e, {
