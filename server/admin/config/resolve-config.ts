@@ -14,7 +14,7 @@ type EnvMap = Record<string, string | undefined>;
 
 function envBool(val: string | undefined, defaultValue: boolean): boolean {
     if (val === undefined) return defaultValue;
-    return val === 'true';
+    return ['true', '1', 'yes', 'on'].includes(val.toLowerCase());
 }
 
 function envNum(val: string | undefined, fallback?: number): number | undefined {

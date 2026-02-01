@@ -28,8 +28,13 @@ export async function readEnvFile(): Promise<{ lines: EnvLine[]; map: Record<str
     let content = '';
     try {
         content = await fs.readFile(ENV_PATH, 'utf8');
-    } catch {
-        content = '';
+    } catch (error) {
+        const err = error as NodeJS.ErrnoException;
+        if (err.code === 'ENOENT') {
+            content = '';
+        } else {
+            throw error;
+        }
     }
     const rawLines = content.split(/\r?\n/);
     const lines = rawLines.map(parseLine);

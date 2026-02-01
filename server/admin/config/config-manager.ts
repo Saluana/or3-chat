@@ -8,7 +8,7 @@ import {
     type EnrichedConfigEntry,
 } from './config-metadata';
 
-const WHITELIST = [
+const WHITELIST = new Set([
     'SSR_AUTH_ENABLED',
     'AUTH_PROVIDER',
     'OR3_GUEST_ACCESS_ENABLED',
@@ -66,7 +66,7 @@ const WHITELIST = [
     'OR3_PRIVACY_URL',
     'NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
     'NUXT_CLERK_SECRET_KEY',
-];
+]);
 
 const SECRET_PATTERN = /(SECRET|KEY|TOKEN|PASSWORD)/i;
 
@@ -78,7 +78,7 @@ export type ConfigEntry = {
 
 export async function readConfigEntries(): Promise<ConfigEntry[]> {
     const { map } = await readEnvFile();
-    return WHITELIST.map((key) => {
+    return Array.from(WHITELIST).map((key) => {
         const value = map[key] ?? null;
         const masked = value !== null && SECRET_PATTERN.test(key);
         return { key, value: masked ? '******' : value, masked };
@@ -90,7 +90,7 @@ const DEFAULT_CONFIG_ORDER = 999;
 
 export async function readEnrichedConfigEntries(): Promise<EnrichedConfigEntry[]> {
     const { map } = await readEnvFile();
-    return WHITELIST.map((key) => {
+    return Array.from(WHITELIST).map((key) => {
         const value = map[key] ?? null;
         const masked = value !== null && SECRET_PATTERN.test(key);
         const metadata = getConfigMetadata(key);
@@ -114,7 +114,7 @@ export async function writeConfigEntries(
 
     const updateMap: Record<string, string | null> = {};
     for (const update of updates) {
-        if (!WHITELIST.includes(update.key)) {
+        if (!WHITELIST.has(update.key)) {
             throw new Error(`Key not allowed: ${update.key}`);
         }
         if (update.value === '******') {
