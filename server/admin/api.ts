@@ -111,7 +111,7 @@ export async function requireAdminApiContext(
     }
 
     // Check owner/permission for workspace admin
-    if (context.session) {
+    if (context.session && !isSuperAdmin(context)) {
         if (options.ownerOnly) {
             requireAdminOwner(context.session);
         } else if (options.permission) {

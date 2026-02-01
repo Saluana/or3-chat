@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
+import { createHmac } from 'crypto';
 import { api } from '~~/convex/_generated/api';
 import type { Id } from '~~/convex/_generated/dataModel';
 import type {
@@ -15,6 +16,60 @@ import {
 } from '../../../utils/sync/convex-gateway';
 import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
 import { useRuntimeConfig } from '#imports';
+
+type AdminContextShape = {
+    principal?: { kind?: string; username?: string };
+    session?: { providerUserId?: string };
+};
+
+async function ensureSuperAdminDeploymentGrant(
+    event: H3Event,
+    client: ReturnType<typeof getConvexGatewayClient>
+): Promise<void> {
+    const adminContext = event.context.admin as AdminContextShape | undefined;
+    if (adminContext?.principal?.kind !== 'super_admin') return;
+    if (event.context.__or3_super_admin_grant_done) return;
+    event.context.__or3_super_admin_grant_done = true;
+
+    const adminUsername = adminContext.principal?.username;
+    const providerUserId = adminContext.session?.providerUserId;
+    if (!adminUsername || !providerUserId) {
+        throw createError({
+            statusCode: 401,
+            statusMessage: 'Missing Clerk session for super admin bridging',
+        });
+    }
+
+    const config = useRuntimeConfig(event);
+    const secret = config.admin?.auth?.jwtSecret;
+    if (!secret) {
+        throw createError({
+            statusCode: 500,
+            statusMessage:
+                'OR3_ADMIN_JWT_SECRET is required for super admin bridging',
+        });
+    }
+
+    const bridgeSignature = createHmac('sha256', secret)
+        .update(`or3-admin-bridge:${providerUserId}:${adminUsername}`)
+        .digest('hex');
+
+    try {
+        await client.mutation(api.admin.ensureDeploymentAdmin, {
+            bridge_signature: bridgeSignature,
+            admin_username: adminUsername,
+        });
+    } catch (error) {
+        throw createError({
+            statusCode: 403,
+            statusMessage:
+                'Super admin bridging failed. Ensure OR3_ADMIN_JWT_SECRET is set in the Convex environment.',
+            data: {
+                original: error instanceof Error ? error.message : String(error),
+            },
+        });
+    }
+}
 
 /**
  * Validate and convert a workspace ID string to Convex Id type.
@@ -67,7 +122,9 @@ async function getConvexClientWithAuth(event: H3Event) {
             statusMessage: 'Missing Clerk authentication token',
         });
     }
-    return getConvexGatewayClient(event, token);
+    const client = getConvexGatewayClient(event, token);
+    await ensureSuperAdminDeploymentGrant(event, client);
+    return client;
 }
 
 export function createConvexWorkspaceAccessStore(

@@ -1,4 +1,5 @@
-import type { Ref } from 'vue';
+import type { Ref, DeepReadonly } from 'vue';
+import { readonly } from 'vue';
 
 /**
  * Global workspace selection state for admin pages.
@@ -17,7 +18,6 @@ export const ADMIN_WORKSPACE_STATE_KEY = 'admin-selected-workspace';
 // Use global Nuxt/Vue composables (auto-imported)
 declare const useState: <T>(key: string, init?: () => T) => Ref<T>;
 declare const computed: <T>(getter: () => T) => { readonly value: T };
-declare const readonly: <T>(ref: { value: T }) => Readonly<{ value: T }>;
 
 export function useAdminWorkspaceContext() {
     // Use useState for shared state across components
@@ -43,8 +43,8 @@ export function useAdminWorkspaceContext() {
     const hasWorkspace = computed(() => !!selectedWorkspaceId.value);
 
     return {
-        selectedWorkspaceId: readonly(selectedWorkspaceId),
-        selectedWorkspace: readonly(selectedWorkspace),
+        selectedWorkspaceId: readonly(selectedWorkspaceId) as DeepReadonly<Ref<string | null>>,
+        selectedWorkspace: readonly(selectedWorkspace) as DeepReadonly<Ref<Workspace | null>>,
         selectWorkspace,
         clearWorkspace,
         hasWorkspace,

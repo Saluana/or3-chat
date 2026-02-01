@@ -235,10 +235,8 @@ export function getWorkspaceDbCacheStats(): { size: number; max: number; keys: s
 }
 
 export function setActiveWorkspaceDb(workspaceId: string | null): Or3DB {
-    if (activeWorkspaceId && activeWorkspaceId !== workspaceId) {
-        evictWorkspaceDb(activeWorkspaceId);
-    }
-
+    // Avoid closing previous workspace DB immediately to prevent in-flight writes
+    // from failing; rely on LRU eviction/TTL for cleanup.
     if (!workspaceId) {
         activeWorkspaceId = null;
         activeDb = defaultDb;

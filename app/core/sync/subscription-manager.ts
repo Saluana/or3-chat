@@ -80,7 +80,7 @@ export class SubscriptionManager {
             this.boundBeforeUnload = () => {
                 this.stop().catch(() => {});
             };
-            win.addEventListener('beforeunload', this.boundBeforeUnload);
+            (win as Window & typeof globalThis).addEventListener('beforeunload', this.boundBeforeUnload);
         }
     }
 
@@ -137,7 +137,7 @@ export class SubscriptionManager {
         // Clean up beforeunload listener
         const win = this.getWindow();
         if (win && this.boundBeforeUnload) {
-            win.removeEventListener('beforeunload', this.boundBeforeUnload);
+            (win as Window & typeof globalThis).removeEventListener('beforeunload', this.boundBeforeUnload);
             this.boundBeforeUnload = null;
         }
 
@@ -601,7 +601,7 @@ export class SubscriptionManager {
 
     private getWindow(): Window | null {
         if (typeof globalThis === 'undefined') return null;
-        const globalWithWindow = globalThis as { window?: Window };
+        const globalWithWindow = globalThis as { window?: Window & typeof globalThis };
         return globalWithWindow.window ?? null;
     }
 }

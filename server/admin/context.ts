@@ -38,11 +38,23 @@ export async function resolveAdminRequestContext(
     // Try super admin JWT first
     const adminClaims = await getAdminFromCookie(event);
     if (adminClaims) {
+        let session: SessionContext | undefined;
+        try {
+            const resolved = await resolveSessionContext(event);
+            if (resolved.authenticated) {
+                session = resolved;
+            }
+        } catch (error) {
+            console.error('[admin] Failed to resolve session for super admin:', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
         return {
             principal: {
                 kind: 'super_admin',
                 username: adminClaims.username,
             },
+            session,
         };
     }
 

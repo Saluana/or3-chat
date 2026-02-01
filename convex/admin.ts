@@ -59,6 +59,33 @@ async function requireAdmin(ctx: MutationCtx | QueryCtx): Promise<{ userId: Id<'
     return { userId };
 }
 
+function getBridgeSecret(): string | null {
+    return process.env.OR3_ADMIN_JWT_SECRET || null;
+}
+
+async function computeBridgeSignature(
+    secret: string,
+    providerUserId: string,
+    adminUsername: string
+): Promise<string> {
+    const encoder = new TextEncoder();
+    const key = await globalThis.crypto.subtle.importKey(
+        'raw',
+        encoder.encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+    );
+    const data = encoder.encode(
+        `or3-admin-bridge:${providerUserId}:${adminUsername}`
+    );
+    const signature = await globalThis.crypto.subtle.sign('HMAC', key, data);
+    const bytes = new Uint8Array(signature);
+    return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
 /**
  * Check if a user is an admin.
  */
@@ -71,6 +98,74 @@ export const isAdmin = query({
             .first();
 
         return adminGrant !== null;
+    },
+});
+
+/**
+ * Ensure the current authenticated user has deployment admin access.
+ * Intended for super admin bridging only.
+ */
+export const ensureDeploymentAdmin = mutation({
+    args: {
+        bridge_signature: v.string(),
+        admin_username: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+            throw new Error('Not authenticated');
+        }
+
+        const authAccount = await ctx.db
+            .query('auth_accounts')
+            .withIndex('by_provider', (q) =>
+                q.eq('provider', 'clerk').eq('provider_user_id', identity.subject)
+            )
+            .first();
+
+        if (!authAccount) {
+            throw new Error('Unauthorized: User not found');
+        }
+
+        const existing = await ctx.db
+            .query('admin_users')
+            .withIndex('by_user', (q) => q.eq('user_id', authAccount.user_id))
+            .first();
+
+        if (existing) {
+            return { created: false, userId: authAccount.user_id };
+        }
+
+        const secret = getBridgeSecret();
+        if (!secret) {
+            throw new Error('Forbidden: OR3_ADMIN_JWT_SECRET not configured');
+        }
+
+        const expectedSignature = await computeBridgeSignature(
+            secret,
+            identity.subject,
+            args.admin_username
+        );
+
+        if (expectedSignature !== args.bridge_signature) {
+            throw new Error('Forbidden: Invalid super admin bridge signature');
+        }
+
+        await ctx.db.insert('admin_users', {
+            user_id: authAccount.user_id,
+            created_at: Date.now(),
+        });
+
+        await logAudit(
+            ctx,
+            'admin.grant',
+            args.admin_username,
+            'super_admin',
+            'user',
+            authAccount.user_id
+        );
+
+        return { created: true, userId: authAccount.user_id };
     },
 });
 
@@ -556,6 +651,9 @@ export const listWorkspaceMembers = query({
         workspace_id: v.id('workspaces'),
     },
     handler: async (ctx, args) => {
+        // Verify caller is an admin
+        await requireAdmin(ctx);
+
         const members = await ctx.db
             .query('workspace_members')
             .withIndex('by_workspace', (q) =>
@@ -589,6 +687,9 @@ export const upsertWorkspaceMember = mutation({
         provider: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        // Verify caller is an admin
+        await requireAdmin(ctx);
+
         const provider = args.provider ?? 'clerk';
         const identifier = args.email_or_provider_id.trim();
 
@@ -704,6 +805,9 @@ export const getWorkspaceSetting = query({
         key: v.string(),
     },
     handler: async (ctx, args) => {
+        // Verify caller is an admin
+        await requireAdmin(ctx);
+
         const entry = await ctx.db
             .query('kv')
             .withIndex('by_workspace_name', (q) =>
@@ -726,6 +830,9 @@ export const setWorkspaceSetting = mutation({
         value: v.string(),
     },
     handler: async (ctx, args) => {
+        // Verify caller is an admin
+        await requireAdmin(ctx);
+
         const now = Date.now();
         const existing = await ctx.db
             .query('kv')
