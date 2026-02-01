@@ -1,4 +1,52 @@
 /**
+ * @module composables/chat/useAiSettings
+ *
+ * **Purpose**
+ * Manages AI-related settings (master system prompt, model defaults) with persistence
+ * to Dexie KV store. Provides migration from legacy localStorage. Settings are shared
+ * globally across all components via singleton pattern.
+ *
+ * **Responsibilities**
+ * - Load and persist AI settings to KV store (key: `ai_settings`)
+ * - Migrate from legacy localStorage on first access
+ * - Provide reactive state for master system prompt and model defaults
+ * - Sanitize and validate settings on load/save
+ * - Support both "last selected" and "fixed" model modes
+ *
+ * **Non-responsibilities**
+ * - Does NOT apply settings to chat messages (see useAi.ts)
+ * - Does NOT manage model catalog (see useModelStore.ts)
+ * - Does NOT validate model IDs exist (caller should check)
+ * - Does NOT emit hooks (settings are directly reactive)
+ *
+ * **Singleton State Pattern**
+ * - Module-scoped ref (`_settings`) ensures all callers share state
+ * - Lazy-loaded once on first access via `ensureLoaded()`
+ * - Settings persist across component mount/unmount (session lifetime)
+ * - Persisted to KV store (survives page reload)
+ *
+ * **Settings Schema (V1)**
+ * - `masterSystemPrompt`: Global system prompt prepended to all chats
+ * - `defaultModelMode`: "lastSelected" (use last chosen model) or "fixed" (always use fixedModelId)
+ * - `fixedModelId`: Model ID to use when defaultModelMode is "fixed"
+ *
+ * **Migration**
+ * - On first load, checks localStorage for legacy key (`or3.ai.settings.v1`)
+ * - Migrates to KV store and clears localStorage (one-time)
+ * - Falls back to defaults if migration fails or no legacy data exists
+ *
+ * **Error Handling**
+ * - Load errors from KV store are logged and fall back to defaults
+ * - Save errors propagate to caller (should be caught and handled)
+ * - Sanitization ensures settings are always valid (no runtime errors)
+ *
+ * **Lifecycle**
+ * - First call triggers lazy load from KV (async, deduped via `_loadPromise`)
+ * - `updateSettings(partial)` merges changes and persists to KV
+ * - `resetSettings()` reverts to defaults and persists
+ */
+
+/**
  * AI Settings Composable
  * 
  * Stores AI-related settings (master prompt, model defaults) in KV for sync.
