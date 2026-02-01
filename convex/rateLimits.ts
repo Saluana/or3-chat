@@ -8,6 +8,23 @@
 import { v } from 'convex/values';
 import { mutation, query, internalMutation } from './_generated/server';
 
+// ============================================================
+// CONSTANTS
+// ============================================================
+
+/** Rate limit record retention period in milliseconds (48 hours) */
+const RATE_LIMIT_RETENTION_MS = 48 * 60 * 60 * 1000;
+
+/** Batch size for rate limit cleanup operations */
+const CLEANUP_BATCH_SIZE = 500;
+
+/** Maximum batches processed per cleanup run */
+const MAX_CLEANUP_BATCHES = 5;
+
+// ============================================================
+// MUTATIONS
+// ============================================================
+
 /**
  * Check and record a rate limit hit atomically.
  * Returns whether the request is allowed.
@@ -119,19 +136,24 @@ export const getStats = query({
 export const cleanup = internalMutation({
     args: {},
     handler: async (ctx) => {
-        const cutoff = Date.now() - 48 * 60 * 60 * 1000; // 48 hours ago
+        const cutoff = Date.now() - RATE_LIMIT_RETENTION_MS;
+        let totalDeleted = 0;
 
-        // Find old records
-        const oldRecords = await ctx.db
-            .query('rate_limits')
-            .filter((q) => q.lt(q.field('updated_at'), cutoff))
-            .take(100);
+        // Process multiple batches per cleanup run
+        for (let i = 0; i < MAX_CLEANUP_BATCHES; i++) {
+            const oldRecords = await ctx.db
+                .query('rate_limits')
+                .filter((q) => q.lt(q.field('updated_at'), cutoff))
+                .take(CLEANUP_BATCH_SIZE);
 
-        // Delete them
-        for (const record of oldRecords) {
-            await ctx.db.delete(record._id);
+            if (oldRecords.length === 0) break;
+
+            await Promise.all(oldRecords.map((r) => ctx.db.delete(r._id)));
+            totalDeleted += oldRecords.length;
+
+            if (oldRecords.length < CLEANUP_BATCH_SIZE) break;
         }
 
-        return { deleted: oldRecords.length };
+        return { deleted: totalDeleted };
     },
 });

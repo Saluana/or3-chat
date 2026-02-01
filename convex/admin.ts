@@ -2,6 +2,20 @@ import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/s
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 
+// ============================================================
+// CONSTANTS
+// ============================================================
+
+/** Maximum results returned by search queries */
+const MAX_SEARCH_LIMIT = 100;
+
+/** Maximum items per page in paginated queries */
+const MAX_PER_PAGE = 100;
+
+// ============================================================
+// HELPERS
+// ============================================================
+
 /**
  * Get the current user's auth account ID.
  * Throws if not authenticated.
@@ -95,17 +109,20 @@ export const listAdmins = query({
 
         const admins = await ctx.db.query('admin_users').collect();
 
-        const results = await Promise.all(
-            admins.map(async (admin) => {
-                const user = await ctx.db.get(admin.user_id);
-                return {
-                    userId: admin.user_id,
-                    email: user?.email,
-                    displayName: user?.display_name,
-                    createdAt: admin.created_at,
-                };
-            })
-        );
+        // Batch fetch all users at once to avoid N+1 queries
+        const userIds = admins.map((a) => a.user_id);
+        const allUsers = await Promise.all(userIds.map((id) => ctx.db.get(id)));
+        const userMap = new Map(allUsers.filter(Boolean).map((u) => [u!._id, u!] as const));
+
+        const results = admins.map((admin) => {
+            const user = userMap.get(admin.user_id);
+            return {
+                userId: admin.user_id,
+                email: user?.email,
+                displayName: user?.display_name,
+                createdAt: admin.created_at,
+            };
+        });
 
         return results;
     },
@@ -205,6 +222,7 @@ export const revokeAdmin = mutation({
 /**
  * Search users by email or display name.
  * Returns matching users with their IDs.
+ * Requires admin authorization.
  */
 export const searchUsers = query({
     args: {
@@ -212,7 +230,10 @@ export const searchUsers = query({
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const limit = args.limit ?? 20;
+        // Verify caller is an admin
+        await requireAdmin(ctx);
+
+        const limit = Math.min(args.limit ?? 20, MAX_SEARCH_LIMIT);
         const searchTerm = args.query.toLowerCase().trim();
 
         if (!searchTerm) {
@@ -272,7 +293,11 @@ export const listWorkspaces = query({
         per_page: v.number(),
     },
     handler: async (ctx, args) => {
-        const { search, include_deleted, page, per_page } = args;
+        // Verify caller is an admin
+        await requireAdmin(ctx);
+
+        const { search, include_deleted, page } = args;
+        const per_page = Math.min(args.per_page, MAX_PER_PAGE);
         const skip = (page - 1) * per_page;
 
         // Get all workspaces
@@ -353,6 +378,9 @@ export const getWorkspace = query({
         workspace_id: v.id('workspaces'),
     },
     handler: async (ctx, args) => {
+        // Verify caller is an admin
+        await requireAdmin(ctx);
+
         const workspace = await ctx.db.get(args.workspace_id);
 
         if (!workspace) {
@@ -500,6 +528,9 @@ export const restoreWorkspace = mutation({
         workspace_id: v.id('workspaces'),
     },
     handler: async (ctx, args) => {
+        // Verify caller is an admin
+        await requireAdmin(ctx);
+
         const workspace = await ctx.db.get(args.workspace_id);
 
         if (!workspace) {
@@ -615,6 +646,9 @@ export const setWorkspaceMemberRole = mutation({
         role: v.union(v.literal('owner'), v.literal('editor'), v.literal('viewer')),
     },
     handler: async (ctx, args) => {
+        // Verify caller is an admin
+        await requireAdmin(ctx);
+
         const member = await ctx.db
             .query('workspace_members')
             .withIndex('by_workspace_user', (q) =>
@@ -639,6 +673,9 @@ export const removeWorkspaceMember = mutation({
         user_id: v.string(),
     },
     handler: async (ctx, args) => {
+        // Verify caller is an admin
+        await requireAdmin(ctx);
+
         const member = await ctx.db
             .query('workspace_members')
             .withIndex('by_workspace_user', (q) =>

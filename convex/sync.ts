@@ -34,6 +34,18 @@ const DEFAULT_RETENTION_SECONDS = 30 * 24 * 3600;
 /** Delay between scheduled GC continuations (1 minute) */
 const GC_CONTINUATION_DELAY_MS = 60_000;
 
+/** Maximum operation ID length in characters */
+const MAX_OP_ID_LENGTH = 64;
+
+/** Maximum payload size in bytes (64KB) */
+const MAX_PAYLOAD_SIZE_BYTES = 64 * 1024;
+
+/** Maximum GC continuation jobs per workspace per scheduled run */
+const MAX_GC_CONTINUATIONS = 10;
+
+/** Maximum workspaces to schedule for GC per scheduled run */
+const MAX_WORKSPACES_PER_GC_RUN = 50;
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -365,6 +377,23 @@ export const push = mutation({
 
         // Verify workspace membership
         await verifyWorkspaceMembership(ctx, args.workspace_id);
+
+        // Input validation
+        const VALID_TABLES = Object.keys(TABLE_INDEX_MAP);
+
+        for (const op of args.ops) {
+            if (op.op_id.length > MAX_OP_ID_LENGTH) {
+                throw new Error(`op_id too long: ${op.op_id.length} exceeds ${MAX_OP_ID_LENGTH}`);
+            }
+            if (!VALID_TABLES.includes(op.table_name)) {
+                throw new Error(`Invalid table: ${op.table_name}`);
+            }
+            if (op.payload && JSON.stringify(op.payload).length > MAX_PAYLOAD_SIZE_BYTES) {
+                throw new Error(
+                    `Payload too large for ${op.table_name}: exceeds ${MAX_PAYLOAD_SIZE_BYTES} bytes`
+                );
+            }
+        }
 
         const results: Array<{
             opId: string;
@@ -818,12 +847,14 @@ export const runWorkspaceGc = internalMutation({
         batch_size: v.optional(v.number()),
         tombstone_cursor: v.optional(v.number()),
         changelog_cursor: v.optional(v.number()),
+        continuation_count: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
         const retentionSeconds = args.retention_seconds ?? DEFAULT_RETENTION_SECONDS;
         const batchSize = args.batch_size ?? DEFAULT_GC_BATCH_SIZE;
         const startTombstoneCursor = args.tombstone_cursor ?? 0;
         const startChangelogCursor = args.changelog_cursor ?? 0;
+        const continuationCount = args.continuation_count ?? 0;
 
         const minCursorRow = await ctx.db
             .query('device_cursors')
@@ -892,14 +923,15 @@ export const runWorkspaceGc = internalMutation({
             hasMoreChangeLogs = false;
         }
 
-        // Schedule continuation if there's more to process
-        if (hasMoreTombstones || hasMoreChangeLogs) {
+        // Schedule continuation if there's more to process and under continuation limit
+        if ((hasMoreTombstones || hasMoreChangeLogs) && continuationCount < MAX_GC_CONTINUATIONS) {
             await ctx.scheduler.runAfter(GC_CONTINUATION_DELAY_MS, internal.sync.runWorkspaceGc, {
                 workspace_id: args.workspace_id,
                 retention_seconds: retentionSeconds,
                 batch_size: batchSize,
                 tombstone_cursor: nextTombstoneCursor,
                 changelog_cursor: nextChangelogCursor,
+                continuation_count: continuationCount + 1,
             });
         }
 
@@ -930,6 +962,7 @@ export const runScheduledGc = internalMutation({
 
         const workspaceIds = new Set<Id<'workspaces'>>();
         for (const change of recentChanges) {
+            if (workspaceIds.size >= MAX_WORKSPACES_PER_GC_RUN) break;
             const createdAt = typeof change.created_at === 'number' ? change.created_at : 0;
             if (createdAt >= sevenDaysAgo) {
                 workspaceIds.add(change.workspace_id);

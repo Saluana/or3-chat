@@ -6,8 +6,19 @@ import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/s
 import { v } from 'convex/values';
 import type { Id, TableNames } from './_generated/dataModel';
 
+// ============================================================
+// CONSTANTS
+// ============================================================
+
 // Valid auth provider - only Clerk is supported
 const VALID_AUTH_PROVIDER = 'clerk';
+
+/** Batch size for workspace data deletion operations */
+const DELETE_BATCH_SIZE = 100;
+
+// ============================================================
+// HELPERS
+// ============================================================
 
 async function getAuthAccount(
     ctx: MutationCtx | QueryCtx
@@ -61,29 +72,43 @@ async function deleteWorkspaceData(ctx: MutationCtx, workspaceId: Id<'workspaces
         withIndex: (
             index: string,
             cb: (q: IndexQueryBuilder) => IndexQueryBuilder
-        ) => { collect: () => Promise<ConvexDoc[]> };
+        ) => { collect: () => Promise<ConvexDoc[]>; take: (n: number) => Promise<ConvexDoc[]> };
     };
 
-    const deleteByIndex = async (table: TableNames, indexName: string) => {
-        const rows = await (ctx.db.query(table) as unknown as QueryByIndex)
-            .withIndex(indexName, (q) => q.eq('workspace_id', workspaceId))
-            .collect();
-        for (const row of rows) {
-            await ctx.db.delete(row._id);
+    const deleteByIndexBatched = async (table: TableNames, indexName: string) => {
+        let totalDeleted = 0;
+        let hasMore = true;
+        while (hasMore) {
+            const rows = await (ctx.db.query(table) as unknown as QueryByIndex)
+                .withIndex(indexName, (q) => q.eq('workspace_id', workspaceId))
+                .take(DELETE_BATCH_SIZE);
+
+            if (rows.length === 0) {
+                hasMore = false;
+                break;
+            }
+
+            await Promise.all(rows.map((r) => ctx.db.delete(r._id)));
+            totalDeleted += rows.length;
+
+            if (rows.length < DELETE_BATCH_SIZE) {
+                hasMore = false;
+            }
         }
+        return totalDeleted;
     };
 
-    await deleteByIndex('threads', 'by_workspace_id');
-    await deleteByIndex('messages', 'by_workspace_id');
-    await deleteByIndex('projects', 'by_workspace_id');
-    await deleteByIndex('posts', 'by_workspace_id');
-    await deleteByIndex('kv', 'by_workspace_name');
-    await deleteByIndex('file_meta', 'by_workspace_hash');
-    await deleteByIndex('change_log', 'by_workspace_version');
-    await deleteByIndex('tombstones', 'by_workspace_version');
-    await deleteByIndex('device_cursors', 'by_workspace_device');
-    await deleteByIndex('workspace_members', 'by_workspace');
-    await deleteByIndex('server_version_counter', 'by_workspace');
+    await deleteByIndexBatched('threads', 'by_workspace_id');
+    await deleteByIndexBatched('messages', 'by_workspace_id');
+    await deleteByIndexBatched('projects', 'by_workspace_id');
+    await deleteByIndexBatched('posts', 'by_workspace_id');
+    await deleteByIndexBatched('kv', 'by_workspace_name');
+    await deleteByIndexBatched('file_meta', 'by_workspace_hash');
+    await deleteByIndexBatched('change_log', 'by_workspace_version');
+    await deleteByIndexBatched('tombstones', 'by_workspace_version');
+    await deleteByIndexBatched('device_cursors', 'by_workspace_device');
+    await deleteByIndexBatched('workspace_members', 'by_workspace');
+    await deleteByIndexBatched('server_version_counter', 'by_workspace');
 }
 
 /**
@@ -116,9 +141,16 @@ export const listMyWorkspaces = query({
             .withIndex('by_user', (q) => q.eq('user_id', authAccount.user_id))
             .collect();
 
-        const workspaces = await Promise.all(
-            memberships.map(async (m) => {
-                const workspace = await ctx.db.get(m.workspace_id);
+        // Batch fetch all workspaces at once to avoid N+1 queries
+        const workspaceIds = memberships.map((m) => m.workspace_id);
+        const allWorkspaces = await Promise.all(workspaceIds.map((id) => ctx.db.get(id)));
+        const workspaceMap = new Map(
+            allWorkspaces.filter(Boolean).map((w) => [w!._id, w!] as const)
+        );
+
+        const workspaces = memberships
+            .map((m) => {
+                const workspace = workspaceMap.get(m.workspace_id);
                 if (!workspace) return null;
                 return {
                     _id: workspace._id,
@@ -129,9 +161,9 @@ export const listMyWorkspaces = query({
                     is_active: activeWorkspaceId === workspace._id,
                 };
             })
-        );
+            .filter(Boolean);
 
-        return workspaces.filter(Boolean);
+        return workspaces;
     },
 });
 
