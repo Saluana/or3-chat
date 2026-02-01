@@ -169,8 +169,8 @@ const or3ConfigSchema = z
         extensions: z.record(z.string(), z.unknown()).optional().default(() => ({})),
         legal: z
             .object({
-                termsUrl: z.string().optional(),
-                privacyUrl: z.string().optional(),
+                termsUrl: z.string().url().or(z.literal('')).optional(),
+                privacyUrl: z.string().url().or(z.literal('')).optional(),
             })
             .optional()
             .transform((val) => ({
