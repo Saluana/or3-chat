@@ -33,7 +33,7 @@ export function requireAdminRequest(event: H3Event): void {
 
     if (allowedHosts.length === 0) return;
 
-    const proxyConfig = normalizeProxyTrustConfig(config.security?.proxy);
+    const proxyConfig = normalizeProxyTrustConfig(config.security.proxy);
     const requestHost = getProxyRequestHost(event, proxyConfig);
 
     if (!requestHost) {
@@ -61,7 +61,7 @@ export function requireAdminMutation(event: H3Event): void {
         throw createError({ statusCode: 403, statusMessage: 'Forbidden' });
     }
 
-    const proxyConfig = normalizeProxyTrustConfig(useRuntimeConfig(event).security?.proxy);
+    const proxyConfig = normalizeProxyTrustConfig(useRuntimeConfig(event).security.proxy);
     const requestHost = getProxyRequestHost(event, proxyConfig);
 
     if (!requestHost) {

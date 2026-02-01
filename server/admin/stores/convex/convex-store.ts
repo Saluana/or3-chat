@@ -27,11 +27,12 @@ async function ensureSuperAdminDeploymentGrant(
     client: ReturnType<typeof getConvexGatewayClient>
 ): Promise<void> {
     const adminContext = event.context.admin as AdminContextShape | undefined;
-    if (adminContext?.principal?.kind !== 'super_admin') return;
+    const principal = adminContext?.principal;
+    if (!principal || principal.kind !== 'super_admin') return;
     if (event.context.__or3_super_admin_grant_done) return;
     event.context.__or3_super_admin_grant_done = true;
 
-    const adminUsername = adminContext.principal?.username;
+    const adminUsername = principal.username;
     const providerUserId = adminContext.session?.providerUserId;
     if (!adminUsername || !providerUserId) {
         throw createError({
@@ -41,7 +42,7 @@ async function ensureSuperAdminDeploymentGrant(
     }
 
     const config = useRuntimeConfig(event);
-    const secret = config.admin?.auth?.jwtSecret;
+    const secret = config.admin.auth.jwtSecret;
     if (!secret) {
         throw createError({
             statusCode: 500,

@@ -38,9 +38,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
         enabled: syncEnabled,
         provider: (process.env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) as SyncProviderId,
         convex: {
-            url:
-                process.env.VITE_CONVEX_URL ||
-                undefined,
+            url: process.env.VITE_CONVEX_URL,
         },
     },
     storage: {
@@ -84,7 +82,10 @@ export const or3CloudConfig = defineOr3CloudConfig({
                 : process.env.NODE_ENV === 'production',
         proxy: {
             trustProxy: process.env.OR3_TRUST_PROXY === 'true',
-            forwardedForHeader: (process.env.OR3_FORWARDED_FOR_HEADER as 'x-forwarded-for' | 'x-real-ip') ?? 'x-forwarded-for',
+            forwardedForHeader:
+                process.env.OR3_FORWARDED_FOR_HEADER === 'x-real-ip'
+                    ? 'x-real-ip'
+                    : 'x-forwarded-for',
             forwardedHostHeader: 'x-forwarded-host' as const,
         },
     },
