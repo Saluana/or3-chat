@@ -23,9 +23,7 @@ const baseConfig: Or3CloudConfig = {
         },
     },
     limits: {},
-    legal: {},
     security: {},
-    extensions: {},
 };
 
 describe('defineOr3CloudConfig', () => {

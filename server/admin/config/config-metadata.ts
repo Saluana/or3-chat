@@ -11,16 +11,19 @@ export type ConfigMetadata = {
     valueType?: 'string' | 'boolean' | 'number';
 };
 
-export type ConfigGroup = 
-    | 'Auth'
-    | 'Sync'
-    | 'Storage'
-    | 'UI & Branding'
-    | 'Features'
-    | 'Limits & Security'
-    | 'Admin'
-    | 'Background Processing'
-    | 'External Services';
+export const CONFIG_GROUPS = [
+    'Auth',
+    'Sync',
+    'Storage',
+    'UI & Branding',
+    'Features',
+    'Limits & Security',
+    'Background Processing',
+    'Admin',
+    'External Services',
+] as const;
+
+export type ConfigGroup = (typeof CONFIG_GROUPS)[number];
 
 export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
     // Auth
@@ -424,18 +427,8 @@ export function getConfigMetadata(key: string): ConfigMetadata | undefined {
     return CONFIG_METADATA[key];
 }
 
-export function getConfigGroups(): ConfigGroup[] {
-    return [
-        'Auth',
-        'Sync',
-        'Storage',
-        'UI & Branding',
-        'Features',
-        'Limits & Security',
-        'Background Processing',
-        'Admin',
-        'External Services',
-    ];
+export function getConfigGroups(): readonly ConfigGroup[] {
+    return CONFIG_GROUPS;
 }
 
 export type EnrichedConfigEntry = {

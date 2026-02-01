@@ -110,6 +110,88 @@ describe('buildOr3CloudConfigFromEnv', () => {
         process.env = originalEnv;
     });
 
+    describe('envBool parsing', () => {
+        it('accepts "true" as truthy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'true',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(true);
+        });
+
+        it('accepts "1" as truthy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: '1',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(true);
+        });
+
+        it('accepts "yes" as truthy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'yes',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(true);
+        });
+
+        it('accepts "on" as truthy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'on',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(true);
+        });
+
+        it('accepts "TRUE" (uppercase) as truthy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'TRUE',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(true);
+        });
+
+        it('accepts "Yes" (mixed case) as truthy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'Yes',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(true);
+        });
+
+        it('treats "false" as falsy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'false',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(false);
+        });
+
+        it('treats "0" as falsy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: '0',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(false);
+        });
+
+        it('treats empty string as falsy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: '',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(false);
+        });
+
+        it('treats random string as falsy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'random',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(false);
+        });
+    });
+
     it('defaults auth/sync/storage to disabled when SSR_AUTH_ENABLED is unset', () => {
         const config = buildOr3CloudConfigFromEnv({});
         expect(config.auth.enabled).toBe(false);
