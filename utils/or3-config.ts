@@ -4,6 +4,15 @@ import type {
     Or3ConfigOptions,
     ResolvedOr3Config,
 } from '../types/or3-config';
+import {
+    DEFAULT_SITE_NAME,
+    DEFAULT_THEME,
+    DEFAULT_MAX_FILE_SIZE_BYTES,
+    DEFAULT_MAX_CLOUD_FILE_SIZE_BYTES,
+    DEFAULT_MAX_FILES_PER_MESSAGE,
+    DEFAULT_PANE_COUNT,
+    DEFAULT_MAX_PANES,
+} from '../shared/config/constants';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Default Configuration
@@ -11,11 +20,11 @@ import type {
 
 export const DEFAULT_OR3_CONFIG: ResolvedOr3Config = {
     site: {
-        name: 'OR3',
+        name: DEFAULT_SITE_NAME,
         description: '',
         logoUrl: '',
         faviconUrl: '',
-        defaultTheme: 'blank',
+        defaultTheme: DEFAULT_THEME,
     },
     features: {
         workflows: {
@@ -40,14 +49,14 @@ export const DEFAULT_OR3_CONFIG: ResolvedOr3Config = {
         },
     },
     limits: {
-        maxFileSizeBytes: 20 * 1024 * 1024, // 20MB
-        maxCloudFileSizeBytes: 100 * 1024 * 1024, // 100MB
-        maxFilesPerMessage: 10,
+        maxFileSizeBytes: DEFAULT_MAX_FILE_SIZE_BYTES,
+        maxCloudFileSizeBytes: DEFAULT_MAX_CLOUD_FILE_SIZE_BYTES,
+        maxFilesPerMessage: DEFAULT_MAX_FILES_PER_MESSAGE,
         localStorageQuotaMB: null,
     },
     ui: {
-        defaultPaneCount: 1,
-        maxPanes: 4,
+        defaultPaneCount: DEFAULT_PANE_COUNT,
+        maxPanes: DEFAULT_MAX_PANES,
         sidebarCollapsedByDefault: false,
     },
     extensions: {},

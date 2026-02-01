@@ -17,6 +17,19 @@ import {
     STORAGE_PROVIDER_ID_LIST,
     SYNC_PROVIDER_ID_LIST,
 } from '../shared/cloud/provider-ids';
+import {
+    DEFAULT_REQUESTS_PER_MINUTE,
+    DEFAULT_MAX_CONVERSATIONS,
+    DEFAULT_MAX_MESSAGES_PER_DAY,
+    DEFAULT_ADMIN_BASE_PATH,
+    DEFAULT_REBUILD_COMMAND,
+    DEFAULT_EXTENSION_MAX_ZIP_BYTES,
+    DEFAULT_EXTENSION_MAX_FILES,
+    DEFAULT_EXTENSION_MAX_TOTAL_BYTES,
+    DEFAULT_JWT_EXPIRY,
+    DEFAULT_BACKGROUND_MAX_JOBS,
+    DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
+} from '../shared/config/constants';
 
 const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
     auth: {
@@ -50,9 +63,9 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
     },
     limits: {
         enabled: true,
-        requestsPerMinute: 20,
-        maxConversations: 0,
-        maxMessagesPerDay: 0,
+        requestsPerMinute: DEFAULT_REQUESTS_PER_MINUTE,
+        maxConversations: DEFAULT_MAX_CONVERSATIONS,
+        maxMessagesPerDay: DEFAULT_MAX_MESSAGES_PER_DAY,
         storageProvider: DEFAULT_LIMITS_PROVIDER_ID,
     },
     security: {
@@ -60,14 +73,14 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         forceHttps: process.env.NODE_ENV === 'production',
     },
     admin: {
-        basePath: '/admin',
+        basePath: DEFAULT_ADMIN_BASE_PATH,
         allowedHosts: [],
         allowRestart: false,
         allowRebuild: false,
-        rebuildCommand: 'bun run build',
-        extensionMaxZipBytes: 25 * 1024 * 1024,
-        extensionMaxFiles: 2000,
-        extensionMaxTotalBytes: 200 * 1024 * 1024,
+        rebuildCommand: DEFAULT_REBUILD_COMMAND,
+        extensionMaxZipBytes: DEFAULT_EXTENSION_MAX_ZIP_BYTES,
+        extensionMaxFiles: DEFAULT_EXTENSION_MAX_FILES,
+        extensionMaxTotalBytes: DEFAULT_EXTENSION_MAX_TOTAL_BYTES,
         extensionAllowedExtensions: [
             '.js',
             '.mjs',
@@ -99,15 +112,15 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
             username: undefined,
             password: undefined,
             jwtSecret: undefined,
-            jwtExpiry: '24h',
+            jwtExpiry: DEFAULT_JWT_EXPIRY,
             deletedWorkspaceRetentionDays: undefined,
         },
     },
     backgroundStreaming: {
         enabled: false,
         storageProvider: DEFAULT_BACKGROUND_PROVIDER_ID,
-        maxConcurrentJobs: 20,
-        jobTimeoutSeconds: 300,
+        maxConcurrentJobs: DEFAULT_BACKGROUND_MAX_JOBS,
+        jobTimeoutSeconds: DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
     },
 };
 

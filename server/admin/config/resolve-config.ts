@@ -14,6 +14,16 @@ import {
     type StorageProviderId,
     type SyncProviderId,
 } from '~~/shared/cloud/provider-ids';
+import {
+    DEFAULT_SITE_NAME,
+    DEFAULT_REQUESTS_PER_MINUTE,
+    DEFAULT_MAX_CONVERSATIONS,
+    DEFAULT_MAX_MESSAGES_PER_DAY,
+    DEFAULT_ADMIN_BASE_PATH,
+    DEFAULT_REBUILD_COMMAND,
+    DEFAULT_BACKGROUND_MAX_JOBS,
+    DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
+} from '~~/shared/config/constants';
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -28,10 +38,16 @@ function envNum(val: string | undefined, fallback?: number): number | undefined 
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+// Helper for feature toggles that default to true unless explicitly 'false'
+function envFeature(val: string | undefined): boolean | undefined {
+    if (val === undefined) return undefined;
+    return val !== 'false';
+}
+
 export function buildOr3ConfigFromEnv(env: EnvMap) {
     return defineOr3Config({
         site: {
-            name: env.OR3_SITE_NAME ?? 'OR3',
+            name: env.OR3_SITE_NAME ?? DEFAULT_SITE_NAME,
             description: env.OR3_SITE_DESCRIPTION || undefined,
             logoUrl: env.OR3_LOGO_URL || undefined,
             faviconUrl: env.OR3_FAVICON_URL || undefined,
@@ -39,44 +55,24 @@ export function buildOr3ConfigFromEnv(env: EnvMap) {
         },
         features: {
             workflows: {
-                enabled: env.OR3_WORKFLOWS_ENABLED
-                    ? env.OR3_WORKFLOWS_ENABLED !== 'false'
-                    : undefined,
-                editor: env.OR3_WORKFLOWS_EDITOR
-                    ? env.OR3_WORKFLOWS_EDITOR !== 'false'
-                    : undefined,
-                slashCommands: env.OR3_WORKFLOWS_SLASH_COMMANDS
-                    ? env.OR3_WORKFLOWS_SLASH_COMMANDS !== 'false'
-                    : undefined,
-                execution: env.OR3_WORKFLOWS_EXECUTION
-                    ? env.OR3_WORKFLOWS_EXECUTION !== 'false'
-                    : undefined,
+                enabled: envFeature(env.OR3_WORKFLOWS_ENABLED),
+                editor: envFeature(env.OR3_WORKFLOWS_EDITOR),
+                slashCommands: envFeature(env.OR3_WORKFLOWS_SLASH_COMMANDS),
+                execution: envFeature(env.OR3_WORKFLOWS_EXECUTION),
             },
             documents: {
-                enabled: env.OR3_DOCUMENTS_ENABLED
-                    ? env.OR3_DOCUMENTS_ENABLED !== 'false'
-                    : undefined,
+                enabled: envFeature(env.OR3_DOCUMENTS_ENABLED),
             },
             backup: {
-                enabled: env.OR3_BACKUP_ENABLED
-                    ? env.OR3_BACKUP_ENABLED !== 'false'
-                    : undefined,
+                enabled: envFeature(env.OR3_BACKUP_ENABLED),
             },
             mentions: {
-                enabled: env.OR3_MENTIONS_ENABLED
-                    ? env.OR3_MENTIONS_ENABLED !== 'false'
-                    : undefined,
-                documents: env.OR3_MENTIONS_DOCUMENTS
-                    ? env.OR3_MENTIONS_DOCUMENTS !== 'false'
-                    : undefined,
-                conversations: env.OR3_MENTIONS_CONVERSATIONS
-                    ? env.OR3_MENTIONS_CONVERSATIONS !== 'false'
-                    : undefined,
+                enabled: envFeature(env.OR3_MENTIONS_ENABLED),
+                documents: envFeature(env.OR3_MENTIONS_DOCUMENTS),
+                conversations: envFeature(env.OR3_MENTIONS_CONVERSATIONS),
             },
             dashboard: {
-                enabled: env.OR3_DASHBOARD_ENABLED
-                    ? env.OR3_DASHBOARD_ENABLED !== 'false'
-                    : undefined,
+                enabled: envFeature(env.OR3_DASHBOARD_ENABLED),
             },
         },
         limits: {
@@ -137,9 +133,9 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
         },
         limits: {
             enabled: env.OR3_LIMITS_ENABLED !== 'false',
-            requestsPerMinute: envNum(env.OR3_REQUESTS_PER_MINUTE, 20) ?? 20,
-            maxConversations: envNum(env.OR3_MAX_CONVERSATIONS, 0) ?? 0,
-            maxMessagesPerDay: envNum(env.OR3_MAX_MESSAGES_PER_DAY, 0) ?? 0,
+            requestsPerMinute: envNum(env.OR3_REQUESTS_PER_MINUTE, DEFAULT_REQUESTS_PER_MINUTE) ?? DEFAULT_REQUESTS_PER_MINUTE,
+            maxConversations: envNum(env.OR3_MAX_CONVERSATIONS, DEFAULT_MAX_CONVERSATIONS) ?? DEFAULT_MAX_CONVERSATIONS,
+            maxMessagesPerDay: envNum(env.OR3_MAX_MESSAGES_PER_DAY, DEFAULT_MAX_MESSAGES_PER_DAY) ?? DEFAULT_MAX_MESSAGES_PER_DAY,
             storageProvider: (env.OR3_LIMITS_STORAGE_PROVIDER ??
                 (syncEnabled ? LIMITS_PROVIDER_IDS.convex : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
         },
@@ -155,7 +151,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
             ),
         },
         admin: {
-            basePath: env.OR3_ADMIN_BASE_PATH || '/admin',
+            basePath: env.OR3_ADMIN_BASE_PATH || DEFAULT_ADMIN_BASE_PATH,
             allowedHosts: env.OR3_ADMIN_ALLOWED_HOSTS
                 ? env.OR3_ADMIN_ALLOWED_HOSTS.split(',')
                       .map((host) => host.trim())
@@ -163,7 +159,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
                 : [],
             allowRestart: env.OR3_ADMIN_ALLOW_RESTART === 'true',
             allowRebuild: env.OR3_ADMIN_ALLOW_REBUILD === 'true',
-            rebuildCommand: env.OR3_ADMIN_REBUILD_COMMAND || 'bun run build',
+            rebuildCommand: env.OR3_ADMIN_REBUILD_COMMAND || DEFAULT_REBUILD_COMMAND,
             extensionMaxZipBytes: envNum(env.OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES),
             extensionMaxFiles: envNum(env.OR3_ADMIN_EXTENSION_MAX_FILES),
             extensionMaxTotalBytes: envNum(env.OR3_ADMIN_EXTENSION_MAX_TOTAL_BYTES),
@@ -177,8 +173,8 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
             enabled: env.OR3_BACKGROUND_STREAMING_ENABLED === 'true',
             storageProvider: (env.OR3_BACKGROUND_STREAMING_PROVIDER ??
                 (syncEnabled ? BACKGROUND_PROVIDER_IDS.convex : DEFAULT_BACKGROUND_PROVIDER_ID)) as BackgroundProviderId,
-            maxConcurrentJobs: envNum(env.OR3_BACKGROUND_MAX_JOBS, 20) ?? 20,
-            jobTimeoutSeconds: envNum(env.OR3_BACKGROUND_JOB_TIMEOUT, 300) ?? 300,
+            maxConcurrentJobs: envNum(env.OR3_BACKGROUND_MAX_JOBS, DEFAULT_BACKGROUND_MAX_JOBS) ?? DEFAULT_BACKGROUND_MAX_JOBS,
+            jobTimeoutSeconds: envNum(env.OR3_BACKGROUND_JOB_TIMEOUT, DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS) ?? DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
         },
     };
 
