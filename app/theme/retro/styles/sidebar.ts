@@ -81,14 +81,14 @@ export const sidebarOverrides = {
         variant: 'soft',
     },
     'button#sidebar.bottom-nav.connect': {
-        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] transition-colors duration-150',
-        variant: 'soft',
+        variant: 'outline',
+        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] text-[color:var(--md-on-surface)]! transition-colors duration-150',
     },
     // SSR Auth button (Clerk sign-in/account) - PRIMARY CTA
     // Base styles only - hover/active defined per-state to avoid conflicts
+    // NOTE: No variant/color specified - using raw classes only to avoid Nuxt UI blue tint
     'button#sidebar.bottom-nav.auth': {
         class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] transition-colors duration-150',
-        variant: 'soft',
     },
     // OpenRouter auth button states (static build mode)
     'button#sidebar.bottom-nav.auth:connected': {

@@ -49,8 +49,6 @@ const buttonProps = computed(() => {
     });
 
     return {
-        variant: 'soft' as const,
-        color: 'neutral' as const,
         block: true,
         ...overrides.value,
     };

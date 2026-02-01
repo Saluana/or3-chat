@@ -1,7 +1,6 @@
 <template>
-    <!-- SSR Auth Mode: Clerk SignIn/UserButton + Optional OpenRouter -->
+    <!-- SSR Auth Mode: OpenRouter (optional) + Clerk SignIn/UserButton -->
     <template v-if="isSsrAuthEnabled">
-        <SidebarAuthButtonClerk />
         <!-- Show OpenRouter button when user override is allowed -->
         <UButton
             v-if="allowUserOverride"
@@ -55,6 +54,8 @@
                 </span>
             </template>
         </UButton>
+        <!-- Clerk user button comes after OpenRouter -->
+        <SidebarAuthButtonClerk />
     </template>
 
     <!-- Static Build Mode: OpenRouter Auth Only -->
@@ -177,13 +178,11 @@ const buttonProps = computed(() => {
     const overrides = useThemeOverrides({
         component: 'button',
         context: 'sidebar',
-        identifier: 'sidebar.bottom-nav.auth',
-        state: isSsrAuthEnabled.value ? 'ssr' : connectionState.value,
+        identifier: 'sidebar.bottom-nav.connect',
+        state: connectionState.value,
         isNuxtUI: true,
     });
     return {
-        variant: 'soft' as const,
-        color: 'neutral' as const,
         block: true,
         disabled: isManaged.value,
         ...overrides.value,
