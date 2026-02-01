@@ -19,6 +19,14 @@ import type { ToolRegistryState } from '~/utils/chat/tool-registry';
 declare global {
     type ActivePluginContext = { pluginId: string | null | undefined };
 
+    // Allow process.dev for runtime dev mode testing (primarily in tests)
+    // In production code, prefer import.meta.dev which is compile-time constant
+    namespace NodeJS {
+        interface Process {
+            dev?: boolean;
+        }
+    }
+
     interface ChatInputBridge {
         registry: Ref<
             Array<{
