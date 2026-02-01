@@ -80,6 +80,14 @@ export default defineNuxtPlugin(() => {
     const streamDedupe = new Map<string, number>();
     const DEDUPE_WINDOW_MS = 15_000;
 
+    // Burst suppression for conflict notifications (prevents spam on large backfills)
+    const CONFLICT_BURST_WINDOW_MS = 10_000;
+    const CONFLICT_BURST_THRESHOLD = 5;
+    const CONFLICT_BURST_COOLDOWN_MS = 60_000;
+    let conflictBurstCount = 0;
+    let conflictBurstStart = 0;
+    let conflictBurstCooldownUntil = 0;
+
     // Track bootstrap/rescan state to suppress notifications during initial sync
     let isInitialSyncing = false;
 
@@ -118,78 +126,19 @@ export default defineNuxtPlugin(() => {
         return false;
     }
     
-    // Task 12.1 & 12.2: Listen for sync conflicts and create notifications
+    // Sync conflicts are not user-facing; keep dev-only logging for observability
     hooks.addAction('sync.conflict:action:detected', async (conflict) => {
-        try {
-            // Skip conflict notifications during bootstrap/rescan to avoid noise
-            if (isInitialSyncing) return;
-
-            const { tableName, pk, local, remote, winner } = conflict;
-
-            // Skip notifications for historical conflicts (older than 24 hours)
-            // Historical conflicts are not actionable and create noise on first load
-            const localClock = (local as { clock?: number })?.clock;
-            const remoteClock = (remote as { clock?: number })?.clock;
-            const conflictClock = Math.max(localClock ?? 0, remoteClock ?? 0);
-            const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-            if (Date.now() - conflictClock * 1000 > ONE_DAY_MS) {
-                if (import.meta.dev) {
-                    console.debug('[notify] Skipping historical conflict notification', {
-                        tableName,
-                        pk,
-                        ageHours: Math.round((Date.now() - conflictClock * 1000) / 1000 / 60 / 60),
-                    });
-                }
-                return;
-            }
-
-            if (import.meta.dev) {
-                console.debug('[notify] sync.conflict:detected', {
-                    tableName,
-                    pk,
-                    winner,
-                    localClock,
-                    remoteClock,
-                });
-            }
-            const conflictKey = `${tableName}:${pk}:${winner}`;
-            const now = Date.now();
-            const lastSeen = conflictDedupe.get(conflictKey);
-            if (lastSeen && now - lastSeen < DEDUPE_WINDOW_MS) return;
-            conflictDedupe.set(conflictKey, now);
-            
-            // Create a notification for the conflict
-            const title = 'Sync conflict resolved';
-            const body = `A conflict was detected in ${tableName} and resolved using last-write-wins. The ${winner} version was kept.`;
-            
-            const service = new NotificationService(
-                getDb(),
-                hooks,
-                getNotificationUserId()
-            );
-            await service.create({
-                type: 'sync.conflict',
-                title,
-                body,
-                threadId: tableName === 'messages' || tableName === 'threads' ? pk : undefined,
-                actions: [
-                    {
-                        id: newId(),
-                        label: 'Details',
-                        kind: 'callback',
-                        data: {
-                            tableName,
-                            pk,
-                            localClock: (local as { clock?: number })?.clock,
-                            remoteClock: (remote as { clock?: number })?.clock,
-                            winner,
-                        },
-                    },
-                ],
-            });
-        } catch (err) {
-            console.error('[notification-listeners] Failed to create sync conflict notification:', err);
-        }
+        if (!import.meta.dev) return;
+        const { tableName, pk, local, remote, winner } = conflict;
+        const localClock = (local as { clock?: number })?.clock;
+        const remoteClock = (remote as { clock?: number })?.clock;
+        console.debug('[notify] sync.conflict:detected', {
+            tableName,
+            pk,
+            winner,
+            localClock,
+            remoteClock,
+        });
     });
 
     // Handle permanent sync errors with dedupe + noise filtering

@@ -20,7 +20,7 @@ export const create = mutation({
         body: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const now = Date.now();
+        const now = Math.floor(Date.now() / 1000);
         const id = crypto.randomUUID();
 
         await ctx.db.insert('notifications', {
@@ -81,9 +81,10 @@ export const markRead = mutation({
 
         if (!notification) return false;
 
+        const now = Math.floor(Date.now() / 1000);
         await ctx.db.patch(notification._id, {
-            read_at: Date.now(),
-            updated_at: Date.now(),
+            read_at: now,
+            updated_at: now,
         });
 
         return true;
