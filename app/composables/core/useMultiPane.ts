@@ -628,6 +628,12 @@ export function useMultiPane(
         // Normalize widths after closing pane
         normalizeStoredWidths(panes.value.length);
         
+        // Post-close hook for cleanup
+        void hooks.doAction('ui.pane.close:action:after', {
+            pane: closing,
+            index: i,
+        });
+        
         if (!panes.value.length) {
             panes.value.push(createEmptyPane());
             activePaneIndex.value = 0;

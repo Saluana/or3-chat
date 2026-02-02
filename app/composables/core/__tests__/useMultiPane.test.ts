@@ -517,3 +517,80 @@ describe('useMultiPane - message loading with validation', () => {
         expect(messages).toHaveLength(0);
     });
 });
+
+describe('useMultiPane - pane prompt cleanup', () => {
+    beforeEach(() => {
+        // Clean up registries
+        const g = globalThis as any;
+        g.__or3PaneAppsRegistry = new Map();
+        g.__or3MultiPaneApi = undefined;
+        // Reset modules
+        vi.resetModules();
+    });
+
+    it('clears pending prompt when pane is closed', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        const {
+            setPanePendingPrompt,
+            getPanePendingPrompt,
+            setupPanePromptCleanup,
+        } = await import('../usePanePrompt');
+
+        // Manually setup cleanup in test environment
+        setupPanePromptCleanup();
+
+        const multiPane = useMultiPane({ maxPanes: 3 });
+
+        // Add a pane
+        multiPane.addPane();
+        const paneId = multiPane.panes.value[1]?.id;
+
+        expect(paneId).toBeDefined();
+
+        // Set a pending prompt for that pane
+        setPanePendingPrompt(paneId!, 'prompt-123');
+
+        // Verify it's set
+        expect(getPanePendingPrompt(paneId!)).toBe('prompt-123');
+
+        // Close the pane
+        await multiPane.closePane(1);
+
+        // Pending prompt should be cleared automatically
+        expect(getPanePendingPrompt(paneId!)).toBeUndefined();
+    });
+
+    it('does not clear prompts for other panes when one closes', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        const {
+            setPanePendingPrompt,
+            getPanePendingPrompt,
+            setupPanePromptCleanup,
+        } = await import('../usePanePrompt');
+
+        // Setup cleanup
+        setupPanePromptCleanup();
+
+        const multiPane = useMultiPane({ maxPanes: 5 });
+
+        // Add two panes
+        multiPane.addPane();
+        multiPane.addPane();
+
+        const pane1Id = multiPane.panes.value[1]?.id;
+        const pane2Id = multiPane.panes.value[2]?.id;
+
+        // Set pending prompts for both
+        setPanePendingPrompt(pane1Id!, 'prompt-1');
+        setPanePendingPrompt(pane2Id!, 'prompt-2');
+
+        // Close first added pane
+        await multiPane.closePane(1);
+
+        // First pane's prompt should be cleared
+        expect(getPanePendingPrompt(pane1Id!)).toBeUndefined();
+
+        // Second pane's prompt should remain
+        expect(getPanePendingPrompt(pane2Id!)).toBe('prompt-2');
+    });
+});
