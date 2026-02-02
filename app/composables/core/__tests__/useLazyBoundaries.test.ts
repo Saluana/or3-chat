@@ -275,11 +275,6 @@ describe('useLazyBoundaries', () => {
     it('should provide readable state object', () => {
         const boundaries = useLazyBoundaries();
 
-        // Verify state is readonly (cannot reassign properties)
-        expect(() => {
-            boundaries.state['editor-host'] = 'loading';
-        }).not.toThrow(); // Vue reactivity allows assignment, but it's conceptually readonly
-
         // All keys should be accessible
         expect(boundaries.state['editor-host']).toBeDefined();
         expect(boundaries.state['workspace-import']).toBeDefined();

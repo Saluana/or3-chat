@@ -19,7 +19,11 @@ interface CacheEntry {
 }
 
 type LoaderResult = { url: string; bytes?: number };
-type Loader = () => Promise<LoaderResult>;
+type Loader = () => Promise<unknown>;
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === 'object';
+}
+
 
 export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
     const options: PreviewCacheOptions = resolvePreviewCacheOptions(opts);
@@ -75,16 +79,19 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
             const result = await loader();
             
             // Validate loader result
-            if (!result || typeof result !== 'object') {
+            if (!isRecord(result)) {
                 throw new Error('Loader returned invalid result: expected object');
             }
-            
             if (typeof result.url !== 'string' || !result.url) {
-                throw new Error('Loader returned invalid url: expected non-empty string');
+                throw new Error(
+                    'Loader returned invalid url: expected non-empty string'
+                );
             }
             
             const url = result.url;
-            const normalizedBytes = Number.isFinite(result.bytes) ? Number(result.bytes) : 0;
+            const normalizedBytes = Number.isFinite(result.bytes)
+                ? Number(result.bytes)
+                : 0;
             
             // Only mutate state after successful validation
             const entry: CacheEntry = {
@@ -98,7 +105,7 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
             totalBytes += normalizedBytes;
             evictIfNeeded();
             
-            return map.get(key)?.url;
+            return entry.url;
         } catch (error) {
             // Decrement misses since this didn't result in a cache entry
             misses--;

@@ -19,12 +19,18 @@ interface LazyBoundariesRegistry {
 
 const REGISTRY_KEY = '__or3_lazy_boundaries_registry__';
 
+type LazyBoundariesGlobal = typeof globalThis & {
+    [REGISTRY_KEY]?: LazyBoundariesRegistry;
+};
+
+const lazyBoundariesGlobal = globalThis as LazyBoundariesGlobal;
+
 /**
  * Get or create the global registry for lazy boundaries.
  */
 function getRegistry(): LazyBoundariesRegistry {
-    if (!(globalThis as any)[REGISTRY_KEY]) {
-        (globalThis as any)[REGISTRY_KEY] = {
+    if (!lazyBoundariesGlobal[REGISTRY_KEY]) {
+        lazyBoundariesGlobal[REGISTRY_KEY] = {
             controller: null,
             moduleCache: new Map<LazyBoundaryKey, Promise<unknown> | undefined>(),
             telemetryListeners: new Set<(payload: LazyTelemetryPayload) => void>(),
@@ -38,7 +44,7 @@ function getRegistry(): LazyBoundariesRegistry {
             }),
         };
     }
-    return (globalThis as any)[REGISTRY_KEY];
+    return lazyBoundariesGlobal[REGISTRY_KEY];
 }
 
 /**

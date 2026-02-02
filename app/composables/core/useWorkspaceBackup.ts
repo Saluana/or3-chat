@@ -1,6 +1,6 @@
 import { ref, type Ref } from 'vue';
 import { getDb } from '~/db/client';
-import { reportError, err, asAppError, type AppError } from '~/utils/errors';
+import { reportError, err, asAppError, type AppError, type ErrorCode } from '~/utils/errors';
 import { useHooks } from '~/core/hooks/useHooks';
 import { useLazyBoundaries } from '~/composables/core/useLazyBoundaries';
 import {
@@ -553,8 +553,8 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
             state.currentStep.value = 'error';
             
             // Categorize error type for better user feedback
-            let errorCode = 'ERR_DB_WRITE_FAILED';
-            const errorMessage = error.message?.toLowerCase() || '';
+            let errorCode: ErrorCode = 'ERR_DB_WRITE_FAILED';
+            const errorMessage = error.message.toLowerCase();
             
             if (
                 errorMessage.includes('quota') ||
@@ -568,12 +568,12 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 errorMessage.includes('schema') ||
                 errorMessage.includes('parse')
             ) {
-                errorCode = 'ERR_VALIDATION_FAILED';
+                errorCode = 'ERR_VALIDATION';
             } else if (
                 errorMessage.includes('permission') ||
                 errorMessage.includes('denied')
             ) {
-                errorCode = 'ERR_PERMISSION_DENIED';
+                errorCode = 'ERR_AUTH';
             }
             
             reportError(error, {

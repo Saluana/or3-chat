@@ -190,8 +190,3 @@ export function useResponsiveState(): ResponsiveState {
     return registry.state;
 }
 
-/**
- * Type export for external consumers.
- * @deprecated Use ResponsiveState interface directly
- */
-export type { ResponsiveState };

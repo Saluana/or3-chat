@@ -25,11 +25,11 @@ export function setupPanePromptCleanup() {
         hooks.addAction(
             'ui.pane.close:action:after',
             ({ pane }) => {
-                if (pane?.id) {
+                if (pane.id) {
                     clearPanePendingPrompt(pane.id);
                 }
             },
-            { kind: 'action', priority: 10 }
+            10
         );
         
         hookHandlerRegistered = true;

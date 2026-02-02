@@ -75,18 +75,20 @@ describe('useTokenizer - worker concurrency', () => {
     });
 
     it('rejects pending requests when worker fails', async () => {
-        let errorHandler: ((error: any) => void) | null = null;
+        const errorHandlerRef: {
+            current: ((error: any) => void) | null;
+        } = { current: null };
 
         // Mock Worker that allows us to trigger errors
         global.Worker = vi.fn().mockImplementation(() => ({
             postMessage: vi.fn(),
             terminate: vi.fn(),
             addEventListener: vi.fn(),
-            set onerror(handler: any) {
-                errorHandler = handler;
+            set onerror(handler: ((error: any) => void) | null) {
+                errorHandlerRef.current = handler;
             },
             get onerror() {
-                return errorHandler;
+                return errorHandlerRef.current;
             },
             onmessage: null,
         })) as any;
@@ -100,9 +102,7 @@ describe('useTokenizer - worker concurrency', () => {
         const countPromise = tokenizer.countTokens('test');
 
         // Trigger worker error
-        if (errorHandler) {
-            errorHandler(new Error('Worker crashed'));
-        }
+        errorHandlerRef.current?.(new Error('Worker crashed'));
 
         // Promise should reject or return fallback
         // (Either is acceptable - the important part is it doesn't hang)

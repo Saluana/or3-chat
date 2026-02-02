@@ -120,16 +120,16 @@ interface DbMessageRow {
  * Fast structural validation for DB message rows.
  * Checks essential fields without heavy parsing.
  */
-function isValidMessageRow(msg: any): msg is DbMessageRow {
+function isValidMessageRow(msg: unknown): msg is DbMessageRow {
+    if (msg === null || typeof msg !== 'object') return false;
+    const m = msg as Record<string, unknown>;
     return (
-        msg != null &&
-        typeof msg === 'object' &&
-        typeof msg.id === 'string' &&
-        msg.id.length > 0 &&
-        typeof msg.role === 'string' &&
-        msg.role.length > 0 &&
+        typeof m.id === 'string' &&
+        m.id.length > 0 &&
+        typeof m.role === 'string' &&
+        m.role.length > 0 &&
         // deleted should be boolean or undefined (truthy check)
-        (msg.deleted === undefined || typeof msg.deleted === 'boolean')
+        (m.deleted === undefined || typeof m.deleted === 'boolean')
     );
 }
 
