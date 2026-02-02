@@ -1,20 +1,39 @@
+/**
+ * @module app/composables/chat/useAi.ts
+ *
+ * Purpose:
+ * Primary chat composable that coordinates local-first persistence, model
+ * message preparation, streaming, and hook orchestration for the chat UI.
+ *
+ * Responsibilities:
+ * - Manage chat state for a thread (messages, loading, aborts)
+ * - Build model input and system prompts for send requests
+ * - Orchestrate streaming lifecycle and background job integration
+ * - Emit hooks for plugins and extensions
+ *
+ * Non-Goals:
+ * - Direct provider implementation details
+ * - Server-only auth or SSR middleware behavior
+ * - Long-lived background job processing
+ *
+ * Invariants:
+ * - Local IndexedDB is the source of truth for UI state
+ * - Hook timing order remains stable for plugins
+ * - Abort always finalizes stream accumulator state
+ */
+
 import { ref, computed, watch, onScopeDispose } from 'vue';
 import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
 import { create, tx, upsert, type Message } from '~/db';
 import { getDb } from '~/db/client';
-import {
-    serializeFileHashes,
-    MAX_MESSAGE_FILE_HASHES,
-} from '~/db/files-util';
-import { normalizeFileUrl, hashToContentPart } from '~/utils/chat/useAi-internal/files';
+import { serializeFileHashes } from '~/db/files-util';
+import { normalizeFileUrl } from '~/utils/chat/useAi-internal/files';
 import {
     parseHashes,
     mergeAssistantFileHashes,
 } from '~/utils/files/attachments';
-import { getThreadSystemPrompt } from '~/db/threads';
 import { messagesByThread } from '~/db/messages';
-import { getPrompt } from '~/db/prompts';
 import type {
     ContentPart,
     ChatMessage,
@@ -26,7 +45,6 @@ import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import {
     buildParts,
     deriveMessageContent,
-    trimOrMessagesImages,
 } from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import {
@@ -37,10 +55,6 @@ import {
 } from '../../utils/chat/openrouterStream';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { inferMimeFromUrl } from '~/utils/chat/files';
-import {
-    promptJsonToString,
-    composeSystemPrompt,
-} from '~/utils/chat/prompt-utils';
 import { createStreamAccumulator } from '~/composables/chat/useStreamAccumulator';
 import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
@@ -63,7 +77,6 @@ import type {
     ModelInfo,
     PaneContext,
     ExtendedSendMessageParams,
-    ModelInputMessage,
 } from '../../../types/chat-internal';
 import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 import type { ORMessage } from '~/core/auth/openrouter-build';
@@ -81,7 +94,10 @@ import {
     stopBackgroundJobTracking,
     ensureBackgroundJobTracker,
     subscribeBackgroundJob,
-    runForegroundStreamLoop
+    runForegroundStreamLoop,
+    resolveSystemPromptText,
+    buildSystemPromptMessage,
+    buildOpenRouterMessagesForSend
 } from '~/utils/chat/useAi-internal';
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
@@ -115,6 +131,27 @@ type OpenRouterMessage =
 
 // Per-instance streaming tail state
 
+/**
+ * Purpose:
+ * Provides reactive chat state and operations for a single thread.
+ * Handles message creation, streaming, background jobs, and lifecycle cleanup.
+ *
+ * Behavior:
+ * - Appends user messages to IndexedDB and UI state
+ * - Streams assistant responses with tool execution support
+ * - Supports background streaming when enabled and safe
+ * - Emits hook actions and filters during key phases
+ * - Aborts in-flight streams on request and preserves partial output
+ *
+ * Constraints:
+ * - Must be used within a Vue setup scope
+ * - Thread id must be set before sending messages
+ * - Background streaming only enabled for text-only requests
+ *
+ * Non-Goals:
+ * - Does not manage navigation or routing
+ * - Does not expose provider secrets in client state
+ */
 export function useChat(
     msgs: ChatMessage[] = [],
     initialThreadId?: string,
@@ -191,6 +228,17 @@ export function useChat(
     const attachedBackgroundJobs = new Set<string>();
     const detached = ref<boolean>(false);
     const isDetached = () => detached.value;
+    /**
+     * Purpose:
+     * Resets per-request stream state and clears the active stream id.
+     *
+     * Behavior:
+     * - Clears stream accumulator buffers
+     * - Clears the public `streamId` ref
+     *
+     * Constraints:
+     * - Safe to call multiple times
+     */
     function resetStream() {
         streamAcc.reset();
         streamId.value = undefined;
@@ -210,6 +258,18 @@ export function useChat(
         }
     );
 
+    /**
+     * Purpose:
+     * Enforces local client-side limits for conversations and daily messages.
+     *
+     * Behavior:
+     * - Checks max conversation count for new threads
+     * - Checks daily message quota
+     * - Emits toast warnings when limits are exceeded
+     *
+     * Constraints:
+     * - This is a client-side guard only, not an authorization layer
+     */
     async function enforceClientLimits(isNewThread: boolean): Promise<boolean> {
         const limits = limitsConfig.value;
         if (limits.enabled === false) return true;
@@ -264,27 +324,36 @@ export function useChat(
         return true;
     }
 
+    /**
+     * Purpose:
+     * Resolves the effective system prompt content for the current thread.
+     *
+     * Behavior:
+     * - Prefers thread-bound prompt if present
+     * - Falls back to active prompt content
+     *
+     * Constraints:
+     * - Returns null when no prompt content is available
+     */
     async function getSystemPromptContent(): Promise<string | null> {
-        if (!threadIdRef.value) return null;
-        try {
-            const promptId = await getThreadSystemPrompt(threadIdRef.value);
-            if (promptId) {
-                const prompt = await getPrompt(promptId);
-                if (prompt) return promptJsonToString(prompt.content);
-            }
-        } catch (e) {
-            console.warn('Failed to load thread system prompt', e);
-        }
-        return activePromptContent.value
-            ? promptJsonToString(
-                  activePromptContent.value as Parameters<
-                      typeof promptJsonToString
-                  >[0]
-              )
-            : null;
+        return resolveSystemPromptText({
+            threadId: threadIdRef.value,
+            activePromptContent: activePromptContent.value,
+        });
     }
 
     // Helpers to reduce duplication and improve clarity/perf
+    /**
+     * Purpose:
+     * Finds the active chat pane context when multi-pane is enabled.
+     *
+     * Behavior:
+     * - Locates the pane bound to the current thread
+     * - Returns pane and index for hook emission
+     *
+     * Constraints:
+     * - Returns null when no active pane is available
+     */
     function getActivePaneContext(): PaneContext | null {
         try {
             const mpApi = (globalThis as GlobalWithPaneApi).__or3MultiPaneApi;
@@ -300,6 +369,18 @@ export function useChat(
         }
     }
 
+    /**
+     * Purpose:
+     * Applies a partial update to a stored message and keeps sync metadata consistent.
+     *
+     * Behavior:
+     * - Loads the current row if not provided
+     * - Mirrors error updates into data.error for reliable sync
+     * - Updates updated_at timestamp
+     *
+     * Constraints:
+     * - No-op if the message does not exist
+     */
     async function updateMessageRecord(
         id: string,
         patch: Partial<StoredMessage>,
@@ -337,6 +418,18 @@ export function useChat(
         });
     }
 
+    /**
+     * Purpose:
+     * Creates a throttled assistant persister for streaming updates.
+     *
+     * Behavior:
+     * - Serializes file hashes only when changes occur
+     * - Updates content, reasoning, and tool call data
+     * - Clears pending flag on finalize
+     *
+     * Constraints:
+     * - Returned function is stateful and tied to the provided message row
+     */
     function makeAssistantPersister(
         assistantDbMsg: StoredMessage,
         assistantFileHashes: string[]
@@ -399,6 +492,17 @@ export function useChat(
         };
     }
 
+    /**
+     * Purpose:
+     * Filters assistant messages to prevent empty placeholders in model input.
+     *
+     * Behavior:
+     * - Keeps non-empty text messages
+     * - Keeps image/file content parts
+     *
+     * Constraints:
+     * - Only applies to assistant role messages
+     */
     function shouldKeepAssistantMessage(m: ChatMessage): boolean {
         if (m.role !== 'assistant') return true;
         const c = m.content;
@@ -413,6 +517,17 @@ export function useChat(
         return true;
     }
 
+    /**
+     * Purpose:
+     * Applies workflow output to UI and raw message state when AI is bypassed.
+     *
+     * Behavior:
+     * - Updates in-memory message arrays when possible
+     * - Falls back to Dexie read to reconstruct missing entries
+     *
+     * Constraints:
+     * - No-op when message id or output is missing
+     */
     async function applyWorkflowResultToMessages(
         messageId: string,
         finalOutput: string
@@ -522,6 +637,19 @@ export function useChat(
     );
 
     let historySyncInFlight = false;
+    /**
+     * Purpose:
+     * Loads thread history into memory and reattaches background jobs if needed.
+     *
+     * Behavior:
+     * - Ensures thread history is loaded once per thread id
+     * - Rebuilds UI message list from raw messages
+     * - Reattaches background jobs after history sync
+     *
+     * Constraints:
+     * - No-op if a sync is already in flight
+     * - Safe to call repeatedly
+     */
     async function ensureHistorySynced() {
         if (historySyncInFlight) return;
         if (threadIdRef.value && historyLoadedFor.value !== threadIdRef.value) {
@@ -548,6 +676,17 @@ export function useChat(
 
     const tailAssistant = ref<UiChatMessage | null>(null);
     let lastSuppressedAssistantId: string | null = null;
+    /**
+     * Purpose:
+     * Flushes the in-progress assistant message into the UI list.
+     *
+     * Behavior:
+     * - Adds tail assistant to messages if missing
+     * - Clears tail reference afterwards
+     *
+     * Constraints:
+     * - No-op when no tail assistant exists
+     */
     function flushTailAssistant() {
         const tail = tailAssistant.value;
         if (!tail) return;
@@ -557,11 +696,30 @@ export function useChat(
         tailAssistant.value = null;
     }
 
+    /**
+     * Purpose:
+     * Resolves a UI message by id, preferring the tail assistant.
+     *
+     * Behavior:
+     * - Returns tail assistant when ids match
+     * - Falls back to messages list
+     */
     function resolveUiMessage(messageId: string): UiChatMessage | null {
         if (tailAssistant.value?.id === messageId) return tailAssistant.value;
         return messages.value.find((m) => m.id === messageId) ?? null;
     }
 
+    /**
+     * Purpose:
+     * Clears background job subscriptions and optionally stops tracking.
+     *
+     * Behavior:
+     * - Unsubscribes all background job listeners
+     * - Optionally stops tracking of active jobs
+     *
+     * Constraints:
+     * - Safe to call multiple times
+     */
     function clearBackgroundJobSubscriptions(options?: {
         keepTracking?: boolean;
     }): void {
@@ -582,6 +740,19 @@ export function useChat(
         attachedBackgroundJobs.clear();
     }
 
+    /**
+     * Purpose:
+     * Attaches a background job tracker to UI state and streaming buffers.
+     *
+     * Behavior:
+     * - Ensures tracker exists and seeds baseline content
+     * - Subscribes to updates and syncs UI text
+     * - Finalizes stream accumulator on completion
+     *
+     * Constraints:
+     * - Only attaches once per job id
+     * - Respects detached mode to avoid UI updates
+     */
     function attachBackgroundJobToUi(params: {
         jobId: string;
         userId: string;
@@ -727,6 +898,17 @@ export function useChat(
         return tracker;
     }
 
+    /**
+     * Purpose:
+     * Reattaches background jobs for the current thread after history load.
+     *
+     * Behavior:
+     * - Scans pending assistant messages for active job metadata
+     * - Rehydrates trackers and restores UI state
+     *
+     * Constraints:
+     * - No-op when background streaming is disabled
+     */
     async function reattachBackgroundJobs(): Promise<void> {
         if (!backgroundStreamingAllowed.value || !threadIdRef.value) return;
 
@@ -775,6 +957,19 @@ export function useChat(
         }
     }
 
+    /**
+     * Purpose:
+     * Sends a user message, performs validation, and streams an assistant response.
+     *
+     * Behavior:
+     * - Validates API key and client-side limits
+     * - Persists user message and builds model input
+     * - Orchestrates foreground or background streaming
+     *
+     * Constraints:
+     * - Returns early when message is filtered or blocked
+     * - Requires thread id to be initialized before send
+     */
     async function sendMessage(
         contentOrParams: string | (SendMessageParams & { content: string }),
         maybeParams?: SendMessageParams
@@ -996,16 +1191,6 @@ export function useChat(
 
         file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
 
-        // Helper: convert a Blob to a data URL (used only for API preparation)
-        const blobToDataUrl = (blob: Blob): Promise<string> =>
-            new Promise((resolve, reject) => {
-                const fr = new FileReader();
-                fr.onerror = () =>
-                    reject(fr.error ?? new Error('FileReader error'));
-                fr.onload = () => resolve(fr.result as string);
-                fr.readAsDataURL(blob);
-            });
-
         // Verify files exist (no Base64 conversion - that happens in buildOpenRouterMessages)
         const hydratedFiles = await Promise.all(
             Array.isArray(files) ? files.map(normalizeFileUrl) : []
@@ -1069,27 +1254,23 @@ export function useChat(
             currentModelId = modelId;
 
             const messagesWithSystemRaw = [...rawMessages.value];
-            const threadSystemText = await getSystemPromptContent();
-            let finalSystem: string | null = null;
+            let masterPrompt = '';
             try {
                 const { settings } = useAiSettings();
                 const settingsValue = settings.value as
                     | ChatSettings
                     | undefined;
-                const master = settingsValue?.masterSystemPrompt ?? '';
-                finalSystem = composeSystemPrompt(
-                    master,
-                    threadSystemText || null
-                );
+                masterPrompt = settingsValue?.masterSystemPrompt ?? '';
             } catch {
-                finalSystem = (threadSystemText || '').trim() || null;
+                masterPrompt = '';
             }
-            if (finalSystem && finalSystem.trim()) {
-                messagesWithSystemRaw.unshift({
-                    role: 'system',
-                    content: finalSystem,
-                    id: `system-${newId()}`,
-                });
+            const systemMessage = await buildSystemPromptMessage({
+                threadId: threadIdRef.value,
+                activePromptContent: activePromptContent.value,
+                masterPrompt,
+            });
+            if (systemMessage) {
+                messagesWithSystemRaw.unshift(systemMessage);
             }
 
             const effectiveMessages = await hooks.applyFilters(
@@ -1102,86 +1283,17 @@ export function useChat(
                 Array.isArray(effectiveMessages) ? effectiveMessages : []
             ).filter(shouldKeepAssistantMessage);
 
-            const isModelMessage = (
-                m: ChatMessage
-            ): m is ChatMessage & { role: 'user' | 'assistant' | 'system' } =>
-                m.role !== 'tool';
-
-            const { buildOpenRouterMessages } = await import(
-                '~/core/auth/openrouter-build'
-            );
-
             // Load thread history if not already loaded
             await ensureHistorySynced();
-
-            const modelInputMessages: ModelInputMessage[] =
-                sanitizedEffectiveMessages.filter(isModelMessage).map(
-                    (m): ModelInputMessage => ({
-                        role: m.role,
-                        content: m.content,
-                        id: m.id,
-                        file_hashes: m.file_hashes,
-                        name: m.name,
-                        tool_call_id: m.tool_call_id,
-                    })
-                );
-            if (assistantHashes.length && prevAssistant?.id) {
-                const target = modelInputMessages.find(
-                    (m) => m.id === prevAssistant.id
-                );
-                if (target) target.file_hashes = null;
-            }
-            const contextHashesList = Array.isArray(context_hashes)
-                ? context_hashes.slice(0, MAX_MESSAGE_FILE_HASHES)
-                : [];
-            if (contextHashesList.length) {
-                const seenContext = new Set<string>(
-                    Array.isArray(file_hashes) ? file_hashes : []
-                );
-                const contextParts: ContentPart[] = [];
-                for (const h of contextHashesList) {
-                    if (!h || seenContext.has(h)) continue;
-                    if (contextParts.length >= MAX_MESSAGE_FILE_HASHES) break;
-                    const part = await hashToContentPart(h);
-                    if (part) {
-                        contextParts.push(part);
-                        seenContext.add(h);
-                    }
-                }
-                if (contextParts.length) {
-                    const lastUserIdx = [...modelInputMessages]
-                        .map((m, idx: number) => (m.role === 'user' ? idx : -1))
-                        .filter((idx) => idx >= 0)
-                        .pop();
-                    if (lastUserIdx != null && lastUserIdx >= 0) {
-                        const target = modelInputMessages[lastUserIdx];
-                        if (target) {
-                            if (!Array.isArray(target.content)) {
-                                if (typeof target.content === 'string') {
-                                    target.content = [
-                                        { type: 'text', text: target.content },
-                                    ];
-                                } else {
-                                    target.content = [];
-                                }
-                            }
-                            target.content.push(...contextParts);
-                        }
-                    }
-                }
-            }
-            let orMessages: OpenRouterMessage[] = await buildOpenRouterMessages(
-                modelInputMessages,
-                {
-                    maxImageInputs: 16,
-                    imageInclusionPolicy: 'all',
-                    debug: false,
-                }
-            );
-            trimOrMessagesImages(
-                orMessages as Parameters<typeof trimOrMessagesImages>[0],
-                5
-            );
+            let orMessages = await buildOpenRouterMessagesForSend({
+                effectiveMessages: sanitizedEffectiveMessages,
+                assistantHashes,
+                prevAssistantId: prevAssistant?.id,
+                contextHashes: context_hashes,
+                fileHashes: Array.isArray(file_hashes) ? file_hashes : [],
+                maxImageInputs: 16,
+                imageInclusionPolicy: 'all',
+            });
             if (orMessages.length === 0) return;
 
             // modalities controls OUTPUT format, not input capability
@@ -1672,6 +1784,17 @@ export function useChat(
 
     // END sendMessage
 
+    /**
+     * Purpose:
+     * Retries a prior user message by removing its assistant response and resending.
+     *
+     * Behavior:
+     * - Rebuilds message context from local state
+     * - Reuses the current settings unless a model override is supplied
+     *
+     * Constraints:
+     * - No-op if message or thread context is missing
+     */
     async function retryMessage(messageId: string, modelOverride?: string) {
         await retryMessageImpl(
             {
@@ -1692,6 +1815,17 @@ export function useChat(
         );
     }
 
+    /**
+     * Purpose:
+     * Continues a partially generated assistant message.
+     *
+     * Behavior:
+     * - Builds a continuation prompt from recent assistant output
+     * - Streams new content into the existing assistant message
+     *
+     * Constraints:
+     * - Requires an existing assistant message id
+     */
     async function continueMessage(messageId: string, modelOverride?: string) {
         await continueMessageImpl(
             {
@@ -1718,6 +1852,18 @@ export function useChat(
         );
     }
 
+    /**
+     * Purpose:
+     * Clears local chat state and tears down subscriptions.
+     *
+     * Behavior:
+     * - Aborts active streams when safe
+     * - Clears UI and raw message arrays
+     * - Disposes hook listeners and background job subscriptions
+     *
+     * Constraints:
+     * - In background mode, detaches without stopping the job
+     */
     function clear() {
         const disposeHooks = () => {
             if (!cleanupFns.length) return;
@@ -1769,7 +1915,17 @@ export function useChat(
         streamAcc.reset();
     }
 
-    // Keep in-memory history in sync when a message is edited elsewhere (e.g., inline edit UI)
+    /**
+     * Purpose:
+     * Applies a local text edit to in-memory message state.
+     *
+     * Behavior:
+     * - Updates raw and UI message caches
+     * - Updates tail assistant if it matches
+     *
+     * Constraints:
+     * - Does not persist to IndexedDB
+     */
     function applyLocalEdit(id: string, text: string) {
         let updated = false;
         const rawIdx = rawMessages.value.findIndex((m) => m.id === id);
@@ -1807,6 +1963,87 @@ export function useChat(
         clear();
     });
 
+    /**
+     * Purpose:
+     * Aborts any active streaming request and finalizes state.
+     *
+     * Behavior:
+     * - Aborts foreground streams or background jobs
+     * - Marks partial messages as stopped
+     * - Emits abort error telemetry when configured
+     *
+     * Constraints:
+     * - No-op if no active stream is present
+     */
+    function abortChat() {
+        if (backgroundJobId.value) {
+            const jobId = backgroundJobId.value;
+            const info = backgroundJobInfo.value;
+            backgroundJobId.value = null;
+            backgroundJobMode.value = 'none';
+            backgroundJobInfo.value = null;
+            aborted.value = true;
+            void abortBackgroundJob(jobId);
+            if (abortController.value) {
+                try {
+                    abortController.value.abort();
+                } catch {
+                    /* intentionally empty */
+                }
+                abortController.value = null;
+            }
+            streamAcc.finalize({ aborted: true });
+            if (tailAssistant.value?.pending)
+                tailAssistant.value.pending = false;
+            if (info?.messageId) {
+                const target = resolveUiMessage(info.messageId);
+                if (target) {
+                    target.pending = false;
+                    target.error = 'stopped';
+                    messages.value = [...messages.value];
+                }
+                void updateMessageRecord(info.messageId, {
+                    pending: false,
+                    error: 'stopped',
+                });
+            }
+            return;
+        }
+
+        if (!loading.value || !abortController.value) return;
+        aborted.value = true;
+        try {
+            abortController.value.abort();
+        } catch {
+            /* intentionally empty */
+        }
+        streamAcc.finalize({ aborted: true });
+        if (tailAssistant.value?.pending)
+            tailAssistant.value.pending = false;
+        try {
+            const appConfig = useAppConfig() as {
+                errors?: { showAbortInfo?: boolean };
+            };
+            const showAbort =
+                typeof appConfig.errors === 'object' &&
+                appConfig.errors.showAbortInfo === true;
+            reportError(
+                err('ERR_STREAM_ABORTED', 'Generation aborted', {
+                    severity: 'info',
+                    tags: {
+                        domain: 'chat',
+                        threadId: threadIdRef.value || '',
+                        streamId: streamId.value || '',
+                        stage: 'abort',
+                    },
+                }),
+                { code: 'ERR_STREAM_ABORTED', toast: showAbort }
+            );
+        } catch {
+            /* intentionally empty */
+        }
+    }
+
     return {
         messages,
         rawMessages,
@@ -1825,74 +2062,7 @@ export function useChat(
         flushTailAssistant,
         applyLocalEdit,
         ensureHistorySynced,
-        abort: () => {
-            if (backgroundJobId.value) {
-                const jobId = backgroundJobId.value;
-                const info = backgroundJobInfo.value;
-                backgroundJobId.value = null;
-                backgroundJobMode.value = 'none';
-                backgroundJobInfo.value = null;
-                aborted.value = true;
-                void abortBackgroundJob(jobId);
-                if (abortController.value) {
-                    try {
-                        abortController.value.abort();
-                    } catch {
-                        /* intentionally empty */
-                    }
-                    abortController.value = null;
-                }
-                streamAcc.finalize({ aborted: true });
-                if (tailAssistant.value?.pending)
-                    tailAssistant.value.pending = false;
-                if (info?.messageId) {
-                    const target = resolveUiMessage(info.messageId);
-                    if (target) {
-                        target.pending = false;
-                        target.error = 'stopped';
-                        messages.value = [...messages.value];
-                    }
-                    void updateMessageRecord(info.messageId, {
-                        pending: false,
-                        error: 'stopped',
-                    });
-                }
-                return;
-            }
-
-            if (!loading.value || !abortController.value) return;
-            aborted.value = true;
-            try {
-                abortController.value.abort();
-            } catch {
-                /* intentionally empty */
-            }
-            streamAcc.finalize({ aborted: true });
-            if (tailAssistant.value?.pending)
-                tailAssistant.value.pending = false;
-            try {
-                const appConfig = useAppConfig() as {
-                    errors?: { showAbortInfo?: boolean };
-                };
-                const showAbort =
-                    typeof appConfig.errors === 'object' &&
-                    appConfig.errors.showAbortInfo === true;
-                reportError(
-                    err('ERR_STREAM_ABORTED', 'Generation aborted', {
-                        severity: 'info',
-                        tags: {
-                            domain: 'chat',
-                            threadId: threadIdRef.value || '',
-                            streamId: streamId.value || '',
-                            stage: 'abort',
-                        },
-                    }),
-                    { code: 'ERR_STREAM_ABORTED', toast: showAbort }
-                );
-            } catch {
-                /* intentionally empty */
-            }
-        },
+        abort: abortChat,
         clear,
     };
 }

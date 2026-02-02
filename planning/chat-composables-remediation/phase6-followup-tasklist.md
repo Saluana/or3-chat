@@ -40,7 +40,7 @@ Hard constraints:
   - New: `app/utils/chat/useAi-internal/foregroundStream.ts`
   - Keep hook timing + orchestration decisions in facade
 
-- [ ] B5. Extract system prompt + OpenRouter message build glue
+- [x] B5. Extract system prompt + OpenRouter message build glue
   - New: `app/utils/chat/useAi-internal/messageBuild.ts`
 
 - [ ] B6. Recount LOC and ensure under 2000
@@ -50,9 +50,9 @@ Hard constraints:
 
 ## C) JSDoc upgrades (doc-maker style)
 
-- [ ] C1. Add module-level header to `useAi.ts` (Purpose/Responsibilities/Constraints/Non-goals/Invariants)
-- [ ] C2. Upgrade `useChat()` JSDoc: lifecycle, cleanup, error contracts, abort semantics
-- [ ] C3. Add short module headers to each new internal module
+- [x] C1. Add module-level header to `useAi.ts` (Purpose/Responsibilities/Constraints/Non-goals/Invariants)
+- [x] C2. Upgrade `useChat()` JSDoc: lifecycle, cleanup, error contracts, abort semantics
+- [x] C3. Add short module headers to each new internal module
 
 ---
 

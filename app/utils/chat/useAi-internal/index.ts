@@ -49,3 +49,15 @@ export type { ContinueMessageContext } from './continue';
 // Foreground streaming
 export { runForegroundStreamLoop } from './foregroundStream';
 export type { ForegroundStreamContext } from './foregroundStream';
+
+// System prompt + message build
+export {
+    resolveSystemPromptText,
+    buildSystemPromptMessage,
+    buildOpenRouterMessagesForSend,
+} from './messageBuild';
+export type {
+    ResolveSystemPromptParams,
+    BuildSystemPromptParams,
+    BuildOpenRouterMessagesParams,
+} from './messageBuild';
