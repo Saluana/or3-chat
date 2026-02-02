@@ -1,6 +1,17 @@
 /**
- * Utility functions for registering sidebar pages with enhanced guardrails and HMR cleanup.
- * Provides a safer and more convenient way to register pages with automatic cleanup.
+ * @module app/composables/sidebar/registerSidebarPage
+ *
+ * Purpose:
+ * Provides guard-railed helpers for registering sidebar pages, including optional
+ * client-only registration and HMR cleanup.
+ *
+ * Responsibilities:
+ * - Wraps the core sidebar page registry with opt-in safety checks
+ * - Supports automatic cleanup during hot module replacement
+ *
+ * Non-responsibilities:
+ * - Does not validate page definitions beyond the core registry
+ * - Does not manage page activation or routing
  */
 import type { Component } from 'vue';
 import type { SidebarPageDef } from './useSidebarPages';
@@ -8,8 +19,20 @@ import type { Post } from '~/db';
 import { useSidebarPages } from './useSidebarPages';
 
 /**
- * Configuration options for enhanced sidebar page registration.
- * Provides guardrails for client-side execution and HMR cleanup.
+ * `RegisterSidebarPageOptions`
+ *
+ * Purpose:
+ * Configures guardrails for page registration.
+ *
+ * Behavior:
+ * Controls client-only registration and whether HMR disposal should unregister.
+ *
+ * Constraints:
+ * - Client-only registration is ignored on the server
+ * - HMR cleanup only runs when HMR is available
+ *
+ * Non-Goals:
+ * - Does not affect the page registry validation rules
  */
 export interface RegisterSidebarPageOptions {
     /** Client-side guard - registration is ignored on server. Defaults to true. */
@@ -19,12 +42,21 @@ export interface RegisterSidebarPageOptions {
 }
 
 /**
- * Register a sidebar page with enhanced guardrails and automatic cleanup.
- * Wraps the base registration function with client-side guards and HMR disposal handling.
- * 
- * @param def - The sidebar page definition to register
- * @param options - Configuration options for registration behavior
- * @returns Unregister function for manual cleanup
+ * `registerSidebarPage`
+ *
+ * Purpose:
+ * Registers a sidebar page with optional client-only guards and HMR cleanup.
+ *
+ * Behavior:
+ * Delegates to the core sidebar page registry and returns its unregister
+ * callback. When HMR is enabled, the callback is invoked on dispose.
+ *
+ * Constraints:
+ * - No-op on the server when `clientOnly` is true
+ * - HMR cleanup only runs in dev HMR environments
+ *
+ * Non-Goals:
+ * - Does not alter the registration schema or ordering rules
  */
 export function registerSidebarPage(
     def: SidebarPageDef,
@@ -54,8 +86,19 @@ export function registerSidebarPage(
 }
 
 /**
- * Configuration options for registering sidebar pages with posts list integration.
- * Extends the base options with post-specific configuration.
+ * `RegisterSidebarPageWithPostsOptions`
+ *
+ * Purpose:
+ * Adds post-list integration settings for sidebar page registration.
+ *
+ * Behavior:
+ * Extends the base registration options with post type and selection callback.
+ *
+ * Constraints:
+ * - `postType` is required to scope post selection
+ *
+ * Non-Goals:
+ * - Does not alter how posts are queried or rendered
  */
 export interface RegisterSidebarPageWithPostsOptions
     extends RegisterSidebarPageOptions {
@@ -66,13 +109,21 @@ export interface RegisterSidebarPageWithPostsOptions
 }
 
 /**
- * Register a sidebar page with automatic posts list integration.
- * Enhances the page definition with posts-related context and helpers.
- * Automatically exposes postType and selectPost helper to the page component.
- * 
- * @param def - The sidebar page definition (component can be Component or async loader)
- * @param options - Options including postType and optional post selection handler
- * @returns Unregister function for manual cleanup
+ * `registerSidebarPageWithPosts`
+ *
+ * Purpose:
+ * Registers a sidebar page and exposes post-selection helpers to its context.
+ *
+ * Behavior:
+ * Adds `postType` and a `selectPost` helper to the page context, then forwards the
+ * registration to `registerSidebarPage`.
+ *
+ * Constraints:
+ * - Requires a `postType` to determine which posts are relevant
+ * - The original `provideContext` is still invoked if provided
+ *
+ * Non-Goals:
+ * - Does not implement post list rendering or data fetching
  */
 export function registerSidebarPageWithPosts(
     def: Omit<SidebarPageDef, 'component'> & {
@@ -106,8 +157,18 @@ export function registerSidebarPageWithPosts(
 registerSidebarPage.withPosts = registerSidebarPageWithPosts;
 
 /**
- * Default export for easier importing.
- * Allows both default and named imports: `import registerSidebarPage from './registerSidebarPage'`
- * or `import { registerSidebarPage } from './registerSidebarPage'`
+ * Default export.
+ *
+ * Purpose:
+ * Offers a default export for the primary registration helper.
+ *
+ * Behavior:
+ * Mirrors the named `registerSidebarPage` export.
+ *
+ * Constraints:
+ * - None beyond the underlying function behavior
+ *
+ * Non-Goals:
+ * - Does not provide additional runtime behavior
  */
 export default registerSidebarPage;

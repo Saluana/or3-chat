@@ -1,43 +1,106 @@
+/**
+ * @module app/composables/sidebar/usePaginatedSidebarItems
+ *
+ * Purpose:
+ * Provides a paginated, live-updating list of sidebar items from IndexedDB.
+ *
+ * Responsibilities:
+ * - Queries threads and documents with filtering and pagination
+ * - Keeps results updated via Dexie live queries
+ *
+ * Non-responsibilities:
+ * - Does not implement rendering or infinite scroll UI
+ * - Does not perform server-side pagination
+ */
 import { ref, shallowRef, type Ref, onMounted, onUnmounted } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
 import { db, type Thread, type Post } from '~/db';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 
+/**
+ * `PAGE_SIZE`
+ *
+ * Purpose:
+ * Defines the default page size for sidebar item pagination.
+ *
+ * Constraints:
+ * - Used as the base increment for `loadMore`
+ */
 const PAGE_SIZE = 50;
 
 /**
- * Transforms a database thread to a unified sidebar item
+ * `threadToUnified`
+ *
+ * Purpose:
+ * Converts a thread record into the unified sidebar item shape.
+ *
+ * Behavior:
+ * Applies title fallbacks and uses the latest available timestamp.
+ *
+ * Constraints:
+ * - Assumes thread timestamps are numeric and comparable
+ *
+ * Non-Goals:
+ * - Does not perform localization or formatting
  */
-export function threadToUnified(t: Thread): UnifiedSidebarItem {
+export function threadToUnified(thread: Thread): UnifiedSidebarItem {
     return {
-        id: t.id,
+        id: thread.id,
         type: 'thread',
-        title: t.title || 'Untitled Chat',
-        updatedAt: t.last_message_at ?? t.updated_at,
-        forked: t.forked,
+        title: thread.title || 'Untitled Chat',
+        updatedAt: thread.last_message_at ?? thread.updated_at,
+        forked: thread.forked,
     };
 }
 
 /**
- * Transforms a database post (document) to a unified sidebar item
+ * `docToUnified`
+ *
+ * Purpose:
+ * Converts a document post into the unified sidebar item shape.
+ *
+ * Behavior:
+ * Applies title fallbacks and preserves post type metadata.
+ *
+ * Constraints:
+ * - Expects document posts with `postType` and `updated_at`
+ *
+ * Non-Goals:
+ * - Does not filter out deleted posts
  */
-export function docToUnified(d: Post): UnifiedSidebarItem {
+export function docToUnified(doc: Post): UnifiedSidebarItem {
     return {
-        id: d.id,
+        id: doc.id,
         type: 'document',
-        title: d.title || 'Untitled Document',
-        updatedAt: d.updated_at,
-        postType: d.postType,
+        title: doc.title || 'Untitled Document',
+        updatedAt: doc.updated_at,
+        postType: doc.postType,
     };
 }
 
 /**
- * Composable for managing paginated loading of sidebar items (threads & documents mixed)
+ * `usePaginatedSidebarItems`
+ *
+ * Purpose:
+ * Supplies a paginated, reactive list of sidebar items with live updates.
+ *
+ * Behavior:
+ * Uses Dexie live queries to keep results fresh and supports incremental
+ * pagination with `loadMore`.
+ *
+ * Constraints:
+ * - Must run on the client where IndexedDB is available
+ * - Pagination is local-only and based on in-memory target counts
+ *
+ * Non-Goals:
+ * - Does not implement server-side pagination or caching
  */
-export function usePaginatedSidebarItems(options: { 
-    type?: 'all' | 'thread' | 'document', 
-    query?: Ref<string> 
-} = {}) {
+export function usePaginatedSidebarItems(
+    options: {
+        type?: 'all' | 'thread' | 'document';
+        query?: Ref<string>;
+    } = {}
+) {
     const items = shallowRef<UnifiedSidebarItem[]>([]);
     const hasMore = ref(true);
     const loading = ref(false);
@@ -49,7 +112,10 @@ export function usePaginatedSidebarItems(options: {
     const searchQuery = options.query;
 
     /**
-     * Fetch the latest items up to a target count
+     * Fetch the latest items up to a target count.
+     *
+     * @param limit - Maximum number of items to return.
+     * @returns Items plus a flag indicating if more items exist.
      */
     async function fetchItems(
         limit: number
@@ -129,7 +195,7 @@ export function usePaginatedSidebarItems(options: {
     }
 
     /**
-     * Load next page of items
+     * Load next page of items.
      */
     function loadMore() {
         if (loading.value || !hasMore.value) return;
@@ -138,7 +204,7 @@ export function usePaginatedSidebarItems(options: {
     }
 
     /**
-     * Reset pagination state and reload from start
+     * Reset pagination state and reload from start.
      */
     function reset() {
         hasMore.value = true;

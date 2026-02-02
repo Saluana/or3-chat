@@ -1,9 +1,16 @@
 /**
- * Unified sidebar search across threads, projects, and documents.
- * Modeled after useThreadSearch but merges all three domains into one Orama index
- * for a single fast query. Falls back to substring filtering if Orama fails.
+ * @module app/composables/sidebar/useSidebarSearch
  *
- * Exposed API mirrors existing pattern so integration stays minimal.
+ * Purpose:
+ * Provides a unified sidebar search across threads, projects, and documents.
+ *
+ * Responsibilities:
+ * - Builds and maintains a client-side Orama index
+ * - Executes debounced searches with substring fallback
+ *
+ * Non-responsibilities:
+ * - Does not render search UI
+ * - Does not provide server-side search
  */
 import { ref, watch, onBeforeUnmount, type Ref } from 'vue';
 import { useDebounceFn, watchDebounced } from '@vueuse/core';
@@ -16,6 +23,7 @@ import {
 
 /**
  * Interface for documents stored in the search index.
+ *
  * Normalizes different entity types (threads, projects, docs) into a common format.
  */
 interface IndexDoc {
@@ -31,7 +39,8 @@ interface IndexDoc {
 
 /**
  * Type alias for Orama database instance.
- * Using unknown since the exact Orama type isn't needed for this composable.
+ *
+ * Uses unknown since the exact Orama type isn't needed for this composable.
  */
 type OramaInstance = unknown;
 
@@ -47,10 +56,11 @@ const QUERY_DEBOUNCE_MS = 120;
 
 /**
  * Type guard to check if a post is a document post.
+ *
  * Filters out non-doc posts and deleted posts.
- * 
- * @param post - The post to check
- * @returns True if the post is a document and not deleted
+ *
+ * @param post - The post to check.
+ * @returns True if the post is a document and not deleted.
  */
 function isDocPost(post: Post): boolean {
     const record = post as Record<string, unknown>;
@@ -59,12 +69,13 @@ function isDocPost(post: Post): boolean {
 
 /**
  * Converts threads, projects, and documents into normalized IndexDoc format.
+ *
  * Handles title fallbacks and ensures consistent data structure for indexing.
- * 
- * @param threads - Array of thread entities
- * @param projects - Array of project entities
- * @param documents - Array of document entities
- * @returns Array of normalized documents ready for indexing
+ *
+ * @param threads - Array of thread entities.
+ * @param projects - Array of project entities.
+ * @param documents - Array of document entities.
+ * @returns Array of normalized documents ready for indexing.
  */
 function toDocs(
     threads: Thread[],
@@ -97,19 +108,19 @@ function toDocs(
 
 /**
  * Builds an Orama search index from the provided entities.
+ *
  * Creates the database schema and indexes all documents.
- * 
- * @param threads - Array of thread entities to index
- * @param projects - Array of project entities to index
- * @param documents - Array of document entities to index
- * @returns Orama database instance or null if creation failed
+ *
+ * @param threads - Array of thread entities to index.
+ * @param projects - Array of project entities to index.
+ * @param documents - Array of document entities to index.
+ * @returns Orama database instance or null if creation failed.
  */
 async function buildIndex(
     threads: Thread[],
     projects: Project[],
     documents: Post[]
 ) {
-     
     const instance = await createDb({
         id: 'string',
         kind: 'string',
@@ -119,18 +130,19 @@ async function buildIndex(
     if (!instance) return null;
     const docs = toDocs(threads, projects, documents);
     if (docs.length) await buildOramaIndex(instance, docs);
-     
+
     return instance;
 }
 
 /**
  * Computes a signature string to detect when the search index needs rebuilding.
+ *
  * Uses entity counts and the latest updated_at timestamp to determine if data has changed.
- * 
- * @param threads - Array of thread entities
- * @param projects - Array of project entities
- * @param documents - Array of document entities
- * @returns Signature string representing the current data state
+ *
+ * @param threads - Array of thread entities.
+ * @param projects - Array of project entities.
+ * @param documents - Array of document entities.
+ * @returns Signature string representing the current data state.
  */
 function computeSignature(
     threads: Thread[],
@@ -149,21 +161,28 @@ function computeSignature(
 }
 
 /**
- * Composable for unified sidebar search across threads, projects, and documents.
- * Uses Orama for fast full-text search with substring fallback.
- * Automatically manages index rebuilding and provides debounced search.
- * 
- * @param threads - Reactive reference to threads array
- * @param projects - Reactive reference to projects array
- * @param documents - Reactive reference to documents array
- * @returns Object containing search state and control functions
+ * `useSidebarSearch`
+ *
+ * Purpose:
+ * Supplies reactive search state and results for sidebar entities.
+ *
+ * Behavior:
+ * Builds an Orama index, debounces rebuild and search, and falls back to
+ * substring matching when indexing is unavailable or yields no matches.
+ *
+ * Constraints:
+ * - Runs on the client where Orama and IndexedDB data are available
+ * - Index rebuild is based on size and latest timestamp signature
+ *
+ * Non-Goals:
+ * - Does not persist search state across sessions
+ * - Does not perform server-side search
  */
 export function useSidebarSearch(
     threads: Ref<Thread[]>,
     projects: Ref<Project[]>,
     documents: Ref<Post[]>
 ) {
-     
     let dbInstance: OramaInstance | null = null;
     let lastQueryToken = 0;
     let warnedFallback = false;
@@ -183,6 +202,7 @@ export function useSidebarSearch(
 
     /**
      * Ensures the search index is built and up-to-date.
+     *
      * Rebuilds the index only when data has changed based on signature comparison.
      * Updates ID maps for result mapping and sets ready/busy states.
      */
@@ -219,10 +239,11 @@ export function useSidebarSearch(
 
     /**
      * Fallback search using substring matching when Orama search fails or returns no results.
+     *
      * Provides basic search functionality without requiring the index.
      * Warns once when fallback mode is used.
-     * 
-     * @param raw - The raw search query string
+     *
+     * @param raw - The raw search query string.
      */
     function substringFallback(raw: string) {
         const ql = raw.toLowerCase();
@@ -242,7 +263,6 @@ export function useSidebarSearch(
         projectResults.value = projectHits;
         documentResults.value = docHits;
         if (!warnedFallback) {
-             
             console.warn('[useSidebarSearch] fallback substring search used');
             warnedFallback = true;
         }
@@ -250,6 +270,7 @@ export function useSidebarSearch(
 
     /**
      * Executes the search using the Orama index.
+     *
      * Handles empty queries, result mapping, and automatic fallback to substring search.
      * Uses token-based cancellation to prevent stale results from overriding newer searches.
      */

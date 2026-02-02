@@ -1,7 +1,17 @@
 /**
- * Composable for managing the active sidebar page state with persistence and lifecycle hooks.
- * Handles page transitions, activation guards, and maintains global singleton state.
- * Integrates with the hooks system for extensibility and analytics.
+ * @module app/composables/sidebar/useActiveSidebarPage
+ *
+ * Purpose:
+ * Centralizes active sidebar page state with persistence and lifecycle-safe updates.
+ *
+ * Responsibilities:
+ * - Tracks the active sidebar page ID across components
+ * - Persists selection in local storage
+ * - Executes activation and deactivation hooks
+ *
+ * Non-responsibilities:
+ * - Does not render sidebar UI
+ * - Does not register pages; use `useSidebarPages` for registration
  */
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 import { useLocalStorage } from '@vueuse/core';
@@ -39,6 +49,7 @@ const g = globalThis as {
 
 /**
  * Initialize global singleton state once for the entire application.
+ *
  * Ensures consistent state across all component instances.
  */
 if (!g.__or3ActiveSidebarPageState) {
@@ -59,9 +70,22 @@ if (!g.__or3ActiveSidebarPageState) {
 }
 
 /**
- * Composable for managing the active sidebar page state.
- * Handles persistence, activation hooks, and page transitions.
- * Uses global singleton state to ensure consistency across all components.
+ * `useActiveSidebarPage`
+ *
+ * Purpose:
+ * Exposes reactive active page state and safe transition helpers.
+ *
+ * Behavior:
+ * Maintains a global singleton store, persists selections, and runs activation
+ * hooks through the shared hooks system.
+ *
+ * Constraints:
+ * - Must run in a client environment to mutate state
+ * - Activation uses the registered page definitions from `useSidebarPages`
+ *
+ * Non-Goals:
+ * - Does not synchronize state to the server
+ * - Does not enforce UI routing or rendering decisions
  */
 export function useActiveSidebarPage() {
     const { getSidebarPage, listSidebarPages } = useSidebarPages();
@@ -81,14 +105,15 @@ export function useActiveSidebarPage() {
         );
     });
 
-/**
- * Set the active sidebar page with comprehensive hook execution and error handling.
- * Executes activation guards, deactivation hooks, and activation hooks in sequence.
- * Handles errors gracefully with state rollback and proper error reporting.
- * 
- * @param id - The ID of the page to activate
- * @returns True if activation succeeded, false if it failed or was blocked
- */
+    /**
+     * Set the active sidebar page with comprehensive hook execution and error handling.
+     *
+     * Executes activation guards, deactivation hooks, and activation hooks in sequence.
+     * Handles errors gracefully with state rollback and proper error reporting.
+     *
+     * @param id - The ID of the page to activate.
+     * @returns True if activation succeeded, false if it failed or was blocked.
+     */
     async function setActivePage(id: string): Promise<boolean> {
         if (!process.client) {
             return false;
@@ -220,9 +245,10 @@ export function useActiveSidebarPage() {
 
     /**
      * Reset to the default page (sidebar-home).
- * Provides a simple way to return to the home page.
-     * 
-     * @returns True if reset succeeded, false if it failed
+     *
+     * Provides a simple way to return to the home page.
+     *
+     * @returns True if reset succeeded, false if it failed.
      */
     async function resetToDefault(): Promise<boolean> {
         return await setActivePage(DEFAULT_PAGE_ID);
@@ -230,6 +256,7 @@ export function useActiveSidebarPage() {
 
     /**
      * Watch for page changes and validate they exist in the registry.
+     *
      * Automatically resets to default page if the active page becomes unavailable.
      */
     watch(activePageId, (newId) => {
@@ -246,6 +273,7 @@ export function useActiveSidebarPage() {
     // Only run initialization logic once globally
     /**
      * Initialize the composable by attempting to restore the previously active page.
+     *
      * Watches for page registration if the requested page isn't immediately available.
      * Ensures proper cleanup on component unmount.
      */

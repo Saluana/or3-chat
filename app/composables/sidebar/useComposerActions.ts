@@ -1,7 +1,16 @@
 /**
- * Composable for managing composer actions in the rich text editor.
- * Provides registration system and reactive access to editor toolbar actions.
- * Actions can be conditionally visible and disabled based on editor context.
+ * @module app/composables/sidebar/useComposerActions
+ *
+ * Purpose:
+ * Provides a registry and composable interface for rich text editor actions.
+ *
+ * Responsibilities:
+ * - Registers toolbar actions for the composer
+ * - Exposes a reactive, context-aware list of actions
+ *
+ * Non-responsibilities:
+ * - Does not render toolbar UI
+ * - Does not manage editor lifecycle directly
  */
 import { computed, reactive } from 'vue';
 import type { ComputedRef } from 'vue';
@@ -9,8 +18,19 @@ import type { Editor } from '@tiptap/vue-3';
 import type { ChromeActionColor } from './useSidebarSections';
 
 /**
- * Context object provided to composer action handlers and visibility functions.
- * Contains information about the current editor state and environment.
+ * `ComposerActionContext`
+ *
+ * Purpose:
+ * Supplies action handlers with editor state and ambient UI context.
+ *
+ * Behavior:
+ * Carries optional identifiers and streaming state needed for action decisions.
+ *
+ * Constraints:
+ * - Values may be undefined depending on view state
+ *
+ * Non-Goals:
+ * - Does not guarantee presence of an editor instance
  */
 export interface ComposerActionContext {
     /** The TipTap editor instance, if available */
@@ -26,8 +46,21 @@ export interface ComposerActionContext {
 }
 
 /**
- * Interface defining a composer action that can be registered in the editor toolbar.
- * Actions provide buttons and functionality for the rich text editor.
+ * `ComposerAction`
+ *
+ * Purpose:
+ * Describes a toolbar action that can be registered for the composer.
+ *
+ * Behavior:
+ * Provides metadata for display and handlers for invocation, visibility, and
+ * disabled state.
+ *
+ * Constraints:
+ * - `id` must be unique within the registry
+ * - `handler` should be safe to call repeatedly
+ *
+ * Non-Goals:
+ * - Does not enforce visual layout or placement rules
  */
 export interface ComposerAction {
     /** Unique identifier for the action */
@@ -51,8 +84,19 @@ export interface ComposerAction {
 }
 
 /**
- * Interface for composer action entries with computed disabled state.
- * Used in the reactive list returned by useComposerActions.
+ * `ComposerActionEntry`
+ *
+ * Purpose:
+ * Represents a resolved action plus its disabled state for rendering.
+ *
+ * Behavior:
+ * Combines a registered action with the computed disabled flag for a context.
+ *
+ * Constraints:
+ * - Disabled state is derived from the current context on each recompute
+ *
+ * Non-Goals:
+ * - Does not compute visibility; that happens in `useComposerActions`
  */
 export interface ComposerActionEntry {
     /** The composer action definition */
@@ -68,6 +112,7 @@ const DEFAULT_ORDER = 200;
 
 /**
  * Global registry for composer actions using the globalThis pattern.
+ *
  * Ensures actions persist across component instances.
  */
 interface ComposerActionsGlobalThis {
@@ -80,12 +125,14 @@ const registry: Map<string, ComposerAction> =
 
 /**
  * Reactive list that mirrors the registry for Vue reactivity.
+ *
  * Updated whenever the registry changes.
  */
 const reactiveList = reactive<{ items: ComposerAction[] }>({ items: [] });
 
 /**
  * Synchronize the reactive list with the registry.
+ *
  * Called whenever actions are registered or unregistered.
  */
 function sync() {
@@ -93,10 +140,19 @@ function sync() {
 }
 
 /**
- * Register a new composer action.
- * Freezes the action object to prevent mutations and updates the reactive list.
+ * `registerComposerAction`
  *
- * @param action - The composer action to register
+ * Purpose:
+ * Adds a composer action to the global registry.
+ *
+ * Behavior:
+ * Freezes the action to discourage mutation and refreshes the reactive list.
+ *
+ * Constraints:
+ * - Overwrites existing registrations with the same ID in dev mode
+ *
+ * Non-Goals:
+ * - Does not validate action schemas beyond basic presence
  */
 export function registerComposerAction(action: ComposerAction) {
     if (import.meta.dev && registry.has(action.id)) {
@@ -110,21 +166,39 @@ export function registerComposerAction(action: ComposerAction) {
 }
 
 /**
- * Unregister a composer action by ID.
- * Removes the action from the registry and updates the reactive list.
+ * `unregisterComposerAction`
  *
- * @param id - The ID of the action to unregister
+ * Purpose:
+ * Removes a composer action from the registry.
+ *
+ * Behavior:
+ * Deletes the action and refreshes the reactive list when the ID exists.
+ *
+ * Constraints:
+ * - No-op when the ID is not registered
+ *
+ * Non-Goals:
+ * - Does not run any teardown hook for removed actions
  */
 export function unregisterComposerAction(id: string) {
     if (registry.delete(id)) sync();
 }
 
 /**
- * Composable for accessing composer actions with context-aware filtering.
- * Returns a reactive list of actions filtered by visibility and computed disabled state.
+ * `useComposerActions`
  *
- * @param context - Function that returns the current composer action context
- * @returns ComputedRef containing filtered and sorted composer action entries
+ * Purpose:
+ * Provides a reactive list of composer actions filtered by context.
+ *
+ * Behavior:
+ * Applies visibility filters, sorts by order, and computes disabled state on
+ * each reactive update.
+ *
+ * Constraints:
+ * - Must be called during component setup for reactivity
+ *
+ * Non-Goals:
+ * - Does not cache results across different contexts
  */
 export function useComposerActions(
     context: () => ComposerActionContext = () => ({})
@@ -145,10 +219,19 @@ export function useComposerActions(
 }
 
 /**
- * Get a list of all registered composer action IDs.
- * Useful for debugging and registry inspection.
+ * `listRegisteredComposerActionIds`
  *
- * @returns Array of registered composer action IDs
+ * Purpose:
+ * Lists currently registered composer action IDs for inspection.
+ *
+ * Behavior:
+ * Returns IDs in registry iteration order.
+ *
+ * Constraints:
+ * - Intended for debugging or diagnostics only
+ *
+ * Non-Goals:
+ * - Does not reflect sorting or visibility filters
  */
 export function listRegisteredComposerActionIds(): string[] {
     return Array.from(registry.keys());
