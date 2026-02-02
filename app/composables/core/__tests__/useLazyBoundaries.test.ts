@@ -3,28 +3,13 @@ import {
     useLazyBoundaries,
     onLazyBoundaryTelemetry,
     createLoadTimer,
+    resetLazyBoundariesForHMR,
 } from '../useLazyBoundaries';
 
 describe('useLazyBoundaries', () => {
     beforeEach(() => {
-        // Reset state between tests by resetting boundaries
-        const boundaries = useLazyBoundaries();
-        const keys: Array<
-            | 'editor-host'
-            | 'editor-extensions'
-            | 'docs-search-panel'
-            | 'docs-search-worker'
-            | 'workspace-export'
-            | 'workspace-import'
-        > = [
-            'editor-host',
-            'editor-extensions',
-            'docs-search-panel',
-            'docs-search-worker',
-            'workspace-export',
-            'workspace-import',
-        ];
-        keys.forEach((key) => boundaries.reset(key));
+        // Use the new reset function for deterministic test isolation
+        resetLazyBoundariesForHMR();
     });
 
     it('should initialize with idle state for all boundaries', () => {
@@ -298,6 +283,57 @@ describe('useLazyBoundaries', () => {
         // All keys should be accessible
         expect(boundaries.state['editor-host']).toBeDefined();
         expect(boundaries.state['workspace-import']).toBeDefined();
+    });
+
+    it('should clean up telemetry listeners on HMR reset', async () => {
+        const boundaries = useLazyBoundaries();
+        const telemetryEvents: any[] = [];
+
+        const unsub = onLazyBoundaryTelemetry((e) => telemetryEvents.push(e));
+
+        // Load something to trigger telemetry
+        const loader = vi.fn().mockResolvedValue({});
+        await boundaries.load({
+            key: 'editor-host',
+            loader,
+        });
+
+        expect(telemetryEvents.length).toBeGreaterThan(0);
+        
+        // Reset for HMR
+        resetLazyBoundariesForHMR();
+        
+        // Load again
+        const boundaries2 = useLazyBoundaries();
+        await boundaries2.load({
+            key: 'editor-host',
+            loader: vi.fn().mockResolvedValue({}),
+        });
+
+        // Old listener should not receive new events after reset
+        // (listeners are cleared by reset)
+        expect(telemetryEvents.length).toBe(1); // Only the first event
+        
+        unsub(); // Clean up (though reset already cleared it)
+    });
+
+    it('should reset all boundary states to idle on HMR reset', async () => {
+        const boundaries = useLazyBoundaries();
+        const loader = vi.fn().mockResolvedValue({});
+        
+        // Load some boundaries
+        await boundaries.load({ key: 'editor-host', loader });
+        await boundaries.load({ key: 'docs-search-panel', loader });
+        
+        expect(boundaries.getState('editor-host')).toBe('ready');
+        expect(boundaries.getState('docs-search-panel')).toBe('ready');
+        
+        // Reset for HMR
+        resetLazyBoundariesForHMR();
+        
+        const boundaries2 = useLazyBoundaries();
+        expect(boundaries2.getState('editor-host')).toBe('idle');
+        expect(boundaries2.getState('docs-search-panel')).toBe('idle');
     });
 });
 

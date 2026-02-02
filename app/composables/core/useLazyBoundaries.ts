@@ -4,49 +4,48 @@ import type {
     LazyBoundaryState,
     LazyBoundaryDescriptor,
     LazyTelemetryPayload,
+    LazyBoundaryController,
 } from '../../../types/lazy-boundaries';
 
-// Keep controller state mutable in type to support tests that simulate state changes.
-export interface LazyBoundaryController {
-    state: Record<LazyBoundaryKey, LazyBoundaryState>;
-    load<T>(descriptor: LazyBoundaryDescriptor<T>): Promise<T>;
-    reset(key: LazyBoundaryKey): void;
-    getState(key: LazyBoundaryKey): LazyBoundaryState;
+/**
+ * Registry for lazy boundary state, stored on globalThis for HMR safety.
+ */
+interface LazyBoundariesRegistry {
+    controller: LazyBoundaryController | null;
+    moduleCache: Map<LazyBoundaryKey, Promise<unknown> | undefined>;
+    telemetryListeners: Set<(payload: LazyTelemetryPayload) => void>;
+    boundaryStates: Record<LazyBoundaryKey, LazyBoundaryState>;
 }
 
-/**
- * Singleton lazy boundary manager.
- * Tracks loading state, memoizes resolved modules, and emits telemetry.
- */
-let lazyBoundariesInstance: LazyBoundaryController | null = null;
+const REGISTRY_KEY = '__or3_lazy_boundaries_registry__';
 
 /**
- * Module-level cache for resolved boundaries.
- * Keyed by LazyBoundaryKey; stores the resolved module promise.
+ * Get or create the global registry for lazy boundaries.
  */
-const moduleCache = new Map<LazyBoundaryKey, Promise<unknown> | undefined>();
-
-/**
- * Telemetry listeners registered by consumers.
- */
-const telemetryListeners = new Set<(payload: LazyTelemetryPayload) => void>();
-
-/**
- * Internal state tracking.
- */
-const boundaryStates = reactive<Record<LazyBoundaryKey, LazyBoundaryState>>({
-    'editor-host': 'idle',
-    'editor-extensions': 'idle',
-    'docs-search-panel': 'idle',
-    'docs-search-worker': 'idle',
-    'workspace-export': 'idle',
-    'workspace-import': 'idle',
-});
+function getRegistry(): LazyBoundariesRegistry {
+    if (!(globalThis as any)[REGISTRY_KEY]) {
+        (globalThis as any)[REGISTRY_KEY] = {
+            controller: null,
+            moduleCache: new Map<LazyBoundaryKey, Promise<unknown> | undefined>(),
+            telemetryListeners: new Set<(payload: LazyTelemetryPayload) => void>(),
+            boundaryStates: reactive<Record<LazyBoundaryKey, LazyBoundaryState>>({
+                'editor-host': 'idle',
+                'editor-extensions': 'idle',
+                'docs-search-panel': 'idle',
+                'docs-search-worker': 'idle',
+                'workspace-export': 'idle',
+                'workspace-import': 'idle',
+            }),
+        };
+    }
+    return (globalThis as any)[REGISTRY_KEY];
+}
 
 /**
  * Emit a telemetry event.
  */
 function emitTelemetry(payload: LazyTelemetryPayload) {
+    const registry = getRegistry();
     if (import.meta.dev) {
         const icon = payload.outcome === 'success' ? '✓' : '✗';
         console.debug(
@@ -54,15 +53,17 @@ function emitTelemetry(payload: LazyTelemetryPayload) {
             payload.error || ''
         );
     }
-    telemetryListeners.forEach((listener) => listener(payload));
+    registry.telemetryListeners.forEach((listener) => listener(payload));
 }
 
 /**
  * Create the singleton lazy boundary controller.
  */
 function createLazyBoundaryController(): LazyBoundaryController {
+    const registry = getRegistry();
+    
     return {
-        state: readonly(boundaryStates),
+        state: readonly(registry.boundaryStates),
 
         async load<T>(descriptor: LazyBoundaryDescriptor<T>): Promise<T> {
             const { key, loader, onResolve } = descriptor;
@@ -70,19 +71,19 @@ function createLazyBoundaryController(): LazyBoundaryController {
 
             try {
                 // Check module cache first
-                let promise = moduleCache.get(key);
+                let promise = registry.moduleCache.get(key);
                 if (!promise) {
                     // Mark as loading and create the loader promise
-                    boundaryStates[key] = 'loading';
+                    registry.boundaryStates[key] = 'loading';
                     promise = Promise.resolve(loader());
-                    moduleCache.set(key, promise);
+                    registry.moduleCache.set(key, promise);
                 }
 
                 // Await the cached promise - result is unknown from cache, but we trust loader type
                 const result = (await promise) as T;
 
                 // Mark as ready
-                boundaryStates[key] = 'ready';
+                registry.boundaryStates[key] = 'ready';
 
                 // Invoke optional callback
                 if (onResolve) {
@@ -105,10 +106,10 @@ function createLazyBoundaryController(): LazyBoundaryController {
                 return result;
             } catch (error) {
                 // Mark as errored
-                boundaryStates[key] = 'error';
+                registry.boundaryStates[key] = 'error';
 
                 // Clear cache so retry is possible
-                moduleCache.delete(key);
+                registry.moduleCache.delete(key);
 
                 // Emit failure telemetry
                 const ms = Math.round(performance.now() - startMs);
@@ -119,25 +120,70 @@ function createLazyBoundaryController(): LazyBoundaryController {
         },
 
         reset(key: LazyBoundaryKey) {
-            boundaryStates[key] = 'idle';
-            moduleCache.delete(key);
+            registry.boundaryStates[key] = 'idle';
+            registry.moduleCache.delete(key);
         },
 
         getState(key: LazyBoundaryKey): LazyBoundaryState {
-            return boundaryStates[key];
+            return registry.boundaryStates[key];
         },
     };
 }
 
 /**
- * Composable for accessing the lazy boundary controller.
- * Ensures a singleton instance across the app.
+ * `useLazyBoundaries`
+ * 
+ * Purpose:
+ * Provides a singleton controller for managing lazy-loaded application boundaries
+ * with state tracking, caching, and telemetry. Ensures modules are loaded once and
+ * shared across the app.
+ * 
+ * Behavior:
+ * - Maintains shared loading state for all registered boundaries
+ * - Caches module promises to prevent duplicate loads
+ * - Emits telemetry events for monitoring (dev mode + registered listeners)
+ * - Supports retry on failure by clearing cache
+ * - Uses globalThis registry for HMR safety
+ * 
+ * Constraints:
+ * - Singleton per app (stored in globalThis)
+ * - Module cache persists until explicit reset or failure
+ * - Telemetry listeners persist across HMR unless explicitly cleared
+ * 
+ * Non-Goals:
+ * - Does not provide component-level caching
+ * - Does not handle dependency resolution between boundaries
+ * - Does not implement timeout or abort mechanisms
+ * 
+ * @example
+ * ```ts
+ * const controller = useLazyBoundaries();
+ * 
+ * // Load a boundary
+ * const editorHost = await controller.load({
+ *   key: 'editor-host',
+ *   loader: () => import('~/components/editor/EditorHost.vue'),
+ *   onResolve: (component) => console.log('Editor loaded!'),
+ * });
+ * 
+ * // Check state
+ * if (controller.getState('editor-host') === 'ready') {
+ *   // Use editor
+ * }
+ * 
+ * // Reset for retry
+ * controller.reset('editor-host');
+ * ```
+ * 
+ * @see types/lazy-boundaries.d.ts for type definitions
+ * @see onLazyBoundaryTelemetry for monitoring events
  */
 export function useLazyBoundaries(): LazyBoundaryController {
-    if (!lazyBoundariesInstance) {
-        lazyBoundariesInstance = createLazyBoundaryController();
+    const registry = getRegistry();
+    if (!registry.controller) {
+        registry.controller = createLazyBoundaryController();
     }
-    return lazyBoundariesInstance;
+    return registry.controller;
 }
 
 /**
@@ -147,8 +193,26 @@ export function useLazyBoundaries(): LazyBoundaryController {
 export function onLazyBoundaryTelemetry(
     listener: (payload: LazyTelemetryPayload) => void
 ): () => void {
-    telemetryListeners.add(listener);
-    return () => telemetryListeners.delete(listener);
+    const registry = getRegistry();
+    registry.telemetryListeners.add(listener);
+    return () => registry.telemetryListeners.delete(listener);
+}
+
+/**
+ * Reset the lazy boundaries registry for HMR and testing.
+ * Clears all cached modules, listeners, and resets controller state.
+ * 
+ * @internal For HMR and test cleanup only
+ */
+export function resetLazyBoundariesForHMR(): void {
+    const registry = getRegistry();
+    registry.controller = null;
+    registry.moduleCache.clear();
+    registry.telemetryListeners.clear();
+    // Reset all boundary states to idle
+    Object.keys(registry.boundaryStates).forEach((key) => {
+        registry.boundaryStates[key as LazyBoundaryKey] = 'idle';
+    });
 }
 
 /**
@@ -159,4 +223,11 @@ export function createLoadTimer() {
     return {
         stop: () => Math.round(performance.now() - start),
     };
+}
+
+// HMR cleanup
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        resetLazyBoundariesForHMR();
+    });
 }
