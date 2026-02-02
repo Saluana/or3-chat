@@ -243,7 +243,7 @@ const dashboardModalOverrides = useThemeOverrides({
 
 const dashboardModalProps = computed(() => {
     const baseClass =
-        'w-[98dvw] h-[98dvh] sm:min-w-[720px] sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden';
+        'w-[98dvw] h-[98dvh] sm:w-[720px] sm:max-w-[95dvw] sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden';
     const baseUi = {
         content: 'z-[10]',
         footer: 'justify-end border-t-[var(--md-border-width)]',

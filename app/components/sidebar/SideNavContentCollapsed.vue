@@ -416,6 +416,11 @@ async function handleSidebarFooterAction(entry: SidebarFooterActionEntry) {
 const toast = useToast();
 
 async function handlePageSelect(pageId: string) {
+    // If selecting home, ensure we navigate to root if not already there
+    if (pageId === DEFAULT_PAGE_ID) {
+        await navigateTo('/');
+    }
+
     if (pageId === activePageId.value) return;
 
     try {

@@ -158,6 +158,7 @@ const connectionState = computed(() =>
 
 const connectionLabel = computed(() => {
     if (!hydrated.value) return 'Connect';
+    if (usingInstanceKey.value && !isConnected.value) return 'Guest Access';
     return isConnected.value ? 'Disconnect' : 'Connect';
 });
 

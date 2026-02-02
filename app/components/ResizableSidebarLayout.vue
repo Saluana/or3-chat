@@ -22,7 +22,7 @@
         <aside
             id="sidebar"
             :class="[
-                'resizable-sidebar flex z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex-col',
+                'resizable-sidebar flex z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex-col overflow-x-hidden',
                 'md:relative md:h-full md:shrink-0 md:border-r-[var(--md-border-width)]',
                 side === 'right' ? 'md:border-l md:border-r-0' : '',
                 // Mobile overlay responsive classes (static for SSR parity)
@@ -157,7 +157,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick, provide } from 'vue';
-import { useResizeObserver, useEventListener } from '@vueuse/core';
+import { useResizeObserver, useEventListener, useMediaQuery } from '@vueuse/core';
 import SidebarHeader from './sidebar/SidebarHeader.vue';
 import ResizeHandle from './sidebar/ResizeHandle.vue';
 import { useIcon } from '~/composables/useIcon';
@@ -240,28 +240,17 @@ const sidebarStyle = computed(() => ({
 // Do NOT restore from localStorage before hydration to keep SSR/client markup identical
 
 // responsive: assume mobile on SSR; determine real value on client
-const isDesktop = ref(false);
-let mq: MediaQueryList | undefined;
-const updateMq = () => {
-    if (typeof window === 'undefined') return;
-    mq = window.matchMedia('(min-width: 768px)');
-    isDesktop.value = mq.matches;
-};
+// Use useMediaQuery for reactive responsive state
+const isDesktop = useMediaQuery('(min-width: 768px)');
 
 // CLS fix: Start with transitions DISABLED to prevent animated width changes during initial render
 // After first paint, enable transitions for smooth user interactions
 const initialized = ref(false);
 const hydrated = ref(false);
 
-// Use VueUse's useEventListener for media query changes (auto-cleanup)
-const mqRef = computed(() => mq);
-useEventListener(mqRef, 'change', () => {
-    isDesktop.value = !!mq?.matches;
-});
-
 onMounted(() => {
     hydrated.value = true;
-    updateMq();
+    hydrated.value = true;
     // Open if defaultOpen & desktop
     if (props.defaultOpen && isDesktop.value) {
         openState.value = true;
