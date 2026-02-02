@@ -247,8 +247,11 @@ export function useChat(
             if (runtimeConfig.public.ssrAuthEnabled !== true) return false;
             if (backgroundStreamingConfig.value?.enabled !== true) return false;
             if (!isBackgroundStreamingEnabled()) return false;
-            const session = sessionContext?.data.value?.session;
-            return Boolean(session?.authenticated && session?.workspace?.id);
+            const session = sessionContext
+                ? sessionContext.data.value?.session ?? null
+                : null;
+            if (!session) return false;
+            return Boolean(session.authenticated && session.workspace?.id);
         }
     );
 

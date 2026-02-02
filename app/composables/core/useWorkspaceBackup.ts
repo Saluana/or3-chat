@@ -1,6 +1,6 @@
 import { ref, type Ref } from 'vue';
 import { getDb } from '~/db/client';
-import { reportError, err, asAppError, type AppError } from '~/utils/errors';
+import { reportError, err, asAppError, type AppError, type ErrorCode } from '~/utils/errors';
 import { useHooks } from '~/core/hooks/useHooks';
 import { useLazyBoundaries } from '~/composables/core/useLazyBoundaries';
 import {
@@ -548,10 +548,36 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 
             await hooks.doAction('workspace:reloaded');
         } catch (e) {
-            state.error.value = asAppError(e);
+            const error = asAppError(e);
+            state.error.value = error;
             state.currentStep.value = 'error';
-            reportError(state.error.value, {
-                code: 'ERR_DB_WRITE_FAILED',
+            
+            // Categorize error type for better user feedback
+            let errorCode: ErrorCode = 'ERR_DB_WRITE_FAILED';
+            const errorMessage = error.message.toLowerCase();
+            
+            if (
+                errorMessage.includes('quota') ||
+                errorMessage.includes('storage') ||
+                errorMessage.includes('exceeded')
+            ) {
+                errorCode = 'ERR_DB_QUOTA_EXCEEDED';
+            } else if (
+                errorMessage.includes('validation') ||
+                errorMessage.includes('invalid') ||
+                errorMessage.includes('schema') ||
+                errorMessage.includes('parse')
+            ) {
+                errorCode = 'ERR_VALIDATION';
+            } else if (
+                errorMessage.includes('permission') ||
+                errorMessage.includes('denied')
+            ) {
+                errorCode = 'ERR_AUTH';
+            }
+            
+            reportError(error, {
+                code: errorCode,
                 message: 'Failed to import workspace.',
                 tags: { domain: 'db', action: 'import' },
             });

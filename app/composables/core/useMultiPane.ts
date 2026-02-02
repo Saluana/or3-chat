@@ -116,6 +116,23 @@ interface DbMessageRow {
     deleted?: boolean;
 }
 
+/**
+ * Fast structural validation for DB message rows.
+ * Checks essential fields without heavy parsing.
+ */
+function isValidMessageRow(msg: unknown): msg is DbMessageRow {
+    if (msg === null || typeof msg !== 'object') return false;
+    const m = msg as Record<string, unknown>;
+    return (
+        typeof m.id === 'string' &&
+        m.id.length > 0 &&
+        typeof m.role === 'string' &&
+        m.role.length > 0 &&
+        // deleted should be boolean or undefined (truthy check)
+        (m.deleted === undefined || typeof m.deleted === 'boolean')
+    );
+}
+
 async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
     if (!id) return [];
     try {
@@ -124,14 +141,36 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
             .between([id, Dexie.minKey], [id, Dexie.maxKey])
             .filter((m) => !m.deleted)
             .toArray();
-        return msgs.map((msg) => {
-            const row = msg as unknown as DbMessageRow;
+        
+        const result: MultiPaneMessage[] = [];
+        let skippedCount = 0;
+        
+        for (const msg of msgs) {
+            // Fast structural validation
+            if (!isValidMessageRow(msg)) {
+                skippedCount++;
+                if (import.meta.dev) {
+                    console.warn(
+                        '[useMultiPane] Skipping invalid message row:',
+                        msg
+                    );
+                }
+                continue;
+            }
+            
+            // Skip deleted messages (double check after filter)
+            if (msg.deleted) {
+                continue;
+            }
+            
+            const row = msg as DbMessageRow;
             const data = row.data;
             const content = deriveMessageContent({
                 content: row.content,
                 data,
             });
-            return {
+            
+            result.push({
                 role: row.role as 'user' | 'assistant' | 'system' | 'tool',
                 content,
                 file_hashes: row.file_hashes,
@@ -142,9 +181,21 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
                 index: typeof row.index === 'number' ? row.index : null,
                 created_at:
                     typeof row.created_at === 'number' ? row.created_at : null,
-            } as MultiPaneMessage;
-        });
-    } catch {
+            } as MultiPaneMessage);
+        }
+        
+        // Dev-only diagnostics
+        if (import.meta.dev && skippedCount > 0) {
+            console.warn(
+                `[useMultiPane] Skipped ${skippedCount} invalid message(s) for thread ${id}`
+            );
+        }
+        
+        return result;
+    } catch (error) {
+        if (import.meta.dev) {
+            console.error('[useMultiPane] Failed to load messages:', error);
+        }
         return [];
     }
 }
@@ -226,6 +277,16 @@ export function useMultiPane(
     }
 
     /**
+     * Normalize stored widths to match current pane count.
+     * Truncates if stored widths exceed pane count to prevent localStorage bloat.
+     */
+    function normalizeStoredWidths(paneCount: number) {
+        if (paneWidths.value.length > paneCount) {
+            paneWidths.value = paneWidths.value.slice(0, paneCount);
+        }
+    }
+
+    /**
      * Get width for a specific pane as a CSS value
      */
     function getPaneWidth(index: number): string {
@@ -233,6 +294,11 @@ export function useMultiPane(
 
         // Single pane or no panes
         if (paneCount <= 1) return '100%';
+
+        // Normalize widths if mismatch detected
+        if (paneWidths.value.length > paneCount) {
+            normalizeStoredWidths(paneCount);
+        }
 
         // Stored widths match current pane count
         if (
@@ -500,6 +566,10 @@ export function useMultiPane(
         }
 
         panes.value.push(pane);
+        
+        // Normalize widths after adding pane
+        normalizeStoredWidths(panes.value.length);
+        
         const prevIndex = activePaneIndex.value;
         const newIndex = panes.value.length - 1;
         setActive(newIndex);
@@ -554,6 +624,16 @@ export function useMultiPane(
 
         const wasActive = i === activePaneIndex.value;
         panes.value.splice(i, 1);
+        
+        // Normalize widths after closing pane
+        normalizeStoredWidths(panes.value.length);
+        
+        // Post-close hook for cleanup
+        void hooks.doAction('ui.pane.close:action:after', {
+            pane: closing,
+            index: i,
+        });
+        
         if (!panes.value.length) {
             panes.value.push(createEmptyPane());
             activePaneIndex.value = 0;

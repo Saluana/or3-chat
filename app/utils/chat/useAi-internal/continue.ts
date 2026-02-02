@@ -649,29 +649,27 @@ export async function continueMessageImpl(
             const errorType = 'stream_interrupted';
 
             const tail = ctx.tailAssistant.value;
-            if (tail) {
-                const tailText = tail.text || '';
-                const tailReasoning = tail.reasoning_text ?? null;
-                const tailToolCalls = tail.toolCalls ?? null;
-                tail.error = errorType;
-                await persistAssistant({
-                    content: tailText,
-                    reasoning: tailReasoning,
-                    toolCalls: tailToolCalls,
-                    finalize: true, // Clear pending so sync captures this
-                });
-                const rawIdx = ctx.rawMessages.value.findIndex((m) => m.id === messageId);
-                if (rawIdx >= 0) {
-                    const existingRaw = ctx.rawMessages.value[rawIdx];
-                    if (existingRaw) {
-                        ctx.rawMessages.value[rawIdx] = {
-                            ...existingRaw,
-                            role: existingRaw.role,
-                            content: tailText || existingRaw.content,
-                            reasoning_text: tailReasoning ?? existingRaw.reasoning_text,
-                            error: errorType,
-                        };
-                    }
+            const tailText = tail.text;
+            const tailReasoning = tail.reasoning_text ?? null;
+            const tailToolCalls = tail.toolCalls ?? null;
+            tail.error = errorType;
+            await persistAssistant({
+                content: tailText,
+                reasoning: tailReasoning,
+                toolCalls: tailToolCalls,
+                finalize: true, // Clear pending so sync captures this
+            });
+            const rawIdx = ctx.rawMessages.value.findIndex((m) => m.id === messageId);
+            if (rawIdx >= 0) {
+                const existingRaw = ctx.rawMessages.value[rawIdx];
+                if (existingRaw) {
+                    ctx.rawMessages.value[rawIdx] = {
+                        ...existingRaw,
+                        role: existingRaw.role,
+                        content: tailText || existingRaw.content,
+                        reasoning_text: tailReasoning ?? existingRaw.reasoning_text,
+                        error: errorType,
+                    };
                 }
             }
             await updateMessageRecord(messageId, { error: errorType });

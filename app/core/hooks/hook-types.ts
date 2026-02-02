@@ -705,6 +705,7 @@ export type CoreHookPayloadMap = {
     'ui.pane.switch:action': [UiPaneSwitchPayload];
     'ui.pane.open:action:after': [UiPaneActivePayload];
     'ui.pane.close:action:before': [UiPaneActivePayload];
+    'ui.pane.close:action:after': [UiPaneActivePayload];
     'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];
     'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];
     'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];

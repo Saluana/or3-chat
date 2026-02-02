@@ -278,3 +278,319 @@ describe('useMultiPane - newPaneForApp', () => {
         expect(uniqueIds.size).toBe(ids.length);
     });
 });
+
+describe('useMultiPane - paneWidths normalization', () => {
+    beforeEach(() => {
+        // Clean up registries and localStorage
+        const g = globalThis as any;
+        g.__or3PaneAppsRegistry = new Map();
+        g.__or3MultiPaneApi = undefined;
+        localStorage.clear();
+    });
+
+    it('truncates stored widths when closing panes', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        
+        const multiPane = useMultiPane({ 
+            maxPanes: 5,
+            storageKey: 'test-widths-close'
+        });
+
+        // Add multiple panes first
+        multiPane.addPane();
+        multiPane.addPane();
+        multiPane.addPane();
+        multiPane.addPane();
+        
+        const paneCountBefore = multiPane.panes.value.length; // Should be 5
+        
+        // Ensure widths are set
+        if (multiPane.paneWidths.value.length === 0) {
+            multiPane.paneWidths.value = Array(paneCountBefore).fill(300);
+        }
+        
+        // Close a pane
+        await multiPane.closePane(0);
+        
+        const paneCountAfter = multiPane.panes.value.length;
+        
+        // Widths should be truncated to match remaining panes
+        expect(multiPane.paneWidths.value.length).toBeLessThanOrEqual(paneCountAfter);
+    });
+
+    it('normalizes widths when panes are added', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        
+        const multiPane = useMultiPane({ 
+            maxPanes: 5,
+            storageKey: 'test-widths-add'
+        });
+
+        // Start with 1 pane, add more
+        const initialCount = multiPane.panes.value.length;
+        
+        multiPane.addPane();
+        multiPane.addPane();
+        
+        const finalCount = multiPane.panes.value.length;
+        
+        // Widths should not exceed pane count
+        expect(multiPane.paneWidths.value.length).toBeLessThanOrEqual(finalCount);
+    });
+
+    it('handles getPaneWidth with orphaned widths gracefully', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        
+        const multiPane = useMultiPane({ 
+            maxPanes: 5,
+            storageKey: 'test-widths-get'
+        });
+
+        // Simulate orphaned widths (more stored than actual panes)
+        multiPane.paneWidths.value = [400, 400, 400, 400, 400];
+        
+        // With only 1 pane, getPaneWidth should not crash
+        const width = multiPane.getPaneWidth(0);
+        
+        expect(width).toBeDefined();
+        // Should fall back to 100% for single pane
+        expect(width).toBe('100%');
+    });
+
+    it('truncates widths array when longer than pane count', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        
+        const multiPane = useMultiPane({ 
+            maxPanes: 5,
+            storageKey: 'test-widths-truncate'
+        });
+
+        // Set up 3 panes
+        multiPane.addPane();
+        multiPane.addPane();
+        
+        const paneCount = multiPane.panes.value.length; // Should be 3
+        
+        // Manually inject extra widths
+        multiPane.paneWidths.value = [300, 300, 300, 300, 300];
+        
+        // Trigger normalization via getPaneWidth
+        multiPane.getPaneWidth(0);
+        
+        // Widths should now match pane count
+        expect(multiPane.paneWidths.value.length).toBe(paneCount);
+    });
+});
+
+describe('useMultiPane - message loading with validation', () => {
+    beforeEach(() => {
+        // Clean up registries
+        const g = globalThis as any;
+        g.__or3PaneAppsRegistry = new Map();
+        g.__or3MultiPaneApi = undefined;
+        // Reset modules to ensure fresh imports
+        vi.resetModules();
+    });
+
+    it('skips invalid message rows without crashing', async () => {
+        // Mock db with mixed valid/invalid messages
+        vi.doMock('~/db', () => ({
+            db: {
+                messages: {
+                    where: () => ({
+                        between: () => ({
+                            filter: () => ({
+                                toArray: async () => [
+                                    // Valid message
+                                    {
+                                        id: 'msg-1',
+                                        role: 'user',
+                                        content: 'Hello',
+                                        deleted: false,
+                                        index: 0,
+                                    },
+                                    // Invalid - no id
+                                    {
+                                        role: 'assistant',
+                                        content: 'Hi',
+                                        deleted: false,
+                                    },
+                                    // Invalid - no role
+                                    {
+                                        id: 'msg-3',
+                                        content: 'Test',
+                                        deleted: false,
+                                    },
+                                    // Valid message
+                                    {
+                                        id: 'msg-4',
+                                        role: 'assistant',
+                                        content: 'Valid response',
+                                        deleted: false,
+                                        index: 1,
+                                    },
+                                ],
+                            }),
+                        }),
+                    }),
+                },
+            },
+        }));
+
+        // Re-import to get the mocked version
+        const { useMultiPane } = await import('../useMultiPane');
+        const multiPane = useMultiPane();
+
+        // Load messages for a thread
+        const messages = await multiPane.loadMessagesFor('thread-123');
+
+        // Should only include the 2 valid messages
+        expect(messages).toHaveLength(2);
+        expect(messages[0]?.id).toBe('msg-1');
+        expect(messages[1]?.id).toBe('msg-4');
+    });
+
+    it('skips deleted messages even if they pass initial filter', async () => {
+        vi.doMock('~/db', () => ({
+            db: {
+                messages: {
+                    where: () => ({
+                        between: () => ({
+                            filter: () => ({
+                                toArray: async () => [
+                                    {
+                                        id: 'msg-1',
+                                        role: 'user',
+                                        content: 'Hello',
+                                        deleted: false,
+                                    },
+                                    {
+                                        id: 'msg-2',
+                                        role: 'assistant',
+                                        content: 'Response',
+                                        deleted: true, // Should be skipped
+                                    },
+                                ],
+                            }),
+                        }),
+                    }),
+                },
+            },
+        }));
+
+        const { useMultiPane } = await import('../useMultiPane');
+        const multiPane = useMultiPane();
+
+        const messages = await multiPane.loadMessagesFor('thread-456');
+
+        expect(messages).toHaveLength(1);
+        expect(messages[0]?.id).toBe('msg-1');
+    });
+
+    it('handles completely invalid data without crashing', async () => {
+        vi.doMock('~/db', () => ({
+            db: {
+                messages: {
+                    where: () => ({
+                        between: () => ({
+                            filter: () => ({
+                                toArray: async () => [
+                                    null,
+                                    undefined,
+                                    'not an object',
+                                    123,
+                                    { random: 'data' },
+                                ],
+                            }),
+                        }),
+                    }),
+                },
+            },
+        }));
+
+        const { useMultiPane } = await import('../useMultiPane');
+        const multiPane = useMultiPane();
+
+        const messages = await multiPane.loadMessagesFor('thread-789');
+
+        // All invalid, should return empty array
+        expect(messages).toHaveLength(0);
+    });
+});
+
+describe('useMultiPane - pane prompt cleanup', () => {
+    beforeEach(() => {
+        // Clean up registries
+        const g = globalThis as any;
+        g.__or3PaneAppsRegistry = new Map();
+        g.__or3MultiPaneApi = undefined;
+        // Reset modules
+        vi.resetModules();
+    });
+
+    it('clears pending prompt when pane is closed', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        const {
+            setPanePendingPrompt,
+            getPanePendingPrompt,
+            setupPanePromptCleanup,
+        } = await import('../usePanePrompt');
+
+        // Manually setup cleanup in test environment
+        setupPanePromptCleanup();
+
+        const multiPane = useMultiPane({ maxPanes: 3 });
+
+        // Add a pane
+        multiPane.addPane();
+        const paneId = multiPane.panes.value[1]?.id;
+
+        expect(paneId).toBeDefined();
+
+        // Set a pending prompt for that pane
+        setPanePendingPrompt(paneId!, 'prompt-123');
+
+        // Verify it's set
+        expect(getPanePendingPrompt(paneId!)).toBe('prompt-123');
+
+        // Close the pane
+        await multiPane.closePane(1);
+
+        // Pending prompt should be cleared automatically
+        expect(getPanePendingPrompt(paneId!)).toBeUndefined();
+    });
+
+    it('does not clear prompts for other panes when one closes', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        const {
+            setPanePendingPrompt,
+            getPanePendingPrompt,
+            setupPanePromptCleanup,
+        } = await import('../usePanePrompt');
+
+        // Setup cleanup
+        setupPanePromptCleanup();
+
+        const multiPane = useMultiPane({ maxPanes: 5 });
+
+        // Add two panes
+        multiPane.addPane();
+        multiPane.addPane();
+
+        const pane1Id = multiPane.panes.value[1]?.id;
+        const pane2Id = multiPane.panes.value[2]?.id;
+
+        // Set pending prompts for both
+        setPanePendingPrompt(pane1Id!, 'prompt-1');
+        setPanePendingPrompt(pane2Id!, 'prompt-2');
+
+        // Close first added pane
+        await multiPane.closePane(1);
+
+        // First pane's prompt should be cleared
+        expect(getPanePendingPrompt(pane1Id!)).toBeUndefined();
+
+        // Second pane's prompt should remain
+        expect(getPanePendingPrompt(pane2Id!)).toBe('prompt-2');
+    });
+});

@@ -19,7 +19,11 @@ interface CacheEntry {
 }
 
 type LoaderResult = { url: string; bytes?: number };
-type Loader = () => Promise<LoaderResult>;
+type Loader = () => Promise<unknown>;
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === 'object';
+}
+
 
 export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
     const options: PreviewCacheOptions = resolvePreviewCacheOptions(opts);
@@ -70,17 +74,48 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
         }
 
         misses++;
-        const { url, bytes } = await loader();
-        const normalizedBytes = Number.isFinite(bytes) ? Number(bytes) : 0;
-        map.set(key, {
-            url,
-            bytes: normalizedBytes,
-            lastAccess: ++accessCounter,
-            pin,
-        });
-        totalBytes += normalizedBytes;
-        evictIfNeeded();
-        return map.get(key)?.url;
+        
+        try {
+            const result = await loader();
+            
+            // Validate loader result
+            if (!isRecord(result)) {
+                throw new Error('Loader returned invalid result: expected object');
+            }
+            if (typeof result.url !== 'string' || !result.url) {
+                throw new Error(
+                    'Loader returned invalid url: expected non-empty string'
+                );
+            }
+            
+            const url = result.url;
+            const normalizedBytes = Number.isFinite(result.bytes)
+                ? Number(result.bytes)
+                : 0;
+            
+            // Only mutate state after successful validation
+            const entry: CacheEntry = {
+                url,
+                bytes: normalizedBytes,
+                lastAccess: ++accessCounter,
+                pin,
+            };
+            
+            map.set(key, entry);
+            totalBytes += normalizedBytes;
+            evictIfNeeded();
+            
+            return entry.url;
+        } catch (error) {
+            // Decrement misses since this didn't result in a cache entry
+            misses--;
+            
+            if (import.meta.dev) {
+                console.error('[preview-cache] Loader failed for key:', key, error);
+            }
+            
+            throw error;
+        }
     }
 
     function promote(key: string, pin = 1) {
