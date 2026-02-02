@@ -67,10 +67,8 @@ import { useActivePrompt } from '#imports';
 import { getDefaultPromptId } from '#imports';
 import { useHooks } from '#imports';
 import { consumeWorkflowHandlingFlag } from '~/plugins/workflow-slash-commands.client';
-import { NotificationService } from '~/core/notifications/notification-service';
 import { resolveNotificationUserId } from '~/core/notifications/notification-user';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
-import { retryMessageImpl, continueMessageImpl } from '~/utils/chat/useAi-internal';
 // settings/model store are provided elsewhere at runtime; keep dynamic access guards
 import type {
     ChatSettings,
@@ -82,11 +80,6 @@ import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 import type { ORMessage } from '~/core/auth/openrouter-build';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
 import {
-    BACKGROUND_JOB_POLL_INTERVAL_MS,
-    BACKGROUND_JOB_POLL_INTERVAL_ACTIVE_MS,
-    BACKGROUND_JOB_PERSIST_INTERVAL_MS,
-    BACKGROUND_JOB_MUTED_KEY,
-    type BackgroundJobUpdate,
     type BackgroundJobSubscriber,
     type BackgroundJobTracker,
     backgroundJobTrackers,
@@ -97,8 +90,9 @@ import {
     runForegroundStreamLoop,
     resolveSystemPromptText,
     buildSystemPromptMessage,
-    buildOpenRouterMessagesForSend
+    buildOpenRouterMessagesForSend, retryMessageImpl, continueMessageImpl
 } from '~/utils/chat/useAi-internal';
+
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
 
