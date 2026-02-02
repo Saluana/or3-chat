@@ -43,7 +43,7 @@ Hard constraints:
 - [x] B5. Extract system prompt + OpenRouter message build glue
   - New: `app/utils/chat/useAi-internal/messageBuild.ts`
 
-- [ ] B6. Recount LOC and ensure under 2000
+- [x] B6. Recount LOC and ensure under 2000
   - Run: `wc -l app/composables/chat/useAi.ts`
 
 ---
