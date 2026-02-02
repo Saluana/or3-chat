@@ -12,8 +12,31 @@ interface Options {
 }
 
 /**
- * Register a callback to a hook name and clean up on unmount and HMR.
- * Typed by hook name for great DX. Returns a disposer you can call manually.
+ * `useHookEffect`
+ *
+ * Purpose:
+ * Provides lifecycle-safe hook subscriptions for Vue components.
+ *
+ * Behavior:
+ * Registers a hook callback and removes it on component unmount and HMR dispose.
+ * Returns a disposer so callers can opt out earlier.
+ *
+ * Constraints:
+ * - Must be called during component setup
+ * - Intended for actions and filters already defined in the hook map
+ *
+ * Non-Goals:
+ * - Does not deduplicate callbacks
+ * - Does not validate hook names at runtime
+ *
+ * @example
+ * ```ts
+ * useHookEffect('ui.pane.close:action:after', ({ pane }) => {
+ *   console.info('Pane closed', pane.id);
+ * });
+ * ```
+ *
+ * @see useHooks for direct hook engine access
  */
 export function useHookEffect<K extends HookName>(
     name: K,

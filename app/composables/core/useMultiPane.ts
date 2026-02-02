@@ -209,6 +209,33 @@ function ensurePaneAppGetter(): PaneAppGetter {
     return cachedPaneAppGetter;
 }
 
+/**
+ * `useMultiPane`
+ *
+ * Purpose:
+ * Manages multi-pane state for chat and document panes.
+ *
+ * Behavior:
+ * - Tracks panes and active index
+ * - Loads thread messages on demand
+ * - Persists pane widths with local storage
+ * - Emits pane hooks for open, close, and thread changes
+ *
+ * Constraints:
+ * - Pane widths rely on `document` for measurement
+ * - Message loading assumes Dexie table shape when using defaults
+ *
+ * Non-Goals:
+ * - Does not render panes or UI
+ * - Does not enforce business rules for pane app content
+ *
+ * @example
+ * ```ts
+ * const { addPane, setPaneThread } = useMultiPane({ maxPanes: 3 });
+ * addPane();
+ * await setPaneThread(0, 'thread-123');
+ * ```
+ */
 export function useMultiPane(
     options: UseMultiPaneOptions = {}
 ): UseMultiPaneApi {

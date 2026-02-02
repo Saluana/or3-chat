@@ -10,49 +10,32 @@ interface UseScrollLockOptions {
 
 /**
  * `useScrollLock`
- * 
+ *
  * Purpose:
- * Provides a composable for locking/unlocking scroll on a target element (default: document.body).
- * Wraps VueUse's useScrollLock with a more opinionated API and controlled state support.
- * 
+ * Locks and unlocks scroll on a target element, defaulting to `document.body`.
+ *
  * Behavior:
- * - Lazily resolves target element via computed getter
- * - Exposes `lock()` and `unlock()` methods for imperative control
- * - Exposes `isLocked` as a readonly ref for reactive reads
- * - Supports controlled state via `controlledState` option (two-way sync)
- * 
+ * Wraps VueUse `useScrollLock` with an imperative API and optional controlled
+ * state sync for UI components.
+ *
  * Constraints:
- * - Only works in browser environment (returns null target on SSR)
- * - Target must be resolvable at time of lock/unlock
- * - Controlled state watches fire immediately (immediate: true)
- * 
+ * - Client-only behavior, target must exist at lock time
+ * - Controlled state is applied immediately
+ *
  * Non-Goals:
- * - Does not provide scroll position restoration
+ * - Does not restore scroll position
  * - Does not handle nested scroll containers automatically
- * - Does not prevent touch-based scrolling (iOS Safari limitations)
- * 
+ *
  * @example
  * ```ts
- * // Basic usage
- * const { lock, unlock, isLocked } = useScrollLock();
- * 
- * // Lock scroll
+ * const { lock, unlock } = useScrollLock();
  * lock();
- * console.log(isLocked.value); // true
- * 
- * // Unlock scroll
  * unlock();
- * 
- * // Custom target
- * const { lock } = useScrollLock({
- *   target: () => document.querySelector('.modal-container')
- * });
- * 
- * // Controlled state
+ *
  * const isModalOpen = ref(false);
  * useScrollLock({ controlledState: isModalOpen });
  * ```
- * 
+ *
  * @see https://vueuse.org/core/useScrollLock/
  */
 export function useScrollLock(options: UseScrollLockOptions = {}) {

@@ -147,6 +147,32 @@ function validateBackupMeta(meta: unknown): ImportMetadata {
     return backupMeta.data;
 }
 
+/**
+ * `useWorkspaceBackup`
+ *
+ * Purpose:
+ * Exposes a browser-only workflow for exporting and importing workspace backups.
+ *
+ * Behavior:
+ * Streams exports to disk, peeks backup metadata, and imports backups using
+ * stream or Dexie formats. Errors are reported via the shared error system.
+ *
+ * Constraints:
+ * - Requires browser APIs for file handling
+ * - Uses the current Dexie schema version for validation
+ *
+ * Non-Goals:
+ * - Does not handle backup encryption
+ * - Does not provide server-side export
+ *
+ * @example
+ * ```ts
+ * const { exportWorkspace, peekBackup, importWorkspace } = useWorkspaceBackup();
+ * await exportWorkspace();
+ * await peekBackup(file);
+ * await importWorkspace(file);
+ * ```
+ */
 export function useWorkspaceBackup(): WorkspaceBackupApi {
     const hooks = useHooks();
 

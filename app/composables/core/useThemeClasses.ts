@@ -1,24 +1,31 @@
-/**
- * Composable for applying theme CSS selector classes to lazy-loaded components
- *
- * Use this in components that are lazy-loaded or dynamically rendered
- * to ensure theme classes are applied even if the component wasn't
- * present when the theme was initialized.
- *
- * @example
- * ```vue
- * <script setup>
- * // In a lazy-loaded component
- * useThemeClasses();
- * </script>
- * ```
- */
-
 import { onMounted } from 'vue';
 import { useNuxtApp } from '#app';
 import { applyThemeClasses } from '~/theme/_shared/css-selector-runtime';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 
+/**
+ * `useThemeClasses`
+ *
+ * Purpose:
+ * Ensures theme selector classes are applied to lazy-loaded components.
+ *
+ * Behavior:
+ * Loads the active theme on mount and applies its selector classes.
+ *
+ * Constraints:
+ * - Requires the theme plugin to be available in Nuxt app context
+ * - Runs on the client after mount
+ *
+ * Non-Goals:
+ * - Does not change the active theme
+ *
+ * @example
+ * ```vue
+ * <script setup>
+ * useThemeClasses();
+ * </script>
+ * ```
+ */
 export function useThemeClasses() {
     const nuxtApp = useNuxtApp();
     const themePlugin = nuxtApp.$theme as ThemePlugin | undefined;

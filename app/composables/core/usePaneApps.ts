@@ -92,8 +92,32 @@ const reactiveRegistry = reactive({ registry });
 const DEFAULT_ORDER = 200;
 
 /**
- * Composable to register and manage custom pane applications.
- * Uses a global Map so plugins can register pane apps that persist across component lifecycles.
+ * `usePaneApps`
+ *
+ * Purpose:
+ * Registers and manages custom pane applications.
+ *
+ * Behavior:
+ * Stores definitions in a global Map so plugins can register pane apps that
+ * persist across component lifecycles and HMR.
+ *
+ * Constraints:
+ * - Pane app ids must be lowercase and hyphenated
+ * - Uses Zod validation and throws on invalid definitions
+ *
+ * Non-Goals:
+ * - Does not lazy load or render apps itself
+ * - Does not provide access control for pane apps
+ *
+ * @example
+ * ```ts
+ * const { registerPaneApp } = usePaneApps();
+ * registerPaneApp({
+ *   id: 'notes',
+ *   label: 'Notes',
+ *   component: () => import('~/components/panes/NotesPane.vue'),
+ * });
+ * ```
  */
 export function usePaneApps() {
     /**

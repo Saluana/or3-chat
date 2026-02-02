@@ -162,7 +162,28 @@ const runWorkerRequest = async <T>(
 };
 
 /**
- * Main composable for token counting.
+ * `useTokenizer`
+ *
+ * Purpose:
+ * Counts tokens using a shared worker with a fallback encoder.
+ *
+ * Behavior:
+ * Uses a Web Worker on the client when available and falls back to
+ * `gpt-tokenizer` via dynamic import when worker setup fails.
+ *
+ * Constraints:
+ * - Worker is client-only and skipped during SSR
+ * - Token counts are approximate to the underlying tokenizer
+ *
+ * Non-Goals:
+ * - Does not cache token results by input
+ * - Does not expose tokenization details beyond counts
+ *
+ * @example
+ * ```ts
+ * const { countTokens } = useTokenizer();
+ * const tokens = await countTokens('Hello world');
+ * ```
  */
 export function useTokenizer() {
     const isReady = ref(!process.client);

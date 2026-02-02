@@ -48,7 +48,7 @@ function getRegistry(): LazyBoundariesRegistry {
 }
 
 /**
- * Emit a telemetry event.
+ * Emit a telemetry event to all registered listeners.
  */
 function emitTelemetry(payload: LazyTelemetryPayload) {
     const registry = getRegistry();
@@ -138,49 +138,33 @@ function createLazyBoundaryController(): LazyBoundaryController {
 
 /**
  * `useLazyBoundaries`
- * 
+ *
  * Purpose:
- * Provides a singleton controller for managing lazy-loaded application boundaries
- * with state tracking, caching, and telemetry. Ensures modules are loaded once and
- * shared across the app.
- * 
+ * Provides a singleton controller for lazy-loaded application boundaries.
+ *
  * Behavior:
- * - Maintains shared loading state for all registered boundaries
- * - Caches module promises to prevent duplicate loads
- * - Emits telemetry events for monitoring (dev mode + registered listeners)
- * - Supports retry on failure by clearing cache
- * - Uses globalThis registry for HMR safety
- * 
+ * - Tracks boundary state transitions
+ * - Caches loader promises to avoid duplicate loads
+ * - Emits telemetry for success and failure
+ * - Supports retry after failure by clearing cache
+ *
  * Constraints:
- * - Singleton per app (stored in globalThis)
- * - Module cache persists until explicit reset or failure
- * - Telemetry listeners persist across HMR unless explicitly cleared
- * 
+ * - Singleton stored on `globalThis` for HMR stability
+ * - Boundary keys must be pre-declared in `types/lazy-boundaries`
+ *
  * Non-Goals:
  * - Does not provide component-level caching
- * - Does not handle dependency resolution between boundaries
- * - Does not implement timeout or abort mechanisms
- * 
+ * - Does not implement abort or timeout controls
+ *
  * @example
  * ```ts
  * const controller = useLazyBoundaries();
- * 
- * // Load a boundary
- * const editorHost = await controller.load({
+ * await controller.load({
  *   key: 'editor-host',
  *   loader: () => import('~/components/editor/EditorHost.vue'),
- *   onResolve: (component) => console.log('Editor loaded!'),
  * });
- * 
- * // Check state
- * if (controller.getState('editor-host') === 'ready') {
- *   // Use editor
- * }
- * 
- * // Reset for retry
- * controller.reset('editor-host');
  * ```
- * 
+ *
  * @see types/lazy-boundaries.d.ts for type definitions
  * @see onLazyBoundaryTelemetry for monitoring events
  */
@@ -193,8 +177,26 @@ export function useLazyBoundaries(): LazyBoundaryController {
 }
 
 /**
- * Register a telemetry listener for monitoring lazy boundary events.
- * Returns an unsubscribe function.
+ * `onLazyBoundaryTelemetry`
+ *
+ * Purpose:
+ * Allows callers to observe lazy boundary load outcomes.
+ *
+ * Behavior:
+ * Registers a listener and returns an unsubscribe callback.
+ *
+ * Constraints:
+ * - Listener persists across HMR unless explicitly removed
+ *
+ * Non-Goals:
+ * - Does not buffer or replay events
+ *
+ * @example
+ * ```ts
+ * const unsubscribe = onLazyBoundaryTelemetry((payload) => {
+ *   console.info('Lazy boundary', payload.key, payload.outcome);
+ * });
+ * ```
  */
 export function onLazyBoundaryTelemetry(
     listener: (payload: LazyTelemetryPayload) => void
@@ -205,10 +207,26 @@ export function onLazyBoundaryTelemetry(
 }
 
 /**
- * Reset the lazy boundaries registry for HMR and testing.
- * Clears all cached modules, listeners, and resets controller state.
- * 
- * @internal For HMR and test cleanup only
+ * `resetLazyBoundariesForHMR`
+ *
+ * Purpose:
+ * Resets the lazy boundaries registry for HMR and test cleanup.
+ *
+ * Behavior:
+ * Clears cached modules, listeners, and controller state.
+ *
+ * Constraints:
+ * - Intended for internal use in HMR and tests
+ *
+ * Non-Goals:
+ * - Not a general-purpose cache invalidation API
+ *
+ * @example
+ * ```ts
+ * resetLazyBoundariesForHMR();
+ * ```
+ *
+ * @internal For HMR and test cleanup only.
  */
 export function resetLazyBoundariesForHMR(): void {
     const registry = getRegistry();
@@ -222,7 +240,25 @@ export function resetLazyBoundariesForHMR(): void {
 }
 
 /**
- * Utility to create a timer for measuring load duration.
+ * `createLoadTimer`
+ *
+ * Purpose:
+ * Provides a simple duration timer for lazy boundary telemetry.
+ *
+ * Behavior:
+ * Captures `performance.now()` and returns a `stop` callback.
+ *
+ * Constraints:
+ * - Requires `performance` to be available
+ *
+ * Non-Goals:
+ * - Does not provide pauses or laps
+ *
+ * @example
+ * ```ts
+ * const timer = createLoadTimer();
+ * const ms = timer.stop();
+ * ```
  */
 export function createLoadTimer() {
     const start = performance.now();

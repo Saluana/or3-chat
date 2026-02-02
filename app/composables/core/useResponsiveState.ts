@@ -111,49 +111,33 @@ function cleanupListeners(): void {
 
 /**
  * `useResponsiveState`
- * 
+ *
  * Purpose:
- * Provides reactive breakpoint state (mobile/tablet/desktop) with SSR-safe defaults
- * and shared listeners across all components.
- * 
+ * Provides reactive breakpoint state with SSR-safe defaults.
+ *
  * Behavior:
- * - Returns consistent shape on both SSR and client (isMobile, isTablet, isDesktop, hydrated)
- * - Uses matchMedia to track breakpoints: mobile (≤768px), desktop (≥1024px), tablet (between)
- * - Shares a single set of listeners across all consuming components
- * - Implements ref-counting when called within Vue effect scopes for automatic cleanup
- * - On SSR: assumes desktop (isDesktop=true, isMobile=false) to prevent hydration mismatches
- * - On client: updates after hydration and sets hydrated=true
- * 
+ * Uses shared `matchMedia` listeners, ref-counted cleanup, and syncs to the
+ * legacy `globalIsMobile` ref for backward compatibility.
+ *
  * Constraints:
- * - Breakpoints are hardcoded (768px mobile, 1024px desktop)
- * - Requires browser environment for actual detection (SSR returns default desktop state)
- * - Ref-counting cleanup only works when called within a Vue effect scope
- * - If called outside a Vue scope, listeners remain active (no cleanup)
- * 
+ * - Breakpoints are fixed at 768px and 1024px
+ * - Requires browser APIs for live updates
+ *
  * Non-Goals:
- * - Does not support custom breakpoint values
- * - Does not provide orientation detection
- * - Does not handle print media or other media types
- * 
+ * - Does not support custom breakpoint configuration
+ * - Does not detect orientation or print media
+ *
  * @example
  * ```ts
- * // In a component
- * const { isMobile, isTablet, isDesktop, hydrated } = useResponsiveState();
- * 
- * // Conditionally render based on breakpoint
- * <div v-if="isMobile">Mobile view</div>
- * <div v-else-if="isTablet">Tablet view</div>
- * <div v-else>Desktop view</div>
- * 
- * // Wait for hydration before measuring
- * watch(hydrated, (isHydrated) => {
- *   if (isHydrated) {
- *     // Safe to measure DOM dimensions
+ * const { isMobile, hydrated } = useResponsiveState();
+ * watch(hydrated, (ready) => {
+ *   if (ready && isMobile.value) {
+ *     // Measure mobile layout
  *   }
  * });
  * ```
- * 
- * @see ~/state/global for the legacy globalIsMobile ref (synced for backward compatibility)
+ *
+ * @see ~/state/global for the legacy `globalIsMobile` ref
  */
 export function useResponsiveState(): ResponsiveState {
     // During SSR, assume desktop (not mobile) to match what we conditionally render
@@ -189,4 +173,3 @@ export function useResponsiveState(): ResponsiveState {
 
     return registry.state;
 }
-

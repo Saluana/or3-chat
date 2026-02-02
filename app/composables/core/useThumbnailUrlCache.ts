@@ -31,6 +31,31 @@ function getGlobalCache(graceMs: number): GlobalThumbCache {
     return g.__or3ThumbUrlCache;
 }
 
+/**
+ * `useThumbnailUrlCache`
+ *
+ * Purpose:
+ * Provides a shared cache for thumbnail object URLs.
+ *
+ * Behavior:
+ * Deduplicates inflight loads, tracks reference counts, and schedules cleanup
+ * after a grace period to allow quick reuse.
+ *
+ * Constraints:
+ * - Object URLs are revoked when ref count drops to zero after the grace period
+ *
+ * Non-Goals:
+ * - Does not persist thumbnails across reloads
+ * - Does not validate blob contents
+ *
+ * @example
+ * ```ts
+ * const cache = useThumbnailUrlCache();
+ * cache.retain(hash);
+ * const state = await cache.ensure(hash, () => fetch(url).then((r) => r.blob()));
+ * cache.release(hash);
+ * ```
+ */
 export function useThumbnailUrlCache(opts: { graceMs?: number } = {}) {
     const graceMs = opts.graceMs ?? 30_000;
     const globalCache = getGlobalCache(graceMs);
