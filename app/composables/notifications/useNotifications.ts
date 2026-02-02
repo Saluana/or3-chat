@@ -105,7 +105,7 @@ export function useNotifications(): NotificationsComposable {
         return {
             notifications: computed(() => [] as Notification[]),
             unreadCount: computed(() => 0),
-            loading: ref(false),
+            loading: computed(() => false),
             markRead: () => Promise.resolve(),
             markAllRead: () => Promise.resolve(),
             clearAll: () => Promise.resolve(0),
