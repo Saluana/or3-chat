@@ -7,10 +7,6 @@ last_updated: 2026-02-01
 
 # tasks.md
 
-## 0. Prep / safety rails
-- [ ] Create a short working branch locally (optional, no commit required).
-- [ ] Add/confirm a focused test file location under `tests/unit/` for theme utilities. (Requirements: 2.1, 3.1, 3.2, 4.1)
-
 ## 1. P0 correctness + confusion fixes (defaults + blank theme)
 - [ ] Fix `app/theme/blank/theme.ts` doc comment mismatch (“Retro theme” copy/paste). (Requirements: 1.1)
 - [ ] Remove or set `isDefault: false` for the blank theme if it is not intended to be default. (Requirements: 1.1)
