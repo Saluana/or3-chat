@@ -1,5 +1,4 @@
 // Small helpers around file/mime handling used by useChat
-
 export function dataUrlToBlob(dataUrl: string): Blob | null {
     try {
         const m: RegExpExecArray | null = /^data:([^;]+);base64,(.*)$/i.exec(

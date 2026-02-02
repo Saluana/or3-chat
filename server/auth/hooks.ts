@@ -92,9 +92,14 @@ export function initializeAuthHookEngine(engine: HookEngine): AuthHookEngine {
         },
 
         addAccessDecisionFilter(fn, priority = 10) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            engine.addFilter('auth.access:filter:decision', fn as any, priority);
-            return () => engine.removeFilter('auth.access:filter:decision', fn as any, priority);
+            const wrapped = (decision: unknown, ctx: unknown) =>
+                fn(
+                    decision as AccessDecision,
+                    ctx as { session: SessionContext | null }
+                );
+            engine.addFilter('auth.access:filter:decision', wrapped, priority);
+            return () =>
+                engine.removeFilter('auth.access:filter:decision', wrapped, priority);
         },
     };
 

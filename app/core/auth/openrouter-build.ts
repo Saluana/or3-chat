@@ -448,18 +448,18 @@ export async function buildOpenRouterMessages(
     return orMessages;
 }
 
-// Decide modalities based on prepared ORMessages + heuristic prompt.
+// Decide modalities based on heuristic prompt intent.
+// Note: modalities controls OUTPUT format, not input capability.
+// Image input (vision) does NOT require image output modality.
 export function decideModalities(orMessages: ORMessage[]): string[] {
-    const hasImageInput = orMessages.some((m) =>
-        m.content.some((p) => p.type === 'image_url')
-    );
     const lastUser = [...orMessages].reverse().find((m) => m.role === 'user');
     const prompt = lastUser?.content.find((p) => p.type === 'text')?.text || '';
-    const imageIntent =
+    // Only request image output when user explicitly wants image generation
+    const imageGenerationIntent =
         /(generate|create|make|produce|draw)\s+(an?\s+)?(image|picture|photo|logo|scene|illustration)/i.test(
             prompt
         );
-    const modalities = ['text'];
-    if (hasImageInput || imageIntent) modalities.push('image');
-    return modalities;
+    // Even with intent, most models don't support image output - let OpenRouter handle it
+    // For now, always return text-only to avoid 404 errors on non-image-gen models
+    return ['text'];
 }

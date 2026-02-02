@@ -23,16 +23,12 @@ import { markRecentOpId } from './recent-op-cache';
 const SYNCED_TABLES = [
     'threads',
     'messages',
-    'chats',
     'projects',
     'posts',
     'kv',
     'file_meta',
     'notifications',
 ] as const;
-
-// ... (clean up constant re-declaration manually if tool doesn't handle partial well, but I will just replace the constant and the methods)
-// Actually, I can use multi_replace for safer editing.
 
 
 /**
@@ -102,8 +98,20 @@ export class HookBridge {
             return;
         }
 
+        const existingTables = new Set(this.db.tables.map((t) => t.name));
+
         const tableNames = SYNCED_TABLES as unknown as string[];
         for (const tableName of tableNames) {
+            if (!existingTables.has(tableName)) {
+                if (import.meta.dev) {
+                    console.warn(
+                        '[HookBridge] Skipping hook install for missing table:',
+                        tableName
+                    );
+                }
+                continue;
+            }
+
             const table = this.db.table(tableName);
 
 

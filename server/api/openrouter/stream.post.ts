@@ -43,9 +43,12 @@ export default defineEventHandler(async (event) => {
     const allowUserOverride = config.openrouterAllowUserOverride !== false;
     const requireUserKey = config.openrouterRequireUserKey === true;
     const authHeader = getHeader(event, 'authorization');
-    const clientKey = authHeader?.startsWith('Bearer ')
-        ? authHeader.slice(7)
-        : undefined;
+    const keyHeader = getHeader(event, 'x-or3-openrouter-key');
+    const clientKey =
+        (typeof keyHeader === 'string' && keyHeader.trim().length > 0
+            ? keyHeader.trim()
+            : undefined) ||
+        (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined);
 
     const apiKey = requireUserKey
         ? clientKey
@@ -170,6 +173,15 @@ export default defineEventHandler(async (event) => {
             if (session.authenticated && session.user?.id && session.workspace?.id) {
                 userId = session.user.id;
                 workspaceId = session.workspace.id;
+            }
+            if (!userId || !workspaceId) {
+                if (process.env.NODE_ENV !== 'production') {
+                    console.warn('[openrouter][stream][bg] session missing for background request', {
+                        authenticated: session.authenticated,
+                        hasUser: Boolean(session.user?.id),
+                        hasWorkspace: Boolean(session.workspace?.id),
+                    });
+                }
             }
         }
 

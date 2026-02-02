@@ -56,6 +56,19 @@ export function normalizeProxyTrustConfig(
  */
 const IP_REGEX = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:.]+$/;
 
+function normalizeHeaderValue(
+    value: unknown
+): string | string[] | undefined {
+    if (typeof value === 'string') return value;
+    if (
+        Array.isArray(value) &&
+        value.every((entry) => typeof entry === 'string')
+    ) {
+        return value as string[];
+    }
+    return undefined;
+}
+
 /**
  * Parse X-Forwarded-For header and return the first valid IP.
  * 
@@ -90,7 +103,9 @@ function parseForwardedFor(headerValue: string): string | null {
 export function getClientIp(event: H3Event, cfg: ProxyTrustConfig): string | null {
     if (cfg.trustProxy) {
         const headerName = cfg.forwardedForHeader ?? 'x-forwarded-for';
-        const forwardedHeader = getHeader(event, headerName);
+        const forwardedHeader = normalizeHeaderValue(
+            getHeader(event, headerName)
+        );
 
         if (forwardedHeader) {
             const parsed = parseForwardedFor(
@@ -125,7 +140,9 @@ export function getProxyRequestHost(
 ): string | null {
     if (cfg.trustProxy) {
         const headerName = cfg.forwardedHostHeader ?? 'x-forwarded-host';
-        const forwardedHost = getHeader(event, headerName);
+        const forwardedHost = normalizeHeaderValue(
+            getHeader(event, headerName)
+        );
 
         if (forwardedHost) {
             const hostValue = Array.isArray(forwardedHost)
@@ -143,8 +160,11 @@ export function getProxyRequestHost(
 
     // Use Host header
     const hostHeader = getHeader(event, 'host');
-    if (hostHeader) {
-        const host = Array.isArray(hostHeader) ? hostHeader[0]! : hostHeader;
+    const normalizedHost = normalizeHeaderValue(hostHeader);
+    if (normalizedHost) {
+        const host = Array.isArray(normalizedHost)
+            ? normalizedHost[0]!
+            : normalizedHost;
         return host.trim().toLowerCase();
     }
 

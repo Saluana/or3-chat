@@ -71,7 +71,7 @@ export default defineEventHandler(async (event) => {
         .map((host) => normalizeHost(host));
 
     if (allowedHosts.length > 0) {
-        const proxyConfig = normalizeProxyTrustConfig(config.security?.proxy);
+        const proxyConfig = normalizeProxyTrustConfig(config.security.proxy);
         const requestHost = getProxyRequestHost(event, proxyConfig);
 
         if (!requestHost) {

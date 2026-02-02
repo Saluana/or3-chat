@@ -10,10 +10,26 @@ export function getKindDir(kind: ExtensionKind): string {
     return 'plugins';
 }
 
+async function mkdirSafe(path: string): Promise<void> {
+    try {
+        await fs.mkdir(path, { recursive: true });
+    } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error) {
+            const code = (error as { code?: string }).code;
+            if (code === 'ENOENT') {
+                await fs.mkdir(EXTENSIONS_BASE_DIR, { recursive: true });
+                await fs.mkdir(path, { recursive: true });
+                return;
+            }
+        }
+        throw error;
+    }
+}
+
 export async function ensureExtensionsDirs(): Promise<void> {
-    await fs.mkdir(EXTENSIONS_BASE_DIR, { recursive: true });
-    await fs.mkdir(join(EXTENSIONS_BASE_DIR, 'plugins'), { recursive: true });
-    await fs.mkdir(join(EXTENSIONS_BASE_DIR, 'themes'), { recursive: true });
-    await fs.mkdir(join(EXTENSIONS_BASE_DIR, 'admin-plugins'), { recursive: true });
-    await fs.mkdir(join(EXTENSIONS_BASE_DIR, '.tmp'), { recursive: true });
+    await mkdirSafe(EXTENSIONS_BASE_DIR);
+    await mkdirSafe(join(EXTENSIONS_BASE_DIR, 'plugins'));
+    await mkdirSafe(join(EXTENSIONS_BASE_DIR, 'themes'));
+    await mkdirSafe(join(EXTENSIONS_BASE_DIR, 'admin-plugins'));
+    await mkdirSafe(join(EXTENSIONS_BASE_DIR, '.tmp'));
 }

@@ -1,3 +1,85 @@
+/**
+ * @module composables/chat/useWorkflowStreamAccumulator
+ *
+ * **Purpose**
+ * Provides a reactive state accumulator for workflow execution streaming. Manages real-time
+ * updates of workflow execution state as events flow from the workflow engine (or3-workflow-core),
+ * presenting a unified, renderable state tree for UI components. Handles both top-level workflows
+ * and nested subflows, branch parallelism, tool calls, and human-in-the-loop (HITL) requests.
+ *
+ * **Responsibilities**
+ * - Accumulate workflow execution events (node start/finish/token, branch lifecycle, tool calls, etc.)
+ * - Maintain reactive state tree with per-node and per-branch states
+ * - Manage subflow scoping via prefixed keys (`sf:parentNodeId|childNodeId`)
+ * - Track execution order and current/last active nodes for UI focus and scrolling
+ * - Aggregate workflow-level streaming tokens from leaf nodes
+ * - Apply RAF (requestAnimationFrame) batching to token updates for performance
+ * - Support HITL pause/resume flows (request tracking, state updates)
+ * - Export final state to WorkflowMessageData for persistence
+ *
+ * **Non-responsibilities**
+ * - Does NOT execute workflows (see or3-workflow-core engine)
+ * - Does NOT manage workflow definitions or schemas (see workflow store)
+ * - Does NOT persist state directly (see useAi.ts for DB writes)
+ * - Does NOT handle UI rendering (see WorkflowView.vue, WorkflowNodeCard.vue)
+ * - Does NOT manage workflow configuration or routing logic
+ *
+ * **Subflow Scope Keying Strategy**
+ * - Top-level nodes use plain nodeId: `"node1"`, `"node2"`
+ * - Subflow nodes use prefixed keys: `"sf:parentNodeId|childNodeId"`
+ * - Deep nesting: `"sf:node1|sf:node2|node3"` for node3 inside node2 inside node1
+ * - Separator: `"|"` splits scope segments
+ * - Prefix: `"sf:"` marks a scope segment
+ * - Parsing: `parseScopedNodeId()` extracts path and leaf nodeId
+ * - UI rendering: nested `UiWorkflowState` objects represent subflow states in the tree
+ *
+ * **Branch Keys and Ordering**
+ * - Branch keys: `"nodeId:branchId"` for parallel execution branches
+ * - Each branch tracks its own `streamingText`, `output`, `complete` flag
+ * - Branch order follows event arrival (no explicit ordering constraint)
+ * - Branches are rendered as expandable sections in UI (see WorkflowNodeCard.vue)
+ *
+ * **Event → State Mapping Invariants**
+ * - `nodeStart` → creates NodeState, adds to executionOrder, sets currentNodeId
+ * - `nodeToken` → appends to node.streamingText (batched via RAF)
+ * - `nodeReasoning` → appends to node.reasoning (batched via RAF)
+ * - `nodeFinish` → sets node.output, moves streamingText to output, marks complete
+ * - `nodeError` → sets node.error, failedNodeId, executionState = 'failed'
+ * - `branchStart` → creates BranchState under `nodeId:branchId` key
+ * - `branchToken` → appends to branch.streamingText (batched via RAF)
+ * - `branchComplete` → moves branch.streamingText to branch.output, marks complete
+ * - `workflowToken` → appends to finalStreamingText (batched via RAF), for leaf aggregation
+ * - `finalize` → commits pending batches, sets executionState, isActive = false, error if provided
+ * - `reset` → clears all state, cancels pending RAF, resets to initial defaults
+ *
+ * **Performance Characteristics**
+ * - RAF batching: token updates are accumulated in pending buffers and flushed on next animation frame
+ * - Expected event rate: 10-100 events/sec during active streaming (depends on LLM speed)
+ * - State tree size: typically 5-20 nodes per workflow, up to 100 for complex graphs
+ * - Subflow nesting: supports arbitrary depth, though typical depth is 1-2 levels
+ * - Version counter increments on every state mutation (used by watchers for change detection)
+ *
+ * **Error Handling Contract**
+ * - `nodeError(nodeId, error)` sets `failedNodeId` and `executionState = 'failed'`
+ * - `finalize({ error })` sets top-level `error` and `executionState = 'failed'`
+ * - Errors do NOT throw or propagate; state is updated and UI reflects failure
+ * - HITL request failures set request.state = 'rejected' and update node state
+ * - Partial execution state is preserved on error (for debugging and resume scenarios)
+ *
+ * **Concurrency and Batching**
+ * - Token events are buffered in Maps/Arrays and applied in a single RAF callback
+ * - Only one RAF flush is scheduled at a time (idempotent scheduling)
+ * - Flush order: node tokens → branch tokens → workflow tokens → version increment
+ * - Finalize cancels pending RAF and commits immediately
+ *
+ * **Testing Strategy**
+ * - Unit tests: verify event handlers update state correctly (mock reactive state)
+ * - Unit tests: verify subflow scoping and branch key parsing
+ * - Unit tests: verify RAF batching reduces mutation count
+ * - Integration tests: simulate full workflow execution event sequences
+ * - Performance tests: measure update latency under high token throughput
+ */
+
 import { reactive } from 'vue';
 import type {
     NodeState,

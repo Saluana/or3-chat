@@ -150,7 +150,7 @@ export async function resolveSessionContext(
             stage: 'workspace.provision',
         });
         const provisioningFailure =
-            config.auth?.sessionProvisioningFailure ?? 'throw';
+            config.auth.sessionProvisioningFailure;
 
         if (provisioningFailure === 'unauthenticated') {
             console.error('[auth:session] Provisioning failure mode: unauthenticated', {

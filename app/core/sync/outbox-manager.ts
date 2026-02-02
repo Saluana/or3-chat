@@ -191,6 +191,11 @@ export class OutboxManager {
                      payload: sanitizePayloadForSync(op.tableName, op.payload, op.operation),
                  }));
 
+                 // Mark opIds as recent BEFORE push to avoid echo race conditions
+                 for (const op of batch) {
+                     markRecentOpId(op.stamp.opId);
+                 }
+
                  // Push to provider
                  const result = await this.provider.push({
                      scope: this.scope,
@@ -216,7 +221,6 @@ export class OutboxManager {
                             await this.markTombstoneSynced(op);
                         }
                         await this.db.pending_ops.delete(op.id);
-                        markRecentOpId(op.stamp.opId);
                         successCount += 1;
                     } else {
                         // Failed - handle retry

@@ -516,6 +516,7 @@ export default defineNuxtConfig({
             // Scan top-level composables
             '~/composables',
             // Scan all composables within subdirectories
+            // Note: Keep non-composable internals out of composables/ to avoid Nuxt auto-import collisions.
             '~/composables/**',
             // Core directory for auth and other utilities (excluding sync which uses barrel exports)
             '~/core',

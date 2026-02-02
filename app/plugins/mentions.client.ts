@@ -265,7 +265,7 @@ export default defineNuxtPlugin(() => {
                 return { messages: originalMessages };
             }
 
-            const mentions = module.collectMentions(editorContent);
+            const mentions = module.collectMentions(editorContent as unknown as Parameters<typeof module.collectMentions>[0]);
             if (mentions.length === 0) {
                 return { messages: originalMessages };
             }
@@ -376,8 +376,11 @@ export default defineNuxtPlugin(() => {
         (payload: DbCreatePayload<ThreadEntity>) => {
             void (async () => {
                 const module = mentionsModule || (await loadMentionsModule());
-                if (module && payload.entity)
-                    module.upsertThread(payload.entity);
+                if (module && payload.entity) {
+                    // Normalize title: convert null to undefined to match ThreadRow type
+                    const threadRow = { ...payload.entity, title: payload.entity.title ?? undefined };
+                    module.upsertThread(threadRow);
+                }
             })();
         },
         { kind: 'action' }
@@ -388,8 +391,11 @@ export default defineNuxtPlugin(() => {
         (payload: DbCreatePayload<ThreadEntity>) => {
             void (async () => {
                 const module = mentionsModule || (await loadMentionsModule());
-                if (module && payload.entity)
-                    module.upsertThread(payload.entity);
+                if (module && payload.entity) {
+                    // Normalize title: convert null to undefined to match ThreadRow type
+                    const threadRow = { ...payload.entity, title: payload.entity.title ?? undefined };
+                    module.upsertThread(threadRow);
+                }
             })();
         },
         { kind: 'action' }

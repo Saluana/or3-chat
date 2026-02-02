@@ -1,3 +1,53 @@
+/**
+ * @module composables/chat/useModelStore
+ *
+ * **Purpose**
+ * Manages the OpenRouter model catalog with local caching, favorites, and search/filter.
+ * Fetches models from OpenRouter API, caches in Dexie KV for 48h TTL, and provides
+ * reactive state for UI consumption. Supports favorite models persistence.
+ *
+ * **Responsibilities**
+ * - Fetch model catalog from OpenRouter API or models-service
+ * - Cache catalog in Dexie KV with TTL (48h default)
+ * - Load favorites from KV and persist changes
+ * - Provide reactive search query and filters (input/output, context, price, parameters)
+ * - Dedupe parallel fetch requests via in-flight promise
+ *
+ * **Non-responsibilities**
+ * - Does NOT send API requests directly (delegates to models-service)
+ * - Does NOT manage API keys (see auth/models-service)
+ * - Does NOT apply model selection to chat (see useAi.ts)
+ * - Does NOT validate model availability (caller should check catalog)
+ *
+ * **Singleton State Pattern**
+ * - Module-scoped refs (`catalog`, `favoriteModels`, `searchQuery`, `filters`) ensure all callers share state
+ * - Previously, each invocation created new refs, so favoriting in modal didn't propagate to chat input
+ * - State persists across component mount/unmount (session lifetime)
+ * - Catalog and favorites are persisted to KV (survive page reload)
+ *
+ * **Caching Strategy**
+ * - Catalog cached in KV with key `MODELS_CATALOG` (TTL: 48h)
+ * - `fetchModels({ force: true })` bypasses cache and fetches fresh
+ * - `fetchModels({ ttlMs })` uses custom TTL for cache freshness check
+ * - In-flight promise dedupes parallel fetches (singleton pattern)
+ *
+ * **Favorites Persistence**
+ * - Favorites stored in KV with key `FAVORITE_MODELS`
+ * - Updated via `addFavorite(model)` / `removeFavorite(modelId)`
+ * - Validated against Zod schema on load
+ *
+ * **Performance**
+ * - In-memory catalog typically 200-500 models (5-50KB JSON)
+ * - Search/filter operations are client-side (no backend queries)
+ * - Lazy-load: catalog not fetched until first access
+ * - Stale-while-revalidate: shows cached data immediately, fetches fresh in background
+ *
+ * **Error Handling**
+ * - Fetch errors logged but do not throw (returns cached or empty array)
+ * - KV read errors logged and fall back to empty state
+ * - Write errors should propagate (caller handles)
+ */
+
 import { kv } from '~/db';
 import { ref } from 'vue';
 
