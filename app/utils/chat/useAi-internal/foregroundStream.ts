@@ -1,16 +1,37 @@
 /**
- * @module useAi/foregroundStream
- * @description Foreground streaming loop with tool execution and persistence cadence.
+ * @module app/utils/chat/useAi-internal/foregroundStream.ts
+ *
+ * Purpose:
+ * Foreground streaming loop for real-time AI responses. Manages the complete
+ * streaming lifecycle including tool execution, multi-turn conversations,
+ * and throttled persistence to balance responsiveness with database performance.
  *
  * Responsibilities:
- * - Run the OpenRouter streaming loop for foreground (non-background) requests
- * - Handle tool calls and append tool results for subsequent iterations
- * - Persist assistant content with a throttled cadence
- * - Update UI assistant state and tool call status
+ * - Execute OpenRouter streaming requests for foreground (non-background) mode
+ * - Handle tool calls and execute them via ToolRegistry
+ * - Support multi-turn tool loops (up to 10 iterations)
+ * - Persist assistant content with throttled cadence (500ms or 50 chunks)
+ * - Process reasoning text and image generation separately
+ * - Update UI assistant state and track tool call status
+ * - Convert generated images to hash references for storage
  *
  * Non-responsibilities:
- * - Hook orchestration (before/after) and higher-level flow control
- * - Background streaming job management
+ * - Hook orchestration before/after (handled by caller)
+ * - Background job management (separate module)
+ * - Message creation and initial setup
+ * - Error reporting and retry logic
+ *
+ * Architecture:
+ * - Single-threaded streaming with async iteration
+ * - Tool results appended as separate messages for context window
+ * - Throttled writes to reduce IndexedDB pressure
+ * - Image blobs stored via createOrRefFile with hash placeholders
+ *
+ * Invariants:
+ * - Tool execution capped at 10 iterations to prevent infinite loops
+ * - Every 50 chunks or 500ms triggers a persist (whichever comes first)
+ * - Generated images limited to 6 per response
+ * - Tool calls always tracked in activeToolCalls Map
  */
 
 import { tx } from '~/db';
@@ -31,14 +52,23 @@ import type {
     ToolResultPayload,
 } from './types';
 
+/**
+ * Internal type. Stream accumulator interface for buffering text/reasoning.
+ */
 type StreamAccumulatorLike = {
     append: (text: string, opts: { kind: 'text' | 'reasoning' }) => void;
 };
 
+/**
+ * Internal type. Minimal hook interface for emitting stream events.
+ */
 type HooksLike = {
     doAction: (name: string, ...args: unknown[]) => Promise<unknown>;
 };
 
+/**
+ * Internal type. Tool execution interface from ToolRegistry.
+ */
 type ToolRegistryLike = {
     executeTool: (
         name: string,
@@ -51,8 +81,24 @@ type ToolRegistryLike = {
     }>;
 };
 
+/**
+ * Internal type. Vue ref-like interface for reactive values.
+ */
 type RefLike<T> = { value: T };
 
+/**
+ * Context object required for foreground streaming operations.
+ *
+ * Purpose:
+ * Encapsulates all dependencies for the streaming loop including API configuration,
+ * UI state refs, persistence callbacks, and tool execution.
+ *
+ * Constraints:
+ * - assistantId and streamId must be pre-generated
+ * - threadId must reference existing thread
+ * - abortSignal controls cancellation
+ * - activeToolCalls is mutated during tool execution
+ */
 export type ForegroundStreamContext = {
     apiKey: string | null;
     modelId: string;
@@ -73,6 +119,84 @@ export type ForegroundStreamContext = {
     rawMessages: RefLike<ChatMessage[]>;
 };
 
+/**
+ * `ai.chat.stream:action:*` (action)
+ *
+ * Purpose:
+ * Main foreground streaming loop that processes AI responses in real-time,
+ * handling text, reasoning, images, and tool calls with support for multi-turn
+ * tool execution.
+ *
+ * Behavior:
+ * 1. Opens OpenRouter stream with provided context
+ * 2. Processes stream events:
+ *    - `text`: Appends to assistant content, emits `ai.chat.stream:action:delta`
+ *    - `reasoning`: Tracks separately, emits `ai.chat.stream:action:reasoning`
+ *    - `image`: Stores blob, creates hash placeholder, appends to content
+ *    - `tool_call`: Queues for execution, updates UI with loading state
+ * 3. Throttled persistence every 500ms or 50 chunks
+ * 4. On tool calls: executes via ToolRegistry, appends results as tool messages
+ * 5. Loops back for additional turns if tools returned results (max 10 iterations)
+ *
+ * Hook Emissions:
+ * - `ai.chat.stream:action:delta` - Text chunk received
+ *   Payload: `{ threadId, assistantId, streamId, deltaLength, totalLength, chunkIndex }`
+ * - `ai.chat.stream:action:reasoning` - Reasoning chunk received
+ *   Payload: `{ threadId, assistantId, streamId, reasoningLength }`
+ *
+ * Constraints:
+ * - Max 10 tool iterations to prevent infinite loops
+ * - Images capped at 6 per response
+ * - Persists every 500ms OR every 50 chunks (whichever first)
+ * - Tool results >500KB get UI summary with truncation notice
+ * - Throws on stream error during first iteration
+ *
+ * Image Handling:
+ * - Data URLs and HTTP URLs converted to blobs
+ * - Stored via createOrRefFile with hash reference
+ * - Uses transparent pixel placeholder in markdown with hash in alt text
+ * - Prevents console errors from invalid image URLs
+ *
+ * Tool Execution Flow:
+ * 1. Tool call detected in stream → added to activeToolCalls (loading state)
+ * 2. Stream ends → executeTool called for each pending tool
+ * 3. Result appended as tool role message via tx.appendMessage
+ * 4. Tool result added to orMessages for context window
+ * 5. If any tools executed, loop continues for assistant response
+ *
+ * Non-Goals:
+ * - Does not handle background/offline streaming
+ * - Does not retry failed streams
+ * - Does not validate tool definitions
+ *
+ * @example
+ * ```ts
+ * const ctx: ForegroundStreamContext = {
+ *   apiKey: 'sk-...',
+ *   modelId: 'gpt-4',
+ *   orMessages: [{ role: 'user', content: 'Hello' }],
+ *   modalities: ['text'],
+ *   tools: myToolDefinitions,
+ *   abortSignal: controller.signal,
+ *   assistantId: 'assistant-123',
+ *   streamId: 'stream-456',
+ *   threadId: 'thread-789',
+ *   streamAcc: { append: (text, opts) => { ... } },
+ *   hooks: { doAction: async () => {} },
+ *   toolRegistry: { executeTool: async () => ({ result: '', toolName: '', timedOut: false }) },
+ *   persistAssistant: async () => '',
+ *   assistantFileHashes: [],
+ *   activeToolCalls: new Map(),
+ *   tailAssistant: { value: null },
+ *   rawMessages: { value: [] }
+ * };
+ *
+ * await runForegroundStreamLoop(ctx);
+ * ```
+ *
+ * @see ai.chat.send:action:before for send initiation
+ * @see backgroundJobs.ts for background streaming variant
+ */
 export async function runForegroundStreamLoop(
     ctx: ForegroundStreamContext
 ): Promise<void> {
