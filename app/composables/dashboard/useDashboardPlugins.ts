@@ -157,6 +157,37 @@ function sync() {
     reactiveList.items = Array.from(registry.values());
 }
 
+/**
+ * Purpose:
+ * Register a dashboard plugin for discovery and navigation.
+ *
+ * Behavior:
+ * Adds or replaces the plugin entry and normalizes inline pages into the
+ * page registry.
+ *
+ * Constraints:
+ * - Plugin IDs must be unique
+ * - Inline pages overwrite existing pages for the plugin
+ *
+ * Non-Goals:
+ * - Rendering the plugin UI
+ *
+ * @example
+ * ```ts
+ * registerDashboardPlugin({
+ *   id: 'my-plugin',
+ *   icon: 'i-carbon-apps',
+ *   label: 'My Plugin',
+ *   pages: [
+ *     {
+ *       id: 'settings',
+ *       title: 'Settings',
+ *       component: () => import('~/components/MyPluginSettings.vue'),
+ *     },
+ *   ],
+ * });
+ * ```
+ */
 export function registerDashboardPlugin(plugin: DashboardPlugin) {
     const isDev =
         import.meta.dev ||
@@ -181,6 +212,24 @@ export function registerDashboardPlugin(plugin: DashboardPlugin) {
     }
 }
 
+/**
+ * Purpose:
+ * Remove a dashboard plugin and its pages from the registry.
+ *
+ * Behavior:
+ * Deletes the plugin entry and clears associated pages and caches.
+ *
+ * Constraints:
+ * - No-op if the plugin ID is not registered
+ *
+ * Non-Goals:
+ * - Unmounting active UI components
+ *
+ * @example
+ * ```ts
+ * unregisterDashboardPlugin('my-plugin');
+ * ```
+ */
 export function unregisterDashboardPlugin(id: string) {
     if (registry.delete(id)) sync();
     unregisterDashboardPluginPage(id); // also clears pages + cache + reactivePages entry
@@ -189,6 +238,24 @@ export function unregisterDashboardPlugin(id: string) {
     delete reactivePages[id];
 }
 
+/**
+ * Purpose:
+ * Access the reactive list of registered dashboard plugins.
+ *
+ * Behavior:
+ * Returns a computed list sorted by the order field.
+ *
+ * Constraints:
+ * - Sorting uses the default order constant when missing
+ *
+ * Non-Goals:
+ * - Filtering by capability or visibility
+ *
+ * @example
+ * ```ts
+ * const plugins = useDashboardPlugins();
+ * ```
+ */
 export function useDashboardPlugins() {
     return computed(() =>
         [...reactiveList.items].sort(
@@ -197,12 +264,53 @@ export function useDashboardPlugins() {
     );
 }
 
+/**
+ * Purpose:
+ * Inspect registered dashboard plugin IDs.
+ *
+ * Behavior:
+ * Returns IDs in registration order.
+ *
+ * Constraints:
+ * - Intended for debugging or diagnostics
+ *
+ * Non-Goals:
+ * - Sorting by plugin order
+ *
+ * @example
+ * ```ts
+ * const ids = listRegisteredDashboardPluginIds();
+ * ```
+ */
 export function listRegisteredDashboardPluginIds(): string[] {
     return Array.from(registry.keys());
 }
 
 // ----- Pages API -----
 
+/**
+ * Purpose:
+ * Register a page for a dashboard plugin.
+ *
+ * Behavior:
+ * Adds or replaces the page entry and updates the reactive pages list.
+ *
+ * Constraints:
+ * - Page IDs must be unique per plugin
+ * - Component instances are marked as raw to avoid reactivity costs
+ *
+ * Non-Goals:
+ * - Loading or mounting the page component
+ *
+ * @example
+ * ```ts
+ * registerDashboardPluginPage('my-plugin', {
+ *   id: 'overview',
+ *   title: 'Overview',
+ *   component: () => import('~/components/MyPluginOverview.vue'),
+ * });
+ * ```
+ */
 export function registerDashboardPluginPage(
     pluginId: string,
     page: DashboardPluginPage
@@ -230,6 +338,24 @@ export function registerDashboardPluginPage(
     syncPages(pluginId);
 }
 
+/**
+ * Purpose:
+ * Remove a page entry or all pages for a plugin.
+ *
+ * Behavior:
+ * Deletes the page entry and clears cached component instances.
+ *
+ * Constraints:
+ * - No-op if the plugin or page is missing
+ *
+ * Non-Goals:
+ * - Unmounting active page components
+ *
+ * @example
+ * ```ts
+ * unregisterDashboardPluginPage('my-plugin', 'overview');
+ * ```
+ */
 export function unregisterDashboardPluginPage(
     pluginId: string,
     pageId?: string
@@ -251,6 +377,24 @@ export function unregisterDashboardPluginPage(
     syncPages(pluginId);
 }
 
+/**
+ * Purpose:
+ * Access the reactive list of pages for a selected plugin.
+ *
+ * Behavior:
+ * Returns a computed, sorted array for the current plugin ID.
+ *
+ * Constraints:
+ * - Returns an empty list when the plugin ID is missing
+ *
+ * Non-Goals:
+ * - Page access control
+ *
+ * @example
+ * ```ts
+ * const pages = useDashboardPluginPages(() => activePluginId.value);
+ * ```
+ */
 export function useDashboardPluginPages(pluginId: () => string | undefined) {
     return computed(() => {
         const id = pluginId();
@@ -262,6 +406,24 @@ export function useDashboardPluginPages(pluginId: () => string | undefined) {
     });
 }
 
+/**
+ * Purpose:
+ * Retrieve a sorted list of pages for a plugin.
+ *
+ * Behavior:
+ * Returns a new array sorted by the order field.
+ *
+ * Constraints:
+ * - Only includes pages currently registered
+ *
+ * Non-Goals:
+ * - Resolving page components
+ *
+ * @example
+ * ```ts
+ * const pages = listDashboardPluginPages('my-plugin');
+ * ```
+ */
 export function listDashboardPluginPages(
     pluginId: string
 ): DashboardPluginPage[] {
@@ -271,6 +433,24 @@ export function listDashboardPluginPages(
     );
 }
 
+/**
+ * Purpose:
+ * Find a page definition for a specific plugin.
+ *
+ * Behavior:
+ * Returns the page entry if it exists in the registry.
+ *
+ * Constraints:
+ * - Returns undefined when missing
+ *
+ * Non-Goals:
+ * - Component resolution
+ *
+ * @example
+ * ```ts
+ * const page = getDashboardPluginPage('my-plugin', 'overview');
+ * ```
+ */
 export function getDashboardPluginPage(
     pluginId: string,
     pageId: string
@@ -288,6 +468,28 @@ function isAsyncLoader(comp: unknown): comp is AsyncComponentLoader {
     return fn.length === 0 && !fn.__vccOpts && !fn.render && !fn.setup;
 }
 
+/**
+ * Purpose:
+ * Resolve and cache the Vue component for a dashboard page.
+ *
+ * Behavior:
+ * Loads async factories, normalizes results, and caches by plugin and page ID.
+ *
+ * Constraints:
+ * - Returns undefined when the page is missing
+ * - Async loaders must return a Vue component or default export
+ *
+ * Non-Goals:
+ * - Rendering or mounting the component
+ *
+ * @example
+ * ```ts
+ * const component = await resolveDashboardPluginPageComponent(
+ *   'my-plugin',
+ *   'overview',
+ * );
+ * ```
+ */
 export async function resolveDashboardPluginPageComponent(
     pluginId: string,
     pageId: string
@@ -329,6 +531,30 @@ export async function resolveDashboardPluginPageComponent(
 // Minimal built‑in examples can be registered in a plugin file separately; keeping
 // this composable focused only on registry mechanics (mirrors other ui-extension patterns).
 
+/**
+ * Purpose:
+ * Manage dashboard navigation state across landing and page views.
+ *
+ * Behavior:
+ * Merges base items with registered plugins, tracks current view, and
+ * resolves page components on demand.
+ *
+ * Constraints:
+ * - Base items overwrite registered items by ID
+ * - Errors are stored in reactive navigation state
+ *
+ * Non-Goals:
+ * - Rendering navigation UI
+ *
+ * @example
+ * ```ts
+ * const {
+ *   dashboardItems,
+ *   openPlugin,
+ *   openPage,
+ * } = useDashboardNavigation();
+ * ```
+ */
 export function useDashboardNavigation(
     options: UseDashboardNavigationOptions = {}
 ) {
@@ -554,10 +780,22 @@ export function useDashboardNavigation(
 }
 
 /**
- * Check if a dashboard plugin declares a specific capability.
- * @param pluginId - The unique ID of the plugin
- * @param capability - The capability string to check (e.g., 'canReadMessages')
- * @returns true if the plugin declares the capability, false otherwise
+ * Purpose:
+ * Check whether a plugin declares a capability string.
+ *
+ * Behavior:
+ * Returns true only when the plugin exists and lists the capability.
+ *
+ * Constraints:
+ * - Returns false when the plugin is missing
+ *
+ * Non-Goals:
+ * - Permission enforcement
+ *
+ * @example
+ * ```ts
+ * const canRead = hasCapability('my-plugin', 'canReadMessages');
+ * ```
  */
 export function hasCapability(pluginId: string, capability: string): boolean {
     const plugin = registry.get(pluginId);
@@ -569,9 +807,22 @@ export function hasCapability(pluginId: string, capability: string): boolean {
 }
 
 /**
- * Get all capabilities declared by a plugin.
- * @param pluginId - The unique ID of the plugin
- * @returns Array of capability strings, or empty array if none declared
+ * Purpose:
+ * Read all declared capabilities for a plugin.
+ *
+ * Behavior:
+ * Returns a copy of the capability list or an empty array.
+ *
+ * Constraints:
+ * - Returns empty list when the plugin is missing
+ *
+ * Non-Goals:
+ * - Validation of capability names
+ *
+ * @example
+ * ```ts
+ * const caps = getPluginCapabilities('my-plugin');
+ * ```
  */
 export function getPluginCapabilities(pluginId: string): string[] {
     const plugin = registry.get(pluginId);
@@ -580,10 +831,25 @@ export function getPluginCapabilities(pluginId: string): string[] {
 }
 
 /**
- * Check if a plugin has ALL of the specified capabilities.
- * @param pluginId - The unique ID of the plugin
- * @param capabilities - Array of capability strings to check
- * @returns true if plugin has all capabilities, false otherwise
+ * Purpose:
+ * Validate that a plugin declares every required capability.
+ *
+ * Behavior:
+ * Returns true when all provided capabilities are present.
+ *
+ * Constraints:
+ * - Returns false when the plugin is missing
+ *
+ * Non-Goals:
+ * - Authorization enforcement
+ *
+ * @example
+ * ```ts
+ * const ok = hasAllCapabilities('my-plugin', [
+ *   'canReadMessages',
+ *   'canSend',
+ * ]);
+ * ```
  */
 export function hasAllCapabilities(
     pluginId: string,
@@ -595,10 +861,22 @@ export function hasAllCapabilities(
 }
 
 /**
- * Check if a plugin has ANY of the specified capabilities.
- * @param pluginId - The unique ID of the plugin
- * @param capabilities - Array of capability strings to check
- * @returns true if plugin has at least one capability, false otherwise
+ * Purpose:
+ * Validate that a plugin declares at least one of the listed capabilities.
+ *
+ * Behavior:
+ * Returns true when any capability is present.
+ *
+ * Constraints:
+ * - Returns false when the plugin is missing
+ *
+ * Non-Goals:
+ * - Authorization enforcement
+ *
+ * @example
+ * ```ts
+ * const ok = hasAnyCapability('my-plugin', ['canWriteDocs', 'canSend']);
+ * ```
  */
 export function hasAnyCapability(
     pluginId: string,

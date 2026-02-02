@@ -9,6 +9,19 @@ import {
 } from '~/composables/documents/useDocumentsStore';
 import { useHooks } from '../../core/hooks/useHooks';
 
+/**
+ * Purpose:
+ * Configure pane-aware document helpers with pane state and handlers.
+ *
+ * Behavior:
+ * Supplies pane references and creation or flush callbacks.
+ *
+ * Constraints:
+ * - Requires multi-pane state refs
+ *
+ * Non-Goals:
+ * - Persisting documents directly
+ */
 export interface UsePaneDocumentsOptions {
     panes: Ref<MultiPaneState[]>;
     activePaneIndex: Ref<number>;
@@ -16,6 +29,19 @@ export interface UsePaneDocumentsOptions {
     flushDocument: (id: string) => Promise<void> | void;
 }
 
+/**
+ * Purpose:
+ * Expose pane-aware document operations.
+ *
+ * Behavior:
+ * Provides create and select helpers for the active pane.
+ *
+ * Constraints:
+ * - Helpers assume pane state is mutable
+ *
+ * Non-Goals:
+ * - Pane rendering or layout control
+ */
 export interface UsePaneDocumentsApi {
     newDocumentInActive: (initial?: {
         title?: string;
@@ -23,6 +49,31 @@ export interface UsePaneDocumentsApi {
     selectDocumentInActive: (id: string) => Promise<void>;
 }
 
+/**
+ * Purpose:
+ * Coordinate document creation and selection within the active pane.
+ *
+ * Behavior:
+ * Flushes pending edits, applies selection filters, and emits pane hooks.
+ *
+ * Constraints:
+ * - Relies on hook filters for veto logic
+ * - Flush errors are logged and do not abort selection
+ *
+ * Non-Goals:
+ * - Persisting pane layouts
+ *
+ * @example
+ * ```ts
+ * const paneDocs = usePaneDocuments({
+ *   panes,
+ *   activePaneIndex,
+ *   createNewDoc: newDocument,
+ *   flushDocument: flush,
+ * });
+ * await paneDocs.selectDocumentInActive(documentId);
+ * ```
+ */
 export function usePaneDocuments(
     opts: UsePaneDocumentsOptions
 ): UsePaneDocumentsApi {

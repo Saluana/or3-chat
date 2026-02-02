@@ -3,6 +3,28 @@ import { listDocuments, type Document } from '~/db/documents';
 import { useToast } from '#imports';
 import { useHookEffect } from '../core/useHookEffect';
 
+/**
+ * Purpose:
+ * Provide a lightweight, reactive list of documents for sidebar navigation.
+ *
+ * Behavior:
+ * Loads recent documents, drops heavy content fields, and refreshes on
+ * document lifecycle hook events.
+ *
+ * Constraints:
+ * - Client-only auto-refresh behavior gated by process.client
+ * - Drops document content to minimize memory use
+ *
+ * Non-Goals:
+ * - Full document hydration
+ * - Server-side listing
+ *
+ * @example
+ * ```ts
+ * const { docs, loading, refresh } = useDocumentsList(200);
+ * await refresh();
+ * ```
+ */
 export function useDocumentsList(limit = 200) {
     const docs = ref<Document[]>([]);
     // Start in loading state so SSR + client initial VDOM match (avoids hydration text mismatch)
