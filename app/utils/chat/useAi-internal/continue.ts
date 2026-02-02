@@ -452,7 +452,6 @@ export async function continueMessageImpl(
             }
         }
 
-        const hasImageInput = hasImageContent(modelInputMessages);
         const modelCandidate = await ctx.hooks.applyFilters(
             'ai.chat.model:filter:select',
             modelOverride || ctx.defaultModelId
@@ -461,8 +460,10 @@ export async function continueMessageImpl(
             (typeof modelCandidate === 'string' && modelCandidate) ||
             modelOverride ||
             ctx.defaultModelId;
-        const modelImageHint = /image|vision|flash/i.test(modelId);
-        const modalities = hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
+        // modalities controls OUTPUT format, not input capability
+        // Only request image output for actual image generation models
+        const isImageGenerationModel = /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId);
+        const modalities = isImageGenerationModel ? ['image', 'text'] : ['text'];
 
         ctx.streamAcc.reset();
         const newStreamId = newId();

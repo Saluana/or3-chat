@@ -130,9 +130,11 @@ export async function* openRouterStream(params: {
             backgroundStreaming: { enabled: boolean };
         };
     };
+    const allowClientFallback = hasApiKey === true;
     const forceServerRoute = Boolean(
         runtimeConfig.public.ssrAuthEnabled === true &&
-            runtimeConfig.public.backgroundStreaming.enabled === true
+            runtimeConfig.public.backgroundStreaming.enabled === true &&
+            !allowClientFallback
     );
     const shouldForceServerRoute = () => forceServerRoute;
 

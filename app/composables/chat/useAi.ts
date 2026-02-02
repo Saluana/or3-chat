@@ -9,6 +9,7 @@ import {
     parseFileHashes,
     MAX_MESSAGE_FILE_HASHES,
 } from '~/db/files-util';
+import { normalizeFileUrl, hashToContentPart } from '~/utils/chat/useAi-internal/files';
 import {
     parseHashes,
     mergeAssistantFileHashes,
@@ -1514,146 +1515,6 @@ export function useChat(
                 fr.readAsDataURL(blob);
             });
 
-        // UI path: verify blob exists, return hash reference without Base64 conversion
-        // This keeps UI state lean - Base64 conversion happens just-in-time for API
-        const normalizeFileUrl = async (f: { type: string; url: string }) => {
-            if (typeof FileReader === 'undefined') return f; // SSR safeguard
-            const mime = f.type || '';
-            // Only process images; leave other files (e.g., PDFs) untouched for now.
-            if (!mime.startsWith('image/')) return f;
-            let url = f.url || '';
-            // Already a data URL - pass through (for pasted images not yet stored)
-            if (url.startsWith('data:image/')) return { ...f, url };
-            try {
-                // Local hash -> verify blob exists, return hash reference
-                if (!/^https?:|^data:|^blob:/i.test(url)) {
-                    const { getFileBlob } = await import('~/db/files');
-                    const blob = await getFileBlob(url);
-                    if (blob) {
-                        // Return hash reference - verified blob exists
-                        // UI will use createObjectURL when needed, API will convert later
-                        return { ...f, url, _verified: true };
-                    }
-                }
-                // blob: object URL - pass through (already efficient)
-                if (url.startsWith('blob:')) {
-                    return { ...f, url, _verified: true };
-                }
-            } catch {
-                // fall through to original url
-            }
-            return { ...f, url };
-        };
-
-        // API path: convert hash references and blob URLs to Base64 for model input
-        // This is called just-in-time before buildOpenRouterMessages
-        const prepareFilesForModel = async (
-            files: Array<{ type: string; url: string }>
-        ): Promise<ContentPart[]> => {
-            const parts: ContentPart[] = [];
-            for (const f of files) {
-                if (!f.url) continue;
-                const mime = f.type || '';
-
-                try {
-                    // Hash reference -> load from IndexedDB and convert to Base64
-                    if (!/^https?:|^data:|^blob:/i.test(f.url)) {
-                        const { getFileMeta, getFileBlob } = await import(
-                            '~/db/files'
-                        );
-                        const blob = await getFileBlob(f.url);
-                        if (!blob) continue;
-
-                        const dataUrl = await blobToDataUrl(blob);
-                        if (mime.startsWith('image/')) {
-                            parts.push({
-                                type: 'image',
-                                image: dataUrl,
-                                mediaType: mime,
-                            });
-                        } else if (mime === 'application/pdf') {
-                            const meta = await getFileMeta(f.url).catch(
-                                () => null
-                            );
-                            parts.push({
-                                type: 'file',
-                                data: dataUrl,
-                                mediaType: mime,
-                                name: meta?.name || 'document.pdf',
-                            });
-                        }
-                        continue;
-                    }
-
-                    // blob: URL -> fetch and convert to Base64
-                    if (f.url.startsWith('blob:')) {
-                        try {
-                            const blob = await $fetch<Blob>(f.url, {
-                                responseType: 'blob',
-                            });
-                            const dataUrl = await blobToDataUrl(blob);
-                            if (mime.startsWith('image/')) {
-                                parts.push({
-                                    type: 'image',
-                                    image: dataUrl,
-                                    mediaType: mime,
-                                });
-                            }
-                        } catch {
-                            // ignore fetch error
-                        }
-                        continue;
-                    }
-
-                    // Already Base64 data URL -> use directly
-                    if (f.url.startsWith('data:')) {
-                        if (mime.startsWith('image/')) {
-                            parts.push({
-                                type: 'image',
-                                image: f.url,
-                                mediaType: mime,
-                            });
-                        }
-                    }
-                } catch {
-                    // Skip files that fail to convert
-                }
-            }
-            return parts;
-        };
-
-        // Convert hash to ContentPart for context injection (just-in-time for API)
-        const hashToContentPart = async (
-            hash: string
-        ): Promise<ContentPart | null> => {
-            try {
-                const { getFileMeta, getFileBlob } = await import('~/db/files');
-                const meta = await getFileMeta(hash).catch(() => null);
-                const blob = await getFileBlob(hash);
-                if (!blob) return null;
-                // Only include images/PDFs to avoid bloating text-only contexts
-                const mime = meta?.mime_type || blob.type || '';
-                if (mime === 'application/pdf') {
-                    const dataUrl = await blobToDataUrl(blob);
-                    return {
-                        type: 'file',
-                        data: dataUrl,
-                        mediaType: mime,
-                        name: meta?.name || 'document.pdf',
-                    };
-                }
-                if (!mime.startsWith('image/')) return null;
-                const dataUrl = await blobToDataUrl(blob);
-                return {
-                    type: 'image',
-                    image: dataUrl,
-                    mediaType: mime,
-                };
-            } catch {
-                return null;
-            }
-        };
-
         // Verify files exist (no Base64 conversion - that happens in buildOpenRouterMessages)
         const hydratedFiles = await Promise.all(
             Array.isArray(files) ? files.map(normalizeFileUrl) : []
@@ -1832,27 +1693,10 @@ export function useChat(
             );
             if (orMessages.length === 0) return;
 
-            const hasImageInput = modelInputMessages.some((m) =>
-                Array.isArray(m.content)
-                    ? m.content.some((p) => {
-                          const part = p as {
-                              type?: string;
-                              mediaType?: string;
-                          };
-                          if (
-                              part.type === 'image' ||
-                              part.type === 'image_url'
-                          )
-                              return true;
-                          if (part.mediaType)
-                              return /image\//.test(part.mediaType);
-                          return false;
-                      })
-                    : false
-            );
-            const modelImageHint = /image|vision|flash/i.test(modelId);
-            const modalities =
-                hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
+            // modalities controls OUTPUT format, not input capability
+            // Only request image output for actual image generation models
+            const isImageGenerationModel = /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId);
+            const modalities = isImageGenerationModel ? ['image', 'text'] : ['text'];
 
             const newStreamId = newId();
             streamId.value = newStreamId;
