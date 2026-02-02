@@ -226,6 +226,16 @@ export function useMultiPane(
     }
 
     /**
+     * Normalize stored widths to match current pane count.
+     * Truncates if stored widths exceed pane count to prevent localStorage bloat.
+     */
+    function normalizeStoredWidths(paneCount: number) {
+        if (paneWidths.value.length > paneCount) {
+            paneWidths.value = paneWidths.value.slice(0, paneCount);
+        }
+    }
+
+    /**
      * Get width for a specific pane as a CSS value
      */
     function getPaneWidth(index: number): string {
@@ -233,6 +243,11 @@ export function useMultiPane(
 
         // Single pane or no panes
         if (paneCount <= 1) return '100%';
+
+        // Normalize widths if mismatch detected
+        if (paneWidths.value.length > paneCount) {
+            normalizeStoredWidths(paneCount);
+        }
 
         // Stored widths match current pane count
         if (
@@ -500,6 +515,10 @@ export function useMultiPane(
         }
 
         panes.value.push(pane);
+        
+        // Normalize widths after adding pane
+        normalizeStoredWidths(panes.value.length);
+        
         const prevIndex = activePaneIndex.value;
         const newIndex = panes.value.length - 1;
         setActive(newIndex);
@@ -554,6 +573,10 @@ export function useMultiPane(
 
         const wasActive = i === activePaneIndex.value;
         panes.value.splice(i, 1);
+        
+        // Normalize widths after closing pane
+        normalizeStoredWidths(panes.value.length);
+        
         if (!panes.value.length) {
             panes.value.push(createEmptyPane());
             activePaneIndex.value = 0;

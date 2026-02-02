@@ -278,3 +278,106 @@ describe('useMultiPane - newPaneForApp', () => {
         expect(uniqueIds.size).toBe(ids.length);
     });
 });
+
+describe('useMultiPane - paneWidths normalization', () => {
+    beforeEach(() => {
+        // Clean up registries and localStorage
+        const g = globalThis as any;
+        g.__or3PaneAppsRegistry = new Map();
+        g.__or3MultiPaneApi = undefined;
+        localStorage.clear();
+    });
+
+    it('truncates stored widths when closing panes', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        
+        const multiPane = useMultiPane({ 
+            maxPanes: 5,
+            storageKey: 'test-widths-close'
+        });
+
+        // Add multiple panes first
+        multiPane.addPane();
+        multiPane.addPane();
+        multiPane.addPane();
+        multiPane.addPane();
+        
+        const paneCountBefore = multiPane.panes.value.length; // Should be 5
+        
+        // Ensure widths are set
+        if (multiPane.paneWidths.value.length === 0) {
+            multiPane.paneWidths.value = Array(paneCountBefore).fill(300);
+        }
+        
+        // Close a pane
+        await multiPane.closePane(0);
+        
+        const paneCountAfter = multiPane.panes.value.length;
+        
+        // Widths should be truncated to match remaining panes
+        expect(multiPane.paneWidths.value.length).toBeLessThanOrEqual(paneCountAfter);
+    });
+
+    it('normalizes widths when panes are added', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        
+        const multiPane = useMultiPane({ 
+            maxPanes: 5,
+            storageKey: 'test-widths-add'
+        });
+
+        // Start with 1 pane, add more
+        const initialCount = multiPane.panes.value.length;
+        
+        multiPane.addPane();
+        multiPane.addPane();
+        
+        const finalCount = multiPane.panes.value.length;
+        
+        // Widths should not exceed pane count
+        expect(multiPane.paneWidths.value.length).toBeLessThanOrEqual(finalCount);
+    });
+
+    it('handles getPaneWidth with orphaned widths gracefully', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        
+        const multiPane = useMultiPane({ 
+            maxPanes: 5,
+            storageKey: 'test-widths-get'
+        });
+
+        // Simulate orphaned widths (more stored than actual panes)
+        multiPane.paneWidths.value = [400, 400, 400, 400, 400];
+        
+        // With only 1 pane, getPaneWidth should not crash
+        const width = multiPane.getPaneWidth(0);
+        
+        expect(width).toBeDefined();
+        // Should fall back to 100% for single pane
+        expect(width).toBe('100%');
+    });
+
+    it('truncates widths array when longer than pane count', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        
+        const multiPane = useMultiPane({ 
+            maxPanes: 5,
+            storageKey: 'test-widths-truncate'
+        });
+
+        // Set up 3 panes
+        multiPane.addPane();
+        multiPane.addPane();
+        
+        const paneCount = multiPane.panes.value.length; // Should be 3
+        
+        // Manually inject extra widths
+        multiPane.paneWidths.value = [300, 300, 300, 300, 300];
+        
+        // Trigger normalization via getPaneWidth
+        multiPane.getPaneWidth(0);
+        
+        // Widths should now match pane count
+        expect(multiPane.paneWidths.value.length).toBe(paneCount);
+    });
+});
