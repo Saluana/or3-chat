@@ -37,3 +37,11 @@ export {
     makeAssistantPersister,
     updateMessageRecord,
 } from './persistence';
+
+// Retry functionality
+export { retryMessageImpl } from './retry';
+export type { RetryMessageContext } from './retry';
+
+// Continue functionality
+export { continueMessageImpl } from './continue';
+export type { ContinueMessageContext } from './continue';

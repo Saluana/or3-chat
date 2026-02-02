@@ -156,14 +156,15 @@ export async function* openRouterStream(params: {
     // Skip if we've already determined it's not available (static build or server down)
     if (forceServerRoute || isServerRouteAvailable()) {
         try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+            if (hasApiKey) {
+                headers['x-or3-openrouter-key'] = apiKey as string;
+            }
             const serverResp = await fetch('/api/openrouter/stream', {
                 method: 'POST',
-                headers: hasApiKey
-                    ? {
-                          'Content-Type': 'application/json',
-                          Authorization: `Bearer ${apiKey}`, // Req 1, 3: Send API key in header; server uses only if env key missing
-                      }
-                    : { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(body),
                 signal,
             });
@@ -415,12 +416,13 @@ export async function startBackgroundStream(params: {
         'Content-Type': 'application/json',
     };
     if (params.apiKey) {
-        headers.Authorization = `Bearer ${params.apiKey}`;
+        headers['x-or3-openrouter-key'] = params.apiKey;
     }
 
     const resp = await fetch('/api/openrouter/stream', {
         method: 'POST',
         headers,
+        credentials: 'include',
         body: JSON.stringify(body),
     });
 

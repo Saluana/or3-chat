@@ -25,11 +25,11 @@ Hard constraints:
 
 ## B) Reduce `useAi.ts` under 2000 LOC (non-breaking)
 
-- [ ] B1. Extract `retryMessage()` into internal module
+- [x] B1. Extract `retryMessage()` into internal module
   - New: `app/utils/chat/useAi-internal/retry.ts`
   - Facade keeps `retryMessage` as before, implemented by calling module
 
-- [ ] B2. Extract `continueMessage()` into internal module
+- [x] B2. Extract `continueMessage()` into internal module
   - New: `app/utils/chat/useAi-internal/continue.ts`
 
 - [ ] B3. Extract file prep helpers out of `sendMessage()`
