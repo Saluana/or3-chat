@@ -1,11 +1,22 @@
 /**
- * useNotifications - Reactive notification center composable
- * 
- * Provides reactive queries and actions for the notification center.
- * Integrates with NotificationService and hook system.
+ * @module app/composables/notifications/useNotifications
+ *
+ * Purpose:
+ * Provide a reactive notification center interface backed by Dexie and the
+ * notification hook system.
+ *
+ * Responsibilities:
+ * - Expose notification queries and derived state for the active user
+ * - Route notification actions through NotificationService and hooks
+ * - Manage subscriptions and cleanup within Vue component lifecycles
+ *
+ * Non-responsibilities:
+ * - Rendering notification UI
+ * - Enforcing authorization beyond server side gates
+ * - Persisting notification preferences outside the local KV table
  */
 
-import { ref, computed, onScopeDispose, watch } from 'vue';
+import { ref, computed, onScopeDispose, watch, type ComputedRef } from 'vue';
 import Dexie, { liveQuery, type Subscription } from 'dexie';
 import { z } from 'zod';
 import { useRuntimeConfig } from '#imports';
@@ -31,9 +42,63 @@ let serviceCleanup: (() => void) | null = null;
 let serviceRefCount = 0;
 
 /**
- * Composable for accessing notification center functionality
+ * Reactive notification state and actions returned by {@link useNotifications}.
+ *
+ * Purpose:
+ * Provide a typed surface for notification queries and actions.
+ *
+ * Behavior:
+ * Exposes computed state for notification lists and unread counts along with
+ * mutation methods that flow through NotificationService and hooks.
+ *
+ * Constraints:
+ * - Computed values update from Dexie liveQuery subscriptions
+ * - Mutation methods are async and can run concurrently
+ *
+ * Non-Goals:
+ * - Guaranteeing immediate persistence across devices
  */
-export function useNotifications() {
+export interface NotificationsComposable {
+    /** Ordered list of notifications for the active user. */
+    notifications: ComputedRef<Notification[]>;
+    /** Count of unread notifications for the active user. */
+    unreadCount: ComputedRef<number>;
+    /** Whether the notification list is still loading. */
+    loading: ComputedRef<boolean>;
+    /** Mark a notification as read. */
+    markRead: (id: string) => Promise<void>;
+    /** Mark all notifications as read. */
+    markAllRead: () => Promise<void>;
+    /** Soft delete all notifications. */
+    clearAll: () => Promise<number>;
+    /** Push a notification through the hooks system. */
+    push: (payload: NotificationCreatePayload) => Promise<void>;
+    /** Check if a thread is muted for notifications. */
+    isThreadMuted: (threadId: string) => boolean;
+    /** Mute notifications for a thread. */
+    muteThread: (threadId: string) => Promise<void>;
+    /** Unmute notifications for a thread. */
+    unmuteThread: (threadId: string) => Promise<void>;
+}
+
+/**
+ * Access notification center functionality for the active user.
+ *
+ * Purpose:
+ * Provide a lifecycle-safe notification API for Vue components.
+ *
+ * Behavior:
+ * Subscribes to Dexie live queries, updates computed state, and cleans up
+ * subscriptions when the calling scope is disposed.
+ *
+ * Constraints:
+ * - Must be called during Vue setup to attach scope disposal handlers
+ * - Returns a no-op implementation when IndexedDB is unavailable
+ *
+ * Non-Goals:
+ * - Triggering network sync or push delivery
+ */
+export function useNotifications(): NotificationsComposable {
     const isClient = import.meta.client || typeof indexedDB !== 'undefined';
     if (!isClient) {
         // SSR-safe no-op
@@ -225,16 +290,10 @@ export function useNotifications() {
         }
     });
 
-    /**
-     * Check if a thread is muted
-     */
     const isThreadMuted = (threadId: string): boolean => {
         return mutedThreadsData.value.includes(threadId);
     };
 
-    /**
-     * Mute notifications for a thread
-     */
     const muteThread = async (threadId: string): Promise<void> => {
         const muted = [...mutedThreadsData.value];
         if (!muted.includes(threadId)) {
@@ -252,9 +311,6 @@ export function useNotifications() {
         }
     };
 
-    /**
-     * Unmute notifications for a thread
-     */
     const unmuteThread = async (threadId: string): Promise<void> => {
         const muted = mutedThreadsData.value.filter((id) => id !== threadId);
         const now = nowSec();
@@ -269,30 +325,18 @@ export function useNotifications() {
         });
     };
 
-    /**
-     * Push a notification (convenience wrapper around hook)
-     */
     const push = async (payload: NotificationCreatePayload): Promise<void> => {
         await hooks.doAction('notify:action:push', payload);
     };
 
-    /**
-     * Mark a notification as read
-     */
     const markRead = async (id: string): Promise<void> => {
         await service.markRead(id);
     };
 
-    /**
-     * Mark all notifications as read
-     */
     const markAllRead = async (): Promise<void> => {
         await service.markAllRead();
     };
 
-    /**
-     * Clear all notifications (soft delete)
-     */
     const clearAll = async (): Promise<number> => {
         return await service.clearAll();
     };
