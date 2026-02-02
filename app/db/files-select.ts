@@ -1,3 +1,17 @@
+/**
+ * @module app/db/files-select
+ *
+ * Purpose:
+ * Convenience query helpers for file metadata lists.
+ *
+ * Responsibilities:
+ * - Provide simple paging for image file metadata
+ * - Offer name update utility for file metadata
+ *
+ * Non-responsibilities:
+ * - File upload or download logic
+ * - Complex search or filtering semantics
+ */
 import { getDb } from './client';
 import type { FileMeta } from './schema';
 import { nowSec, nextClock } from './util';
@@ -5,6 +19,19 @@ import { nowSec, nextClock } from './util';
 // List image FileMeta records, newest first, with simple paging.
 // Filters: deleted !== true AND kind === 'image'.
 // Uses the updated_at index for ordering, then filters in-collection for simplicity.
+/**
+ * Purpose:
+ * List image file metadata with basic paging.
+ *
+ * Behavior:
+ * Filters to non-deleted image records and orders by most recent updates.
+ *
+ * Constraints:
+ * - Uses in-collection filtering after ordering.
+ *
+ * Non-Goals:
+ * - Does not include non-image file types.
+ */
 export async function listImageMetasPaged(
     offset = 0,
     limit = 50
@@ -23,6 +50,19 @@ export async function listImageMetasPaged(
 }
 
 // List deleted image FileMeta records, newest first, with paging.
+/**
+ * Purpose:
+ * List deleted image file metadata with basic paging.
+ *
+ * Behavior:
+ * Filters to deleted image records and orders by most recent updates.
+ *
+ * Constraints:
+ * - Uses in-collection filtering after ordering.
+ *
+ * Non-Goals:
+ * - Does not return active files.
+ */
 export async function listDeletedImageMetasPaged(
     offset = 0,
     limit = 50
@@ -41,6 +81,19 @@ export async function listDeletedImageMetasPaged(
 }
 
 // Update a file's display name and bump updated_at.
+/**
+ * Purpose:
+ * Update a file metadata display name.
+ *
+ * Behavior:
+ * Loads the file metadata row, updates the name, and bumps timestamps.
+ *
+ * Constraints:
+ * - No-op if the hash does not exist.
+ *
+ * Non-Goals:
+ * - Does not validate name uniqueness.
+ */
 export async function updateFileName(
     hash: string,
     name: string

@@ -1,3 +1,17 @@
+/**
+ * @module app/db/prompts
+ *
+ * Purpose:
+ * Prompt CRUD utilities built on top of the posts table with hook support.
+ *
+ * Responsibilities:
+ * - Manage prompt-specific metadata and content parsing
+ * - Emit hook actions and filters for prompt lifecycle events
+ *
+ * Non-responsibilities:
+ * - Prompt templating or formatting for providers
+ * - Server-side prompt synchronization
+ */
 import { getDb } from './client';
 import { newId, nowSec, nextClock } from './util';
 import { useHooks } from '../core/hooks/useHooks';
@@ -24,6 +38,19 @@ function isPromptPost(
  * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
  * Content is persisted as a JSON string (TipTap JSON) for flexibility.
  */
+/**
+ * Purpose:
+ * Internal storage shape for prompt rows in the posts table.
+ *
+ * Behavior:
+ * Persists TipTap JSON as a string for compact storage.
+ *
+ * Constraints:
+ * - `postType` must be `prompt`.
+ *
+ * Non-Goals:
+ * - Not intended for direct UI consumption.
+ */
 export interface PromptRow {
     id: string;
     title: string; // non-empty trimmed
@@ -36,6 +63,19 @@ export interface PromptRow {
 }
 
 /** Public facing record with content already parsed. */
+/**
+ * Purpose:
+ * Public prompt record shape returned to callers.
+ *
+ * Behavior:
+ * Parses stored JSON content into a TipTap document.
+ *
+ * Constraints:
+ * - Content is normalized to valid TipTap JSON.
+ *
+ * Non-Goals:
+ * - Does not retain raw JSON strings.
+ */
 export interface PromptRecord {
     id: string;
     title: string;
@@ -159,11 +199,38 @@ function rowToRecord(row: PromptRow): PromptRecord {
     };
 }
 
+/**
+ * Purpose:
+ * Input payload for creating prompts.
+ *
+ * Behavior:
+ * Allows optional title and TipTap JSON content.
+ *
+ * Constraints:
+ * - Title is normalized and may be empty when allowed.
+ *
+ * Non-Goals:
+ * - Does not accept markdown or other formats.
+ */
 export interface CreatePromptInput {
     title?: string | null;
     content?: TipTapDocument | null; // TipTap JSON object
 }
 
+/**
+ * Purpose:
+ * Create and persist a prompt record.
+ *
+ * Behavior:
+ * Normalizes title, validates content, writes to the posts table, and emits
+ * lifecycle hooks.
+ *
+ * Constraints:
+ * - Stored content is JSON-stringified TipTap documents.
+ *
+ * Non-Goals:
+ * - Does not apply server-side validation.
+ */
 export async function createPrompt(
     input: CreatePromptInput = {}
 ): Promise<PromptRecord> {
@@ -210,6 +277,19 @@ export async function createPrompt(
     return rowToRecord(persistedRow);
 }
 
+/**
+ * Purpose:
+ * Fetch a single prompt by id.
+ *
+ * Behavior:
+ * Reads the post row, filters through hooks, and returns a parsed record.
+ *
+ * Constraints:
+ * - Returns undefined when missing or filtered out.
+ *
+ * Non-Goals:
+ * - Does not resolve linked entities.
+ */
 export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
     const hooks = useHooks();
     const row = await getDb().posts.get(id);
@@ -233,6 +313,19 @@ export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
     return rowToRecord(mergedRow);
 }
 
+/**
+ * Purpose:
+ * List recent prompts with optional limiting.
+ *
+ * Behavior:
+ * Filters by `postType = prompt`, excludes deleted rows, and sorts by `updated_at`.
+ *
+ * Constraints:
+ * - Sorting is done in-memory for small result sets.
+ *
+ * Non-Goals:
+ * - Does not paginate via cursor semantics.
+ */
 export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
     const hooks = useHooks();
     // Filter by postType (indexed) and non-deleted
@@ -253,11 +346,37 @@ export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
     return mergePromptEntities(filteredEntities, baseMap).map(rowToRecord);
 }
 
+/**
+ * Purpose:
+ * Patch payload for prompt updates.
+ *
+ * Behavior:
+ * Accepts optional title and content updates.
+ *
+ * Constraints:
+ * - Undefined values are ignored.
+ *
+ * Non-Goals:
+ * - Does not apply partial TipTap patches.
+ */
 export interface UpdatePromptPatch {
     title?: string;
     content?: TipTapDocument | null; // TipTap JSON object
 }
 
+/**
+ * Purpose:
+ * Update an existing prompt record.
+ *
+ * Behavior:
+ * Loads the row, applies the patch, persists changes, and emits hooks.
+ *
+ * Constraints:
+ * - Returns undefined if the prompt does not exist.
+ *
+ * Non-Goals:
+ * - Does not merge concurrent edits.
+ */
 export async function updatePrompt(
     id: string,
     patch: UpdatePromptPatch
@@ -330,6 +449,19 @@ export async function updatePrompt(
     return rowToRecord(persistedRow);
 }
 
+/**
+ * Purpose:
+ * Soft delete a prompt by marking the row as deleted.
+ *
+ * Behavior:
+ * Updates deletion metadata and emits delete hooks.
+ *
+ * Constraints:
+ * - No-op when the prompt does not exist.
+ *
+ * Non-Goals:
+ * - Does not permanently remove the row.
+ */
 export async function softDeletePrompt(id: string): Promise<void> {
     const hooks = useHooks();
     const existing = await getDb().posts.get(id);
@@ -372,6 +504,19 @@ export async function softDeletePrompt(id: string): Promise<void> {
     await hooks.doAction('db.prompts.delete:action:soft:after', payload);
 }
 
+/**
+ * Purpose:
+ * Hard delete a prompt row from the posts table.
+ *
+ * Behavior:
+ * Removes the row and emits delete hooks.
+ *
+ * Constraints:
+ * - No-op when the prompt does not exist.
+ *
+ * Non-Goals:
+ * - Does not clean up external resources.
+ */
 export async function hardDeletePrompt(id: string): Promise<void> {
     const hooks = useHooks();
     const existing = await getDb().posts.get(id);
@@ -396,4 +541,17 @@ export async function hardDeletePrompt(id: string): Promise<void> {
     await hooks.doAction('db.prompts.delete:action:hard:after', payload);
 }
 
+/**
+ * Purpose:
+ * Public type alias for prompt records.
+ *
+ * Behavior:
+ * Mirrors `PromptRecord`.
+ *
+ * Constraints:
+ * - Provided for backward compatibility.
+ *
+ * Non-Goals:
+ * - Does not represent the internal storage row shape.
+ */
 export type { PromptRecord as Prompt };

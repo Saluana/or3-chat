@@ -1,3 +1,17 @@
+/**
+ * @module app/db/posts
+ *
+ * Purpose:
+ * CRUD helpers for posts stored in the local database.
+ *
+ * Responsibilities:
+ * - Validate and persist post rows
+ * - Emit hook events for post lifecycle operations
+ *
+ * Non-responsibilities:
+ * - Rendering or formatting post content
+ * - Handling document or prompt specific logic
+ */
 import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
@@ -47,6 +61,19 @@ function normalizeMeta(meta: unknown): string | null | undefined {
     }
 }
 
+/**
+ * Purpose:
+ * Create a post row in the local database.
+ *
+ * Behavior:
+ * Applies filters, normalizes input, validates schemas, and writes to Dexie.
+ *
+ * Constraints:
+ * - Throws on validation errors.
+ *
+ * Non-Goals:
+ * - Does not attach files or metadata beyond the post schema.
+ */
 export async function createPost(input: PostCreate): Promise<Post> {
     const hooks = useHooks();
     const filtered: unknown = await hooks.applyFilters(
@@ -80,6 +107,19 @@ export async function createPost(input: PostCreate): Promise<Post> {
     return next;
 }
 
+/**
+ * Purpose:
+ * Upsert a post row with updated clocks.
+ *
+ * Behavior:
+ * Validates the post, updates clock values, and writes to Dexie.
+ *
+ * Constraints:
+ * - Requires a fully shaped `Post` value.
+ *
+ * Non-Goals:
+ * - Does not merge partial updates.
+ */
 export async function upsertPost(value: Post): Promise<void> {
     const hooks = useHooks();
     const filtered: unknown = await hooks.applyFilters(
@@ -118,6 +158,19 @@ export async function upsertPost(value: Post): Promise<void> {
     });
 }
 
+/**
+ * Purpose:
+ * Fetch a post by id with hook filtering.
+ *
+ * Behavior:
+ * Reads the row and applies output filters.
+ *
+ * Constraints:
+ * - Returns undefined when missing or filtered out.
+ *
+ * Non-Goals:
+ * - Does not parse content beyond stored string.
+ */
 export function getPost(id: string) {
     const hooks = useHooks();
     return dbTry(() => getDb().posts.get(id), {
@@ -129,6 +182,19 @@ export function getPost(id: string) {
     );
 }
 
+/**
+ * Purpose:
+ * List all posts.
+ *
+ * Behavior:
+ * Reads the full posts table and applies output filters.
+ *
+ * Constraints:
+ * - Intended for small data sets.
+ *
+ * Non-Goals:
+ * - Does not support pagination.
+ */
 export function allPosts() {
     const hooks = useHooks();
     return dbTry(() => getDb().posts.toArray(), {
@@ -140,6 +206,19 @@ export function allPosts() {
     );
 }
 
+/**
+ * Purpose:
+ * Search posts by title substring.
+ *
+ * Behavior:
+ * Performs a case-insensitive substring match and applies output filters.
+ *
+ * Constraints:
+ * - Uses in-memory filtering.
+ *
+ * Non-Goals:
+ * - Does not provide full-text search.
+ */
 export function searchPosts(term: string) {
     const q = term.toLowerCase();
     const hooks = useHooks();
@@ -152,6 +231,19 @@ export function searchPosts(term: string) {
     );
 }
 
+/**
+ * Purpose:
+ * Soft delete a post by marking it deleted.
+ *
+ * Behavior:
+ * Updates the deleted flag and timestamps with hook emission.
+ *
+ * Constraints:
+ * - No-op if the post does not exist.
+ *
+ * Non-Goals:
+ * - Does not remove the row permanently.
+ */
 export async function softDeletePost(id: string): Promise<void> {
     const hooks = useHooks();
     await getDb().transaction('rw', getDb().posts, async () => {
@@ -180,6 +272,19 @@ export async function softDeletePost(id: string): Promise<void> {
     });
 }
 
+/**
+ * Purpose:
+ * Hard delete a post row by id.
+ *
+ * Behavior:
+ * Deletes the row and emits delete hooks.
+ *
+ * Constraints:
+ * - No-op if the post does not exist.
+ *
+ * Non-Goals:
+ * - Does not clean up related data.
+ */
 export async function hardDeletePost(id: string): Promise<void> {
     const hooks = useHooks();
     const existing = await dbTry(() => getDb().posts.get(id), {

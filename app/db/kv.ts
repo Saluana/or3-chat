@@ -1,3 +1,17 @@
+/**
+ * @module app/db/kv
+ *
+ * Purpose:
+ * Key value storage helpers with hook integration.
+ *
+ * Responsibilities:
+ * - Provide CRUD helpers for the KV table
+ * - Ensure the active DB is open before operations
+ *
+ * Non-responsibilities:
+ * - Storing secrets outside the KV table
+ * - Schema migrations or indexing
+ */
 import { getDb, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
@@ -10,6 +24,19 @@ async function ensureDbOpen(targetDb: Or3DB): Promise<void> {
     }
 }
 
+/**
+ * Purpose:
+ * Create a KV record in the local database.
+ *
+ * Behavior:
+ * Applies filters, validates the input, and writes to Dexie.
+ *
+ * Constraints:
+ * - Throws on validation errors.
+ *
+ * Non-Goals:
+ * - Does not perform deduplication by name.
+ */
 export async function createKv(input: KvCreate): Promise<Kv> {
     const db = getDb();
     await ensureDbOpen(db);
@@ -39,6 +66,19 @@ export async function createKv(input: KvCreate): Promise<Kv> {
     return next;
 }
 
+/**
+ * Purpose:
+ * Upsert a KV record using the full schema.
+ *
+ * Behavior:
+ * Validates, updates clock values, and writes to Dexie with hooks.
+ *
+ * Constraints:
+ * - Requires a fully shaped `Kv` value.
+ *
+ * Non-Goals:
+ * - Does not merge partial updates.
+ */
 export async function upsertKv(value: Kv): Promise<void> {
     const db = getDb();
     await ensureDbOpen(db);
@@ -72,6 +112,19 @@ export async function upsertKv(value: Kv): Promise<void> {
     });
 }
 
+/**
+ * Purpose:
+ * Hard delete a KV record by id.
+ *
+ * Behavior:
+ * Reads the record, emits delete hooks, and removes it from Dexie.
+ *
+ * Constraints:
+ * - No-op if the record does not exist.
+ *
+ * Non-Goals:
+ * - Does not clear related caches.
+ */
 export async function hardDeleteKv(id: string): Promise<void> {
     const db = getDb();
     await ensureDbOpen(db);
@@ -94,6 +147,19 @@ export async function hardDeleteKv(id: string): Promise<void> {
     });
 }
 
+/**
+ * Purpose:
+ * Fetch a KV record by id with hook filtering.
+ *
+ * Behavior:
+ * Reads the row and applies output filters.
+ *
+ * Constraints:
+ * - Returns undefined when missing or filtered out.
+ *
+ * Non-Goals:
+ * - Does not parse stored values.
+ */
 export async function getKv(id: string) {
     const db = getDb();
     await ensureDbOpen(db);
@@ -107,6 +173,19 @@ export async function getKv(id: string) {
     return hooks.applyFilters('db.kv.get:filter:output', res);
 }
 
+/**
+ * Purpose:
+ * Fetch a KV record by name.
+ *
+ * Behavior:
+ * Queries on the `name` index and applies output filters.
+ *
+ * Constraints:
+ * - Uses the provided DB instance when supplied.
+ *
+ * Non-Goals:
+ * - Does not create the record if missing.
+ */
 export async function getKvByName(name: string, targetDb: Or3DB = getDb()) {
     await ensureDbOpen(targetDb);
     const hooks = useHooks();
@@ -119,6 +198,19 @@ export async function getKvByName(name: string, targetDb: Or3DB = getDb()) {
 }
 
 // Convenience helpers for auth/session flows
+/**
+ * Purpose:
+ * Set or update a KV record by name.
+ *
+ * Behavior:
+ * Creates the record if missing or updates the existing row with clocks.
+ *
+ * Constraints:
+ * - Uses `kv:${name}` as the id for new records.
+ *
+ * Non-Goals:
+ * - Does not perform transactional writes across tables.
+ */
 export async function setKvByName(
     name: string,
     value: string | null,
@@ -158,6 +250,19 @@ export async function setKvByName(
     return kvEntity;
 }
 
+/**
+ * Purpose:
+ * Hard delete a KV record by name.
+ *
+ * Behavior:
+ * Looks up the record by name, then deletes it with hooks.
+ *
+ * Constraints:
+ * - No-op if the record does not exist.
+ *
+ * Non-Goals:
+ * - Does not delete related data keyed by the KV value.
+ */
 export async function hardDeleteKvByName(
     name: string,
     targetDb: Or3DB = getDb()

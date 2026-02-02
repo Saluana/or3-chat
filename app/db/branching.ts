@@ -1,3 +1,19 @@
+/**
+ * @module app/db/branching
+ *
+ * Purpose:
+ * Branching utilities for threads, including fork and retry flows and
+ * context assembly across parent and child threads.
+ *
+ * Responsibilities:
+ * - Create forked threads using hook-aware workflows
+ * - Resolve branch context for AI prompt building
+ * - Normalize branch mode semantics for callers
+ *
+ * Non-responsibilities:
+ * - Rendering or formatting context for providers
+ * - Server-side branching operations
+ */
 import Dexie from 'dexie';
 import { getDb } from './client';
 import { newId, nowSec, nextClock } from './util';
@@ -12,6 +28,19 @@ import type {
     RetryBranchParams,
 } from '../core/hooks/hook-types';
 
+/**
+ * Purpose:
+ * Public alias for branch mode selection in callers.
+ *
+ * Behavior:
+ * Mirrors `BranchMode` from the hook type map.
+ *
+ * Constraints:
+ * - Only supports `reference` and `copy`.
+ *
+ * Non-Goals:
+ * - Does not introduce new branch modes.
+ */
 export type ForkMode = BranchMode;
 
 interface ForkThreadParams {
@@ -99,6 +128,21 @@ function toThreadEntity(thread: Thread): ThreadEntity {
  * Create a new thread branching off an existing thread at a specific user message.
  * - reference mode: no ancestor messages copied; context builder will stitch.
  * - copy mode: ancestor slice (<= anchor.index) copied into new thread with normalized indexes.
+ */
+/**
+ * Purpose:
+ * Fork a thread at a specific anchor message, producing a new branch.
+ *
+ * Behavior:
+ * Creates a new thread, optionally copies ancestor messages, and emits hooks
+ * around the fork lifecycle.
+ *
+ * Constraints:
+ * - Anchor message must belong to the source thread.
+ * - `copy` mode duplicates messages up to the anchor index.
+ *
+ * Non-Goals:
+ * - Does not merge threads or resolve conflicts.
  */
 export async function forkThread({
     sourceThreadId,
@@ -194,6 +238,20 @@ export async function forkThread({
 /**
  * Given an assistant message, locate the preceding user message and fork the thread there.
  */
+/**
+ * Purpose:
+ * Fork a thread by locating the prior user message of an assistant reply.
+ *
+ * Behavior:
+ * Finds the preceding user message and delegates to `forkThread`, while
+ * emitting retry-specific hooks.
+ *
+ * Constraints:
+ * - Requires the provided message to be an assistant message.
+ *
+ * Non-Goals:
+ * - Does not generate new assistant responses.
+ */
 export async function retryBranch({
     assistantMessageId,
     mode = 'reference',
@@ -251,6 +309,20 @@ interface BuildContextParams {
  * Build AI context for a (possibly branched) thread.
  * - Root or copy branches: just local messages.
  * - Reference branches: ancestor slice (<= anchor_index) from parent + local messages.
+ */
+/**
+ * Purpose:
+ * Build the ordered message context for a thread with branching awareness.
+ *
+ * Behavior:
+ * Merges ancestor and local messages, applies hook filters, and returns the
+ * resulting message list.
+ *
+ * Constraints:
+ * - Reference branches include ancestor messages up to the anchor index.
+ *
+ * Non-Goals:
+ * - Does not format messages for provider-specific payloads.
  */
 export async function buildContext({ threadId }: BuildContextParams) {
     const hooks = useHooks();

@@ -1,3 +1,17 @@
+/**
+ * @module app/db/message-files
+ *
+ * Purpose:
+ * Utilities for associating file hashes with messages.
+ *
+ * Responsibilities:
+ * - Resolve file metadata for message attachments
+ * - Add or remove file references and update ref counts
+ *
+ * Non-responsibilities:
+ * - Uploading or downloading file blobs
+ * - Rendering attachment previews
+ */
 import { getDb } from './client';
 import type { FileMeta } from './schema';
 import { parseFileHashes, serializeFileHashes } from './files-util';
@@ -6,11 +20,36 @@ import { useHooks } from '../core/hooks/useHooks';
 import { nowSec, nextClock } from './util';
 
 /** Discriminated union for adding files to messages */
+/**
+ * Purpose:
+ * Payload type for adding files to messages.
+ *
+ * Behavior:
+ * Supports either a raw Blob or a previously stored hash reference.
+ *
+ * Constraints:
+ * - Blob entries must include valid Blob instances.
+ *
+ * Non-Goals:
+ * - Does not carry metadata beyond name or hash.
+ */
 export type AddableFile =
     | { type: 'blob'; blob: Blob; name?: string }
     | { type: 'hash'; hash: string };
 
-/** Resolve file metadata list for a message id */
+/**
+ * Purpose:
+ * Resolve file metadata entries for a given message.
+ *
+ * Behavior:
+ * Parses stored hashes from the message and loads metadata rows.
+ *
+ * Constraints:
+ * - Returns an empty array when the message is missing or has no hashes.
+ *
+ * Non-Goals:
+ * - Does not ensure blobs are available locally.
+ */
 export async function filesForMessage(messageId: string): Promise<FileMeta[]> {
     const msg = await getDb().messages.get(messageId);
     if (!msg) return [];
@@ -19,7 +58,20 @@ export async function filesForMessage(messageId: string): Promise<FileMeta[]> {
     return getDb().file_meta.where('hash').anyOf(hashes).toArray();
 }
 
-/** Add files (blobs or existing hashes) to a message, updating ref counts */
+/**
+ * Purpose:
+ * Attach files to a message by blob or hash.
+ *
+ * Behavior:
+ * Creates or references file metadata, updates message file hashes, and
+ * applies validation hooks.
+ *
+ * Constraints:
+ * - Runs inside a transaction to keep message and file state aligned.
+ *
+ * Non-Goals:
+ * - Does not enforce UI selection limits.
+ */
 export async function addFilesToMessage(
     messageId: string,
     files: AddableFile[]
@@ -69,7 +121,19 @@ export async function addFilesToMessage(
     );
 }
 
-/** Remove a single file hash from a message, adjusting ref count */
+/**
+ * Purpose:
+ * Remove a file reference from a message.
+ *
+ * Behavior:
+ * Updates the message hash list and decrements file ref counts.
+ *
+ * Constraints:
+ * - No-op if the message does not exist or the hash is absent.
+ *
+ * Non-Goals:
+ * - Does not delete file metadata or blobs.
+ */
 export async function removeFileFromMessage(
     messageId: string,
     hash: string

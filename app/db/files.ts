@@ -1,3 +1,33 @@
+/**
+ * @module app/db/files
+ *
+ * Purpose:
+ * Local file metadata and blob storage with deduplication and hook integration.
+ *
+ * Responsibilities:
+ * - Deduplicate files by content hash
+ * - Store file metadata and blobs in IndexedDB
+ * - Emit hook actions and filters for file lifecycle events
+ *
+ * Non-responsibilities:
+ * - Remote storage synchronization
+ * - File rendering or UI workflows
+ *
+ * Hook Points:
+ * - `db.files.create:filter:input`
+ * - `db.files.create:action:before`
+ * - `db.files.create:action:after`
+ * - `db.files.get:filter:output`
+ * - `db.files.refchange:action:after`
+ * - `db.files.delete:action:soft:before`
+ * - `db.files.delete:action:soft:after`
+ * - `db.files.delete:action:hard:before`
+ * - `db.files.delete:action:hard:after`
+ * - `db.files.restore:action:before`
+ * - `db.files.restore:action:after`
+ *
+ * @see docs/core-hook-map.md for hook conventions
+ */
 import Dexie from 'dexie';
 import { getDb } from './client';
 import { useHooks } from '../core/hooks/useHooks';
@@ -10,25 +40,6 @@ import type {
     DbDeletePayload,
     FileEntity,
 } from '../core/hooks/hook-types';
-
-/**
- * File storage and deduplication layer with hook integration.
- *
- * Hook Points:
- * - `db.files.create:filter:input` - Transform FileMetaCreate before validation (line 86-89)
- * - `db.files.create:action:before` - Called before file metadata is written to DB (line 93)
- * - `db.files.create:action:after` - Called after file metadata and blob are persisted (line 96)
- * - `db.files.get:filter:output` - Transform FileMeta on retrieval (line 114)
- * - `db.files.refchange:action:after` - Called after ref_count changes (line 28-32)
- * - `db.files.delete:action:soft:before` - Called before soft delete (line 129, 150)
- * - `db.files.delete:action:soft:after` - Called after soft delete (line 135, 156)
- * - `db.files.delete:action:hard:before` - Called before hard delete (line 192-195)
- * - `db.files.delete:action:hard:after` - Called after hard delete (line 198)
- * - `db.files.restore:action:before` - Called before restoring soft-deleted file (line 171)
- * - `db.files.restore:action:after` - Called after restore (line 177)
- *
- * All hooks receive relevant metadata; filters can transform or veto (return false to reject).
- */
 
 // Default max file size (20MB) - can be overridden by config
 const DEFAULT_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
@@ -129,7 +140,21 @@ async function changeRefCount(hash: string, delta: number) {
     });
 }
 
-/** Create or reference existing file by content hash (dedupe). */
+/**
+ * Purpose:
+ * Create a file entry or reference an existing entry by hash.
+ *
+ * Behavior:
+ * Computes a hash, increments ref count if it exists, or stores metadata and
+ * blob data if it is new. Emits hooks during creation.
+ *
+ * Constraints:
+ * - Enforces max file size limit.
+ * - Requires browser APIs for blob hashing and storage.
+ *
+ * Non-Goals:
+ * - Does not upload to remote storage directly.
+ */
 export async function createOrRefFile(
     file: Blob,
     name: string
@@ -239,7 +264,19 @@ export async function createOrRefFile(
     return finalMeta;
 }
 
-/** Get file metadata by hash */
+/**
+ * Purpose:
+ * Fetch file metadata for a content hash.
+ *
+ * Behavior:
+ * Reads metadata and applies output filters.
+ *
+ * Constraints:
+ * - Returns undefined if the row is missing or filtered out.
+ *
+ * Non-Goals:
+ * - Does not fetch blobs.
+ */
 export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
     const hooks = useHooks();
     const meta = await getDb().file_meta.get(hash);
@@ -252,14 +289,38 @@ export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
     return parseOrThrow(FileMetaSchema, applyFileEntityToMeta(meta, entity));
 }
 
-/** Get binary Blob by hash */
+/**
+ * Purpose:
+ * Retrieve the binary blob for a content hash.
+ *
+ * Behavior:
+ * Returns the stored blob if present, otherwise attempts to ensure it exists.
+ *
+ * Constraints:
+ * - May return undefined if blob is not available locally.
+ *
+ * Non-Goals:
+ * - Does not guarantee a remote download.
+ */
 export async function getFileBlob(hash: string): Promise<Blob | undefined> {
     const row = await getDb().file_blobs.get(hash);
     if (row?.blob) return row.blob;
     return ensureFileBlob(hash);
 }
 
-/** Ensure blob exists locally; attempt download if missing. */
+/**
+ * Purpose:
+ * Ensure a blob exists locally, downloading if required.
+ *
+ * Behavior:
+ * Checks local storage first, then uses the transfer queue when available.
+ *
+ * Constraints:
+ * - Client-only. Returns undefined in non-browser contexts.
+ *
+ * Non-Goals:
+ * - Does not force a download when the queue is unavailable.
+ */
 export async function ensureFileBlob(
     hash: string
 ): Promise<Blob | undefined> {
@@ -282,7 +343,19 @@ export async function ensureFileBlob(
     }
 }
 
-/** Soft delete file (mark deleted flag only) */
+/**
+ * Purpose:
+ * Soft delete a single file metadata row.
+ *
+ * Behavior:
+ * Marks the row as deleted and updates timestamps with hook emission.
+ *
+ * Constraints:
+ * - No-op if the file metadata does not exist.
+ *
+ * Non-Goals:
+ * - Does not remove blobs from storage.
+ */
 export async function softDeleteFile(hash: string): Promise<void> {
     const hooks = useHooks();
     await getDb().transaction('rw', getDb().file_meta, async () => {
@@ -302,7 +375,19 @@ export async function softDeleteFile(hash: string): Promise<void> {
     });
 }
 
-/** Soft delete multiple files in one transaction */
+/**
+ * Purpose:
+ * Soft delete multiple files in a single transaction.
+ *
+ * Behavior:
+ * Updates deletion flags and timestamps for each unique hash and emits hooks.
+ *
+ * Constraints:
+ * - Skips hashes that are missing or already deleted.
+ *
+ * Non-Goals:
+ * - Does not remove blobs from storage.
+ */
 export async function softDeleteMany(hashes: string[]): Promise<void> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return;
@@ -340,7 +425,19 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
     });
 }
 
-/** Restore multiple files that were soft deleted */
+/**
+ * Purpose:
+ * Restore soft deleted file metadata rows.
+ *
+ * Behavior:
+ * Clears deleted flags and emits restore hooks.
+ *
+ * Constraints:
+ * - Only affects rows currently marked deleted.
+ *
+ * Non-Goals:
+ * - Does not restore missing blobs.
+ */
 export async function restoreMany(hashes: string[]): Promise<void> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return;
@@ -377,7 +474,19 @@ export async function restoreMany(hashes: string[]): Promise<void> {
     });
 }
 
-/** Hard delete files (remove metadata + blob) */
+/**
+ * Purpose:
+ * Hard delete file metadata and blobs.
+ *
+ * Behavior:
+ * Removes rows from file meta and blob tables in a transaction.
+ *
+ * Constraints:
+ * - Deletes are permanent for local storage.
+ *
+ * Non-Goals:
+ * - Does not delete remote storage objects.
+ */
 export async function hardDeleteMany(hashes: string[]): Promise<void> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return;
@@ -396,11 +505,36 @@ export async function hardDeleteMany(hashes: string[]): Promise<void> {
     });
 }
 
-/** Remove one reference to a file; if dropping to 0 we keep data (GC future) */
+/**
+ * Purpose:
+ * Decrement a file reference count without deleting the file.
+ *
+ * Behavior:
+ * Updates ref count and timestamps with hook emission.
+ *
+ * Constraints:
+ * - Ref count is clamped to zero.
+ *
+ * Non-Goals:
+ * - Does not garbage collect files when ref count reaches zero.
+ */
 export async function derefFile(hash: string): Promise<void> {
     await changeRefCount(hash, -1);
 }
 
+/**
+ * Purpose:
+ * Standardize file delete errors for reporting.
+ *
+ * Behavior:
+ * Creates an `ERR_DB_WRITE_FAILED` error with file-specific tags.
+ *
+ * Constraints:
+ * - Intended for internal error handling.
+ *
+ * Non-Goals:
+ * - Does not report the error automatically.
+ */
 export function fileDeleteError(message: string, cause?: unknown) {
     return err('ERR_DB_WRITE_FAILED', message, {
         cause,
@@ -408,7 +542,19 @@ export function fileDeleteError(message: string, cause?: unknown) {
     });
 }
 
-// Export internal for testing / tasks list mapping
+/**
+ * Purpose:
+ * Internal API for adjusting file reference counts.
+ *
+ * Behavior:
+ * Updates ref_count and emits ref change hooks inside a transaction.
+ *
+ * Constraints:
+ * - Exported for composition and tests.
+ *
+ * Non-Goals:
+ * - Does not validate file existence outside the transaction.
+ */
 export { changeRefCount };
 
 async function enqueueUpload(hash: string): Promise<void> {

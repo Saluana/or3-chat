@@ -1,3 +1,18 @@
+/**
+ * @module app/db/client
+ *
+ * Purpose:
+ * Workspace-scoped Dexie database setup and accessors for local persistence.
+ *
+ * Responsibilities:
+ * - Define the IndexedDB schema and migrations
+ * - Provide workspace-aware DB instances with LRU caching
+ * - Expose helpers to switch or inspect the active DB
+ *
+ * Non-responsibilities:
+ * - Data validation or business logic for specific entities
+ * - Remote sync orchestration
+ */
 import Dexie, { type Table } from 'dexie';
 import { LRUCache } from 'lru-cache';
 import type {
@@ -21,12 +36,38 @@ const MAX_CACHED_WORKSPACE_DBS = 10;
 /** TTL for inactive workspace DBs in ms (5 minutes) */
 const WORKSPACE_DB_TTL_MS = 5 * 60 * 1000;
 
+/**
+ * Purpose:
+ * Local storage shape for binary blobs in IndexedDB.
+ *
+ * Behavior:
+ * Stores the file hash as the primary key with the binary Blob payload.
+ *
+ * Constraints:
+ * - Only used locally, not part of sync payloads.
+ *
+ * Non-Goals:
+ * - Does not store metadata or reference counts.
+ */
 export interface FileBlobRow {
     hash: string; // primary key
     blob: Blob; // actual binary Blob
 }
 
 // Dexie database versioning & schema
+/**
+ * Purpose:
+ * Dexie database class for OR3 local persistence.
+ *
+ * Behavior:
+ * Defines schema versions, migrations, and table typings for the app data.
+ *
+ * Constraints:
+ * - Must maintain backward-compatible versioning for existing local DBs.
+ *
+ * Non-Goals:
+ * - Does not enforce business rules beyond schema definitions.
+ */
 export class Or3DB extends Dexie {
     projects!: Table<Project, string>;
     threads!: Table<Thread, string>;
@@ -182,24 +223,91 @@ let activeDb: Or3DB = defaultDb;
  * @deprecated Use getDb() instead to ensure you always get the current active DB.
  * Direct `db` imports capture a stale reference when workspace changes.
  */
+/**
+ * Purpose:
+ * Legacy DB reference for compatibility with older imports.
+ *
+ * Behavior:
+ * Tracks the active DB but can become stale if workspaces change.
+ *
+ * Constraints:
+ * - Prefer `getDb()` to avoid stale references.
+ *
+ * Non-Goals:
+ * - Does not guarantee correctness across workspace switches.
+ *
+ * @deprecated Use `getDb()` to always access the active workspace DB.
+ */
 export let db = defaultDb;
 
 /**
  * Get the currently active database.
  * Always use this instead of importing `db` directly to avoid stale references.
  */
+/**
+ * Purpose:
+ * Retrieve the currently active database instance.
+ *
+ * Behavior:
+ * Returns the DB associated with the active workspace, or the default DB.
+ *
+ * Constraints:
+ * - Assumes `setActiveWorkspaceDb` has been called when switching workspaces.
+ *
+ * Non-Goals:
+ * - Does not open the DB or validate schema availability.
+ */
 export function getDb(): Or3DB {
     return activeDb;
 }
 
+/**
+ * Purpose:
+ * Access the default database instance used when no workspace is active.
+ *
+ * Behavior:
+ * Returns the shared default DB created at module initialization.
+ *
+ * Constraints:
+ * - The default DB uses the base name `or3-db`.
+ *
+ * Non-Goals:
+ * - Does not switch or mutate the active workspace.
+ */
 export function getDefaultDb(): Or3DB {
     return defaultDb;
 }
 
+/**
+ * Purpose:
+ * Report the currently active workspace id.
+ *
+ * Behavior:
+ * Returns the workspace id last set via `setActiveWorkspaceDb`.
+ *
+ * Constraints:
+ * - Returns null when no workspace is active.
+ *
+ * Non-Goals:
+ * - Does not validate that the workspace DB is open.
+ */
 export function getActiveWorkspaceId(): string | null {
     return activeWorkspaceId;
 }
 
+/**
+ * Purpose:
+ * Retrieve or create a workspace-specific DB instance.
+ *
+ * Behavior:
+ * Uses an LRU cache to reuse DB instances and evict inactive ones.
+ *
+ * Constraints:
+ * - Evicts least-recently-used DBs when cache capacity is exceeded.
+ *
+ * Non-Goals:
+ * - Does not switch the active workspace automatically.
+ */
 export function getWorkspaceDb(workspaceId: string): Or3DB {
     const existing = workspaceDbCache.get(workspaceId);
     if (existing) return existing;
@@ -219,6 +327,19 @@ export function getWorkspaceDb(workspaceId: string): Or3DB {
  * Manually evict a workspace DB from cache and close it.
  * Useful when switching away from a workspace to free resources.
  */
+/**
+ * Purpose:
+ * Evict and close a cached workspace DB instance.
+ *
+ * Behavior:
+ * Removes the DB from the LRU cache which triggers cleanup and close.
+ *
+ * Constraints:
+ * - No effect if the workspace DB is not cached.
+ *
+ * Non-Goals:
+ * - Does not update the active workspace reference.
+ */
 export function evictWorkspaceDb(workspaceId: string): void {
     workspaceDbCache.delete(workspaceId);
 }
@@ -226,7 +347,24 @@ export function evictWorkspaceDb(workspaceId: string): void {
 /**
  * Get current workspace DB cache stats for debugging/monitoring.
  */
-export function getWorkspaceDbCacheStats(): { size: number; max: number; keys: string[] } {
+/**
+ * Purpose:
+ * Provide cache statistics for workspace DB instances.
+ *
+ * Behavior:
+ * Returns current size, max capacity, and cached workspace ids.
+ *
+ * Constraints:
+ * - Intended for diagnostics and debugging.
+ *
+ * Non-Goals:
+ * - Does not provide lifecycle or health state.
+ */
+export function getWorkspaceDbCacheStats(): {
+    size: number;
+    max: number;
+    keys: string[];
+} {
     return {
         size: workspaceDbCache.size,
         max: MAX_CACHED_WORKSPACE_DBS,
@@ -234,6 +372,19 @@ export function getWorkspaceDbCacheStats(): { size: number; max: number; keys: s
     };
 }
 
+/**
+ * Purpose:
+ * Set the active workspace DB and evict the previously active workspace.
+ *
+ * Behavior:
+ * Switches the active DB reference and cleans up old workspace resources.
+ *
+ * Constraints:
+ * - Passing null resets to the default DB.
+ *
+ * Non-Goals:
+ * - Does not validate workspace permissions.
+ */
 export function setActiveWorkspaceDb(workspaceId: string | null): Or3DB {
     // Evict previous workspace DB on switch to free resources and clean up
     // sync singletons bound to the old workspace.
@@ -259,6 +410,19 @@ export function setActiveWorkspaceDb(workspaceId: string | null): Or3DB {
 /**
  * Create a workspace-specific database instance
  * Used in SSR mode where each workspace has isolated data
+ */
+/**
+ * Purpose:
+ * Explicitly create or retrieve a workspace DB instance.
+ *
+ * Behavior:
+ * Delegates to `getWorkspaceDb`, which handles caching and creation.
+ *
+ * Constraints:
+ * - Intended for SSR or callers that need direct DB access.
+ *
+ * Non-Goals:
+ * - Does not set the active workspace.
  */
 export function createWorkspaceDb(workspaceId: string): Or3DB {
     return getWorkspaceDb(workspaceId);

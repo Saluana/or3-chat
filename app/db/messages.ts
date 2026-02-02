@@ -1,3 +1,18 @@
+/**
+ * @module app/db/messages
+ *
+ * Purpose:
+ * Message persistence helpers with hook integration and thread updates.
+ *
+ * Responsibilities:
+ * - Validate and store message records
+ * - Maintain message ordering via index and order_key
+ * - Provide transactional operations that update threads
+ *
+ * Non-responsibilities:
+ * - Rendering message content
+ * - Server-side synchronization
+ */
 import Dexie from 'dexie';
 import { getDb } from './client';
 import { dbTry } from './dbTry';
@@ -45,6 +60,19 @@ function hasFileHashesArray(obj: unknown): obj is { file_hashes: string[] } {
     );
 }
 
+/**
+ * Purpose:
+ * Create a message record in the local database.
+ *
+ * Behavior:
+ * Applies filters, normalizes file hashes, validates schemas, and writes to Dexie.
+ *
+ * Constraints:
+ * - Throws on validation errors.
+ *
+ * Non-Goals:
+ * - Does not update thread metadata.
+ */
 export async function createMessage(input: MessageCreate): Promise<Message> {
     const hooks = useHooks();
     const filtered: unknown = await hooks.applyFilters(
@@ -79,6 +107,19 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
     return value;
 }
 
+/**
+ * Purpose:
+ * Upsert a message record with updated clocks.
+ *
+ * Behavior:
+ * Validates the message, increments clock values, and persists to Dexie.
+ *
+ * Constraints:
+ * - Requires a fully shaped `Message` value.
+ *
+ * Non-Goals:
+ * - Does not merge partial updates.
+ */
 export async function upsertMessage(value: Message): Promise<void> {
     const hooks = useHooks();
     const filtered: unknown = await hooks.applyFilters(
@@ -111,6 +152,19 @@ export async function upsertMessage(value: Message): Promise<void> {
     });
 }
 
+/**
+ * Purpose:
+ * Fetch ordered messages for a thread.
+ *
+ * Behavior:
+ * Queries by thread id and sorts by index, then applies output filters.
+ *
+ * Constraints:
+ * - Uses the active workspace DB.
+ *
+ * Non-Goals:
+ * - Does not paginate results.
+ */
 export function messagesByThread(threadId: string) {
     const hooks = useHooks();
     return dbTry(
@@ -121,6 +175,19 @@ export function messagesByThread(threadId: string) {
     );
 }
 
+/**
+ * Purpose:
+ * Fetch a message by id with hook filtering.
+ *
+ * Behavior:
+ * Reads the row and applies output filters.
+ *
+ * Constraints:
+ * - Returns undefined when missing or filtered out.
+ *
+ * Non-Goals:
+ * - Does not fetch related thread data.
+ */
 export function getMessage(id: string) {
     const hooks = useHooks();
     return dbTry(() => getDb().messages.get(id), {
@@ -134,6 +201,19 @@ export function getMessage(id: string) {
     );
 }
 
+/**
+ * Purpose:
+ * Fetch the first message matching a stream id.
+ *
+ * Behavior:
+ * Queries by `stream_id` and applies output filters.
+ *
+ * Constraints:
+ * - Returns undefined if no matching message exists.
+ *
+ * Non-Goals:
+ * - Does not return all stream matches.
+ */
 export function messageByStream(streamId: string) {
     const hooks = useHooks();
     return dbTry(
@@ -144,6 +224,19 @@ export function messageByStream(streamId: string) {
     );
 }
 
+/**
+ * Purpose:
+ * Soft delete a message row.
+ *
+ * Behavior:
+ * Marks the message as deleted and updates timestamps and clocks.
+ *
+ * Constraints:
+ * - No-op if the message does not exist.
+ *
+ * Non-Goals:
+ * - Does not remove attachments or files.
+ */
 export async function softDeleteMessage(id: string): Promise<void> {
     const hooks = useHooks();
     await getDb().transaction('rw', getDb().messages, async () => {
@@ -177,6 +270,19 @@ export async function softDeleteMessage(id: string): Promise<void> {
     });
 }
 
+/**
+ * Purpose:
+ * Hard delete a message row by id.
+ *
+ * Behavior:
+ * Deletes the row and emits delete hooks.
+ *
+ * Constraints:
+ * - No-op if the message does not exist.
+ *
+ * Non-Goals:
+ * - Does not update thread metadata.
+ */
 export async function hardDeleteMessage(id: string): Promise<void> {
     const hooks = useHooks();
     const existing = await dbTry(() => getDb().messages.get(id), {
@@ -201,7 +307,20 @@ export async function hardDeleteMessage(id: string): Promise<void> {
     });
 }
 
-// Append a message to a thread and update thread timestamps atomically
+/**
+ * Purpose:
+ * Append a message to a thread and update thread timestamps.
+ *
+ * Behavior:
+ * Computes the next index when missing, writes the message, and updates the
+ * thread metadata inside a transaction.
+ *
+ * Constraints:
+ * - Uses sparse index spacing for insertions.
+ *
+ * Non-Goals:
+ * - Does not normalize indexes unless necessary.
+ */
 export async function appendMessage(input: MessageCreate): Promise<Message> {
     const hooks = useHooks();
     return getDb().transaction('rw', getDb().messages, getDb().threads, async () => {
@@ -244,7 +363,19 @@ export async function appendMessage(input: MessageCreate): Promise<Message> {
     });
 }
 
-// Move a message to another thread, computing next index in destination
+/**
+ * Purpose:
+ * Move a message to another thread.
+ *
+ * Behavior:
+ * Updates thread id and index, then updates destination thread timestamps.
+ *
+ * Constraints:
+ * - No-op if the message does not exist.
+ *
+ * Non-Goals:
+ * - Does not update source thread metadata.
+ */
 export async function moveMessage(
     messageId: string,
     toThreadId: string
@@ -286,7 +417,20 @@ export async function moveMessage(
     });
 }
 
-// Copy a message into another thread (new id) and update dest thread timestamps
+/**
+ * Purpose:
+ * Copy a message into another thread with a new id.
+ *
+ * Behavior:
+ * Clones the message, assigns a new index, and updates destination thread
+ * metadata inside a transaction.
+ *
+ * Constraints:
+ * - No-op if the source message does not exist.
+ *
+ * Non-Goals:
+ * - Does not copy related entities beyond the message row.
+ */
 export async function copyMessage(
     messageId: string,
     toThreadId: string
@@ -330,7 +474,20 @@ export async function copyMessage(
     });
 }
 
-// Insert a message right after a given message id, adjusting index using sparse spacing
+/**
+ * Purpose:
+ * Insert a message immediately after another message.
+ *
+ * Behavior:
+ * Computes a sparse index between neighbors, normalizes when needed, then
+ * inserts the message and updates thread timestamps.
+ *
+ * Constraints:
+ * - Throws if the anchor message is missing.
+ *
+ * Non-Goals:
+ * - Does not support arbitrary reordering beyond single insertions.
+ */
 export async function insertMessageAfter(
     afterMessageId: string,
     input: Omit<MessageCreate, 'index'>
@@ -388,7 +545,19 @@ export async function insertMessageAfter(
     });
 }
 
-// Compact / normalize indexes for a thread to 1000, 2000, 3000...
+/**
+ * Purpose:
+ * Normalize message indexes within a thread.
+ *
+ * Behavior:
+ * Rewrites indexes to a uniform step to restore sparse gaps.
+ *
+ * Constraints:
+ * - Runs inside a transaction on the messages table.
+ *
+ * Non-Goals:
+ * - Does not update thread metadata.
+ */
 export async function normalizeThreadIndexes(
     threadId: string,
     start = 1000,

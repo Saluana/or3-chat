@@ -1,15 +1,60 @@
-/** Default maximum number of files (hashes) per message */
+/**
+ * @module app/db/files-util
+ *
+ * Purpose:
+ * Shared helpers for handling message file hash lists.
+ *
+ * Responsibilities:
+ * - Enforce per-message file hash limits
+ * - Serialize and parse hash lists safely
+ *
+ * Non-responsibilities:
+ * - File metadata lookup or storage
+ */
 import { or3Config } from '~~/config.or3';
 
-/** Primary export used across app (UI + DB) */
+/**
+ * Purpose:
+ * Maximum number of files allowed per message.
+ *
+ * Behavior:
+ * Reads the limit from OR3 configuration at import time.
+ *
+ * Constraints:
+ * - Static at runtime unless the module is reloaded.
+ *
+ * Non-Goals:
+ * - Does not enforce limits at persistence time.
+ */
 export const MAX_FILES_PER_MESSAGE: number = or3Config.limits.maxFilesPerMessage;
 
-/** Backward compatibility alias (internal usage) */
+/**
+ * Purpose:
+ * Backward compatibility alias for max file hashes per message.
+ *
+ * Behavior:
+ * Mirrors `MAX_FILES_PER_MESSAGE`.
+ *
+ * Constraints:
+ * - Intended for internal usage only.
+ *
+ * Non-Goals:
+ * - Does not introduce a new limit value.
+ */
 export const MAX_MESSAGE_FILE_HASHES: number = MAX_FILES_PER_MESSAGE;
 
 /**
- * Parse serialized JSON array of file hashes into a bounded string array.
- * Returns empty array for invalid input. Enforces MAX_MESSAGE_FILE_HASHES limit.
+ * Purpose:
+ * Parse stored file hash arrays into a bounded list.
+ *
+ * Behavior:
+ * Parses JSON input and returns only string hashes up to the configured limit.
+ *
+ * Constraints:
+ * - Returns an empty array for invalid JSON or invalid shapes.
+ *
+ * Non-Goals:
+ * - Does not validate hash format.
  */
 export function parseFileHashes(
     serialized: string | null | undefined
@@ -32,8 +77,17 @@ export function parseFileHashes(
 }
 
 /**
- * Serialize array of hashes enforcing max + dedupe while preserving first occurrence ordering.
- * Invalid entries (non-string) are skipped. Returns JSON string.
+ * Purpose:
+ * Serialize file hashes for storage on message rows.
+ *
+ * Behavior:
+ * Deduplicates hashes, preserves first occurrence order, and enforces the max.
+ *
+ * Constraints:
+ * - Skips invalid non-string values.
+ *
+ * Non-Goals:
+ * - Does not validate hash format.
  */
 export function serializeFileHashes(hashes: string[]): string {
     const seen = new Set<string>();

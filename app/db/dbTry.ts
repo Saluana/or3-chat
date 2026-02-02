@@ -1,6 +1,32 @@
+/**
+ * @module app/db/dbTry
+ *
+ * Purpose:
+ * Centralized wrapper for Dexie operations with consistent error reporting.
+ *
+ * Responsibilities:
+ * - Map IndexedDB quota errors to explicit error codes
+ * - Emit structured error reports with DB-specific tags
+ * - Provide optional rethrow semantics for callers
+ *
+ * Non-responsibilities:
+ * - Retrying operations or handling transactional rollbacks
+ */
 import { reportError, err } from '~/utils/errors';
 
-/** Quota guidance (Req 20.2) exported for UI/doc reuse */
+/**
+ * Purpose:
+ * User-facing guidance for storage quota errors.
+ *
+ * Behavior:
+ * Exposed for UI surfaces and documentation reuse.
+ *
+ * Constraints:
+ * - Text must remain user safe and non-technical.
+ *
+ * Non-Goals:
+ * - Does not localize or format the message.
+ */
 export const DB_QUOTA_GUIDANCE =
     'Storage quota exceeded. Clear older chats, files, or browser site data to free space.' as const;
 
@@ -12,6 +38,19 @@ export const DB_QUOTA_GUIDANCE =
  * - Attaches domain:'db', op, entity tags for hooks & diagnostics
  */
 
+/**
+ * Purpose:
+ * Provide structured tags for DB error reporting and diagnostics.
+ *
+ * Behavior:
+ * Tags are included in `reportError` payloads to aid filtering.
+ *
+ * Constraints:
+ * - `op` must be `read` or `write`.
+ *
+ * Non-Goals:
+ * - Not a comprehensive telemetry schema.
+ */
 export interface DbTryTags {
     readonly op: 'read' | 'write';
     readonly entity?: string; // table/entity name for context
@@ -32,6 +71,21 @@ function getErrorInfo(e: unknown): { name: string; message: string } {
     return { name: '', message: '' };
 }
 
+/**
+ * Purpose:
+ * Execute a DB operation with standardized error handling.
+ *
+ * Behavior:
+ * Wraps the operation, reports quota and generic errors, and optionally
+ * rethrows based on the provided options.
+ *
+ * Constraints:
+ * - Errors are reported via `reportError`.
+ * - Returns undefined when errors are swallowed.
+ *
+ * Non-Goals:
+ * - Does not implement retries or backoff.
+ */
 export async function dbTry<T>(
     fn: () => Promise<T> | T,
     tags: DbTryTags,

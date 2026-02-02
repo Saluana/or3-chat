@@ -1,3 +1,18 @@
+/**
+ * @module app/db/documents
+ *
+ * Purpose:
+ * Document CRUD utilities built on top of the posts table with hook support.
+ *
+ * Responsibilities:
+ * - Manage document-specific metadata and content parsing
+ * - Emit hook actions and filters for document lifecycle events
+ * - Provide stable typed APIs for document records
+ *
+ * Non-responsibilities:
+ * - Rich-text editor state management
+ * - Server-side document synchronization
+ */
 import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { newId, nowSec, nextClock } from './util';
@@ -26,6 +41,19 @@ function isDocumentPost(
  * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
  * Content is persisted as a JSON string (TipTap JSON) for flexibility.
  */
+/**
+ * Purpose:
+ * Internal storage shape for document rows in the posts table.
+ *
+ * Behavior:
+ * Persists TipTap JSON as a string to keep Dexie rows compact.
+ *
+ * Constraints:
+ * - `postType` must be `doc`.
+ *
+ * Non-Goals:
+ * - Not intended for direct consumption by UI.
+ */
 export interface DocumentRow {
     id: string;
     title: string; // non-empty trimmed
@@ -38,6 +66,19 @@ export interface DocumentRow {
 }
 
 /** Public facing record with content already parsed. */
+/**
+ * Purpose:
+ * Public document record shape returned to callers.
+ *
+ * Behavior:
+ * Parses the stored JSON content into a TipTap document.
+ *
+ * Constraints:
+ * - Content is normalized to a valid TipTap JSON structure.
+ *
+ * Non-Goals:
+ * - Does not retain raw JSON strings.
+ */
 export interface DocumentRecord {
     id: string;
     title: string;
@@ -178,11 +219,38 @@ function rowToRecord(row: DocumentRow): DocumentRecord {
     };
 }
 
+/**
+ * Purpose:
+ * Input payload for creating new documents.
+ *
+ * Behavior:
+ * Allows optional title and TipTap JSON content.
+ *
+ * Constraints:
+ * - Title is normalized and defaults to a non-empty value.
+ *
+ * Non-Goals:
+ * - Does not accept markdown or other formats.
+ */
 export interface CreateDocumentInput {
     title?: string | null;
     content?: TipTapDocument | null; // TipTap JSON object
 }
 
+/**
+ * Purpose:
+ * Create and persist a document record.
+ *
+ * Behavior:
+ * Normalizes title, validates content, writes to the posts table, and emits
+ * lifecycle hooks.
+ *
+ * Constraints:
+ * - Stored content is JSON-stringified TipTap documents.
+ *
+ * Non-Goals:
+ * - Does not perform collaborative merge logic.
+ */
 export async function createDocument(
     input: CreateDocumentInput = {}
 ): Promise<DocumentRecord> {
@@ -238,6 +306,19 @@ export async function createDocument(
     return rowToRecord(persistedRow);
 }
 
+/**
+ * Purpose:
+ * Fetch a single document by id.
+ *
+ * Behavior:
+ * Reads the post row, filters through hooks, and returns a parsed record.
+ *
+ * Constraints:
+ * - Returns undefined when the record is missing or filtered out.
+ *
+ * Non-Goals:
+ * - Does not resolve linked entities or attachments.
+ */
 export async function getDocument(
     id: string
 ): Promise<DocumentRecord | undefined> {
@@ -267,6 +348,19 @@ export async function getDocument(
     return rowToRecord(mergedRow);
 }
 
+/**
+ * Purpose:
+ * List recent documents with optional limiting.
+ *
+ * Behavior:
+ * Filters by `postType = doc`, excludes deleted rows, and sorts by `updated_at`.
+ *
+ * Constraints:
+ * - Sorting is done in-memory for small result sets.
+ *
+ * Non-Goals:
+ * - Does not paginate via cursor semantics.
+ */
 export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
     const hooks = useHooks();
     // Filter by postType (indexed) and non-deleted
@@ -292,11 +386,37 @@ export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
     return mergeDocumentEntities(filteredEntities, baseMap).map(rowToRecord);
 }
 
+/**
+ * Purpose:
+ * Patch payload for document updates.
+ *
+ * Behavior:
+ * Accepts optional title and content updates.
+ *
+ * Constraints:
+ * - Undefined values are ignored.
+ *
+ * Non-Goals:
+ * - Does not allow partial TipTap patch application.
+ */
 export interface UpdateDocumentPatch {
     title?: string;
     content?: TipTapDocument | null; // TipTap JSON object
 }
 
+/**
+ * Purpose:
+ * Update an existing document record.
+ *
+ * Behavior:
+ * Loads the row, applies the patch, persists changes, and emits hooks.
+ *
+ * Constraints:
+ * - Returns undefined if the document does not exist.
+ *
+ * Non-Goals:
+ * - Does not merge concurrent edits.
+ */
 export async function updateDocument(
     id: string,
     patch: UpdateDocumentPatch
@@ -383,6 +503,19 @@ export async function updateDocument(
     return rowToRecord(persistedRow);
 }
 
+/**
+ * Purpose:
+ * Soft delete a document by marking the row as deleted.
+ *
+ * Behavior:
+ * Updates deletion metadata and emits delete hooks.
+ *
+ * Constraints:
+ * - No-op when the document does not exist.
+ *
+ * Non-Goals:
+ * - Does not permanently remove the row.
+ */
 export async function softDeleteDocument(id: string): Promise<void> {
     const hooks = useHooks();
     const existing = await dbTry(() => getDb().posts.get(id), {
@@ -433,6 +566,19 @@ export async function softDeleteDocument(id: string): Promise<void> {
     await hooks.doAction('db.documents.delete:action:soft:after', payload);
 }
 
+/**
+ * Purpose:
+ * Hard delete a document row from the posts table.
+ *
+ * Behavior:
+ * Removes the row and emits delete hooks.
+ *
+ * Constraints:
+ * - No-op when the document does not exist.
+ *
+ * Non-Goals:
+ * - Does not clean up external resources.
+ */
 export async function hardDeleteDocument(id: string): Promise<void> {
     const hooks = useHooks();
     const existing = await dbTry(() => getDb().posts.get(id), {
@@ -465,4 +611,17 @@ export async function hardDeleteDocument(id: string): Promise<void> {
     await hooks.doAction('db.documents.delete:action:hard:after', payload);
 }
 
+/**
+ * Purpose:
+ * Public type alias for document records.
+ *
+ * Behavior:
+ * Mirrors `DocumentRecord`.
+ *
+ * Constraints:
+ * - Provided for backward compatibility.
+ *
+ * Non-Goals:
+ * - Does not represent the internal storage row shape.
+ */
 export type { DocumentRecord as Document };

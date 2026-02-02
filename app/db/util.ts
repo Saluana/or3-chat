@@ -1,8 +1,30 @@
+/**
+ * @module app/db/util
+ *
+ * Purpose:
+ * Shared utility helpers for DB-related logic.
+ *
+ * Responsibilities:
+ * - Provide consistent schema parsing
+ * - Generate timestamps, clocks, and ids
+ *
+ * Non-responsibilities:
+ * - Business logic or persistence operations
+ */
 import type { ZodTypeAny, infer as ZodInfer } from 'zod';
 
 /**
- * Parse data with Zod schema, throwing on validation failure.
- * @returns Validated data matching schema type
+ * Purpose:
+ * Parse data with a Zod schema and throw on validation failure.
+ *
+ * Behavior:
+ * Returns the parsed value when validation succeeds, otherwise throws.
+ *
+ * Constraints:
+ * - Throws generic errors with Zod messages.
+ *
+ * Non-Goals:
+ * - Does not return partial validation results.
  */
 export function parseOrThrow<TSchema extends ZodTypeAny>(
     schema: TSchema,
@@ -13,15 +35,48 @@ export function parseOrThrow<TSchema extends ZodTypeAny>(
     return res.data as ZodInfer<TSchema>;
 }
 
-/** Returns current Unix timestamp in seconds */
+/**
+ * Purpose:
+ * Provide the current Unix timestamp in seconds.
+ *
+ * Behavior:
+ * Rounds down the current time to seconds.
+ *
+ * Constraints:
+ * - Uses the local clock.
+ *
+ * Non-Goals:
+ * - Does not provide monotonic time guarantees.
+ */
 export const nowSec = (): number => Math.floor(Date.now() / 1000);
 
-/** Increment a record clock for LWW conflict resolution */
+/**
+ * Purpose:
+ * Increment a record clock for last-write-wins resolution.
+ *
+ * Behavior:
+ * Adds one to the provided clock, defaulting to zero.
+ *
+ * Constraints:
+ * - Pure function with no side effects.
+ *
+ * Non-Goals:
+ * - Does not handle HLC values.
+ */
 export const nextClock = (clock?: number): number => (clock ?? 0) + 1;
 
 /**
+ * Purpose:
  * Generate a unique identifier string.
- * Prefers Web Crypto API (UUID v4) when available, falls back to timestamp-based ID.
+ *
+ * Behavior:
+ * Uses Web Crypto UUID v4 when available and falls back to a timestamp-based id.
+ *
+ * Constraints:
+ * - Fallback ids are not cryptographically secure.
+ *
+ * Non-Goals:
+ * - Does not guarantee global uniqueness across devices.
  */
 export function newId(): string {
     // Prefer Web Crypto if available

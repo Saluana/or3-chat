@@ -1,3 +1,18 @@
+/**
+ * @module app/db/threads
+ *
+ * Purpose:
+ * Thread persistence helpers with hook integration.
+ *
+ * Responsibilities:
+ * - Validate and store thread records
+ * - Provide thread query and deletion helpers
+ * - Support fork and system prompt updates
+ *
+ * Non-responsibilities:
+ * - Rendering or formatting thread content
+ * - Server-side sync logic
+ */
 import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
@@ -11,6 +26,19 @@ import {
     type Message,
 } from './schema';
 
+/**
+ * Purpose:
+ * Create a new thread record in the local database.
+ *
+ * Behavior:
+ * Applies filters, validates input with defaults, writes to Dexie, and emits hooks.
+ *
+ * Constraints:
+ * - Enforces optional client-side max conversation limits.
+ *
+ * Non-Goals:
+ * - Does not create initial messages.
+ */
 export async function createThread(input: ThreadCreate): Promise<Thread> {
     const hooks = useHooks();
 
@@ -60,6 +88,19 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
     return value;
 }
 
+/**
+ * Purpose:
+ * Upsert a thread record with updated clocks.
+ *
+ * Behavior:
+ * Validates the thread, increments clock values, and writes to Dexie.
+ *
+ * Constraints:
+ * - Requires a fully shaped `Thread` value.
+ *
+ * Non-Goals:
+ * - Does not merge partial updates.
+ */
 export async function upsertThread(value: Thread): Promise<void> {
     const hooks = useHooks();
     const filtered = await hooks.applyFilters(
@@ -92,6 +133,19 @@ export async function upsertThread(value: Thread): Promise<void> {
     });
 }
 
+/**
+ * Purpose:
+ * Fetch threads for a given project.
+ *
+ * Behavior:
+ * Queries by `project_id` and applies output filters.
+ *
+ * Constraints:
+ * - Returns an empty array when no threads are found.
+ *
+ * Non-Goals:
+ * - Does not sort by recency beyond Dexie ordering.
+ */
 export function threadsByProject(projectId: string) {
     const hooks = useHooks();
     const promise = dbTry(
@@ -103,6 +157,19 @@ export function threadsByProject(projectId: string) {
     );
 }
 
+/**
+ * Purpose:
+ * Search threads by title substring.
+ *
+ * Behavior:
+ * Performs a case-insensitive substring match and applies output filters.
+ *
+ * Constraints:
+ * - Uses in-memory filtering.
+ *
+ * Non-Goals:
+ * - Does not provide full-text search.
+ */
 export function searchThreadsByTitle(term: string) {
     const q = term.toLowerCase();
     const hooks = useHooks();
@@ -114,6 +181,19 @@ export function searchThreadsByTitle(term: string) {
         );
 }
 
+/**
+ * Purpose:
+ * Fetch a thread by id with hook filtering.
+ *
+ * Behavior:
+ * Reads the row and applies output filters.
+ *
+ * Constraints:
+ * - Returns undefined when missing or filtered out.
+ *
+ * Non-Goals:
+ * - Does not fetch thread messages.
+ */
 export function getThread(id: string) {
     const hooks = useHooks();
     return dbTry(() => getDb().threads.get(id), {
@@ -127,6 +207,19 @@ export function getThread(id: string) {
     );
 }
 
+/**
+ * Purpose:
+ * Fetch child threads for a parent thread.
+ *
+ * Behavior:
+ * Queries by `parent_thread_id` and applies output filters.
+ *
+ * Constraints:
+ * - Returns an empty array when there are no children.
+ *
+ * Non-Goals:
+ * - Does not include the parent thread itself.
+ */
 export function childThreads(parentThreadId: string) {
     const hooks = useHooks();
     return getDb().threads
@@ -138,6 +231,19 @@ export function childThreads(parentThreadId: string) {
         );
 }
 
+/**
+ * Purpose:
+ * Soft delete a thread by marking it deleted.
+ *
+ * Behavior:
+ * Updates deletion flags and timestamps with hooks.
+ *
+ * Constraints:
+ * - No-op if the thread does not exist.
+ *
+ * Non-Goals:
+ * - Does not delete messages.
+ */
 export async function softDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
     await getDb().transaction('rw', getDb().threads, async () => {
@@ -167,6 +273,19 @@ export async function softDeleteThread(id: string): Promise<void> {
     });
 }
 
+/**
+ * Purpose:
+ * Hard delete a thread and its messages.
+ *
+ * Behavior:
+ * Deletes messages and the thread row in a transaction with hooks.
+ *
+ * Constraints:
+ * - No-op if the thread does not exist.
+ *
+ * Non-Goals:
+ * - Does not delete attachments or files referenced by messages.
+ */
 export async function hardDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
     const existing = await dbTry(() => getDb().threads.get(id), {
@@ -190,7 +309,19 @@ export async function hardDeleteThread(id: string): Promise<void> {
     });
 }
 
-// Fork a thread: clone thread metadata and optionally copy messages
+/**
+ * Purpose:
+ * Fork a thread with optional message copying.
+ *
+ * Behavior:
+ * Creates a new thread derived from the source and optionally clones messages.
+ *
+ * Constraints:
+ * - Requires the source thread to exist.
+ *
+ * Non-Goals:
+ * - Does not normalize message indexes in the new thread.
+ */
 export async function forkThread(
     sourceThreadId: string,
     overrides: Partial<ThreadCreate> = {},
@@ -279,6 +410,19 @@ export async function forkThread(
     });
 }
 
+/**
+ * Purpose:
+ * Update the system prompt association for a thread.
+ *
+ * Behavior:
+ * Updates `system_prompt_id` and emits hooks.
+ *
+ * Constraints:
+ * - No-op if the thread does not exist.
+ *
+ * Non-Goals:
+ * - Does not validate prompt existence.
+ */
 export async function updateThreadSystemPrompt(
     threadId: string,
     promptId: string | null
@@ -313,6 +457,19 @@ export async function updateThreadSystemPrompt(
     });
 }
 
+/**
+ * Purpose:
+ * Retrieve the system prompt id associated with a thread.
+ *
+ * Behavior:
+ * Reads the thread and applies output filters to the prompt id.
+ *
+ * Constraints:
+ * - Returns null when the thread is missing.
+ *
+ * Non-Goals:
+ * - Does not fetch the prompt record itself.
+ */
 export async function getThreadSystemPrompt(
     threadId: string
 ): Promise<string | null> {
