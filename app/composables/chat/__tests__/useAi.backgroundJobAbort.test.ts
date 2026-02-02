@@ -24,8 +24,8 @@ vi.mock('~/utils/chat/openrouterStream', async () => {
 describe('primeBackgroundJobUpdate', () => {
     it('passes update payload to onAbort subscribers', async () => {
         vi.resetModules();
-        vi.doUnmock('~/composables/chat/useAi');
-        const { primeBackgroundJobUpdate } = await import('../useAi');
+        vi.doUnmock('~/utils/chat/useAi-internal/backgroundJobs');
+        const { primeBackgroundJobUpdate } = await import('~/utils/chat/useAi-internal/backgroundJobs');
         const onAbort = vi.fn();
         const tracker = {
             jobId: 'job-1',

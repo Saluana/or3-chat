@@ -3,8 +3,8 @@ import type { BackgroundJobStatus } from '~/utils/chat/openrouterStream';
 
 describe('stopBackgroundJobTracking', () => {
     it('closes stream and resets tracking flags', async () => {
-        vi.unmock('~/composables/chat/useAi');
-        const mod = await import('~/composables/chat/useAi');
+        vi.unmock('~/utils/chat/useAi-internal/backgroundJobs');
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
         const { stopBackgroundJobTracking } = mod;
 
         const close = vi.fn();
