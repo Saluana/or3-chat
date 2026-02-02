@@ -32,11 +32,11 @@ Hard constraints:
 - [x] B2. Extract `continueMessage()` into internal module
   - New: `app/utils/chat/useAi-internal/continue.ts`
 
-- [ ] B3. Extract file prep helpers out of `sendMessage()`
+- [x] B3. Extract file prep helpers out of `sendMessage()`
   - New: `app/utils/chat/useAi-internal/files.ts`
   - Move: `normalizeFileUrl`, `prepareFilesForModel`, `hashToContentPart` (exact behavior)
 
-- [ ] B4. Extract foreground streaming loop (tool loop + persistence cadence)
+- [x] B4. Extract foreground streaming loop (tool loop + persistence cadence)
   - New: `app/utils/chat/useAi-internal/foregroundStream.ts`
   - Keep hook timing + orchestration decisions in facade
 

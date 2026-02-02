@@ -45,3 +45,7 @@ export type { RetryMessageContext } from './retry';
 // Continue functionality
 export { continueMessageImpl } from './continue';
 export type { ContinueMessageContext } from './continue';
+
+// Foreground streaming
+export { runForegroundStreamLoop } from './foregroundStream';
+export type { ForegroundStreamContext } from './foregroundStream';

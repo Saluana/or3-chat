@@ -3,7 +3,6 @@ import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
 import { create, tx, upsert, type Message } from '~/db';
 import { getDb } from '~/db/client';
-import { createOrRefFile } from '~/db/files';
 import {
     serializeFileHashes,
     MAX_MESSAGE_FILE_HASHES,
@@ -20,11 +19,9 @@ import type {
     ContentPart,
     ChatMessage,
     SendMessageParams,
-    ToolCall,
 } from '~/utils/chat/types';
 import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
-import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import {
     buildParts,
@@ -33,16 +30,13 @@ import {
 } from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import {
-    openRouterStream,
-    pollJobStatus,
     startBackgroundStream,
-    subscribeBackgroundJobStream,
     abortBackgroundJob,
     isBackgroundStreamingEnabled,
     type BackgroundJobStatus,
 } from '../../utils/chat/openrouterStream';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
-import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
+import { inferMimeFromUrl } from '~/utils/chat/files';
 import {
     promptJsonToString,
     composeSystemPrompt,
@@ -86,7 +80,8 @@ import {
     primeBackgroundJobUpdate,
     stopBackgroundJobTracking,
     ensureBackgroundJobTracker,
-    subscribeBackgroundJob
+    subscribeBackgroundJob,
+    runForegroundStreamLoop
 } from '~/utils/chat/useAi-internal';
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
@@ -1375,308 +1370,28 @@ export function useChat(
 
             abortController.value = new AbortController();
 
-            let continueLoop = true;
-            let loopIteration = 0;
-            const MAX_TOOL_ITERATIONS = 10; // Prevent infinite loops
-
-            while (continueLoop && loopIteration < MAX_TOOL_ITERATIONS) {
-                continueLoop = false;
-                loopIteration++;
-
-                const stream = openRouterStream({
-                    apiKey: effectiveApiKey.value,
-                    model: modelId,
-                    orMessages: orMessages as Parameters<
-                        typeof openRouterStream
-                    >[0]['orMessages'],
-                    modalities,
-                    tools:
-                        enabledToolDefs.length > 0
-                            ? enabledToolDefs
-                            : undefined,
-                    signal: abortController.value.signal,
-                });
-
-                const rawAssistant: ChatMessage = {
-                    role: 'assistant',
-                    content: '',
-                    id: assistantDbMsg.id,
-                    stream_id: newStreamId,
-                    reasoning_text: null,
-                };
-
-                if (loopIteration === 1) {
-                    recordRawMessage(rawAssistant);
-                    rawMessages.value.push(rawAssistant);
-                    const uiAssistant = ensureUiMessage(rawAssistant);
-                    uiAssistant.pending = true;
-                    tailAssistant.value = uiAssistant;
-                }
-
-                const current =
-                    tailAssistant.value || ensureUiMessage(rawAssistant);
-                let chunkIndex = 0;
-                const WRITE_INTERVAL_MS = 500;
-                let lastPersistAt = 0;
-                const pendingToolCalls: ToolCall[] = [];
-
-                try {
-                    for await (const ev of stream) {
-                        if (ev.type === 'tool_call') {
-                            // Tool call detected - enqueue for execution after stream closes
-                            if (current.pending) current.pending = false;
-
-                            const toolCall = ev.tool_call;
-
-                            // Add tool call to tracking with loading status
-                            activeToolCalls.set(toolCall.id, {
-                                id: toolCall.id,
-                                name: toolCall.function.name,
-                                status: 'loading',
-                                args: toolCall.function.arguments,
-                            });
-
-                            // Update UI with loading state
-                            current.toolCalls = Array.from(
-                                activeToolCalls.values()
-                            );
-
-                            // Persist current assistant state (function call request)
-                            await persistAssistant({
-                                content: current.text,
-                                reasoning: current.reasoning_text ?? null,
-                                toolCalls: current.toolCalls ?? undefined,
-                            });
-
-                            pendingToolCalls.push(toolCall);
-                            continue;
-                        } else if (ev.type === 'reasoning') {
-                            if (current.reasoning_text === null)
-                                current.reasoning_text = ev.text;
-                            else current.reasoning_text += ev.text;
-                            streamAcc.append(ev.text, { kind: 'reasoning' });
-                            try {
-                                await hooks.doAction(
-                                    'ai.chat.stream:action:reasoning',
-                                    ev.text,
-                                    {
-                                        threadId: threadIdRef.value,
-                                        assistantId: assistantDbMsg.id,
-                                        streamId: newStreamId,
-                                        reasoningLength:
-                                            current.reasoning_text?.length || 0,
-                                    }
-                                );
-                            } catch {
-                                /* intentionally empty */
-                            }
-                        } else if (ev.type === 'text') {
-                            if (current.pending) current.pending = false;
-                            const delta = ev.text;
-                            streamAcc.append(delta, { kind: 'text' });
-                            await hooks.doAction(
-                                'ai.chat.stream:action:delta',
-                                delta,
-                                {
-                                    threadId: threadIdRef.value,
-                                    assistantId: assistantDbMsg.id,
-                                    streamId: newStreamId,
-                                    deltaLength: delta.length,
-                                    totalLength:
-                                        current.text.length + delta.length,
-                                    chunkIndex: chunkIndex++,
-                                }
-                            );
-                            current.text += delta;
-                        } else if (ev.type === 'image') {
-                            if (current.pending) current.pending = false;
-                            // Store image first, then use hash placeholder (not Base64)
-                            if (assistantFileHashes.length < 6) {
-                                let blob: Blob | null = null;
-                                if (ev.url.startsWith('data:image/'))
-                                    blob = dataUrlToBlob(ev.url);
-                                else if (/^https?:/.test(ev.url)) {
-                                    try {
-                                        // Use $fetch with responseType: 'blob'
-                                        blob = await $fetch<Blob>(ev.url, {
-                                            responseType: 'blob',
-                                        });
-                                    } catch {
-                                        /* intentionally empty */
-                                    }
-                                }
-                                if (blob) {
-                                    try {
-                                        const meta = await createOrRefFile(
-                                            blob,
-                                            'gen-image'
-                                        );
-                                        assistantFileHashes.push(meta.hash);
-                                        // Use valid 1x1 transparent pixel and store hash in alt text to eliminate console errors
-                                        const placeholder = `![file-hash:${meta.hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`;
-                                        const already =
-                                            current.text.includes(placeholder);
-                                        if (!already) {
-                                            current.text +=
-                                                (current.text ? '\n\n' : '') +
-                                                placeholder;
-                                        }
-                                        const serialized =
-                                            await persistAssistant({
-                                                content: current.text,
-                                                reasoning:
-                                                    current.reasoning_text ??
-                                                    null,
-                                            });
-                                        current.file_hashes =
-                                            serialized?.split(',') ?? [];
-                                    } catch {
-                                        /* intentionally empty */
-                                    }
-                                } else {
-                                    // Fallback: couldn't convert to blob, use URL directly
-                                    const placeholder = `![generated image](${ev.url})`;
-                                    const already =
-                                        current.text.includes(placeholder);
-                                    if (!already) {
-                                        current.text +=
-                                            (current.text ? '\n\n' : '') +
-                                            placeholder;
-                                    }
-                                }
-                            }
-                        }
-
-                        // Batch writes: persist every 500ms OR every 50 chunks (whichever comes first)
-                        // to reduce DB pressure while maintaining progress safety
-                        const now = Date.now();
-                        const shouldPersist =
-                            now - lastPersistAt >= WRITE_INTERVAL_MS ||
-                            chunkIndex % 50 === 0;
-                        if (shouldPersist) {
-                            await persistAssistant({
-                                content: current.text,
-                                reasoning: current.reasoning_text ?? null,
-                            });
-                            if (assistantFileHashes.length) {
-                                current.file_hashes = assistantFileHashes;
-                            }
-                            lastPersistAt = now;
-                        }
-                    }
-
-                    if (pendingToolCalls.length > 0) {
-                        const toolResultsForNextLoop: Array<{
-                            call: ToolCall;
-                            result: string;
-                        }> = [];
-
-                        for (const toolCall of pendingToolCalls) {
-                            const execution = await toolRegistry.executeTool(
-                                toolCall.function.name,
-                                toolCall.function.arguments
-                            );
-
-                            let toolResultText: string;
-                            let toolStatus: 'complete' | 'error' = 'complete';
-                            if (execution.error) {
-                                toolStatus = 'error';
-                                toolResultText = `Error executing tool "${toolCall.function.name}": ${execution.error}`;
-                                console.warn('[useChat] tool execution error', {
-                                    tool: toolCall.function.name,
-                                    error: execution.error,
-                                    timedOut: execution.timedOut,
-                                });
-                            } else {
-                                toolResultText = execution.result || '';
-                            }
-
-                            activeToolCalls.set(toolCall.id, {
-                                id: toolCall.id,
-                                name: toolCall.function.name,
-                                status: toolStatus,
-                                args: toolCall.function.arguments,
-                                result:
-                                    toolStatus === 'complete'
-                                        ? toolResultText
-                                        : undefined,
-                                error:
-                                    toolStatus === 'error'
-                                        ? execution.error
-                                        : undefined,
-                            });
-                            current.toolCalls = Array.from(
-                                activeToolCalls.values()
-                            );
-
-                            const SUMMARY_THRESHOLD = 500;
-                            let uiSummary = toolResultText;
-                            if (toolResultText.length > SUMMARY_THRESHOLD) {
-                                uiSummary = `Tool result (${Math.round(
-                                    toolResultText.length / 1024
-                                )}KB): ${toolResultText.slice(
-                                    0,
-                                    200
-                                )}... [truncated for display]`;
-                            }
-
-                            await tx.appendMessage({
-                                thread_id: threadIdRef.value,
-                                role: 'tool',
-                                data: {
-                                    content: uiSummary,
-                                    tool_call_id: toolCall.id,
-                                    tool_name: toolCall.function.name,
-                                },
-                            });
-
-                            toolResultsForNextLoop.push({
-                                call: toolCall,
-                                result: toolResultText,
-                            });
-                        }
-
-                        orMessages.push({
-                            role: 'assistant',
-                            content: [
-                                { type: 'text', text: current.text || '' },
-                            ],
-                            tool_calls: pendingToolCalls.map((toolCall) => ({
-                                id: toolCall.id,
-                                type: 'function' as const,
-                                function: {
-                                    name: toolCall.function.name,
-                                    arguments: toolCall.function.arguments,
-                                },
-                            })),
-                        });
-
-                        for (const payload of toolResultsForNextLoop) {
-                            orMessages.push({
-                                role: 'tool',
-                                tool_call_id: payload.call.id,
-                                name: payload.call.function.name,
-                                content: [
-                                    { type: 'text', text: payload.result },
-                                ],
-                            });
-                        }
-
-                        pendingToolCalls.length = 0;
-                        continueLoop = true;
-                        continue;
-                    }
-                } catch (streamError) {
-                    if (loopIteration > 1) {
-                        console.warn(
-                            '[useChat] Stream error during tool loop',
-                            streamError
-                        );
-                        continueLoop = false;
-                    }
-                    throw streamError;
-                }
-            }
+            await runForegroundStreamLoop({
+                apiKey: effectiveApiKey.value,
+                modelId,
+                orMessages,
+                modalities,
+                tools:
+                    enabledToolDefs.length > 0
+                        ? enabledToolDefs
+                        : undefined,
+                abortSignal: abortController.value.signal,
+                assistantId: assistantDbMsg.id,
+                streamId: newStreamId,
+                threadId: threadIdRef.value!,
+                streamAcc,
+                hooks,
+                toolRegistry,
+                persistAssistant,
+                assistantFileHashes,
+                activeToolCalls,
+                tailAssistant,
+                rawMessages,
+            });
 
             const current = tailAssistant.value!;
             const fullText = current.text;
