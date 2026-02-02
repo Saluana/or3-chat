@@ -85,23 +85,26 @@ const setupWorker = (worker: Worker) => {
 const ensureWorker = async (): Promise<Worker | null> => {
     if (!import.meta.client) return null;
     if (workerInstance) return workerInstance;
-    if (workerPromise) return workerPromise;
-
-    workerPromise = new Promise<Worker | null>((resolve) => {
-        try {
-            const worker = new Worker(
-                new URL('../../workers/tokenizer.worker.ts', import.meta.url),
-                { type: 'module' }
-            );
-            setupWorker(worker);
-            workerInstance = worker;
-            resolve(workerInstance);
-        } catch (error) {
-            console.warn('[useTokenizer] Failed to initialize worker:', error);
-            disposeWorker();
-            resolve(null);
-        }
-    });
+    
+    // Use atomic promise initialization to prevent race conditions
+    if (!workerPromise) {
+        workerPromise = (async () => {
+            try {
+                const worker = new Worker(
+                    new URL('../../workers/tokenizer.worker.ts', import.meta.url),
+                    { type: 'module' }
+                );
+                setupWorker(worker);
+                workerInstance = worker;
+                return workerInstance;
+            } catch (error) {
+                console.warn('[useTokenizer] Failed to initialize worker:', error);
+                workerInstance = null;
+                workerPromise = null;
+                return null;
+            }
+        })();
+    }
 
     return workerPromise;
 };
