@@ -81,22 +81,99 @@ const registry = createRegistry<DocumentHistoryAction>(
     '__or3DocumentHistoryActionsRegistry'
 );
 
-/** Register (or replace) a message action. */
+/**
+ * Purpose:
+ * Add or replace a document history action in the global registry.
+ *
+ * Behavior:
+ * Registers the action by ID, replacing any existing entry.
+ *
+ * Constraints:
+ * - IDs must be unique across actions
+ * - Registry is shared across the app and survives HMR
+ *
+ * Non-Goals:
+ * - Ordering enforcement beyond the shared registry sort rules
+ *
+ * @example
+ * ```ts
+ * registerDocumentHistoryAction({
+ *   id: 'my-plugin:export-doc',
+ *   icon: 'i-carbon-download',
+ *   label: 'Export Document',
+ *   order: 250,
+ *   handler: async ({ document }) => {
+ *     await exportDocument(document.id);
+ *   },
+ * });
+ * ```
+ */
 export function registerDocumentHistoryAction(action: DocumentHistoryAction) {
     registry.register(action);
 }
 
-/** Unregister an action by id (optional utility). */
+/**
+ * Purpose:
+ * Remove a previously registered document history action.
+ *
+ * Behavior:
+ * Deletes the entry if it exists and leaves the registry intact.
+ *
+ * Constraints:
+ * - No-op when the ID does not exist
+ *
+ * Non-Goals:
+ * - Resetting registry state for other actions
+ *
+ * @example
+ * ```ts
+ * unregisterDocumentHistoryAction('my-plugin:export-doc');
+ * ```
+ */
 export function unregisterDocumentHistoryAction(id: string) {
     registry.unregister(id);
 }
 
-/** Accessor for actions applicable to a specific message. */
+/**
+ * Purpose:
+ * Read the reactive list of registered document history actions.
+ *
+ * Behavior:
+ * Returns a computed list sorted by the registry rules.
+ *
+ * Constraints:
+ * - Sorting is managed by the registry helper
+ *
+ * Non-Goals:
+ * - Filtering by document type or state
+ *
+ * @example
+ * ```ts
+ * const actions = useDocumentHistoryActions();
+ * ```
+ */
 export function useDocumentHistoryActions() {
     return registry.useItems();
 }
 
-/** Convenience for plugin authors to check existing action ids. */
+/**
+ * Purpose:
+ * Inspect the registry by ID for debugging or collision checks.
+ *
+ * Behavior:
+ * Returns the action IDs in registration order.
+ *
+ * Constraints:
+ * - Intended for tooling and debugging
+ *
+ * Non-Goals:
+ * - Sorting by action order
+ *
+ * @example
+ * ```ts
+ * const ids = listRegisteredDocumentHistoryActionIds();
+ * ```
+ */
 export function listRegisteredDocumentHistoryActionIds(): string[] {
     return registry.listIds();
 }

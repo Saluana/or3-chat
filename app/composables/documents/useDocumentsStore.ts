@@ -41,6 +41,26 @@ function scheduleSave(id: string) {
     st.debouncedSave();
 }
 
+/**
+ * Purpose:
+ * Persist staged title or content updates to storage.
+ *
+ * Behavior:
+ * Coalesces pending changes, updates the record, and emits pane-level
+ * save hooks when appropriate.
+ *
+ * Constraints:
+ * - No-op when there is nothing staged
+ * - Serializes concurrent flush calls per document
+ *
+ * Non-Goals:
+ * - Validation beyond the document schema
+ *
+ * @example
+ * ```ts
+ * await flush(documentId);
+ * ```
+ */
 export async function flush(id: string) {
     const st = documentsMap.get(id);
     if (!st || !st.record) return;
@@ -111,6 +131,24 @@ export async function flush(id: string) {
     return st.flushPromise;
 }
 
+/**
+ * Purpose:
+ * Hydrate a document into the shared in-memory cache.
+ *
+ * Behavior:
+ * Loads from storage, updates state, and reports missing records.
+ *
+ * Constraints:
+ * - Emits toast notifications on failure
+ *
+ * Non-Goals:
+ * - Retry logic or offline recovery
+ *
+ * @example
+ * ```ts
+ * const doc = await loadDocument(documentId);
+ * ```
+ */
 export async function loadDocument(id: string) {
     const st = ensure(id);
     st.status = 'loading';
@@ -129,6 +167,24 @@ export async function loadDocument(id: string) {
     return st.record;
 }
 
+/**
+ * Purpose:
+ * Create a new document and seed its cached state.
+ *
+ * Behavior:
+ * Creates the record, caches it, and marks the state as idle.
+ *
+ * Constraints:
+ * - Emits toast notifications on failure
+ *
+ * Non-Goals:
+ * - Template selection or content generation
+ *
+ * @example
+ * ```ts
+ * const doc = await newDocument({ title: 'Plan' });
+ * ```
+ */
 export async function newDocument(initial?: {
     title?: string;
     content?: TipTapDocument | null;
@@ -145,6 +201,24 @@ export async function newDocument(initial?: {
     }
 }
 
+/**
+ * Purpose:
+ * Stage a title change and schedule a debounced save.
+ *
+ * Behavior:
+ * Updates pending title state and queues a flush.
+ *
+ * Constraints:
+ * - Requires a loaded document record
+ *
+ * Non-Goals:
+ * - Immediate persistence
+ *
+ * @example
+ * ```ts
+ * setDocumentTitle(documentId, 'New Title');
+ * ```
+ */
 export function setDocumentTitle(id: string, title: string) {
     const st = ensure(id);
     if (st.record) {
@@ -153,6 +227,24 @@ export function setDocumentTitle(id: string, title: string) {
     }
 }
 
+/**
+ * Purpose:
+ * Stage content changes and schedule a debounced save.
+ *
+ * Behavior:
+ * Updates pending content state and queues a flush.
+ *
+ * Constraints:
+ * - Requires a loaded document record
+ *
+ * Non-Goals:
+ * - Immediate persistence
+ *
+ * @example
+ * ```ts
+ * setDocumentContent(documentId, tiptapJson);
+ * ```
+ */
 export function setDocumentContent(id: string, content: TipTapDocument | null) {
     const st = ensure(id);
     if (st.record) {
@@ -161,16 +253,67 @@ export function setDocumentContent(id: string, content: TipTapDocument | null) {
     }
 }
 
+/**
+ * Purpose:
+ * Access the reactive state container for a document.
+ *
+ * Behavior:
+ * Returns existing state or creates it lazily.
+ *
+ * Constraints:
+ * - Creation sets status to loading
+ *
+ * Non-Goals:
+ * - Fetching the record from storage
+ *
+ * @example
+ * ```ts
+ * const state = useDocumentState(documentId);
+ * ```
+ */
 export function useDocumentState(id: string) {
     return documentsMap.get(id) || ensure(id);
 }
 
+/**
+ * Purpose:
+ * Inspect all cached document states.
+ *
+ * Behavior:
+ * Returns the shared reactive map.
+ *
+ * Constraints:
+ * - Mutating the map directly can break invariants
+ *
+ * Non-Goals:
+ * - Access control or filtering
+ *
+ * @example
+ * ```ts
+ * const stateMap = useAllDocumentsState();
+ * ```
+ */
 export function useAllDocumentsState() {
     return documentsMap;
 }
 
 // ---- Minimal internal peek helpers for multi-pane hook integration ----
 // Whether there are staged (pending) changes that would trigger a save on flush.
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Detect whether a document has staged changes.
+ *
+ * Behavior:
+ * Returns true when title or content is pending.
+ *
+ * Constraints:
+ * - Requires state to be present
+ *
+ * Non-Goals:
+ * - Triggering a save
+ */
 export function __hasPendingDocumentChanges(id: string): boolean {
     const st = documentsMap.get(id);
     return !!(
@@ -181,6 +324,21 @@ export function __hasPendingDocumentChanges(id: string): boolean {
 }
 
 // Read current status (used to confirm a flush produced a saved state).
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Read a document status without creating state.
+ *
+ * Behavior:
+ * Returns the status value if the state exists.
+ *
+ * Constraints:
+ * - Returns undefined when not cached
+ *
+ * Non-Goals:
+ * - Loading or initializing state
+ */
 export function __peekDocumentStatus(
     id: string
 ): DocState['status'] | undefined {
@@ -189,6 +347,25 @@ export function __peekDocumentStatus(
 
 // Release a document's in-memory state (after ensuring pending changes flushed).
 // This lets GC reclaim large TipTap JSON payloads when switching away.
+/**
+ * Purpose:
+ * Release cached state for a document to reduce memory usage.
+ *
+ * Behavior:
+ * Optionally flushes pending changes, clears cached content, and
+ * removes the entry from the state map.
+ *
+ * Constraints:
+ * - Flush failures are swallowed during release
+ *
+ * Non-Goals:
+ * - Deleting the document record from storage
+ *
+ * @example
+ * ```ts
+ * await releaseDocument(documentId, { flush: true });
+ * ```
+ */
 export async function releaseDocument(
     id: string,
     opts: { flush?: boolean; deleteEntry?: boolean } = {}
