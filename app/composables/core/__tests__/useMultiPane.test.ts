@@ -381,3 +381,139 @@ describe('useMultiPane - paneWidths normalization', () => {
         expect(multiPane.paneWidths.value.length).toBe(paneCount);
     });
 });
+
+describe('useMultiPane - message loading with validation', () => {
+    beforeEach(() => {
+        // Clean up registries
+        const g = globalThis as any;
+        g.__or3PaneAppsRegistry = new Map();
+        g.__or3MultiPaneApi = undefined;
+        // Reset modules to ensure fresh imports
+        vi.resetModules();
+    });
+
+    it('skips invalid message rows without crashing', async () => {
+        // Mock db with mixed valid/invalid messages
+        vi.doMock('~/db', () => ({
+            db: {
+                messages: {
+                    where: () => ({
+                        between: () => ({
+                            filter: () => ({
+                                toArray: async () => [
+                                    // Valid message
+                                    {
+                                        id: 'msg-1',
+                                        role: 'user',
+                                        content: 'Hello',
+                                        deleted: false,
+                                        index: 0,
+                                    },
+                                    // Invalid - no id
+                                    {
+                                        role: 'assistant',
+                                        content: 'Hi',
+                                        deleted: false,
+                                    },
+                                    // Invalid - no role
+                                    {
+                                        id: 'msg-3',
+                                        content: 'Test',
+                                        deleted: false,
+                                    },
+                                    // Valid message
+                                    {
+                                        id: 'msg-4',
+                                        role: 'assistant',
+                                        content: 'Valid response',
+                                        deleted: false,
+                                        index: 1,
+                                    },
+                                ],
+                            }),
+                        }),
+                    }),
+                },
+            },
+        }));
+
+        // Re-import to get the mocked version
+        const { useMultiPane } = await import('../useMultiPane');
+        const multiPane = useMultiPane();
+
+        // Load messages for a thread
+        const messages = await multiPane.loadMessagesFor('thread-123');
+
+        // Should only include the 2 valid messages
+        expect(messages).toHaveLength(2);
+        expect(messages[0]?.id).toBe('msg-1');
+        expect(messages[1]?.id).toBe('msg-4');
+    });
+
+    it('skips deleted messages even if they pass initial filter', async () => {
+        vi.doMock('~/db', () => ({
+            db: {
+                messages: {
+                    where: () => ({
+                        between: () => ({
+                            filter: () => ({
+                                toArray: async () => [
+                                    {
+                                        id: 'msg-1',
+                                        role: 'user',
+                                        content: 'Hello',
+                                        deleted: false,
+                                    },
+                                    {
+                                        id: 'msg-2',
+                                        role: 'assistant',
+                                        content: 'Response',
+                                        deleted: true, // Should be skipped
+                                    },
+                                ],
+                            }),
+                        }),
+                    }),
+                },
+            },
+        }));
+
+        const { useMultiPane } = await import('../useMultiPane');
+        const multiPane = useMultiPane();
+
+        const messages = await multiPane.loadMessagesFor('thread-456');
+
+        expect(messages).toHaveLength(1);
+        expect(messages[0]?.id).toBe('msg-1');
+    });
+
+    it('handles completely invalid data without crashing', async () => {
+        vi.doMock('~/db', () => ({
+            db: {
+                messages: {
+                    where: () => ({
+                        between: () => ({
+                            filter: () => ({
+                                toArray: async () => [
+                                    null,
+                                    undefined,
+                                    'not an object',
+                                    123,
+                                    { random: 'data' },
+                                ],
+                            }),
+                        }),
+                    }),
+                },
+            },
+        }));
+
+        const { useMultiPane } = await import('../useMultiPane');
+        const multiPane = useMultiPane();
+
+        const messages = await multiPane.loadMessagesFor('thread-789');
+
+        // All invalid, should return empty array
+        expect(messages).toHaveLength(0);
+    });
+});

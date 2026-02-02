@@ -116,6 +116,23 @@ interface DbMessageRow {
     deleted?: boolean;
 }
 
+/**
+ * Fast structural validation for DB message rows.
+ * Checks essential fields without heavy parsing.
+ */
+function isValidMessageRow(msg: any): msg is DbMessageRow {
+    return (
+        msg != null &&
+        typeof msg === 'object' &&
+        typeof msg.id === 'string' &&
+        msg.id.length > 0 &&
+        typeof msg.role === 'string' &&
+        msg.role.length > 0 &&
+        // deleted should be boolean or undefined (truthy check)
+        (msg.deleted === undefined || typeof msg.deleted === 'boolean')
+    );
+}
+
 async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
     if (!id) return [];
     try {
@@ -124,14 +141,36 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
             .between([id, Dexie.minKey], [id, Dexie.maxKey])
             .filter((m) => !m.deleted)
             .toArray();
-        return msgs.map((msg) => {
-            const row = msg as unknown as DbMessageRow;
+        
+        const result: MultiPaneMessage[] = [];
+        let skippedCount = 0;
+        
+        for (const msg of msgs) {
+            // Fast structural validation
+            if (!isValidMessageRow(msg)) {
+                skippedCount++;
+                if (import.meta.dev) {
+                    console.warn(
+                        '[useMultiPane] Skipping invalid message row:',
+                        msg
+                    );
+                }
+                continue;
+            }
+            
+            // Skip deleted messages (double check after filter)
+            if (msg.deleted) {
+                continue;
+            }
+            
+            const row = msg as DbMessageRow;
             const data = row.data;
             const content = deriveMessageContent({
                 content: row.content,
                 data,
             });
-            return {
+            
+            result.push({
                 role: row.role as 'user' | 'assistant' | 'system' | 'tool',
                 content,
                 file_hashes: row.file_hashes,
@@ -142,9 +181,21 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
                 index: typeof row.index === 'number' ? row.index : null,
                 created_at:
                     typeof row.created_at === 'number' ? row.created_at : null,
-            } as MultiPaneMessage;
-        });
-    } catch {
+            } as MultiPaneMessage);
+        }
+        
+        // Dev-only diagnostics
+        if (import.meta.dev && skippedCount > 0) {
+            console.warn(
+                `[useMultiPane] Skipped ${skippedCount} invalid message(s) for thread ${id}`
+            );
+        }
+        
+        return result;
+    } catch (error) {
+        if (import.meta.dev) {
+            console.error('[useMultiPane] Failed to load messages:', error);
+        }
         return [];
     }
 }
