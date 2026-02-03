@@ -55,16 +55,51 @@ export function mergeThemeProps<T extends Record<string, unknown>>(
     // Spread base first to preserve types, then selectively apply overrides
     const result = { ...base } as Record<string, unknown>;
 
+    // Filter out dev-only debug properties
+    const debugKeys = new Set(['data-theme-target', 'data-theme-matches']);
+
     // Apply overrides but only for keys that exist in base or are special override keys
     const specialKeys = new Set(['class', 'style', 'ui']);
 
     for (const key in overrides) {
+        if (debugKeys.has(key)) {
+            // Skip dev-only properties
+            continue;
+        }
         if (key in base || specialKeys.has(key)) {
             result[key] = overrides[key];
         }
     }
 
     return result as T;
+}
+
+/**
+ * Remove dev-only debug properties from theme overrides.
+ * Use this when you need to spread overrides directly without a base object.
+ *
+ * @param overrides - Theme override props that may contain debug properties
+ * @returns Clean override props without debug properties
+ *
+ * @example
+ * ```ts
+ * const cleanProps = cleanThemeProps(overrides.value);
+ * return { ...cleanProps, label: 'My Label' };
+ * ```
+ */
+export function cleanThemeProps(
+    overrides: ResolvedOverrideProps
+): OverrideProps {
+    const result: Record<string, unknown> = {};
+    const debugKeys = new Set(['data-theme-target', 'data-theme-matches']);
+
+    for (const key in overrides) {
+        if (!debugKeys.has(key)) {
+            result[key] = overrides[key];
+        }
+    }
+
+    return result as OverrideProps;
 }
 
 interface ComponentOverrideCache {

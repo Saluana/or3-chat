@@ -180,8 +180,6 @@ export interface ResolvedOverrideProps extends OverrideProps {
     'data-theme-target'?: string;
     /** Dev-only selectors list for debug. */
     'data-theme-matches'?: string;
-    /** Allow dynamic properties for custom overrides */
-    [key: string]: unknown;
 }
 
 /**
