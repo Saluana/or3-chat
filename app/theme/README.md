@@ -118,6 +118,13 @@ Theme selection is persisted in `localStorage`/cookies (`or3_active_theme`).
 Light/dark mode is tracked separately via the older `theme.set()` API and
 applies classes like `light`/`dark` to `<html>`.
 
+## Theme defaults precedence
+The default theme is chosen using a single precedence order:
+1. `runtimeConfig.public.branding.defaultTheme` (when set and valid).
+2. The manifest `isDefault` entry.
+3. The first theme entry in the manifest.
+4. A fallback constant (`retro`) if no themes are discovered.
+
 ## Component integration
 
 ### 1) `v-theme` directive (recommended for components)

@@ -362,7 +362,7 @@ import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { shallowRef } from 'vue';
 import { useToast } from '#imports';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
-import type { ThemePlugin } from '~/plugins/90.theme.client';
+import type { ThemePlugin } from '~/theme/_shared/types';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';

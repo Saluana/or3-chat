@@ -29,9 +29,7 @@ import { computed, getCurrentInstance, unref } from 'vue';
 import { useNuxtApp } from '#app';
 import type { ComputedRef, ComponentPublicInstance } from 'vue';
 import type { ResolveParams } from '../theme/_shared/runtime-resolver';
-
-/** Resolved theme override props - can contain any component props */
-export type OverrideProps = Record<string, unknown>;
+import type { OverrideProps } from '~/theme/_shared/types';
 
 interface ComponentOverrideCache {
     theme: string;
@@ -43,6 +41,8 @@ const componentOverrideCache = new WeakMap<
     ComponentPublicInstance,
     ComponentOverrideCache
 >();
+
+const MAX_CACHE_ENTRIES = 50;
 
 /**
  * Internal helper to build deterministic cache keys for override resolution.
@@ -189,10 +189,20 @@ export function useThemeOverrides(
                 }
 
                 const cached = cache.entries.get(cacheKey);
-                if (cached) return cached;
+                if (cached) {
+                    cache.entries.delete(cacheKey);
+                    cache.entries.set(cacheKey, cached);
+                    return cached;
+                }
 
                 const result = resolveOverrides(resolveParams);
                 cache.entries.set(cacheKey, result);
+                if (cache.entries.size > MAX_CACHE_ENTRIES) {
+                    const oldestKey = cache.entries.keys().next().value;
+                    if (oldestKey) {
+                        cache.entries.delete(oldestKey);
+                    }
+                }
                 return result;
             }
         }

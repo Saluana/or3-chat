@@ -1,7 +1,7 @@
 import { onMounted } from 'vue';
 import { useNuxtApp } from '#app';
 import { applyThemeClasses } from '~/theme/_shared/css-selector-runtime';
-import type { ThemePlugin } from '~/plugins/90.theme.client';
+import type { ThemePlugin } from '~/theme/_shared/types';
 
 /**
  * `useThemeClasses`

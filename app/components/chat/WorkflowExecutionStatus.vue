@@ -428,7 +428,7 @@ import { modelRegistry } from 'or3-workflow-core';
 import { useIcon } from '~/composables/useIcon';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
-import type { ThemePlugin } from '~/plugins/90.theme.client';
+import type { ThemePlugin } from '~/theme/_shared/types';
 import { useToast } from '#imports';
 
 defineOptions({ name: 'WorkflowExecutionStatus' });

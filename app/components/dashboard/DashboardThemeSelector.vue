@@ -47,7 +47,8 @@
 import { ref, computed, onMounted } from 'vue';
 import { useNuxtApp, useIcon } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
-import type { ThemePlugin } from '~/plugins/90.theme.client';
+import type { ThemePlugin } from '~/theme/_shared/types';
+import { FALLBACK_THEME_NAME } from '~/theme/_shared/constants';
 
 interface ThemeInfo {
     name: string;
@@ -59,7 +60,9 @@ const nuxtApp = useNuxtApp();
 const themePlugin = nuxtApp.$theme as ThemePlugin;
 
 const availableThemes = ref<ThemeInfo[]>([]);
-const activeTheme = computed(() => themePlugin?.activeTheme?.value || 'retro');
+const activeTheme = computed(
+    () => themePlugin?.activeTheme?.value || FALLBACK_THEME_NAME
+);
 
 onMounted(async () => {
     // Load available themes from manifest
@@ -67,8 +70,8 @@ onMounted(async () => {
         const { loadThemeManifest } = await import(
             '~/theme/_shared/theme-manifest'
         );
-        const manifest = await loadThemeManifest();
-        availableThemes.value = manifest.map((entry) => ({
+        const { entries } = await loadThemeManifest();
+        availableThemes.value = entries.map((entry) => ({
             name: entry.name,
             displayName:
                 entry.definition?.displayName ||

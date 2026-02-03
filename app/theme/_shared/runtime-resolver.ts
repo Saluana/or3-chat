@@ -15,6 +15,7 @@ import type {
     CompiledTheme,
     AttributeMatcher,
     PropClassMaps,
+    ResolvedOverrideProps,
 } from './types';
 
 /**
@@ -45,7 +46,7 @@ export interface ResolveParams {
  */
 export interface ResolvedOverride {
     /** Merged props to apply to component */
-    props: Record<string, unknown>;
+    props: ResolvedOverrideProps;
 }
 
 /**
@@ -55,7 +56,8 @@ export interface ResolvedOverride {
  * Note: This LRU implementation treats Map insertion order as access order.
  * When a key is accessed or set, it is deleted and re-inserted to move it to the end of the Map,
  * representing the most recently used position. This is a non-standard LRU approach; typical LRU caches
- * maintain a separate order-tracking structure.
+ * maintain a separate order-tracking structure. We accept the tradeoff to keep the hot path simple
+ * and allocation-light.
  */
 class LRUCache<K, V> {
     private cache: Map<K, V>;

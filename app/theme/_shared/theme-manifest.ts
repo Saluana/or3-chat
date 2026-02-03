@@ -44,6 +44,8 @@ const stylesheetModules = import.meta.glob('../**/*.css', {
     import: 'default',
 }) as Record<string, StylesheetModuleLoader>;
 
+const stylesheetInFlight = new Map<string, Promise<void>>();
+
 const configModules = import.meta.glob('../*/app.config.ts', { eager: true });
 
 const rawThemeEntries: RawThemeEntry[] = Object.entries(themeModules).map(
@@ -81,8 +83,19 @@ export interface ThemeManifestEntry {
 /**
  * Load every theme definition to construct the manifest.
  */
-export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
+export interface ThemeManifestError {
+    path: string;
+    error: unknown;
+}
+
+export interface ThemeManifestResult {
+    entries: ThemeManifestEntry[];
+    errors: ThemeManifestError[];
+}
+
+export async function loadThemeManifest(): Promise<ThemeManifestResult> {
     const manifest: ThemeManifestEntry[] = [];
+    const errors: ThemeManifestError[] = [];
 
     const results = await Promise.all(
         rawThemeEntries.map(async (entry) => {
@@ -93,11 +106,10 @@ export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
                     | undefined;
 
                 if (!definition?.name) {
-                    if (import.meta.dev) {
-                        console.warn(
-                            `[theme] Skipping ${entry.path}: missing theme name.`
-                        );
-                    }
+                    const error = new Error(
+                        `[theme] Skipping ${entry.path}: missing theme name.`
+                    );
+                    errors.push({ path: entry.path, error });
                     return null;
                 }
 
@@ -123,12 +135,7 @@ export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
                         iconModules[`../${entry.dirName}/icons.config.ts`],
                 };
             } catch (error) {
-                if (import.meta.dev) {
-                    console.warn(
-                        `[theme] Failed to load theme module at ${entry.path}:`,
-                        error
-                    );
-                }
+                errors.push({ path: entry.path, error });
                 return null;
             }
         })
@@ -140,7 +147,7 @@ export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
         }
     }
 
-    return manifest;
+    return { entries: manifest, errors };
 }
 
 /**
@@ -170,6 +177,12 @@ export async function loadThemeStylesheets(
             return;
         }
 
+        const cacheKey = `${entry.name}:${href}`;
+        const existingPromise = stylesheetInFlight.get(cacheKey);
+        if (existingPromise) {
+            return existingPromise;
+        }
+
         const existingLink = doc.querySelector(
             `link[data-theme-stylesheet="${entry.name}"][href="${href}"]`
         );
@@ -178,24 +191,37 @@ export async function loadThemeStylesheets(
             return;
         }
 
-        return new Promise<void>((resolve) => {
+        const promise = new Promise<void>((resolve) => {
             const link = doc.createElement('link');
             link.rel = 'stylesheet';
             link.href = href;
             link.setAttribute('data-theme-stylesheet', entry.name);
 
-            link.onload = () => resolve();
+            const finalize = () => {
+                stylesheetInFlight.delete(cacheKey);
+                resolve();
+            };
+
+            link.onload = finalize;
             link.onerror = () => {
                 if (import.meta.dev) {
                     console.warn(
                         `[theme] Failed to load stylesheet "${stylesheet}" (resolved to "${href}") for theme "${entry.name}".`
                     );
                 }
-                resolve();
+                finalize();
             };
+
+            if (!doc.head) {
+                finalize();
+                return;
+            }
 
             doc.head.appendChild(link);
         });
+
+        stylesheetInFlight.set(cacheKey, promise);
+        return promise;
     });
 
     await Promise.all(promises);

@@ -1,6 +1,6 @@
 import type { UserThemeOverrides } from './user-overrides-types';
 import type { ThemeBackgrounds } from '../../theme/_shared/types';
-import type { ThemePlugin } from '~/plugins/90.theme.client';
+import type { ThemePlugin } from '~/theme/_shared/types';
 import {
     applyThemeBackgrounds,
     createThemeBackgroundTokenResolver,

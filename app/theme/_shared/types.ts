@@ -151,6 +151,13 @@ export interface OverrideProps {
     [key: string]: unknown;
 }
 
+export interface ResolvedOverrideProps extends OverrideProps {
+    /** Dev-only selector that matched first. */
+    'data-theme-target'?: string;
+    /** Dev-only selectors list for debug. */
+    'data-theme-matches'?: string;
+}
+
 /**
  * Prop-to-class mapping configuration
  * Maps semantic props (variant, size, color) to CSS classes
@@ -243,6 +250,20 @@ export interface ThemeDefinition {
 
     /** Icon overrides for this theme */
     icons?: Record<string, string>;
+}
+
+export interface ThemePlugin {
+    set: (name: string) => void;
+    toggle: () => void;
+    get: () => string;
+    system: () => string;
+    current: import('vue').Ref<string>;
+    activeTheme: import('vue').Ref<string>;
+    resolversVersion: import('vue').Ref<number>;
+    setActiveTheme: (themeName: string) => Promise<void>;
+    getResolver: (themeName: string) => import('./runtime-resolver').RuntimeResolver | null;
+    loadTheme: (themeName: string) => Promise<CompiledTheme | null>;
+    getTheme: (themeName: string) => CompiledTheme | null;
 }
 
 export interface ThemeFontSet {

@@ -37,6 +37,8 @@ export function generateThemeCssVariables(def: ThemeDefinition): string {
     return lightBlock + (darkBlock ? '\n' + darkBlock : '');
 }
 
+// Unbounded cache is safe here because keys are limited to theme token names,
+// which are finite and validated at authoring time.
 const kebabCache = new Map<string, string>();
 
 function kebab(str: string): string {

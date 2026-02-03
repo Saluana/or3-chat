@@ -9,10 +9,20 @@ import { KNOWN_THEME_CONTEXTS } from './contexts';
  * Parse a selector into its components.
  */
 const selectorCache = new Map<string, ParsedSelector>();
+const MAX_SELECTOR_CACHE_ENTRIES = 200;
+
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        selectorCache.clear();
+    });
+}
 
 export function parseSelector(selector: string): ParsedSelector {
     if (selectorCache.has(selector)) {
-        return selectorCache.get(selector)!;
+        const cached = selectorCache.get(selector)!;
+        selectorCache.delete(selector);
+        selectorCache.set(selector, cached);
+        return cached;
     }
 
     // Normalize simple syntax to attribute selectors
@@ -42,6 +52,12 @@ export function parseSelector(selector: string): ParsedSelector {
     };
 
     selectorCache.set(selector, result);
+    if (selectorCache.size > MAX_SELECTOR_CACHE_ENTRIES) {
+        const oldestKey = selectorCache.keys().next().value;
+        if (oldestKey) {
+            selectorCache.delete(oldestKey);
+        }
+    }
     return result;
 }
 

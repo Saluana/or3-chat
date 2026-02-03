@@ -82,7 +82,7 @@ import { deriveStartNodeId } from '~/utils/chat/workflow-types';
 import WorkflowExecutionStatus from './WorkflowExecutionStatus.vue';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
-import type { ThemePlugin } from '~/plugins/90.theme.client';
+import type { ThemePlugin } from '~/theme/_shared/types';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useToast } from '#imports';
