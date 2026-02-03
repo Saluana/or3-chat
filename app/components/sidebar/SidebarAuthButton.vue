@@ -117,7 +117,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref } from 'vue';
 import { state } from '~/state/global';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 
 // Check if SSR auth is enabled via runtime config
 const runtimeConfig = useRuntimeConfig();
@@ -183,11 +183,10 @@ const buttonProps = computed(() => {
         state: connectionState.value,
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         block: true,
         disabled: isManaged.value,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 function onOpenRouterClick() {

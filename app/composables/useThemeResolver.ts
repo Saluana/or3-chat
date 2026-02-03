@@ -29,11 +29,47 @@ import { computed, getCurrentInstance, unref } from 'vue';
 import { useNuxtApp } from '#app';
 import type { ComputedRef, ComponentPublicInstance } from 'vue';
 import type { ResolveParams } from '../theme/_shared/runtime-resolver';
-import type { OverrideProps } from '~/theme/_shared/types';
+import type { OverrideProps, ResolvedOverrideProps } from '~/theme/_shared/types';
+
+/**
+ * Type-safe merge of base component props with theme overrides.
+ * Preserves literal types from base props while allowing overrides to replace them.
+ *
+ * @param base - Base component props with literal types (e.g., { color: 'primary' as const })
+ * @param overrides - Theme override props (may contain wider types like string)
+ * @returns Merged props with preserved type safety
+ *
+ * @example
+ * ```ts
+ * const props = mergeThemeProps(
+ *   { color: 'primary' as const, size: 'md' as const },
+ *   { variant: 'solid', size: 'lg' } // size override will be applied
+ * );
+ * // Type of props.color is still 'primary', not string
+ * ```
+ */
+export function mergeThemeProps<T extends Record<string, unknown>>(
+    base: T,
+    overrides: ResolvedOverrideProps
+): T {
+    // Spread base first to preserve types, then selectively apply overrides
+    const result = { ...base } as Record<string, unknown>;
+
+    // Apply overrides but only for keys that exist in base or are special override keys
+    const specialKeys = new Set(['class', 'style', 'ui']);
+
+    for (const key in overrides) {
+        if (key in base || specialKeys.has(key)) {
+            result[key] = overrides[key];
+        }
+    }
+
+    return result as T;
+}
 
 interface ComponentOverrideCache {
     theme: string;
-    entries: Map<string, OverrideProps>;
+    entries: Map<string, ResolvedOverrideProps>;
 }
 
 // Resolution cache using WeakMap to prevent memory leaks
@@ -75,7 +111,7 @@ export interface UseThemeResolverReturn {
      * @param params - Resolution parameters
      * @returns Resolved override props
      */
-    resolveOverrides: (params: ResolveParams) => OverrideProps;
+    resolveOverrides: (params: ResolveParams) => ResolvedOverrideProps;
 
     /**
      * Current active theme name
@@ -104,7 +140,7 @@ export function useThemeResolver(): UseThemeResolverReturn {
 
     const activeTheme = computed(() => theme.activeTheme.value);
 
-    const resolveOverrides = (params: ResolveParams): OverrideProps => {
+    const resolveOverrides = (params: ResolveParams): ResolvedOverrideProps => {
         const currentTheme = theme.activeTheme.value;
         const resolver = theme.getResolver(currentTheme);
 
@@ -160,7 +196,7 @@ export function useThemeResolver(): UseThemeResolverReturn {
  */
 export function useThemeOverrides(
     params: ResolveParams | ComputedRef<ResolveParams>
-): ComputedRef<OverrideProps> {
+): ComputedRef<ResolvedOverrideProps> {
     const { resolveOverrides, activeTheme } = useThemeResolver();
     const instance = getCurrentInstance();
 

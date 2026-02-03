@@ -11,8 +11,15 @@ import { KNOWN_THEME_CONTEXTS } from './contexts';
 const selectorCache = new Map<string, ParsedSelector>();
 const MAX_SELECTOR_CACHE_ENTRIES = 200;
 
-if (import.meta.hot) {
-    import.meta.hot.dispose(() => {
+// Type guard for HMR support
+interface HotModule {
+    hot?: {
+        dispose: (cb: () => void) => void;
+    };
+}
+
+if ((import.meta as HotModule).hot) {
+    (import.meta as HotModule).hot!.dispose(() => {
         selectorCache.clear();
     });
 }

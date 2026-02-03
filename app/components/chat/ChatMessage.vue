@@ -367,7 +367,7 @@ import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import { useRafFn, useClipboard } from '@vueuse/core';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
 import {
@@ -398,13 +398,12 @@ const copyButtonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
+    return mergeThemeProps({
         icon: useIcon('chat.message.copy').value,
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const retryButtonProps = computed(() => {
@@ -415,13 +414,12 @@ const retryButtonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
+    return mergeThemeProps({
         icon: useIcon('chat.message.retry').value,
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const continueButtonProps = computed(() => {
@@ -434,13 +432,12 @@ const continueButtonProps = computed(() => {
     const continueIcon =
         useIcon('chat.message.continue').value || 'heroicons:play-20-solid';
 
-    return {
+    return mergeThemeProps({
         icon: continueIcon,
         color: 'success' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const branchButtonProps = computed(() => {
@@ -451,13 +448,12 @@ const branchButtonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
+    return mergeThemeProps({
         icon: useIcon('chat.message.branch').value,
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const editButtonProps = computed(() => {
@@ -468,13 +464,12 @@ const editButtonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
+    return mergeThemeProps({
         icon: useIcon('chat.message.edit').value,
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const pluginActionButtonProps = computed(() => {
@@ -485,12 +480,11 @@ const pluginActionButtonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
+    return mergeThemeProps({
         color: 'info' as const,
         size: 'sm' as const,
         class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const saveEditButtonProps = computed(() => {
@@ -501,12 +495,11 @@ const saveEditButtonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
+    return mergeThemeProps({
         size: 'sm' as const,
         color: 'success' as const,
         class: 'theme-btn',
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const cancelEditButtonProps = computed(() => {
@@ -517,12 +510,11 @@ const cancelEditButtonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
+    return mergeThemeProps({
         size: 'sm' as const,
         color: 'error' as const,
         class: 'theme-btn',
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const messageContainerProps = computed(() => {

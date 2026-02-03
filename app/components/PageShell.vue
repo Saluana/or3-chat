@@ -255,7 +255,7 @@ import {
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
 import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/theme/_shared/types';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { useIcon } from '~/composables/useIcon';
@@ -360,10 +360,7 @@ function useButtonThemeProps(
           })
         : computed(() => ({} as Record<string, unknown>));
 
-    return computed(() => ({
-        ...fallback,
-        ...overrides.value,
-    }));
+    return computed(() => mergeThemeProps(fallback, overrides.value));
 }
 
 const sidebarToggleButtonProps = useButtonThemeProps('shell.sidebar-toggle', {

@@ -83,7 +83,7 @@ import WorkflowExecutionStatus from './WorkflowExecutionStatus.vue';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import type { ThemePlugin } from '~/theme/_shared/types';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useToast } from '#imports';
 import { useOr3Config } from '~/composables/useOr3Config';
@@ -166,13 +166,12 @@ const copyButtonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
+    return mergeThemeProps({
         icon: useIcon('chat.message.copy').value,
         color: 'neutral' as const,
         variant: 'ghost' as const,
         size: 'xs' as const,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const retryButtonProps = computed(() => {
@@ -183,13 +182,12 @@ const retryButtonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
+    return mergeThemeProps({
         icon: useIcon('ui.refresh').value,
         color: 'primary' as const,
         variant: 'ghost' as const,
         size: 'xs' as const,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const { copy } = useClipboard({ legacy: true });

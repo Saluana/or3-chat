@@ -9,6 +9,16 @@ import {
     CONVEX_STORAGE_PROVIDER_ID,
 } from './shared/cloud/provider-ids';
 
+// Extend Nuxt config types for convex-nuxt module
+declare module '@nuxt/schema' {
+    interface NuxtConfig {
+        convex?: {
+            url?: string;
+            manualInit?: boolean;
+        };
+    }
+}
+
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
 

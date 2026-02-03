@@ -147,8 +147,32 @@ export interface OverrideProps {
     /** Nuxt UI component-specific config object (passed to :ui prop) */
     ui?: Record<string, unknown>;
 
-    /** Allow any additional component-specific props */
-    [key: string]: unknown;
+    /** Block-level styling (for buttons and similar) */
+    block?: boolean;
+
+    /** Loading state (for buttons) */
+    loading?: boolean;
+
+    /** Disabled state */
+    disabled?: boolean;
+
+    /** Icon prop (for buttons with icons) */
+    icon?: string;
+
+    /** Leading/trailing icons */
+    leadingIcon?: string;
+    trailingIcon?: string;
+
+    /** Square variant (for icon-only buttons) */
+    square?: boolean;
+
+    /** Label text */
+    label?: string;
+
+    /** ARIA attributes for accessibility */
+    'aria-label'?: string;
+    'aria-pressed'?: boolean;
+    'aria-describedby'?: string;
 }
 
 export interface ResolvedOverrideProps extends OverrideProps {
@@ -156,6 +180,8 @@ export interface ResolvedOverrideProps extends OverrideProps {
     'data-theme-target'?: string;
     /** Dev-only selectors list for debug. */
     'data-theme-matches'?: string;
+    /** Allow dynamic properties for custom overrides */
+    [key: string]: unknown;
 }
 
 /**

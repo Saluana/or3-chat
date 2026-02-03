@@ -34,7 +34,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 
 const iconUser = useIcon('sidebar.user');
@@ -48,9 +48,8 @@ const buttonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
+    return mergeThemeProps({
         block: true,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 </script>

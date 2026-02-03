@@ -126,7 +126,7 @@ import 'or3-scroll/style.css';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useToast, useHooks } from '#imports';
 import { MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
@@ -490,15 +490,17 @@ const scrollToBottomButtonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
-        icon: iconScrollToBottom.value || 'heroicons:arrow-down-20-solid',
-        size: 'sm' as const,
-        color: 'primary' as const,
-        variant: 'solid' as const,
-        ui: { base: 'rounded-full' },
-        class: 'shadow-lg',
-        ...overrides.value,
-    };
+    return mergeThemeProps(
+        {
+            icon: iconScrollToBottom.value || 'heroicons:arrow-down-20-solid',
+            size: 'sm' as const,
+            color: 'primary' as const,
+            variant: 'solid' as const,
+            ui: { base: 'rounded-full' },
+            class: 'shadow-lg',
+        },
+        overrides.value
+    );
 });
 
 const scrollToBottomOpacity = computed(() => {
