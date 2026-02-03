@@ -1,8 +1,19 @@
 /**
- * Background Job Store
+ * @module server/utils/background-jobs/store
  *
- * Factory that creates the appropriate background job provider based on configuration.
- * Falls back to in-memory provider if the configured provider is unavailable.
+ * Purpose:
+ * Provider factory and configuration access for background streaming jobs.
+ * The store selects a provider based on runtime config and caches it to
+ * avoid repeated initialization.
+ *
+ * Responsibilities:
+ * - Resolve and cache the active provider.
+ * - Expose background streaming enabled status.
+ * - Resolve background job configuration with defaults.
+ *
+ * Non-Goals:
+ * - Implementing provider logic or persistence.
+ * - Enforcing authorization rules for job access.
  */
 
 import type { BackgroundJobProvider, BackgroundJobConfig } from './types';
@@ -13,8 +24,16 @@ import { BACKGROUND_PROVIDER_IDS } from '~~/shared/cloud/provider-ids';
 let cachedProvider: BackgroundJobProvider | null = null;
 
 /**
- * Get the active background job provider.
- * Caches the provider for performance.
+ * Purpose:
+ * Resolve the active background job provider.
+ *
+ * Behavior:
+ * - Reads runtime config for provider selection.
+ * - Dynamically imports Convex provider when configured.
+ * - Caches the resolved provider for subsequent calls.
+ *
+ * Constraints:
+ * - Falls back to the in-memory provider when configuration is missing.
  */
 export async function getJobProvider(): Promise<BackgroundJobProvider> {
     if (cachedProvider) {
@@ -57,7 +76,8 @@ export async function getJobProvider(): Promise<BackgroundJobProvider> {
 }
 
 /**
- * Check if background streaming is enabled
+ * Purpose:
+ * Determine whether background streaming is enabled in config.
  */
 export function isBackgroundStreamingEnabled(): boolean {
     const config = useRuntimeConfig();
@@ -66,7 +86,11 @@ export function isBackgroundStreamingEnabled(): boolean {
 }
 
 /**
- * Get background job configuration
+ * Purpose:
+ * Resolve background job configuration with defaults.
+ *
+ * Behavior:
+ * - Uses `DEFAULT_CONFIG` for any missing fields.
  */
 export function getJobConfig(): BackgroundJobConfig {
     const config = useRuntimeConfig();
@@ -81,7 +105,8 @@ export function getJobConfig(): BackgroundJobConfig {
 }
 
 /**
- * Reset the cached provider (useful for testing or config changes)
+ * Purpose:
+ * Clear the cached provider, typically for tests or config changes.
  */
 export function resetJobProvider(): void {
     cachedProvider = null;

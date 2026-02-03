@@ -1,12 +1,48 @@
+/**
+ * @module server/utils/llm/rate-limiter
+ *
+ * Purpose:
+ * Provides an in-memory rate limiter dedicated to LLM request paths.
+ * This is intentionally separate from sync and storage rate limiting to avoid
+ * shared keys and accidental coupling of limits.
+ *
+ * Responsibilities:
+ * - Track recent request timestamps per key in a sliding window.
+ * - Provide an atomic check-and-record operation to prevent races.
+ * - Expose stats and reset helpers for diagnostics and tests.
+ *
+ * Non-Goals:
+ * - Distributed rate limiting or persistence across restarts.
+ * - Per-route enforcement or policy selection.
+ *
+ * Constraints:
+ * - In-memory only and resets on server restart.
+ * - Bounded LRU cache to avoid unbounded growth.
+ */
+
 import { LRUCache } from 'lru-cache';
 
-/** LLM-specific rate limit config (avoids conflict with sync rate-limiter) */
+/**
+ * Purpose:
+ * Describes the window and request count limit for an LLM subject.
+ *
+ * Constraints:
+ * - `windowMs` is in milliseconds.
+ * - `maxRequests` applies per subject key.
+ */
 export interface LlmRateLimitConfig {
     windowMs: number;
     maxRequests: number;
 }
 
-/** LLM-specific rate limit result (avoids conflict with sync rate-limiter) */
+/**
+ * Purpose:
+ * Represents the outcome of an LLM rate limit check.
+ *
+ * Behavior:
+ * - `remaining` reflects the number of requests still allowed in the window.
+ * - `retryAfterMs` is only present when the request is rejected.
+ */
 export interface LlmRateLimitResult {
     allowed: boolean;
     remaining: number;
@@ -27,8 +63,25 @@ const rateLimitStore = new LRUCache<string, RateLimitEntry>({
 });
 
 /**
- * Atomically check and record a rate limit request.
- * This prevents TOCTOU race conditions where concurrent requests could bypass limits.
+ * Purpose:
+ * Perform a single atomic check-and-record step for an LLM request.
+ *
+ * Behavior:
+ * - Prunes timestamps outside the window.
+ * - Rejects requests once `maxRequests` is reached.
+ * - Records the current request timestamp before returning success.
+ *
+ * Constraints:
+ * - Atomic within a single process. It does not coordinate across instances.
+ *
+ * Non-Goals:
+ * - Emitting metrics or headers. Callers handle that separately.
+ *
+ * @example
+ * ```ts
+ * const result = checkAndRecordLlmRequest(userId, { windowMs: 60_000, maxRequests: 30 });
+ * if (!result.allowed) return sendTooManyRequests(result.retryAfterMs);
+ * ```
  */
 export function checkAndRecordLlmRequest(
     key: string,
@@ -70,8 +123,8 @@ export function checkAndRecordLlmRequest(
 }
 
 /**
- * @deprecated Use checkAndRecordLlmRequest for atomic check+record.
- * This is kept for backwards compatibility with getLlmRateLimitStats.
+ * @deprecated Use `checkAndRecordLlmRequest` for atomic check and record.
+ * This helper is retained for compatibility with `getLlmRateLimitStats`.
  */
 function checkLlmRateLimitInternal(
     key: string,
@@ -102,6 +155,17 @@ function checkLlmRateLimitInternal(
     return { allowed: true, remaining };
 }
 
+/**
+ * Purpose:
+ * Expose rate limit stats for an LLM subject without mutating state.
+ *
+ * Behavior:
+ * - Returns the configured limit, remaining count, and window size.
+ * - Uses the internal non-mutating check for compatibility.
+ *
+ * Constraints:
+ * - Stats are per-process and reset on server restart.
+ */
 export function getLlmRateLimitStats(
     key: string,
     config: LlmRateLimitConfig
@@ -114,6 +178,14 @@ export function getLlmRateLimitStats(
     };
 }
 
+/**
+ * Purpose:
+ * Clear stored LLM rate limit entries for a single key or all keys.
+ *
+ * Behavior:
+ * - When `key` is provided, only that subject is cleared.
+ * - When omitted, the entire cache is cleared.
+ */
 export function resetLlmRateLimits(key?: string): void {
     if (key) {
         rateLimitStore.delete(key);

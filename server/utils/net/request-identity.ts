@@ -1,21 +1,47 @@
 /**
- * Proxy-safe request identity utilities.
- * 
- * Provides functions to safely extract client IP and request host,
- * respecting trusted proxy configuration.
- * 
- * When behind a reverse proxy (e.g., nginx, Cloudflare), the socket address
- * is the proxy's IP, not the client's. These utilities parse X-Forwarded-*
- * headers when trustProxy is enabled, falling back to direct connection
- * info otherwise.
+ * @module server/utils/net/request-identity
+ *
+ * Purpose:
+ * Proxy-safe request identity helpers for SSR endpoints.
+ * These utilities extract client identity and host information while respecting
+ * trusted proxy configuration.
+ *
+ * Responsibilities:
+ * - Normalize proxy trust configuration.
+ * - Extract client IP from trusted forwarded headers or socket address.
+ * - Extract host value from trusted forwarded headers or Host header.
+ *
+ * Non-Goals:
+ * - Full IP validation or geo-location.
+ * - Parsing Proxy Protocol or other non-HTTP identity schemes.
+ *
+ * Constraints:
+ * - When `trustProxy` is enabled, missing or invalid forwarded headers return null.
+ * - All results are best-effort and should be treated as untrusted unless validated.
  */
 
 import type { H3Event } from 'h3';
 import { getHeader } from 'h3';
 
+/**
+ * Purpose:
+ * Enumerates supported forwarded-for header names.
+ */
 export type ForwardedForHeader = 'x-forwarded-for' | 'x-real-ip';
+
+/**
+ * Purpose:
+ * Enumerates supported forwarded-host header names.
+ */
 export type ForwardedHostHeader = 'x-forwarded-host';
 
+/**
+ * Purpose:
+ * Normalized proxy trust configuration.
+ *
+ * Constraints:
+ * - Header names are restricted to known values to avoid spoofed configuration.
+ */
 export interface ProxyTrustConfig {
     /** Whether to trust X-Forwarded-* headers from proxies */
     trustProxy: boolean;
@@ -25,12 +51,30 @@ export interface ProxyTrustConfig {
     forwardedHostHeader?: ForwardedHostHeader;
 }
 
+/**
+ * Purpose:
+ * Input shape for proxy trust configuration before normalization.
+ *
+ * Constraints:
+ * - Unknown header names are ignored and replaced with defaults.
+ */
 export interface ProxyTrustConfigInput {
     trustProxy?: boolean;
     forwardedForHeader?: string;
     forwardedHostHeader?: string;
 }
 
+/**
+ * Purpose:
+ * Normalize optional proxy trust settings into a safe, typed config.
+ *
+ * Behavior:
+ * - Defaults to `trustProxy = false`.
+ * - Allows only known forwarded header names.
+ *
+ * Non-Goals:
+ * - Validation that the proxy chain is actually trustworthy.
+ */
 export function normalizeProxyTrustConfig(
     input?: ProxyTrustConfigInput
 ): ProxyTrustConfig {
@@ -51,7 +95,7 @@ export function normalizeProxyTrustConfig(
 }
 
 /**
- * Simple IPv4/IPv6 validation regex.
+ * Simple IPv4 and IPv6 validation regex.
  * Matches common IP formats but not all edge cases.
  */
 const IP_REGEX = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:.]+$/;
@@ -71,9 +115,8 @@ function normalizeHeaderValue(
 
 /**
  * Parse X-Forwarded-For header and return the first valid IP.
- * 
+ *
  * Format: client, proxy1, proxy2, ...
- * We take the first (client) IP.
  */
 function parseForwardedFor(headerValue: string): string | null {
     if (!headerValue) return null;
@@ -85,22 +128,29 @@ function parseForwardedFor(headerValue: string): string | null {
     // Validate basic IP shape
     if (!IP_REGEX.test(firstIp)) return null;
 
-    // Additional validation: reject private/local IPs if needed
-    // For now, we accept any valid-looking IP
     return firstIp;
 }
 
 /**
- * Get the client IP address from the request.
- * 
- * When trustProxy is true, parses X-Forwarded-For header.
- * Otherwise, uses the socket's remote address.
- * 
- * @param event - The H3 event
- * @param cfg - Proxy trust configuration
- * @returns The client IP, or null if it cannot be determined
+ * Purpose:
+ * Resolve the client IP for an incoming request.
+ *
+ * Behavior:
+ * - When `trustProxy` is enabled, uses the configured forwarded-for header.
+ * - When `trustProxy` is disabled, returns the socket remote address.
+ * - Fails closed to `null` when forwarded headers are missing or invalid.
+ *
+ * Constraints:
+ * - Returned IPs are not verified beyond basic shape checks.
+ * - Trusting forwarded headers requires a trusted proxy boundary.
+ *
+ * Non-Goals:
+ * - Filtering private or reserved IP ranges.
  */
-export function getClientIp(event: H3Event, cfg: ProxyTrustConfig): string | null {
+export function getClientIp(
+    event: H3Event,
+    cfg: ProxyTrustConfig
+): string | null {
     if (cfg.trustProxy) {
         const headerName = cfg.forwardedForHeader ?? 'x-forwarded-for';
         const forwardedHeader = normalizeHeaderValue(
@@ -114,8 +164,7 @@ export function getClientIp(event: H3Event, cfg: ProxyTrustConfig): string | nul
             if (parsed) return parsed;
         }
 
-        // If forwarded header is missing/invalid, fall through to socket address
-        // but return null to indicate we couldn't get a trusted identity
+        // If forwarded header is missing or invalid, fail closed.
         return null;
     }
 
@@ -125,14 +174,17 @@ export function getClientIp(event: H3Event, cfg: ProxyTrustConfig): string | nul
 }
 
 /**
- * Get the request host (hostname) from the request.
- * 
- * When trustProxy is true, uses X-Forwarded-Host header.
- * Otherwise, uses the Host header.
- * 
- * @param event - The H3 event
- * @param cfg - Proxy trust configuration
- * @returns The request host, or null if it cannot be determined
+ * Purpose:
+ * Resolve the request host for an incoming request.
+ *
+ * Behavior:
+ * - When `trustProxy` is enabled, uses the configured forwarded-host header.
+ * - When `trustProxy` is disabled, uses the Host header.
+ * - Fails closed to `null` when forwarded headers are missing or invalid.
+ *
+ * Constraints:
+ * - Returns lowercased host values for consistent comparisons.
+ * - Does not strip ports; callers can normalize if needed.
  */
 export function getProxyRequestHost(
     event: H3Event,
@@ -154,7 +206,7 @@ export function getProxyRequestHost(
             }
         }
 
-        // Fail closed when trustProxy is enabled and forwarded host is missing/invalid
+        // Fail closed when trustProxy is enabled and forwarded host is missing or invalid.
         return null;
     }
 

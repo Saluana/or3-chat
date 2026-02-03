@@ -1,12 +1,28 @@
 /**
- * Background Job Types
+ * @module server/utils/background-jobs/types
  *
- * Defines the pluggable provider interface for background streaming jobs.
- * Implementations can use in-memory, Convex, Redis, etc.
+ * Purpose:
+ * Defines the background job contract for server-side streaming.
+ * These types formalize the provider interface so multiple storage backends
+ * can plug in without changing the streaming pipeline.
+ *
+ * Responsibilities:
+ * - Describe the job record and lifecycle state.
+ * - Define provider capabilities and required methods.
+ * - Centralize provider configuration defaults.
+ *
+ * Non-Goals:
+ * - Implementing any storage or streaming logic.
+ * - Defining API routes or authorization.
  */
 
 /**
- * Background job record
+ * Purpose:
+ * Represents a persisted background streaming job.
+ *
+ * Constraints:
+ * - `status` must reflect the terminal state once completed.
+ * - `content` is the accumulated stream output.
  */
 export interface BackgroundJob {
     /** Unique job identifier */
@@ -23,18 +39,19 @@ export interface BackgroundJob {
     status: 'streaming' | 'complete' | 'error' | 'aborted';
     /** Accumulated content from streaming */
     content: string;
-    /** Number of chunks received (for progress) */
+    /** Number of chunks received */
     chunksReceived: number;
     /** Unix timestamp when job started */
     startedAt: number;
-    /** Unix timestamp when job completed/failed/aborted */
+    /** Unix timestamp when job completed, failed, or aborted */
     completedAt?: number;
-    /** Error message if status is 'error' */
+    /** Error message when status is `error` */
     error?: string;
 }
 
 /**
- * Parameters for creating a new job
+ * Purpose:
+ * Input for creating a new streaming job.
  */
 export interface CreateJobParams {
     userId: string;
@@ -44,7 +61,11 @@ export interface CreateJobParams {
 }
 
 /**
- * Partial update for a streaming job
+ * Purpose:
+ * Partial update payload for a streaming job.
+ *
+ * Constraints:
+ * - Updates are incremental and should be append-only for `contentChunk`.
  */
 export interface JobUpdate {
     /** Content chunk to append */
@@ -54,104 +75,102 @@ export interface JobUpdate {
 }
 
 /**
- * Background Job Provider Interface
+ * Purpose:
+ * Contract for background job storage providers.
  *
- * Implement this interface to add a new storage backend for background jobs.
- * Providers are responsible for job persistence and lifecycle management.
+ * Behavior:
+ * - Providers persist job records and expose lifecycle updates.
+ * - The streaming loop depends on `createJob`, `updateJob`, and `completeJob`.
  *
- * Built-in providers:
- * - memory: In-memory (single instance, jobs lost on restart)
- * - convex: Convex database (multi-instance, persistent)
- * - redis: Redis (multi-instance, persistent) [future]
+ * Constraints:
+ * - `checkAndRecord` style atomicity is not required here, but updates must
+ *   be safe for concurrent streaming and viewer polling.
+ * - Providers that do not run in-process must not return AbortControllers.
  *
- * IMPORTANT: For abort functionality:
- * - Memory provider: Uses AbortController directly
- * - External providers (Convex/Redis): Must poll job status to detect aborts
+ * Non-Goals:
+ * - Directly streaming content to clients. That is handled elsewhere.
  */
 export interface BackgroundJobProvider {
-    /** Provider name for logging/debugging */
+    /** Provider name for logging and diagnostics */
     readonly name: string;
 
     /**
      * Create a new background job.
-     * @returns The job ID
-     * @throws Error if max concurrent jobs reached
+     *
+     * @throws Error when the provider enforces a concurrent job cap.
      */
     createJob(params: CreateJobParams): Promise<string>;
 
     /**
-     * Retrieve a job by ID.
-     * @param jobId - The job ID
-     * @param userId - User ID for authorization check (use '*' to skip check)
-     * @returns The job or null if not found/unauthorized
+     * Retrieve a job by ID with optional authorization.
+     *
+     * Constraints:
+     * - `userId` must be validated unless it is `'*'`.
      */
     getJob(jobId: string, userId: string): Promise<BackgroundJob | null>;
 
     /**
-     * Update a streaming job with new content chunk.
-     * Called incrementally as chunks arrive.
-     * No-op if job is not in 'streaming' status.
+     * Append or update streaming progress for a job.
+     * No-op if the job is not in `streaming` status.
      */
     updateJob(jobId: string, update: JobUpdate): Promise<void>;
 
     /**
      * Mark a job as successfully completed.
-     * @param jobId - The job ID
-     * @param finalContent - The complete accumulated content
      */
     completeJob(jobId: string, finalContent: string): Promise<void>;
 
     /**
-     * Mark a job as failed.
-     * @param jobId - The job ID
-     * @param error - Error message
+     * Mark a job as failed with an error.
      */
     failJob(jobId: string, error: string): Promise<void>;
 
     /**
      * Abort a running job.
-     * @param jobId - The job ID
-     * @param userId - User ID for authorization check
-     * @returns true if aborted, false if job not found, unauthorized, or already complete
+     *
+     * Behavior:
+     * - Returns `true` only when a streaming job is successfully aborted.
      */
     abortJob(jobId: string, userId: string): Promise<boolean>;
 
     /**
-     * Get an AbortController for a job (only for in-process providers).
-     * Memory provider stores these; external providers return undefined.
+     * Optional AbortController lookup for in-process providers.
+     * External providers should return `undefined`.
      */
     getAbortController?(jobId: string): AbortController | undefined;
 
     /**
-     * Clean up expired/stale jobs.
-     * Called periodically to remove old jobs and timeout streaming ones.
-     * @returns Number of jobs cleaned up
+     * Clean up expired or stale jobs.
+     *
+     * @returns Number of jobs removed or timed out.
      */
     cleanupExpired(): Promise<number>;
 
     /**
-     * Get active job count (for monitoring/limits).
+     * Optional count of active streaming jobs.
      */
     getActiveJobCount?(): Promise<number>;
 }
 
 /**
- * Configuration for background job providers
+ * Purpose:
+ * Configuration values for background job storage providers.
  */
 export interface BackgroundJobConfig {
     /** Maximum concurrent streaming jobs */
     maxConcurrentJobs: number;
     /** Job timeout in milliseconds */
     jobTimeoutMs: number;
-    /** How long to keep completed jobs before cleanup (ms) */
+    /** Retention window for completed jobs in milliseconds */
     completedJobRetentionMs: number;
 }
 
 /**
- * Default configuration values
+ * Purpose:
+ * Default configuration values for background jobs.
  */
 export const DEFAULT_CONFIG: BackgroundJobConfig = {
     maxConcurrentJobs: 20,
-    jobTimeoutMs: 5 * 60 * 1000, // 5 minutes
-    completedJobRetentionMs: 5 * 60 * 1000, // 5 minutes
+    jobTimeoutMs: 5 * 60 * 1000,
+    completedJobRetentionMs: 5 * 60 * 1000,
 };

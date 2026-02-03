@@ -7,6 +7,34 @@ import {
 } from 'h3';
 import { useRuntimeConfig } from '#imports';
 
+/**
+ * @module server/middleware/cors
+ *
+ * Purpose:
+ * Emits spec-correct CORS response headers for browser requests.
+ * This middleware exists to support OR3 deployments where the UI and API may be
+ * served from different origins, while keeping credential handling correct.
+ *
+ * Behavior:
+ * - If the request has no `Origin` header, it does nothing.
+ * - If `security.allowedOrigins` is empty, all origins are allowed and
+ *   `Access-Control-Allow-Origin: *` is emitted.
+ * - If `security.allowedOrigins` is non-empty, only exact matches are allowed.
+ *   For allowed origins, the middleware echoes the origin and enables
+ *   `Access-Control-Allow-Credentials: true`.
+ * - Appends `Origin` to `Vary` instead of overwriting it.
+ * - For `OPTIONS` preflight requests, responds with 204 and emits
+ *   allow-methods and allow-headers.
+ *
+ * Constraints:
+ * - Never emits `Access-Control-Allow-Credentials` together with `*`.
+ * - Allowlist matching is exact string match. Scheme and port must match.
+ *
+ * Non-Goals:
+ * - Pattern matching or wildcard allowlists.
+ * - Setting `Access-Control-Max-Age` (left to deployment policy).
+ */
+
 export default defineEventHandler((event) => {
     const config = useRuntimeConfig();
     const allowedOrigins = config.security.allowedOrigins;
