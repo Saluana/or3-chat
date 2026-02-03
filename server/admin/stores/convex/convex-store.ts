@@ -1,3 +1,26 @@
+/**
+ * @module server/admin/stores/convex/convex-store.ts
+ *
+ * Purpose:
+ * Provides a concrete implementation of the Admin Store interfaces using Convex
+ * as the backend. This module handles the complexities of server-side
+ * authentication and privileged data access.
+ *
+ * Responsibilities:
+ * - Implementing WorkspaceAccessStore, WorkspaceSettingsStore, and AdminUserStore.
+ * - Authenticating super admins via Clerk JWTs or Convex Admin Keys.
+ * - Bridging admin identities for deployment-level mutation access.
+ * - Validating and converting IDs between the Admin API and Convex internals.
+ *
+ * Architecture:
+ * This implementation relies on the Convex Gateway Client utilities to perform
+ * mutation and query requests. It uses a session-based caching mechanism
+ * (`__or3_super_admin_grant_done`) to avoid redundant deployment grants.
+ *
+ * Constraints:
+ * - Requires either `CLERK_SECRET_KEY` or `CONVEX_SELF_HOSTED_ADMIN_KEY` for auth.
+ * - All mutations require an authenticated principal Kind of `super_admin`.
+ */
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
 import { createHmac } from 'crypto';
@@ -24,6 +47,11 @@ type AdminContextShape = {
     session?: { providerUserId?: string };
 };
 
+/**
+ * Constructs a mock OIDC identity for super admins when using Convex Admin Keys.
+ *
+ * Internal utility.
+ */
 function buildAdminIdentity(username: string) {
     const normalized = username.trim() || 'super_admin';
     return {
@@ -34,6 +62,19 @@ function buildAdminIdentity(username: string) {
     };
 }
 
+/**
+ * Ensures that a super admin has the necessary deployment-level permissions
+ * in Convex before performing sensitive mutations.
+ *
+ * Behavior:
+ * Generates an HMAC signature (`bridge_signature`) using the `OR3_ADMIN_JWT_SECRET`
+ * to verify the server's authority to grant admin status to a specific Clerk user.
+ *
+ * Constraints:
+ * - Only runs once per request (cached on `event.context`).
+ * - Requires `OR3_ADMIN_JWT_SECRET` to be synchronized between the Nuxt server
+ *   and the Convex environment.
+ */
 async function ensureSuperAdminDeploymentGrant(
     event: H3Event,
     client: ReturnType<typeof getConvexGatewayClient>
@@ -101,7 +142,9 @@ function validateWorkspaceId(id: string): Id<'workspaces'> {
 
 /**
  * Validate and convert a user ID string to Convex Id type.
- * Throws if the ID is empty/invalid.
+ *
+ * @throws 400 Error if the ID is malformed.
+ * Internal utility.
  */
 function validateUserId(id: string): Id<'users'> {
     if (!id || typeof id !== 'string') {
@@ -114,6 +157,18 @@ function validateUserId(id: string): Id<'users'> {
     return id as Id<'users'>;
 }
 
+/**
+ * Resolves an authenticated Convex client based on the current request context.
+ *
+ * Logic:
+ * 1. If `super_admin` principal exists and a Convex Admin Key is provided,
+ *    returns a client using manual OIDC identity bridging.
+ * 2. Otherwise, attempts to retrieve a Clerk JWT from the current session.
+ * 3. Validates that the provider is 'clerk'.
+ * 4. Ensures super admin deployment grants are applied if necessary.
+ *
+ * @throws 401/403/501 Error if authentication fails or is misconfigured.
+ */
 async function getConvexClientWithAuth(event: H3Event) {
     const config = useRuntimeConfig(event);
     const authProvider = config.auth.provider;
@@ -152,6 +207,9 @@ async function getConvexClientWithAuth(event: H3Event) {
     return client;
 }
 
+/**
+ * Creates a WorkspaceAccessStore implemented for Convex.
+ */
 export function createConvexWorkspaceAccessStore(
     event: H3Event
 ): WorkspaceAccessStore {
@@ -240,6 +298,9 @@ export function createConvexWorkspaceAccessStore(
     };
 }
 
+/**
+ * Creates a WorkspaceSettingsStore implemented for Convex.
+ */
 export function createConvexWorkspaceSettingsStore(
     event: H3Event
 ): WorkspaceSettingsStore {
@@ -262,6 +323,9 @@ export function createConvexWorkspaceSettingsStore(
     };
 }
 
+/**
+ * Creates an AdminUserStore implemented for Convex.
+ */
 export function createConvexAdminUserStore(event: H3Event): AdminUserStore {
     return {
         async listAdmins(): Promise<AdminUserInfo[]> {

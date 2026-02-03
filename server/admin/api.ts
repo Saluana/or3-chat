@@ -1,6 +1,5 @@
 import type { H3Event } from 'h3';
 import type { Permission, SessionContext } from '~/core/hooks/hook-types';
-import { resolveSessionContext } from '../auth/session';
 import { requireAdminAccess, requireAdminOwner } from '../auth/admin';
 import { requireCan } from '../auth/can';
 import { requireAdminMutation, requireAdminRequest } from './guard';

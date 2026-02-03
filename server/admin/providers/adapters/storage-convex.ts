@@ -1,3 +1,18 @@
+/**
+ * @module server/admin/providers/adapters/storage-convex.ts
+ *
+ * Purpose:
+ * Admin adapter for Convex storage. Provides maintenance tools for managing
+ * blob data in the Convex backend.
+ *
+ * Key Operations:
+ * - **Storage Garbage Collection**: Purges file blobs that were logically deleted
+ *   from the database but still occupy space in the storage provider.
+ *
+ * Constraints:
+ * - Requires a valid Clerk gateway token to perform administrative mutations.
+ * - Operates within a workspace scope.
+ */
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
 import { api } from '~~/convex/_generated/api';
@@ -19,8 +34,13 @@ import type {
 } from '../types';
 import { useRuntimeConfig } from '#imports';
 
+/** Default retention window for deleted files (30 days). */
 const DEFAULT_RETENTION_SECONDS = 30 * 24 * 3600;
 
+/**
+ * Purpose:
+ * Normalizes user-provided GC limits into seconds.
+ */
 function resolveRetentionSeconds(payload?: Record<string, unknown>): number {
     const days = typeof payload?.retentionDays === 'number' ? payload.retentionDays : null;
     const seconds =
@@ -30,15 +50,24 @@ function resolveRetentionSeconds(payload?: Record<string, unknown>): number {
     return DEFAULT_RETENTION_SECONDS;
 }
 
+/**
+ * Singleton implementation of the Convex Storage admin adapter.
+ */
 export const convexStorageAdminAdapter: ProviderAdminAdapter = {
     id: CONVEX_STORAGE_PROVIDER_ID,
     kind: 'storage',
+
+    /**
+     * Purpose:
+     * Validates storage provider alignment and configuration.
+     * Warns if Clerk is not used, as many actions require Clerk JWTs.
+     */
     async getStatus(_event: H3Event, ctx: ProviderStatusContext): Promise<ProviderAdminStatusResult> {
         const warnings: ProviderAdminStatusResult['warnings'] = [];
         if (ctx.enabled && ctx.provider !== CONVEX_STORAGE_PROVIDER_ID) {
             warnings.push({
                 level: 'warning',
-                message: 'Storage provider mismatch.',
+                message: 'Storage provider mismatch. The selected provider does not match this adapter.',
             });
         }
         const config = useRuntimeConfig();
@@ -46,7 +75,7 @@ export const convexStorageAdminAdapter: ProviderAdminAdapter = {
             warnings.push({
                 level: 'warning',
                 message:
-                    'Convex storage admin actions currently expect Clerk gateway tokens.',
+                    'Convex storage admin actions currently expect Clerk gateway tokens for authentication.',
             });
         }
         return {
@@ -55,12 +84,22 @@ export const convexStorageAdminAdapter: ProviderAdminAdapter = {
                 {
                     id: 'storage.gc',
                     label: 'Run Storage GC',
-                    description: 'Delete orphaned blobs after retention window.',
+                    description: 'Delete orphaned blobs from the primary storage backend after the retention window.',
                     danger: true,
                 },
             ],
         };
     },
+
+    /**
+     * Purpose:
+     * Executes the requested storage maintenance action.
+     *
+     * Behavior:
+     * - `storage.gc`: Triggers a Convex mutation to purge deleted files.
+     *
+     * @throws 401 Unauthorized if a valid Clerk token cannot be resolved.
+     */
     async runAction(
         event: H3Event,
         actionId: string,

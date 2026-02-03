@@ -1,3 +1,25 @@
+/**
+ * @module server/admin/extensions/install.ts
+ *
+ * Purpose:
+ * Core installation engine for OR3 extensions. Handles secure extraction,
+ * validation, and safe replacement of extension packages.
+ *
+ * Architecture:
+ * - **Atomic Installation**: Extracts archives into a `.tmp` directory first.
+ *   Only renames/replaces the target directory if all validations pass.
+ * - **Streaming Extraction**: Processes the zip archive without buffering
+ *   the entire unpacked contents in memory.
+ * - **Zip Slip Protection**: Enforces strict path normalization and resolve
+ *   checks to prevent directory traversal attacks.
+ * - **Resource Gating**: Enforces limits on file count, compressed size, and
+ *   unpacked total size.
+ *
+ * Responsibilities:
+ * - Validate `or3.manifest.json` early in the extraction process.
+ * - Enforce file extension allow-lists to block malicious binaries.
+ * - Handle nested directory prefixes within archives (common in GitHub exports).
+ */
 import { promises as fs } from 'node:fs';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, join, normalize, resolve, extname, sep } from 'node:path';
@@ -6,13 +28,25 @@ import type { ExtensionKind, Or3ExtensionManifest } from './types';
 import { Or3ExtensionManifestSchema } from './types';
 import { ensureExtensionsDirs, EXTENSIONS_BASE_DIR, getKindDir } from './paths';
 
+/**
+ * Purpose:
+ * Defines security and operational limits for extension installations.
+ */
 export type ExtensionInstallLimits = {
+    /** Maximum allowed size for the uploaded .zip file. */
     maxZipBytes: number;
+    /** Maximum number of files permitted within the archive. */
     maxFiles: number;
+    /** Maximum total size of all files after extraction. */
     maxTotalBytes: number;
+    /** List of permitted file extensions (e.g., ['.js', '.css']). */
     allowedExtensions: string[];
 };
 
+/**
+ * Purpose:
+ * Strict default limits to prevent DoS or accidental disk exhaustion.
+ */
 const DEFAULT_LIMITS: ExtensionInstallLimits = {
     maxZipBytes: 25 * 1024 * 1024,
     maxFiles: 2000,
@@ -46,12 +80,21 @@ const DEFAULT_LIMITS: ExtensionInstallLimits = {
     ],
 };
 
+/**
+ * Purpose:
+ * Low-level validation to block directory traversal attempts.
+ * Throws if the path escaping its root.
+ */
 function ensureSafePath(path: string) {
     if (path.includes('..')) throw new Error('Invalid archive path');
     if (path.startsWith('/')) throw new Error('Invalid archive path');
     if (/^[A-Za-z]:/.test(path)) throw new Error('Invalid archive path');
 }
 
+/**
+ * Purpose:
+ * Cleans zip entry keys for consistent internal handling.
+ */
 function normalizeEntryKey(key: string): string {
     let normalized = key.replace(/\0/g, '');
     normalized = normalized.replace(/\\/g, '/');
@@ -61,12 +104,25 @@ function normalizeEntryKey(key: string): string {
     return normalized;
 }
 
+/**
+ * Purpose:
+ * Determines the directory prefix if an extension is nested inside a folder in the zip.
+ */
 function computePrefix(manifestPath: string): string {
     const dir = dirname(manifestPath);
     if (dir === '.' || dir === '/') return '';
     return dir.endsWith('/') ? dir : `${dir}/`;
 }
 
+/**
+ * Purpose:
+ * Efficiently locates and parses the `or3.manifest.json` without extracting the whole zip.
+ *
+ * Behavior:
+ * - Scans the zip index for the manifest file.
+ * - Extracts only that file into memory.
+ * - Validates it against `Or3ExtensionManifestSchema`.
+ */
 async function extractManifestFromZip(buffer: Buffer): Promise<{
     manifest: Or3ExtensionManifest;
     manifestPath: string;
@@ -131,6 +187,24 @@ async function extractManifestFromZip(buffer: Buffer): Promise<{
     };
 }
 
+/**
+ * Purpose:
+ * Orchestrates the full extension installation process from a Buffer.
+ *
+ * Behavior:
+ * 1. Checks pre-extraction limits (compressed size).
+ * 2. Extracts and validates the manifest.
+ * 3. Prepares a temporary staging directory.
+ * 4. Extracts all files while checking inline limits (file count, total size, extensions).
+ * 5. Atomically replaces any existing extension directory with the new one.
+ *
+ * @param buffer - The raw binary data of the .zip file.
+ * @param force - If true, replaces existing extensions; otherwise throws.
+ * @param limits - User-provided or default limits.
+ * @returns The manifest of the successfully installed extension.
+ *
+ * @throws Error on manifest violations, security checks, or resource limits.
+ */
 export async function installExtensionFromZip(
     buffer: Buffer,
     force: boolean,
@@ -278,6 +352,10 @@ export async function installExtensionFromZip(
     }
 }
 
+/**
+ * Purpose:
+ * Merges user-provided limits with the system defaults.
+ */
 export function resolveExtensionInstallLimits(
     overrides?: Partial<ExtensionInstallLimits>
 ): ExtensionInstallLimits {

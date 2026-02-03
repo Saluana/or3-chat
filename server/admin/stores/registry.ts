@@ -1,3 +1,20 @@
+/**
+ * @module server/admin/stores/registry.ts
+ *
+ * Purpose:
+ * Acts as a service registry or factory that resolves abstract store interfaces
+ * to their provider-specific implementations.
+ *
+ * Responsibilities:
+ * - Directing store requests to the appropriate provider (e.g., Convex).
+ * - Caching provider capabilities to avoid redundant lookups.
+ * - Providing a unified set of factory functions for the Admin API.
+ *
+ * Architecture:
+ * This is a middleware-like layer that reads the global sync configuration
+ * (`config.sync.provider`) and returns the corresponding store instances.
+ * It ensures that the admin API doesn't need to know which database is in use.
+ */
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
 import type {
@@ -19,6 +36,12 @@ let cachedProviderId: string | null = null;
 let cacheTimestamp: number = 0;
 const CACHE_TTL_MS = 60000; // 1 minute
 
+/**
+ * Resolves the appropriate WorkspaceAccessStore for the current environment.
+ *
+ * @param event - The current H3 event used to resolve runtime configuration.
+ * @throws 501 Error if no store implementation exists for the active provider.
+ */
 export function getWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore {
     const config = useRuntimeConfig(event);
     const provider = config.sync.provider;
@@ -33,6 +56,12 @@ export function getWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore {
     });
 }
 
+/**
+ * Resolves the appropriate WorkspaceSettingsStore for the current environment.
+ *
+ * @param event - The current H3 event used to resolve runtime configuration.
+ * @throws 501 Error if no store implementation exists for the active provider.
+ */
 export function getWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStore {
     const config = useRuntimeConfig(event);
     const provider = config.sync.provider;
@@ -47,6 +76,12 @@ export function getWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStor
     });
 }
 
+/**
+ * Resolves the appropriate AdminUserStore for the current environment.
+ *
+ * @param event - The current H3 event used to resolve runtime configuration.
+ * @throws 501 Error if no store implementation exists for the active provider.
+ */
 export function getAdminUserStore(event: H3Event): AdminUserStore {
     const config = useRuntimeConfig(event);
     const provider = config.sync.provider;
@@ -62,8 +97,13 @@ export function getAdminUserStore(event: H3Event): AdminUserStore {
 }
 
 /**
- * Get the admin store capabilities for the current sync provider.
- * Capabilities are cached per provider.
+ * Retrieves the administrative capabilities of the active store provider.
+ *
+ * Behavior:
+ * Caches the results for 1 minute (CACHE_TTL_MS) to reduce configuration
+ * lookup overhead during consecutive requests.
+ *
+ * @param event - Optional H3 event. If missing, system defaults are used.
  */
 export function getAdminStoreCapabilities(event?: H3Event): AdminStoreCapabilities {
     const config = useRuntimeConfig(event);

@@ -1,3 +1,19 @@
+/**
+ * @module server/admin/providers/adapters/sync-convex.ts
+ *
+ * Purpose:
+ * Admin adapter for the Convex sync provider. Provides maintenance tools for
+ * the sync change log and tombstone tracking.
+ *
+ * Key Operations:
+ * - **Change Log GC**: Purges historical sync entries that have been fully
+ *   propagated to all devices beyond the retention window.
+ * - **Tombstone GC**: Permanently deletes metadata records of deleted entities.
+ *
+ * Constraints:
+ * - Requires a valid Clerk gateway token for authentication.
+ * - Actions are workspace-scoped.
+ */
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
 import { api } from '~~/convex/_generated/api';
@@ -19,8 +35,13 @@ import type {
 } from '../types';
 import { useRuntimeConfig } from '#imports';
 
+/** Default retention window for sync metadata (30 days). */
 const DEFAULT_RETENTION_SECONDS = 30 * 24 * 3600;
 
+/**
+ * Purpose:
+ * Normalizes user-provided GC limits into seconds.
+ */
 function resolveRetentionSeconds(payload?: Record<string, unknown>): number {
     const days = typeof payload?.retentionDays === 'number' ? payload.retentionDays : null;
     const seconds =
@@ -30,9 +51,17 @@ function resolveRetentionSeconds(payload?: Record<string, unknown>): number {
     return DEFAULT_RETENTION_SECONDS;
 }
 
+/**
+ * Singleton implementation of the Convex Sync admin adapter.
+ */
 export const convexSyncAdminAdapter: ProviderAdminAdapter = {
     id: CONVEX_PROVIDER_ID,
     kind: 'sync',
+
+    /**
+     * Purpose:
+     * Checks sync configuration and reports warnings.
+     */
     async getStatus(_event: H3Event, ctx: ProviderStatusContext): Promise<ProviderAdminStatusResult> {
         const config = useRuntimeConfig();
         const warnings: ProviderAdminStatusResult['warnings'] = [];
@@ -40,14 +69,14 @@ export const convexSyncAdminAdapter: ProviderAdminAdapter = {
         if (ctx.enabled && !config.sync.convexUrl) {
             warnings.push({
                 level: 'error',
-                message: 'Convex sync is enabled but no Convex URL is configured.',
+                message: 'Convex sync is enabled but no Convex URL is configured in the environment.',
             });
         }
         if (ctx.enabled && config.auth.provider !== CLERK_PROVIDER_ID) {
             warnings.push({
                 level: 'warning',
                 message:
-                    'Convex admin actions currently expect Clerk gateway tokens.',
+                    'Convex admin actions currently expect Clerk gateway tokens for authentication.',
             });
         }
 
@@ -60,18 +89,29 @@ export const convexSyncAdminAdapter: ProviderAdminAdapter = {
                 {
                     id: 'sync.gc-change-log',
                     label: 'Run Sync Change Log GC',
-                    description: 'Purge old change_log entries after retention window.',
+                    description: 'Purge old change_log entries from the database after the retention window.',
                     danger: true,
                 },
                 {
                     id: 'sync.gc-tombstones',
                     label: 'Run Sync Tombstone GC',
-                    description: 'Purge tombstones after retention window.',
+                    description: 'Purge metadata tombstones after the retention window.',
                     danger: true,
                 },
             ],
         };
     },
+
+    /**
+     * Purpose:
+     * Executes sync maintenance tasks.
+     *
+     * Behavior:
+     * - `sync.gc-change-log`: Calls the purge mutation for historical change logs.
+     * - `sync.gc-tombstones`: Calls the purge mutation for entity tombstones.
+     *
+     * @throws 401 Unauthorized if a valid Clerk token cannot be resolved.
+     */
     async runAction(
         event: H3Event,
         actionId: string,
