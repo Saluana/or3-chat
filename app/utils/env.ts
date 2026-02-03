@@ -1,36 +1,52 @@
 /**
- * Environment and browser capability detection utilities.
- * Use these to avoid duplicate SSR guards throughout the codebase.
+ * @module app/utils/env
+ *
+ * Purpose:
+ * Environment and browser capability detection utilities used to avoid
+ * duplicate SSR guards throughout the codebase.
+ *
+ * Constraints:
+ * - These checks are intentionally conservative and return `false` during SSR.
  */
 
 /**
- * Check if code is running in a browser environment (client-side).
- * Returns false during SSR.
+ * `isBrowser`
+ *
+ * Purpose:
+ * Returns true when running in a browser environment.
  */
 export const isBrowser = (): boolean => typeof window !== 'undefined';
 
 /**
- * Check if localStorage is available.
- * Returns false during SSR or if localStorage is disabled.
+ * `hasLocalStorage`
+ *
+ * Purpose:
+ * Returns true when `localStorage` is available.
  */
 export const hasLocalStorage = (): boolean =>
     typeof localStorage !== 'undefined';
 
 /**
- * Check if document is available.
- * Returns false during SSR.
+ * `hasDocument`
+ *
+ * Purpose:
+ * Returns true when `document` is available.
  */
 export const hasDocument = (): boolean => typeof document !== 'undefined';
 
 /**
- * Check if navigator is available.
- * Returns false during SSR.
+ * `hasNavigator`
+ *
+ * Purpose:
+ * Returns true when `navigator` is available.
  */
 export const hasNavigator = (): boolean => typeof navigator !== 'undefined';
 
 /**
- * Check if code is running in a browser environment with document access.
- * Returns false during SSR or if document is unavailable.
+ * `isBrowserWithDocument`
+ *
+ * Purpose:
+ * Returns true when both `window` and `document` are available.
  */
 export const isBrowserWithDocument = (): boolean =>
     typeof window !== 'undefined' && typeof document !== 'undefined';

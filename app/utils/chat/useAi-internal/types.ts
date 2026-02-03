@@ -1,14 +1,12 @@
 /**
- * @module useAi/types
- * @description Internal type definitions for useAi composable.
+ * @module app/utils/chat/useAi-internal/types
  *
- * @responsibilities
- * - Define internal-only types used across useAi internal modules
- * - Provide type safety for background job tracking, stored messages, and streaming
+ * Purpose:
+ * Internal type definitions for useAi composable modules.
  *
- * @non-responsibilities
- * - Should not contain runtime code
- * - Types exported from here are internal; public types remain in the facade
+ * Constraints:
+ * - Internal API only. Public types are exported from the facade.
+ * - No runtime code should live here.
  */
 
 import type { Message } from '~/db';

@@ -1,3 +1,19 @@
+/**
+ * @module app/utils/capability-guards
+ *
+ * Purpose:
+ * Enforces plugin capability gates for actions that are exposed to plugins.
+ *
+ * Behavior:
+ * - When no plugin context is active, guards allow the operation
+ * - When a plugin context is active, guards verify capabilities and show
+ *   a toast on denial
+ *
+ * Constraints:
+ * - These guards are UI-level enforcement and do not replace server checks
+ * - Active plugin context is stored on `globalThis`
+ */
+
 import {
     hasCapability,
     hasAnyCapability,
@@ -8,13 +24,14 @@ import { reportError, err } from './errors';
 type ToastInput = Parameters<ReturnType<typeof useToast>['add']>[0];
 
 /**
- * Guard function to check if the current plugin context has the required capability.
- * If no plugin context is present, the operation is allowed (no gating for non-plugin code).
- * If a plugin context is present but lacks the capability, the operation is blocked.
+ * `guardCapability`
  *
- * @param capability - The required capability string
- * @param operation - Human-readable name of the operation being guarded
- * @returns true if allowed, false if blocked
+ * Purpose:
+ * Verifies that the active plugin has the required capability.
+ *
+ * Behavior:
+ * - Returns `true` when no plugin context is active
+ * - Shows a toast and reports an error when denied
  */
 export function guardCapability(
     capability: string,
@@ -62,7 +79,10 @@ export function guardCapability(
 }
 
 /**
- * Guard function that checks multiple capabilities (plugin must have ALL of them).
+ * `guardAllCapabilities`
+ *
+ * Purpose:
+ * Requires a plugin to have all listed capabilities.
  */
 export function guardAllCapabilities(
     capabilities: string[],
@@ -83,7 +103,10 @@ export function guardAllCapabilities(
 }
 
 /**
- * Guard function that checks multiple capabilities (plugin must have ANY of them).
+ * `guardAnyCapability`
+ *
+ * Purpose:
+ * Requires a plugin to have at least one of the listed capabilities.
  */
 export function guardAnyCapability(
     capabilities: string[],
@@ -130,8 +153,10 @@ export function guardAnyCapability(
 }
 
 /**
- * Set the active plugin context for capability checking.
- * This should be called when entering plugin code execution.
+ * `setPluginContext`
+ *
+ * Purpose:
+ * Sets the active plugin context used by capability guards.
  */
 export function setPluginContext(pluginId: string | null) {
     const g = globalThis as typeof globalThis & {
@@ -144,7 +169,10 @@ export function setPluginContext(pluginId: string | null) {
 }
 
 /**
- * Clear the active plugin context.
+ * `clearPluginContext`
+ *
+ * Purpose:
+ * Clears the active plugin context.
  */
 export function clearPluginContext() {
     const g = globalThis as typeof globalThis & {
@@ -156,7 +184,10 @@ export function clearPluginContext() {
 }
 
 /**
- * Get the current active plugin ID if any.
+ * `getActivePluginId`
+ *
+ * Purpose:
+ * Returns the currently active plugin ID or `null`.
  */
 export function getActivePluginId(): string | null {
     const g = globalThis as typeof globalThis & {

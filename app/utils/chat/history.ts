@@ -1,9 +1,25 @@
+/**
+ * @module app/utils/chat/history
+ *
+ * Purpose:
+ * Loads persisted chat history for a thread into reactive state.
+ *
+ * Constraints:
+ * - Uses Dexie directly and runs only on the client.
+ */
+
 import type { Ref } from 'vue';
 import type { ChatMessage, ContentPart } from './types';
 import { deriveMessageContent } from './messages';
 import { db } from '~/db';
 import type { Message } from '~/db/schema';
 
+/**
+ * `ensureThreadHistoryLoaded`
+ *
+ * Purpose:
+ * Loads messages for the active thread once and populates UI state.
+ */
 export async function ensureThreadHistoryLoaded(
     threadIdRef: Ref<string | undefined>,
     historyLoadedFor: Ref<string | null>,

@@ -31,11 +31,23 @@ import type { ModelInputMessage } from '../../../../types/chat-internal';
 import type { OpenRouterMessage } from './types';
 import { hashToContentPart } from './files';
 
+/**
+ * `ResolveSystemPromptParams`
+ *
+ * Purpose:
+ * Parameters for resolving the effective system prompt text.
+ */
 export type ResolveSystemPromptParams = {
     threadId: string | null | undefined;
     activePromptContent: unknown | null | undefined;
 };
 
+/**
+ * `resolveSystemPromptText`
+ *
+ * Purpose:
+ * Resolves thread-specific system prompt text with fallback to active prompt.
+ */
 export async function resolveSystemPromptText(
     params: ResolveSystemPromptParams
 ): Promise<string | null> {
@@ -58,10 +70,22 @@ export async function resolveSystemPromptText(
         : null;
 }
 
+/**
+ * `BuildSystemPromptParams`
+ *
+ * Purpose:
+ * Parameters for building the final system prompt message.
+ */
 export type BuildSystemPromptParams = ResolveSystemPromptParams & {
     masterPrompt?: string;
 };
 
+/**
+ * `buildSystemPromptMessage`
+ *
+ * Purpose:
+ * Builds a system message suitable for the chat history.
+ */
 export async function buildSystemPromptMessage(
     params: BuildSystemPromptParams
 ): Promise<ChatMessage | null> {
@@ -83,6 +107,12 @@ export async function buildSystemPromptMessage(
     };
 }
 
+/**
+ * `BuildOpenRouterMessagesParams`
+ *
+ * Purpose:
+ * Parameters for building OpenRouter-compatible messages for send.
+ */
 export type BuildOpenRouterMessagesParams = {
     effectiveMessages: ChatMessage[];
     assistantHashes: string[];
@@ -97,6 +127,12 @@ export type BuildOpenRouterMessagesParams = {
         | 'recent-assistant';
 };
 
+/**
+ * `buildOpenRouterMessagesForSend`
+ *
+ * Purpose:
+ * Builds OpenRouter-compatible messages, injecting context hashes when needed.
+ */
 export async function buildOpenRouterMessagesForSend(
     params: BuildOpenRouterMessagesParams
 ): Promise<OpenRouterMessage[]> {

@@ -1,3 +1,10 @@
+/**
+ * @module app/utils/chat/types
+ *
+ * Purpose:
+ * Shared chat type definitions used across UI and streaming utilities.
+ */
+
 export type TextPart = { type: 'text'; text: string };
 
 export type ImagePart = {
@@ -15,6 +22,12 @@ export type FilePart = {
 
 export type ContentPart = TextPart | ImagePart | FilePart;
 
+/**
+ * `ChatMessage`
+ *
+ * Purpose:
+ * Canonical chat message shape used by UI and persistence layers.
+ */
 export interface ChatMessage {
     role: 'user' | 'assistant' | 'system' | 'tool';
     content: string | ContentPart[];
@@ -49,6 +62,12 @@ export interface ToolCall {
     };
 }
 
+/**
+ * `ToolDefinition`
+ *
+ * Purpose:
+ * OpenRouter tool definition with optional UI metadata.
+ */
 export interface ToolDefinition {
     type: 'function';
     function: {

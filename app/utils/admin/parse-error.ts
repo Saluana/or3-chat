@@ -1,20 +1,17 @@
-import { z } from 'zod';
-
 /**
- * Utility for parsing errors from $fetch and other sources
- * 
- * Replaces unsafe type casting with runtime validation using Zod.
- * 
- * @example
- * ```typescript
- * try {
- *   await $fetch('/api/endpoint');
- * } catch (error: unknown) {
- *   const message = parseErrorMessage(error, 'Operation failed');
- *   console.error(message);
- * }
- * ```
+ * @module app/utils/admin/parse-error
+ *
+ * Purpose:
+ * Extracts human-readable error messages from `$fetch` or unknown errors
+ * using runtime validation.
+ *
+ * Behavior:
+ * - Tries Nuxt/H3 fetch error shape first
+ * - Falls back to standard Error-like objects
+ * - Uses a caller-provided fallback message
  */
+
+import { z } from 'zod';
 
 const FetchErrorSchema = z.object({
     data: z.object({
@@ -26,6 +23,12 @@ const StandardErrorSchema = z.object({
     message: z.string()
 });
 
+/**
+ * `parseErrorMessage`
+ *
+ * Purpose:
+ * Returns the most useful message available from an unknown error.
+ */
 export function parseErrorMessage(error: unknown, fallback = 'An error occurred'): string {
     // Try parsing as fetch error (Nuxt/H3 format)
     const fetchError = FetchErrorSchema.safeParse(error);
@@ -44,7 +47,10 @@ export function parseErrorMessage(error: unknown, fallback = 'An error occurred'
 }
 
 /**
- * Check if error message contains a specific substring (case-insensitive)
+ * `errorContains`
+ *
+ * Purpose:
+ * Checks if the parsed error message includes a substring (case-insensitive).
  */
 export function errorContains(error: unknown, substring: string): boolean {
     const message = parseErrorMessage(error, '');

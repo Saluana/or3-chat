@@ -1,3 +1,10 @@
+/**
+ * @module app/utils/chat/uiMessages
+ *
+ * Purpose:
+ * Transforms raw message records into UI-ready chat message objects.
+ */
+
 // Canonical UI message utilities (content part type no longer needed directly)
 import { parseHashes } from '~/utils/files/attachments';
 import {
@@ -32,6 +39,12 @@ interface RawMessageLike {
     created_at?: number | null;
 }
 
+/**
+ * `ToolCallInfo`
+ *
+ * Purpose:
+ * UI representation of a tool call state.
+ */
 export interface ToolCallInfo {
     id?: string;
     name: string;
@@ -42,6 +55,12 @@ export interface ToolCallInfo {
     error?: string;
 }
 
+/**
+ * `UiChatMessage`
+ *
+ * Purpose:
+ * UI-friendly message shape with flattened text and optional workflow data.
+ */
 export interface UiChatMessage {
     id: string;
     role: 'user' | 'assistant' | 'system' | 'tool';
@@ -60,6 +79,12 @@ export interface UiChatMessage {
     workflowState?: UiWorkflowState;
 }
 
+/**
+ * `partsToText`
+ *
+ * Purpose:
+ * Flattens content parts into a displayable text string.
+ */
 export function partsToText(
     parts: string | ContentPartLike[] | null | undefined,
     role?: string
@@ -87,6 +112,12 @@ export function partsToText(
     return out;
 }
 
+/**
+ * `ensureUiMessage`
+ *
+ * Purpose:
+ * Converts a raw message record into a UI-ready message object.
+ */
 export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
     const id = raw.id || raw.stream_id || crypto.randomUUID();
     const role = raw.role || 'user';
@@ -227,9 +258,21 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
 
 // Legacy raw storage (non reactive). We expose accessor for plugins.
 const _rawMessages: RawMessageLike[] = [];
+/**
+ * `recordRawMessage`
+ *
+ * Purpose:
+ * Stores raw messages for plugin access and diagnostics.
+ */
 export function recordRawMessage(m: RawMessageLike): void {
     _rawMessages.push(m);
 }
+/**
+ * `getRawMessages`
+ *
+ * Purpose:
+ * Returns a snapshot of stored raw messages.
+ */
 export function getRawMessages(): readonly RawMessageLike[] {
     return _rawMessages.slice();
 }

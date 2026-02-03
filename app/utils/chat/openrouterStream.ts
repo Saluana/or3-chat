@@ -1,3 +1,19 @@
+/**
+ * @module app/utils/chat/openrouterStream
+ *
+ * Purpose:
+ * Implements OpenRouter streaming and SSR background streaming utilities.
+ *
+ * Behavior:
+ * - Tries server route streaming first when available
+ * - Falls back to direct OpenRouter streaming when allowed
+ * - Supports SSR background streaming jobs with polling and SSE helpers
+ *
+ * Constraints:
+ * - Server routes are required when SSR auth background streaming is enabled
+ * - Client fallback requires an API key
+ */
+
 import { useRuntimeConfig } from '#imports';
 import type { ToolDefinition } from './types';
 import {
@@ -113,6 +129,12 @@ function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
     };
 }
 
+/**
+ * `openRouterStream`
+ *
+ * Purpose:
+ * Streams OpenRouter responses as SSE events.
+ */
 export async function* openRouterStream(params: {
     apiKey?: string | null;
     model: string;
@@ -302,7 +324,10 @@ export async function* openRouterStream(params: {
 const BACKGROUND_STREAMING_CACHE_KEY = 'or3:background-streaming-available';
 
 /**
- * Background job status from server
+ * `BackgroundJobStatus`
+ *
+ * Purpose:
+ * Represents background streaming job status from the server.
  */
 export interface BackgroundJobStatus {
     id: string;
@@ -320,13 +345,22 @@ export interface BackgroundJobStatus {
 }
 
 /**
- * Result from starting a background stream
+ * `BackgroundStreamResult`
+ *
+ * Purpose:
+ * Return type for starting a background streaming job.
  */
 export interface BackgroundStreamResult {
     jobId: string;
     status: 'streaming';
 }
 
+/**
+ * `BackgroundJobStreamEvent`
+ *
+ * Purpose:
+ * SSE payload shape for background job updates.
+ */
 export type BackgroundJobStreamEvent = {
     event: 'snapshot' | 'delta' | 'status';
     status: BackgroundJobStatus;
@@ -345,7 +379,10 @@ async function readErrorMessage(
 }
 
 /**
- * Check if background streaming is available (server must support it)
+ * `isBackgroundStreamingEnabled`
+ *
+ * Purpose:
+ * Returns true when background streaming is available for this client.
  */
 export function isBackgroundStreamingEnabled(): boolean {
     if (!isServerRouteAvailable()) return false;
@@ -378,8 +415,10 @@ function setBackgroundStreamingAvailable(available: boolean): void {
 }
 
 /**
- * Start a background streaming job.
- * Returns immediately with a job ID; streaming continues on server.
+ * `startBackgroundStream`
+ *
+ * Purpose:
+ * Starts a background streaming job and returns its job ID.
  */
 export async function startBackgroundStream(params: {
     apiKey?: string | null;
@@ -449,7 +488,10 @@ export async function startBackgroundStream(params: {
 }
 
 /**
- * Poll the status of a background job
+ * `pollJobStatus`
+ *
+ * Purpose:
+ * Polls the status of a background streaming job.
  */
 export async function pollJobStatus(
     jobId: string,
@@ -473,7 +515,10 @@ export async function pollJobStatus(
 }
 
 /**
- * Abort a background streaming job
+ * `abortBackgroundJob`
+ *
+ * Purpose:
+ * Requests abortion of a background streaming job.
  */
 export async function abortBackgroundJob(jobId: string): Promise<boolean> {
     const resp = await fetch(`/api/jobs/${jobId}/abort`, {
@@ -489,11 +534,10 @@ export async function abortBackgroundJob(jobId: string): Promise<boolean> {
 }
 
 /**
- * Poll a job until it completes or errors
- * @param jobId - The job ID to poll
- * @param onProgress - Optional callback for progress updates
- * @param pollIntervalMs - Polling interval in ms (default 1000)
- * @param maxWaitMs - Maximum wait time in ms (default 5 minutes)
+ * `waitForJobCompletion`
+ *
+ * Purpose:
+ * Polls a job until it completes or errors.
  */
 export async function waitForJobCompletion(
     jobId: string,
@@ -521,7 +565,10 @@ export async function waitForJobCompletion(
 }
 
 /**
- * Subscribe to background job updates via SSE.
+ * `subscribeBackgroundJobStream`
+ *
+ * Purpose:
+ * Subscribes to background job updates via SSE.
  */
 export function subscribeBackgroundJobStream(params: {
     jobId: string;

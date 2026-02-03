@@ -1,7 +1,19 @@
+/**
+ * @module app/utils/chat/messages
+ *
+ * Purpose:
+ * Shared utilities for building and extracting chat message content.
+ */
+
 import type { ContentPart } from './types';
 import { isWorkflowMessageData } from './workflow-types';
 
-// Build UI parts: text first, then extra text blocks, then attachments
+/**
+ * `buildParts`
+ *
+ * Purpose:
+ * Builds content parts with text first, then extra text blocks, then files.
+ */
 export function buildParts(
     outgoing: string,
     files: { type: string; url: string }[] = [],
@@ -21,7 +33,12 @@ export function buildParts(
     ];
 }
 
-// Extract concatenated text from a ChatMessage.content
+/**
+ * `getTextFromContent`
+ *
+ * Purpose:
+ * Extracts concatenated text from a content array.
+ */
 export function getTextFromContent(
     content: string | ContentPart[] | undefined | null
 ): string {
@@ -35,9 +52,14 @@ export function getTextFromContent(
 }
 
 /**
- * Derive a string content value from a stored message shape.
- * - For workflow messages, prefer the final output.
- * - Otherwise fall back to data.content/text, then top-level content.
+ * `deriveMessageContent`
+ *
+ * Purpose:
+ * Derives a string content value from a stored message shape.
+ *
+ * Behavior:
+ * - For workflow messages, uses `finalOutput`
+ * - Otherwise prefers `data.content` or `data.text`, then top-level content
  */
 export function deriveMessageContent(msg: {
     content?: string | ContentPart[] | null;
@@ -61,7 +83,12 @@ export function deriveMessageContent(msg: {
     return '';
 }
 
-// Merge and dedupe file-hash arrays
+/**
+ * `mergeFileHashes`
+ *
+ * Purpose:
+ * Merges and deduplicates file hash arrays.
+ */
 export function mergeFileHashes(
     existing?: string[] | null,
     fromAssistant?: string[]
@@ -71,7 +98,12 @@ export function mergeFileHashes(
     return Array.from(new Set([...a, ...b]));
 }
 
-// Drop oldest images across built OR messages, keeping `max`
+/**
+ * `trimOrMessagesImages`
+ *
+ * Purpose:
+ * Drops oldest image parts across OpenRouter messages to keep within a limit.
+ */
 type ORMessagePart = { type: string };
 type ORMessage = { content: ORMessagePart[] };
 

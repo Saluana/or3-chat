@@ -1,19 +1,15 @@
 /**
- * @module useAi/persistence
- * @description Database persistence helpers for useAi.
+ * @module app/utils/chat/useAi-internal/persistence
  *
- * @responsibilities
- * - Create assistant persisters for incremental message writes
- * - Update message records in Dexie
- * - Manage file hash serialization for messages
+ * Purpose:
+ * Persistence helpers for useAi to write assistant output to Dexie.
  *
- * @non-responsibilities
- * - Stream management (handled by streaming module)
- * - Background job tracking (handled by backgroundJobs module)
+ * Behavior:
+ * - Creates a persister that batches content/tool-call updates
+ * - Updates message records and keeps `data.error` in sync
  *
- * @dependencies
- * - ~/db for Dexie operations
- * - ~/db/files-util for file hash serialization
+ * Constraints:
+ * - Internal API only
  */
 
 import { nowSec } from '~/db/util';
@@ -24,12 +20,10 @@ import type { StoredMessage, AssistantPersister } from './types';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
 
 /**
- * Create a persister function for an assistant message.
- * Caches last serialized file hashes to avoid recomputing on each write.
+ * `makeAssistantPersister`
  *
- * @param assistantDbMsg - The initial assistant message from DB
- * @param assistantFileHashes - Array of file hashes to persist
- * @returns Async function to persist content/reasoning/toolCalls
+ * Purpose:
+ * Creates a persister that incrementally writes assistant output to Dexie.
  */
 export function makeAssistantPersister(
     assistantDbMsg: StoredMessage,
@@ -95,12 +89,10 @@ export function makeAssistantPersister(
 }
 
 /**
- * Update an existing message record in Dexie.
- * If error is being updated, also syncs to data.error for reliable sync.
+ * `updateMessageRecord`
  *
- * @param id - Message ID
- * @param patch - Partial message to merge
- * @param existing - Optional existing message to avoid refetch
+ * Purpose:
+ * Updates an existing message record and keeps `data.error` in sync.
  */
 export async function updateMessageRecord(
     id: string,

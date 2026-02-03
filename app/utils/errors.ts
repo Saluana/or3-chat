@@ -1,5 +1,24 @@
-// Minimal centralized error utility (Task 1.1)
-// Provides: types, err(), isAppError(), asAppError(), reportError(), simpleRetry(), light scrub & duplicate suppression.
+/**
+ * @module app/utils/errors
+ *
+ * Purpose:
+ * Minimal, centralized error utilities used across OR3.
+ * Provides a consistent error shape, reporting hooks, and lightweight
+ * duplicate suppression.
+ *
+ * Behavior:
+ * - `err` creates typed `AppError` objects with metadata
+ * - `reportError` emits hooks, logs with dedupe, and optionally shows toasts
+ * - `simpleRetry` provides a small retry helper for transient failures
+ *
+ * Constraints:
+ * - Scrubbing only targets obvious token-like strings
+ * - Logging is best-effort and should not throw
+ *
+ * Non-Goals:
+ * - Full telemetry pipeline
+ * - Deep data redaction or structured error serialization
+ */
 
 import { useHooks } from '~/core/hooks/useHooks';
 
@@ -38,7 +57,12 @@ export interface AppError extends Error {
 
 export type StandardError = AppError; // alias for wording continuity
 
-// Factory
+/**
+ * `err`
+ *
+ * Purpose:
+ * Creates an `AppError` with consistent metadata for reporting and UI.
+ */
 export function err(
     code: ErrorCode,
     message: string,
@@ -59,10 +83,22 @@ export function err(
     return e;
 }
 
+/**
+ * `isAppError`
+ *
+ * Purpose:
+ * Type guard for `AppError`.
+ */
 export function isAppError(v: unknown): v is AppError {
     return !!v && typeof v === 'object' && 'code' in v && 'severity' in v;
 }
 
+/**
+ * `asAppError`
+ *
+ * Purpose:
+ * Normalizes unknown values into `AppError` instances.
+ */
 export function asAppError(
     v: unknown,
     fb: { code?: ErrorCode; message?: string } = {}
@@ -185,6 +221,17 @@ export interface ReportOptions {
     retryable?: boolean; // override retryable
 }
 
+/**
+ * `reportError`
+ *
+ * Purpose:
+ * Central reporting path that logs, emits hooks, and optionally shows toasts.
+ *
+ * Behavior:
+ * - Suppresses duplicates within a short window
+ * - Emits `error:raised` and domain-specific hooks
+ * - Scrubs obvious token-like strings in messages and tags
+ */
 export function reportError(
     input: unknown,
     opts: ReportOptions = {}
@@ -244,6 +291,12 @@ export function reportError(
     }
 }
 
+/**
+ * `simpleRetry`
+ *
+ * Purpose:
+ * Retries an async operation with a fixed delay.
+ */
 export async function simpleRetry<T>(
     fn: () => Promise<T>,
     attempts = 2,

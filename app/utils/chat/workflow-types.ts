@@ -1,11 +1,16 @@
 /**
- * Workflow Message Types
+ * @module app/utils/chat/workflow-types
  *
- * This module defines TypeScript types and interfaces for workflow execution
- * messages displayed in the chat interface. These types enable discriminated
- * unions for type-safe rendering logic without any schema changes.
+ * Purpose:
+ * Defines TypeScript types and helpers for workflow execution messages
+ * displayed in the chat interface.
  *
- * @module workflow-types
+ * Behavior:
+ * - Provides discriminated unions for workflow vs standard messages
+ * - Exposes UI-friendly workflow state types
+ *
+ * Constraints:
+ * - These are structural types only; runtime validation is minimal
  */
 
 import type { Attachment } from 'or3-workflow-core';
@@ -271,14 +276,10 @@ export type MessageDataUnion = BaseMessageData | WorkflowMessageData;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Type guard to check if message data is workflow execution data.
- * Use this to safely narrow the type of message.data for rendering.
+ * `isWorkflowMessageData`
  *
- * @example
- * if (isWorkflowMessageData(message.data)) {
- *   // TypeScript knows message.data is WorkflowMessageData here
- *   console.log(message.data.workflowName);
- * }
+ * Purpose:
+ * Type guard for workflow execution message data.
  */
 export function isWorkflowMessageData(
     data: unknown
@@ -292,8 +293,10 @@ export function isWorkflowMessageData(
 }
 
 /**
- * Type guard to check if message data is regular message data.
- * Note: Returns true for null/undefined data as well (treated as regular message).
+ * `isBaseMessageData`
+ *
+ * Purpose:
+ * Type guard for regular message data.
  */
 export function isBaseMessageData(data: unknown): data is BaseMessageData {
     if (data === null || data === undefined) return true;
@@ -383,11 +386,10 @@ export interface UiWorkflowState {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Derive the start node ID for resuming a workflow execution.
- * Uses a fallback chain to find the most appropriate node to resume from.
+ * `deriveStartNodeId`
  *
- * @param opts - Options containing various state sources
- * @returns The node ID to resume from, or undefined if none found
+ * Purpose:
+ * Determines the best node ID to resume a workflow execution from.
  */
 export function deriveStartNodeId(opts: {
     resumeState?: WorkflowResumeState;
@@ -416,10 +418,20 @@ export function deriveStartNodeId(opts: {
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Special branch ID used by parallel nodes for the merge step */
+/**
+ * `MERGE_BRANCH_ID`
+ *
+ * Purpose:
+ * Special branch ID used by parallel nodes for the merge step.
+ */
 export const MERGE_BRANCH_ID = '__merge__';
 
-/** Display label for the merge branch */
+/**
+ * `MERGE_BRANCH_LABEL`
+ *
+ * Purpose:
+ * Display label for the merge branch.
+ */
 export const MERGE_BRANCH_LABEL = 'Merging results...';
 
 /** Resume metadata for workflow executions */

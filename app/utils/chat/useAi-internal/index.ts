@@ -1,9 +1,11 @@
 /**
- * @module useAi/index
- * @description Barrel export for useAi internal modules.
+ * @module app/utils/chat/useAi-internal/index
  *
- * Re-exports all internal module functionality for use by the main useAi facade.
- * This allows clean imports from a single path while maintaining separation.
+ * Purpose:
+ * Barrel exports for useAi internal modules.
+ *
+ * Constraints:
+ * - Internal API only. Do not import directly from UI components.
  */
 
 // Types

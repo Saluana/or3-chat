@@ -1,5 +1,19 @@
+/**
+ * @module app/utils/projects/normalizeProjectData
+ *
+ * Purpose:
+ * Normalizes project entry lists from user or plugin inputs into a
+ * predictable array shape.
+ */
+
 export type ProjectEntryKind = 'chat' | 'doc';
 
+/**
+ * `ProjectEntry`
+ *
+ * Purpose:
+ * Canonical project entry shape used in UI lists and menus.
+ */
 export interface ProjectEntry {
     id: string;
     name?: string;
@@ -53,6 +67,16 @@ function normalizeEntry(value: unknown): ProjectEntry | null {
     return { id, name, kind };
 }
 
+/**
+ * `normalizeProjectData`
+ *
+ * Purpose:
+ * Converts an unknown input into a normalized list of project entries.
+ *
+ * Behavior:
+ * - Accepts arrays, JSON array strings, or single entry objects
+ * - Skips invalid entries
+ */
 export function normalizeProjectData(raw: unknown): ProjectEntry[] {
     const arr = parseEntriesArray(raw);
     if (!arr || !arr.length) return [];

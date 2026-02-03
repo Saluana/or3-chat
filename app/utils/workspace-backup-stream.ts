@@ -1,8 +1,42 @@
+/**
+ * @module app/utils/workspace-backup-stream
+ *
+ * Purpose:
+ * Streams workspace backups to and from a JSONL format optimized for large
+ * datasets and file blobs.
+ *
+ * Behavior:
+ * - Exports tables as a line-delimited stream with a metadata header
+ * - Imports by streaming lines into Dexie transactions
+ * - Applies special handling for `file_blobs` to keep line size bounded
+ *
+ * Constraints:
+ * - The backup format is versioned and validated on import
+ * - Import can be destructive when `clearTables` is true
+ *
+ * Non-Goals:
+ * - Cross-database migration between unrelated schemas
+ * - Encrypted backups (handled at a higher layer)
+ */
+
 import Dexie from 'dexie';
 import type { IndexableType } from 'dexie';
 import type { Or3DB } from '~/db/client';
 
+/**
+ * `WORKSPACE_BACKUP_FORMAT`
+ *
+ * Purpose:
+ * Identifies the JSONL backup stream format.
+ */
 export const WORKSPACE_BACKUP_FORMAT = 'or3-backup-stream';
+
+/**
+ * `WORKSPACE_BACKUP_VERSION`
+ *
+ * Purpose:
+ * Current backup format version.
+ */
 export const WORKSPACE_BACKUP_VERSION = 1;
 
 export interface WorkspaceBackupTableSummary {
@@ -106,6 +140,12 @@ function base64ToBlob(payload: { data: string; type: string }): Blob {
     return new Blob([bytes.buffer], { type: payload.type });
 }
 
+/**
+ * `detectWorkspaceBackupFormat`
+ *
+ * Purpose:
+ * Peeks at the first line to determine the backup format type.
+ */
 export async function detectWorkspaceBackupFormat(
     file: Blob
 ): Promise<'stream' | 'dexie' | 'unknown'> {
@@ -129,6 +169,12 @@ export async function detectWorkspaceBackupFormat(
     return 'unknown';
 }
 
+/**
+ * `streamWorkspaceExport`
+ *
+ * Purpose:
+ * Streams a workspace backup to a FileSystem file handle.
+ */
 export async function streamWorkspaceExport({
     db,
     fileHandle,
@@ -154,6 +200,12 @@ export async function streamWorkspaceExport({
     });
 }
 
+/**
+ * `streamWorkspaceExportToWritable`
+ *
+ * Purpose:
+ * Streams a workspace backup to an existing WritableStream writer.
+ */
 export async function streamWorkspaceExportToWritable({
     db,
     writable,
@@ -394,6 +446,12 @@ function isValidBackupVersion(
     return version === WORKSPACE_BACKUP_VERSION;
 }
 
+/**
+ * `peekWorkspaceBackupMetadata`
+ *
+ * Purpose:
+ * Reads the backup header metadata without importing the full file.
+ */
 export async function peekWorkspaceBackupMetadata(
     file: Blob
 ): Promise<WorkspaceBackupHeaderLine> {
@@ -413,6 +471,15 @@ export async function peekWorkspaceBackupMetadata(
     throw new Error('Backup metadata not found.');
 }
 
+/**
+ * `importWorkspaceStream`
+ *
+ * Purpose:
+ * Imports a workspace backup stream into the provided Dexie database.
+ *
+ * Constraints:
+ * - Throws when the backup targets a different DB name or newer schema
+ */
 export async function importWorkspaceStream({
     db,
     file,

@@ -1,3 +1,18 @@
+/**
+ * @module app/utils/workspace-db-logout
+ *
+ * Purpose:
+ * Clears workspace-scoped IndexedDB databases on logout based on policy flags.
+ *
+ * Behavior:
+ * - Enumerates workspace DB names when possible
+ * - Falls back to cached workspace list when enumeration is unavailable
+ * - Deletes DBs only when per-workspace logout policy is `clear`
+ *
+ * Constraints:
+ * - Uses best-effort deletion and ignores failures
+ */
+
 import Dexie from 'dexie';
 import { getDefaultDb } from '~/db/client';
 import { getKvByName } from '~/db/kv';
@@ -5,6 +20,12 @@ import { getKvByName } from '~/db/kv';
 const WORKSPACE_DB_PREFIX = 'or3-db-';
 const LOGOUT_POLICY_PREFIX = 'workspace.logout.policy.';
 
+/**
+ * `clearWorkspaceDbsOnLogout`
+ *
+ * Purpose:
+ * Deletes workspace DBs that are configured to be cleared on logout.
+ */
 export async function clearWorkspaceDbsOnLogout(): Promise<void> {
     const baseDb = getDefaultDb();
     let names: string[] = [];

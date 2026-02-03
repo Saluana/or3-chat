@@ -1,14 +1,23 @@
-import { reportError, err } from '~/utils/errors';
 /**
- * Hashing utilities for file deduplication.
- * - New files use SHA-256 with `sha256:` prefix.
- * - Legacy MD5 hashes remain supported for reads/verification.
+ * @module app/utils/hash
  *
- * Optimizations:
- * - Cached SparkMD5 module to avoid repeated dynamic imports
- * - Pre-allocated hex lookup table for O(n) conversion
- * - Adaptive yielding: scheduler.yield() → requestIdleCallback → setTimeout
+ * Purpose:
+ * File hashing utilities used for deduplication and attachment tracking.
+ *
+ * Behavior:
+ * - New files use SHA-256 with `sha256:` prefix
+ * - Legacy MD5 hashes remain supported for reads/verification
+ * - Uses WebCrypto where available and falls back to streaming MD5
+ *
+ * Constraints:
+ * - WebCrypto SHA-256 is required for modern hashing on large files
+ * - Hashing is best-effort and throws on unexpected crypto errors
+ *
+ * Non-Goals:
+ * - Cryptographic signing or HMAC utilities
  */
+
+import { reportError, err } from '~/utils/errors';
 
 const CHUNK_SIZE = 256 * 1024; // 256KB
 const WEBCRYPTO_THRESHOLD = 8 * 1024 * 1024; // 8MB - covers ~95% of files
@@ -82,6 +91,12 @@ async function yieldToMain(): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * `parseHash`
+ *
+ * Purpose:
+ * Parses a hash string into algorithm and hex parts.
+ */
 export function parseHash(hash: string): ParsedHash | null {
     if (!hash) return null;
     const trimmed = hash.trim().toLowerCase();
@@ -103,15 +118,33 @@ export function parseHash(hash: string): ParsedHash | null {
     return null;
 }
 
+/**
+ * `formatHash`
+ *
+ * Purpose:
+ * Formats a hash as `algorithm:hex` in lowercase.
+ */
 export function formatHash(algorithm: HashAlgorithm, hex: string): string {
     return `${algorithm}:${hex.toLowerCase()}`;
 }
 
+/**
+ * `isValidHash`
+ *
+ * Purpose:
+ * Returns true when the hash string matches a known format.
+ */
 export function isValidHash(hash: string): boolean {
     return parseHash(hash) !== null;
 }
 
 /** Compute hash hex (lowercase) using the requested algorithm. */
+/**
+ * `computeHashHex`
+ *
+ * Purpose:
+ * Computes the raw hex digest for the requested algorithm.
+ */
 export async function computeHashHex(
     blob: Blob,
     algorithm: HashAlgorithm
@@ -154,7 +187,12 @@ export async function computeHashHex(
     return computeMd5Hex(blob);
 }
 
-/** Compute SHA-256 hash with prefix for new files. */
+/**
+ * `computeFileHash`
+ *
+ * Purpose:
+ * Computes a SHA-256 hash with `sha256:` prefix for new files.
+ */
 export async function computeFileHash(blob: Blob): Promise<string> {
     const hex = await computeHashHex(blob, 'sha256');
     return formatHash('sha256', hex);

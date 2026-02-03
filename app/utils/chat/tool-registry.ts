@@ -1,17 +1,38 @@
+/**
+ * @module app/utils/chat/tool-registry
+ *
+ * Purpose:
+ * Provides a global registry for AI tools with enablement persistence and
+ * execution helpers.
+ *
+ * Behavior:
+ * - Tools are registered with metadata and a handler
+ * - Enablement state is stored in localStorage (debounced)
+ * - Execution validates arguments and enforces a timeout
+ *
+ * Constraints:
+ * - Persistence is client-only
+ * - Handlers must return a string
+ */
+
 import { markRaw, shallowReactive, ref, watch, computed, type Ref } from 'vue';
 import type { ToolDefinition } from './types';
 
 /**
- * Tool handler function signature.
- * Takes parsed arguments and returns a string result or promise thereof.
- * Handlers run in the app context and should handle their own error handling/downstream validation.
+ * `ToolHandler`
+ *
+ * Purpose:
+ * Tool handler signature. Handlers run in the app context.
  */
 export type ToolHandler<TArgs = Record<string, unknown>> = (
     args: TArgs
 ) => Promise<string> | string;
 
 /**
- * Extended tool definition with optional UI metadata.
+ * `ExtendedToolDefinition`
+ *
+ * Purpose:
+ * Tool definition with optional UI metadata.
  */
 export interface ExtendedToolDefinition extends ToolDefinition {
     description?: string; // human-readable summary for toggles or docs
@@ -21,7 +42,10 @@ export interface ExtendedToolDefinition extends ToolDefinition {
 }
 
 /**
- * A registered tool with handler and reactive enabled state.
+ * `RegisteredTool`
+ *
+ * Purpose:
+ * Registered tool record with handler and reactive state.
  */
 export interface RegisteredTool {
     definition: ExtendedToolDefinition;
@@ -39,7 +63,10 @@ const TOOL_STORAGE_KEY = 'or3.tools.enabled';
 const DEFAULT_TIMEOUT_MS = 10000;
 
 /**
- * Global registry state singleton.
+ * `ToolRegistryState`
+ *
+ * Purpose:
+ * Internal singleton state for the tool registry.
  */
 export interface ToolRegistryState {
     tools: Map<string, RegisteredTool>;
@@ -216,7 +243,10 @@ async function withTimeout(
 }
 
 /**
- * Main registry API composable.
+ * `useToolRegistry`
+ *
+ * Purpose:
+ * Returns the registry API for registering tools and executing tool calls.
  */
 export function useToolRegistry() {
     // Lazy hydrate on first access

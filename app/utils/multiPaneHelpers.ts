@@ -1,14 +1,21 @@
 /**
- * Multi-Pane Utility Functions
- * Type-safe helpers for accessing and filtering multi-pane state
+ * @module app/utils/multiPaneHelpers
+ *
+ * Purpose:
+ * Type-safe helpers for accessing and filtering multi-pane state.
+ *
+ * Constraints:
+ * - Returns empty results when the multi-pane API is not initialized.
  */
 
 import type { PaneState } from '~/composables/core/useMultiPane';
 import { getGlobalMultiPaneApi } from './multiPaneApi';
 
 /**
- * Get all currently active panes
- * Returns empty array if multi-pane API is not available
+ * `getActivePanes`
+ *
+ * Purpose:
+ * Returns the current pane state list.
  */
 export function getActivePanes(): PaneState[] {
     const api = getGlobalMultiPaneApi();
@@ -17,7 +24,10 @@ export function getActivePanes(): PaneState[] {
 }
 
 /**
- * Get IDs of all documents currently open in panes
+ * `getOpenDocumentIds`
+ *
+ * Purpose:
+ * Returns document IDs currently open in panes.
  */
 export function getOpenDocumentIds(): string[] {
     const panes = getActivePanes();
@@ -29,7 +39,10 @@ export function getOpenDocumentIds(): string[] {
 }
 
 /**
- * Get IDs of all threads currently open in panes
+ * `getOpenThreadIds`
+ *
+ * Purpose:
+ * Returns thread IDs currently open in panes.
  */
 export function getOpenThreadIds(): string[] {
     const panes = getActivePanes();
@@ -41,14 +54,20 @@ export function getOpenThreadIds(): string[] {
 }
 
 /**
- * Check if a specific document is currently open
+ * `isDocumentOpen`
+ *
+ * Purpose:
+ * Returns true when the document is open in any pane.
  */
 export function isDocumentOpen(documentId: string): boolean {
     return getOpenDocumentIds().includes(documentId);
 }
 
 /**
- * Check if a specific thread is currently open
+ * `isThreadOpen`
+ *
+ * Purpose:
+ * Returns true when the thread is open in any pane.
  */
 export function isThreadOpen(threadId: string): boolean {
     return getOpenThreadIds().includes(threadId);
