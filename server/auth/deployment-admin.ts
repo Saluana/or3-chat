@@ -1,20 +1,35 @@
 /**
- * Deployment admin checker abstraction.
- * 
- * This provides a provider-agnostic way to check if a user has deployment-wide
- * admin access. Different sync providers can implement this interface.
+ * @module server/auth/deployment-admin.ts
+ *
+ * Purpose:
+ * Provides an abstraction for verifying deployment-wide administrative privileges.
+ * This is distinct from workspace-level permissions and is typically used
+ * for system-level settings, global user management, and infrastructure access.
+ *
+ * Architecture:
+ * - **Provider-Agnostic**: The specific verification logic is delegated to
+ *   implementations of the `DeploymentAdminChecker` interface.
+ * - **Sync-Linked**: The choice of checker depends on the configured sync provider
+ *   (e.g., Convex), as global admin status is usually stored in the primary backend.
+ * - **Cached**: Uses a short-lived internal cache (1 minute TTL) to minimize redundant
+ *   backend queries for the same provider.
  */
 import type { H3Event } from 'h3';
 import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { useRuntimeConfig } from '#imports';
 
+/**
+ * Purpose:
+ * Contract for checking deployment-level admin status.
+ */
 export interface DeploymentAdminChecker {
     /**
-     * Check if a user has deployment-wide admin access.
-     * 
-     * @param providerUserId - The provider's user ID (e.g., Clerk user ID)
-     * @param provider - The auth provider ID
-     * @returns true if user has deployment admin access
+     * Purpose:
+     * Evaluates if a specific user identity has been granted deployment admin status.
+     *
+     * @param providerUserId - The external ID from the auth provider (Clerk ID).
+     * @param provider - The ID of the auth provider issuing the identity.
+     * @returns A promise resolving to `true` if the user is a deployment admin.
      */
     checkDeploymentAdmin(providerUserId: string, provider: string): Promise<boolean>;
 }
@@ -25,7 +40,14 @@ let cacheTimestamp: number = 0;
 const CACHE_TTL_MS = 60000; // 1 minute
 
 /**
- * Get the deployment admin checker for the current sync provider.
+ * Purpose:
+ * Factory method to retrieve the appropriate deployment admin checker
+ * for the current server configuration.
+ *
+ * Behavior:
+ * - Memoizes the checker instance for 1 minute or until the sync provider changes.
+ *
+ * @param event - Optional H3 event for context-aware config resolution.
  */
 export function getDeploymentAdminChecker(event?: H3Event): DeploymentAdminChecker {
     const config = useRuntimeConfig(event);
@@ -48,6 +70,10 @@ export function getDeploymentAdminChecker(event?: H3Event): DeploymentAdminCheck
     return checker;
 }
 
+/**
+ * Purpose:
+ * Instantiates a checker implementation based on the provider ID.
+ */
 function createChecker(providerId: string): DeploymentAdminChecker {
     switch (providerId) {
         case CONVEX_PROVIDER_ID:
@@ -60,7 +86,12 @@ function createChecker(providerId: string): DeploymentAdminChecker {
 }
 
 /**
- * Convex implementation of DeploymentAdminChecker.
+ * Purpose:
+ * Convex-backed implementation of the deployment admin check.
+ *
+ * Behavior:
+ * - Queries the Convex backend to map the provider identity to an internal user.
+ * - Checks the `admin` table for an active admin grant for that user.
  */
 class ConvexDeploymentAdminChecker implements DeploymentAdminChecker {
     async checkDeploymentAdmin(providerUserId: string, provider: string): Promise<boolean> {
@@ -88,14 +119,15 @@ class ConvexDeploymentAdminChecker implements DeploymentAdminChecker {
 
             return isAdmin;
         } catch {
-            // If anything fails, assume not an admin
+            // If anything fails, assume not an admin to maintain safe defaults
             return false;
         }
     }
 }
 
 /**
- * No-op implementation for providers that don't support deployment admin.
+ * Purpose:
+ * Default "deny-all" implementation for providers without global admin logic.
  */
 class NoOpDeploymentAdminChecker implements DeploymentAdminChecker {
     async checkDeploymentAdmin(): Promise<boolean> {

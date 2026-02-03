@@ -1,3 +1,24 @@
+/**
+ * @module server/admin/config/resolve-config.ts
+ *
+ * Purpose:
+ * Transforms raw, flat environment variable strings into structured, type-safe
+ * configuration objects used throughout the OR3 application.
+ *
+ * Responsibilities:
+ * - Parsing string values into booleans, numbers, and complex nested objects.
+ * - Applying system-wide defaults for missing values.
+ * - Enforcing strict configuration validation for production environments.
+ *
+ * Architecture:
+ * This module bridges the gap between the process environment and the typed
+ * configuration system (Or3Config and Or3CloudConfig). It is used during system
+ * initialization and by the admin manager to validate pending changes.
+ *
+ * Constraints:
+ * - Must handle undefined environment variables gracefully by providing defaults.
+ * - Validates configuration against schemas provided by `defineOr3Config`.
+ */
 import { defineOr3Config } from '~~/utils/or3-config';
 import { defineOr3CloudConfig } from '~~/utils/or3-cloud-config';
 import type { Or3CloudConfig } from '~~/types/or3-cloud-config';
@@ -27,23 +48,54 @@ import {
 
 type EnvMap = Record<string, string | undefined>;
 
+/**
+ * Safely converts an environment variable string to a boolean.
+ *
+ * Behavior:
+ * Interprets 'true', '1', 'yes', and 'on' as `true`. All other values,
+ * including mixed case variations, are interpreted as `false` if `defaultValue`
+ * is not provided.
+ */
 function envBool(val: string | undefined, defaultValue: boolean): boolean {
     if (val === undefined) return defaultValue;
     return ['true', '1', 'yes', 'on'].includes(val.toLowerCase());
 }
 
+/**
+ * Safely converts an environment variable string to a number.
+ *
+ * Behavior:
+ * Uses the global `Number()` constructor. If the result is not a finite number,
+ * it returns the provided `fallback`.
+ */
 function envNum(val: string | undefined, fallback?: number): number | undefined {
     if (val === undefined) return fallback;
     const parsed = Number(val);
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-// Helper for feature toggles that default to true unless explicitly 'false'
+/**
+ * Helper for feature toggles that default to true unless explicitly disabled.
+ *
+ * Behavior:
+ * Returns `false` ONLY if the input is the literal string 'false'. For all other
+ * string values or `undefined`, it returns `true` (or remains `undefined` if
+ * downstream logic handles the default).
+ */
 function envFeature(val: string | undefined): boolean | undefined {
     if (val === undefined) return undefined;
     return val !== 'false';
 }
 
+/**
+ * Builds the standard OR3 configuration object from environment variables.
+ *
+ * Purpose:
+ * Generates the application-level configuration for features like site branding,
+ * workflow toggles, and UI limits.
+ *
+ * @param env - A map of environment variable keys and values
+ */
 export function buildOr3ConfigFromEnv(env: EnvMap) {
     return defineOr3Config({
         site: {
@@ -95,6 +147,20 @@ export function buildOr3ConfigFromEnv(env: EnvMap) {
     });
 }
 
+/**
+ * Builds the OR3 Cloud configuration object from environment variables.
+ *
+ * Purpose:
+ * Generates the infrastructure-level configuration for Auth, Sync, Storage,
+ * and security headers.
+ *
+ * Constraints:
+ * - Automatically enables/disables Sync and Storage based on the state of
+ *   `SSR_AUTH_ENABLED`.
+ * - Enforces HTTPS in production environments by default.
+ *
+ * @param env - A map of environment variable keys and values
+ */
 export function buildOr3CloudConfigFromEnv(env: EnvMap) {
     const authEnabled = env.SSR_AUTH_ENABLED === 'true';
     const syncEnabled = authEnabled && env.OR3_SYNC_ENABLED !== 'false';

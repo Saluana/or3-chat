@@ -1,6 +1,24 @@
 /**
- * Session context resolution.
- * Resolves ProviderSession to internal SessionContext.
+ * @module server/auth/session.ts
+ *
+ * Purpose:
+ * High-level session resolution for Nitro requests. This module orchestrates
+ * the transition from raw request data (cookies/headers) to a fully hydrated
+ * internal session context, including workspace and role resolution.
+ *
+ * Architecture:
+ * - **Per-Request Caching**: Results are stored in `event.context` to ensure
+ *   consistent session data throughout a single request's lifecycle and avoid
+ *   redundant network calls to auth providers or databases.
+ * - **Isolation**: Uses a generated `requestId` for cache isolation.
+ * - **Provider-Agnostic**: Delegates to registered `AuthProvider` implementations.
+ *
+ * Flow:
+ * 1. Check if SSR auth is enabled for the request.
+ * 2. Attempt to resolve identity from the configured `AuthProvider` (e.g., Clerk).
+ * 3. Resolve or provision the workspace/user mapping via the sync backend (Convex).
+ * 4. Check for deployment-level administrative privileges.
+ * 5. Return and cache the unified `SessionContext`.
  */
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
@@ -17,11 +35,16 @@ const SESSION_CONTEXT_KEY_PREFIX = '__or3_session_context_';
 const REQUEST_ID_KEY = '__or3_request_id';
 
 /**
- * Resolve the session context for an H3 event.
- * Results are cached per-request to avoid multiple provider calls.
+ * Purpose:
+ * Resolves the full session context for an H3 event.
  *
- * @param event - H3 event
- * @returns SessionContext with authenticated state
+ * Behavior:
+ * - Automatically caches the result in the event context.
+ * - Handles workspace auto-provisioning via the sync backend.
+ * - Falls back to unauthenticated state on failures unless configured otherwise.
+ *
+ * @param event - The Nitro request event.
+ * @returns A promise resolving to the final `SessionContext`.
  */
 export async function resolveSessionContext(
     event: H3Event

@@ -1,16 +1,48 @@
 /**
- * Metadata for configuration entries
- * Maps environment variable keys to human-readable names, descriptions, and grouping
+ * @module server/admin/config/config-metadata.ts
+ *
+ * Purpose:
+ * Defines the schema and human-readable metadata for all system configuration options.
+ * Serves as the source of truth for UI labels, descriptions, and logical grouping
+ * in the admin dashboard.
+ *
+ * Responsibilities:
+ * - Maintenance of the global CONFIG_METADATA registry.
+ * - Definition of the EnrichedConfigEntry type for UI consumption.
+ * - Providing lookup utilities for configuration groups and individual keys.
+ *
+ * Non-goals:
+ * - Does not handle environment variable resolution (see resolve-config.ts).
+ * - Does not handle persistence to disk (see env-file.ts).
  */
 
+/**
+ * Metadata for a single configuration entry.
+ *
+ * Purpose:
+ * Provides the necessary context to render a configuration field in the UI
+ * and validate its value type.
+ */
 export type ConfigMetadata = {
+    /** Human-readable label for the configuration setting */
     label: string;
+    /** Detailed description of what the setting does and its impact */
     description: string;
+    /** Group category for UI organization and navigation */
     group: ConfigGroup;
+    /** Relative display order within the assigned group */
     order?: number;
+    /** Expected data type of the value for UI input selection */
     valueType?: 'string' | 'boolean' | 'number';
 };
 
+/**
+ * Human-readable categories for grouping configuration settings in the UI.
+ *
+ * Architecture:
+ * These groups are used to generate the navigation tabs or sections in the
+ * Admin Dashboard > Settings interface.
+ */
 export const CONFIG_GROUPS = [
     'Auth',
     'Sync',
@@ -25,6 +57,12 @@ export const CONFIG_GROUPS = [
 
 export type ConfigGroup = (typeof CONFIG_GROUPS)[number];
 
+/**
+ * Central registry of configuration metadata.
+ *
+ * Maps environment variable names to their descriptive metadata. Every key
+ * intended for editing via the admin dashboard should be registered here.
+ */
 export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
     // Auth
     'SSR_AUTH_ENABLED': {
@@ -429,21 +467,53 @@ export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
     },
 };
 
+/**
+ * Retrieves metadata for a specific configuration key.
+ *
+ * Purpose:
+ * Allows the configuration manager to pull schema information during enrichment.
+ *
+ * @param key - The environment variable key (e.g., 'SSR_AUTH_ENABLED')
+ */
 export function getConfigMetadata(key: string): ConfigMetadata | undefined {
     return CONFIG_METADATA[key];
 }
 
+/**
+ * Returns the list of all available configuration groups.
+ *
+ * @returns A readonly array of group names used for UI layout
+ */
 export function getConfigGroups(): readonly ConfigGroup[] {
     return CONFIG_GROUPS;
 }
 
+/**
+ * A configuration entry augmented with its schema metadata.
+ *
+ * Purpose:
+ * This is the primary data structure sent to the Admin Dashboard. It combines
+ * raw environment values with human-friendly display information.
+ *
+ * Constraints:
+ * - Key names must match the whitelist in config-manager.ts.
+ * - Value may be masked (e.g., '******') before reaching this structure.
+ */
 export type EnrichedConfigEntry = {
+    /** The environment variable key name */
     key: string;
+    /** The current value (masked if it's a secret) */
     value: string | null;
+    /** Whether the value is currently masked (e.g., '******') */
     masked: boolean;
+    /** Human-readable label from CONFIG_METADATA */
     label: string;
+    /** Detailed description from CONFIG_METADATA */
     description: string;
+    /** UI group category for navigation */
     group: ConfigGroup;
+    /** Display order within the group */
     order: number;
+    /** Value type for UI input rendering (e.g., checkboxes for booleans) */
     valueType: 'string' | 'boolean' | 'number';
 };

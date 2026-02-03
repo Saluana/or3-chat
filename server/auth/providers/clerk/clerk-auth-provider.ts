@@ -1,20 +1,54 @@
 /**
- * Clerk auth provider implementation.
- * Extracts session information from Clerk's auth context.
+ * @module server/auth/providers/clerk/clerk-auth-provider.ts
+ *
+ * Purpose:
+ * Clerk-specific implementation of the SSR `AuthProvider`. This module bridges
+ * Clerk's session management into the OR3 internal session model.
+ *
+ * Behavior:
+ * 1. Retrieves the session context from the request (populated by Clerk's Nitro middleware).
+ * 2. Validates the JWT expiration claim.
+ * 3. Enriches the session by fetching full user details (email, name) via Clerk's Backend SDK.
+ * 4. Normalizes the data into a standard `ProviderSession`.
+ *
+ * Constraints:
+ * - Depends on correctly configured Clerk public/secret keys.
+ * - Requires Clerk's SSR middleware to be active in the Nitro pipeline.
+ * - Throws in development if Clerk context is missing to aid debugging.
  */
 import type { H3Event } from 'h3';
 import type { AuthProvider, ProviderSession } from '../../types';
 import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { clerkClient } from '@clerk/nuxt/server';
 
+/**
+ * Purpose:
+ * Internal interface representing the structure of Clerk's auth context
+ * as exposed by the `@clerk/nuxt` server integration.
+ */
 interface ClerkAuthContext {
     userId: string | null;
     sessionClaims: { exp?: number; [key: string]: unknown };
 }
 
+/**
+ * Purpose:
+ * Singleton implementation of the Clerk auth provider.
+ */
 export const clerkAuthProvider: AuthProvider = {
     name: CLERK_PROVIDER_ID,
 
+    /**
+     * Purpose:
+     * Resolves a session from Clerk's server-side context.
+     *
+     * Behavior:
+     * - Calls the lazy `auth()` function provided by Clerk's middleware.
+     * - Fetches full user profile details to populate identity fields.
+     *
+     * @param event - The Nitro request event.
+     * @returns Normalized provider session or `null` if unauthenticated.
+     */
     async getSession(event: H3Event): Promise<ProviderSession | null> {
         // Clerk middleware populates event.context.auth as a function
         const authFn = event.context.auth as (() => unknown) | undefined;

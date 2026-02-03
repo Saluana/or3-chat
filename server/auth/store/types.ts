@@ -1,23 +1,33 @@
 /**
- * AuthWorkspaceStore interface.
- * Defines the contract for workspace/user persistence.
- * Default implementation will be backed by the SyncProvider backend (Convex).
+ * @module server/auth/store/types.ts
+ *
+ * Purpose:
+ * Defines the abstract persistence layer for SSR Auth. This interface decouples
+ * session resolution from specific backend technologies (e.g., Convex, SQL, etc.).
+ *
+ * Current Status:
+ * **Internal / Under Construction**.
+ * Session resolution currently uses direct Convex imports for expediency.
+ * This interface outlines the target architecture for multi-backend support.
  */
 import type { WorkspaceRole } from '~/core/hooks/hook-types';
 
 /**
- * Store interface for auth-related workspace and user persistence.
- * The actual implementation will use the selected SyncProvider backend.
- * 
- * TODO: Implement this interface when abstracting session resolution
- * Currently, session resolution in server/auth/session.ts directly uses Convex.
- * When adding support for other sync providers, this interface should be
- * implemented and a registry pattern similar to AuthProvider should be used.
+ * Purpose:
+ * Interface for auth-related workspace and user persistence.
+ *
+ * Responsibilities:
+ * - Map external provider identities to internal persistent IDs.
+ * - Manage workspace assignments and role resolution.
+ * - Abstract multi-tenant scoping logic.
  */
 export interface AuthWorkspaceStore {
     /**
-     * Get or create an internal user from provider identity.
-     * Creates the user if it doesn't exist.
+     * Purpose:
+     * Resolves an internal user ID from an external provider's identity.
+     * Must be idempotent; creates a new user if one does not exist.
+     *
+     * @returns The internal unique ID for the user.
      */
     getOrCreateUser(input: {
         provider: string;
@@ -27,16 +37,20 @@ export interface AuthWorkspaceStore {
     }): Promise<{ userId: string }>;
 
     /**
-     * Get or create a default workspace for a user.
-     * Used on first login to ensure every user has a workspace.
+     * Purpose:
+     * Ensures every user has at least one workspace upon initial login.
+     *
+     * @returns The internal unique ID for the workspace.
      */
     getOrCreateDefaultWorkspace(
         userId: string
     ): Promise<{ workspaceId: string }>;
 
     /**
-     * Get the role of a user in a workspace.
-     * Returns null if the user is not a member.
+     * Purpose:
+     * Evaluates the hierarchical role of a user within a specific workspace.
+     *
+     * @returns The assigned `WorkspaceRole`, or `null` if the user has no access.
      */
     getWorkspaceRole(input: {
         userId: string;
@@ -44,7 +58,8 @@ export interface AuthWorkspaceStore {
     }): Promise<WorkspaceRole | null>;
 
     /**
-     * List all workspaces for a user.
+     * Purpose:
+     * Retrieves all workspaces where the user holds an active membership.
      */
     listUserWorkspaces(
         userId: string

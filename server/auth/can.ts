@@ -1,6 +1,18 @@
 /**
- * Centralized authorization via can().
- * All SSR endpoints should use can() to check permissions.
+ * @module server/auth/can.ts
+ *
+ * Purpose:
+ * Centralized authorization engine for OR3 SSR. All server-side endpoints and
+ * middleware must use `can()` or its derivatives to enforce permissions.
+ *
+ * Responsibilities:
+ * - Map roles to specific granular permissions.
+ * - Evaluate if a session context has the required permission for a resource.
+ * - Delegate to the Auth Hook Engine for dynamic decision filtering.
+ *
+ * Non-responsibilities:
+ * - Handling authentication (see `session.ts`).
+ * - Managing user roles (see `convex/workspaces.ts`).
  */
 import { createError } from 'h3';
 import type {
@@ -11,6 +23,14 @@ import type {
 } from '~/core/hooks/hook-types';
 import { getAuthHookEngine, isAuthHookEngineInitialized } from './hooks';
 
+/**
+ * Purpose:
+ * Internal helper to run the access decision through the hook pipeline.
+ *
+ * Behavior:
+ * If the auth hook engine is ready, it applies all registered filters.
+ * Filters can only deny access, never grant it.
+ */
 function applyDecisionFilters(
     base: AccessDecision,
     session: SessionContext | null
@@ -25,7 +45,11 @@ function applyDecisionFilters(
     return engine.applyAccessDecisionFilters(base, { session });
 }
 
-/** Role to permissions mapping. */
+/**
+ * Purpose:
+ * Static role-to-permission mapping. This defines the baseline capabilities
+ * of each workspace role.
+ */
 const ROLE_PERMISSIONS: Record<WorkspaceRole, Permission[]> = {
     owner: [
         'workspace.read',
@@ -40,12 +64,28 @@ const ROLE_PERMISSIONS: Record<WorkspaceRole, Permission[]> = {
 };
 
 /**
- * Check if a session has a specific permission.
+ * Purpose:
+ * Core authorization function. Determines if an action is allowed based on
+ * the current session and requested permission.
  *
- * @param session - The session context (or null if unauthenticated)
- * @param permission - The permission to check
- * @param resource - Optional resource to check against
- * @returns AccessDecision with allowed status and details
+ * Behavior:
+ * 1. Checks if the session is authenticated.
+ * 2. Checks if the user's role has the required permission.
+ * 3. Handles special cases (e.g., deployment admin overrides).
+ * 4. Applies dynamic filters via the hook engine.
+ *
+ * @param session - The resolved session context (or null if anonymous).
+ * @param permission - The specific capability being requested.
+ * @param resource - Optional descriptor for the target resource.
+ * @returns An `AccessDecision` containing the result and reasoning.
+ *
+ * @example
+ * ```ts
+ * const decision = can(session, 'workspace.write');
+ * if (decision.allowed) {
+ *   // Proceed with write
+ * }
+ * ```
  */
 export function can(
     session: SessionContext | null,
@@ -74,7 +114,7 @@ export function can(
     }
 
     const allowedPermissions = ROLE_PERMISSIONS[role];
-    let allowed = allowedPermissions.includes(permission);
+    let allowed = allowedPermissions?.includes(permission) ?? false;
 
     // Special case: deployment admin grants admin.access regardless of role
     if (permission === 'admin.access' && session.deploymentAdmin) {
@@ -94,7 +134,10 @@ export function can(
 }
 
 /**
- * Require a valid session, throwing 401 if not authenticated.
+ * Purpose:
+ * Assertion helper to ensure a user is authenticated.
+ *
+ * @throws 401 Unauthorized if the session is not authenticated.
  */
 export function requireSession(
     session: SessionContext | null
@@ -108,7 +151,17 @@ export function requireSession(
 }
 
 /**
- * Require a specific permission, throwing 403 if not allowed.
+ * Purpose:
+ * Guard helper to enforce a permission.
+ *
+ * @throws 401 Unauthorized if not authenticated.
+ * @throws 403 Forbidden if authenticated but permission is denied.
+ *
+ * @example
+ * ```ts
+ * // In a Nitro event handler
+ * requireCan(event.context.session, 'workspace.settings.manage');
+ * ```
  */
 export function requireCan(
     session: SessionContext | null,
