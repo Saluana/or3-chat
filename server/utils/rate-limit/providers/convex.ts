@@ -1,8 +1,16 @@
 /**
- * Convex Rate Limit Provider
+ * @module server/utils/rate-limit/providers/convex
  *
- * Uses Convex for persistent rate limiting storage.
- * Falls back to memory provider if Convex calls fail.
+ * Purpose:
+ * Convex-backed rate limit provider with memory fallback.
+ *
+ * Responsibilities:
+ * - Use Convex mutations and queries for persistent rate limits.
+ * - Fall back to the in-memory provider on configuration or runtime failures.
+ *
+ * Non-Goals:
+ * - Implement rate limit policy selection.
+ * - Guarantee global ordering across multiple Convex clusters.
  */
 
 import { ConvexHttpClient } from 'convex/browser';
@@ -16,6 +24,14 @@ import type {
 import { memoryRateLimitProvider } from './memory';
 import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
+/**
+ * Purpose:
+ * Convex-backed implementation of the rate limit provider.
+ *
+ * Behavior:
+ * - Lazily initializes a Convex client from runtime config.
+ * - Falls back to memory when Convex is unavailable or errors.
+ */
 export class ConvexRateLimitProvider implements RateLimitProvider {
     readonly name = CONVEX_PROVIDER_ID;
     private client: ConvexHttpClient | null = null;
@@ -85,5 +101,8 @@ export class ConvexRateLimitProvider implements RateLimitProvider {
     }
 }
 
-// Singleton instance
+/**
+ * Purpose:
+ * Singleton Convex provider instance.
+ */
 export const convexRateLimitProvider = new ConvexRateLimitProvider();

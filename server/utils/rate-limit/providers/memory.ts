@@ -1,9 +1,19 @@
 /**
- * In-Memory Rate Limit Provider
+ * @module server/utils/rate-limit/providers/memory
  *
- * Uses an LRU cache for rate limiting with fixed-window counters.
- * This is the default provider and always available as a fallback.
- * Note that limits reset on server restart.
+ * Purpose:
+ * In-memory rate limit provider using fixed windows and LRU cache.
+ *
+ * Responsibilities:
+ * - Track request counts per key within a fixed time window.
+ * - Provide atomic check-and-record behavior in-process.
+ *
+ * Non-Goals:
+ * - Distributed rate limiting or persistence across restarts.
+ * - Sliding window semantics.
+ *
+ * Constraints:
+ * - In-memory only and resets on restart.
  */
 
 import { LRUCache } from 'lru-cache';
@@ -28,6 +38,10 @@ const cache = new LRUCache<string, RateLimitEntry>({
     updateAgeOnHas: false,
 });
 
+/**
+ * Purpose:
+ * In-memory implementation of the rate limit provider contract.
+ */
 export class MemoryRateLimitProvider implements RateLimitProvider {
     readonly name = 'memory';
 
@@ -87,5 +101,8 @@ export class MemoryRateLimitProvider implements RateLimitProvider {
     }
 }
 
-// Singleton instance
+/**
+ * Purpose:
+ * Singleton in-memory provider instance.
+ */
 export const memoryRateLimitProvider = new MemoryRateLimitProvider();

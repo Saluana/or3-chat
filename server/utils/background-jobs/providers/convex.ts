@@ -1,13 +1,18 @@
 /**
- * Convex Background Job Provider
+ * @module server/utils/background-jobs/providers/convex
  *
- * Persistent implementation using Convex database.
- * Jobs survive server restarts and work across multiple instances.
+ * Purpose:
+ * Convex-backed background job provider for multi-instance deployments.
+ * Jobs persist across restarts and can be shared between servers.
  *
- * Best for: Production, multi-instance deployments.
+ * Responsibilities:
+ * - Persist job lifecycle state in Convex.
+ * - Enforce concurrency limits using Convex queries.
+ * - Provide poll-based abort checks for streaming loops.
  *
- * Note: This provider uses poll-based abort detection since AbortControllers
- * are in-process and can't be shared across instances.
+ * Non-Goals:
+ * - In-process AbortController support.
+ * - Client-facing streaming delivery.
  */
 
 import type {
@@ -23,12 +28,20 @@ import { getConvexClient } from "../../convex-client";
 import { CONVEX_PROVIDER_ID } from "~~/shared/cloud/provider-ids";
 
 /**
- * Get a Convex HTTP client for server-side calls
+ * Purpose:
+ * Resolve a Convex HTTP client for server-side calls.
  */
 function getClient() {
   return getConvexClient();
 }
 
+/**
+ * Purpose:
+ * Convex provider implementation for background jobs.
+ *
+ * Constraints:
+ * - Abort is detected via polling, not AbortController.
+ */
 export const convexJobProvider: BackgroundJobProvider = {
   name: CONVEX_PROVIDER_ID,
 
@@ -114,8 +127,7 @@ export const convexJobProvider: BackgroundJobProvider = {
     });
   },
 
-  // Convex provider doesn't have AbortControllers (they're in-process)
-  // Streaming loop must poll for abort status using checkAborted query
+  // Convex provider does not expose AbortControllers.
   getAbortController(_jobId: string): AbortController | undefined {
     return undefined;
   },
@@ -136,8 +148,14 @@ export const convexJobProvider: BackgroundJobProvider = {
 };
 
 /**
- * Check if a job should be aborted (for poll-based abort).
- * Call this periodically during streaming to detect user-initiated aborts.
+ * Purpose:
+ * Poll-based abort detection for Convex-backed jobs.
+ *
+ * Behavior:
+ * - Returns `true` when the job has been marked aborted.
+ *
+ * Constraints:
+ * - Callers must poll periodically while streaming.
  */
 export async function checkJobAborted(jobId: string): Promise<boolean> {
   const client = getClient();

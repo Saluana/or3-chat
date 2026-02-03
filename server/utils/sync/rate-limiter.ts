@@ -1,22 +1,26 @@
-import { LRUCache } from 'lru-cache';
-
 /**
- * Sync Rate Limiter
+ * @module server/utils/sync/rate-limiter
  *
- * In-memory sliding window rate limiter for sync and storage operations.
- * Limits are per-subject (userId, IP address, or other identifier) to prevent 
- * abuse while allowing normal usage.
+ * Purpose:
+ * In-memory sliding window rate limits for sync, storage, and auth requests.
+ * This module protects SSR endpoints from sustained abuse while allowing
+ * normal usage patterns.
  *
- * Memory bounds:
- * - Maximum 10,000 subjects tracked concurrently (LRU eviction)
- * - Entries expire after 10 minutes of inactivity
- * - Each entry stores ~100 bytes (timestamps array)
- * - Total memory: ~1MB worst case
+ * Responsibilities:
+ * - Provide per-subject limits for known operations.
+ * - Track recent request timestamps in a sliding window.
+ * - Expose stats and reset helpers for tests and diagnostics.
  *
- * Note: This is in-memory and resets on server restart. This is acceptable
- * for soft limits - it prevents sustained abuse but won't persist across
- * deployments. For distributed deployments, consider Redis.
+ * Non-Goals:
+ * - Distributed or persistent rate limiting.
+ * - Per-route policy selection beyond the provided operation keys.
+ *
+ * Constraints:
+ * - In-memory and resets on server restart.
+ * - LRU cache bounds memory usage.
  */
+
+import { LRUCache } from 'lru-cache';
 
 import type {
     RateLimitConfig,
@@ -29,43 +33,53 @@ interface RateLimitEntry {
 }
 
 /**
- * Rate limit configurations for sync operations.
- * These are tuned for a chat/document editor application.
+ * Purpose:
+ * Rate limits for sync operations, tuned for chat editor usage patterns.
  */
 export const SYNC_RATE_LIMITS: Record<string, RateLimitConfig> = {
-    // Push: 200 ops/min - allows rapid typing and batch edits
+    // Push: 200 ops per minute
     'sync:push': { windowMs: 60_000, maxRequests: 200 },
-    // Pull: 120 req/min - sufficient for bootstrap and reconnect scenarios
+    // Pull: 120 requests per minute
     'sync:pull': { windowMs: 60_000, maxRequests: 120 },
-    // Cursor updates: 60 req/min - less frequent than push/pull
+    // Cursor updates: 60 requests per minute
     'sync:cursor': { windowMs: 60_000, maxRequests: 60 },
 } as const;
 
+/**
+ * Purpose:
+ * Rate limits for storage operations.
+ */
 export const STORAGE_RATE_LIMITS: Record<string, RateLimitConfig> = {
     'storage:upload': { windowMs: 60_000, maxRequests: 50 },
     'storage:download': { windowMs: 60_000, maxRequests: 100 },
-    // Storage commit: 30/min per user to prevent spam
+    // Storage commit: 30 per minute per user
     'storage:commit': { windowMs: 60_000, maxRequests: 30 },
 };
 
+/**
+ * Purpose:
+ * Rate limits for auth session discovery.
+ */
 export const AUTH_RATE_LIMITS: Record<string, RateLimitConfig> = {
-    // Auth session: 60/min per IP to prevent enumeration attacks
+    // Auth session: 60 per minute per IP
     'auth:session': { windowMs: 60_000, maxRequests: 60 },
 };
 
-// Merge all rate limit configurations
+/**
+ * Purpose:
+ * Combined lookup table for all known rate limit operations.
+ */
 export const ALL_RATE_LIMITS = {
     ...SYNC_RATE_LIMITS,
     ...STORAGE_RATE_LIMITS,
     ...AUTH_RATE_LIMITS,
 };
 
-/** Maximum age for entries before cleanup (10 minutes) */
+/** Maximum age for entries before cleanup (10 minutes). */
 const MAX_ENTRY_AGE_MS = 10 * 60 * 1000;
 
 /**
  * Rate limit store using LRU cache to prevent unbounded growth.
- * Max 10k users tracked, entries expire after 10 minutes of inactivity.
  */
 const rateLimitStore = new LRUCache<string, RateLimitEntry>({
     max: 10_000,
@@ -75,20 +89,23 @@ const rateLimitStore = new LRUCache<string, RateLimitEntry>({
 });
 
 /**
- * Get the rate limit key for a subject and operation.
- * Subject can be a userId, IP address, or other identifier.
+ * Purpose:
+ * Build a cache key from a subject identifier and operation.
  */
 function getRateLimitKey(subjectKey: string, operation: string): string {
     return `${subjectKey}:${operation}`;
 }
 
 /**
- * Check if a request is allowed under rate limits.
- * Does NOT record the request - call recordSyncRequest separately if allowed.
+ * Purpose:
+ * Check whether a request is allowed under the configured limits.
  *
- * @param subjectKey - The subject making the request (userId, IP, etc.)
- * @param operation - The operation type (e.g., 'sync:push', 'auth:session')
- * @returns Rate limit result with allowed status and remaining requests
+ * Behavior:
+ * - Does not record the request. Call `recordSyncRequest` after success.
+ * - Unknown operations are allowed by default.
+ *
+ * Constraints:
+ * - Sliding window is computed in-process only.
  */
 export function checkSyncRateLimit(subjectKey: string, operation: string): RateLimitResult {
     const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
@@ -127,11 +144,15 @@ export function checkSyncRateLimit(subjectKey: string, operation: string): RateL
 }
 
 /**
- * Record a request for rate limiting.
- * Call this AFTER the request is allowed and processed.
+ * Purpose:
+ * Record a request for a subject and operation.
  *
- * @param subjectKey - The subject making the request (userId, IP, etc.)
- * @param operation - The operation type
+ * Behavior:
+ * - Adds a timestamp to the sliding window.
+ * - Prunes timestamps outside the current window.
+ *
+ * Constraints:
+ * - Call only after a request is allowed.
  */
 export function recordSyncRequest(subjectKey: string, operation: string): void {
     const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
@@ -158,9 +179,12 @@ export function recordSyncRequest(subjectKey: string, operation: string): void {
 }
 
 /**
- * Reset rate limits for a subject (useful for testing)
+ * Purpose:
+ * Reset rate limit entries for a subject or all subjects.
  *
- * @param subjectKey - The subject to reset, or undefined to reset all
+ * Behavior:
+ * - When `subjectKey` is provided, clears known operations for that subject.
+ * - When omitted, clears the entire cache.
  */
 export function resetSyncRateLimits(subjectKey?: string): void {
     if (subjectKey) {
@@ -173,10 +197,11 @@ export function resetSyncRateLimits(subjectKey?: string): void {
 }
 
 /**
- * Get current rate limit stats for a subject (useful for debugging/headers)
+ * Purpose:
+ * Retrieve rate limit stats for diagnostics or headers.
  *
- * @param subjectKey - The subject to check (userId, IP, etc.)
- * @param operation - The operation type
+ * Behavior:
+ * - Returns `null` when the operation is unknown.
  */
 export function getSyncRateLimitStats(
     subjectKey: string,

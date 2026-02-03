@@ -1,6 +1,23 @@
 /**
- * Workspace mutations for OR3
- * Handles workspace creation and membership
+ * @module convex/workspaces
+ *
+ * Purpose:
+ * Implements workspace lifecycle and membership mutations for OR3 Cloud.
+ * Provides the primary user-facing API for creating, listing, and selecting
+ * workspaces.
+ *
+ * Behavior:
+ * - Authenticated users can create and list their workspaces
+ * - Membership is required for updates, activation, and removal
+ * - `ensure` and `resolveSession` support session bootstrapping
+ *
+ * Constraints:
+ * - Only Clerk is supported as an auth provider in this module
+ * - Owner-only actions are enforced for updates and deletion
+ *
+ * Non-Goals:
+ * - Admin-grade management of all workspaces (see convex/admin.ts)
+ * - Fine-grained role permissions beyond owner checks
  */
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import { v } from 'convex/values';
@@ -20,6 +37,12 @@ const DELETE_BATCH_SIZE = 100;
 // HELPERS
 // ============================================================
 
+/**
+ * Internal helper.
+ *
+ * Purpose:
+ * Resolves the authenticated user's auth account mapping.
+ */
 async function getAuthAccount(
     ctx: MutationCtx | QueryCtx
 ): Promise<{ userId: Id<'users'>; authAccountId: Id<'auth_accounts'> }> {
@@ -42,6 +65,12 @@ async function getAuthAccount(
     return { userId: authAccount.user_id, authAccountId: authAccount._id };
 }
 
+/**
+ * Internal helper.
+ *
+ * Purpose:
+ * Ensures a user is a member of a workspace and returns the membership row.
+ */
 async function requireWorkspaceMembership(
     ctx: MutationCtx | QueryCtx,
     workspaceId: Id<'workspaces'>,
@@ -61,6 +90,12 @@ async function requireWorkspaceMembership(
     return membership;
 }
 
+/**
+ * Internal helper.
+ *
+ * Purpose:
+ * Deletes workspace-scoped data in batches to avoid large transactions.
+ */
 async function deleteWorkspaceData(ctx: MutationCtx, workspaceId: Id<'workspaces'>) {
     type IndexQueryBuilder = {
         eq: (field: string, value: unknown) => IndexQueryBuilder;
@@ -112,7 +147,14 @@ async function deleteWorkspaceData(ctx: MutationCtx, workspaceId: Id<'workspaces
 }
 
 /**
- * Get all workspaces for the current user
+ * `workspaces.listMyWorkspaces` (query)
+ *
+ * Purpose:
+ * Lists all workspaces for the current authenticated user.
+ *
+ * Behavior:
+ * - Returns an empty array for unauthenticated users
+ * - Marks the active workspace via `is_active`
  */
 export const listMyWorkspaces = query({
     args: {},
@@ -168,7 +210,14 @@ export const listMyWorkspaces = query({
 });
 
 /**
- * Create a new workspace for the current user
+ * `workspaces.create` (mutation)
+ *
+ * Purpose:
+ * Creates a workspace and grants the current user owner membership.
+ *
+ * Behavior:
+ * - Creates a user record and auth account mapping if missing
+ * - Initializes `server_version_counter` for sync
  */
 export const create = mutation({
     args: {
@@ -237,6 +286,15 @@ export const create = mutation({
     },
 });
 
+/**
+ * `workspaces.update` (mutation)
+ *
+ * Purpose:
+ * Updates workspace name and description.
+ *
+ * Constraints:
+ * - Only workspace owners can update
+ */
 export const update = mutation({
     args: {
         workspace_id: v.id('workspaces'),
@@ -259,6 +317,15 @@ export const update = mutation({
     },
 });
 
+/**
+ * `workspaces.setActive` (mutation)
+ *
+ * Purpose:
+ * Sets the current user's active workspace.
+ *
+ * Behavior:
+ * - Requires membership in the target workspace
+ */
 export const setActive = mutation({
     args: {
         workspace_id: v.id('workspaces'),
@@ -276,6 +343,16 @@ export const setActive = mutation({
     },
 });
 
+/**
+ * `workspaces.remove` (mutation)
+ *
+ * Purpose:
+ * Deletes a workspace and all workspace-scoped data.
+ *
+ * Constraints:
+ * - Only owners can delete
+ * - Updates `active_workspace_id` for affected users
+ */
 export const remove = mutation({
     args: {
         workspace_id: v.id('workspaces'),
@@ -314,8 +391,15 @@ export const remove = mutation({
 });
 
 /**
- * Ensure a user and their default workspace exist.
- * Called during session resolution on first login.
+ * `workspaces.ensure` (mutation)
+ *
+ * Purpose:
+ * Ensures a user and a default workspace exist on first login.
+ *
+ * Behavior:
+ * - Validates provider and JWT subject
+ * - Creates a personal workspace if none exists
+ * - Sets active workspace for the user
  */
 export const ensure = mutation({
     args: {
@@ -439,8 +523,14 @@ export const ensure = mutation({
 });
 
 /**
- * Resolve an existing user/workspace session without mutating data.
- * Returns null when the user or workspace cannot be found.
+ * `workspaces.resolveSession` (query)
+ *
+ * Purpose:
+ * Resolves a user and workspace session without mutating state.
+ *
+ * Behavior:
+ * - Returns `null` when the mapping or workspace cannot be found
+ * - Falls back to the oldest membership when no active workspace is set
  */
 export const resolveSession = query({
     args: {

@@ -1,13 +1,39 @@
 /**
- * User identity queries for testing auth integration
+ * @module convex/users
+ *
+ * Purpose:
+ * Small identity and account lookup utilities used by the client and test
+ * harness to validate auth integration.
+ *
+ * Behavior:
+ * - `me` returns the caller's auth identity (or `null`)
+ * - `getAuthAccountByProvider` returns the internal user mapping for a provider
+ *
+ * Constraints:
+ * - Convex identity claims come from the configured auth provider (Clerk by
+ *   default in OR3 Cloud).
+ *
+ * Non-Goals:
+ * - Full user profile APIs.
+ * - Workspace authorization checks (handled in workspace/sync modules).
  */
 import { query } from './_generated/server';
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 
 /**
- * Get auth account by provider and provider user ID.
- * Returns the internal user ID if found.
+ * `users.getAuthAccountByProvider` (query)
+ *
+ * Purpose:
+ * Looks up an auth account mapping by `(provider, provider_user_id)`.
+ *
+ * Authorization:
+ * This query does not validate the caller's identity and should be treated as
+ * an internal/testing surface. Do not expose it to untrusted clients.
+ *
+ * Behavior:
+ * - Returns `null` when no mapping exists
+ * - Returns the internal `user_id` (Convex Id<'users'>) when found
  */
 export const getAuthAccountByProvider = query({
     args: {
@@ -35,11 +61,22 @@ export const getAuthAccountByProvider = query({
 });
 
 /**
- * Get the current authenticated user's identity.
- * Returns null if not authenticated, or the user's Clerk identity if logged in.
+ * `users.me` (query)
  *
- * Usage in Vue:
- *   const identity = useQuery(api.users.me);
+ * Purpose:
+ * Returns the current caller's auth identity as provided by Convex auth.
+ *
+ * Behavior:
+ * - Returns `null` when the caller is not authenticated
+ * - Returns a subset of identity fields useful for UI/session wiring
+ *
+ * @example
+ * ```ts
+ * const identity = useQuery(api.users.me);
+ * if (identity) {
+ *   console.log('Signed in as', identity.email);
+ * }
+ * ```
  */
 export const me = query({
     args: {},

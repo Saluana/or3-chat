@@ -1,10 +1,19 @@
 /**
- * Memory Background Job Provider
+ * @module server/utils/background-jobs/providers/memory
  *
- * In-memory implementation for single-instance deployments.
- * Jobs are lost on server restart.
+ * Purpose:
+ * In-process background job provider for single-instance deployments.
+ * Jobs are stored in memory and are lost on server restart.
  *
- * Best for: Development, testing, single-server deployments.
+ * Responsibilities:
+ * - Persist job state in memory.
+ * - Enforce max concurrent job limits.
+ * - Provide AbortController access for streaming cancellation.
+ * - Periodically clean up stale or timed-out jobs.
+ *
+ * Non-Goals:
+ * - Multi-instance coordination.
+ * - Durable persistence across restarts.
  */
 
 import type {
@@ -16,7 +25,7 @@ import type {
 import { getJobConfig } from '../store';
 
 /**
- * Internal job with AbortController (not exposed in public interface)
+ * Internal job record that includes an AbortController.
  */
 interface MemoryJob extends BackgroundJob {
     abortController: AbortController;
@@ -29,7 +38,7 @@ const jobs = new Map<string, MemoryJob>();
 let cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
 /**
- * Cleanup expired jobs
+ * Remove timed-out and stale jobs based on configured retention windows.
  */
 async function cleanupExpiredJobs(): Promise<number> {
     const config = getJobConfig();
@@ -63,7 +72,7 @@ async function cleanupExpiredJobs(): Promise<number> {
 }
 
 /**
- * Start periodic cleanup if not already running
+ * Start periodic cleanup if not already running.
  */
 function ensureCleanupInterval(): void {
     if (cleanupInterval) return;
@@ -72,22 +81,30 @@ function ensureCleanupInterval(): void {
         () => {
             void cleanupExpiredJobs();
         },
-        60_000 // Every minute
+        60_000
     );
 
-    // Don't block process exit
+    // Do not block process exit
     if (typeof cleanupInterval.unref === 'function') {
         cleanupInterval.unref();
     }
 }
 
 /**
- * Generate a unique job ID
+ * Generate a unique job identifier.
  */
 function generateJobId(): string {
     return crypto.randomUUID();
 }
 
+/**
+ * Purpose:
+ * Memory-backed provider implementation for background jobs.
+ *
+ * Constraints:
+ * - Process-local storage only.
+ * - Abort controllers are available for in-process streaming cancellation.
+ */
 export const memoryJobProvider: BackgroundJobProvider = {
     name: 'memory',
 
@@ -134,7 +151,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
             return null;
         }
 
-        // Return public interface (without abortController)
+        // Return public interface (without AbortController)
         const { abortController: _, ...publicJob } = job;
         return publicJob;
     },
@@ -204,7 +221,10 @@ export const memoryJobProvider: BackgroundJobProvider = {
 };
 
 /**
- * For testing: clear all jobs
+ * Internal API.
+ *
+ * Purpose:
+ * Clear all in-memory jobs and cleanup state, primarily for tests.
  */
 export function clearAllJobs(): void {
     jobs.clear();
@@ -215,7 +235,10 @@ export function clearAllJobs(): void {
 }
 
 /**
- * For testing: get raw job count
+ * Internal API.
+ *
+ * Purpose:
+ * Return the number of in-memory jobs, primarily for tests.
  */
 export function getJobCount(): number {
     return jobs.size;

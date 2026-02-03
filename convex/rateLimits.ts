@@ -1,8 +1,24 @@
 /**
- * Rate Limits Convex Functions
+ * @module convex/rateLimits
  *
- * Provides persistent rate limiting storage via Convex.
- * Uses a simple counter with window tracking.
+ * Purpose:
+ * Provides persistent, deployment-wide rate limiting primitives backed by
+ * Convex storage.
+ *
+ * Behavior:
+ * - Uses a per-key counter with a rolling window start timestamp
+ * - `checkAndRecord` is the authoritative "increment and decide" operation
+ * - `getStats` is a read-only view for UI/telemetry
+ * - `cleanup` removes expired rows to keep table size bounded
+ *
+ * Constraints:
+ * - Rate limiting is only as strong as the key design. Keys must be scoped to
+ *   the intended subject (user, workspace, IP, etc.).
+ * - Window behavior is per key and uses `Date.now()` timestamps.
+ *
+ * Non-Goals:
+ * - Distributed in-memory token buckets.
+ * - Returning HTTP headers (this is storage, not an HTTP layer).
  */
 
 import { v } from 'convex/values';
@@ -26,8 +42,21 @@ const MAX_CLEANUP_BATCHES = 5;
 // ============================================================
 
 /**
- * Check and record a rate limit hit atomically.
- * Returns whether the request is allowed.
+ * `rateLimits.checkAndRecord` (mutation)
+ *
+ * Purpose:
+ * Atomically records a rate-limit hit for `key` and returns whether the request
+ * should be allowed.
+ *
+ * Behavior:
+ * - Creates a new record on first use
+ * - Resets the window when expired
+ * - Increments within an active window
+ * - Returns `retryAfterMs` when blocked
+ *
+ * Constraints:
+ * - This mutation does not authenticate the caller.
+ *   Callers must ensure untrusted clients cannot choose arbitrary keys.
  */
 export const checkAndRecord = mutation({
     args: {
@@ -97,7 +126,13 @@ export const checkAndRecord = mutation({
 });
 
 /**
- * Get current rate limit stats without recording.
+ * `rateLimits.getStats` (query)
+ *
+ * Purpose:
+ * Returns current window state for a key without incrementing counters.
+ *
+ * Behavior:
+ * - Returns a full allowance when no record exists or the window has expired
  */
 export const getStats = query({
     args: {
@@ -131,7 +166,14 @@ export const getStats = query({
 });
 
 /**
- * Cleanup old rate limit records (run via cron)
+ * `rateLimits.cleanup` (internal mutation)
+ *
+ * Purpose:
+ * Deletes old rate limit rows to prevent unbounded growth.
+ *
+ * Behavior:
+ * - Deletes rows with `updated_at < now - RATE_LIMIT_RETENTION_MS` in batches
+ * - Caps work per invocation to avoid long-running cleanup tasks
  */
 export const cleanup = internalMutation({
     args: {},

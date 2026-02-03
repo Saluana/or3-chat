@@ -1,3 +1,18 @@
+/**
+ * @module server/utils/__tests__/normalize-host.test
+ *
+ * Purpose:
+ * Validate host normalization rules used for allowlist checks.
+ *
+ * Behavior:
+ * - Lowercases hostnames.
+ * - Strips port suffixes.
+ * - Preserves IPv6 bracket notation.
+ *
+ * Non-Goals:
+ * - DNS or IP reachability validation.
+ */
+
 /* @vitest-environment node */
 import { describe, it, expect } from 'vitest';
 import { normalizeHost } from '../normalize-host';

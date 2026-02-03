@@ -1,7 +1,24 @@
 /**
- * Background Jobs Convex Functions
+ * @module convex/backgroundJobs
  *
- * Mutations and queries for managing background streaming jobs.
+ * Purpose:
+ * Persists background streaming job state so jobs can survive reloads and
+ * be observed from multiple clients or server processes.
+ *
+ * Behavior:
+ * - Jobs are created in `streaming` state and updated incrementally
+ * - Completion and failure are terminal states
+ * - Aborts are explicit and only apply to streaming jobs
+ * - Cleanup removes stale or timed-out jobs in batches
+ *
+ * Constraints:
+ * - This module does not authenticate callers. Caller must enforce access
+ *   control for job creation and reads.
+ * - Status transitions are not strictly enforced beyond simple guards.
+ *
+ * Non-Goals:
+ * - Distributed job scheduling or retries
+ * - Rich audit logging for job changes
  */
 
 import { v } from 'convex/values';
@@ -19,7 +36,14 @@ const CLEANUP_BATCH_SIZE = 100;
 // ============================================================
 
 /**
- * Create a new background job
+ * `backgroundJobs.create` (mutation)
+ *
+ * Purpose:
+ * Creates a new streaming job record for a user and thread.
+ *
+ * Behavior:
+ * - Initializes `status` to `streaming`
+ * - Initializes content and chunk counters
  */
 export const create = mutation({
     args: {
@@ -45,7 +69,14 @@ export const create = mutation({
 });
 
 /**
- * Get a job by ID with user authorization
+ * `backgroundJobs.get` (query)
+ *
+ * Purpose:
+ * Retrieves a job by ID with a simple user ownership check.
+ *
+ * Authorization:
+ * - If `user_id` is `'*'`, the ownership check is skipped.
+ * - Otherwise the job must belong to the provided `user_id`.
  */
 export const get = query({
     args: {
@@ -78,7 +109,13 @@ export const get = query({
 });
 
 /**
- * Update a streaming job with new content
+ * `backgroundJobs.update` (mutation)
+ *
+ * Purpose:
+ * Appends streamed content and updates progress counters.
+ *
+ * Constraints:
+ * - No-op if the job is not in `streaming` state.
  */
 export const update = mutation({
     args: {
@@ -106,7 +143,10 @@ export const update = mutation({
 });
 
 /**
- * Mark a job as successfully completed
+ * `backgroundJobs.complete` (mutation)
+ *
+ * Purpose:
+ * Marks a job as completed and stores final content.
  */
 export const complete = mutation({
     args: {
@@ -126,7 +166,10 @@ export const complete = mutation({
 });
 
 /**
- * Mark a job as failed
+ * `backgroundJobs.fail` (mutation)
+ *
+ * Purpose:
+ * Marks a job as failed and stores an error string.
  */
 export const fail = mutation({
     args: {
@@ -146,7 +189,13 @@ export const fail = mutation({
 });
 
 /**
- * Abort a running job
+ * `backgroundJobs.abort` (mutation)
+ *
+ * Purpose:
+ * Requests cancellation of an active streaming job.
+ *
+ * Behavior:
+ * - Returns `false` when the job is missing, not owned, or not streaming.
  */
 export const abort = mutation({
     args: {
@@ -177,7 +226,13 @@ export const abort = mutation({
 });
 
 /**
- * Check if a job should be aborted (for poll-based abort)
+ * `backgroundJobs.checkAborted` (query)
+ *
+ * Purpose:
+ * Lightweight polling endpoint to determine whether a job has been aborted.
+ *
+ * Behavior:
+ * - Returns `true` when the job does not exist to allow callers to stop work.
  */
 export const checkAborted = query({
     args: {
@@ -192,7 +247,14 @@ export const checkAborted = query({
 });
 
 /**
- * Cleanup expired/stale jobs
+ * `backgroundJobs.cleanup` (mutation)
+ *
+ * Purpose:
+ * Cleans up timed-out streaming jobs and removes stale completed jobs.
+ *
+ * Behavior:
+ * - Times out streaming jobs older than `timeout_ms`
+ * - Deletes completed, errored, or aborted jobs older than `retention_ms`
  */
 export const cleanup = mutation({
     args: {
@@ -244,7 +306,10 @@ export const cleanup = mutation({
 });
 
 /**
- * Get active job count
+ * `backgroundJobs.getActiveCount` (query)
+ *
+ * Purpose:
+ * Returns the number of currently streaming jobs.
  */
 export const getActiveCount = query({
     args: {},

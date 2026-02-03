@@ -1,10 +1,18 @@
 /**
- * Unit tests for proxy-safe request identity utilities
- * Tests:
- * - trustProxy=false => socket address
- * - trustProxy=true => parses X-Forwarded-For first entry
- * - invalid forwarded values => null
+ * @module server/utils/net/__tests__/request-identity.test
+ *
+ * Purpose:
+ * Verify proxy-safe request identity utilities.
+ *
+ * Behavior:
+ * - Uses socket address when proxy trust is disabled.
+ * - Parses forwarded headers when proxy trust is enabled.
+ * - Fails closed to null for missing or invalid forwarded values.
+ *
+ * Non-Goals:
+ * - Comprehensive IP format validation.
  */
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock h3 module

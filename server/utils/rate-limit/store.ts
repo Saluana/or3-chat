@@ -1,8 +1,16 @@
 /**
- * Rate Limit Store
+ * @module server/utils/rate-limit/store
  *
- * Factory that creates the appropriate rate limit provider based on configuration.
- * Falls back to in-memory provider if the configured provider is unavailable.
+ * Purpose:
+ * Resolve the configured rate limit provider for server usage.
+ *
+ * Responsibilities:
+ * - Choose a provider based on runtime config.
+ * - Fall back to the in-memory provider when unavailable.
+ * - Cache the resolved provider instance.
+ *
+ * Non-Goals:
+ * - Implementing rate limit logic.
  */
 
 import type { RateLimitProvider } from './types';
@@ -13,8 +21,13 @@ import { LIMITS_PROVIDER_IDS } from '~~/shared/cloud/provider-ids';
 let cachedProvider: RateLimitProvider | null = null;
 
 /**
+ * Purpose:
  * Get the active rate limit provider.
- * Caches the provider for performance.
+ *
+ * Behavior:
+ * - Uses runtime config to pick a provider.
+ * - Falls back to memory when the configured provider is unavailable.
+ * - Caches the resolved provider for reuse.
  */
 export function getRateLimitProvider(): RateLimitProvider {
     if (cachedProvider) {
@@ -57,7 +70,8 @@ export function getRateLimitProvider(): RateLimitProvider {
 }
 
 /**
- * Reset the cached provider (useful for testing or config changes)
+ * Purpose:
+ * Clear the cached provider, typically for tests or config changes.
  */
 export function resetRateLimitProvider(): void {
     cachedProvider = null;

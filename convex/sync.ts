@@ -1,11 +1,24 @@
 /**
- * Convex Sync Functions
+ * @module convex/sync
  *
- * Core sync operations for the OR3 sync layer:
- * - push: Batch write changes from clients with idempotency
- * - pull: Cursor-based fetch of changes since last sync
- * - watchChanges: Reactive query for real-time subscriptions
- * - updateDeviceCursor: Track device sync progress for retention
+ * Purpose:
+ * Implements the OR3 Cloud sync protocol in Convex.
+ * Provides push, pull, and retention-aware GC for change logs and tombstones.
+ *
+ * Behavior:
+ * - `push` accepts batched changes and applies LWW conflict resolution
+ * - `pull` and `watchChanges` read change logs after a cursor
+ * - `updateDeviceCursor` tracks per-device progress for retention
+ * - GC mutations delete old tombstones and change log entries safely
+ *
+ * Constraints:
+ * - All endpoints require workspace membership via Convex auth
+ * - Wire schema is snake_case and aligns with Dexie
+ * - `order_key` and `clock` drive deterministic ordering and conflicts
+ *
+ * Non-Goals:
+ * - Per-table cursors or server-side merge strategies beyond LWW
+ * - Schema enforcement beyond lightweight validation in `validatePayload`
  */
 import { v } from 'convex/values';
 import { mutation, query, internalMutation, type MutationCtx, type QueryCtx } from './_generated/server';
@@ -51,8 +64,11 @@ const MAX_WORKSPACES_PER_GC_RUN = 50;
 // ============================================================
 
 /**
- * Allocate a batch of server versions for a workspace (atomic increment)
- * Returns the *start* version of the batch.
+ * Internal helper.
+ *
+ * Purpose:
+ * Allocates a contiguous server_version range for a workspace.
+ * The return value is the start of the range.
  */
 async function allocateServerVersions(
     ctx: MutationCtx,
@@ -88,8 +104,13 @@ async function allocateServerVersions(
 }
 
 /**
- * Table name to index name mapping
- * Note: file_meta uses `hash` as PK (content-addressable) instead of `id`
+ * Internal mapping.
+ *
+ * Purpose:
+ * Maps table names to their workspace-scoped index.
+ *
+ * @remarks
+ * `file_meta` uses `hash` as the primary key rather than `id`.
  */
 const TABLE_INDEX_MAP: Record<string, { table: string; indexName: string }> = {
     threads: { table: 'threads', indexName: 'by_workspace_id' },
@@ -102,7 +123,11 @@ const TABLE_INDEX_MAP: Record<string, { table: string; indexName: string }> = {
 };
 
 /**
- * Upsert tombstone for delete operations
+ * Internal helper.
+ *
+ * Purpose:
+ * Ensures a delete operation is represented by a tombstone with the newest
+ * clock value so deletes do not resurrect during sync.
  */
 async function upsertTombstone(
     ctx: MutationCtx,
@@ -149,8 +174,10 @@ async function upsertTombstone(
 }
 
 /**
- * Sanitize payload to prevent workspace/id injection attacks.
- * Strips `workspace_id` and `_id` fields that could reassign records.
+ * Internal helper.
+ *
+ * Purpose:
+ * Removes fields that could reassign documents across workspaces or Convex IDs.
  */
 function sanitizePayload(payload: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
     if (!payload) return payload;
@@ -158,6 +185,12 @@ function sanitizePayload(payload: Record<string, unknown> | undefined): Record<s
     return safe;
 }
 
+/**
+ * Internal helper.
+ *
+ * Purpose:
+ * Lightweight validation for common fields to avoid malformed writes.
+ */
 function validatePayload(
     tableName: string,
     payload: Record<string, unknown> | undefined
@@ -171,8 +204,14 @@ function validatePayload(
 }
 
 /**
- * Apply a single operation to the appropriate data table
- * Implements LWW (Last-Write-Wins) conflict resolution
+ * Internal helper.
+ *
+ * Purpose:
+ * Applies a single operation to a data table using LWW conflict resolution.
+ *
+ * Behavior:
+ * - Deletes set `deleted` and track `deleted_at`
+ * - Puts update if incoming `clock` is newer or equal
  */
 async function applyOpToTable(
     ctx: MutationCtx,
@@ -301,7 +340,10 @@ async function applyOpToTable(
 }
 
 /**
- * Verify user has access to workspace
+ * Internal authorization helper.
+ *
+ * Purpose:
+ * Ensures the caller is authenticated and a member of the workspace.
  */
 async function verifyWorkspaceMembership(
     ctx: MutationCtx | QueryCtx,
@@ -344,10 +386,20 @@ async function verifyWorkspaceMembership(
 // ============================================================
 
 /**
- * Push batch of changes from client
- * - Idempotent via op_id
- * - Applies LWW conflict resolution
- * - Writes to change_log for other clients to pull
+ * `sync.push` (mutation)
+ *
+ * Purpose:
+ * Writes a batch of client-side changes into Convex and the change log.
+ *
+ * Behavior:
+ * - Enforces a maximum batch size and payload size
+ * - Idempotent by `op_id` and returns existing server versions
+ * - Applies LWW conflict resolution per table
+ * - Writes `change_log` entries for downstream pulls
+ *
+ * Constraints:
+ * - `op_id` length is capped
+ * - Only allowlisted table names are accepted
  */
 export const push = mutation({
     args: {
@@ -528,7 +580,10 @@ export const push = mutation({
 });
 
 /**
- * Update device cursor - tracks sync progress for retention
+ * `sync.updateDeviceCursor` (mutation)
+ *
+ * Purpose:
+ * Records the latest server version seen by a device for retention logic.
  */
 export const updateDeviceCursor = mutation({
     args: {
@@ -567,8 +622,14 @@ export const updateDeviceCursor = mutation({
 // ============================================================
 
 /**
- * Pull changes since cursor
- * Returns paginated changes ordered by server_version
+ * `sync.pull` (query)
+ *
+ * Purpose:
+ * Returns a page of changes after a given server_version cursor.
+ *
+ * Behavior:
+ * - Results are ordered by `server_version` ascending
+ * - `tables` can be used to filter specific tables
  */
 export const pull = query({
     args: {
@@ -643,8 +704,14 @@ export const pull = query({
 });
 
 /**
- * Watch for changes - reactive query for subscriptions
- * Returns changes since cursor, re-runs when new changes arrive
+ * `sync.watchChanges` (query)
+ *
+ * Purpose:
+ * Reactive subscription endpoint that re-runs when new changes arrive.
+ *
+ * Behavior:
+ * - Returns changes after an optional cursor
+ * - Caller controls the page size via `limit`
  */
 export const watchChanges = query({
     args: {
@@ -707,7 +774,10 @@ export const watchChanges = query({
 });
 
 /**
- * Get current server version for a workspace
+ * `sync.getServerVersion` (query)
+ *
+ * Purpose:
+ * Returns the current server version counter for a workspace.
  */
 export const getServerVersion = query({
     args: {
@@ -725,8 +795,14 @@ export const getServerVersion = query({
 });
 
 /**
- * GC tombstones older than retention window and below min cursor
- * Uses batching to avoid memory issues with large datasets
+ * `sync.gcTombstones` (mutation)
+ *
+ * Purpose:
+ * Deletes tombstones that are older than the retention window and below the
+ * minimum device cursor to avoid resurrection.
+ *
+ * Behavior:
+ * - Processes one batch at a time using a cursor
  */
 export const gcTombstones = mutation({
     args: {
@@ -779,8 +855,14 @@ export const gcTombstones = mutation({
 });
 
 /**
- * GC change_log entries below min cursor with retention window
- * Uses batching to avoid memory issues with large datasets
+ * `sync.gcChangeLog` (mutation)
+ *
+ * Purpose:
+ * Deletes change_log rows older than the retention window and below the minimum
+ * device cursor.
+ *
+ * Behavior:
+ * - Processes one batch at a time using a cursor
  */
 export const gcChangeLog = mutation({
     args: {
@@ -837,8 +919,11 @@ export const gcChangeLog = mutation({
 // ============================================================
 
 /**
- * Internal mutation for scheduled GC.
- * Runs GC for a specific workspace and schedules continuation if needed.
+ * `sync.runWorkspaceGc` (internal mutation)
+ *
+ * Purpose:
+ * Executes a bounded GC pass for a workspace and schedules a continuation
+ * if more work remains.
  */
 export const runWorkspaceGc = internalMutation({
     args: {
@@ -945,7 +1030,10 @@ export const runWorkspaceGc = internalMutation({
 });
 
 /**
- * Scheduled GC entry point - finds workspaces with sync activity and runs GC
+ * `sync.runScheduledGc` (internal mutation)
+ *
+ * Purpose:
+ * Finds active workspaces and schedules GC work for each.
  */
 export const runScheduledGc = internalMutation({
     args: {},

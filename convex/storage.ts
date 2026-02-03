@@ -1,3 +1,26 @@
+/**
+ * @module convex/storage
+ *
+ * Purpose:
+ * Manages file metadata and storage URLs for OR3 Cloud.
+ * Blob bytes are stored in Convex storage while metadata is stored in `file_meta`.
+ *
+ * Behavior:
+ * - Validates workspace membership for all operations
+ * - Generates short-lived upload URLs
+ * - Commits metadata and deduplicates by `hash`
+ * - Provides read access to stored file URLs
+ * - Supports GC of deleted metadata and storage blobs
+ *
+ * Constraints:
+ * - File size is capped at 100MB in `generateUploadUrl`
+ * - `hash` is the canonical identifier and must be stable across devices
+ *
+ * Non-Goals:
+ * - Streaming uploads or multipart coordination
+ * - Per-file authorization beyond workspace membership
+ */
+
 import { v } from 'convex/values';
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
@@ -15,6 +38,12 @@ const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 
 const nowSec = (): number => Math.floor(Date.now() / 1000);
 
+/**
+ * Internal authorization helper.
+ *
+ * Purpose:
+ * Ensures the caller is authenticated and a member of the target workspace.
+ */
 async function verifyWorkspaceMembership(
     ctx: MutationCtx | QueryCtx,
     workspaceId: Id<'workspaces'>
@@ -49,6 +78,15 @@ async function verifyWorkspaceMembership(
     return authAccount.user_id;
 }
 
+/**
+ * `storage.generateUploadUrl` (mutation)
+ *
+ * Purpose:
+ * Returns a short-lived upload URL for Convex storage.
+ *
+ * Constraints:
+ * - Enforces a 100MB size cap
+ */
 export const generateUploadUrl = mutation({
     args: {
         workspace_id: v.id('workspaces'),
@@ -71,6 +109,17 @@ export const generateUploadUrl = mutation({
     },
 });
 
+/**
+ * `storage.commitUpload` (mutation)
+ *
+ * Purpose:
+ * Persists file metadata and associates a Convex storage object.
+ *
+ * Behavior:
+ * - If a record with the same `hash` exists, updates storage metadata only
+ * - Otherwise inserts a new row with `ref_count = 1`
+ * - Performs a small dedup sweep to resolve rare race duplicates
+ */
 export const commitUpload = mutation({
     args: {
         workspace_id: v.id('workspaces'),
@@ -153,6 +202,15 @@ export const commitUpload = mutation({
     },
 });
 
+/**
+ * `storage.getFileUrl` (query)
+ *
+ * Purpose:
+ * Retrieves a signed URL for a stored file.
+ *
+ * Behavior:
+ * - Returns `null` when metadata exists but the blob is missing
+ */
 export const getFileUrl = query({
     args: {
         workspace_id: v.id('workspaces'),
@@ -179,6 +237,17 @@ export const getFileUrl = query({
     },
 });
 
+/**
+ * `storage.gcDeletedFiles` (mutation)
+ *
+ * Purpose:
+ * Deletes storage blobs and metadata for files that are soft-deleted and
+ * no longer referenced.
+ *
+ * Constraints:
+ * - Skips files with `ref_count > 0`
+ * - Uses a caller-provided retention window in seconds
+ */
 export const gcDeletedFiles = mutation({
     args: {
         workspace_id: v.id('workspaces'),

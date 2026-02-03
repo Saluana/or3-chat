@@ -1,6 +1,18 @@
 /**
- * Tests for sync rate limiter
+ * @module server/utils/sync/__tests__/rate-limiter.test
+ *
+ * Purpose:
+ * Validate sync, storage, and auth rate limit behavior.
+ *
+ * Behavior:
+ * - Enforces sliding window limits per subject and operation.
+ * - Isolates subjects and operations from each other.
+ * - Handles unknown operations by allowing requests.
+ *
+ * Non-Goals:
+ * - Distributed rate limit verification.
  */
+
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     checkSyncRateLimit,

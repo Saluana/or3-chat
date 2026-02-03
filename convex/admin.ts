@@ -1,3 +1,25 @@
+/**
+ * @module convex/admin
+ *
+ * Purpose:
+ * Provides admin-only queries and mutations for managing users, workspaces,
+ * and admin grants in OR3 Cloud.
+ *
+ * Behavior:
+ * - All exported endpoints require admin authorization via `requireAdmin`
+ * - Admin actions are written to the `audit_log` table
+ * - Supports a super admin bridge for deployment bootstrap
+ *
+ * Constraints:
+ * - Admin identity is derived from Convex auth claims and a special issuer
+ * - These functions are intended to be called from trusted SSR endpoints
+ *   guarded by `can()`; do not expose directly to untrusted clients
+ *
+ * Non-Goals:
+ * - Tenant-level policy enforcement beyond admin membership
+ * - User self-service endpoints
+ */
+
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
@@ -24,8 +46,10 @@ type AdminActor = {
 // ============================================================
 
 /**
- * Get the current user's auth account ID.
- * Throws if not authenticated.
+ * Internal helper.
+ *
+ * Purpose:
+ * Resolves the caller's auth account mapping from Convex identity.
  */
 async function getAuthAccount(
     ctx: MutationCtx | QueryCtx,
@@ -46,8 +70,10 @@ async function getAuthAccount(
 }
 
 /**
- * Require admin authorization for the current user.
- * Throws if not authenticated or not an admin.
+ * Internal helper.
+ *
+ * Purpose:
+ * Ensures the caller is an admin. Supports a special issuer for super admins.
  */
 async function requireAdmin(ctx: MutationCtx | QueryCtx): Promise<AdminActor> {
     const identity = await ctx.auth.getUserIdentity();
@@ -108,7 +134,10 @@ async function computeBridgeSignature(
 }
 
 /**
- * Check if a user is an admin.
+ * `admin.isAdmin` (query)
+ *
+ * Purpose:
+ * Checks if a user has an admin grant.
  */
 export const isAdmin = query({
     args: { user_id: v.id('users') },
@@ -123,8 +152,14 @@ export const isAdmin = query({
 });
 
 /**
- * Ensure the current authenticated user has deployment admin access.
- * Intended for super admin bridging only.
+ * `admin.ensureDeploymentAdmin` (mutation)
+ *
+ * Purpose:
+ * Bootstraps deployment admin access using a signed bridge token.
+ *
+ * Constraints:
+ * - Requires `OR3_ADMIN_JWT_SECRET` to be configured
+ * - Intended for super admin bridge flows only
  */
 export const ensureDeploymentAdmin = mutation({
     args: {
@@ -191,7 +226,10 @@ export const ensureDeploymentAdmin = mutation({
 });
 
 /**
- * Log an admin action to the audit log.
+ * Internal helper.
+ *
+ * Purpose:
+ * Records an admin action in the audit log.
  */
 async function logAudit(
     ctx: MutationCtx,
@@ -214,8 +252,10 @@ async function logAudit(
 }
 
 /**
- * List all admin users with their user details.
- * Requires admin authorization.
+ * `admin.listAdmins` (query)
+ *
+ * Purpose:
+ * Lists all admin users with basic profile info.
  */
 export const listAdmins = query({
     args: {},
@@ -245,8 +285,10 @@ export const listAdmins = query({
 });
 
 /**
- * Grant admin access to a user.
- * Requires admin authorization.
+ * `admin.grantAdmin` (mutation)
+ *
+ * Purpose:
+ * Grants admin access to a user and records an audit entry.
  */
 export const grantAdmin = mutation({
     args: {
@@ -295,8 +337,10 @@ export const grantAdmin = mutation({
 });
 
 /**
- * Revoke admin access from a user (hard delete).
- * Requires admin authorization.
+ * `admin.revokeAdmin` (mutation)
+ *
+ * Purpose:
+ * Revokes admin access for a user and records an audit entry.
  */
 export const revokeAdmin = mutation({
     args: {
@@ -336,9 +380,10 @@ export const revokeAdmin = mutation({
 });
 
 /**
- * Search users by email or display name.
- * Returns matching users with their IDs.
- * Requires admin authorization.
+ * `admin.searchUsers` (query)
+ *
+ * Purpose:
+ * Searches users by email or display name with prefix matching.
  */
 export const searchUsers = query({
     args: {
@@ -398,8 +443,10 @@ export const searchUsers = query({
 // ============================================================================
 
 /**
- * List all workspaces (admin only).
- * Supports search, pagination, and deleted filter.
+ * `admin.listWorkspaces` (query)
+ *
+ * Purpose:
+ * Lists workspaces with pagination and optional deleted filtering.
  */
 export const listWorkspaces = query({
     args: {
@@ -487,7 +534,10 @@ export const listWorkspaces = query({
 });
 
 /**
- * Get a single workspace by ID (admin only).
+ * `admin.getWorkspace` (query)
+ *
+ * Purpose:
+ * Returns a single workspace with owner and member counts.
  */
 export const getWorkspace = query({
     args: {
@@ -526,7 +576,10 @@ export const getWorkspace = query({
 });
 
 /**
- * Create a new workspace (admin only).
+ * `admin.createWorkspace` (mutation)
+ *
+ * Purpose:
+ * Creates a workspace on behalf of a user and records an audit entry.
  */
 export const createWorkspace = mutation({
     args: {
@@ -601,7 +654,10 @@ export const createWorkspace = mutation({
 });
 
 /**
- * Soft delete a workspace (admin only).
+ * `admin.softDeleteWorkspace` (mutation)
+ *
+ * Purpose:
+ * Soft deletes a workspace and records an audit entry.
  */
 export const softDeleteWorkspace = mutation({
     args: {
@@ -637,7 +693,10 @@ export const softDeleteWorkspace = mutation({
 });
 
 /**
- * Restore a soft-deleted workspace (admin only).
+ * `admin.restoreWorkspace` (mutation)
+ *
+ * Purpose:
+ * Restores a soft-deleted workspace.
  */
 export const restoreWorkspace = mutation({
     args: {
@@ -665,7 +724,10 @@ export const restoreWorkspace = mutation({
 // ============================================================================
 
 /**
- * List workspace members (admin only).
+ * `admin.listWorkspaceMembers` (query)
+ *
+ * Purpose:
+ * Lists members for a workspace.
  */
 export const listWorkspaceMembers = query({
     args: {
@@ -698,7 +760,10 @@ export const listWorkspaceMembers = query({
 });
 
 /**
- * Upsert a workspace member (admin only).
+ * `admin.upsertWorkspaceMember` (mutation)
+ *
+ * Purpose:
+ * Adds or updates a member with the given role.
  */
 export const upsertWorkspaceMember = mutation({
     args: {
@@ -759,7 +824,10 @@ export const upsertWorkspaceMember = mutation({
 });
 
 /**
- * Set workspace member role (admin only).
+ * `admin.setWorkspaceMemberRole` (mutation)
+ *
+ * Purpose:
+ * Updates an existing member role.
  */
 export const setWorkspaceMemberRole = mutation({
     args: {
@@ -787,7 +855,10 @@ export const setWorkspaceMemberRole = mutation({
 });
 
 /**
- * Remove a workspace member (admin only).
+ * `admin.removeWorkspaceMember` (mutation)
+ *
+ * Purpose:
+ * Removes a member from a workspace.
  */
 export const removeWorkspaceMember = mutation({
     args: {
@@ -818,7 +889,10 @@ export const removeWorkspaceMember = mutation({
 // ============================================================================
 
 /**
- * Get a workspace setting (admin only).
+ * `admin.getWorkspaceSetting` (query)
+ *
+ * Purpose:
+ * Retrieves a workspace-scoped KV setting.
  */
 export const getWorkspaceSetting = query({
     args: {
@@ -842,7 +916,10 @@ export const getWorkspaceSetting = query({
 });
 
 /**
- * Set a workspace setting (admin only).
+ * `admin.setWorkspaceSetting` (mutation)
+ *
+ * Purpose:
+ * Writes a workspace-scoped KV setting and clears deletion flags.
  */
 export const setWorkspaceSetting = mutation({
     args: {

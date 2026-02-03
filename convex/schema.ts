@@ -1,12 +1,22 @@
 /**
- * Convex Schema for OR3 Sync Layer
+ * @module convex/schema
  *
- * This schema defines all tables needed for multi-device sync:
- * - Auth tables (users, workspaces, members)
- * - Synced data tables (threads, messages, projects, posts, kv, file_meta)
- * - Sync infrastructure (change_log, server_version_counter, device_cursors)
+ * Purpose:
+ * Declares the Convex schema that backs OR3 Cloud auth, sync, storage, and
+ * admin operations.
  *
- * Field naming follows snake_case to align with Dexie wire schema.
+ * Behavior:
+ * - Tables are organized around auth, sync infrastructure, synced data, and
+ *   operational utilities such as rate limits and background jobs.
+ * - Field naming is snake_case to align with the Dexie wire schema.
+ *
+ * Constraints:
+ * - The schema is the source of truth for Convex validation.
+ * - Sync payloads rely on flexible `v.any()` fields for evolving data shapes.
+ *
+ * Non-Goals:
+ * - Enforcing application-level invariants. Those are handled in mutations and
+ *   in client-side validators.
  */
 import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';

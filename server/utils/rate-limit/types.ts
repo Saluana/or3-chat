@@ -1,19 +1,34 @@
 /**
- * Rate Limit Provider Interface
+ * @module server/utils/rate-limit/types
  *
- * Defines a pluggable storage backend for rate limiting.
- * Implementations can use in-memory, Convex, Redis, Postgres, etc.
+ * Purpose:
+ * Define the provider contract and shared types for rate limiting.
+ *
+ * Responsibilities:
+ * - Describe rate limit configuration and result shapes.
+ * - Provide the provider interface for pluggable backends.
+ *
+ * Non-Goals:
+ * - Enforcing any particular rate limit policy.
  */
 
+/**
+ * Purpose:
+ * Result of a rate limit check.
+ */
 export interface RateLimitResult {
     /** Whether the request is allowed */
     allowed: boolean;
     /** Remaining requests in the current window */
     remaining: number;
-    /** Milliseconds until rate limit resets (if blocked) */
+    /** Milliseconds until rate limit resets when blocked */
     retryAfterMs?: number;
 }
 
+/**
+ * Purpose:
+ * Read-only statistics about a rate limit window.
+ */
 export interface RateLimitStats {
     /** Maximum requests allowed in the window */
     limit: number;
@@ -23,6 +38,10 @@ export interface RateLimitStats {
     resetMs: number;
 }
 
+/**
+ * Purpose:
+ * Configuration for a rate limit window.
+ */
 export interface RateLimitConfig {
     /** Time window in milliseconds */
     windowMs: number;
@@ -31,34 +50,25 @@ export interface RateLimitConfig {
 }
 
 /**
- * Rate Limit Provider Interface
+ * Purpose:
+ * Contract for rate limit storage providers.
  *
- * Implement this interface to add a new storage backend for rate limiting.
- * The provider is responsible for tracking request counts within sliding windows.
- *
- * IMPORTANT: Use checkAndRecord() for atomic check-and-increment to prevent
- * race conditions. The separate check() method is only for read-only queries.
+ * Behavior:
+ * - Providers must implement atomic check and record semantics.
+ * - Stats queries are read-only and must not mutate state.
  */
 export interface RateLimitProvider {
-    /** Provider name for logging/debugging */
+    /** Provider name for logging and diagnostics */
     readonly name: string;
 
     /**
      * Atomically check and record a request.
-     * This is the primary method - use this to prevent race conditions.
-     *
-     * @param key - Unique identifier (e.g., "daily:user:123")
-     * @param config - Rate limit configuration
-     * @returns Rate limit result with allowed status and remaining requests
+     * This is the primary API to avoid race conditions.
      */
     checkAndRecord(key: string, config: RateLimitConfig): Promise<RateLimitResult>;
 
     /**
-     * Get current rate limit stats for a key (read-only).
-     *
-     * @param key - Unique identifier
-     * @param config - Rate limit configuration
-     * @returns Current stats or null if no data
+     * Retrieve current rate limit stats for a key.
      */
     getStats(key: string, config: RateLimitConfig): Promise<RateLimitStats | null>;
 }

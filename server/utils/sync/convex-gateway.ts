@@ -1,6 +1,25 @@
 /**
- * Convex gateway helpers for SSR sync endpoints.
+ * @module server/utils/sync/convex-gateway
+ *
+ * Purpose:
+ * Helper utilities for Convex gateway mode in SSR sync endpoints.
+ * This module mints provider tokens and caches ConvexHttpClient instances
+ * keyed by user identity to avoid repeated initialization.
+ *
+ * Responsibilities:
+ * - Retrieve provider tokens from Clerk auth context.
+ * - Resolve Convex URLs across runtime config shapes.
+ * - Provide cached Convex clients for user and admin contexts.
+ *
+ * Non-Goals:
+ * - Authorization checks. SSR endpoints must enforce `can()`.
+ * - Token refresh scheduling beyond per-request access.
+ *
+ * Constraints:
+ * - Server-only usage.
+ * - Cache is process-local and bounded by an LRU policy.
  */
+
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
 import { ConvexHttpClient } from 'convex/browser';
@@ -8,6 +27,10 @@ import type { UserIdentityAttributes } from 'convex/server';
 import { useRuntimeConfig } from '#imports';
 
 // Type guard for Clerk auth context
+/**
+ * Purpose:
+ * Minimal shape of Clerk auth context required for token minting.
+ */
 type ClerkAuthContext = {
     getToken: (options?: {
         template?: string;
@@ -23,6 +46,17 @@ function isClerkAuthContext(value: unknown): value is ClerkAuthContext {
     );
 }
 
+/**
+ * Purpose:
+ * Mint a provider token from Clerk auth context.
+ *
+ * Behavior:
+ * - Returns `null` when auth context is missing or invalid.
+ * - Returns `null` for empty or whitespace-only tokens.
+ *
+ * Constraints:
+ * - Assumes `event.context.auth()` returns a Clerk-compatible context.
+ */
 export async function getClerkProviderToken(
     event: H3Event,
     template?: string
@@ -40,13 +74,13 @@ export async function getClerkProviderToken(
 
     try {
         const token = await authResult.getToken({ template });
-        
+
         // Validate token is non-empty
         if (!token || token.trim().length === 0) {
             console.warn('[sync-gateway] Empty or whitespace-only token returned');
             return null;
         }
-        
+
         return token;
     } catch (error) {
         console.error('[sync-gateway] Failed to mint provider token:', {
@@ -74,7 +108,7 @@ type RuntimeConfigWithConvex = {
     };
 };
 
-// LRU Cache implementation for gateway clients
+// LRU cache entry for gateway clients.
 interface CacheEntry {
     client: ConvexHttpClient;
     lastAccessed: number;
@@ -117,6 +151,17 @@ function resolveConvexUrl(event: H3Event): string {
     return url;
 }
 
+/**
+ * Purpose:
+ * Create or retrieve a cached Convex client for a user token.
+ *
+ * Behavior:
+ * - Uses a process-local LRU cache keyed by URL and token.
+ * - Updates access time on cache hits.
+ *
+ * Constraints:
+ * - Cache is bounded to `MAX_GATEWAY_CLIENTS` entries.
+ */
 export function getConvexGatewayClient(event: H3Event, token: string): ConvexHttpClient {
     const url = resolveConvexUrl(event);
     const cacheKey = `user:${url}:${token}`;
@@ -142,6 +187,14 @@ export function getConvexGatewayClient(event: H3Event, token: string): ConvexHtt
     return client;
 }
 
+/**
+ * Purpose:
+ * Create or retrieve a cached Convex client for admin auth.
+ *
+ * Behavior:
+ * - Uses `setAdminAuth` with the provided identity.
+ * - Caches per admin key and identity tuple.
+ */
 export function getConvexAdminGatewayClient(
     event: H3Event,
     adminKey: string,

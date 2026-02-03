@@ -1,3 +1,17 @@
+/**
+ * @module server/utils/notifications/__tests__/emit.test
+ *
+ * Purpose:
+ * Validate server notification emission helpers.
+ *
+ * Behavior:
+ * - Emits completion and error notifications through Convex client.
+ * - Throws when Convex URL configuration is missing.
+ *
+ * Non-Goals:
+ * - Integration with realtime delivery or subscriptions.
+ */
+
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     emitBackgroundJobComplete,

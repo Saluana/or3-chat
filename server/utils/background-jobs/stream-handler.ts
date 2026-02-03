@@ -1,8 +1,24 @@
 /**
- * Background Streaming Handler
+ * @module server/utils/background-jobs/stream-handler
  *
- * Handles background mode streaming where the server continues
- * processing even after the client disconnects.
+ * Purpose:
+ * Orchestrates background streaming jobs when the client disconnects.
+ * This module bridges OpenRouter SSE streams with job persistence, live
+ * viewer updates, and server-side notifications.
+ *
+ * Responsibilities:
+ * - Start background jobs and spawn streaming loops.
+ * - Consume SSE streams and persist incremental updates.
+ * - Emit live updates to connected viewers.
+ * - Emit completion or error notifications when no viewers remain.
+ *
+ * Non-Goals:
+ * - Client HTTP response streaming.
+ * - Provider selection logic beyond using the configured provider.
+ *
+ * Constraints:
+ * - Runs on the server only.
+ * - Uses OpenRouter SSE payload format.
  */
 
 import type { BackgroundJobProvider } from '../background-jobs/types';
@@ -25,6 +41,14 @@ import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
+/**
+ * Purpose:
+ * Input required to start a background streaming job.
+ *
+ * Constraints:
+ * - `body` must be a validated OpenRouter request payload.
+ * - `apiKey` must be a valid OpenRouter API key.
+ */
 export interface BackgroundStreamParams {
     body: Record<string, unknown>;
     apiKey: string;
@@ -35,20 +59,33 @@ export interface BackgroundStreamParams {
     referer: string;
 }
 
+/**
+ * Purpose:
+ * Result returned when a background job is started.
+ */
 export interface BackgroundStreamResult {
     jobId: string;
     status: 'streaming';
 }
 
 /**
- * Check if the request is for background mode
+ * Purpose:
+ * Detect whether a request payload opts into background mode.
+ *
+ * Behavior:
+ * - Returns `true` only when `_background` is explicitly set to `true`.
  */
 export function isBackgroundModeRequest(body: Record<string, unknown>): boolean {
     return body._background === true;
 }
 
 /**
- * Validate background mode parameters
+ * Purpose:
+ * Validate and extract background mode identifiers from a request payload.
+ *
+ * Behavior:
+ * - Ensures `_threadId` and `_messageId` are present and non-empty strings.
+ * - Returns a structured result with an error message when invalid.
  */
 export function validateBackgroundParams(body: Record<string, unknown>): {
     valid: boolean;
@@ -71,7 +108,16 @@ export function validateBackgroundParams(body: Record<string, unknown>): {
 }
 
 /**
- * Start a background streaming job
+ * Purpose:
+ * Create and start a background streaming job.
+ *
+ * Behavior:
+ * - Creates a provider job record.
+ * - Starts a fire-and-forget streaming loop.
+ * - Returns the job ID immediately.
+ *
+ * Constraints:
+ * - Errors in the background loop are captured and recorded on the job.
  */
 export async function startBackgroundStream(
     params: BackgroundStreamParams
@@ -97,8 +143,18 @@ export async function startBackgroundStream(
 }
 
 /**
- * Consume a background stream and persist updates.
- * Used for server-authoritative background streaming.
+ * Purpose:
+ * Consume a background stream and persist incremental updates.
+ *
+ * Behavior:
+ * - Parses OpenRouter SSE events and accumulates content.
+ * - Periodically flushes updates to the provider.
+ * - Emits live deltas and status updates for viewers.
+ * - Sends notifications only when no viewers remain.
+ *
+ * Constraints:
+ * - Flush cadence is tuned for SSE throughput, not durable delivery guarantees.
+ * - Convex providers require polling for abort status.
  */
 export async function consumeBackgroundStream(params: {
     jobId: string;
@@ -248,7 +304,7 @@ export async function consumeBackgroundStream(params: {
                     '[background-stream] Failed to emit notification:',
                     err
                 );
-                // Don't fail the job if notification fails
+                // Do not fail the job if notification fails
             }
         }
 
@@ -272,7 +328,7 @@ export async function consumeBackgroundStream(params: {
             completedAt: Date.now(),
             error: err instanceof Error ? err.message : String(err),
         });
-        
+
         if (shouldNotify()) {
             // Emit error notification
             try {
@@ -290,13 +346,13 @@ export async function consumeBackgroundStream(params: {
                 );
             }
         }
-        
+
         throw err;
     }
 }
 
 /**
- * Stream in the background without client connection
+ * Stream in the background without keeping a client connection open.
  */
 async function streamInBackground(
     jobId: string,
@@ -341,7 +397,8 @@ async function streamInBackground(
 }
 
 /**
- * Check if background streaming is available
+ * Purpose:
+ * Expose background streaming availability for route handlers.
  */
 export function isBackgroundStreamingAvailable(): boolean {
     return isBackgroundStreamingEnabled();

@@ -1,10 +1,22 @@
 /**
- * Background Job Viewers
+ * @module server/utils/background-jobs/viewers
  *
- * Tracks active viewers per job ID so server-side notifications
- * can be suppressed when a client is actively attached.
+ * Purpose:
+ * Track live viewers and broadcast updates for background jobs.
+ * This supports suppressing server notifications while a client is
+ * actively attached to a job stream.
  *
- * Note: In multi-instance deployments this is per-process only.
+ * Responsibilities:
+ * - Track viewer counts per job ID.
+ * - Maintain in-memory live job state for streaming updates.
+ * - Provide listener registration and cleanup.
+ *
+ * Non-Goals:
+ * - Cross-instance coordination or persistence.
+ * - Authorization for viewers.
+ *
+ * Constraints:
+ * - Process-local only. Multi-instance deployments need an external channel.
  */
 
 import type { BackgroundJob } from './types';
@@ -41,6 +53,14 @@ type LiveJobEvent =
 
 const jobStreams = new Map<string, LiveJobState>();
 
+/**
+ * Purpose:
+ * Register a viewer for a job and return a disposer.
+ *
+ * Behavior:
+ * - Increments the viewer count for the job.
+ * - The returned function decrements the count once.
+ */
 export function registerJobViewer(jobId: string): () => void {
     const nextCount = (jobViewers.get(jobId) ?? 0) + 1;
     jobViewers.set(jobId, nextCount);
@@ -59,14 +79,33 @@ export function registerJobViewer(jobId: string): () => void {
     };
 }
 
+/**
+ * Purpose:
+ * Determine whether a job currently has active viewers.
+ */
 export function hasJobViewers(jobId: string): boolean {
     return (jobViewers.get(jobId) ?? 0) > 0;
 }
 
+/**
+ * Purpose:
+ * Get the current live state for a job, if present.
+ *
+ * Constraints:
+ * - Returns `null` when no live state exists.
+ */
 export function getJobLiveState(jobId: string): LiveJobState | null {
     return jobStreams.get(jobId) ?? null;
 }
 
+/**
+ * Purpose:
+ * Register a listener for live job events.
+ *
+ * Behavior:
+ * - Ensures live state exists for the job.
+ * - Returns a disposer that removes the listener.
+ */
 export function registerJobStream(
     jobId: string,
     listener: (event: LiveJobEvent) => void
@@ -83,6 +122,10 @@ export function registerJobStream(
     };
 }
 
+/**
+ * Purpose:
+ * Ensure a live job state exists and cancel pending cleanup.
+ */
 export function initJobLiveState(jobId: string): void {
     const state = ensureJobLiveState(jobId);
     if (state.cleanupTimer) {
@@ -91,6 +134,10 @@ export function initJobLiveState(jobId: string): void {
     }
 }
 
+/**
+ * Purpose:
+ * Emit a streaming delta to all listeners and update live state.
+ */
 export function emitJobDelta(
     jobId: string,
     delta: string,
@@ -112,6 +159,10 @@ export function emitJobDelta(
     }
 }
 
+/**
+ * Purpose:
+ * Emit a status update and schedule cleanup for completed jobs.
+ */
 export function emitJobStatus(
     jobId: string,
     status: BackgroundJob['status'],

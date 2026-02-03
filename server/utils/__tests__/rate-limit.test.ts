@@ -1,3 +1,18 @@
+/**
+ * @module server/utils/__tests__/rate-limit.test
+ *
+ * Purpose:
+ * Verify the in-memory admin rate limiter behavior.
+ *
+ * Behavior:
+ * - Allows requests within the configured window.
+ * - Blocks requests after the max is reached.
+ * - Resets counters when the window expires.
+ *
+ * Non-Goals:
+ * - Distributed rate limiting behavior.
+ */
+
 /* @vitest-environment node */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { checkRateLimit, getRateLimitStatus } from '../rate-limit';
