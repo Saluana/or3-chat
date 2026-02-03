@@ -115,7 +115,7 @@
 import { computed } from 'vue';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import { db } from '~/db';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
 import {
@@ -190,16 +190,20 @@ const actionButtonOverridesMap = {
 };
 
 // Theme overrides for the popover trigger button
-const actionTriggerProps = computed(() => ({
-    variant: 'ghost' as const,
-    color: 'primary' as const,
-    size: 'xs' as const,
-    icon: iconMore.value,
-    ariaLabel: 'Open actions',
-    square: true,
-    class: 'flex items-center justify-center',
-    ...triggerOverrides.value,
-}));
+const actionTriggerProps = computed(() =>
+    mergeThemeProps(
+        {
+            variant: 'ghost' as const,
+            color: 'primary' as const,
+            size: 'xs' as const,
+            icon: iconMore.value,
+            ariaLabel: 'Open actions',
+            square: true,
+            class: 'flex items-center justify-center',
+        },
+        triggerOverrides.value
+    )
+);
 
 // Theme overrides function for action buttons
 type ActionButtonId = keyof typeof actionButtonOverridesMap;
@@ -212,13 +216,15 @@ const actionButtonProps = (id: ActionButtonId) => {
     if (id === 'delete') icon = iconTrash;
     if (id === 'add-to-project') icon = iconFolder;
 
-    return {
-        color: 'neutral' as const,
-        variant: 'popover' as const,
-        size: 'sm' as const,
-        icon: icon.value,
-        ...overrides,
-    };
+    return mergeThemeProps(
+        {
+            color: 'neutral' as const,
+            variant: 'popover' as const,
+            size: 'sm' as const,
+            icon: icon.value,
+        },
+        overrides
+    );
 };
 
 const extraActions = computed<readonly ExtraAction[]>(() =>
