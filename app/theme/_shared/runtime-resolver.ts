@@ -1,13 +1,19 @@
 /**
- * Runtime Override Resolver
+ * @module app/theme/_shared/runtime-resolver
  *
- * This class is responsible for resolving theme overrides at runtime.
- * It matches component parameters against compiled overrides and merges
- * them by specificity.
+ * Purpose:
+ * Resolves theme overrides at runtime by matching compiled selectors.
  *
- * Performance targets:
- * - Override resolution: < 1ms per component
- * - Theme switch: < 50ms total
+ * Behavior:
+ * - Uses an index per component for fast matching
+ * - Caches results when no attribute matching is required
+ *
+ * Constraints:
+ * - Attribute matching requires an element reference
+ * - Cache size is capped to limit memory usage
+ *
+ * Non-Goals:
+ * - Exact parity with CSS selector engines
  */
 
 import type {
@@ -18,7 +24,13 @@ import type {
 } from './types';
 
 /**
- * Parameters for resolving overrides
+ * `ResolveParams`
+ *
+ * Purpose:
+ * Parameters for resolving overrides for a component instance.
+ *
+ * Constraints:
+ * - `component` must match the theme override component name
  */
 export interface ResolveParams {
     /** Component type (e.g., 'button', 'input', 'modal') */
@@ -41,7 +53,10 @@ export interface ResolveParams {
 }
 
 /**
- * Resolved override result
+ * `ResolvedOverride`
+ *
+ * Purpose:
+ * Resolved props to apply to a component.
  */
 export interface ResolvedOverride {
     /** Merged props to apply to component */
@@ -49,13 +64,7 @@ export interface ResolvedOverride {
 }
 
 /**
- * Simple LRU Cache implementation for override resolution.
- * Limits memory usage by evicting least recently used entries.
- *
- * Note: This LRU implementation treats Map insertion order as access order.
- * When a key is accessed or set, it is deleted and re-inserted to move it to the end of the Map,
- * representing the most recently used position. This is a non-standard LRU approach; typical LRU caches
- * maintain a separate order-tracking structure.
+ * Internal LRU cache for override resolution.
  */
 class LRUCache<K, V> {
     private cache: Map<K, V>;
@@ -101,10 +110,10 @@ class LRUCache<K, V> {
 }
 
 /**
- * Runtime resolver for theme overrides
+ * `RuntimeResolver`
  *
- * The resolver is initialized with a compiled theme configuration
- * and provides efficient override resolution based on component parameters.
+ * Purpose:
+ * Resolves overrides for a compiled theme with caching.
  */
 export class RuntimeResolver {
     private overrides: CompiledOverride[]; // Keep reference for tests
@@ -115,9 +124,7 @@ export class RuntimeResolver {
     private componentsWithAttributes: Set<string>;
 
     /**
-     * Create a new runtime resolver
-     *
-     * @param compiledTheme - Compiled theme configuration from build time
+     * Creates a runtime resolver for a compiled theme.
      */
     constructor(compiledTheme: CompiledTheme) {
         // Build index by component type for fast lookup
@@ -153,13 +160,7 @@ export class RuntimeResolver {
     }
 
     /**
-     * Resolve overrides for a component instance
-     *
-     * Matches component parameters against compiled overrides and merges
-     * by specificity. Returns merged props ready to apply to component.
-     *
-     * @param params - Component parameters for resolution
-     * @returns Resolved override props
+     * Resolves overrides for a component instance.
      */
     resolve(params: ResolveParams): ResolvedOverride {
         // Check cache first
@@ -273,7 +274,7 @@ export class RuntimeResolver {
     }
 
     /**
-     * Generate a cache key for resolution parameters
+     * Generates a cache key for resolution parameters.
      */
     private getCacheKey(params: ResolveParams): string {
         // Format: component|context|identifier|state|isNuxtUI
@@ -284,18 +285,7 @@ export class RuntimeResolver {
     }
 
     /**
-     * Check if an override matches the given component parameters
-     *
-     * Implements CSS-like specificity matching:
-     * 1. Component type must match
-     * 2. Context must match (if specified in override)
-     * 3. Identifier must match (if specified in override)
-     * 4. State must match (if specified in override)
-     * 5. HTML attributes must match (if specified in override)
-     *
-     * @param override - Compiled override to check
-     * @param params - Component parameters to match against
-     * @returns true if override matches
+     * Checks whether an override matches the given component parameters.
      */
     private matches(
         override: CompiledOverride,

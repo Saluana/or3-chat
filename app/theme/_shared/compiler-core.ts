@@ -1,3 +1,23 @@
+/**
+ * @module app/theme/_shared/compiler-core
+ *
+ * Purpose:
+ * Parses theme selector DSL strings into structured components for matching.
+ *
+ * Behavior:
+ * - Normalizes shorthand selectors into attribute selectors
+ * - Extracts component, context, identifier, state, and attribute matchers
+ * - Caches parsed selectors for reuse
+ *
+ * Constraints:
+ * - Parsing is intentionally shallow and does not validate full CSS grammar
+ * - Only the DSL patterns used by OR3 are supported
+ *
+ * Non-Goals:
+ * - Full CSS selector parsing
+ * - Validation of component names or context existence
+ */
+
 import type {
     ParsedSelector,
     AttributeMatcher,
@@ -6,7 +26,18 @@ import type {
 import { KNOWN_THEME_CONTEXTS } from './contexts';
 
 /**
- * Parse a selector into its components.
+ * `parseSelector`
+ *
+ * Purpose:
+ * Converts a selector string into a structured representation used by
+ * runtime and build time override matching.
+ *
+ * Behavior:
+ * - Normalizes shorthand before parsing
+ * - Returns cached results for repeated inputs
+ *
+ * Constraints:
+ * - Returns a default component of "button" when no component is provided
  */
 const selectorCache = new Map<string, ParsedSelector>();
 
@@ -46,14 +77,27 @@ export function parseSelector(selector: string): ParsedSelector {
 }
 
 /**
- * Escape special regex characters
+ * `escapeRegex`
+ *
+ * Purpose:
+ * Escapes a string for safe regex construction in selector normalization.
  */
 function escapeRegex(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
- * Normalize simple selector syntax to attribute selectors
+ * `normalizeSelector`
+ *
+ * Purpose:
+ * Expands shorthand selector syntax into attribute selectors.
+ *
+ * Behavior:
+ * - Expands `#id` to `data-id` selectors
+ * - Expands `.context` to `data-context` selectors for known contexts
+ *
+ * Constraints:
+ * - Context expansion only applies to known contexts
  */
 export function normalizeSelector(selector: string): string {
     let result = selector;
@@ -77,7 +121,13 @@ export function normalizeSelector(selector: string): string {
 }
 
 /**
- * Extract HTML attribute selectors from normalized selector
+ * `extractAttributes`
+ *
+ * Purpose:
+ * Extracts attribute matchers from a normalized selector string.
+ *
+ * Constraints:
+ * - Ignores data-context and data-id which are handled separately
  */
 function extractAttributes(selector: string): AttributeMatcher[] {
     const attributes: AttributeMatcher[] = [];
@@ -113,7 +163,16 @@ function extractAttributes(selector: string): AttributeMatcher[] {
 }
 
 /**
- * Calculate CSS selector specificity
+ * `calculateSpecificity`
+ *
+ * Purpose:
+ * Computes a weighted specificity score for selector matching.
+ *
+ * Behavior:
+ * - Treats context, identifier, attributes, and pseudo classes as weighted inputs
+ *
+ * Non-Goals:
+ * - Exact parity with CSS specificity rules
  */
 export function calculateSpecificity(
     selector: string,

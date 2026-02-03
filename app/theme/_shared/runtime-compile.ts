@@ -1,10 +1,25 @@
+/**
+ * @module app/theme/_shared/runtime-compile
+ *
+ * Purpose:
+ * Compiles override definitions into runtime friendly structures.
+ *
+ * Behavior:
+ * - Parses selectors and computes specificity
+ * - Sorts overrides by specificity descending
+ *
+ * Constraints:
+ * - Only supports selector features implemented by compiler-core
+ */
+
 import type { CompiledOverride, OverrideProps } from './types';
 import { parseSelector, calculateSpecificity } from './compiler-core';
 
 /**
- * Compile override definitions into runtime-friendly structures.
- * Mirrors the build-time compiler but runs in the browser/server when themes
- * are dynamically loaded.
+ * `compileOverridesRuntime`
+ *
+ * Purpose:
+ * Compiles selector overrides for runtime resolution.
  */
 export function compileOverridesRuntime(
     overrides: Record<string, OverrideProps>

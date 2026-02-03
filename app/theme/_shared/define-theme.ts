@@ -1,43 +1,42 @@
 /**
- * Refined Theme System - Theme Definition DSL
- * 
- * This file provides the `defineTheme` function, which is the primary API
- * for theme authors to define new themes.
+ * @module app/theme/_shared/define-theme
+ *
+ * Purpose:
+ * Defines a theme using the OR3 theme DSL and validates it in development.
+ *
+ * Behavior:
+ * - Performs validation in dev and throws on errors
+ * - Logs warnings in dev without blocking
+ *
+ * Constraints:
+ * - Validation is dev only and does not run in production
+ *
+ * Non-Goals:
+ * - Runtime normalization or auto fixing of invalid definitions
  */
 
 import type { ThemeDefinition } from './types';
 import { validateThemeDefinition } from './validate-theme';
 
 /**
- * Define a new theme using the refined theme DSL
- * 
- * This function provides type safety and runtime validation for theme definitions.
- * In development mode, it performs comprehensive validation and provides helpful
- * error messages.
- * 
- * @param config - Theme configuration object
- * @returns The validated theme definition
- * 
+ * `defineTheme`
+ *
+ * Purpose:
+ * Returns a validated theme definition for consumption by build and runtime.
+ *
+ * Behavior:
+ * - Throws on validation errors in development
+ * - Returns the input unchanged in production
+ *
+ * Constraints:
+ * - Validation does not run in production
+ *
  * @example
- * ```typescript
+ * ```ts
  * export default defineTheme({
  *   name: 'nature',
  *   displayName: 'Nature',
- *   description: 'Organic green theme with natural tones',
- *   colors: {
- *     primary: '#3f8452',
- *     secondary: '#5a7b62',
- *     surface: '#f5faf5',
- *     dark: {
- *       primary: '#8dd29a',
- *       surface: '#0c130d',
- *     },
- *   },
- *   overrides: {
- *     button: { variant: 'solid', size: 'md' },
- *     'button.chat': { variant: 'ghost', size: 'sm' },
- *     'button#chat.send': { variant: 'solid', class: 'shadow-glow' },
- *   },
+ *   colors: { primary: '#3f8452', secondary: '#5a7b62', surface: '#f5faf5' }
  * });
  * ```
  */
@@ -83,6 +82,9 @@ export function defineTheme(config: ThemeDefinition): ThemeDefinition {
 }
 
 /**
- * Type helper for creating theme definitions with full type inference
+ * `ThemeConfig`
+ *
+ * Purpose:
+ * Type helper for theme definitions.
  */
 export type ThemeConfig = ThemeDefinition;

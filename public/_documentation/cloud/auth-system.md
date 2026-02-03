@@ -71,12 +71,17 @@ The Sync Engine (`convex-sync`) relies on the session to authenticate its WebSoc
 
 ## Configuration
 
-Two flags control the auth system in `nuxt.config.ts`:
+Two env vars control the default Clerk + Convex auth/sync setup:
 
 *   `SSR_AUTH_ENABLED`: Enables the Clerk integration and server-side session resolution.
-*   `CONVEX_URL`: Points to the backend instance for workspace data.
+*   `VITE_CONVEX_URL`: Convex deployment URL (used for workspace provisioning + sync/storage).
 
 If `SSR_AUTH_ENABLED` is false, the app runs in "Local Mode" (no sync, local storage only).
+
+You can also disable sync/storage independently (while keeping auth enabled) via:
+
+- `OR3_SYNC_ENABLED=false`
+- `OR3_STORAGE_ENABLED=false`
 
 ---
 

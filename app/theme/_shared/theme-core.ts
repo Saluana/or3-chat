@@ -1,6 +1,16 @@
 /**
- * Shared theme utilities used by both client and server plugins
- * Consolidates duplicated logic to reduce code bloat
+ * @module app/theme/_shared/theme-core
+ *
+ * Purpose:
+ * Shared theme utilities used by client and server plugins.
+ *
+ * Behavior:
+ * - Provides deep clone and merge helpers
+ * - Loads and compiles themes with runtime caches
+ *
+ * Constraints:
+ * - Theme loading depends on the theme manifest
+ * - Runtime operations may differ between client and server
  */
 
 import { RuntimeResolver } from './runtime-resolver';
@@ -20,7 +30,13 @@ import type { CompiledTheme } from './types';
 // ============================================================================
 
 /**
- * Deep clone a value using structuredClone when available, falling back to JSON
+ * `cloneDeep`
+ *
+ * Purpose:
+ * Deep clones a value using structuredClone with JSON fallback.
+ *
+ * Constraints:
+ * - JSON fallback drops functions and non-serializable values
  */
 export function cloneDeep<T>(value: T): T {
     if (value === undefined || value === null) {
@@ -39,7 +55,13 @@ export function cloneDeep<T>(value: T): T {
 }
 
 /**
- * Deep merge patch into base object (mutates base)
+ * `deepMerge`
+ *
+ * Purpose:
+ * Deep merges a patch into a base object.
+ *
+ * Constraints:
+ * - Mutates the base object
  */
 export function deepMerge(
     base: Record<string, unknown>,
@@ -69,7 +91,10 @@ export function deepMerge(
 }
 
 /**
- * Recursively update target with source values (in-place mutation)
+ * `recursiveUpdate`
+ *
+ * Purpose:
+ * Recursively updates target with source values.
  */
 export function recursiveUpdate(
     target: Record<string, unknown>,
@@ -102,8 +127,10 @@ export function recursiveUpdate(
 // ============================================================================
 
 /**
- * Validate and sanitize a theme name
- * Returns null if the theme name is invalid or not available
+ * `sanitizeThemeName`
+ *
+ * Purpose:
+ * Validates a theme name and checks availability.
  */
 export function sanitizeThemeName(
     themeName: string | null,
@@ -120,6 +147,12 @@ export function sanitizeThemeName(
 // Theme Loading Infrastructure
 // ============================================================================
 
+/**
+ * `ThemeLoaderOptions`
+ *
+ * Purpose:
+ * Options for theme loading behavior.
+ */
 export interface ThemeLoaderOptions {
     /** Callback when a theme is loaded and registered */
     onThemeRegistered?: (themeName: string, theme: CompiledTheme) => void;
@@ -127,6 +160,12 @@ export interface ThemeLoaderOptions {
     isDev?: boolean;
 }
 
+/**
+ * `ThemeLoaderState`
+ *
+ * Purpose:
+ * Runtime caches for loaded themes and resolvers.
+ */
 export interface ThemeLoaderState {
     themeRegistry: Map<string, CompiledTheme>;
     resolverRegistry: Map<string, RuntimeResolver>;
@@ -134,7 +173,15 @@ export interface ThemeLoaderState {
 }
 
 /**
- * Load a theme by name, compiling it if not already cached
+ * `loadTheme`
+ *
+ * Purpose:
+ * Loads and compiles a theme by name.
+ *
+ * Behavior:
+ * - Loads theme definition and optional assets
+ * - Registers icons and app config overrides
+ * - Caches compiled theme and resolver
  */
 export async function loadTheme(
     themeName: string,
@@ -236,7 +283,10 @@ export async function loadTheme(
 }
 
 /**
- * Ensure a theme is loaded and has a resolver available
+ * `ensureThemeLoaded`
+ *
+ * Purpose:
+ * Ensures a theme is loaded and has a resolver available.
  */
 export async function ensureThemeLoaded(
     themeName: string,

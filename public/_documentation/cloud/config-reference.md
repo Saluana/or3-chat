@@ -449,6 +449,21 @@ These are instance-level usage limits (mostly for SSR / hosted deployments).
 - Env: `OR3_FORCE_HTTPS`
 - Purpose: Redirect HTTP to HTTPS.
 
+#### `security.proxy.trustProxy`
+
+- Type: `boolean`
+- Default: `false`
+- Env: `OR3_TRUST_PROXY`
+- Purpose: Trust reverse-proxy headers (`X-Forwarded-*`) for client IP/host.
+- Notes: Enable this when running behind a load balancer / reverse proxy.
+
+#### `security.proxy.forwardedForHeader`
+
+- Type: `'x-forwarded-for' | 'x-real-ip'`
+- Default: `'x-forwarded-for'`
+- Env: `OR3_FORWARDED_FOR_HEADER`
+- Purpose: Which header to treat as the client IP.
+
 ### `backgroundStreaming`
 
 SSR-only background processing for AI streams.

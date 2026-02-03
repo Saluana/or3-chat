@@ -1,23 +1,39 @@
 /**
- * Runtime CSS Selector Class Application
+ * @module app/theme/_shared/css-selector-runtime
  *
- * Applies Tailwind utility classes to elements matched by CSS selectors.
- * This provides minimal runtime overhead for theme customization.
+ * Purpose:
+ * Applies runtime class based selector overrides for themes.
+ * This is used when theme definitions include `cssSelectors` with class values.
+ *
+ * Behavior:
+ * - Adds classes to matched elements in small chunks to avoid frame drops
+ * - Tracks applied classes per element to avoid duplicates
+ *
+ * Constraints:
+ * - Requires `document` and runs only in the browser
+ * - Only class based overrides are handled here
+ *
+ * Non-Goals:
+ * - Replacing a full CSS engine
+ * - Applying inline styles at runtime
  */
 
 import type { CSSelectorConfig } from './types';
 
 /**
- * Cache to track which classes have been applied to which elements
- * WeakMap ensures proper garbage collection when elements are removed
+ * Internal cache for class application per element.
  */
 const classApplicationCache = new WeakMap<HTMLElement, Set<string>>();
 
 /**
- * Apply theme classes to elements matching CSS selectors
+ * `applyThemeClasses`
  *
- * @param themeName - The active theme name
- * @param selectors - CSS selector to config mapping from theme definition
+ * Purpose:
+ * Applies class based selector overrides for a theme.
+ *
+ * Behavior:
+ * - Ignores selectors with empty class definitions
+ * - Batches DOM work to keep UI responsive
  */
 export function applyThemeClasses(
     themeName: string,
@@ -93,9 +109,10 @@ export function applyThemeClasses(
 }
 
 /**
- * Remove all theme classes from elements
+ * `removeThemeClasses`
  *
- * @param selectors - CSS selector to config mapping
+ * Purpose:
+ * Removes class based selector overrides from matched elements.
  */
 export function removeThemeClasses(
     selectors: Record<string, CSSelectorConfig>
@@ -131,10 +148,13 @@ export function removeThemeClasses(
 }
 
 /**
- * Load theme CSS file
+ * `loadThemeCSS`
  *
- * @param themeName - The theme name
- * @returns Promise that resolves when CSS is loaded
+ * Purpose:
+ * Loads a theme CSS file via a link tag.
+ *
+ * Constraints:
+ * - No error is thrown when CSS is missing
  */
 export async function loadThemeCSS(themeName: string): Promise<void> {
     // Check if CSS is already loaded
@@ -169,9 +189,10 @@ export async function loadThemeCSS(themeName: string): Promise<void> {
 }
 
 /**
- * Unload theme CSS file
+ * `unloadThemeCSS`
  *
- * @param themeName - The theme name
+ * Purpose:
+ * Removes a previously loaded theme CSS link.
  */
 export function unloadThemeCSS(themeName: string): void {
     const link = document.querySelector(`link[data-theme-css="${themeName}"]`);

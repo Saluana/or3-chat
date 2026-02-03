@@ -122,6 +122,8 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 |-----|--------------|---------|-------------|
 | `security.allowedOrigins` | `OR3_ALLOWED_ORIGINS` | `[]` (all) | CORS allowed origins (comma-separated) |
 | `security.forceHttps` | `OR3_FORCE_HTTPS` | `true` (prod) | Force HTTPS redirects |
+| `security.proxy.trustProxy` | `OR3_TRUST_PROXY` | `false` | Trust reverse-proxy headers (`X-Forwarded-*`) |
+| `security.proxy.forwardedForHeader` | `OR3_FORWARDED_FOR_HEADER` | `"x-forwarded-for"` | Which header to treat as the client IP (`x-forwarded-for` or `x-real-ip`) |
 
 ## Dependency Chain
 

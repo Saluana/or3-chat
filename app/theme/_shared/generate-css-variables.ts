@@ -1,8 +1,27 @@
+/**
+ * @module app/theme/_shared/generate-css-variables
+ *
+ * Purpose:
+ * Generates CSS variable blocks from theme definitions.
+ *
+ * Behavior:
+ * - Produces light and optional dark CSS variable blocks
+ * - Adds font and border variables when configured
+ *
+ * Constraints:
+ * - Only string values are emitted as variables
+ *
+ * Non-Goals:
+ * - Validating color values
+ */
+
 import type { ThemeDefinition, ColorPalette, ThemeFontSet } from './types';
 
 /**
- * Generate CSS variable declarations from theme color palette.
- * Supports light and dark palette (dark overrides).
+ * `generateThemeCssVariables`
+ *
+ * Purpose:
+ * Generates the CSS variable blocks for a theme.
  */
 export function generateThemeCssVariables(def: ThemeDefinition): string {
     const light = buildPalette(def.colors);

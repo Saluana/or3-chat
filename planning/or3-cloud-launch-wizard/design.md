@@ -22,6 +22,22 @@ Key repo facts the wizard must align with:
 - Cloud strict validation is enforced by `defineOr3CloudConfig(config, { strict })`, where `strict` is effectively true in production.
 - Convex + Clerk requires Convex env vars `CLERK_ISSUER_URL` and `OR3_ADMIN_JWT_SECRET` set via Convex CLI.
 
+### Reuse existing config plumbing (avoid drift)
+
+The repo already has “env → typed config” and “safe `.env` editing” utilities that the wizard can reuse to reduce duplication and data-loss risk:
+
+- Validation helpers:
+  - `server/admin/config/resolve-config.ts` exports `buildOr3ConfigFromEnv(env)` and `buildOr3CloudConfigFromEnv(env)`.
+  - `utils/or3-cloud-config.ts` exports `defineOr3CloudConfig(config, { strict })` which enforces the authoritative schema.
+- `.env` read/merge/write:
+  - `server/admin/config/env-file.ts` already round-trips `.env` while preserving comments/unknown lines.
+  - The wizard will likely need a generalized version that accepts `(instanceDir, envFile)` instead of hardcoding `process.cwd()` and `.env`.
+- UX metadata / field copy:
+  - `server/admin/config/config-metadata.ts` defines labels/descriptions/grouping per env var.
+  - `server/admin/config/config-manager.ts` has a strict whitelist + masking pattern (good defaults for “wizard-owned keys” + redaction).
+
+Even if the wizard is later published as a standalone package, these files are useful as the canonical in-repo source of truth during v1. If packaging constraints prevent importing server/admin modules, keep a minimal copy that is mechanically derived from the above.
+
 ## Core UX flow (step graph)
 
 The wizard should feel like:
@@ -110,7 +126,7 @@ export type WizardDeploymentTarget = 'local-dev' | 'prod-build';
 export interface WizardAnswers {
   // Target + files
   instanceDir: string;
-  envFile: '.env' | '.env.local';
+  envFile: '.env' | '.env.local'; // recommend '.env' in v1 (matches existing admin tooling)
   deploymentTarget: WizardDeploymentTarget;
 
   // Base branding
@@ -271,8 +287,10 @@ Use a two-tier validation approach:
 
 2. **Authoritative config validation** (final):
    - Build an env map from `WizardAnswers`.
-   - Run `buildOr3CloudConfigFromEnv(env)` and `buildOr3ConfigFromEnv(env)`.
-   - For production targets, run strict mode (equivalent to `NODE_ENV=production` or `OR3_STRICT_CONFIG=true`).
+   - Run `buildOr3ConfigFromEnv(env)` for base config.
+   - For cloud config strictness, avoid relying on global `process.env`:
+     - Prefer building a `Or3CloudConfig` candidate and calling `defineOr3CloudConfig(config, { strict })` explicitly, OR
+     - Add a small helper (e.g. `buildOr3CloudConfigFromEnv(env, { strict })`) that forwards to `defineOr3CloudConfig`.
 
 This ensures the wizard never diverges from the real runtime configuration rules.
 

@@ -1,8 +1,14 @@
 /**
- * Refined Theme System - Core Type Definitions
+ * @module app/theme/_shared/types
  *
- * This file contains all the core TypeScript interfaces for the refined theme system.
- * It defines the structure of theme definitions, overrides, and compiled theme configs.
+ * Purpose:
+ * Core TypeScript interfaces for the refined theme system.
+ *
+ * Behavior:
+ * - Defines author facing and runtime theme structures
+ *
+ * Constraints:
+ * - These are structural types only
  */
 
 /**
@@ -57,6 +63,15 @@ interface BaseColorPalette {
     info?: string;
 }
 
+/**
+ * `ColorPalette`
+ *
+ * Purpose:
+ * Defines the theme color palette with optional dark overrides.
+ *
+ * Constraints:
+ * - Custom token keys map to CSS variables
+ */
 export interface ColorPalette extends BaseColorPalette {
     // Dark mode overrides (optional)
     dark?: Partial<BaseColorPalette> & CustomColorTokens;
@@ -179,6 +194,15 @@ export interface CSSelectorConfig {
  * This is the interface that theme authors use to define new themes.
  * It uses a simplified, convention-based structure.
  */
+/**
+ * `ThemeDefinition`
+ *
+ * Purpose:
+ * Author facing theme definition contract.
+ *
+ * Constraints:
+ * - `name` must be kebab case and unique across themes
+ */
 export interface ThemeDefinition {
     /** Unique theme identifier (kebab-case) */
     name: string;
@@ -268,6 +292,12 @@ export interface ThemeFonts extends ThemeFontSet {
 /**
  * Parsed selector components
  */
+/**
+ * `ParsedSelector`
+ *
+ * Purpose:
+ * Parsed selector components used by compiler and runtime.
+ */
 export interface ParsedSelector {
     /** Component type (e.g., 'button', 'input') */
     component: string;
@@ -290,6 +320,12 @@ export interface ParsedSelector {
  *
  * This is the optimized format used at runtime for override resolution.
  * The compiler transforms CSS selectors into this format.
+ */
+/**
+ * `CompiledOverride`
+ *
+ * Purpose:
+ * Runtime friendly override structure with specificity.
  */
 export interface CompiledOverride {
     /** Component type */

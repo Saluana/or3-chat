@@ -1,9 +1,18 @@
 /**
- * Refined Theme System - Theme Definition Validation
+ * @module app/theme/_shared/validate-theme
  *
- * This module provides runtime validation for theme definitions.
- * It checks for required fields, validates color formats, and ensures
- * selector syntax is correct.
+ * Purpose:
+ * Runtime validation for theme definitions.
+ *
+ * Behavior:
+ * - Reports errors for missing required fields
+ * - Reports warnings for suspicious values and selector patterns
+ *
+ * Constraints:
+ * - Validation is best effort and does not guarantee semantic correctness
+ *
+ * Non-Goals:
+ * - Automatic repair of invalid definitions
  */
 
 import type {
@@ -13,7 +22,10 @@ import type {
 } from './types';
 
 /**
- * Validation result
+ * `ValidationResult`
+ *
+ * Purpose:
+ * Result structure for theme validation.
  */
 export interface ValidationResult {
     valid: boolean;
@@ -22,10 +34,10 @@ export interface ValidationResult {
 }
 
 /**
- * Validate a theme definition
+ * `validateThemeDefinition`
  *
- * @param config - Theme definition to validate
- * @returns Validation result with any errors or warnings
+ * Purpose:
+ * Validates a theme definition and returns errors and warnings.
  */
 export function validateThemeDefinition(
     config: ThemeDefinition

@@ -1,8 +1,18 @@
 /**
- * Theme manifest helper utilities.
+ * @module app/theme/_shared/theme-manifest
  *
- * Provides a typed manifest of theme modules and associated assets so
- * runtime plugins can automatically discover and load themes.
+ * Purpose:
+ * Builds and manages a manifest of theme modules and assets.
+ *
+ * Behavior:
+ * - Discovers theme modules via Vite glob imports
+ * - Lazily loads stylesheets and optional assets
+ *
+ * Constraints:
+ * - Requires Vite runtime for glob imports
+ *
+ * Non-Goals:
+ * - Validating theme definitions beyond basic presence checks
  */
 
 import type { ThemeDefinition } from './types';
@@ -55,7 +65,10 @@ const rawThemeEntries: RawThemeEntry[] = Object.entries(themeModules).map(
 );
 
 /**
- * Loaded theme entry enriched with definition metadata.
+ * `ThemeManifestEntry`
+ *
+ * Purpose:
+ * Manifest entry enriched with definition metadata and loaders.
  */
 export interface ThemeManifestEntry {
     /** Theme identifier from definition */
@@ -79,7 +92,13 @@ export interface ThemeManifestEntry {
 }
 
 /**
- * Load every theme definition to construct the manifest.
+ * `loadThemeManifest`
+ *
+ * Purpose:
+ * Loads all theme definitions and builds the manifest.
+ *
+ * Constraints:
+ * - Missing or invalid theme modules are skipped in dev
  */
 export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
     const manifest: ThemeManifestEntry[] = [];
@@ -144,8 +163,10 @@ export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
 }
 
 /**
- * Dynamically load theme stylesheets via <link> tags.
- * This ensures CSS is only loaded when the theme is active, not bundled into main CSS.
+ * `loadThemeStylesheets`
+ *
+ * Purpose:
+ * Loads theme stylesheets via link tags when a theme is activated.
  */
 export async function loadThemeStylesheets(
     entry: ThemeManifestEntry,
@@ -202,7 +223,10 @@ export async function loadThemeStylesheets(
 }
 
 /**
- * Unload theme stylesheets by removing their <link> tags
+ * `unloadThemeStylesheets`
+ *
+ * Purpose:
+ * Removes theme stylesheet link tags for a theme.
  */
 export function unloadThemeStylesheets(themeName: string): void {
     if (typeof document === 'undefined') {
@@ -217,7 +241,10 @@ export function unloadThemeStylesheets(themeName: string): void {
 }
 
 /**
- * Refresh a manifest entry after reloading the module, keeping derived data in sync.
+ * `updateManifestEntry`
+ *
+ * Purpose:
+ * Updates a manifest entry with a new definition and derived values.
  */
 export function updateManifestEntry(
     entry: ThemeManifestEntry,
@@ -229,6 +256,12 @@ export function updateManifestEntry(
     entry.hasCssSelectorStyles = containsStyleSelectors(definition);
 }
 
+/**
+ * `loadThemeAppConfig`
+ *
+ * Purpose:
+ * Loads a theme specific app.config override if present.
+ */
 export async function loadThemeAppConfig(
     entry: ThemeManifestEntry
 ): Promise<ThemeAppConfig | null> {

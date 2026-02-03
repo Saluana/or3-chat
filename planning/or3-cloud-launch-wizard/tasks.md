@@ -8,11 +8,15 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
   - Requirements: 2.1, 3.1
 - [ ] Confirm deployment targets for v1 are only `local-dev` and `prod-build`
   - Requirements: 6.1
+- [ ] Confirm whether v1 operates “in-place” (current repo) vs scaffolding a fresh instance directory (or both)
+  - Requirements: 5.1, 7.1
 
 ## 1. Define the Wizard API contract (API-first)
 
 - [ ] Create TypeScript types for session/steps/answers/presets
   - Requirements: 1.1, 2.1, 3.1, 3.2, 3.3
+- [ ] Decide how sessions are persisted for resume (disk vs memory) and define the storage format + location
+  - Requirements: 1.2
 - [ ] Define the step graph (declarative `WizardStep[]`) with copy + defaults
   - Requirements: 2.1, 2.2, 3.1, 3.2, 3.3
 - [ ] Add a Provider Catalog model (auth/sync/storage) that drives selection + provider-specific prompts
@@ -35,7 +39,7 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
   - Requirements: 4.1
   - Subtasks:
     - [ ] Build env map from answers
-    - [ ] Call `buildOr3CloudConfigFromEnv(env)` in strict/non-strict mode
+    - [ ] Implement strict/non-strict validation WITHOUT mutating global `process.env` (prefer `defineOr3CloudConfig(config, { strict })`)
     - [ ] Call `buildOr3ConfigFromEnv(env)`
 - [ ] Add a “redacted summary” generator
   - Requirements: 2.2, 4.2
@@ -54,7 +58,8 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
 - [ ] Implement env file read/merge/write
   - Requirements: 5.1
   - Subtasks:
-    - [ ] Parse `.env` preserving comments/unknown keys where possible
+    - [ ] Reuse or extract the existing safe env editor from `server/admin/config/env-file.ts`
+    - [ ] Support writing to `(instanceDir, envFile)` instead of only `process.cwd()/.env`
     - [ ] Update only wizard-owned keys
     - [ ] Write in stable order (group by OR3/Cloud/Security)
 - [ ] Add “dry-run” mode that prints planned changes without writing
@@ -149,3 +154,4 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
   - Requirements: 2.1, 5.1
 - [ ] Ensure config reference remains authoritative and referenced by wizard help links
   - Requirements: 2.1
+- [ ] Fix any env var naming drift in docs that the wizard will link to (e.g. `CONVEX_URL` vs `VITE_CONVEX_URL`)

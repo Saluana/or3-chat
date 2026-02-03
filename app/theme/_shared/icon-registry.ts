@@ -1,13 +1,56 @@
+/**
+ * @module app/theme/_shared/icon-registry
+ *
+ * Purpose:
+ * Registers and resolves theme specific icon overrides.
+ *
+ * Behavior:
+ * - Maintains default icons and per theme overrides
+ * - Resolves tokens against the active theme cache
+ *
+ * Constraints:
+ * - Theme names must match those used in the theme manifest
+ * - Resolution falls back to defaults when no override exists
+ *
+ * Non-Goals:
+ * - Icon loading or validation
+ */
+
 import { ref, shallowRef } from 'vue';
 import { DEFAULT_ICONS, type IconToken } from '~/config/icon-tokens';
 
+/**
+ * `IconMap`
+ *
+ * Purpose:
+ * Partial map of icon tokens to concrete icon names.
+ *
+ * Constraints:
+ * - Tokens must exist in the default icon token set
+ */
 export type IconMap = Partial<Record<IconToken, string>>;
 
+/**
+ * `IconRegistryState`
+ *
+ * Purpose:
+ * Serializable registry state for SSR hydration.
+ */
 export interface IconRegistryState {
     themes: Record<string, IconMap>;
     activeTheme: string;
 }
 
+/**
+ * `IconRegistry`
+ *
+ * Purpose:
+ * Runtime registry for icon overrides with fast resolution.
+ *
+ * Behavior:
+ * - Caches the active theme icon map for fast lookup
+ * - Supports SSR hydration through `state` and `hydrate`
+ */
 export class IconRegistry {
     private defaults: typeof DEFAULT_ICONS;
     private themes: Map<string, IconMap> = new Map();
@@ -24,7 +67,7 @@ export class IconRegistry {
     }
 
     /**
-     * Register a theme's icon overrides
+     * Registers icon overrides for a theme.
      */
     registerTheme(themeName: string, icons: IconMap) {
         this.themes.set(themeName, icons);
@@ -35,7 +78,7 @@ export class IconRegistry {
     }
 
     /**
-     * Unregister a theme's icon overrides (for cleanup)
+     * Unregisters icon overrides for a theme.
      */
     unregisterTheme(themeName: string) {
         this.themes.delete(themeName);
@@ -48,7 +91,7 @@ export class IconRegistry {
     }
 
     /**
-     * Set the currently active theme for resolution
+     * Sets the active theme for resolution.
      */
     setActiveTheme(themeName: string) {
         if (this.activeTheme !== themeName) {
@@ -58,7 +101,7 @@ export class IconRegistry {
     }
 
     /**
-     * Rebuild the flattened cache for the active theme
+     * Rebuilds the flattened cache for the active theme.
      */
     private rebuildCache() {
         const overrides = this.themes.get(this.activeTheme);
@@ -70,7 +113,10 @@ export class IconRegistry {
     }
 
     /**
-     * Resolve a semantic token to a concrete icon string
+     * Resolves an icon token to a concrete icon name.
+     *
+     * Constraints:
+     * - Returns a fallback icon when resolution fails
      */
     resolve(token: IconToken, themeName?: string): string {
         // Fast path: resolving for active theme
@@ -95,14 +141,14 @@ export class IconRegistry {
     }
 
     /**
-     * Get the raw map for a specific theme (useful for debugging)
+     * Returns the raw icon map for a theme.
      */
     getThemeMap(themeName: string): IconMap | undefined {
         return this.themes.get(themeName);
     }
 
     /**
-     * Export registry state for SSR hydration
+     * Returns serializable registry state for SSR hydration.
      */
     get state() {
         return {
@@ -112,7 +158,7 @@ export class IconRegistry {
     }
 
     /**
-     * Hydrate registry state from SSR
+     * Hydrates registry state from SSR.
      */
     hydrate(state: IconRegistryState) {
         // Clear existing themes first
@@ -127,5 +173,10 @@ export class IconRegistry {
     }
 }
 
-// Singleton instance for direct usage if needed, though plugin injection is preferred
+/**
+ * `iconRegistry`
+ *
+ * Purpose:
+ * Singleton registry instance for theme icon resolution.
+ */
 export const iconRegistry = new IconRegistry();
