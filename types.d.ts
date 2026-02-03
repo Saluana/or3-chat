@@ -3,5 +3,6 @@ import './types/global.d.ts';
 import './types/database.d.ts';
 import './types/sidebar.d.ts';
 import './types/h3.d.ts';
+import './types/convex-http-client.d.ts';
 
 export {};
