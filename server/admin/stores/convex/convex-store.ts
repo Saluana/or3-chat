@@ -16,14 +16,13 @@ import {
     getConvexGatewayClient,
 } from '../../../utils/sync/convex-gateway';
 import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+import { ADMIN_IDENTITY_ISSUER } from '~~/shared/cloud/admin-identity';
 import { useRuntimeConfig } from '#imports';
 
 type AdminContextShape = {
     principal?: { kind?: string; username?: string };
     session?: { providerUserId?: string };
 };
-
-const ADMIN_IDENTITY_ISSUER = 'or3-admin';
 
 function buildAdminIdentity(username: string) {
     const normalized = username.trim() || 'super_admin';

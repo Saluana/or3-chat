@@ -220,6 +220,15 @@ describe('buildOr3CloudConfigFromEnv', () => {
         expect(config.storage.enabled).toBe(true);
     });
 
+    it('reads CONVEX_SELF_HOSTED_ADMIN_KEY into sync.convex.adminKey', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            CONVEX_SELF_HOSTED_ADMIN_KEY: 'admin-key-value',
+            NODE_ENV: 'development',
+        });
+        expect(config.sync.convex?.adminKey).toBe('admin-key-value');
+    });
+
     it('parses CORS origins from CSV', () => {
         const config = buildOr3CloudConfigFromEnv({
             OR3_ALLOWED_ORIGINS: 'https://app.com, https://admin.app.com, ',

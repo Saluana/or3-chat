@@ -1,6 +1,7 @@
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
+import { ADMIN_IDENTITY_ISSUER } from '../shared/cloud/admin-identity';
 
 // ============================================================
 // CONSTANTS
@@ -11,9 +12,6 @@ const MAX_SEARCH_LIMIT = 100;
 
 /** Maximum items per page in paginated queries */
 const MAX_PER_PAGE = 100;
-
-/** Issuer used by server-side super admin identity (keep in sync with server). */
-const ADMIN_IDENTITY_ISSUER = 'or3-admin';
 
 type AdminActor = {
     actorId: string;
@@ -58,12 +56,8 @@ async function requireAdmin(ctx: MutationCtx | QueryCtx): Promise<AdminActor> {
     }
 
     if (identity.issuer === ADMIN_IDENTITY_ISSUER) {
-        const username = identity.preferredUsername || identity.name || identity.subject;
-        if (!username) {
-            throw new Error('Unauthorized: Admin identity missing username');
-        }
         return {
-            actorId: username,
+            actorId: 'admin-key',
             actorType: 'super_admin',
         };
     }
