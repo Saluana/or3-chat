@@ -1,3 +1,9 @@
+/**
+ * @module server/api/admin/plugins/workspace-settings.post
+ *
+ * Purpose:
+ * Updates configuration values for a plugin.
+ */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { requireAdminApi } from '../../../admin/api';
@@ -9,6 +15,19 @@ const BodySchema = z.object({
     settings: z.record(z.string(), z.unknown()),
 });
 
+/**
+ * POST /api/admin/plugins/workspace-settings
+ *
+ * Purpose:
+ * Persist plugin settings.
+ *
+ * Behavior:
+ * - Overwrites provided keys (merge strategy depends on implementation of `setPluginSettings`, usually merge).
+ * - Validates inputs via Zod.
+ *
+ * Security:
+ * - Admin-only (Mutation).
+ */
 export default defineEventHandler(async (event) => {
     const session = await requireAdminApi(event, { ownerOnly: true, mutation: true });
 

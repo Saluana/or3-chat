@@ -1,3 +1,9 @@
+/**
+ * @module server/api/admin/workspaces/[id].get
+ *
+ * Purpose:
+ * Retrieves detailed information about a specific workspace from the super admin perspective.
+ */
 import { defineEventHandler, getRouterParam, createError } from 'h3';
 import { requireAdminApiContext } from '../../../admin/api';
 import { getWorkspaceAccessStore } from '../../../admin/stores/registry';
@@ -7,7 +13,13 @@ import { checkGenericRateLimit, getClientIp } from '../../../admin/auth/rate-lim
 /**
  * GET /api/admin/workspaces/:id
  *
- * Get workspace details by ID.
+ * Purpose:
+ * Fetch full workspace metadata + member list.
+ *
+ * Behavior:
+ * - Rate limited.
+ * - Requires super admin context (via `requireAdminApiContext` and typically `super_admin` role implied by route).
+ * - Returns 404 if not found.
  */
 export default defineEventHandler(async (event) => {
     // Admin must be enabled

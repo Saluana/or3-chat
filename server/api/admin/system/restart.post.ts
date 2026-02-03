@@ -1,7 +1,23 @@
+/**
+ * @module server/api/admin/system/restart.post
+ *
+ * Purpose:
+ * Restarts the application server process.
+ */
 import { defineEventHandler, createError } from 'h3';
 import { requireAdminApi } from '../../../admin/api';
 import { requestRestart } from '../../../admin/system/server-control';
 
+/**
+ * POST /api/admin/system/restart
+ *
+ * Purpose:
+ * Apply configuration changes that require a process reboot.
+ *
+ * Behavior:
+ * - Checks `admin.allowRestart` feature flag.
+ * - Usually signals the process manager (PM2/Docker) to restart.
+ */
 export default defineEventHandler(async (event) => {
     await requireAdminApi(event, { ownerOnly: true, mutation: true });
 

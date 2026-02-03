@@ -28,6 +28,14 @@ const providers = new Map<string, AuthProviderRegistryItem>();
  *
  * Constraints:
  * - Should be called early in the application lifecycle.
+ *
+ * @example
+ * ```ts
+ * registerAuthProvider({
+ *   id: 'custom-provider',
+ *   create: () => new MyCustomProvider()
+ * });
+ * ```
  */
 export function registerAuthProvider(item: AuthProviderRegistryItem): void {
     if (import.meta.dev && providers.has(item.id)) {
@@ -45,6 +53,14 @@ export function registerAuthProvider(item: AuthProviderRegistryItem): void {
  *
  * @param id - The unique ID of the provider (e.g., 'clerk').
  * @returns An initialized `AuthProvider` instance, or `null` if not registered.
+ *
+ * @example
+ * ```ts
+ * const provider = getAuthProvider('clerk');
+ * if (provider) {
+ *   await provider.getSession(event);
+ * }
+ * ```
  */
 export function getAuthProvider(id: string): AuthProvider | null {
     const item = providers.get(id);

@@ -1,3 +1,20 @@
+/**
+ * @module server/hooks/admin-hook-types.ts
+ *
+ * Purpose:
+ * Central registry for all Admin-related hook definitions.
+ * Provides type safety for hook names and payloads.
+ *
+ * Responsibilities:
+ * - Define the union of valid administrative hook names.
+ * - Map each hook name to its expected argument tuple (payload).
+ *
+ * Usage:
+ * To add a new hook:
+ * 1. Add the hook name to `AdminHookKey`.
+ * 2. Add the payload signature to `AdminHookPayloadMap`.
+ */
+
 export type AdminHookKey =
     | 'admin.plugin:action:installed'
     | 'admin.plugin:action:enabled'

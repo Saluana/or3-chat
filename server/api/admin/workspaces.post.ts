@@ -1,3 +1,21 @@
+/**
+ * @module server/api/admin/workspaces.post
+ *
+ * Purpose:
+ * Creates a new workspace and assigns an initial owner.
+ *
+ * Responsibilities:
+ * - Validates input constraints (name length, description, etc.)
+ * - Enforces generic rate limits for admin actions
+ * - Delegates persistence to `AuthWorkspaceStore`
+ * - Emits `admin.workspace:action:created` for audit/side-effects
+ *
+ * Security:
+ * - Gated by `requireAdminApiContext` (Super Admin access typically required to create workspaces)
+ * - Rate limited by IP
+ *
+ * @see server/admin/stores/workspace-access-store.ts
+ */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { requireAdminApiContext } from '../../admin/api';
 import { getWorkspaceAccessStore } from '../../admin/stores/registry';
@@ -13,8 +31,22 @@ interface CreateWorkspaceBody {
 /**
  * POST /api/admin/workspaces
  *
- * Create a new workspace.
- * Requires: name, ownerUserId
+ * Purpose:
+ * Provisions a new workspace in the system.
+ *
+ * Behavior:
+ * 1. Checks admin feature flag and rate limits.
+ * 2. Validates payload (name length, owner ID format).
+ * 3. Persists workspace via store.
+ * 4. Trigger `admin.workspace:action:created` hook.
+ *
+ * Errors:
+ * - 400: Validation failure (name missing, ID invalid)
+ * - 404: Admin disabled
+ * - 429: Rate limit exceeded
+ *
+ * Hook: `admin.workspace:action:created`
+ * - Payload: `{ workspaceId, name, ownerUserId, createdBy }`
  */
 export default defineEventHandler(async (event) => {
     // Admin must be enabled

@@ -1,3 +1,9 @@
+/**
+ * @module server/api/admin/admin-users/revoke.post
+ *
+ * Purpose:
+ * Removes administrative privileges from a user.
+ */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { requireAdminApiContext } from '../../../admin/api';
 import { getAdminUserStore } from '../../../admin/stores/registry';
@@ -10,7 +16,15 @@ interface RevokeAdminBody {
 /**
  * POST /api/admin/admin-users/revoke
  *
- * Revoke deployment admin access from a user.
+ * Purpose:
+ * Demotes an admin user back to a regular user.
+ *
+ * Behavior:
+ * - Updates the user record in `AdminUserStore`.
+ * - Does not delete the user, only strips the `is_admin` or equivalent flag/role.
+ *
+ * Constraints:
+ * - Caller must have permission to manage admins (usually Super Admin).
  */
 export default defineEventHandler(async (event) => {
     // Admin must be enabled

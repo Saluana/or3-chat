@@ -1,3 +1,25 @@
+/**
+ * @module server/hooks/hook-engine.ts
+ *
+ * Purpose:
+ * Core event dispatch and data transformation engine.
+ * Implements a WordPress-style hook system with two primitives:
+ *
+ * 1. **Actions**: Fire-and-forget event bus. (e.g. "user created", "server started")
+ * 2. **Filters**: Pipeline for modifying data. (e.g. "modify outgoing message", "validate config")
+ *
+ * Architecture:
+ * - In-memory, synchronous or asynchronous execution.
+ * - Priority-based execution order (lower numbers run earlier).
+ * - Wildcard support (`*`) for broad listeners.
+ * - Diagnostic tracking for timing and error rates.
+ *
+ * Invariants:
+ * - Filter chains must pass the value to the next callback.
+ * - Errors in callbacks are caught and logged, they do NOT crash the caller (unless fatal).
+ * - Execution order is stable: Priority ASC, then Registration Order.
+ */
+
 export type HookKind = 'action' | 'filter';
 
 type AnyFn = (...args: unknown[]) => unknown;
@@ -45,41 +67,128 @@ function sortCallbacks<T extends CallbackEntry>(arr: T[]): T[] {
     return arr.sort((a, b) => a.priority - b.priority || a.id - b.id);
 }
 
+/**
+ * Purpose:
+ * Public contract for interaction with the hook system.
+ */
 export interface HookEngine {
+    /**
+     * Purpose:
+     * Registers a filter function to transform a value.
+     *
+     * @param name - The hook name (e.g., 'system.config:filter:settings').
+     * @param fn - The transformation function (must return a value).
+     * @param priority - Execution order (default 10). Lower runs first.
+     */
     addFilter: <F extends AnyFn>(
         name: string,
         fn: F,
         priority?: number,
         acceptedArgs?: number
     ) => void;
+
+    /**
+     * Purpose:
+     * Unregisters a previously added filter.
+     * Must pass the exact function reference used during registration.
+     */
     removeFilter: <F extends AnyFn>(
         name: string,
         fn: F,
         priority?: number
     ) => void;
+
+    /**
+     * Purpose:
+     * Runs a value through all registered filters for a given hook name asynchronously.
+     *
+     * @param name - The hook name.
+     * @param value - The initial value to be transformed.
+     * @param args - Additional context arguments passed to filters (read-only).
+     * @returns The final transformed value.
+     */
     applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;
+
+    /**
+     * Purpose:
+     * Synchronous version of `applyFilters`.
+     *
+     * Constraints:
+     * - All registered filters MUST be synchronous. If an async filter is encountered,
+     *   it will return a Promise instead of the value, likely breaking the pipeline.
+     */
     applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;
 
+    /**
+     * Purpose:
+     * Registers an action listener to observe an event.
+     *
+     * @param name - The hook name (e.g., 'user:action:login').
+     * @param fn - The callback function (void return).
+     * @param priority - Execution order (default 10).
+     */
     addAction: <F extends AnyFn>(
         name: string,
         fn: F,
         priority?: number,
         acceptedArgs?: number
     ) => void;
+
     removeAction: <F extends AnyFn>(
         name: string,
         fn: F,
         priority?: number
     ) => void;
+
+    /**
+     * Purpose:
+     * Triggers an action event asynchronously.
+     * Awaits all listeners (sequentially by priority).
+     */
     doAction: (name: string, ...args: unknown[]) => Promise<void>;
+
+    /**
+     * Purpose:
+     * Triggers an action event synchronously.
+     *
+     * Constraints:
+     * - Does not await async listeners; they execute as "fire-and-forget" promises
+     *   unless the caller explicitly handles them (which this method does not).
+     */
     doActionSync: (name: string, ...args: unknown[]) => void;
 
+    /**
+     * Use to check if any listeners are registered.
+     * Returns `true` (or priority number) if found, `false` otherwise.
+     */
     hasFilter: (name?: string, fn?: AnyFn) => boolean | number;
     hasAction: (name?: string, fn?: AnyFn) => boolean | number;
+
+    /**
+     * Nuclear option: Clears all callbacks.
+     * Use with caution, mostly for testing teardown.
+     */
     removeAllCallbacks: (priority?: number) => void;
+
     currentPriority: () => number | false;
 
+    /**
+     * Registers a one-time action listener. Automatically removes itself after first run.
+     */
     onceAction: (name: string, fn: AnyFn, priority?: number) => () => void;
+
+    /**
+     * Purpose:
+     * Universal registration method supporting both actions and filters.
+     * Returns a disposer function for easy cleanup.
+     *
+     * @example
+     * ```ts
+     * const dispose = hooks.on('my.event', () => console.log('fired!'));
+     * // ... later
+     * dispose();
+     * ```
+     */
     on: (name: string, fn: AnyFn, opts?: OnOptions) => () => void;
     off: (disposer: () => void) => void;
 

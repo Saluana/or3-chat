@@ -1,6 +1,12 @@
 /**
- * POST /api/sync/gc-change-log
- * Gateway endpoint for change log GC.
+ * @module server/api/sync/gc-change-log.post
+ *
+ * Purpose:
+ * Prunes the sync operation log (oplog) to prevent unbounded growth.
+ *
+ * Responsibilities:
+ * - Removes ops older than the retention window.
+ * - Ensures consistency (doesn't remove ops needed by active clients, ideally, though this is heuristic based).
  */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
@@ -19,6 +25,16 @@ const GcRequestSchema = z.object({
     retentionSeconds: z.number().int().positive(),
 });
 
+/**
+ * POST /api/sync/gc-change-log
+ *
+ * Purpose:
+ * Maintenance task for Sync Log.
+ *
+ * Behavior:
+ * - Requires `workspace.write` permission.
+ * - Proxies `api.sync.gcChangeLog`.
+ */
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isSyncEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });

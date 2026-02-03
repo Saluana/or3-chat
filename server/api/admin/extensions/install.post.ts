@@ -1,3 +1,21 @@
+/**
+ * @module server/api/admin/extensions/install.post
+ *
+ * Purpose:
+ * Handles the upload and installation of extensions (plugins/themes) via ZIP payload.
+ *
+ * Responsibilities:
+ * - Accepts Multipart (`file`, `force`) or JSON (`zipBase64`, `force`).
+ * - Enforces generic rate limits (5 installs/hour per IP).
+ * - Enforces deployment security limits (max file size, allowed extensions).
+ * - Validates ZIP structure and manifest.
+ * - Delegate install to `installExtensionFromZip`.
+ * - Invalidates registry cache.
+ *
+ * Security:
+ * - Admin-only (Owner-only mutation).
+ * - Checks file types against allowed list to prevent RCE vectors.
+ */
 import {
     defineEventHandler,
     readBody,
@@ -40,6 +58,23 @@ async function readZipPayload(event: H3Event) {
     return { buffer: Buffer.from(body.data.zipBase64, 'base64'), force: Boolean(body.data.force) };
 }
 
+/**
+ * POST /api/admin/extensions/install
+ *
+ * Purpose:
+ * Uploads a ZIP file containing an extension.
+ *
+ * Behavior:
+ * 1. Checks installation quota (5/hr).
+ * 2. Parses payload (Multipart or JSON).
+ * 3. Resolves limits from `runtimeConfig.admin`.
+ * 4. Expands ZIP, validates manifest, writes to disk.
+ * 5. Emits `admin.plugin:action:installed`.
+ *
+ * Constraints:
+ * - Requires explicit `force: true` to overwrite existing extensions.
+ * - Max file size and count are configurable via env.
+ */
 export default defineEventHandler(async (event) => {
     await requireAdminApi(event, { ownerOnly: true, mutation: true });
 

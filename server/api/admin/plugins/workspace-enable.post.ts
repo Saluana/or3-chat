@@ -1,3 +1,9 @@
+/**
+ * @module server/api/admin/plugins/workspace-enable.post
+ *
+ * Purpose:
+ * Toggles a plugin's active state for a specific workspace.
+ */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { requireAdminApi } from '../../../admin/api';
@@ -9,6 +15,17 @@ const BodySchema = z.object({
     enabled: z.boolean(),
 });
 
+/**
+ * POST /api/admin/plugins/workspace-enable
+ *
+ * Purpose:
+ * Enable/Disable a plugin.
+ *
+ * Behavior:
+ * - Updates the workspace-specific implementation of plugin state (e.g. `enabled_plugins` setting).
+ * - Emits `admin.plugin:action:enabled` or `disabled`.
+ * - Returns the updated list of enabled plugins.
+ */
 export default defineEventHandler(async (event) => {
     const session = await requireAdminApi(event, { ownerOnly: true, mutation: true });
 

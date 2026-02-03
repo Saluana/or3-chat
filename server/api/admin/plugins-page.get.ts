@@ -1,3 +1,13 @@
+/**
+ * @module server/api/admin/plugins-page.get
+ *
+ * Purpose:
+ * Optimization endpoint for the Admin Plugins Page.
+ *
+ * Responsibilities:
+ * - Aggregates installed plugins and their enabled status for the current workspace
+ * - Reduces round-trips for initial page load
+ */
 import { defineEventHandler, createError } from 'h3';
 import { requireAdminApi } from '../../admin/api';
 import { listInstalledExtensions } from '../../admin/extensions/extension-manager';
@@ -5,8 +15,17 @@ import { getEnabledPlugins } from '../../admin/plugins/workspace-plugin-store';
 import { getWorkspaceSettingsStore } from '../../admin/stores/registry';
 
 /**
- * Combined endpoint for plugins page - replaces 2 separate API calls
- * Performance: Reduces load time from ~430ms to ~200ms
+ * GET /api/admin/plugins-page
+ *
+ * Purpose:
+ * Serves all necessary data for the Plugin management screen.
+ *
+ * Behavior:
+ * - Validates workspace context.
+ * - Fetches registry of all plugins + current workspace enabled state in parallel.
+ *
+ * Performance:
+ * - Replaces 2 separate calls => ~50% latency reduction.
  */
 export default defineEventHandler(async (event) => {
     const session = await requireAdminApi(event);

@@ -74,6 +74,25 @@ export interface AuthProvider {
     getSession(event: H3Event): Promise<ProviderSession | null>;
 }
 
+/**
+ * @example
+ * ```ts
+ * const myProvider: AuthProvider = {
+ *   name: 'my-provider',
+ *   async getSession(event) {
+ *     const token = getHeader(event, 'Authorization');
+ *     if (!token) return null;
+ *     // ... validate token ...
+ *     return {
+ *       provider: 'my-provider',
+ *       user: { id: '123', email: 'user@example.com' },
+ *       expiresAt: new Date(Date.now() + 3600),
+ *     };
+ *   }
+ * };
+ * ```
+ */
+
 // ============================================================================
 // Registry Types
 // ============================================================================

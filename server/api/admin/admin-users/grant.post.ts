@@ -1,3 +1,9 @@
+/**
+ * @module server/api/admin/admin-users/grant.post
+ *
+ * Purpose:
+ * Promotes a user to a deployment-level administrator.
+ */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { requireAdminApiContext } from '../../../admin/api';
 import { getAdminUserStore } from '../../../admin/stores/registry';
@@ -11,7 +17,15 @@ interface GrantAdminBody {
 /**
  * POST /api/admin/admin-users/grant
  *
- * Grant deployment admin access to a user.
+ * Purpose:
+ * Elevates privileges of a specific user.
+ *
+ * Behavior:
+ * - Rate limited to prevent mass-elevation attacks.
+ * - Updates user store to reflect admin status.
+ *
+ * Security:
+ * - Highly privileged operation; gated by `requireAdminApiContext`.
  */
 export default defineEventHandler(async (event) => {
     // Admin must be enabled

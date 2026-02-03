@@ -1,6 +1,14 @@
 /**
- * POST /api/storage/presign-upload
- * Gateway endpoint for storage uploads.
+ * @module server/api/storage/presign-upload.post
+ *
+ * Purpose:
+ * Generates a short-lived URL for uploading a file directly to the storage provider.
+ *
+ * Responsibilities:
+ * - Authorizes write access (`workspace.write`).
+ * - Validates file constraints (Size, MIME type).
+ * - Enforces rate limits (`storage:upload`).
+ * - Generates URL via backend.
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { z } from 'zod';
@@ -32,6 +40,22 @@ const BodySchema = z.object({
     disposition: z.string().optional(),
 });
 
+/**
+ * POST /api/storage/presign-upload
+ *
+ * Purpose:
+ * Authorize an upload intent.
+ *
+ * Behavior:
+ * 1. Checks permissions.
+ * 2. Checks strict file size limit (from config).
+ * 3. Checks allowed MIME types allowlist.
+ * 4. Returns signed URL.
+ *
+ * Constraints:
+ * - Max file size: `or3Config.limits.maxCloudFileSizeBytes`.
+ * - Allowed Types: Images, PDF, Text/Markdown.
+ */
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isStorageEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });

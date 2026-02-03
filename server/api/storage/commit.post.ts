@@ -1,6 +1,18 @@
 /**
- * POST /api/storage/commit
- * Link uploaded storage ID to file metadata.
+ * @module server/api/storage/commit.post
+ *
+ * Purpose:
+ * Finalizes a file upload by linking a storage blob to a workspace.
+ *
+ * Responsibilities:
+ * - Proxy the `storage.commitUpload` mutation to the backend provider (Convex).
+ * - Enforce `workspace.write` permissions.
+ * - Enforce rate limits (`storage:commit`).
+ * - Record analytics metrics.
+ *
+ * Architecture:
+ * - Uses SSR Auth Gateway pattern.
+ * - Backend agnostic (delegates via Gateway Client).
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { z } from 'zod';
@@ -35,6 +47,23 @@ const BodySchema = z.object({
     page_count: z.number().optional(),
 });
 
+/**
+ * POST /api/storage/commit
+ *
+ * Purpose:
+ * Confirm that a file uploaded via presigned URL is valid and should be persisted.
+ *
+ * Behavior:
+ * 1. Validates Session & Permission (`workspace.write`).
+ * 2. Checks Rate Limit.
+ * 3. Calls backend mutation to store metadata.
+ * 4. Records completion metric.
+ *
+ * Errors:
+ * - 404: If Storage/Auth disabled.
+ * - 429: Rate limit.
+ * - 401: Unauthorized.
+ */
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isStorageEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });

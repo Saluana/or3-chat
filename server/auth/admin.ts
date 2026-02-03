@@ -19,6 +19,15 @@ import { requireCan, requireSession } from './can';
  *
  * @throws 401 Unauthorized if not authenticated.
  * @throws 403 Forbidden if not a deployment admin.
+ *
+ * @example
+ * ```ts
+ * export default defineEventHandler((event) => {
+ *   const session = event.context.session;
+ *   requireAdminAccess(session);
+ *   // Safe to perform sensitive deployment-level ops here
+ * });
+ * ```
  */
 export function requireAdminAccess(session: SessionContext | null): void {
     requireSession(session);
@@ -37,6 +46,15 @@ export function requireAdminAccess(session: SessionContext | null): void {
  *
  * @throws 401 Unauthorized if not authenticated.
  * @throws 403 Forbidden if not an owner or does not have manage permissions.
+ *
+ * @example
+ * ```ts
+ * export default defineEventHandler((event) => {
+ *   const session = event.context.session;
+ *   requireAdminOwner(session);
+ *   // Safe to delete workspace or manage billing
+ * });
+ * ```
  */
 export function requireAdminOwner(session: SessionContext | null): void {
     requireSession(session);

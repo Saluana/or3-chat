@@ -1,3 +1,23 @@
+/**
+ * @module server/hooks/typed-hooks.ts
+ *
+ * Purpose:
+ * Provides a type-safe wrapper around the generic `HookEngine`.
+ * Enforces correct argument types for registered listeners based on `AdminHookPayloadMap`.
+ *
+ * Usage:
+ * Instead of:
+ * ```ts
+ * engine.addAction('admin.plugin:action:installed', (payload) => { ... }); // Implicit any
+ * ```
+ * Use:
+ * ```ts
+ * const typedHooks = createTypedAdminHookEngine(engine);
+ * typedHooks.addAction('admin.plugin:action:installed', ({ id }) => {
+ *   // 'id' is correctly inferred as string
+ * });
+ * ```
+ */
 import type { HookEngine, HookKind, OnOptions } from './hook-engine';
 import type {
     AdminActionHookName,

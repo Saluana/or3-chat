@@ -1,9 +1,31 @@
+/**
+ * @module server/api/admin/system/status.get
+ *
+ * Purpose:
+ * Aggregates health metrics and configuration status from all active providers.
+ */
 import { defineEventHandler } from 'h3';
 import { requireAdminApi } from '../../../admin/api';
 import { getProviderAdminAdapter } from '../../../admin/providers/registry';
 import { createStubProviderAdapter } from '../../../admin/providers/adapters/stub';
 import type { ProviderAdminStatus } from '../../../admin/providers/types';
 
+/**
+ * GET /api/admin/system/status
+ *
+ * Purpose:
+ * Dashboard "Control Panel" data source.
+ *
+ * Behavior:
+ * - Queries Auth, Sync, and Storage providers concurrently for their status.
+ * - Collects warnings (e.g. "Storage not connected", "Sync lagging").
+ * - Returns feature flags for admin capabilities (rebuild/restart).
+ *
+ * Response:
+ * - `status`: { auth, sync, storage, ... }
+ * - `warnings`: Flat list of all warnings.
+ * - `session`: Context info.
+ */
 export default defineEventHandler(async (event) => {
     const session = await requireAdminApi(event);
 

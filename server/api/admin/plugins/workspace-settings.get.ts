@@ -1,3 +1,9 @@
+/**
+ * @module server/api/admin/plugins/workspace-settings.get
+ *
+ * Purpose:
+ * Retrieves configuration values for a plugin in the current workspace.
+ */
 import { defineEventHandler, getQuery, createError } from 'h3';
 import { z } from 'zod';
 import { requireAdminApi } from '../../../admin/api';
@@ -8,6 +14,16 @@ const QuerySchema = z.object({
     pluginId: z.string().min(1),
 });
 
+/**
+ * GET /api/admin/plugins/workspace-settings
+ *
+ * Purpose:
+ * Fetch persisted settings for a plugin.
+ *
+ * Behavior:
+ * - Scoped to the session workspace.
+ * - Returns key-value pairs.
+ */
 export default defineEventHandler(async (event) => {
     const session = await requireAdminApi(event);
 

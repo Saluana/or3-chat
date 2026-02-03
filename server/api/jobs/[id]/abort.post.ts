@@ -1,14 +1,26 @@
 /**
- * POST /api/jobs/[id]/abort
+ * @module server/api/jobs/[id]/abort.post
  *
- * Abort a running background streaming job.
- * Requires authentication.
+ * Purpose:
+ * Cancels a running background streaming job.
  */
-
 import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 
+/**
+ * POST /api/jobs/:id/abort
+ *
+ * Purpose:
+ * Stop a background generation.
+ *
+ * Behavior:
+ * - Identifies user.
+ * - Tells the Job Provider to signal abortion.
+ *
+ * Security:
+ * - Only the job owner can abort their job.
+ */
 export default defineEventHandler(async (event) => {
     const jobId = getRouterParam(event, 'id');
 

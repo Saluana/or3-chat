@@ -1,3 +1,9 @@
+/**
+ * @module server/api/admin/workspaces/soft-delete.post
+ *
+ * Purpose:
+ * Marks a workspace as deleted without immediately purging data.
+ */
 import { defineEventHandler, getRouterParam, createError } from 'h3';
 import { requireAdminApiContext } from '../../../admin/api';
 import { getWorkspaceAccessStore } from '../../../admin/stores/registry';
@@ -7,7 +13,16 @@ import { checkGenericRateLimit, getClientIp } from '../../../admin/auth/rate-lim
 /**
  * POST /api/admin/workspaces/:id/soft-delete
  *
- * Soft delete a workspace.
+ * Purpose:
+ * Archive a workspace.
+ *
+ * Behavior:
+ * - Sets `deletedAt` timestamp.
+ * - Emits `admin.workspace:action:deleted` hook.
+ * - Rate limited.
+ *
+ * Security:
+ * - Captures actor ID for the audit hook.
  */
 export default defineEventHandler(async (event) => {
     // Admin must be enabled

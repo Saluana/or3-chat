@@ -65,3 +65,23 @@ export interface AuthWorkspaceStore {
         userId: string
     ): Promise<Array<{ id: string; name: string; role: WorkspaceRole }>>;
 }
+
+/**
+ * @example
+ * ```ts
+ * class MockStore implements AuthWorkspaceStore {
+ *   async getOrCreateUser({ provider, providerUserId }) {
+ *     return { userId: `${provider}:${providerUserId}` };
+ *   }
+ *   async getOrCreateDefaultWorkspace(userId) {
+ *     return { workspaceId: 'default' };
+ *   }
+ *   async getWorkspaceRole() {
+ *     return 'owner';
+ *   }
+ *   async listUserWorkspaces() {
+ *     return [{ id: 'default', name: 'My Workspace', role: 'owner' }];
+ *   }
+ * }
+ * ```
+ */

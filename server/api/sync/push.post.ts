@@ -1,6 +1,14 @@
 /**
- * POST /api/sync/push
- * Gateway endpoint for sync push.
+ * @module server/api/sync/push.post
+ *
+ * Purpose:
+ * Receives a batch of local mutations (ops) and pushes them to the server.
+ *
+ * Responsibilities:
+ * - Validates payload structure against shared schemas (ensures snake_case/camelCase drift is handled).
+ * - Authorizes write access (`workspace.write`).
+ * - Enforces rate limits (`sync:push`).
+ * - Proxies to backend (`api.sync.push`).
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { PushBatchSchema, TABLE_PAYLOAD_SCHEMAS } from '~~/shared/sync/schemas';
@@ -19,6 +27,22 @@ import {
     getSyncRateLimitStats,
 } from '../../utils/sync/rate-limiter';
 
+/**
+ * POST /api/sync/push
+ *
+ * Purpose:
+ * Apply client-side CRDT-like operations to the central store.
+ *
+ * Behavior:
+ * 1. Validates each operation's payload schema (e.g. `MessageSchema`).
+ * 2. Authenticates user.
+ * 3. Rate limits.
+ * 4. Proxies to Convex mutation.
+ *
+ * Constraints:
+ * - Atomic-ish: If one op fails validation here, the whole batch is rejected (400).
+ * - Backend might still reject individual ops or conflict resolve.
+ */
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isSyncEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });

@@ -1,6 +1,13 @@
 /**
- * POST /api/storage/gc/run
- * Trigger storage GC for orphaned blobs.
+ * @module server/api/storage/gc/run.post
+ *
+ * Purpose:
+ * Manually triggers Garbage Collection for orphaned storage blobs in a workspace.
+ *
+ * Responsibilities:
+ * - Identifies files not referenced by any attachment/record.
+ * - Enforces retention policies (default 30 days).
+ * - Rate limits execution to prevent abuse (1 min cooldown per workspace).
  */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
@@ -38,6 +45,20 @@ function recordGcRun(workspaceId: string, now: number): void {
     lastGcRunByWorkspace.set(workspaceId, now);
 }
 
+/**
+ * POST /api/storage/gc/run
+ *
+ * Purpose:
+ * Clean up storage.
+ *
+ * Behavior:
+ * - Requires `admin.access` on the workspace.
+ * - Delegates to `api.storage.gcDeletedFiles`.
+ * - Returns count of deleted objects.
+ *
+ * Constraints:
+ * - Cooldown: 60s/workspace.
+ */
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isStorageEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });

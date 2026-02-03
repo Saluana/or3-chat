@@ -1,6 +1,13 @@
 /**
- * GET /api/auth/session
- * Returns the current session context or null if not authenticated.
+ * @module server/api/auth/session.get
+ *
+ * Purpose:
+ * Retrieves the current authentication state for the active request.
+ *
+ * Responsibilities:
+ * - Bootstraps client-side session state during hydration.
+ * - Checks rate limits (`auth:session`) by IP to prevent enumeration.
+ * - Disables caching (`Cache-Control: no-store`) to prevent leakage.
  */
 import { defineEventHandler, createError, setResponseHeader } from 'h3';
 import { resolveSessionContext } from '../../auth/session';
@@ -12,6 +19,22 @@ import {
 } from '../../utils/sync/rate-limiter';
 import { getClientIp, normalizeProxyTrustConfig } from '../../utils/net/request-identity';
 
+/**
+ * GET /api/auth/session
+ *
+ * Purpose:
+ * Session bootstrapper.
+ *
+ * Behavior:
+ * 1. Checks feature flag (`SSR_AUTH_ENABLED`).
+ * 2. Rate limits by IP.
+ * 3. Resolves session context from cookies/tokens.
+ * 4. Returns session object or null.
+ *
+ * Security:
+ * - Never cached.
+ * - Rate limited.
+ */
 export default defineEventHandler(async (event) => {
     // If SSR auth is disabled, always return null session
     if (!isSsrAuthEnabled(event)) {

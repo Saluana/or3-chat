@@ -1,3 +1,9 @@
+/**
+ * @module server/api/admin/system/provider-action.post
+ *
+ * Purpose:
+ * Executes provider-specific administrative tasks (e.g. database migration, index rebuild).
+ */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { requireAdminApi } from '../../../admin/api';
@@ -11,6 +17,17 @@ const BodySchema = z.object({
     payload: z.record(z.string(), z.unknown()).optional(),
 });
 
+/**
+ * POST /api/admin/system/provider-action
+ *
+ * Purpose:
+ * Generic gateway for provider RPCs.
+ *
+ * Behavior:
+ * - Resolves the provider adapter for the requested `kind`.
+ * - Dispatches `actionId` to the adapter.
+ * - Handles `stub` adapters gracefully if no real provider is configured.
+ */
 export default defineEventHandler(async (event) => {
     const session = await requireAdminApi(event, { ownerOnly: true, mutation: true });
 

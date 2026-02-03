@@ -1,3 +1,14 @@
+/**
+ * @module server/api/admin/auth/change-password.post
+ *
+ * Purpose:
+ * Rotates the Super Admin credentials.
+ *
+ * Responsibilities:
+ * - Validates password strength policy
+ * - Verifies current password before change
+ * - Updates the local credentials file atomically
+ */
 import { defineEventHandler, readBody, createError } from 'h3';
 import {
     readAdminCredentials,
@@ -18,11 +29,18 @@ interface ChangePasswordBody {
 
 /**
  * POST /api/admin/auth/change-password
- * 
- * Super admin password change endpoint.
- * - Requires current password verification
- * - Validates new password strength
- * - Updates credentials file atomically
+ *
+ * Purpose:
+ * Update the stored password hash.
+ *
+ * Behavior:
+ * 1. Authenticates current session via cookie.
+ * 2. Re-verifies `currentPassword` (Sudo-mode check).
+ * 3. Checks `newPassword` complexity.
+ * 4. Writes new hash to disk.
+ *
+ * Security:
+ * - Requires active session + knowledge of old password (defense against session hijacking).
  */
 export default defineEventHandler(async (event) => {
     // Admin must be enabled

@@ -1,3 +1,9 @@
+/**
+ * @module server/api/admin/workspace/members/upsert.post
+ *
+ * Purpose:
+ * Adds a new member or updates an existing member's role.
+ */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { requireAdminApi } from '../../../../admin/api';
@@ -9,6 +15,17 @@ const BodySchema = z.object({
     provider: z.string().optional(),
 });
 
+/**
+ * POST /api/admin/workspace/members/upsert
+ *
+ * Purpose:
+ * Add (invite) or update a user within the workspace.
+ *
+ * Behavior:
+ * - Uses email or provider ID to resolve/create user record.
+ * - Sets the specified role.
+ * - Idempotent for existing members.
+ */
 export default defineEventHandler(async (event) => {
     const session = await requireAdminApi(event, { ownerOnly: true, mutation: true });
 

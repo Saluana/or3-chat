@@ -45,6 +45,17 @@ const REQUEST_ID_KEY = '__or3_request_id';
  *
  * @param event - The Nitro request event.
  * @returns A promise resolving to the final `SessionContext`.
+ *
+ * @example
+ * ```ts
+ * export default defineEventHandler(async (event) => {
+ *   const session = await resolveSessionContext(event);
+ *   if (!session.authenticated) {
+ *     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
+ *   }
+ *   return { user: session.user };
+ * });
+ * ```
  */
 export async function resolveSessionContext(
     event: H3Event

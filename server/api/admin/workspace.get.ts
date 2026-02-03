@@ -1,3 +1,13 @@
+/**
+ * @module server/api/admin/workspace.get
+ *
+ * Purpose:
+ * Aggregates workspace details, members, and settings for the admin dashboard.
+ *
+ * Responsibilities:
+ * - Resolves target workspace (Super Admin override vs Session default)
+ * - Fetches members list, plugin states, and guest access settings
+ */
 import { defineEventHandler, createError, getQuery } from 'h3';
 import { requireAdminApi, getAdminContext } from '../../admin/api';
 import {
@@ -7,6 +17,30 @@ import {
 import { getEnabledPlugins } from '../../admin/plugins/workspace-plugin-store';
 import { isSuperAdmin } from '../../admin/context';
 
+/**
+ * GET /api/admin/workspace
+ *
+ * Purpose:
+ * Provides the initial data payload for the workspace management view.
+ *
+ * Behavior:
+ * 1. Checks permissions.
+ * 2. Determines target `workspaceId`:
+ *    - If Super Admin + `workspaceId` query param -> use that.
+ *    - Otherwise -> use `session.workspace.id`.
+ * 3. Fetches members, plugins, and settings in parallel-ish fashion.
+ *
+ * Errors:
+ * - 404: Workspace not found (if super admin queries invalid ID)
+ * - 400: Workspace not resolved (if no session workspace and not super admin explicit)
+ *
+ * Returns:
+ * - `workspace`: Basic info `{ id, name }`
+ * - `role`: Effective role ('owner' for super admin)
+ * - `members`: List of members
+ * - `enabledPlugins`: List of active plugin IDs
+ * - `guestAccessEnabled`: Boolean flag
+ */
 export default defineEventHandler(async (event) => {
     const session = await requireAdminApi(event);
     

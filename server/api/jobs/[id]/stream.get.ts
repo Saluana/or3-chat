@@ -1,12 +1,15 @@
 /**
- * GET /api/jobs/[id]/stream
+ * @module server/api/jobs/[id]/stream.get
  *
- * Server-sent events stream for background job updates.
- * First event is a snapshot; subsequent events are deltas.
+ * Purpose:
+ * Provides a Server-Sent Events (SSE) stream for real-time background job updates.
  *
- * Requires authentication.
+ * Responsibilities:
+ * - Establishes persistent connection.
+ * - Subscribes to live job updates (if active) or falls back to polling (if idle/persisted).
+ * - Implements "smart polling" (adaptive intervals).
+ * - Handles client disconnects.
  */
-
 import type { BackgroundJob } from '../../../utils/background-jobs/types';
 import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
@@ -77,6 +80,22 @@ export function serializeJobStatus(
     return status;
 }
 
+/**
+ * GET /api/jobs/:id/stream
+ *
+ * Purpose:
+ * Real-time feed of background generation.
+ *
+ * Behavior:
+ * 1. Sends initial 'snapshot' (full state or delta from `offset`).
+ * 2. If 'streaming': Attaches listener to in-memory `JobStream`. Pushes 'delta' events.
+ * 3. Falls back to DB polling if memory stream is gone but job is incomplete.
+ * 4. Closing: Ends stream on completion or error.
+ *
+ * Security:
+ * - Content-Type: text/event-stream
+ * - No-Cache
+ */
 export default defineEventHandler(async (event) => {
     const jobId = getRouterParam(event, 'id');
 

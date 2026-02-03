@@ -48,6 +48,15 @@ const CACHE_TTL_MS = 60000; // 1 minute
  * - Memoizes the checker instance for 1 minute or until the sync provider changes.
  *
  * @param event - Optional H3 event for context-aware config resolution.
+ *
+ * @example
+ * ```ts
+ * const checker = getDeploymentAdminChecker(event);
+ * const isAdmin = await checker.checkDeploymentAdmin('user_123', 'clerk');
+ * if (isAdmin) {
+ *   // Grant super-admin capabilities
+ * }
+ * ```
  */
 export function getDeploymentAdminChecker(event?: H3Event): DeploymentAdminChecker {
     const config = useRuntimeConfig(event);

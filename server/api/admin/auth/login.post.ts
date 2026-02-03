@@ -1,3 +1,19 @@
+/**
+ * @module server/api/admin/auth/login.post
+ *
+ * Purpose:
+ * Authenticates the super admin against local file-based credentials.
+ *
+ * Responsibilities:
+ * - Rate limiting (brute force protection)
+ * - Credential verification (bcrypt)
+ * - Session issuance (JWT via HTTP-only cookie)
+ * - Credential bootstrapping (from env on first run)
+ *
+ * Security:
+ * - Delays response on failure implicitly via bcrypt duration
+ * - Explicit rate limit: 5 attempts / 15 mins per IP+User
+ */
 import { defineEventHandler, readBody, createError } from 'h3';
 import {
     credentialsFileExists,
@@ -21,11 +37,21 @@ interface LoginBody {
 
 /**
  * POST /api/admin/auth/login
- * 
- * Super admin login endpoint.
- * - Rate limited to 5 attempts per 15 minutes per IP+username
- * - Sets httpOnly, secure, sameSite=strict cookie on success
- * - Returns 404 if admin is not enabled
+ *
+ * Purpose:
+ * Exchange credentials for a session cookie.
+ *
+ * Behavior:
+ * 1. Checks feature flag.
+ * 2. Checks rate limit availability.
+ * 3. Bootstraps credentials from ENV if file missing.
+ * 4. Verifies username/password (constant time comparison where possible).
+ * 5. Issues stricter SameSite=Strict cookie on success.
+ *
+ * Errors:
+ * - 429: Too many requests
+ * - 401: Invalid credentials
+ * - 500: Server misconfiguration (missing credential file)
  */
 export default defineEventHandler(async (event) => {
     // Admin must be enabled

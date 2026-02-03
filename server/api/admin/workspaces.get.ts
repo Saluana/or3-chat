@@ -1,3 +1,14 @@
+/**
+ * @module server/api/admin/workspaces.get
+ *
+ * Purpose:
+ * Lists workspaces with advanced filtering and pagination for the admin dashboard.
+ *
+ * Responsibilities:
+ * - Pagination and searching
+ * - Soft-deletion inclusion
+ * - Caching results to reduce database load
+ */
 import { defineEventHandler, getQuery, createError } from 'h3';
 import { createHash } from 'crypto';
 import { requireAdminApiContext } from '../../admin/api';
@@ -23,6 +34,7 @@ interface WorkspaceListResult {
     total: number;
 }
 
+// In-memory cache for workspace lists
 const cache = new Map<string, { data: WorkspaceListResult; timestamp: number }>();
 
 // Periodic cleanup to prevent unbounded cache growth
@@ -38,14 +50,23 @@ setInterval(() => {
 /**
  * GET /api/admin/workspaces
  *
- * List all workspaces with search and pagination.
- * Supports:
- * - search: filter by workspace name
- * - includeDeleted: show soft-deleted workspaces
- * - page: page number (default: 1)
- * - perPage: items per page (default: 20)
+ * Purpose:
+ * Retrieves a paginated list of workspaces.
  *
- * Workspace list is cached for 30 seconds per admin to reduce database load.
+ * Behavior:
+ * - Caches results for 30 seconds based on query params + admin identity.
+ * - Supports searching by name/description.
+ * - Supports filtering for soft-deleted items.
+ *
+ * Performance:
+ * - Cache key = MD5(admin_id + params)
+ * - Prevents DB thrashing on rapid navigation
+ *
+ * Query Params:
+ * - `search`: Filter string
+ * - `includeDeleted`: 'true' | 'false'
+ * - `page`: Number (1-based)
+ * - `perPage`: Number (max 100)
  */
 export default defineEventHandler(async (event) => {
     // Admin must be enabled

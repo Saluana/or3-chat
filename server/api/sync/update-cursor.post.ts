@@ -1,6 +1,9 @@
 /**
- * POST /api/sync/update-cursor
- * Gateway endpoint for device cursor updates.
+ * @module server/api/sync/update-cursor.post
+ *
+ * Purpose:
+ * Updates the "last seen" version for a specific device.
+ * Used for calculating change log retention (don't GC data a device hasn't seen yet).
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { z } from 'zod';
@@ -25,6 +28,16 @@ const UpdateCursorSchema = z.object({
     version: z.number().int().nonnegative(),
 });
 
+/**
+ * POST /api/sync/update-cursor
+ *
+ * Purpose:
+ * Heartbeat/Checkpoint mechanism.
+ *
+ * Behavior:
+ * - Updates `device_cursors` table in backend.
+ * - Allows backend to safely trim oplog.
+ */
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isSyncEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });

@@ -1,14 +1,27 @@
 /**
- * GET /api/jobs/[id]/status
+ * @module server/api/jobs/[id]/status.get
  *
- * Get the status of a background streaming job.
- * Requires authentication.
+ * Purpose:
+ * Polls the current state and content of a background job.
  */
-
 import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 
+/**
+ * GET /api/jobs/:id/status
+ *
+ * Purpose:
+ * Retrieve job progress suitable for polling clients.
+ *
+ * Behavior:
+ * - Checks auth/ownership.
+ * - Supports `offset` parameter to retrieve only new content (delta).
+ *
+ * Use Case:
+ * - Client reconnection.
+ * - Legacy polling fallback if SSE fails.
+ */
 export default defineEventHandler(async (event) => {
     const jobId = getRouterParam(event, 'id');
 

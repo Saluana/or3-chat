@@ -1,6 +1,14 @@
 /**
- * POST /api/storage/presign-download
- * Gateway endpoint for storage downloads.
+ * @module server/api/storage/presign-download.post
+ *
+ * Purpose:
+ * Generates a short-lived URL for downloading a file directly from the storage provider.
+ *
+ * Responsibilities:
+ * - Authorizes access to the file (`workspace.read`).
+ * - Proxies the request to generate the signed URL (Convex `api.storage.getFileUrl`).
+ * - Enforces rate limits (`storage:download`).
+ * - Computes expiration time.
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { z } from 'zod';
@@ -30,6 +38,21 @@ const BodySchema = z.object({
     disposition: z.string().optional(),
 });
 
+/**
+ * POST /api/storage/presign-download
+ *
+ * Purpose:
+ * Secure file retrieval.
+ *
+ * Behavior:
+ * - Checks if user can read the workspace.
+ * - Rate limiting to prevent scraping.
+ * - Returns a temporary URL that the client uses immediately.
+ *
+ * Security:
+ * - URL expires (TTL configurable).
+ * - Bypasses server bandwidth by directing client to R2/S3/Convex directly.
+ */
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isStorageEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });

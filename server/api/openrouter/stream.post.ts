@@ -1,16 +1,29 @@
 /**
- * Nitro server route: POST /api/openrouter/stream
+ * @module server/api/openrouter/stream.post
  *
- * Proxies OpenRouter streaming requests, preferring env.OPENROUTER_API_KEY.
- * Pipes upstream SSE through to the client; the client parses with the shared parser.
- * Aborts upstream on client disconnect.
+ * Purpose:
+ * Proxies chat completion requests to OpenRouter, supporting both direct SSE streaming
+ * and background job offloading for long-running tasks.
  *
- * Note: Per design doc, we keep raw fetch for streaming because the SDK's chat.send()
- * buffers the entire response. Streaming requires direct body access which SDK doesn't expose.
+ * Responsibilities:
+ * - Validates API keys (Server-side env vs. Client-provided header).
+ * - Enforces Rate Limits (via `checkAndRecordLlmRequest`).
+ * - Forking Logic:
+ *   - Direct Streaming: Pipes upstream SSE to client.
+ *   - Background Job: Offloads via `startBackgroundStream` if requested or required.
+ * - Error Handling: Translates upstream errors to 4xx/5xx responses.
  *
- * Reqs: 1 (env-or-client key), 2 (streaming + abort), 4 (no logging keys)
+ * Behavior:
+ * - Checks `x-or3-background`: If true (and available), spawns background job + returns 202.
+ * - Checks Rate Limits ($Limit/User & $Limit/IP).
+ * - Forwards headers (Referer, X-Title) for OpenRouter rankings.
+ * - Aborts upstream request if client disconnects.
+ *
+ * Security:
+ * - Key Precedence: User Key (if allowed) > Server Key.
+ * - Rate Limiting: Strict token bucket enforcement.
+ * - Logs: Never logs API keys.
  */
-
 import { getRequestIP, setResponseHeader } from 'h3';
 import { resolveSessionContext } from '../../auth/session';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';

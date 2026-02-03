@@ -1,3 +1,9 @@
+/**
+ * @module server/api/admin/system/config/write.post
+ *
+ * Purpose:
+ * Updates system configuration variables in the persistent store.
+ */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { requireAdminApi } from '../../../../admin/api';
@@ -12,6 +18,20 @@ const BodySchema = z.object({
     ),
 });
 
+/**
+ * POST /api/admin/system/config/write
+ *
+ * Purpose:
+ * Save new configuration values.
+ *
+ * Behavior:
+ * - Writes to `.env` or `config.json` depending on the provider.
+ * - Validation via Zod.
+ * - Returns `restartRequired: true` to signal Client UI to prompt for restart.
+ *
+ * Security:
+ * - Admin-only (Mutation).
+ */
 export default defineEventHandler(async (event) => {
     await requireAdminApi(event, { ownerOnly: true, mutation: true });
 

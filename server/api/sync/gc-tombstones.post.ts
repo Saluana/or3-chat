@@ -1,6 +1,8 @@
 /**
- * POST /api/sync/gc-tombstones
- * Gateway endpoint for tombstone GC.
+ * @module server/api/sync/gc-tombstones.post
+ *
+ * Purpose:
+ * Cleans up deletion markers (tombstones) that have exceeded the retention period.
  */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
@@ -19,6 +21,19 @@ const GcRequestSchema = z.object({
     retentionSeconds: z.number().int().positive(),
 });
 
+/**
+ * POST /api/sync/gc-tombstones
+ *
+ * Purpose:
+ * Forget about deleted items after X time.
+ *
+ * Behavior:
+ * - Proxies `api.sync.gcTombstones`.
+ * - Requires `workspace.write` permissions.
+ *
+ * Impact:
+ * - Clients that have been offline longer than `retentionSeconds` must do a full re-sync, as they will miss deletions.
+ */
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isSyncEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });

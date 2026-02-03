@@ -1,3 +1,9 @@
+/**
+ * @module server/api/admin/workspace/members/set-role.post
+ *
+ * Purpose:
+ * Updates the permission level (role) of a workspace member.
+ */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { requireAdminApi } from '../../../../admin/api';
@@ -8,6 +14,17 @@ const BodySchema = z.object({
     role: z.enum(['owner', 'editor', 'viewer']),
 });
 
+/**
+ * POST /api/admin/workspace/members/set-role
+ *
+ * Purpose:
+ * Change member privileges.
+ *
+ * Behavior:
+ * - Validate role enum.
+ * - Call store update.
+ * - Emit `admin.user:action:role_changed` hook.
+ */
 export default defineEventHandler(async (event) => {
     const session = await requireAdminApi(event, { ownerOnly: true, mutation: true });
 

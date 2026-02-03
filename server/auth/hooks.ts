@@ -67,6 +67,24 @@ export interface AuthHookEngine {
     addAccessDecisionFilter(fn: AuthAccessDecisionFilter, priority?: number): () => void;
 }
 
+/**
+ * @example
+ * ```ts
+ * const authEngine = getAuthHookEngine();
+ *
+ * // Register a filter to deny access to 'restricted-area' on weekends
+ * authEngine.addAccessDecisionFilter((decision, ctx) => {
+ *   if (decision.permission === 'access.restricted-area') {
+ *     const isWeekend = new Date().getDay() % 6 === 0;
+ *     if (isWeekend) {
+ *       return { ...decision, allowed: false, reason: 'weekend-lockdown' };
+ *     }
+ *   }
+ *   return decision;
+ * });
+ * ```
+ */
+
 // Singleton instance managed by Nitro lifecycle
 let authHookEngine: AuthHookEngine | null = null;
 

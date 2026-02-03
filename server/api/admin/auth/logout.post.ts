@@ -1,12 +1,25 @@
+/**
+ * @module server/api/admin/auth/logout.post
+ *
+ * Purpose:
+ * Terminates the admin session.
+ */
 import { defineEventHandler, createError, getCookie } from 'h3';
 import { clearAdminCookie } from '../../../admin/auth/jwt';
 import { isAdminEnabled } from '../../../utils/admin/is-admin-enabled';
 
 /**
  * POST /api/admin/auth/logout
- * 
- * Super admin logout endpoint.
- * Clears the admin JWT cookie.
+ *
+ * Purpose:
+ * Invalidates compliance session by clearing the `or3_admin` cookie.
+ *
+ * Behavior:
+ * - Sets the cookie to expire immediately.
+ * - Requires POST method to prevent CSRF via GET.
+ *
+ * Debugging:
+ * - Logs cookie presence before clearing for audit/diagnostic purposes.
  */
 export default defineEventHandler(async (event) => {
     // Admin must be enabled

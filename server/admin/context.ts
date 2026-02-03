@@ -1,11 +1,21 @@
 /**
- * Hybrid admin request context resolution.
- * 
- * Supports two types of admin identities:
- * 1. Super admin: JWT cookie-based, created from env vars
- * 2. Workspace admin: Normal SSR auth session with deployment admin grant
- * 
- * This is the central function for admin authorization.
+ * @module server/admin/context.ts
+ *
+ * Purpose:
+ * Hybrid admin request context resolution. Bridges traditional session auth
+ * and dedicated "Super Admin" JWT authentication.
+ *
+ * Architecture:
+ * Supports two distinct tiers of admin identity:
+ * 1. **Super Admin**: Authenticated via a high-entropy JWT cookie. Credentials
+ *    are defined in environment variables. Used for global system tasks.
+ * 2. **Workspace Admin**: A standard OR3 session that has been granted the
+ *    `admin.access` permission (Deployment Admin grant). Used for workspace-specific maintenance.
+ *
+ * Responsibilities:
+ * - Cookie-to-Principal resolution.
+ * - Session-to-Principal resolution.
+ * - Type-safe assertions for admin status (`asserts context is AdminRequestContext`).
  */
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
@@ -14,23 +24,34 @@ import { getAdminFromCookie, type AdminJwtClaims } from './auth/jwt';
 import { resolveSessionContext } from '../auth/session';
 import { can } from '../auth/can';
 
+/**
+ * Unique identity of the admin requestor.
+ */
 export type AdminPrincipal =
     | { kind: 'super_admin'; username: string }
     | { kind: 'workspace_admin'; userId: string; session: SessionContext };
 
+/**
+ * Complete context of an admin-specific request.
+ */
 export type AdminRequestContext = {
+    /** The resolved principal identity. */
     principal: AdminPrincipal;
-    // The workspace session if this is a workspace admin
+    /** The underlying workspace session, if available. */
     session?: SessionContext;
 };
 
 /**
- * Resolve admin request context from the event.
+ * Purpose:
+ * Orchestrates the resolution of the admin context from an incoming event.
  * 
- * Tries super admin JWT first, then falls back to workspace session
- * with deployment admin grant check.
+ * Behavior:
+ * 1. Checks for a "Super Admin" JWT cookie first (priority tier 1).
+ * 2. If present, attempts to also resolve a standard session for context mixing.
+ * 3. Falls back to checking the standard session for an `admin.access` grant.
  * 
- * Returns null if no admin context can be resolved.
+ * Returns:
+ * The combined context or `null` if no valid admin identity is found.
  */
 export async function resolveAdminRequestContext(
     event: H3Event
@@ -80,7 +101,8 @@ export async function resolveAdminRequestContext(
 }
 
 /**
- * Require an admin context, throwing 401 if not found.
+ * Purpose:
+ * Enforces the presence of an admin context, throwing 401 if missing.
  */
 export function requireAdminContext(
     event: H3Event,
@@ -95,7 +117,8 @@ export function requireAdminContext(
 }
 
 /**
- * Check if the principal is a super admin.
+ * Purpose:
+ * Predicate to check if the principal has global Super Admin privileges.
  */
 export function isSuperAdmin(context: AdminRequestContext): boolean {
     return context.principal.kind === 'super_admin';

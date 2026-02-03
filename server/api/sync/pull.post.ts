@@ -1,6 +1,14 @@
 /**
- * POST /api/sync/pull
- * Gateway endpoint for sync pull.
+ * @module server/api/sync/pull.post
+ *
+ * Purpose:
+ * Retrieves a batch of changes from the server for client-side synchronization.
+ *
+ * Responsibilities:
+ * - Authorizes access (`workspace.read`).
+ * - Enforces rate limits (`sync:pull`).
+ * - Proxies request to backend (`api.sync.pull`).
+ * - Returns changes + new global cursor (server version).
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { PullRequestSchema } from '~~/shared/sync/schemas';
@@ -18,6 +26,20 @@ import {
     getSyncRateLimitStats,
 } from '../../utils/sync/rate-limiter';
 
+/**
+ * POST /api/sync/pull
+ *
+ * Purpose:
+ * Client requests "what changed since cursor X?"
+ *
+ * Behavior:
+ * 1. Validates schema and permissions.
+ * 2. Checks token bucket rate limiter.
+ * 3. Fetches changes via Convex.
+ *
+ * Security:
+ * - Leaking change logs leaks data; strictly gated by `workspace.read`.
+ */
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isSyncEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
