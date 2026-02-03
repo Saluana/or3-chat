@@ -375,7 +375,7 @@ import {
     type WorkspaceImportMode,
 } from '~/composables/core/useWorkspaceBackup';
 import { err, reportError, type AppError } from '~/utils/errors';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 
 const docsHref =
     'https://github.com/Saluana/or3-chat/blob/main/docs/UI/workspace-backup.md';
@@ -419,11 +419,10 @@ const exportButtonProps = computed(() => {
         identifier: 'dashboard.workspace.export',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         variant: 'outline' as const,
         class: 'text-[var(--md-on-surface)]',
-        ...(overrides.value as any),
-    };
+    }, overrides.value as any);
 });
 
 const browseButtonProps = computed(() => {
@@ -433,12 +432,11 @@ const browseButtonProps = computed(() => {
         identifier: 'dashboard.workspace.browse',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         size: 'sm' as const,
         variant: 'outline' as const,
 
-        ...(overrides.value as any),
-    };
+    }, overrides.value as any);
 });
 
 const clearFileButtonProps = computed(() => {
@@ -448,13 +446,12 @@ const clearFileButtonProps = computed(() => {
         identifier: 'dashboard.workspace.clear-file',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         size: 'sm' as const,
         color: 'error' as const,
         variant: 'basic' as const,
         type: 'button' as const,
-        ...(overrides.value as any),
-    };
+    }, overrides.value as any);
 });
 
 const importModeButtonProps = computed(() => {
@@ -464,12 +461,11 @@ const importModeButtonProps = computed(() => {
         identifier: 'dashboard.workspace.import-mode',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         variant: 'ghost' as const,
         color: 'primary' as const,
         type: 'button' as const,
-        ...(overrides.value as any),
-    };
+    }, overrides.value as any);
 });
 
 const importButtonProps = computed(() => {
@@ -479,12 +475,11 @@ const importButtonProps = computed(() => {
         identifier: 'dashboard.workspace.import',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         variant: 'outline' as const,
         class: 'text-[var(--md-on-surface)]',
         type: 'button' as const,
-        ...(overrides.value as any),
-    };
+    }, overrides.value as any);
 });
 
 const alertProps = computed(() => {

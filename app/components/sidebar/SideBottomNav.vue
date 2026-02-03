@@ -97,7 +97,7 @@
 
 <script lang="ts" setup>
 import { computed, ref, useAttrs } from 'vue';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useOr3Config } from '~/composables/useOr3Config';
 
@@ -131,12 +131,11 @@ const infoButtonProps = computed(() => {
         identifier: 'sidebar.bottom-nav.info',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         variant: 'soft' as const,
         color: 'neutral' as const,
         block: true,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const dashboardButtonProps = computed(() => {
@@ -146,12 +145,11 @@ const dashboardButtonProps = computed(() => {
         identifier: 'sidebar.bottom-nav.dashboard',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         variant: 'soft' as const,
         color: 'neutral' as const,
         block: true,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 // Popover menu buttons
@@ -162,12 +160,11 @@ const activityButtonProps = computed(() => {
         identifier: 'sidebar.bottom-nav.activity',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         variant: 'ghost' as const,
         color: 'neutral' as const,
         block: true,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const creditsButtonProps = computed(() => {
@@ -177,12 +174,11 @@ const creditsButtonProps = computed(() => {
         identifier: 'sidebar.bottom-nav.credits',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         variant: 'ghost' as const,
         color: 'neutral' as const,
         block: true,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 function navigateToActivity() {

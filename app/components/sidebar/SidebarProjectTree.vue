@@ -153,7 +153,7 @@ import {
     type ProjectEntry,
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
 
@@ -225,14 +225,13 @@ const renameProjectButtonProps = computed(() => {
         identifier: 'sidebar.project-rename',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
         icon: useIcon('ui.edit').value,
         class: 'w-full justify-start cursor-pointer',
-        ...(overrides.value as any),
-    };
+    }, overrides.value as any);
 });
 
 const deleteProjectButtonProps = computed(() => {
@@ -242,14 +241,13 @@ const deleteProjectButtonProps = computed(() => {
         identifier: 'sidebar.project-delete',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
         icon: useIcon('ui.trash').value,
         class: 'w-full justify-start cursor-pointer text-[var(--md-error)] hover:bg-[var(--md-error)]/10 active:bg-[var(--md-error)]/15',
-        ...(overrides.value as any),
-    };
+    }, overrides.value as any);
 });
 
 const renameEntryButtonProps = computed(() => {
@@ -259,14 +257,13 @@ const renameEntryButtonProps = computed(() => {
         identifier: 'sidebar.project-entry-rename',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
         icon: useIcon('ui.edit').value,
         class: 'w-full justify-start',
-        ...(overrides.value as any),
-    };
+    }, overrides.value as any);
 });
 
 const removeEntryButtonProps = computed(() => {
@@ -276,14 +273,13 @@ const removeEntryButtonProps = computed(() => {
         identifier: 'sidebar.project-entry-remove',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
         icon: useIcon('ui.trash').value,
         class: 'w-full justify-start text-[var(--md-error)] hover:bg-[var(--md-error)]/10 active:bg-[var(--md-error)]/15',
-        ...(overrides.value as any),
-    };
+    }, overrides.value as any);
 });
 
 const extraActionButtonProps = computed(() => {
@@ -293,13 +289,12 @@ const extraActionButtonProps = computed(() => {
         identifier: 'sidebar.project-extra-action',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
         class: 'w-full justify-start',
-        ...(overrides.value as any),
-    };
+    }, overrides.value as any);
 });
 
 const treeItems = computed<TreeItem[]>(() =>

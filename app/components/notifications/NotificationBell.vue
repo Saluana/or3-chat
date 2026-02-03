@@ -35,7 +35,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, provide } from 'vue';
 import { useRoute } from 'vue-router';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useNotifications } from '~/composables/notifications/useNotifications';
 import { NOTIFICATION_POPOVER_CLOSE_KEY } from './notification-popover';
@@ -95,12 +95,11 @@ const buttonProps = computed(() => {
         identifier: 'sidebar.bottom-nav.notifications',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         variant: 'soft' as const,
         color: 'neutral' as const,
         block: true,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const mergedButtonProps = computed(() => ({
