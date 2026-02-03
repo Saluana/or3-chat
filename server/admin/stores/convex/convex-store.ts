@@ -12,6 +12,7 @@ import type {
 } from '../types';
 import {
     getClerkProviderToken,
+    getConvexAdminGatewayClient,
     getConvexGatewayClient,
 } from '../../../utils/sync/convex-gateway';
 import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
@@ -21,6 +22,18 @@ type AdminContextShape = {
     principal?: { kind?: string; username?: string };
     session?: { providerUserId?: string };
 };
+
+const ADMIN_IDENTITY_ISSUER = 'or3-admin';
+
+function buildAdminIdentity(username: string) {
+    const normalized = username.trim() || 'super_admin';
+    return {
+        subject: normalized,
+        issuer: ADMIN_IDENTITY_ISSUER,
+        name: normalized,
+        preferredUsername: normalized,
+    };
+}
 
 async function ensureSuperAdminDeploymentGrant(
     event: H3Event,
@@ -105,17 +118,27 @@ function validateUserId(id: string): Id<'users'> {
 async function getConvexClientWithAuth(event: H3Event) {
     const config = useRuntimeConfig(event);
     const authProvider = config.auth.provider;
-    
+    const adminContext = event.context.admin as AdminContextShape | undefined;
+    const principal = adminContext?.principal;
+
+    if (principal?.kind === 'super_admin') {
+        const adminKey = config.sync.convexAdminKey?.trim();
+        if (adminKey) {
+            const identity = buildAdminIdentity(principal.username || 'super_admin');
+            return getConvexAdminGatewayClient(event, adminKey, identity);
+        }
+    }
+
     // Check if Clerk is configured (Convex store requires Clerk JWT for server-to-server auth)
     if (authProvider !== 'clerk') {
         throw createError({
             statusCode: 501,
-            statusMessage: `Convex-based admin dashboard requires Clerk auth. ` +
-                `For local development without Clerk, use the memory provider. ` +
+            statusMessage: `Convex-based admin dashboard requires Clerk auth or ` +
+                `a server-side Convex admin key (CONVEX_SELF_HOSTED_ADMIN_KEY). ` +
                 `Current provider: ${authProvider || 'none'}`,
         });
     }
-    
+
     const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
     if (!token) {
         throw createError({
@@ -124,7 +147,9 @@ async function getConvexClientWithAuth(event: H3Event) {
         });
     }
     const client = getConvexGatewayClient(event, token);
-    await ensureSuperAdminDeploymentGrant(event, client);
+    if (principal?.kind === 'super_admin' && adminContext?.session?.providerUserId) {
+        await ensureSuperAdminDeploymentGrant(event, client);
+    }
     return client;
 }
 

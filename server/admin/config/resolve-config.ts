@@ -114,6 +114,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
             provider: (env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) as SyncProviderId,
             convex: {
                 url: env.VITE_CONVEX_URL || undefined,
+                adminKey: env.CONVEX_SELF_HOSTED_ADMIN_KEY || undefined,
             },
         },
         storage: {

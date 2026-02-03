@@ -47,6 +47,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         provider: DEFAULT_SYNC_PROVIDER_ID,
         convex: {
             url: undefined,
+            adminKey: undefined,
         },
     },
     storage: {
@@ -152,6 +153,7 @@ const cloudConfigSchema = z
             convex: z
                 .object({
                     url: z.string().optional(),
+                    adminKey: z.string().optional(),
                 })
                 .optional(),
         }),

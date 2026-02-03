@@ -13,6 +13,7 @@ import {
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
 
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
+const convexAdminKey = or3CloudConfig.sync.convex?.adminKey || '';
 const convexEnabled =
     (or3CloudConfig.sync.enabled &&
         or3CloudConfig.sync.provider === CONVEX_PROVIDER_ID) ||
@@ -135,6 +136,7 @@ export default defineNuxtConfig({
             enabled: or3CloudConfig.sync.enabled,
             provider: or3CloudConfig.sync.provider,
             convexUrl,
+            convexAdminKey,
         },
         storage: {
             enabled: or3CloudConfig.storage.enabled,

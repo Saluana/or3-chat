@@ -67,6 +67,12 @@ export interface Or3CloudConfig {
              * Convex deployment URL.
              */
             url?: string;
+            /**
+             * Convex admin key for server-side admin operations.
+             * Required to use the admin dashboard without a user auth session.
+             * @env CONVEX_SELF_HOSTED_ADMIN_KEY
+             */
+            adminKey?: string;
         };
     };
 

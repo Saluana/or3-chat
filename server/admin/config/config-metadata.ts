@@ -80,6 +80,12 @@ export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
         group: 'Sync',
         order: 3,
     },
+    'CONVEX_SELF_HOSTED_ADMIN_KEY': {
+        label: 'Convex Admin Key',
+        description: 'Server-side Convex admin key for super admin dashboard access',
+        group: 'Sync',
+        order: 4,
+    },
 
     // Storage
     'OR3_STORAGE_ENABLED': {

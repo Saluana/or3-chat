@@ -320,6 +320,18 @@ Important default behavior when using env:
 - Purpose: Convex deployment URL.
 - Required: yes when `sync.enabled=true` and provider is `convex` (strict mode).
 
+#### `sync.convex.adminKey`
+
+- Type: `string | undefined`
+- Default: `undefined`
+- Env: `CONVEX_SELF_HOSTED_ADMIN_KEY`
+- Purpose: Server-side Convex admin key for super admin dashboard access without a user auth session.
+- Notes: Only used on the server. Keep this secret.
+  - How to get it:
+    - Convex Cloud: Convex Dashboard → deployment → Settings → URL & Deploy Key → copy deploy key.
+    - Self-hosted: use your backend’s generated admin key (docker: `docker compose exec backend ./generate_admin_key.sh`).
+    - Local anonymous dev: see `~/.convex/anonymous-convex-backend-state/`.
+
 #### Convex Auth (Clerk) Environment
 
 Convex validates Clerk JWTs via [convex/auth.config.ts](../../convex/auth.config.ts). Set:

@@ -39,6 +39,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
         provider: (process.env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) as SyncProviderId,
         convex: {
             url: process.env.VITE_CONVEX_URL,
+            adminKey: process.env.CONVEX_SELF_HOSTED_ADMIN_KEY,
         },
     },
     storage: {

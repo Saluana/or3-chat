@@ -4,6 +4,7 @@
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
 import { ConvexHttpClient } from 'convex/browser';
+import type { UserIdentityAttributes } from 'convex/server';
 import { useRuntimeConfig } from '#imports';
 
 // Type guard for Clerk auth context
@@ -98,8 +99,8 @@ function evictLRU(): void {
     }
 }
 
-export function getConvexGatewayClient(event: H3Event, token: string): ConvexHttpClient {
-    const config = useRuntimeConfig() as RuntimeConfigWithConvex;
+function resolveConvexUrl(event: H3Event): string {
+    const config = useRuntimeConfig(event) as RuntimeConfigWithConvex;
     const url =
         config.sync?.convexUrl ||
         config.public?.sync?.convexUrl ||
@@ -113,7 +114,12 @@ export function getConvexGatewayClient(event: H3Event, token: string): ConvexHtt
         });
     }
 
-    const cacheKey = `${url}:${token}`;
+    return url;
+}
+
+export function getConvexGatewayClient(event: H3Event, token: string): ConvexHttpClient {
+    const url = resolveConvexUrl(event);
+    const cacheKey = `user:${url}:${token}`;
     const cached = gatewayClientCache.get(cacheKey);
     if (cached) {
         // Update last accessed time for LRU
@@ -129,6 +135,33 @@ export function getConvexGatewayClient(event: H3Event, token: string): ConvexHtt
     });
 
     // Evict oldest entry if over capacity (LRU)
+    if (gatewayClientCache.size > MAX_GATEWAY_CLIENTS) {
+        evictLRU();
+    }
+
+    return client;
+}
+
+export function getConvexAdminGatewayClient(
+    event: H3Event,
+    adminKey: string,
+    identity: UserIdentityAttributes
+): ConvexHttpClient {
+    const url = resolveConvexUrl(event);
+    const cacheKey = `admin:${url}:${adminKey}:${identity.subject}:${identity.issuer}`;
+    const cached = gatewayClientCache.get(cacheKey);
+    if (cached) {
+        cached.lastAccessed = Date.now();
+        return cached.client;
+    }
+
+    const client = new ConvexHttpClient(url);
+    client.setAdminAuth(adminKey, identity);
+    gatewayClientCache.set(cacheKey, {
+        client,
+        lastAccessed: Date.now(),
+    });
+
     if (gatewayClientCache.size > MAX_GATEWAY_CLIENTS) {
         evictLRU();
     }

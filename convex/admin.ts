@@ -12,6 +12,15 @@ const MAX_SEARCH_LIMIT = 100;
 /** Maximum items per page in paginated queries */
 const MAX_PER_PAGE = 100;
 
+/** Issuer used by server-side super admin identity (keep in sync with server). */
+const ADMIN_IDENTITY_ISSUER = 'or3-admin';
+
+type AdminActor = {
+    actorId: string;
+    actorType: 'super_admin' | 'workspace_admin';
+    userId?: Id<'users'>;
+};
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -20,12 +29,10 @@ const MAX_PER_PAGE = 100;
  * Get the current user's auth account ID.
  * Throws if not authenticated.
  */
-async function getAuthAccount(ctx: MutationCtx | QueryCtx): Promise<{ userId: Id<'users'> }> {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-        throw new Error('Not authenticated');
-    }
-
+async function getAuthAccount(
+    ctx: MutationCtx | QueryCtx,
+    identity: { subject: string }
+): Promise<{ userId: Id<'users'> }> {
     const authAccount = await ctx.db
         .query('auth_accounts')
         .withIndex('by_provider', (q) =>
@@ -44,8 +51,24 @@ async function getAuthAccount(ctx: MutationCtx | QueryCtx): Promise<{ userId: Id
  * Require admin authorization for the current user.
  * Throws if not authenticated or not an admin.
  */
-async function requireAdmin(ctx: MutationCtx | QueryCtx): Promise<{ userId: Id<'users'> }> {
-    const { userId } = await getAuthAccount(ctx);
+async function requireAdmin(ctx: MutationCtx | QueryCtx): Promise<AdminActor> {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+        throw new Error('Not authenticated');
+    }
+
+    if (identity.issuer === ADMIN_IDENTITY_ISSUER) {
+        const username = identity.preferredUsername || identity.name || identity.subject;
+        if (!username) {
+            throw new Error('Unauthorized: Admin identity missing username');
+        }
+        return {
+            actorId: username,
+            actorType: 'super_admin',
+        };
+    }
+
+    const { userId } = await getAuthAccount(ctx, identity);
 
     const adminGrant = await ctx.db
         .query('admin_users')
@@ -56,7 +79,11 @@ async function requireAdmin(ctx: MutationCtx | QueryCtx): Promise<{ userId: Id<'
         throw new Error('Forbidden: Admin access required');
     }
 
-    return { userId };
+    return {
+        actorId: userId,
+        actorType: 'workspace_admin',
+        userId,
+    };
 }
 
 function getBridgeSecret(): string | null {
@@ -233,7 +260,7 @@ export const grantAdmin = mutation({
     },
     handler: async (ctx, args) => {
         // Verify caller is an admin
-        const { userId: callerId } = await requireAdmin(ctx);
+        const { actorId, actorType, userId } = await requireAdmin(ctx);
 
         // Check if user exists
         const user = await ctx.db.get(args.user_id);
@@ -255,15 +282,15 @@ export const grantAdmin = mutation({
         await ctx.db.insert('admin_users', {
             user_id: args.user_id,
             created_at: Date.now(),
-            created_by_user_id: callerId,
+            created_by_user_id: userId,
         });
 
         // Log audit entry
         await logAudit(
             ctx,
             'admin.grant',
-            callerId,
-            'workspace_admin',
+            actorId,
+            actorType,
             'user',
             args.user_id,
             { email: user.email }
@@ -283,7 +310,7 @@ export const revokeAdmin = mutation({
     },
     handler: async (ctx, args) => {
         // Verify caller is an admin
-        const { userId: callerId } = await requireAdmin(ctx);
+        const { actorId, actorType } = await requireAdmin(ctx);
 
         const adminGrant = await ctx.db
             .query('admin_users')
@@ -303,8 +330,8 @@ export const revokeAdmin = mutation({
         await logAudit(
             ctx,
             'admin.revoke',
-            callerId,
-            'workspace_admin',
+            actorId,
+            actorType,
             'user',
             args.user_id,
             { email: user?.email }
@@ -515,7 +542,7 @@ export const createWorkspace = mutation({
     },
     handler: async (ctx, args) => {
         // Admin authorization
-        const { userId: adminUserId } = await requireAdmin(ctx);
+        const { actorId, actorType } = await requireAdmin(ctx);
         
         // Verify owner exists
         const owner = await ctx.db.get(args.owner_user_id);
@@ -563,8 +590,8 @@ export const createWorkspace = mutation({
             await logAudit(
                 ctx,
                 'workspace.create',
-                adminUserId,
-                'workspace_admin',
+                actorId,
+                actorType,
                 'workspace',
                 workspaceId,
                 { name: args.name, owner_user_id: args.owner_user_id }
@@ -589,7 +616,7 @@ export const softDeleteWorkspace = mutation({
     },
     handler: async (ctx, args) => {
         // Admin authorization
-        const { userId: adminUserId } = await requireAdmin(ctx);
+        const { actorId, actorType } = await requireAdmin(ctx);
         
         const workspace = await ctx.db.get(args.workspace_id);
 
@@ -606,8 +633,8 @@ export const softDeleteWorkspace = mutation({
         await logAudit(
             ctx,
             'workspace.delete',
-            adminUserId,
-            'workspace_admin',
+            actorId,
+            actorType,
             'workspace',
             args.workspace_id,
             { name: workspace.name }
