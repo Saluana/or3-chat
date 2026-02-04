@@ -28,6 +28,7 @@ const stats = ref({
     tombstones: 0,
     kv: 0,
 });
+const pendingOpsData = ref<any[]>([]); // New: Store actual ops for inspection
 const lastThreadId = ref<string | null>(null);
 const lastMessageId = ref<string | null>(null);
 const lastAction = ref('');
@@ -49,6 +50,8 @@ async function refreshState() {
         tombstones: await db.tombstones.count(),
         kv: await db.kv.count(),
     };
+    // New: Fetch actual ops for validation
+    pendingOpsData.value = await db.pending_ops.toArray();
 }
 
 async function setWorkspace(id: string | null) {
@@ -116,6 +119,31 @@ async function createBlockedKv() {
     await refreshState();
 }
 
+// New: Test that non-blocked keys work
+async function createAllowedKv() {
+    const db = getDb();
+    const timestamp = nowSec();
+    await db.kv.put({
+        id: 'kv:user_theme',
+        name: 'user_theme',
+        value: 'dark',
+        deleted: false,
+        created_at: timestamp,
+        updated_at: timestamp,
+        clock: 1,
+    });
+    lastAction.value = 'Allowed KV key written';
+    await refreshState();
+}
+
+// New: Simulate the background worker flushing ops
+async function simulateSync() {
+    const db = getDb();
+    await db.pending_ops.clear();
+    lastAction.value = 'Simulated Sync (Ops Flushed)';
+    await refreshState();
+}
+
 async function deleteLastThread() {
     const db = getDb();
     if (!lastThreadId.value) {
@@ -129,7 +157,8 @@ async function deleteLastThread() {
 
 async function resetWorkspaceData() {
     const db = getDb();
-    await db.transaction('rw', db.threads, db.messages, db.pending_ops, db.tombstones, db.kv, async () => {
+    // Use array syntax for tables to avoid argument limit issues
+    await db.transaction('rw', [db.threads, db.messages, db.pending_ops, db.tombstones, db.kv], async () => {
         await db.threads.clear();
         await db.messages.clear();
         await db.pending_ops.clear();
@@ -182,7 +211,9 @@ await setWorkspace('workspace-a');
                     Create Pending Message
                 </button>
                 <button data-testid="create-blocked-kv" @click="createBlockedKv">Write Blocked KV</button>
+                <button data-testid="create-allowed-kv" @click="createAllowedKv">Write Allowed KV</button>
                 <button data-testid="delete-thread" @click="deleteLastThread">Delete Last Thread</button>
+                <button data-testid="simulate-sync" @click="simulateSync">Simulate Sync (Flush)</button>
                 <button data-testid="reset-workspace" @click="resetWorkspaceData">Reset Workspace Data</button>
             </div>
         </section>
@@ -211,6 +242,11 @@ await setWorkspace('workspace-a');
                     <div data-testid="kv-count">{{ stats.kv }}</div>
                 </div>
             </div>
+        </section>
+
+        <section>
+            <h2>Pending Ops Payload</h2>
+            <pre data-testid="pending-ops-json" style="background: #111; padding: 1rem; overflow: auto; max-height: 200px;">{{ JSON.stringify(pendingOpsData, null, 2) }}</pre>
         </section>
 
         <section>
