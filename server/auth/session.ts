@@ -122,28 +122,39 @@ export async function resolveSessionContext(
         return nullSession;
     }
 
-    // Map provider session to internal user/workspace via the configured sync provider
-    // TODO: Abstract this into a provider-agnostic SessionStore interface
+    // Map provider session to internal user/workspace via the configured AuthWorkspaceStore
     try {
-        // For now, we use Convex directly as it's the only supported sync provider
-        // When adding new providers, this should be abstracted similar to AuthProvider
-        const { getConvexClient } = await import('../utils/convex-client');
-        const { api } = await import('~~/convex/_generated/api');
-        const convex = getConvexClient();
+        // Get the configured workspace store based on sync provider
+        const { getAuthWorkspaceStore } = await import('./store/registry');
+        const storeId = config.public.sync?.provider || 'convex';
+        const store = getAuthWorkspaceStore(storeId);
 
-        const resolved = await convex.query(api.workspaces.resolveSession, {
+        if (!store) {
+            throw new Error(
+                `[auth:session] AuthWorkspaceStore not registered for provider: ${storeId}`
+            );
+        }
+
+        // Get or create user
+        const { userId } = await store.getOrCreateUser({
             provider: providerSession.provider,
-            provider_user_id: providerSession.user.id,
+            providerUserId: providerSession.user.id,
+            email: providerSession.user.email,
+            displayName: providerSession.user.displayName,
         });
 
-        const workspaceInfo =
-            resolved ??
-            (await convex.mutation(api.workspaces.ensure, {
-                provider: providerSession.provider,
-                provider_user_id: providerSession.user.id,
-                email: providerSession.user.email,
-                name: providerSession.user.displayName,
-            }));
+        // Get or create default workspace
+        const { workspaceId, workspaceName } =
+            await store.getOrCreateDefaultWorkspace(userId);
+
+        // Get workspace role
+        const role = await store.getWorkspaceRole({ userId, workspaceId });
+
+        if (!role) {
+            throw new Error(
+                `[auth:session] User ${userId} has no access to workspace ${workspaceId}`
+            );
+        }
 
         // Check if user has deployment admin access using the provider-agnostic checker
         const adminChecker = getDeploymentAdminChecker(event);
@@ -151,6 +162,12 @@ export async function resolveSessionContext(
             providerSession.user.id,
             providerSession.provider
         );
+
+        const workspaceInfo = {
+            id: workspaceId,
+            name: workspaceName,
+            role,
+        };
 
         const sessionContext: SessionContext = {
             authenticated: true,

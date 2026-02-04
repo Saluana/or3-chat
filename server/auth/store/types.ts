@@ -40,11 +40,11 @@ export interface AuthWorkspaceStore {
      * Purpose:
      * Ensures every user has at least one workspace upon initial login.
      *
-     * @returns The internal unique ID for the workspace.
+     * @returns The internal unique ID and name for the workspace.
      */
     getOrCreateDefaultWorkspace(
         userId: string
-    ): Promise<{ workspaceId: string }>;
+    ): Promise<{ workspaceId: string; workspaceName: string }>;
 
     /**
      * Purpose:
