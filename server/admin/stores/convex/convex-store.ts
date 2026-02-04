@@ -176,7 +176,7 @@ async function getConvexClientWithAuth(event: H3Event) {
     const principal = adminContext?.principal;
 
     if (principal?.kind === 'super_admin') {
-        const adminKey = config.sync.convexAdminKey?.trim();
+        const adminKey = config.sync.convexAdminKey.trim();
         if (adminKey) {
             const identity = buildAdminIdentity(principal.username || 'super_admin');
             return getConvexAdminGatewayClient(event, adminKey, identity);

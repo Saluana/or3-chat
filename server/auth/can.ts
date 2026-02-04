@@ -114,7 +114,7 @@ export function can(
     }
 
     const allowedPermissions = ROLE_PERMISSIONS[role];
-    let allowed = allowedPermissions?.includes(permission) ?? false;
+    let allowed = allowedPermissions.includes(permission);
 
     // Special case: deployment admin grants admin.access regardless of role
     if (permission === 'admin.access' && session.deploymentAdmin) {
