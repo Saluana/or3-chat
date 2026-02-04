@@ -231,9 +231,13 @@ const computedWidth = computed(() =>
     collapsed.value ? props.collapsedWidth : width.value
 );
 
+// SSR-safe sidebar style: during SSR and before hydration, use mobile-first values
+// Only apply desktop styles (pixel width) after hydration to avoid mismatch
 const sidebarStyle = computed(() => ({
-    width: isDesktop.value ? `${computedWidth.value}px` : '100%',
-    maxWidth: isDesktop.value ? 'none' : '100dvw',
+    // Before hydration: always use mobile values for SSR parity
+    // After hydration: use actual responsive values
+    width: hydrated.value && isDesktop.value ? `${computedWidth.value}px` : '100%',
+    maxWidth: hydrated.value && isDesktop.value ? 'none' : '100dvw',
     '--sidebar-rep-size': `${props.sidebarPatternSize}px`,
     '--sidebar-rep-opacity': String(props.sidebarPatternOpacity),
 }));
