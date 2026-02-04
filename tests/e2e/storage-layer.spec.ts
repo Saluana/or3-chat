@@ -4,7 +4,7 @@ test.describe('Storage Layer (E2E)', () => {
     const testPage = '/_tests/_test-storage';
 
     async function resetLocalState(page: import('@playwright/test').Page) {
-        await page.goto('about:blank');
+        await page.goto(testPage);
         await page.evaluate(async () => {
             localStorage.clear();
             await new Promise<void>((resolve) => {
@@ -14,6 +14,7 @@ test.describe('Storage Layer (E2E)', () => {
                 request.onblocked = () => resolve();
             });
         });
+        await page.reload();
     }
 
     async function uploadFile(page: import('@playwright/test').Page, file: { name: string; mimeType: string; buffer: Buffer }) {
@@ -90,7 +91,7 @@ test.describe('Storage Layer (E2E)', () => {
         });
 
         const metaCard = page.locator('.card').filter({ hasText: 'File Metadata' });
-        await expect(metaCard.getByText('pdf')).toBeVisible();
+        await expect(metaCard.getByRole('cell', { name: 'pdf', exact: true })).toBeVisible();
 
         const transferCard = page.locator('.card').filter({ hasText: 'Transfer Queue' });
         await transferCard.getByRole('button', { name: 'Clear All' }).click();

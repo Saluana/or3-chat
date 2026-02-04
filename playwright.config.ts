@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const skipWebServer = process.env.PW_SKIP_WEB_SERVER === 'true';
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -20,9 +22,12 @@ export default defineConfig({
     },
   ],
 
-  webServer: {
-    command: 'bun run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: skipWebServer
+    ? undefined
+    : {
+        command: 'bun run dev',
+        url: 'http://localhost:3000',
+        timeout: 120 * 1000,
+        reuseExistingServer: !process.env.CI,
+      },
 });
