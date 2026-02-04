@@ -55,26 +55,26 @@ If any of the above still select Convex by default, `sync/storage != convex` is 
 ## Phase 1 — Core boundaries + dispatchers (core must not import SDKs)
 
 ### 1.1 AuthWorkspaceStore registry (server)
-- [ ] Add an `AuthWorkspaceStore` registry (server) with:
-  - [ ] `registerAuthWorkspaceStore({ id, create })`
-  - [ ] `getAuthWorkspaceStore(id)`
-  - [ ] strict-mode validation for missing configured store
-- [ ] Refactor `server/auth/session.ts` to:
-  - [ ] resolve provider identity via `AuthProvider`
-  - [ ] resolve internal user/workspace via configured `AuthWorkspaceStore`
-  - [ ] keep existing failure modes (`throw` / `unauthenticated` / `service-unavailable`)
+- [x] Add an `AuthWorkspaceStore` registry (server) with:
+  - [x] `registerAuthWorkspaceStore({ id, create })`
+  - [x] `getAuthWorkspaceStore(id)`
+  - [x] strict-mode validation for missing configured store
+- [x] Refactor `server/auth/session.ts` to:
+  - [x] resolve provider identity via `AuthProvider`
+  - [x] resolve internal user/workspace via configured `AuthWorkspaceStore`
+  - [x] keep existing failure modes (`throw` / `unauthenticated` / `service-unavailable`)
 
 ### 1.2 ProviderTokenBroker (server)
-- [ ] Define a server `ProviderTokenBroker` interface:
-  - [ ] `getProviderToken({ providerId, template? }): Promise<string | null>`
-- [ ] Add a server registry/resolver for the broker keyed by `auth.provider`
+- [x] Define a server `ProviderTokenBroker` interface:
+  - [x] `getProviderToken({ providerId, template? }): Promise<string | null>`
+- [x] Add a server registry/resolver for the broker keyed by `auth.provider`
 - [ ] Replace all direct Clerk token minting calls in core server code with broker calls.
   - This includes gateway endpoints and admin adapters.
 
 ### 1.3 Sync gateway adapter + endpoint dispatch (server)
-- [ ] Introduce a `SyncGatewayAdapter` interface + registry:
-  - [ ] `registerSyncGatewayAdapter({ id, create })` (or `registerSyncGatewayAdapter(adapter)`)
-  - [ ] `getActiveSyncGatewayAdapter()` from config
+- [x] Introduce a `SyncGatewayAdapter` interface + registry:
+  - [x] `registerSyncGatewayAdapter({ id, create })` (or `registerSyncGatewayAdapter(adapter)`)
+  - [x] `getActiveSyncGatewayAdapter()` from config
 - [ ] Refactor core endpoints:
   - [ ] `server/api/sync/push.post.ts`
   - [ ] `server/api/sync/pull.post.ts`
@@ -83,7 +83,7 @@ If any of the above still select Convex by default, `sync/storage != convex` is 
   - …so they do **no provider imports** and dispatch to the adapter.
 
 ### 1.4 Storage gateway adapter + endpoint dispatch (server)
-- [ ] Introduce a `StorageGatewayAdapter` interface + registry
+- [x] Introduce a `StorageGatewayAdapter` interface + registry
 - [ ] Refactor core endpoints:
   - [ ] `server/api/storage/presign-upload.post.ts`
   - [ ] `server/api/storage/presign-download.post.ts`
@@ -92,7 +92,7 @@ If any of the above still select Convex by default, `sync/storage != convex` is 
   - …so they do **no provider imports** and dispatch to the adapter.
 
 ### 1.5 Workspace API boundary (client)
-- [ ] Introduce `WorkspaceApi` interface + `useWorkspaceApi()` resolver
+- [x] Introduce `WorkspaceApi` interface + `useWorkspaceApi()` resolver
 - [ ] Decide server backing model:
   - [ ] Extend `AuthWorkspaceStore` for workspace CRUD (recommended), or introduce `WorkspaceStore`
 - [ ] Add SSR endpoints for workspace lifecycle (`/api/workspaces/*`) that call the configured store adapter
