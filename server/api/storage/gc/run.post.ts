@@ -15,13 +15,7 @@ import { resolveSessionContext } from '../../../auth/session';
 import { requireCan } from '../../../auth/can';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../../utils/storage/is-storage-enabled';
-import { api } from '~~/convex/_generated/api';
-import type { Id } from '~~/convex/_generated/dataModel';
-import {
-    getClerkProviderToken,
-    getConvexGatewayClient,
-} from '../../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+import { getActiveStorageGatewayAdapter } from '../../../storage/gateway/registry';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -53,7 +47,7 @@ function recordGcRun(workspaceId: string, now: number): void {
  *
  * Behavior:
  * - Requires `admin.access` on the workspace.
- * - Delegates to `api.storage.gcDeletedFiles`.
+ * - Dispatches to registered StorageGatewayAdapter.
  * - Returns count of deleted objects.
  *
  * Constraints:
@@ -87,18 +81,23 @@ export default defineEventHandler(async (event) => {
     }
     recordGcRun(body.data.workspace_id, now);
 
-    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
-    if (!token) {
-        throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+    // Get storage gateway adapter from registry
+    const adapter = getActiveStorageGatewayAdapter();
+    if (!adapter) {
+        throw createError({ statusCode: 500, statusMessage: 'Storage adapter not configured' });
     }
 
-    const client = getConvexGatewayClient(event, token);
+    // Check if adapter supports GC
+    if (!adapter.gc) {
+        throw createError({ statusCode: 501, statusMessage: 'GC not supported by adapter' });
+    }
+
     const retentionSeconds = body.data.retention_seconds ?? 30 * 24 * 3600;
-    const result = await client.mutation(api.storage.gcDeletedFiles, {
-        workspace_id: body.data.workspace_id as Id<'workspaces'>,
+    const result = await adapter.gc(event, {
+        workspace_id: body.data.workspace_id,
         retention_seconds: retentionSeconds,
         limit: body.data.limit,
     });
 
-    return { deleted_count: result.deletedCount };
+    return result;
 });

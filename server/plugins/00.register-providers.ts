@@ -46,4 +46,18 @@ export default defineNitroPlugin(() => {
     } catch (error) {
         console.error('[providers] Failed to register Convex SyncGatewayAdapter:', error);
     }
+
+    // Register Convex StorageGatewayAdapter (temporary - will move to provider package)
+    try {
+        const { registerStorageGatewayAdapter } = require('~/server/storage/gateway/registry');
+        const { createConvexStorageGatewayAdapter } = require('~/server/storage/gateway/impls/convex-storage-gateway-adapter');
+        
+        registerStorageGatewayAdapter({
+            id: 'convex',
+            order: 100,
+            create: createConvexStorageGatewayAdapter,
+        });
+    } catch (error) {
+        console.error('[providers] Failed to register Convex StorageGatewayAdapter:', error);
+    }
 });
