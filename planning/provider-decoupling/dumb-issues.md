@@ -1,6 +1,28 @@
 # dumb-issues.md
 
-## 1) “Runtime gating” with compile-time imports (a.k.a. the build still requires Convex)
+This document is intentionally blunt and concrete: each item is a real coupling point that prevents “provider swappability” from being true in practice.
+
+---
+
+## 0) “Dynamic import behind config” does not guarantee uninstallability in Nuxt
+
+**Problem**
+Nuxt/Vite/Nitro compile and bundle specific file trees automatically:
+- `app/pages/**`, `app/plugins/**`
+- `server/api/**`, `server/middleware/**`, `server/plugins/**`
+
+If any file in those zones imports provider SDKs or generated files, you have a compile-time dependency even if runtime code never executes.
+
+**Concrete fix (recommended)**
+Provider implementations must not exist in core build graph.
+- Put provider code in **installable Nuxt module packages**
+- Provider packages self-register implementations into core registries
+
+This is the only clean “uninstall dependency, repo still builds” solution.
+
+---
+
+## 1) “Runtime gating” with compile-time imports (Convex still required)
 
 **Where**
 - `app/plugins/convex-sync.client.ts`
@@ -8,27 +30,16 @@
 **Snippet**
 ```ts
 import { useConvexClient } from 'convex-vue';
-import { createConvexSyncProvider } from '~/core/sync/providers/convex-sync-provider';
-import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
-
-// ... later ...
-if (runtimeConfig.public.sync?.provider !== CONVEX_PROVIDER_ID) {
-  return;
-}
+// ...
+if (runtimeConfig.public.sync?.provider !== CONVEX_PROVIDER_ID) return;
 ```
 
 **Why this is bad**
-You’re “skipping sync” at runtime, but you still hard-import Convex modules at the top of an auto-loaded Nuxt plugin. That means:
-- Convex is a mandatory dependency even when not used.
-- Removing Convex from dependencies breaks the build immediately.
-
-**Real-world consequences**
-- “Swappable providers” is a lie.
-- Any attempt to ship a non-Convex build or package-based provider strategy fails.
+Auto-loaded plugin + top-level Convex imports ⇒ Convex is mandatory even when not selected.
 
 **Concrete fix**
-- Replace provider-specific plugin with a thin dispatcher plugin.
-- Move provider imports behind `await import(...)` after config checks.
+- Core plugin becomes provider-agnostic (sync engine + registry only).
+- Convex provider package adds a client plugin that registers the Convex `SyncProvider`.
 
 ---
 
@@ -37,28 +48,16 @@ You’re “skipping sync” at runtime, but you still hard-import Convex module
 **Where**
 - `app/plugins/convex-clerk.client.ts`
 
-**Snippet**
-```ts
-import { useConvexClient } from 'convex-vue';
-
-// reads window.Clerk, assumes Clerk exists
-const clerk = (window as any).Clerk;
-```
-
 **Why this is bad**
-Even if you don’t use Convex or Clerk, the plugin still compiles and forces those dependencies/types into the build graph.
-
-**Real-world consequences**
-- You can’t uninstall Clerk or Convex without editing core.
-- “provider packages” can’t happen while core auto-loads this.
+This forces Convex and Clerk into the client graph. Also relies on `window.Clerk` (auth-provider assumption).
 
 **Concrete fix**
-- Delete/replace with a provider package registration hook.
-- Only load this bridge from the Convex provider package when both providers are selected.
+- Move this into the Convex provider package.
+- Replace `window.Clerk` with a provider-agnostic token broker (client + server).
 
 ---
 
-## 3) Workspace UI is married to Convex (so swapping backend means rewriting UI)
+## 3) Workspace UI is married to Convex
 
 **Where**
 - `app/plugins/workspaces/WorkspaceManager.vue`
@@ -67,73 +66,44 @@ Even if you don’t use Convex or Clerk, the plugin still compiles and forces th
 ```ts
 import { useConvexMutation, useConvexQuery } from 'convex-vue';
 import { api } from '~~/convex/_generated/api';
-
-const { data: workspaces } = useConvexQuery(api.workspaces.listMyWorkspaces, {});
-const createWorkspaceMutation = useConvexMutation(api.workspaces.create);
 ```
 
 **Why this is bad**
-This is supposed to be “OR3 Cloud workspace UX”, not “Convex SDK demo component”.
-
-**Real-world consequences**
-- A non-Convex provider can’t implement workspaces without touching UI.
-- Removing Convex breaks builds in unrelated UI.
+Swapping backend requires rewriting UI, and Convex becomes a mandatory dependency for unrelated UI.
 
 **Concrete fix**
-Introduce a tiny `WorkspaceApi` composable interface and have Convex implement it behind a dynamic import.
+- Introduce a tiny `WorkspaceApi` interface + composable resolver.
+- UI talks only to `WorkspaceApi`.
+- Providers implement `WorkspaceApi` (SDK direct or SSR endpoints).
 
 ---
 
-## 4) SSR session provisioning is hardcoded to Convex (it even admits it)
+## 4) SSR session provisioning is hardcoded to Convex (ignores AuthWorkspaceStore)
 
 **Where**
 - `server/auth/session.ts`
 
-**Snippet**
-```ts
-// TODO: Abstract this into a provider-agnostic SessionStore interface
-// For now, we use Convex directly as it's the only supported sync provider
-const { getConvexClient } = await import('../utils/convex-client');
-const { api } = await import('~~/convex/_generated/api');
-const convex = getConvexClient();
-
-const resolved = await convex.query(api.workspaces.resolveSession, { ... });
-```
-
 **Why this is bad**
-You already defined `AuthWorkspaceStore`, then completely ignore it and weld auth provisioning to Convex.
-
-**Real-world consequences**
-- Any non-Convex canonical store is blocked.
-- You can’t extract Convex to a package because core server code imports it.
+Canonical user/workspace mapping becomes Convex-only, blocking other backends.
 
 **Concrete fix**
-- Implement `AuthWorkspaceStore` registry + adapters.
-- Move Convex provisioning into a Convex-backed store adapter.
+- Implement an `AuthWorkspaceStore` registry (server).
+- `resolveSessionContext()` calls the configured store adapter.
+- Convex store adapter lives in Convex provider package.
 
 ---
 
-## 5) Clerk middleware runs whenever SSR auth is enabled (even if provider isn’t Clerk)
+## 5) Clerk middleware runs whenever SSR auth is enabled (provider mismatch)
 
 **Where**
 - `server/middleware/00.clerk.ts`
 
-**Snippet**
-```ts
-if (config.auth.enabled !== true) return;
-const { clerkMiddleware } = await import('@clerk/nuxt/server');
-return clerkMiddleware()(event);
-```
-
 **Why this is bad**
-The gate is wrong. `auth.enabled` is not “use clerk”. It’s “SSR auth on”, which could be any provider.
-
-**Real-world consequences**
-- Set provider to custom, keep SSR auth enabled → server still tries to load Clerk.
-- Uninstall Clerk → server blows up even if not selected.
+`auth.enabled` is not “use Clerk”. Swapping auth provider still triggers Clerk middleware and crashes if Clerk uninstalled.
 
 **Concrete fix**
-Gate by `config.auth.provider === 'clerk'` (or better: a provider dispatcher that loads only the selected provider).
+Core should not ship Clerk middleware in `server/middleware/**`.
+- Clerk provider package adds its own middleware when installed.
 
 ---
 
@@ -142,45 +112,26 @@ Gate by `config.auth.provider === 'clerk'` (or better: a provider dispatcher tha
 **Where**
 - `server/plugins/auth.ts`
 
-**Snippet**
-```ts
-if (config.auth.enabled !== true) return;
-const { clerkAuthProvider } = await import('../auth/providers/clerk');
-registerAuthProvider({ id: CLERK_PROVIDER_ID, create: () => clerkAuthProvider });
-```
-
 **Why this is bad**
-Same mistake as the middleware: it confuses “SSR auth enabled” with “Clerk is the provider”.
-
-**Real-world consequences**
-- Provider swap is brittle and surprising.
-- Uninstalling Clerk is impossible without patching core.
+Same mismatch as middleware: `auth.enabled` != “register Clerk”.
 
 **Concrete fix**
-Only register the provider selected in config (dynamic import via provider loader).
+Auth providers register themselves from their Nuxt modules (provider packages).
+Core doesn’t import provider implementations.
 
 ---
 
-## 7) Core server Convex client module makes Convex non-optional
+## 7) Core server Convex utilities make Convex non-optional
 
 **Where**
 - `server/utils/convex-client.ts`
-
-**Snippet**
-```ts
-import { ConvexHttpClient } from 'convex/browser';
-import { api } from '~~/convex/_generated/api';
-```
+- `server/utils/sync/convex-gateway.ts`
 
 **Why this is bad**
-This is core server code importing Convex SDK and generated API. If Convex is supposed to be optional, this file must not exist in core.
-
-**Real-world consequences**
-- You cannot remove Convex deps.
-- You cannot move Convex backend into a provider package without untangling this.
+These files import `convex/*` and `~~/convex/_generated/*` in core server code.
 
 **Concrete fix**
-Move this into the Convex provider package, and have core call a provider-agnostic store/client interface.
+Move them into the Convex provider package. Core server code must not import Convex SDKs or generated APIs.
 
 ---
 
@@ -190,67 +141,128 @@ Move this into the Convex provider package, and have core call a provider-agnost
 - `server/admin/providers/adapters/sync-convex.ts`
 - `server/admin/providers/adapters/storage-convex.ts`
 
-**Snippet**
-```ts
-const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
-```
-
 **Why this is bad**
-This bakes in a specific auth provider assumption into a backend adapter. If you swap auth away from Clerk, your admin tools break.
-
-**Real-world consequences**
-- Convex admin maintenance becomes unusable without Clerk.
-- You can’t claim “auth provider swappable”.
+Backend adapter assumes auth provider (Clerk). Swap auth ⇒ admin breaks.
 
 **Concrete fix**
-Request provider tokens via a provider-agnostic broker interface (server-side token broker), keyed by the configured auth provider.
+Introduce a server `ProviderTokenBroker` interface:
+- `getProviderToken({ providerId, template })`
+Implemented by auth provider package.
+Convex admin adapters request tokens via this broker, never via Clerk-specific helpers.
 
 ---
 
-## 9) Provider IDs are compile-time unions, so external providers require core edits
+## 9) Provider IDs are compile-time unions (blocks external providers)
 
 **Where**
 - `shared/cloud/provider-ids.ts`
-- `utils/or3-cloud-config.ts` (zod enums)
-
-**Snippet**
-```ts
-export const AUTH_PROVIDER_ID_LIST = [ 'clerk', 'custom' ] as const;
-// ...
-provider: z.enum(AUTH_PROVIDER_ID_LIST),
-```
+- `utils/or3-cloud-config.ts` (`z.enum(...)`)
+- `config.or3cloud.ts` casts env to those union types
 
 **Why this is bad**
-If the goal is “installable provider packages”, then the core app cannot hardcode the list. That defeats the entire point.
-
-**Real-world consequences**
-- You can’t add `or3-supabase` or `or3-auth0` without modifying core.
+Adding a provider requires editing core code to extend the union. That defeats “installable provider packages”.
 
 **Concrete fix**
-- Make provider IDs `string` in config.
-- Validate them against runtime-registered providers in strict mode.
+- Make provider IDs plain `string` in config schema.
+- Validate at runtime against registries (strict mode).
 
 ---
 
-## 10) Convex backend code is explicitly Clerk-only (which is fine… but only if it’s not core)
+## 10) Convex backend code is explicitly Clerk-only (fine only if it’s not core)
 
 **Where**
-- `convex/workspaces.ts`
-- `convex/auth.config.ts`
-
-**Snippet**
-```ts
-// Constraints:
-// - Only Clerk is supported as an auth provider in this module
-const VALID_AUTH_PROVIDER = 'clerk';
-```
+- `convex/**`
 
 **Why this is bad**
-This is not a problem *inside a Convex provider package*. It’s a problem as long as Convex backend lives inside the core app repo that pretends providers are swappable.
-
-**Real-world consequences**
-- You can’t ship non-Clerk auth with Convex backend without deeper work.
-- You can’t credibly claim decoupling until Convex backend lives behind a package boundary.
+As long as `convex/**` is in core, core is not truly provider-agnostic.
 
 **Concrete fix**
-Move Convex backend into `or3-convex` and treat it as the Convex provider’s implementation detail.
+Convex backend lives in Convex provider package, delivered via an explicit init/codegen workflow.
+
+---
+
+## 11) SSR gateway endpoints import Convex generated APIs (sync + storage)
+
+**Where**
+- `server/api/sync/*.post.ts`
+- `server/api/storage/*.post.ts`
+
+**Why this is bad**
+Even if `sync.provider != convex`, these files are part of Nitro server build graph. Missing `convex/_generated/**` breaks the server build.
+
+**Concrete fix**
+Convert core endpoints into provider-agnostic dispatchers:
+- core does auth + `can()` + validation + rate limiting
+- dispatches to registered `SyncGatewayAdapter` / `StorageGatewayAdapter`
+- provider packages register adapters (Convex/SQLite/etc)
+
+---
+
+## 12) Rate limit provider is imported unconditionally (Convex becomes mandatory)
+
+**Where**
+- `server/utils/rate-limit/store.ts` imports `./providers/convex` at top-level
+
+**Why this is bad**
+Even if config selects memory, the build still requires Convex.
+
+**Concrete fix**
+Use the same provider pattern:
+- registry + adapters
+- Convex rate limit provider lives in Convex provider package
+
+---
+
+## 13) Background job provider uses a “dynamic import” that still bundles Convex
+
+**Where**
+- `server/utils/background-jobs/store.ts` does `await import('./providers/convex')`
+
+**Why this is bad**
+This is still a statically analyzable import target; bundling includes the module and its Convex imports.
+
+**Concrete fix**
+Provider package registers `BackgroundJobProvider` via Nitro plugin; core never references provider module paths.
+
+---
+
+## 14) Notifications emitter is Convex-only in core
+
+**Where**
+- `server/utils/notifications/emit.ts`
+
+**Why this is bad**
+Convex becomes mandatory even when background streaming is off.
+
+**Concrete fix**
+Move Convex notification emission into Convex provider package or introduce a small notification persistence interface with provider implementations.
+
+---
+
+## 15) Dev/test pages under `app/pages/_tests/**` break “no Convex” builds
+
+**Where**
+- `app/pages/_tests/_test-*.vue`
+
+**Why this is bad**
+All pages are compiled. These imports will break the client build when Convex is uninstalled.
+
+**Concrete fix**
+Move provider-specific test pages into provider packages (best), or keep them out of `app/pages/**` in non-provider builds.
+
+---
+
+## 16) Provider implementation files + type augmentations still break “uninstall the dependency”
+
+**Where (examples)**
+- `app/core/sync/providers/convex-sync-provider.ts` (imports `convex-vue` and `~~/convex/_generated/*`)
+- `server/auth/providers/clerk/clerk-auth-provider.ts` (imports `@clerk/nuxt/server`)
+- `server/types/convex-http-client.d.ts` (imports `convex/server`)
+- `server/admin/stores/convex/**` (imports `~~/convex/_generated/*`)
+
+**Why this is bad**
+Even if the auto-loaded plugins/middleware are fixed, these files can still be part of the TypeScript program and/or server bundle. If the dependency is removed, typecheck/build still fails.
+
+**Concrete fix**
+- Move provider implementation files (and provider-specific type augmentation files) into provider packages.
+- Ensure core does not include provider-only `*.d.ts` that reference provider SDK types.

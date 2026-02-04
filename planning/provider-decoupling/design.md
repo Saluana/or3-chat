@@ -1,224 +1,350 @@
 # design.md
 
 ## Overview
-This design removes the *compile-time* coupling to Clerk + Convex while preserving the current “default providers” behavior.
+Provider decoupling has one real goal:
 
-The current state is not “provider-agnostic”; it’s “provider-agnostic in comments and config shape, but hard-wired in imports”. Runtime gating is not enough. Nuxt auto-loads plugins/middleware and TypeScript resolves imports at build time. If core files import `convex-vue` or `@clerk/nuxt/server`, the dependency is mandatory whether you use it or not.
+> **The core repo must build + typecheck when provider SDKs and generated files are uninstalled.**
 
-The solution is boring and correct:
-- Move **provider-specific imports** behind **dynamic imports** at execution time.
-- Move provider implementations behind a **registry** with “installed/available” checks.
-- Ensure core features (workspace UI, session provisioning, admin adapters) call **provider-agnostic interfaces**, not provider SDKs.
+That means we must solve *build-graph coupling*, not just runtime behavior.
 
-This design intentionally splits into two phases:
-- Phase 1: refactor within this repo to kill hardcoding and make swapping survivable.
-- Phase 2: extract Clerk/Convex into installable packages.
+This doc describes the simplest architecture that:
+- preserves today’s default behavior (Clerk + Convex)
+- avoids conditionals sprinkled across core
+- keeps provider boundaries boring (registries + small interfaces)
+- makes new providers (LocalFS storage, SQLite sync) straightforward
 
-## Current Hard-Coupling Hotspots (What’s actually broken today)
-These are the places that prevent provider swapping/removal:
+---
 
-- Client plugins import Convex at module top-level:
-  - `app/plugins/convex-sync.client.ts` imports `convex-vue` and Convex provider modules even when `sync.provider != convex`.
-  - `app/plugins/convex-clerk.client.ts` imports `convex-vue` and assumes Clerk is on `window`.
+## Reality check: why “dynamic import behind config” is not enough in Nuxt
 
-- Workspace UI imports Convex directly:
-  - `app/plugins/workspaces/WorkspaceManager.vue` uses `useConvexQuery/useConvexMutation` and `~~/convex/_generated/api`.
+The intern design emphasizes `await import(...)` after config checks. That helps with **runtime** behavior, but it does *not* guarantee uninstallability in Nuxt/Vite:
 
-- Server auth/session provisioning imports Convex directly:
-  - `server/auth/session.ts` hardcodes Convex for workspace provisioning.
-  - `server/utils/convex-client.ts` imports Convex SDK and generated API.
+- Nuxt auto-registers files by directory conventions (`app/plugins`, `server/api`, `server/middleware`, `server/plugins`).
+- Vite/Nitro still need to **resolve and bundle** any statically analyzable import targets.
+- TypeScript still needs to resolve modules for **type-only imports**.
 
-- Server middleware/plugins are only gated by `auth.enabled`, not selected provider:
-  - `server/middleware/00.clerk.ts` runs whenever SSR auth is enabled.
-  - `server/plugins/auth.ts` registers Clerk whenever SSR auth is enabled.
+So the rule for true decoupling is stricter:
 
-- Admin adapters hardcode “Clerk token for Convex gateway”:
-  - `server/admin/providers/adapters/sync-convex.ts`, `storage-convex.ts` call `getClerkProviderToken(...)`.
+> **Core must not contain any imports (value or type) from provider SDKs or provider-generated files in any auto-included zone.**
 
-- Config types bake provider IDs into compile-time unions:
-  - `shared/cloud/provider-ids.ts` and `utils/or3-cloud-config.ts` hardcode provider ID lists. That blocks external providers without core edits.
+The only durable way to achieve this is:
 
-## Phase 1 Design: Stop Hardcoding Inside This Repo
+> **Provider implementations live in installable packages (Nuxt modules).**
 
-### 1) Provider Package Registry (runtime)
-We already have a registry pattern for server auth providers (`server/auth/registry.ts`). Do the same concept across the provider surfaces, but keep it minimal.
+Core ships interfaces + registries + provider-agnostic endpoints. Provider packages register concrete implementations when installed.
 
-Core interface (new, shared between server/client):
+---
+
+## What’s coupled today (actual hotspots)
+
+This list is intentionally concrete so the intern can grep and delete/relocate confidently.
+
+### Client build graph coupling
+- `app/plugins/convex-sync.client.ts` (imports `convex-vue` + Convex provider modules)
+- `app/plugins/convex-clerk.client.ts` (imports `convex-vue` + assumes Clerk globals)
+- `app/core/sync/providers/convex-sync-provider.ts` (imports `convex-vue` + `~~/convex/_generated/*`)
+- `app/plugins/workspaces/WorkspaceManager.vue` (imports `convex-vue` + `~~/convex/_generated/api`)
+- `app/pages/_tests/**` (imports `convex-vue` and `~~/convex/_generated/*`)
+
+### Server build graph coupling
+- `server/api/sync/*.post.ts` (imports `~~/convex/_generated/*` + uses Clerk token minting)
+- `server/api/storage/*.post.ts` (imports `~~/convex/_generated/*` + uses Clerk token minting)
+- `server/auth/providers/clerk/clerk-auth-provider.ts` (imports `@clerk/nuxt/server`)
+- `server/auth/deployment-admin.ts` (imports/loads `~~/convex/_generated/*`)
+- `server/utils/convex-client.ts` (imports `convex/browser` + `~~/convex/_generated/api`)
+- `server/utils/sync/convex-gateway.ts` (imports `convex/browser` + assumes Clerk auth context)
+- `server/admin/stores/convex/**` and `server/admin/providers/adapters/*convex*.ts` (imports `~~/convex/_generated/*`)
+- `server/utils/rate-limit/store.ts` (imports Convex provider at module top-level)
+- `server/utils/background-jobs/providers/convex.ts` (imports `convex/_generated/*`)
+- `server/utils/notifications/emit.ts` (imports `convex/_generated/*`)
+- `server/types/convex-http-client.d.ts` (imports `convex/server` in core type augmentation)
+- `server/middleware/00.clerk.ts` and `server/plugins/auth.ts` (run on `auth.enabled`, not `auth.provider`)
+
+### Configuration coupling (blocks external providers)
+- `shared/cloud/provider-ids.ts` (compile-time provider ID unions)
+- `utils/or3-cloud-config.ts` and `config.or3cloud.ts` (zod enums/casts based on those unions)
+- `nuxt.config.ts` (module config keys + conditional module lists)
+
+---
+
+## Chosen solution (simplest that actually works)
+
+### Principle: core owns contracts, providers own SDK imports
+Core provides:
+- small interfaces (what core needs)
+- registries (how providers plug in)
+- provider-agnostic SSR endpoints (gateway mode)
+- UI/composable boundaries (workspace lifecycle)
+
+Provider packages provide:
+- SDK imports (Clerk/Convex/etc)
+- concrete implementations and registrations
+- optional server middleware/routes
+- optional init/codegen scripts (Convex)
+
+This avoids “optional dependencies” hacks and matches Nuxt conventions.
+
+---
+
+## Core contracts (minimal, boring)
+
+### 1) Auth
+Already exists:
+- `server/auth/registry.ts` (`registerAuthProvider`, `getAuthProvider`)
+
+Add:
+- `AuthWorkspaceStore` registry (server)
+  - interface already exists at `server/auth/store/types.ts`
+  - core session resolution MUST call store adapter, not Convex directly
+
+Add (needed for gateway auth):
+- `ProviderTokenBroker` (server)
+  - “give me a provider token for `<providerId>` and optional `<template>`”
+  - implemented by auth provider package (Clerk implementation calls `event.context.auth().getToken(...)`)
+
+Why this is best:
+- fixes “Convex admin assumes Clerk”
+- keeps “minting provider tokens” as an auth-provider responsibility (correct boundary)
+
+### 2) Sync
+Client side already has:
+- `shared/sync/types.ts` (`SyncProvider`)
+- `app/core/sync/sync-provider-registry.ts` (string-keyed registry)
+- `app/core/sync/providers/gateway-sync-provider.ts` (provider-agnostic gateway client)
+
+Add server-side contract:
 ```ts
-export type ProviderKind = 'auth' | 'sync' | 'storage' | 'limits' | 'background';
-
-export interface ProviderPackage {
+export interface SyncGatewayAdapter {
   id: string;
-  kinds: ProviderKind[];
-  // Optional hooks to register adapters into the existing registries.
-  registerServer?: () => Promise<void>;
-  registerClient?: () => Promise<void>;
-}
-
-export interface ProviderLoader {
-  isAvailable(id: string): boolean;
-  load(id: string): Promise<ProviderPackage | null>; // dynamic import
+  // called by /api/sync/* endpoints
+  pull(event, input): Promise<PullResponse>;
+  push(event, input): Promise<PushResult>;
+  updateCursor(event, input): Promise<void>;
+  gcTombstones?(event, input): Promise<void>;
+  gcChangeLog?(event, input): Promise<void>;
 }
 ```
+Core `/api/sync/*` endpoints become:
+- auth + `can()` + validation + rate limiting (still core)
+- dispatch to `SyncGatewayAdapter` for the selected `sync.provider`
 
-Key principle:
-- Core never imports provider SDKs.
-- Core only calls `load(providerId)`.
+Why this is best:
+- gateway endpoints stay stable (client code doesn’t change)
+- providers implement only the backend proxy/logic
+- core never imports provider SDKs or generated APIs
 
-### 2) Nuxt auto-loaded plugins/middleware become thin dispatchers
-Replace provider-specific Nuxt plugins (Convex/Clerk) with dispatcher plugins that:
-- read runtime config
-- `await import(...)` the selected provider package
-- call that provider’s `registerClient()` / `registerServer()`
+### 3) Storage
+Client side already has:
+- `app/core/storage/types.ts` (`ObjectStorageProvider`)
+- `app/core/storage/provider-registry.ts`
 
-Example (client):
+Add server-side contract:
 ```ts
-export default defineNuxtPlugin(async () => {
-  const cfg = useRuntimeConfig();
-  if (!cfg.public.ssrAuthEnabled) return;
-
-  const providerId = cfg.auth.provider;
-  const pkg = await loadProviderPackage(providerId);
-  await pkg?.registerClient?.();
-});
+export interface StorageGatewayAdapter {
+  id: string;
+  presignUpload(event, input): Promise<{ url: string; expiresAt: number; headers?: Record<string,string>; storageId?: string; method?: string }>;
+  presignDownload(event, input): Promise<{ url: string; expiresAt: number; headers?: Record<string,string>; storageId?: string; method?: string }>;
+  commit?(event, input): Promise<void>;
+  gc?(event, input): Promise<unknown>;
+}
 ```
+Core `/api/storage/*` endpoints become:
+- auth + `can()` + validation + rate limiting (still core)
+- dispatch to `StorageGatewayAdapter` for selected `storage.provider`
 
-Example (server middleware):
-```ts
-export default defineEventHandler(async (event) => {
-  const cfg = useRuntimeConfig();
-  if (cfg.auth.enabled !== true) return;
+Why this is best:
+- keeps the client storage queue stable
+- lets providers decide “S3 presigned URL” vs “local upload endpoint” without changing the UI
 
-  const providerId = cfg.auth.provider;
-  const pkg = await loadProviderPackage(providerId);
-  // provider registers its own middleware or exposes a handler.
-});
-```
+**Practical simplification (recommended): make the client storage provider always “gateway”**
+The current `createConvexStorageProvider()` already calls SSR endpoints (`/api/storage/presign-*`, `/api/storage/commit`) and does not require the Convex client SDK.
 
-This kills the “plugin imports Convex even when unused” problem.
+Rename/generalize this into a provider-agnostic *gateway storage provider* so the client does **not** need per-backend storage packages at all:
+- client always talks to `/api/storage/*`
+- server dispatch decides the actual backend (`storage.provider`)
 
-### 3) Provider-agnostic Workspace API (client)
-Workspace lifecycle should not be implemented in the UI using backend SDKs.
+This is simpler and makes “install a new storage backend, no client bundling” realistic.
 
-Introduce a tiny composable boundary:
+### 4) Workspace lifecycle (UI)
+Define a client boundary:
 ```ts
 export interface WorkspaceApi {
-  list(): Promise<Array<{ id: string; name: string; description?: string | null; role: string }>>;
+  list(): Promise<Array<{ id: string; name: string; role: string }>>;
   create(input: { name: string; description?: string | null }): Promise<{ id: string }>;
   update(input: { id: string; name: string; description?: string | null }): Promise<void>;
   remove(input: { id: string }): Promise<void>;
   setActive(input: { id: string }): Promise<void>;
 }
-
-export function useWorkspaceApi(): WorkspaceApi { /* resolves by provider */ }
 ```
+Core `WorkspaceManager` depends on this interface only.
 
-Implementation options in Phase 1:
-- Convex direct provider package can implement this via `convex-vue`.
-- Gateway-only providers can implement this via SSR endpoints.
+Provider implementations:
+- Convex provider can implement this directly (SDK) or via SSR endpoints
+- SQLite provider implements via SSR endpoints (simplest)
 
-Outcome:
-- `WorkspaceManager.vue` becomes backend-agnostic.
-- Convex is no longer a required dependency to render workspace UI.
+**Gateway-first recommendation**
+Prefer implementing `WorkspaceApi` via SSR endpoints for all providers (including Convex).
+It avoids pulling provider SDKs into the client build graph and keeps workspace UI stable.
 
-### 4) Session provisioning uses AuthWorkspaceStore (server)
-`server/auth/session.ts` currently contains the exact TODO we need. Do it.
+**Server-side backing**
+To make the gateway-first approach one-shot, pick one of these (A is simplest):
 
-Flow:
-- Resolve provider session via `AuthProvider` registry.
-- Resolve canonical store adapter via `AuthWorkspaceStore` registry.
-- Store adapter performs `getOrCreateUser`, `getOrCreateDefaultWorkspace`, `getWorkspaceRole`.
+**A) Extend `AuthWorkspaceStore` to fully back workspace CRUD**
+- Add methods like `createWorkspace`, `updateWorkspace`, `removeWorkspace`, `setActiveWorkspace` to `AuthWorkspaceStore`.
+- Add core SSR endpoints `/api/workspaces/*` that call the configured store adapter.
 
-Adapter implementations:
-- Convex-backed store (Phase 1) lives in provider code but still in-repo.
-- Future stores live in external packages.
+**B) Introduce a separate `WorkspaceStore` interface**
+- Keep `AuthWorkspaceStore` focused on identity mapping + membership resolution.
+- Add `WorkspaceStore` for CRUD + active workspace selection.
+- Session provisioning uses both (or `AuthWorkspaceStore` delegates to `WorkspaceStore`).
 
-### 5) Config: move from compile-time ID unions → runtime validation
-Right now `AUTH_PROVIDER_ID_LIST` etc are hard-coded union enums.
+Either way: the client talks to one `WorkspaceApi`, and the provider-specific logic stays server-side.
 
-That guarantees you must edit core to add a provider. That’s the opposite of modular.
+---
 
-Phase 1 change (minimal and safe):
-- Change config schema fields `auth.provider`, `sync.provider`, `storage.provider` to `z.string()`.
-- Validate against the runtime registry (server boot) in strict mode:
-  - “selected provider not registered” -> error.
+## How providers plug in (recommended: Nuxt module packages)
 
-Defaults remain as today (clerk/convex). But providers are not compile-time baked.
+### Provider package shape
+Each provider package is a Nuxt module that:
+- adds its own client plugin(s) to register providers
+- adds its own Nitro plugin(s) to register server adapters
+- optionally adds server middleware (auth context) and/or extra server routes
 
-### 6) Admin adapters: stop hardcoding Clerk gateway tokens
-Admin adapters for Convex should not call “getClerkProviderToken”. They should:
-- request “provider token for `<providerId>` with template `<template>`” from `AuthTokenBroker` (server side version)
-- or use a provider-owned gateway auth mechanism.
+Core discovers providers through registries.
 
-This is not optional if you want “swap Clerk”.
+### Nuxt constraint: installed deps don’t run unless included
+Installing a package alone does not make Nuxt execute it. You need either:
+- a Nuxt module entry in `modules: [...]`, or
+- an explicit import from the core build graph
 
-## Phase 2 Design: Extract to Installable Packages
+**Minimal (fine for built-ins):**
+- core `nuxt.config.ts` conditionally includes the known provider modules (Clerk/Convex) based on config.
 
-### Package targets
-- `or3-clerk` (auth provider package)
-  - Nuxt module to add `@clerk/nuxt` only when installed
-  - Nitro middleware for `event.context.auth`
-  - `AuthProvider` registration (`clerkAuthProvider`)
-  - Admin adapter for validating provider config
+**Fully extensible (no core edits for new providers):**
+- add a small build-time “provider discovery” step that generates a static import map from installed `or3-provider-*` packages
+- core uses that generated map to register client/server providers without hardcoding IDs
 
-- `or3-convex` (sync + storage + canonical store package)
-  - Nuxt module to add `convex-nuxt` only when installed
-  - Client registrations:
-    - Sync provider (`createConvexSyncProvider`)
-    - Convex auth bridge (token → `convex.setAuth`)
-    - WorkspaceApi direct implementation (optional)
-  - Server registrations:
-    - `AuthWorkspaceStore` implementation backed by Convex
-    - Admin adapters for sync/storage
+If we don’t do discovery, external providers will still require editing `nuxt.config.ts` to include their module.
 
-### The annoying reality: Convex backend code
-Convex requires a root-level `convex/` project with schema/functions. You can’t “just import it”.
+### Why *not* a “core ProviderLoader that imports providers”
+A core loader that maps `providerId -> import('./providers/convex')` reintroduces coupling:
+- bundlers will still include/resolve those modules
+- missing SDKs still break builds
 
-The clean path:
-- `or3-convex` ships a template directory (e.g. `templates/convex/**`).
-- Provide a generator script:
-  - `bunx or3-convex init` copies templates into the host repo
-  - OR, for monorepos: symlink via Bun workspace tooling.
+Let provider packages self-register instead. If a provider package isn’t installed, it cannot register, and core can fail fast with a clean error message.
 
-This keeps the core app free of Convex files when not installed.
+---
 
-### Nuxt module ownership
-If you want Convex/Clerk to be removable dependencies, core `nuxt.config.ts` must stop referencing their module-specific config keys.
+## Configuration: IDs become strings, validation becomes runtime
 
-In Phase 2:
-- Core app does not set `convex: { ... }` at all.
-- `or3-convex` Nuxt module injects those options and runtime config mapping.
+Current problem:
+- provider IDs are compile-time unions (`z.enum([...])`), which forces core edits for new providers.
 
-Same for Clerk:
-- `or3-clerk` module injects `@clerk/nuxt` and exposes the expected runtime config mapping.
+Fix:
+- `auth.provider`, `sync.provider`, `storage.provider`, etc become `string`
+- strict mode validation happens at boot:
+  - “configured provider missing from registry” ⇒ startup error with instructions
 
-## Error Handling
-- Missing selected provider package:
-  - Strict mode: throw a startup error identifying missing package + provider id.
-  - Non-strict: disable the surface (auth/sync/storage) and surface a warning.
+This is both simpler and more extensible.
 
-- Provider token failures:
-  - Direct providers: fall back to gateway provider if registered.
-  - Gateway-only: return 401/503 depending on configured policy.
+---
 
-## Testing Strategy
+## Implementation plan (phases)
 
-### Unit
-- Provider registry:
-  - selecting provider loads correct package
-  - missing provider fails as expected
-- Config validation:
-  - provider id not in registry triggers strict-mode error
-- WorkspaceApi boundary:
-  - UI calls WorkspaceApi methods without importing provider SDKs
+### Phase 1 (still in this repo): create boundaries + dispatchers
+Goal: core code no longer imports provider SDKs/generated code in auto-included zones.
 
-### Integration
-- SSR auth with clerk installed vs not installed
-- Sync provider direct (convex) vs gateway fallback
-- Admin actions request provider token via broker (no Clerk hardcode)
+Key moves:
+- replace Convex-specific client plugins with provider-agnostic core plugins + provider package plugins
+- refactor Workspace UI to `WorkspaceApi`
+- refactor `server/auth/session.ts` to use `AuthWorkspaceStore`
+- refactor `/api/sync/*` and `/api/storage/*` endpoints to dispatch to adapters
+- introduce server `ProviderTokenBroker` and use it everywhere we currently call `getClerkProviderToken`
+- relocate/remove `_tests` pages that import provider SDKs (or move them into provider packages)
 
-### Build gates
-- Build without `@clerk/nuxt` dependency when auth provider is not clerk
-- Build without Convex dependencies when sync/storage not convex
+### Phase 2: extract to installable packages
+Goal: `package.json` for core no longer depends on `@clerk/nuxt`, `convex-*`, or generated Convex files.
 
-That’s the whole point.
+Recommended packages (names illustrative):
+- `or3-provider-clerk` (auth)
+- `or3-provider-convex` (sync + storage + AuthWorkspaceStore + admin adapters)
+- `or3-provider-localfs` (storage example)
+- `or3-provider-sqlite` (sync + AuthWorkspaceStore example)
+
+---
+
+## Example provider: LocalFS storage (minimal but correct)
+
+**Use-case**: single-node/self-hosted deployments without S3.
+
+### Server-side adapter behavior
+- `presignUpload` returns an internal upload URL like `/api/storage/localfs/upload?token=...`
+- `token` is short-lived (e.g., 60s) and includes:
+  - workspaceId, hash, sizeBytes, mimeType, exp
+  - HMAC signature
+- Upload endpoint validates token + `can(workspace.write)` then streams body to disk:
+  - path: `${DATA_DIR}/or3-storage/${workspaceId}/${hash}`
+- `presignDownload` returns `/api/storage/localfs/download?token=...` with `can(workspace.read)`
+- `commit` is optional; if used, it records metadata (or triggers the existing metadata write path)
+
+Why this fits the existing contract:
+- client already supports “presigned” URLs and optional headers/method
+- LocalFS just uses “presigned internal endpoints” instead of S3 presigned URLs
+
+---
+
+## Example provider: SQLite sync (gateway mode)
+
+**Use-case**: self-hosted, no Convex, no vendor lock-in.
+
+### Minimal server model
+SQLite schema (names illustrative):
+- `users(id, provider, provider_user_id, email, display_name, created_at)`
+- `workspaces(id, name, created_at)`
+- `memberships(user_id, workspace_id, role, created_at)`
+- `change_log(workspace_id, server_version, table_name, pk, op, payload_json, stamp_json, created_at)`
+- `device_cursors(workspace_id, device_id, last_seen_version, updated_at)`
+- `tombstones(workspace_id, table_name, pk, deleted_at, clock, hlc, device_id)` (optional if already encoded in change_log)
+
+Key invariants to keep identical to existing client sync:
+- stable ordering via `server_version` cursor
+- idempotency via `op_id` (unique constraint if stored)
+- wire schema stays snake_case aligned with Dexie sync payloads
+
+### How the gateway adapter maps requests
+- `push`:
+  - validate batch (shared schemas)
+  - for each op: insert into `change_log` and/or apply to materialized tables
+  - return per-op results + new `serverVersion`
+- `pull`:
+  - select from `change_log` where `server_version > cursor`
+  - return up to limit, plus `hasMore`
+- `updateCursor`:
+  - upsert device cursor row
+- `gcChangeLog`:
+  - delete change_log rows older than retention window *and* below the min cursor across devices
+
+### AuthWorkspaceStore on SQLite
+- `getOrCreateUser`: upsert by `(provider, provider_user_id)`
+- `getOrCreateDefaultWorkspace`: create workspace + membership if none
+- `getWorkspaceRole`: look up membership role
+- `listUserWorkspaces`: join memberships/workspaces
+
+Why this is best as an example:
+- no client SDK required (gateway provider already exists)
+- lets us validate that core boundaries are correct
+- gives a clear non-Convex “reference provider” for future backends
+
+---
+
+## Testing strategy (what proves decoupling)
+
+### Build gates (non-negotiable)
+Prove these configurations work:
+- No Clerk deps installed + `auth.provider != clerk`
+- No Convex deps installed + no configured surface selects Convex-backed providers
+
+### Runtime sanity
+- Workspace UI still works through `WorkspaceApi`
+- Sync still runs in gateway mode via `/api/sync/*`
+- Storage queue still works via `/api/storage/*`

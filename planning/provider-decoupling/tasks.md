@@ -1,91 +1,172 @@
 # tasks.md
 
-## Phase 1 — Make it less hardcoded (in-repo refactor)
+This checklist is written so a new intern can implement provider decoupling without guessing.
 
-### 1. Kill compile-time imports in auto-loaded Nuxt plugins/middleware
-- [ ] Replace provider-specific client plugins with thin dispatchers that dynamically import provider packages
-  - Requirements: 2.2, 2.3
-  - [ ] Remove top-level imports of `convex-vue` and `~~/convex/_generated/api` from auto-loaded plugins
-  - [ ] Add a client dispatcher plugin that loads the selected sync provider package at runtime
-  - [ ] Add a client dispatcher plugin that loads the selected auth provider package at runtime
+Key rule:
+- **If a file lives in an auto-included Nuxt zone (`app/pages`, `app/plugins`, `server/api`, `server/middleware`, `server/plugins`), it must not import provider SDKs or provider-generated files.**
 
-- [ ] Gate server middleware/plugin registration by selected auth provider, not just `auth.enabled`
-  - Requirements: 1.1, 2.1
-  - [ ] Update server auth middleware dispatcher so it does not import Clerk when provider != clerk
-  - [ ] Update server plugin registration so it only registers the configured provider’s AuthProvider
+---
 
-### 2. Introduce a minimal provider package loader/registry
-- [ ] Implement a provider loader interface with dynamic imports
-  - Requirements: 1.1, 1.2, 1.3, 2.3
-  - [ ] Map provider IDs → dynamic import functions (initially for clerk/convex)
-  - [ ] Add “isAvailable” checks so missing deps fail fast or soft depending on strict mode
+## Phase 0 — Preflight (prove what’s broken, prevent regressions)
 
-### 3. Make workspace management provider-agnostic
-- [ ] Create a `WorkspaceApi` boundary and refactor WorkspaceManager UI to use it
-  - Requirements: 3.1
-  - [ ] Implement Convex version of WorkspaceApi behind a dynamic import (only when convex is installed)
-  - [ ] Implement gateway/SSR fallback WorkspaceApi (server endpoints) to enable non-Convex providers
-  - [ ] Remove direct Convex usage from `WorkspaceManager.vue`
+### 0.1 Map the current coupling graph (one-time audit)
+- [ ] Enumerate provider imports in core hot zones:
+  - [ ] `app/pages/**` (especially `app/pages/_tests/**`)
+  - [ ] `app/plugins/**`
+  - [ ] `server/api/**`
+  - [ ] `server/middleware/**`
+  - [ ] `server/plugins/**`
+- [ ] Make a list of “provider SDK import strings” to ban in core:
+  - [ ] `@clerk/nuxt`
+  - [ ] `convex`
+  - [ ] `convex-vue`
+  - [ ] `~~/convex/_generated/*`
 
-### 4. Replace Convex-only session provisioning with AuthWorkspaceStore adapter
-- [ ] Implement a server-side registry for `AuthWorkspaceStore` adapters
-  - Requirements: 3.2
-  - [ ] Add `getActiveAuthWorkspaceStore()` resolver based on config
-  - [ ] Implement Convex-backed store adapter (still in-repo for Phase 1)
+### 0.2 Decide what “no Convex build” means (scope alignment)
+- [ ] Confirm config defaults won’t silently select Convex-backed providers for other surfaces:
+  - [ ] limits provider (`limits.storageProvider`)
+  - [ ] background jobs provider (`backgroundJobs.storageProvider`)
+  - [ ] server notifications emitter (currently Convex-only)
 
-- [ ] Refactor server session resolution to call `AuthWorkspaceStore` rather than Convex directly
-  - Requirements: 3.2
-  - [ ] Keep the current provisioning failure modes intact
-  - [ ] Add tests for “missing store adapter” behavior
+If any of the above still select Convex by default, `sync/storage != convex` is not enough to claim “no Convex build”.
 
-### 5. Stop hardcoding Clerk tokens inside Convex admin adapters
-- [ ] Replace `getClerkProviderToken(...)` usage with token broker calls
-  - Requirements: 1.1, 5.1
-  - [ ] Add a server-side token broker interface (or reuse existing patterns) so adapters request tokens by provider id
-  - [ ] Ensure admin actions can authenticate when auth provider is not clerk
+### 0.3 Add guard rails (recommended)
+- [ ] Add a simple script/CI step that fails if core hot zones import banned provider modules.
+  - [ ] Run it in CI and locally before merging provider changes.
 
-### 6. Make provider IDs runtime-extensible
-- [ ] Remove compile-time provider ID unions as the source of truth
-  - Requirements: 4.1
-  - [ ] Change config schema provider fields to `string` and validate using runtime registry in strict mode
-  - [ ] Keep defaults as clerk/convex but do not hardcode lists that block extensions
+---
 
-### 7. Verification gates
-- [ ] Add build/typecheck scenarios that prove decoupling
-  - Requirements: 2.1, 2.2
-  - [ ] Typecheck/build with Clerk removed (auth.provider != clerk)
-  - [ ] Typecheck/build with Convex removed (sync/storage != convex)
+## Phase 1 — Core boundaries + dispatchers (core must not import SDKs)
 
+### 1.1 AuthWorkspaceStore registry (server)
+- [ ] Add an `AuthWorkspaceStore` registry (server) with:
+  - [ ] `registerAuthWorkspaceStore({ id, create })`
+  - [ ] `getAuthWorkspaceStore(id)`
+  - [ ] strict-mode validation for missing configured store
+- [ ] Refactor `server/auth/session.ts` to:
+  - [ ] resolve provider identity via `AuthProvider`
+  - [ ] resolve internal user/workspace via configured `AuthWorkspaceStore`
+  - [ ] keep existing failure modes (`throw` / `unauthenticated` / `service-unavailable`)
 
-## Phase 2 — Extract into installable provider packages
+### 1.2 ProviderTokenBroker (server)
+- [ ] Define a server `ProviderTokenBroker` interface:
+  - [ ] `getProviderToken({ providerId, template? }): Promise<string | null>`
+- [ ] Add a server registry/resolver for the broker keyed by `auth.provider`
+- [ ] Replace all direct Clerk token minting calls in core server code with broker calls.
+  - This includes gateway endpoints and admin adapters.
 
-### 1. Create provider packages (repo or external)
-- [ ] Create `or3-clerk` package
-  - Requirements: 4.1
-  - [ ] Expose Nuxt module that installs/configures `@clerk/nuxt`
-  - [ ] Register server auth provider + middleware
-  - [ ] Provide admin adapter for auth status
+### 1.3 Sync gateway adapter + endpoint dispatch (server)
+- [ ] Introduce a `SyncGatewayAdapter` interface + registry:
+  - [ ] `registerSyncGatewayAdapter({ id, create })` (or `registerSyncGatewayAdapter(adapter)`)
+  - [ ] `getActiveSyncGatewayAdapter()` from config
+- [ ] Refactor core endpoints:
+  - [ ] `server/api/sync/push.post.ts`
+  - [ ] `server/api/sync/pull.post.ts`
+  - [ ] `server/api/sync/update-cursor.post.ts`
+  - [ ] `server/api/sync/gc-*.post.ts`
+  - …so they do **no provider imports** and dispatch to the adapter.
 
-- [ ] Create `or3-convex` package
-  - Requirements: 4.1, 4.2
-  - [ ] Expose Nuxt module that installs/configures `convex-nuxt` and client wiring
-  - [ ] Provide SyncProvider + StorageProvider adapters
-  - [ ] Provide `AuthWorkspaceStore` adapter backed by Convex
-  - [ ] Provide admin adapters for sync/storage
+### 1.4 Storage gateway adapter + endpoint dispatch (server)
+- [ ] Introduce a `StorageGatewayAdapter` interface + registry
+- [ ] Refactor core endpoints:
+  - [ ] `server/api/storage/presign-upload.post.ts`
+  - [ ] `server/api/storage/presign-download.post.ts`
+  - [ ] `server/api/storage/commit.post.ts`
+  - [ ] `server/api/storage/gc/*.post.ts`
+  - …so they do **no provider imports** and dispatch to the adapter.
 
-### 2. Solve Convex backend distribution
-- [ ] Provide an init/generator workflow for Convex backend code
-  - Requirements: 4.2
-  - [ ] Add `bunx or3-convex init` to copy `convex/**` templates into host repo
-  - [ ] Ensure Convex codegen (`convex/_generated/**`) runs in host repo, not inside core OR3 package
+### 1.5 Workspace API boundary (client)
+- [ ] Introduce `WorkspaceApi` interface + `useWorkspaceApi()` resolver
+- [ ] Decide server backing model:
+  - [ ] Extend `AuthWorkspaceStore` for workspace CRUD (recommended), or introduce `WorkspaceStore`
+- [ ] Add SSR endpoints for workspace lifecycle (`/api/workspaces/*`) that call the configured store adapter
+- [ ] Refactor workspace UI component(s) to only use `WorkspaceApi`
+  - [ ] Remove `convex-vue` and `~~/convex/_generated/*` imports from UI
 
-### 3. Remove provider code from core app
-- [ ] Delete/migrate Convex/Clerk provider implementations from core
-  - Requirements: 4.1
-  - [ ] Core app only depends on provider registries + interfaces
-  - [ ] Provider packages self-register via their Nuxt modules
+### 1.6 Client plugin cleanup (remove provider-specific auto-plugins)
+- [ ] Replace `app/plugins/convex-sync.client.ts` with provider-agnostic behavior:
+  - [ ] core sync engine plugin starts/stops based on session/workspace
+  - [ ] core plugin uses `getActiveSyncProvider()` only (registry), no Convex imports
+- [ ] Replace `app/plugins/storage-transfer.client.ts` with provider-agnostic behavior:
+  - [ ] core plugin wires the transfer queue to session/workspace
+  - [ ] core registers a generic “gateway storage provider” that calls `/api/storage/*`
+  - [ ] server dispatch picks the actual backend (`storage.provider`)
+- [ ] Delete or relocate `app/plugins/convex-clerk.client.ts` (provider-owned)
 
-### 4. Documentation
-- [ ] Document how to swap providers (install/uninstall)
-  - Requirements: 1.1, 1.2, 1.3
-  - [ ] Provide a “no Convex” and “no Clerk” setup guide
+### 1.7 Remove/relocate provider-specific dev pages
+- [ ] Move `app/pages/_tests/_test-*.vue` pages that import provider SDKs into provider packages
+  - OR gate them behind a build-time flag and keep them out of `app/pages/**` by default.
+
+### 1.8 Config: provider IDs become runtime-extensible
+- [ ] Replace provider ID unions (`z.enum([...])`) with `string` fields in config schemas.
+- [ ] Add strict-mode startup validation:
+  - [ ] selected provider id must be registered for each enabled surface (auth/sync/storage)
+  - [ ] error message should include “install package X” style guidance
+
+---
+
+## Phase 2 — Provider packages (Nuxt modules; SDKs live here)
+
+This phase is what makes “optional dependencies” actually real.
+
+### 2.1 Create provider packages as Nuxt modules
+
+**Auth: `or3-provider-clerk`**
+- [ ] Nuxt module installs/configures `@clerk/nuxt`
+- [ ] Adds server middleware to populate request auth context
+- [ ] Registers:
+  - [ ] `AuthProvider` implementation (Clerk)
+  - [ ] `ProviderTokenBroker` implementation (Clerk)
+  - [ ] Admin adapter for auth status/config
+
+**Sync/Storage/Canonical store: `or3-provider-convex`**
+- [ ] Nuxt module installs/configures `convex-nuxt` + client wiring
+- [ ] Registers:
+  - [ ] client `SyncProvider` (direct, Convex SDK)
+  - [ ] optional client `WorkspaceApi` (direct or via SSR)
+  - [ ] server `AuthWorkspaceStore` (Convex-backed)
+  - [ ] server `SyncGatewayAdapter` (Convex gateway)
+  - [ ] server `StorageGatewayAdapter` (Convex storage gateway)
+  - [ ] admin adapters for sync/storage maintenance
+
+**Provider inclusion (Nuxt constraint)**
+- [ ] Decide how provider modules are included:
+  - [ ] Minimal: hardcode built-in provider modules (Clerk/Convex) in `nuxt.config.ts` conditionals
+  - [ ] Extensible: add a build-time discovery step that generates a static import map from installed `or3-provider-*` packages (recommended if we want true third-party “install-only” UX)
+
+### 2.2 Convex backend distribution workflow
+- [ ] Provide an init workflow for `convex/**` files:
+  - [ ] `bunx or3-provider-convex init` copies templates into host repo
+  - [ ] Ensure Convex codegen runs in host repo, not core package
+
+### 2.3 Reference/example providers (to prove extensibility)
+
+**Storage: `or3-provider-localfs`**
+- [ ] Implements `StorageGatewayAdapter` using local disk
+- [ ] Adds local upload/download endpoints using short-lived signed tokens
+
+**Sync: `or3-provider-sqlite`**
+- [ ] Implements `SyncGatewayAdapter` using SQLite (gateway mode)
+- [ ] Implements `AuthWorkspaceStore` using the same SQLite DB
+- [ ] (Optional) Provides admin adapter for GC/health checks
+
+### 2.4 Remove provider code from core
+- [ ] Core app no longer contains:
+  - [ ] `convex/**`
+  - [ ] Convex/Clerk-specific plugins, middleware, endpoints, or utils
+  - [ ] provider-only type augmentations (e.g., `server/types/convex-http-client.d.ts`)
+- [ ] Core `package.json` no longer depends on provider SDKs
+
+---
+
+## Phase 3 — Verification gates (prove the requirements)
+
+### 3.1 Build/typecheck matrix (must pass)
+- [ ] No Clerk installed + `auth.provider != clerk` ⇒ `bun run build` + `bun run type-check`
+- [ ] No Convex installed + no Convex-backed surface selected ⇒ `bun run build` + `bun run type-check`
+
+### 3.2 Functional sanity
+- [ ] Workspace UI works through `WorkspaceApi`
+- [ ] Sync works in gateway mode through `/api/sync/*`
+- [ ] Storage works through `/api/storage/*`
+- [ ] Provider token minting works via `ProviderTokenBroker` (no Clerk hardcodes outside provider package)
