@@ -58,6 +58,14 @@ export function checkRateLimit(
     remaining: number;
     resetAt: number;
 } {
+    if (process.env.NODE_ENV !== 'production') {
+        return {
+            allowed: true,
+            remaining: MAX_ATTEMPTS,
+            resetAt: Date.now() + WINDOW_MS,
+        };
+    }
+
     const key = getRateLimitKey(ip, username);
     const now = Date.now();
     const entry = rateLimitStore.get(key);

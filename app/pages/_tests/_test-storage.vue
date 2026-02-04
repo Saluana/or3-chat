@@ -214,7 +214,13 @@ onMounted(() => {
         <div class="card">
             <h2>📤 Upload Test File</h2>
             <p class="help">Select a file to test upload queue and hash-based deduplication</p>
-            <input ref="uploadInput" type="file" style="display: none" @change="handleFileSelect" />
+            <input
+                ref="uploadInput"
+                type="file"
+                data-testid="upload-input"
+                style="display: none"
+                @change="handleFileSelect"
+            />
             <button class="btn" @click="selectFile" :disabled="uploadLoading">
                 {{ uploadLoading ? 'Processing...' : '+ Select File' }}
             </button>

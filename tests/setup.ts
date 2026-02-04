@@ -1,7 +1,19 @@
 import 'fake-indexeddb/auto';
 // Global test setup: mock heavy virtualization lib to avoid jsdom/Bun hangs.
 import { vi } from 'vitest';
-import { defineComponent, h, ref } from 'vue';
+import { defineComponent, h, computed, onMounted, onUnmounted, ref, watch } from 'vue';
+
+// Nuxt macro stub for non-Nuxt Vitest runtime.
+// Many pages call definePageMeta() without an explicit import.
+(globalThis as any).definePageMeta = () => {};
+
+// Nuxt auto-imports Vue composables. Make the common ones available globally so
+// Nuxt pages can mount under plain Vitest + Vite.
+(globalThis as any).ref = ref;
+(globalThis as any).computed = computed;
+(globalThis as any).watch = watch;
+(globalThis as any).onMounted = onMounted;
+(globalThis as any).onUnmounted = onUnmounted;
 
 // Polyfill ResizeObserver for jsdom
 class ResizeObserver {
@@ -229,5 +241,3 @@ vi.mock('or3-scroll', () => {
         Or3Scroll: Base,
     };
 });
-
-

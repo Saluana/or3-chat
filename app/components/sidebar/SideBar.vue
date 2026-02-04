@@ -1,5 +1,5 @@
 <template>
-    <div id="sidebar" class="flex flex-row w-full h-full">
+    <div class="flex flex-row w-full h-full" data-testid="sidebar-inner">
         <SidebarSideNavContentCollapsed
             id="sidebar-content-collapsed"
             :active-thread="props.activeThread"

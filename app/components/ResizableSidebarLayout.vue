@@ -21,6 +21,7 @@
         <!-- Sidebar -->
         <aside
             id="sidebar"
+            data-testid="sidebar"
             :class="[
                 'resizable-sidebar flex z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex-col overflow-x-hidden',
                 'md:relative md:h-full md:shrink-0 md:border-r-[var(--md-border-width)]',

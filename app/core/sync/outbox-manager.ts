@@ -109,6 +109,11 @@ export class OutboxManager {
     async flush(): Promise<boolean> {
         if (this.isFlushing) return false;
 
+        // E2E Test Hook: Allow tests to simulate offline mode (dev only)
+        if (import.meta.dev && (globalThis as { __OR3_TEST_OFFLINE?: boolean }).__OR3_TEST_OFFLINE) {
+            return false;
+        }
+
         // Check circuit breaker before attempting flush
         const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
         if (!circuitBreaker.canRetry()) {

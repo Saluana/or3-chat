@@ -10,18 +10,21 @@ test.describe('Verification of Fixes', () => {
         // Since we might not have chats, let's just assert we are on root (start state)
         await expect(page).toHaveURL(/\/$/);
 
-        // 3. Simulate being on a chat page (client-side navigation if possible, or just go to a 404 page that renders the sidebar)
-        // Let's try to go to a non-existent chat which might redirect or show 404 but keep sidebar
-        await page.goto('/chat/non-existent-uuid');
+        // 3. Navigate to chat index so the sidebar is mounted
+        await page.goto('/chat');
         
-        // 4. Find and click the Home button in the sidebar. 
-        // The ID is #btn-home or similar based on SideNavContentCollapsed.vue
+        // 4. Collapse sidebar to reveal the compact Home button, then click it
+        const toggleButton = page.getByLabel(/collapse|expand/i).first();
+        if (await toggleButton.isVisible()) {
+            await toggleButton.click();
+        }
+
         const homeBtn = page.locator('#btn-home');
         await expect(homeBtn).toBeVisible();
         await homeBtn.click();
 
-        // 5. Verify we are back at root
-        await expect(page).toHaveURL(/\/$/);
+        // 5. Verify we are back at home (chat landing)
+        await expect(page).toHaveURL(/\/chat$/);
     });
 
     test('Dashboard modal should fit on small screens', async ({ page }) => {

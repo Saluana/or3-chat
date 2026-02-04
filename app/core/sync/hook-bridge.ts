@@ -188,8 +188,13 @@ export class HookBridge {
         primKey: unknown,
         payload: unknown
     ): void {
+        // Safe record access pattern - payload can be undefined for delete operations
+        const safePayload = (payload && typeof payload === 'object') 
+            ? payload as Record<string, unknown> 
+            : {};
+        
         const pkField = getPkField(tableName);
-        const pk = String(primKey ?? (payload as Record<string, unknown>)[pkField] ?? '');
+        const pk = String(primKey ?? safePayload[pkField] ?? '');
 
         // Strict PK check: don't capture if PK is empty (garbage)
         if (!pk) {
@@ -201,7 +206,7 @@ export class HookBridge {
 
         // Filter out blocked KV keys (large caches, secrets, device-local data)
         if (tableName === 'kv') {
-            const kvName = (payload as { name?: string }).name ?? pk.replace('kv:', '');
+            const kvName = (safePayload.name as string | undefined) ?? pk.replace('kv:', '');
 
             // Allow plugins to extend the blocklist (untyped hook, use raw engine)
             const blocklist = useHooks()._engine.applyFiltersSync(
@@ -217,14 +222,13 @@ export class HookBridge {
         // Skip messages that are still streaming (pending: true)
         // This avoids race conditions and reduces bandwidth - only sync finalized messages
         if (tableName === 'messages' && operation === 'put') {
-            const msg = payload as { pending?: boolean };
-            if (msg.pending === true) {
+            if (safePayload.pending === true) {
                 return; // Skip intermediate streaming updates, wait for finalization
             }
         }
 
         const hlc = generateHLC();
-        const baseClock = (payload as { clock?: number }).clock ?? 0;
+        const baseClock = (typeof safePayload.clock === 'number') ? safePayload.clock : 0;
         const stamp: ChangeStamp = {
             deviceId: this.deviceId,
             opId: crypto.randomUUID(),
@@ -236,7 +240,7 @@ export class HookBridge {
         markRecentOpId(stamp.opId);
 
         // Auto-generate order_key for messages if missing
-        if (tableName === 'messages' && operation === 'put') {
+        if (tableName === 'messages' && operation === 'put' && payload) {
             const msg = payload as { order_key?: string };
             if (!msg.order_key) {
                 msg.order_key = hlcToOrderKey(hlc);
@@ -245,6 +249,7 @@ export class HookBridge {
 
         // Use shared sanitization logic
         const payloadForSync = sanitizePayloadForSync(tableName, payload, operation);
+
 
         const pendingOp: PendingOp = {
             id: crypto.randomUUID(),

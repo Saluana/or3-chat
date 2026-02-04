@@ -300,6 +300,12 @@ export default defineNuxtPlugin(async () => {
         start: startSyncEngine,
         stop: stopSyncEngine,
         isRunning: () => engineState !== null,
+        flush: async () => {
+            if (engineState?.outboxManager) {
+                return engineState.outboxManager.flush();
+            }
+            return false;
+        },
     });
 
     // Handle HMR cleanup

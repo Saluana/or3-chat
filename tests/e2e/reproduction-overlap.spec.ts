@@ -9,7 +9,7 @@ test.describe('Sidebar Overlap Reproduction', () => {
         // 1. Identify Sidebar and Chat Container
         // Sidebar usu. has id="sidebar" or class "sidebar"
         // Chat container usu. has class "chat-container" or similar
-        const sidebar = page.locator('#sidebar');
+        const sidebar = page.getByTestId('sidebar');
         const chatContainer = page.locator('main'); // Assuming main is used, or we find a large container
 
         await expect(sidebar).toBeVisible();

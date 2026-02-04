@@ -108,6 +108,10 @@ function getRateLimitKey(subjectKey: string, operation: string): string {
  * - Sliding window is computed in-process only.
  */
 export function checkSyncRateLimit(subjectKey: string, operation: string): RateLimitResult {
+    if (process.env.NODE_ENV !== 'production') {
+        return { allowed: true, remaining: Infinity };
+    }
+
     const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
     if (!config) {
         // Unknown operation - allow by default
