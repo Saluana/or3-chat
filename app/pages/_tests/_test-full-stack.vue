@@ -274,6 +274,10 @@ watch(identity, () => {
                     🔐 Auth Test
                     <span class="desc">Test Clerk + session API</span>
                 </NuxtLink>
+                <NuxtLink to="/_tests/_test-auth-e2e" class="quick-link">
+                    🧪 Auth E2E Test
+                    <span class="desc">Admin login + session checks</span>
+                </NuxtLink>
                 <NuxtLink to="/_tests/_test-sync" class="quick-link">
                     🔄 Sync Test
                     <span class="desc">Test outbox + conflicts</span>
