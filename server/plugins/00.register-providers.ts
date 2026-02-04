@@ -32,4 +32,18 @@ export default defineNitroPlugin(() => {
     } catch (error) {
         console.error('[providers] Failed to register Convex AuthWorkspaceStore:', error);
     }
+
+    // Register Convex SyncGatewayAdapter (temporary - will move to provider package)
+    try {
+        const { registerSyncGatewayAdapter } = require('~/server/sync/gateway/registry');
+        const { createConvexSyncGatewayAdapter } = require('~/server/sync/gateway/impls/convex-sync-gateway-adapter');
+        
+        registerSyncGatewayAdapter({
+            id: 'convex',
+            order: 100,
+            create: createConvexSyncGatewayAdapter,
+        });
+    } catch (error) {
+        console.error('[providers] Failed to register Convex SyncGatewayAdapter:', error);
+    }
 });

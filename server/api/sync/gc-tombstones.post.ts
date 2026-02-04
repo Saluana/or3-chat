@@ -11,10 +11,7 @@ import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
-import { api } from '~~/convex/_generated/api';
-import type { Id } from '~~/convex/_generated/dataModel';
-import { getClerkProviderToken, getConvexGatewayClient } from '../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
 
 const GcRequestSchema = z.object({
     scope: SyncScopeSchema,
@@ -28,7 +25,7 @@ const GcRequestSchema = z.object({
  * Forget about deleted items after X time.
  *
  * Behavior:
- * - Proxies `api.sync.gcTombstones`.
+ * - Dispatches to registered SyncGatewayAdapter.
  * - Requires `workspace.write` permissions.
  *
  * Impact:
@@ -51,16 +48,19 @@ export default defineEventHandler(async (event) => {
         id: parsed.data.scope.workspaceId,
     });
 
-    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
-    if (!token) {
-        throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+    // Get sync gateway adapter from registry
+    const adapter = getActiveSyncGatewayAdapter();
+    if (!adapter) {
+        throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
     }
 
-    const client = getConvexGatewayClient(event, token);
-    const result = await client.mutation(api.sync.gcTombstones, {
-        workspace_id: parsed.data.scope.workspaceId as Id<'workspaces'>,
-        retention_seconds: parsed.data.retentionSeconds,
-    });
+    // Check if adapter supports GC tombstones
+    if (!adapter.gcTombstones) {
+        throw createError({ statusCode: 501, statusMessage: 'GC tombstones not supported by adapter' });
+    }
+
+    // Dispatch to adapter
+    const result = await adapter.gcTombstones(event, parsed.data);
 
     return result;
 });

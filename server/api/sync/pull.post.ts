@@ -7,7 +7,7 @@
  * Responsibilities:
  * - Authorizes access (`workspace.read`).
  * - Enforces rate limits (`sync:pull`).
- * - Proxies request to backend (`api.sync.pull`).
+ * - Dispatches to registered SyncGatewayAdapter.
  * - Returns changes + new global cursor (server version).
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
@@ -16,10 +16,7 @@ import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
-import { api } from '~~/convex/_generated/api';
-import type { Id } from '~~/convex/_generated/dataModel';
-import { getClerkProviderToken, getConvexGatewayClient } from '../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
 import {
     checkSyncRateLimit,
     recordSyncRequest,
@@ -35,7 +32,7 @@ import {
  * Behavior:
  * 1. Validates schema and permissions.
  * 2. Checks token bucket rate limiter.
- * 3. Fetches changes via Convex.
+ * 3. Fetches changes via registered SyncGatewayAdapter.
  *
  * Security:
  * - Leaking change logs leaks data; strictly gated by `workspace.read`.
@@ -62,7 +59,6 @@ export default defineEventHandler(async (event) => {
     });
 
     // Rate limiting (per-user)
-    const retryAfterDefaultMs = 1000;
     const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:pull');
     if (!rateLimitResult.allowed) {
         const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
@@ -80,18 +76,14 @@ export default defineEventHandler(async (event) => {
         setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
     }
 
-    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
-    if (!token) {
-        throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+    // Get sync gateway adapter from registry
+    const adapter = getActiveSyncGatewayAdapter();
+    if (!adapter) {
+        throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
     }
 
-    const client = getConvexGatewayClient(event, token);
-    const result = await client.query(api.sync.pull, {
-        workspace_id: parsed.data.scope.workspaceId as Id<'workspaces'>,
-        cursor: parsed.data.cursor,
-        limit: parsed.data.limit,
-        tables: parsed.data.tables,
-    });
+    // Dispatch to adapter
+    const result = await adapter.pull(event, parsed.data);
 
     // Record successful request for rate limiting
     recordSyncRequest(session.user.id, 'sync:pull');

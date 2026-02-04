@@ -8,7 +8,7 @@
  * - Validates payload structure against shared schemas (ensures snake_case/camelCase drift is handled).
  * - Authorizes write access (`workspace.write`).
  * - Enforces rate limits (`sync:push`).
- * - Proxies to backend (`api.sync.push`).
+ * - Dispatches to registered SyncGatewayAdapter.
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { PushBatchSchema, TABLE_PAYLOAD_SCHEMAS } from '~~/shared/sync/schemas';
@@ -17,10 +17,7 @@ import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
-import { api } from '~~/convex/_generated/api';
-import type { Id } from '~~/convex/_generated/dataModel';
-import { getClerkProviderToken, getConvexGatewayClient } from '../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
 import {
     checkSyncRateLimit,
     recordSyncRequest,
@@ -37,7 +34,7 @@ import {
  * 1. Validates each operation's payload schema (e.g. `MessageSchema`).
  * 2. Authenticates user.
  * 3. Rate limits.
- * 4. Proxies to Convex mutation.
+ * 4. Dispatches to registered SyncGatewayAdapter.
  *
  * Constraints:
  * - Atomic-ish: If one op fails validation here, the whole batch is rejected (400).
@@ -83,7 +80,6 @@ export default defineEventHandler(async (event) => {
     });
 
     // Rate limiting (per-user)
-    const retryAfterDefaultMs = 1000;
     const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:push');
     if (!rateLimitResult.allowed) {
         const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
@@ -101,25 +97,14 @@ export default defineEventHandler(async (event) => {
         setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
     }
 
-    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
-    if (!token) {
-        throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+    // Get sync gateway adapter from registry
+    const adapter = getActiveSyncGatewayAdapter();
+    if (!adapter) {
+        throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
     }
 
-    const client = getConvexGatewayClient(event, token);
-    const result = await client.mutation(api.sync.push, {
-        workspace_id: parsed.data.scope.workspaceId as Id<'workspaces'>,
-        ops: parsed.data.ops.map((op) => ({
-            op_id: op.stamp.opId,
-            table_name: op.tableName,
-            operation: op.operation,
-            pk: op.pk,
-            payload: op.payload,
-            clock: op.stamp.clock,
-            hlc: op.stamp.hlc,
-            device_id: op.stamp.deviceId,
-        })),
-    });
+    // Dispatch to adapter
+    const result = await adapter.push(event, parsed.data);
 
     // Record successful request for rate limiting
     recordSyncRequest(session.user.id, 'sync:push');

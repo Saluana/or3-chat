@@ -1,0 +1,135 @@
+/**
+ * @module server/sync/gateway/impls/convex-sync-gateway-adapter.ts
+ *
+ * Purpose:
+ * Convex implementation of SyncGatewayAdapter. This is a TEMPORARY location.
+ * This implementation will be moved to the or3-provider-convex package in Phase 3.
+ *
+ * Current Status:
+ * - Lives in core to maintain existing behavior during refactoring
+ * - Will be deleted from core once provider package is created
+ *
+ * DO NOT import this file directly. Use getActiveSyncGatewayAdapter() instead.
+ */
+import type { H3Event } from 'h3';
+import { createError } from 'h3';
+import type { SyncGatewayAdapter } from '../types';
+import type {
+    PullRequest,
+    PullResponse,
+    PushBatch,
+    PushResult,
+} from '~~/shared/sync/types';
+import type { Id } from '~~/convex/_generated/dataModel';
+import { api } from '~~/convex/_generated/api';
+import { getClerkProviderToken, getConvexGatewayClient } from '~/server/utils/sync/convex-gateway';
+import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+
+/**
+ * Convex-backed SyncGatewayAdapter implementation.
+ *
+ * Implementation:
+ * - Uses Convex HTTP client for server-side queries/mutations
+ * - Calls api.sync.pull/push/etc
+ * - Maps types between gateway interface and Convex API
+ */
+export class ConvexSyncGatewayAdapter implements SyncGatewayAdapter {
+    id = 'convex';
+
+    async pull(event: H3Event, input: PullRequest): Promise<PullResponse> {
+        const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
+        if (!token) {
+            throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+        }
+
+        const client = getConvexGatewayClient(event, token);
+        const result = await client.query(api.sync.pull, {
+            workspace_id: input.scope.workspaceId as Id<'workspaces'>,
+            cursor: input.cursor,
+            limit: input.limit,
+            tables: input.tables,
+        });
+
+        return result;
+    }
+
+    async push(event: H3Event, input: PushBatch): Promise<PushResult> {
+        const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
+        if (!token) {
+            throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+        }
+
+        const client = getConvexGatewayClient(event, token);
+        const result = await client.mutation(api.sync.push, {
+            workspace_id: input.scope.workspaceId as Id<'workspaces'>,
+            ops: input.ops.map((op) => ({
+                op_id: op.stamp.opId,
+                table_name: op.tableName,
+                operation: op.operation,
+                pk: op.pk,
+                payload: op.payload,
+                clock: op.stamp.clock,
+                hlc: op.stamp.hlc,
+                device_id: op.stamp.deviceId,
+            })),
+        });
+
+        return result;
+    }
+
+    async updateCursor(
+        event: H3Event,
+        input: { scope: { workspaceId: string }; deviceId: string; version: number }
+    ): Promise<void> {
+        const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
+        if (!token) {
+            throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+        }
+
+        const client = getConvexGatewayClient(event, token);
+        await client.mutation(api.sync.updateDeviceCursor, {
+            workspace_id: input.scope.workspaceId as Id<'workspaces'>,
+            device_id: input.deviceId,
+            last_seen_version: input.version,
+        });
+    }
+
+    async gcTombstones(
+        event: H3Event,
+        input: { scope: { workspaceId: string }; retentionSeconds: number }
+    ): Promise<void> {
+        const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
+        if (!token) {
+            throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+        }
+
+        const client = getConvexGatewayClient(event, token);
+        await client.mutation(api.sync.gcTombstones, {
+            workspace_id: input.scope.workspaceId as Id<'workspaces'>,
+            retention_seconds: input.retentionSeconds,
+        });
+    }
+
+    async gcChangeLog(
+        event: H3Event,
+        input: { scope: { workspaceId: string }; retentionSeconds: number }
+    ): Promise<void> {
+        const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
+        if (!token) {
+            throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+        }
+
+        const client = getConvexGatewayClient(event, token);
+        await client.mutation(api.sync.gcChangeLog, {
+            workspace_id: input.scope.workspaceId as Id<'workspaces'>,
+            retention_seconds: input.retentionSeconds,
+        });
+    }
+}
+
+/**
+ * Factory function for creating Convex SyncGatewayAdapter instances.
+ */
+export function createConvexSyncGatewayAdapter(): SyncGatewayAdapter {
+    return new ConvexSyncGatewayAdapter();
+}
