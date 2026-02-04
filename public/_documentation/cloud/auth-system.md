@@ -24,7 +24,7 @@ The client app uses composables to manage this state:
 
 *   **`useSessionContext`**: Fetches the resolved session from the server (SSR-safe).
 *   **`useSession`**: Provides reactive "Is Signed In" state and User ID.
-*   **`convex-clerk.client.ts`**: A plugin that bridges Clerk and Convex. it watches the Clerk session and pushes the JWT to the Convex client (`convex.setAuth`), enabling RLS (Row Level Security) on the backend.
+*   **`or3-provider-convex` module**: Registers the Convex auth bridge plugin at build time. It watches the Clerk session and pushes the JWT to the Convex client (`convex.setAuth`), enabling RLS (Row Level Security) on the backend.
 
 ### 3. LLM Authorization (OpenRouter)
 

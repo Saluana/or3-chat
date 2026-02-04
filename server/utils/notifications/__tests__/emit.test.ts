@@ -5,31 +5,16 @@
  * Validate server notification emission helpers.
  *
  * Behavior:
- * - Emits completion and error notifications through Convex client.
- * - Throws when Convex URL configuration is missing.
+ * - Emits completion and error notifications through the registered emitter.
+ * - Throws when the emitter is missing.
  *
  * Non-Goals:
  * - Integration with realtime delivery or subscriptions.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import {
-    emitBackgroundJobComplete,
-    emitBackgroundJobError,
-} from '../emit';
-
-const mutationMock = vi.hoisted(() => vi.fn().mockResolvedValue('notif-1'));
-const ConvexHttpClientMock = vi.hoisted(() =>
-    vi.fn(() => ({ mutation: mutationMock }))
-);
-
-vi.mock('convex/browser', () => ({
-    ConvexHttpClient: ConvexHttpClientMock,
-}));
-
-vi.mock('~~/convex/_generated/api', () => ({
-    api: { notifications: { create: 'notifications.create' } },
-}));
+import { emitBackgroundJobComplete, emitBackgroundJobError } from '../emit';
+import { registerNotificationEmitter, _resetNotificationEmitters } from '../registry';
 
 const mocks = vi.hoisted(() => ({
     config: { sync: { convexUrl: 'https://convex.test' } } as any
@@ -41,20 +26,30 @@ vi.mock('#imports', () => ({
 
 describe('notification emit helpers', () => {
     beforeEach(() => {
-        mutationMock.mockClear();
-        ConvexHttpClientMock.mockClear();
-        mocks.config = { sync: { convexUrl: 'https://convex.test' } };
+        mocks.config = { sync: { provider: 'convex' } };
+        _resetNotificationEmitters();
     });
 
-    it('throws when convex url is missing', async () => {
-        mocks.config = { sync: {} };
+    it('throws when emitter is missing', async () => {
+        mocks.config = { sync: { provider: 'missing' } };
 
         await expect(
             emitBackgroundJobComplete('ws-1', 'user-1', 'thread-1', 'job-1')
-        ).rejects.toThrow('CONVEX_URL is not defined in runtime config');
+        ).rejects.toThrow('No emitter registered');
     });
 
     it('emits background completion notifications', async () => {
+        const emitComplete = vi.fn().mockResolvedValue('notif-1');
+        const emitError = vi.fn();
+        registerNotificationEmitter({
+            id: 'convex',
+            create: () => ({
+                id: 'convex',
+                emitBackgroundJobComplete: emitComplete,
+                emitBackgroundJobError: emitError,
+            }),
+        });
+
         const result = await emitBackgroundJobComplete(
             'ws-1',
             'user-1',
@@ -63,17 +58,26 @@ describe('notification emit helpers', () => {
         );
 
         expect(result).toBe('notif-1');
-        expect(mutationMock).toHaveBeenCalledWith('notifications.create', {
-            workspace_id: 'ws-1',
-            user_id: 'user-1',
-            thread_id: 'thread-1',
-            type: 'ai.background.complete',
-            title: 'Background response completed',
-            body: 'Your background AI response is ready in thread thread-1',
+        expect(emitComplete).toHaveBeenCalledWith({
+            workspaceId: 'ws-1',
+            userId: 'user-1',
+            threadId: 'thread-1',
+            jobId: 'job-1',
         });
     });
 
     it('emits background error notifications', async () => {
+        const emitComplete = vi.fn();
+        const emitError = vi.fn().mockResolvedValue('notif-1');
+        registerNotificationEmitter({
+            id: 'convex',
+            create: () => ({
+                id: 'convex',
+                emitBackgroundJobComplete: emitComplete,
+                emitBackgroundJobError: emitError,
+            }),
+        });
+
         const result = await emitBackgroundJobError(
             'ws-1',
             'user-1',
@@ -83,13 +87,12 @@ describe('notification emit helpers', () => {
         );
 
         expect(result).toBe('notif-1');
-        expect(mutationMock).toHaveBeenCalledWith('notifications.create', {
-            workspace_id: 'ws-1',
-            user_id: 'user-1',
-            thread_id: 'thread-2',
-            type: 'ai.background.error',
-            title: 'Background response failed',
-            body: 'Failed: boom',
+        expect(emitError).toHaveBeenCalledWith({
+            workspaceId: 'ws-1',
+            userId: 'user-1',
+            threadId: 'thread-2',
+            jobId: 'job-2',
+            error: 'boom',
         });
     });
 });

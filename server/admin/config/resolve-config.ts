@@ -29,11 +29,6 @@ import {
     DEFAULT_STORAGE_PROVIDER_ID,
     DEFAULT_SYNC_PROVIDER_ID,
     LIMITS_PROVIDER_IDS,
-    type AuthProviderId,
-    type BackgroundProviderId,
-    type LimitsProviderId,
-    type StorageProviderId,
-    type SyncProviderId,
 } from '~~/shared/cloud/provider-ids';
 import {
     DEFAULT_SITE_NAME,
@@ -169,7 +164,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
     const config: Or3CloudConfig = {
         auth: {
             enabled: authEnabled,
-            provider: (env.AUTH_PROVIDER ?? AUTH_PROVIDER_IDS.clerk) as AuthProviderId,
+            provider: env.AUTH_PROVIDER ?? AUTH_PROVIDER_IDS.clerk,
             clerk: {
                 publishableKey: env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY || undefined,
                 secretKey: env.NUXT_CLERK_SECRET_KEY || undefined,
@@ -177,7 +172,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
         },
         sync: {
             enabled: syncEnabled,
-            provider: (env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) as SyncProviderId,
+            provider: env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID,
             convex: {
                 url: env.VITE_CONVEX_URL || undefined,
                 adminKey: env.CONVEX_SELF_HOSTED_ADMIN_KEY || undefined,
@@ -185,7 +180,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
         },
         storage: {
             enabled: storageEnabled,
-            provider: (env.NUXT_PUBLIC_STORAGE_PROVIDER ?? DEFAULT_STORAGE_PROVIDER_ID) as StorageProviderId,
+            provider: env.NUXT_PUBLIC_STORAGE_PROVIDER ?? DEFAULT_STORAGE_PROVIDER_ID,
         },
         services: {
             llm: {
@@ -203,8 +198,9 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
             requestsPerMinute: envNum(env.OR3_REQUESTS_PER_MINUTE, DEFAULT_REQUESTS_PER_MINUTE) ?? DEFAULT_REQUESTS_PER_MINUTE,
             maxConversations: envNum(env.OR3_MAX_CONVERSATIONS, DEFAULT_MAX_CONVERSATIONS) ?? DEFAULT_MAX_CONVERSATIONS,
             maxMessagesPerDay: envNum(env.OR3_MAX_MESSAGES_PER_DAY, DEFAULT_MAX_MESSAGES_PER_DAY) ?? DEFAULT_MAX_MESSAGES_PER_DAY,
-            storageProvider: (env.OR3_LIMITS_STORAGE_PROVIDER ??
-                (syncEnabled ? LIMITS_PROVIDER_IDS.convex : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
+            storageProvider:
+                env.OR3_LIMITS_STORAGE_PROVIDER ??
+                (syncEnabled ? LIMITS_PROVIDER_IDS.convex : LIMITS_PROVIDER_IDS.memory),
         },
         security: {
             allowedOrigins: env.OR3_ALLOWED_ORIGINS
@@ -238,8 +234,9 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
         },
         backgroundStreaming: {
             enabled: env.OR3_BACKGROUND_STREAMING_ENABLED === 'true',
-            storageProvider: (env.OR3_BACKGROUND_STREAMING_PROVIDER ??
-                (syncEnabled ? BACKGROUND_PROVIDER_IDS.convex : DEFAULT_BACKGROUND_PROVIDER_ID)) as BackgroundProviderId,
+            storageProvider:
+                env.OR3_BACKGROUND_STREAMING_PROVIDER ??
+                (syncEnabled ? BACKGROUND_PROVIDER_IDS.convex : DEFAULT_BACKGROUND_PROVIDER_ID),
             maxConcurrentJobs: envNum(env.OR3_BACKGROUND_MAX_JOBS, DEFAULT_BACKGROUND_MAX_JOBS) ?? DEFAULT_BACKGROUND_MAX_JOBS,
             jobTimeoutSeconds: envNum(env.OR3_BACKGROUND_JOB_TIMEOUT, DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS) ?? DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
         },

@@ -28,8 +28,8 @@ import { getAuthProvider } from './registry';
 import { useRuntimeConfig } from '#imports';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
 import { recordSessionResolution, recordProviderError } from './metrics';
-import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { getDeploymentAdminChecker } from './deployment-admin';
+import { getAuthWorkspaceStore } from './store/registry';
 
 const SESSION_CONTEXT_KEY_PREFIX = '__or3_session_context_';
 const REQUEST_ID_KEY = '__or3_request_id';
@@ -69,7 +69,7 @@ export async function resolveSessionContext(
 
     // Get provider from config for cache key
     const config = useRuntimeConfig();
-    const providerId = config.auth.provider || CLERK_PROVIDER_ID;
+    const providerId = config.auth.provider || 'clerk';
     const cacheKey = `${SESSION_CONTEXT_KEY_PREFIX}${requestId}_${providerId}`;
 
     // Check cache first
@@ -122,28 +122,30 @@ export async function resolveSessionContext(
         return nullSession;
     }
 
-    // Map provider session to internal user/workspace via the configured sync provider
-    // TODO: Abstract this into a provider-agnostic SessionStore interface
+    // Map provider session to internal user/workspace via the configured store adapter
     try {
-        // For now, we use Convex directly as it's the only supported sync provider
-        // When adding new providers, this should be abstracted similar to AuthProvider
-        const { getConvexClient } = await import('../utils/convex-client');
-        const { api } = await import('~~/convex/_generated/api');
-        const convex = getConvexClient();
+        const storeId = config.sync.provider;
+        const store = storeId ? getAuthWorkspaceStore(storeId, event) : null;
 
-        const resolved = await convex.query(api.workspaces.resolveSession, {
+        if (!store) {
+            throw new Error(
+                `[auth:session] AuthWorkspaceStore not registered for "${storeId}"`
+            );
+        }
+
+        const { userId } = await store.getOrCreateUser({
             provider: providerSession.provider,
-            provider_user_id: providerSession.user.id,
+            providerUserId: providerSession.user.id,
+            email: providerSession.user.email,
+            displayName: providerSession.user.displayName,
         });
 
-        const workspaceInfo =
-            resolved ??
-            (await convex.mutation(api.workspaces.ensure, {
-                provider: providerSession.provider,
-                provider_user_id: providerSession.user.id,
-                email: providerSession.user.email,
-                name: providerSession.user.displayName,
-            }));
+        const { workspaceId } = await store.getOrCreateDefaultWorkspace(userId);
+        const role = await store.getWorkspaceRole({
+            userId,
+            workspaceId,
+        });
+        const workspace = await store.getWorkspace({ workspaceId });
 
         // Check if user has deployment admin access using the provider-agnostic checker
         const adminChecker = getDeploymentAdminChecker(event);
@@ -161,11 +163,8 @@ export async function resolveSessionContext(
                 email: providerSession.user.email,
                 displayName: providerSession.user.displayName,
             },
-            workspace: {
-                id: workspaceInfo.id,
-                name: workspaceInfo.name,
-            },
-            role: workspaceInfo.role,
+            workspace: workspace ?? { id: workspaceId, name: 'Workspace' },
+            role,
             expiresAt: providerSession.expiresAt.toISOString(),
             deploymentAdmin,
         };

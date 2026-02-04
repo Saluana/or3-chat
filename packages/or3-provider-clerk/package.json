@@ -1,0 +1,9 @@
+{
+  "name": "or3-provider-clerk",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/module.ts",
+  "dependencies": {
+    "@clerk/nuxt": "^1.13.12"
+  }
+}

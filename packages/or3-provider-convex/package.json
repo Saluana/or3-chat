@@ -1,0 +1,11 @@
+{
+  "name": "or3-provider-convex",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/module.ts",
+  "dependencies": {
+    "convex": "^1.31.3",
+    "convex-nuxt": "0.1.5",
+    "convex-vue": "^0.1.4"
+  }
+}

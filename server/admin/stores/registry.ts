@@ -23,13 +23,29 @@ import type {
     AdminUserStore,
     AdminStoreCapabilities,
 } from './types';
-import {
-    createConvexWorkspaceAccessStore,
-    createConvexWorkspaceSettingsStore,
-    createConvexAdminUserStore,
-} from './convex/convex-store';
-import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { useRuntimeConfig } from '#imports';
+
+export interface AdminStoreProvider {
+    id: string;
+    createWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore;
+    createWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStore;
+    createAdminUserStore(event: H3Event): AdminUserStore;
+    capabilities: AdminStoreCapabilities;
+}
+
+const providers = new Map<string, AdminStoreProvider>();
+
+export function registerAdminStoreProvider(provider: AdminStoreProvider): void {
+    if (import.meta.dev && providers.has(provider.id)) {
+        console.warn(`[admin:stores] Replacing provider: ${provider.id}`);
+    }
+    providers.set(provider.id, provider);
+}
+
+function getProvider(id: string | undefined): AdminStoreProvider | null {
+    if (!id) return null;
+    return providers.get(id) ?? null;
+}
 
 let cachedCapabilities: AdminStoreCapabilities | null = null;
 let cachedProviderId: string | null = null;
@@ -46,9 +62,8 @@ export function getWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore {
     const config = useRuntimeConfig(event);
     const provider = config.sync.provider;
 
-    if (provider === CONVEX_PROVIDER_ID) {
-        return createConvexWorkspaceAccessStore(event);
-    }
+    const resolved = getProvider(provider);
+    if (resolved) return resolved.createWorkspaceAccessStore(event);
 
     throw createError({
         statusCode: 501,
@@ -66,9 +81,8 @@ export function getWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStor
     const config = useRuntimeConfig(event);
     const provider = config.sync.provider;
 
-    if (provider === CONVEX_PROVIDER_ID) {
-        return createConvexWorkspaceSettingsStore(event);
-    }
+    const resolved = getProvider(provider);
+    if (resolved) return resolved.createWorkspaceSettingsStore(event);
 
     throw createError({
         statusCode: 501,
@@ -86,9 +100,8 @@ export function getAdminUserStore(event: H3Event): AdminUserStore {
     const config = useRuntimeConfig(event);
     const provider = config.sync.provider;
 
-    if (provider === CONVEX_PROVIDER_ID) {
-        return createConvexAdminUserStore(event);
-    }
+    const resolved = getProvider(provider);
+    if (resolved) return resolved.createAdminUserStore(event);
 
     throw createError({
         statusCode: 501,
@@ -128,25 +141,17 @@ export function getAdminStoreCapabilities(event?: H3Event): AdminStoreCapabiliti
 function getCapabilitiesForProvider(
     provider: string | undefined
 ): AdminStoreCapabilities {
-    switch (provider) {
-        case CONVEX_PROVIDER_ID:
-            return {
-                supportsServerSideAdmin: true,
-                supportsUserSearch: true,
-                supportsWorkspaceList: true,
-                supportsWorkspaceManagement: true,
-                supportsDeploymentAdminGrants: true,
-            };
-        default:
-            // Unknown provider - minimal capabilities
-            return {
-                supportsServerSideAdmin: false,
-                supportsUserSearch: false,
-                supportsWorkspaceList: false,
-                supportsWorkspaceManagement: false,
-                supportsDeploymentAdminGrants: false,
-            };
+    const resolved = getProvider(provider);
+    if (resolved) {
+        return resolved.capabilities;
     }
+    return {
+        supportsServerSideAdmin: false,
+        supportsUserSearch: false,
+        supportsWorkspaceList: false,
+        supportsWorkspaceManagement: false,
+        supportsDeploymentAdminGrants: false,
+    };
 }
 
 /**

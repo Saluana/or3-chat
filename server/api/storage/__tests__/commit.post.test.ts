@@ -44,17 +44,11 @@ vi.mock('../../../utils/sync/rate-limiter', () => ({
     recordSyncRequest: (...args: unknown[]) => recordSyncRequestMock(...args),
 }));
 
-vi.mock('../../../utils/sync/convex-gateway', () => ({
-    getClerkProviderToken: vi.fn().mockResolvedValue('token'),
-    getConvexGatewayClient: () => ({ mutation: vi.fn().mockResolvedValue(null) }),
-}));
-
-vi.mock('~~/convex/_generated/api', () => ({
-    api: {
-        storage: {
-            commitUpload: 'storage.commitUpload',
-        },
-    },
+const commitMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../../storage/gateway/resolve', () => ({
+    getActiveStorageGatewayAdapterOrThrow: () => ({
+        commit: commitMock,
+    }),
 }));
 
 vi.mock('../../../utils/storage/metrics', () => ({
@@ -71,6 +65,7 @@ describe('POST /api/storage/commit rate limiting', () => {
         setResponseHeaderMock.mockReset();
         checkSyncRateLimitMock.mockReset();
         recordSyncRequestMock.mockReset();
+        commitMock.mockReset();
     });
 
     it('returns 429 when rate limit is exceeded', async () => {

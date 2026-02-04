@@ -15,13 +15,7 @@ import { resolveSessionContext } from '../../../auth/session';
 import { requireCan } from '../../../auth/can';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../../utils/storage/is-storage-enabled';
-import { api } from '~~/convex/_generated/api';
-import type { Id } from '~~/convex/_generated/dataModel';
-import {
-    getClerkProviderToken,
-    getConvexGatewayClient,
-} from '../../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+import { getActiveStorageGatewayAdapterOrThrow } from '../../../storage/gateway/resolve';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -87,18 +81,14 @@ export default defineEventHandler(async (event) => {
     }
     recordGcRun(body.data.workspace_id, now);
 
-    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
-    if (!token) {
-        throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
-    }
-
-    const client = getConvexGatewayClient(event, token);
     const retentionSeconds = body.data.retention_seconds ?? 30 * 24 * 3600;
-    const result = await client.mutation(api.storage.gcDeletedFiles, {
-        workspace_id: body.data.workspace_id as Id<'workspaces'>,
-        retention_seconds: retentionSeconds,
-        limit: body.data.limit,
+    const adapter = getActiveStorageGatewayAdapterOrThrow();
+    if (!adapter.gc) {
+        return { deleted_count: 0 };
+    }
+    const result = await adapter.gc(event, {
+        retentionSeconds,
     });
 
-    return { deleted_count: result.deletedCount };
+    return { deleted_count: (result as { deletedCount?: number })?.deletedCount ?? 0 };
 });

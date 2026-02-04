@@ -28,41 +28,38 @@ export const BACKGROUND_PROVIDER_IDS = {
     redis: 'redis',
 } as const;
 
-export const AUTH_PROVIDER_ID_LIST = [
-    AUTH_PROVIDER_IDS.clerk,
-    AUTH_PROVIDER_IDS.custom,
-] as const;
+export const AUTH_PROVIDER_ID_LIST = [AUTH_PROVIDER_IDS.clerk, AUTH_PROVIDER_IDS.custom];
 
 export const SYNC_PROVIDER_ID_LIST = [
     SYNC_PROVIDER_IDS.convex,
     SYNC_PROVIDER_IDS.firebase,
     SYNC_PROVIDER_IDS.custom,
-] as const;
+];
 
 export const STORAGE_PROVIDER_ID_LIST = [
     STORAGE_PROVIDER_IDS.convex,
     STORAGE_PROVIDER_IDS.s3,
     STORAGE_PROVIDER_IDS.custom,
-] as const;
+];
 
 export const LIMITS_PROVIDER_ID_LIST = [
     LIMITS_PROVIDER_IDS.memory,
     LIMITS_PROVIDER_IDS.convex,
     LIMITS_PROVIDER_IDS.redis,
     LIMITS_PROVIDER_IDS.postgres,
-] as const;
+];
 
 export const BACKGROUND_PROVIDER_ID_LIST = [
     BACKGROUND_PROVIDER_IDS.memory,
     BACKGROUND_PROVIDER_IDS.convex,
     BACKGROUND_PROVIDER_IDS.redis,
-] as const;
+];
 
-export type AuthProviderId = (typeof AUTH_PROVIDER_ID_LIST)[number];
-export type SyncProviderId = (typeof SYNC_PROVIDER_ID_LIST)[number];
-export type StorageProviderId = (typeof STORAGE_PROVIDER_ID_LIST)[number];
-export type LimitsProviderId = (typeof LIMITS_PROVIDER_ID_LIST)[number];
-export type BackgroundProviderId = (typeof BACKGROUND_PROVIDER_ID_LIST)[number];
+export type AuthProviderId = string;
+export type SyncProviderId = string;
+export type StorageProviderId = string;
+export type LimitsProviderId = string;
+export type BackgroundProviderId = string;
 
 export const DEFAULT_AUTH_PROVIDER_ID = AUTH_PROVIDER_IDS.clerk;
 export const DEFAULT_SYNC_PROVIDER_ID = SYNC_PROVIDER_IDS.convex;

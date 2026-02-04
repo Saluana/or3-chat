@@ -20,18 +20,12 @@ import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../utils/storage/is-storage-enabled';
-import { api } from '~~/convex/_generated/api';
-import type { Id } from '~~/convex/_generated/dataModel';
-import {
-    getClerkProviderToken,
-    getConvexGatewayClient,
-} from '../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
 import { recordUploadComplete } from '../../utils/storage/metrics';
 import {
     checkSyncRateLimit,
     recordSyncRequest,
 } from '../../utils/sync/rate-limiter';
+import { getActiveStorageGatewayAdapterOrThrow } from '../../storage/gateway/resolve';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -96,25 +90,24 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
-    if (!token) {
-        throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+    const adapter = getActiveStorageGatewayAdapterOrThrow();
+    if (adapter.commit) {
+        await adapter.commit(event, {
+            workspaceId: body.data.workspace_id,
+            hash: body.data.hash,
+            storageId: body.data.storage_id,
+            storageProviderId: body.data.storage_provider_id,
+            meta: {
+                name: body.data.name,
+                mimeType: body.data.mime_type,
+                sizeBytes: body.data.size_bytes,
+                kind: body.data.kind,
+                width: body.data.width,
+                height: body.data.height,
+                pageCount: body.data.page_count,
+            },
+        });
     }
-
-    const client = getConvexGatewayClient(event, token);
-    await client.mutation(api.storage.commitUpload, {
-        workspace_id: body.data.workspace_id as Id<'workspaces'>,
-        hash: body.data.hash,
-        storage_id: body.data.storage_id as Id<'_storage'>,
-        storage_provider_id: body.data.storage_provider_id,
-        mime_type: body.data.mime_type,
-        size_bytes: body.data.size_bytes,
-        name: body.data.name,
-        kind: body.data.kind,
-        width: body.data.width,
-        height: body.data.height,
-        page_count: body.data.page_count,
-    });
 
     recordSyncRequest(userId, 'storage:commit');
     recordUploadComplete(body.data.size_bytes);

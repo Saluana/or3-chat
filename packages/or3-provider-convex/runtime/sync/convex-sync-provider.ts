@@ -1,0 +1,182 @@
+import { useConvexClient } from 'convex-vue';
+import { api } from '~~/convex/_generated/api';
+import type {
+    SyncProvider,
+    SyncScope,
+    SyncChange,
+    PullRequest,
+    PullResponse,
+    PushBatch,
+    PushResult,
+    PendingOp,
+    SyncSubscribeOptions,
+} from '~~/shared/sync/types';
+import { PullResponseSchema, SyncChangeSchema, PushResultSchema } from '~~/shared/sync/schemas';
+import { z } from 'zod';
+import type { Id } from '~~/convex/_generated/dataModel';
+import { CONVEX_JWT_TEMPLATE, CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
+
+const SYNCED_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta', 'notifications'];
+
+type ConvexClient = ReturnType<typeof useConvexClient>;
+
+export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
+    const subscriptions = new Map<string, () => void>();
+
+    return {
+        id: CONVEX_PROVIDER_ID,
+        mode: 'direct',
+        auth: {
+            providerId: CONVEX_PROVIDER_ID,
+            template: CONVEX_JWT_TEMPLATE,
+        },
+
+        async subscribe(
+            scope: SyncScope,
+            tables: string[],
+            onChanges: (changes: SyncChange[]) => void,
+            options?: SyncSubscribeOptions
+        ): Promise<() => void> {
+            const tablesToWatch = tables.length > 0 ? tables : SYNCED_TABLES;
+            let disposed = false;
+            const cursor = options?.cursor ?? 0;
+            const limit = options?.limit ?? 200;
+
+            const unwatch = client.onUpdate(
+                api.sync.watchChanges,
+                {
+                    workspace_id: scope.workspaceId as Id<'workspaces'>,
+                    cursor,
+                    limit,
+                },
+                (result) => {
+                    if (disposed) return;
+
+                    try {
+                        const safeChanges = z.array(SyncChangeSchema).safeParse(result.changes);
+                        if (!safeChanges.success) {
+                            console.error('[convex-sync] Invalid watch changes:', safeChanges.error);
+                            return;
+                        }
+
+                        const changes = safeChanges.data;
+                        const filtered = tables.length > 0
+                            ? changes.filter((c) => tables.includes(c.tableName))
+                            : changes;
+
+                        if (filtered.length > 0) {
+                            onChanges(filtered);
+                        }
+                    } catch (error) {
+                        console.error('[convex-sync] onChanges error:', error);
+                    }
+                }
+            );
+
+            const key = `${scope.workspaceId}:${tablesToWatch.join(',')}:${cursor}:${limit}`;
+            const cleanup = () => {
+                disposed = true;
+                if (typeof unwatch === 'function') {
+                    try {
+                        unwatch();
+                    } catch (err: unknown) {
+                        const isKnownRaceCondition =
+                            err instanceof TypeError &&
+                            err.message.includes('Cannot read properties of undefined') &&
+                            err.message.includes('numSubscribers');
+
+                        if (!isKnownRaceCondition) {
+                            console.warn('[convex-sync] Cleanup unwatch failed:', err);
+                        }
+                    }
+                }
+            };
+            subscriptions.set(key, cleanup);
+
+            return cleanup;
+        },
+
+        async pull(request: PullRequest): Promise<PullResponse> {
+            const result = await client.query(api.sync.pull, {
+                workspace_id: request.scope.workspaceId as Id<'workspaces'>,
+                cursor: request.cursor,
+                limit: request.limit,
+                tables: request.tables,
+            });
+
+            const parsed = PullResponseSchema.safeParse({
+                changes: result.changes,
+                nextCursor: result.nextCursor,
+                hasMore: result.hasMore,
+            });
+
+            if (!parsed.success) {
+                console.error('[convex-sync] Invalid pull response:', parsed.error);
+                throw new Error(`Invalid pull response: ${parsed.error.message}`);
+            }
+
+            return parsed.data;
+        },
+
+        async push(batch: PushBatch): Promise<PushResult> {
+            const result = await client.mutation(api.sync.push, {
+                workspace_id: batch.scope.workspaceId as Id<'workspaces'>,
+                ops: batch.ops.map((op: PendingOp) => ({
+                    op_id: op.stamp.opId,
+                    table_name: op.tableName,
+                    operation: op.operation,
+                    pk: op.pk,
+                    payload: op.payload,
+                    clock: op.stamp.clock,
+                    hlc: op.stamp.hlc,
+                    device_id: op.stamp.deviceId,
+                })),
+            });
+
+            const parsed = PushResultSchema.safeParse({
+                results: result.results,
+                serverVersion: result.serverVersion,
+            });
+
+            if (!parsed.success) {
+                console.error('[convex-sync] Invalid push response:', parsed.error);
+                throw new Error(`Invalid push response: ${parsed.error.message}`);
+            }
+
+            return parsed.data;
+        },
+
+        async updateCursor(scope: SyncScope, deviceId: string, version: number): Promise<void> {
+            await client.mutation(api.sync.updateDeviceCursor, {
+                workspace_id: scope.workspaceId as Id<'workspaces'>,
+                device_id: deviceId,
+                last_seen_version: version,
+            });
+        },
+
+        async gcTombstones(scope: SyncScope, retentionSeconds: number): Promise<void> {
+            await client.mutation(api.sync.gcTombstones, {
+                workspace_id: scope.workspaceId as Id<'workspaces'>,
+                retention_seconds: retentionSeconds,
+            });
+        },
+
+        async gcChangeLog(scope: SyncScope, retentionSeconds: number): Promise<void> {
+            await client.mutation(api.sync.gcChangeLog, {
+                workspace_id: scope.workspaceId as Id<'workspaces'>,
+                retention_seconds: retentionSeconds,
+            });
+        },
+
+        async dispose(): Promise<void> {
+            subscriptions.forEach((cleanup, key) => {
+                try {
+                    cleanup();
+                } catch (err) {
+                    console.warn('[convex-sync] Subscription cleanup failed:', key, err);
+                }
+            });
+            subscriptions.clear();
+        },
+    };
+}

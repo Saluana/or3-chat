@@ -84,7 +84,7 @@
             <div class="space-y-3" v-else>
                 <div
                     v-for="workspace in displayWorkspaces"
-                    :key="workspace._id"
+                    :key="workspace.id"
                     class="rounded-md border border-[var(--md-outline-variant)] p-4 space-y-3"
                 >
                     <div class="flex flex-wrap items-start justify-between gap-4">
@@ -94,7 +94,7 @@
                                     {{ workspace.name }}
                                 </h4>
                                 <span
-                                    v-if="workspace.is_active"
+                                    v-if="workspace.isActive"
                                     class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--md-surface-container-high)]"
                                 >
                                     Active
@@ -109,7 +109,7 @@
                             <p class="text-[11px] opacity-60">
                                 On sign out:
                                 <span class="font-medium">
-                                    {{ formatLogoutPolicy(workspacePolicies[workspace._id]) }}
+                                    {{ formatLogoutPolicy(workspacePolicies[workspace.id]) }}
                                 </span>
                             </p>
                         </div>
@@ -117,17 +117,17 @@
                             <UButton
                                 size="sm"
                                 class="whitespace-nowrap shrink-0"
-                                :variant="workspace.is_active ? 'solid' : 'outline'"
-                                :disabled="workspace.is_active || selecting"
+                                :variant="workspace.isActive ? 'solid' : 'outline'"
+                                :disabled="workspace.isActive || selecting"
                                 @click="selectWorkspace(workspace)"
                             >
-                                {{ workspace.is_active ? 'Active' : 'Select' }}
+                                {{ workspace.isActive ? 'Active' : 'Select' }}
                             </UButton>
                             <UButton
                                 size="sm"
                                 class="whitespace-nowrap shrink-0"
                                 variant="outline"
-                                :disabled="editingWorkspaceId === workspace._id"
+                                :disabled="editingWorkspaceId === workspace.id"
                                 @click="startEdit(workspace)"
                             >
                                 Edit
@@ -137,7 +137,7 @@
                                 class="whitespace-nowrap shrink-0"
                                 variant="outline"
                                 color="error"
-                                :disabled="deletingWorkspaceId === workspace._id"
+                                :disabled="deletingWorkspaceId === workspace.id"
                                 @click="deleteWorkspace(workspace)"
                             >
                                 Delete
@@ -145,7 +145,7 @@
                         </div>
                     </div>
 
-                    <div v-if="editingWorkspaceId === workspace._id" class="flex flex-col gap-3">
+                    <div v-if="editingWorkspaceId === workspace.id" class="flex flex-col gap-3">
                         <UInput v-model="editName" placeholder="Workspace name" class="w-full" />
                         <UTextarea
                             v-model="editDescription"
@@ -197,9 +197,6 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { useConvexMutation, useConvexQuery } from 'convex-vue';
-import { api } from '~~/convex/_generated/api';
-import type { Id } from '~~/convex/_generated/dataModel';
 import {
     getActiveWorkspaceId,
     getDefaultDb,
@@ -208,29 +205,28 @@ import {
 import { getKvByName, setKvByName } from '~/db/kv';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useWorkspaceApi } from '~/composables/workspace/useWorkspaceApi';
+import type { WorkspaceSummary } from '~/core/workspaces/types';
 
 const toast = useToast();
 const baseDb = getDefaultDb();
 const cacheKey = 'workspace.manager.cache';
 const logoutPolicyPrefix = 'workspace.logout.policy.';
 
-type WorkspaceSummary = {
-    _id: Id<'workspaces'>;
-    name: string;
-    description?: string | null;
-    role: string;
-    created_at: number;
-    is_active?: boolean;
-};
-
-const { data: workspaces, isPending } = useConvexQuery(
-    api.workspaces.listMyWorkspaces,
-    {}
-);
-const createWorkspaceMutation = useConvexMutation(api.workspaces.create);
-const updateWorkspaceMutation = useConvexMutation(api.workspaces.update);
-const deleteWorkspaceMutation = useConvexMutation(api.workspaces.remove);
-const setActiveWorkspaceMutation = useConvexMutation(api.workspaces.setActive);
+async function fetchWorkspaces() {
+    isPending.value = true;
+    try {
+        workspaces.value = await workspaceApi.list();
+    } catch (error) {
+        console.error('[workspace-manager] Failed to load workspaces:', error);
+        toast.add({
+            title: 'Failed to load workspaces',
+            color: 'error',
+        });
+    } finally {
+        isPending.value = false;
+    }
+}
 
 const createName = ref('');
 const createDescription = ref('');
@@ -264,12 +260,18 @@ const logoutPolicySelectProps = computed(() => {
     };
 });
 
+const workspaceApi = useWorkspaceApi();
+const workspaces = ref<WorkspaceSummary[]>([]);
+const isPending = ref(false);
 const cachedWorkspaces = ref<WorkspaceSummary[]>([]);
-const cachedActiveId = ref<Id<'workspaces'> | null>(null);
+const cachedActiveId = ref<string | null>(null);
 const legacyStats = ref({ threads: 0, messages: 0, projects: 0 });
 const importing = ref(false);
 
 const sessionContext = useSessionContext();
+const activeWorkspaceId = computed(
+    () => sessionContext.data.value?.session?.workspace?.id ?? null
+);
 
 async function refreshSessionUntilWorkspace(workspaceId: string): Promise<boolean> {
     // Keep this tight: we just need to beat eventual consistency + any client caches.
@@ -293,11 +295,16 @@ const legacyHasData = computed(
         legacyStats.value.projects > 0
 );
 
-const displayWorkspaces = computed(() =>
-    workspaces.value && workspaces.value.length > 0
-        ? (workspaces.value as WorkspaceSummary[])
-        : cachedWorkspaces.value
-);
+const displayWorkspaces = computed(() => {
+    const source =
+        workspaces.value && workspaces.value.length > 0
+            ? workspaces.value
+            : cachedWorkspaces.value;
+    return source.map((workspace) => ({
+        ...workspace,
+        isActive: workspace.id === activeWorkspaceId.value,
+    }));
+});
 
 async function loadCache() {
     const cached = await getKvByName(cacheKey, baseDb);
@@ -305,12 +312,12 @@ async function loadCache() {
     try {
         const parsed = JSON.parse(cached.value) as {
             workspaces?: WorkspaceSummary[];
-            activeId?: Id<'workspaces'> | null;
+            activeId?: string | null;
         };
         cachedActiveId.value = parsed.activeId ?? null;
         cachedWorkspaces.value = (parsed.workspaces ?? []).map((workspace) => ({
             ...workspace,
-            is_active: workspace._id === cachedActiveId.value,
+            isActive: workspace.id === cachedActiveId.value,
         }));
     } catch {
         cachedWorkspaces.value = [];
@@ -319,7 +326,7 @@ async function loadCache() {
 }
 
 async function saveCache(list: WorkspaceSummary[]) {
-    const activeId = list.find((ws) => ws.is_active)?._id ?? cachedActiveId.value;
+    const activeId = list.find((ws) => ws.isActive)?.id ?? cachedActiveId.value;
     cachedActiveId.value = activeId ?? null;
     await setKvByName(
         cacheKey,
@@ -433,17 +440,25 @@ onMounted(async () => {
     if (cachedWorkspaces.value.length > 0) {
         await loadWorkspacePolicies(cachedWorkspaces.value);
     }
+    await fetchWorkspaces();
 });
 
-const editingWorkspaceId = ref<Id<'workspaces'> | null>(null);
+watch(
+    () => sessionContext.data.value?.session?.workspace?.id,
+    async () => {
+        await fetchWorkspaces();
+    }
+);
+
+const editingWorkspaceId = ref<string | null>(null);
 const editName = ref('');
 const editDescription = ref('');
 
 function startEdit(workspace: WorkspaceSummary) {
-    editingWorkspaceId.value = workspace._id;
+    editingWorkspaceId.value = workspace.id;
     editName.value = workspace.name;
     editDescription.value = workspace.description ?? '';
-    editLogoutPolicy.value = workspacePolicies.value[workspace._id] ?? 'keep';
+    editLogoutPolicy.value = workspacePolicies.value[workspace.id] ?? 'keep';
 }
 
 function cancelEdit() {
@@ -459,15 +474,15 @@ function formatLogoutPolicy(policy: LogoutPolicy | undefined) {
 async function loadWorkspacePolicies(list: WorkspaceSummary[]) {
     const entries = await Promise.all(
         list.map(async (workspace) => {
-            const res = await getKvByName(`${logoutPolicyPrefix}${workspace._id}`, baseDb);
+            const res = await getKvByName(`${logoutPolicyPrefix}${workspace.id}`, baseDb);
             const value = res?.value === 'clear' ? 'clear' : 'keep';
-            return [workspace._id, value] as const;
+            return [workspace.id, value] as const;
         })
     );
     workspacePolicies.value = Object.fromEntries(entries);
 }
 
-async function saveWorkspacePolicy(workspaceId: Id<'workspaces'>, policy: LogoutPolicy) {
+async function saveWorkspacePolicy(workspaceId: string, policy: LogoutPolicy) {
     await setKvByName(`${logoutPolicyPrefix}${workspaceId}`, policy, baseDb);
     workspacePolicies.value = { ...workspacePolicies.value, [workspaceId]: policy };
 }
@@ -476,12 +491,12 @@ async function createWorkspace() {
     if (!createName.value.trim()) return;
     creating.value = true;
     try {
-        const workspaceId = await createWorkspaceMutation.mutate({
+        const { id: workspaceId } = await workspaceApi.create({
             name: createName.value.trim(),
             description: createDescription.value.trim() || undefined,
         });
         await saveWorkspacePolicy(workspaceId, createLogoutPolicy.value);
-        await setActiveWorkspaceMutation.mutate({ workspace_id: workspaceId });
+        await workspaceApi.setActive({ id: workspaceId });
 
         // Ensure the next reload resolves into the newly active workspace.
         await refreshSessionUntilWorkspace(workspaceId);
@@ -489,14 +504,13 @@ async function createWorkspace() {
         // Update cache before reload so UI shows correctly immediately after
         cachedActiveId.value = workspaceId;
         await saveCache([
-            ...cachedWorkspaces.value.map((ws) => ({ ...ws, is_active: false })),
+            ...cachedWorkspaces.value.map((ws) => ({ ...ws, isActive: false })),
             {
-                _id: workspaceId,
+                id: workspaceId,
                 name: createName.value.trim(),
                 description: createDescription.value.trim() || null,
                 role: 'owner',
-                created_at: Date.now() / 1000,
-                is_active: true,
+                isActive: true,
             },
         ]);
         toast.add({ title: 'Workspace created', description: 'Switching to new workspace...' });
@@ -514,19 +528,19 @@ async function createWorkspace() {
 }
 
 async function selectWorkspace(workspace: WorkspaceSummary) {
-    if (workspace.is_active) return;
+    if (workspace.isActive) return;
     selecting.value = true;
     try {
-        await setActiveWorkspaceMutation.mutate({ workspace_id: workspace._id });
+        await workspaceApi.setActive({ id: workspace.id });
 
         // Ensure the next reload resolves into the selected workspace.
-        await refreshSessionUntilWorkspace(workspace._id);
+        await refreshSessionUntilWorkspace(workspace.id);
 
         // Update cache before reload
-        cachedActiveId.value = workspace._id;
+        cachedActiveId.value = workspace.id;
         cachedWorkspaces.value = cachedWorkspaces.value.map((item) => ({
             ...item,
-            is_active: item._id === workspace._id,
+            isActive: item.id === workspace.id,
         }));
         await saveCache(cachedWorkspaces.value);
         toast.add({ title: 'Workspace updated', description: 'Switching workspace...' });
@@ -547,12 +561,12 @@ async function saveEdit(workspace: WorkspaceSummary) {
     if (!editName.value.trim()) return;
     saving.value = true;
     try {
-        await updateWorkspaceMutation.mutate({
-            workspace_id: workspace._id,
+        await workspaceApi.update({
+            id: workspace.id,
             name: editName.value.trim(),
             description: editDescription.value.trim() || undefined,
         });
-        await saveWorkspacePolicy(workspace._id, editLogoutPolicy.value);
+        await saveWorkspacePolicy(workspace.id, editLogoutPolicy.value);
         editingWorkspaceId.value = null;
         toast.add({ title: 'Workspace updated', description: 'Changes saved.' });
     } catch (error) {
@@ -573,12 +587,12 @@ async function deleteWorkspace(workspace: WorkspaceSummary) {
     );
     if (!confirmed) return;
 
-    deletingWorkspaceId.value = workspace._id;
+    deletingWorkspaceId.value = workspace.id;
     try {
-        await deleteWorkspaceMutation.mutate({ workspace_id: workspace._id });
+        await workspaceApi.remove({ id: workspace.id });
         await refreshNuxtData('auth-session');
         cachedWorkspaces.value = cachedWorkspaces.value.filter(
-            (item) => item._id !== workspace._id
+            (item) => item.id !== workspace.id
         );
         await saveCache(cachedWorkspaces.value);
         toast.add({ title: 'Workspace deleted', description: 'Workspace removed.' });

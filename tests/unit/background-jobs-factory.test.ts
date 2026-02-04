@@ -22,10 +22,15 @@ import {
     isBackgroundStreamingEnabled,
     resetJobProvider,
 } from '../../server/utils/background-jobs/store';
+import {
+    registerBackgroundJobProvider,
+    _resetBackgroundJobProviders,
+} from '../../server/utils/background-jobs/registry';
 
 describe('Background Job Provider Factory', () => {
     beforeEach(() => {
         resetJobProvider();
+        _resetBackgroundJobProviders();
         vi.clearAllMocks();
         // Default mock return value
         mockUseRuntimeConfig.mockReturnValue({
@@ -37,6 +42,7 @@ describe('Background Job Provider Factory', () => {
 
     afterEach(() => {
         resetJobProvider();
+        _resetBackgroundJobProviders();
     });
 
     describe('Provider Selection', () => {
@@ -58,46 +64,41 @@ describe('Background Job Provider Factory', () => {
             expect(provider.name).toBe('memory');
         });
 
-        it('should return convex provider when configured with convexUrl', async () => {
+        it('should return convex provider when configured and registered', async () => {
             mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {
                     storageProvider: 'convex',
                 },
-                public: {
-                    sync: {
-                        convexUrl: 'https://test.convex.cloud',
-                    },
-                },
+            });
+
+            registerBackgroundJobProvider({
+                id: 'convex',
+                create: () => ({ name: 'convex' } as any),
             });
 
             const provider = await getJobProvider();
             expect(provider.name).toBe('convex');
         });
 
-        it('should fall back to memory when convex is selected but no URL is configured', async () => {
+        it('should fall back to memory when provider is missing', async () => {
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
             mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {
                     storageProvider: 'convex',
                 },
-                public: {
-                    sync: {
-                        convexUrl: undefined,
-                    },
-                },
             });
 
             const provider = await getJobProvider();
             expect(provider.name).toBe('memory');
             expect(consoleWarnSpy).toHaveBeenCalledWith(
-                expect.stringContaining('Convex URL not configured')
+                expect.stringContaining('Provider \"convex\" not registered')
             );
 
             consoleWarnSpy.mockRestore();
         });
 
-        it('should fall back to memory for unimplemented redis provider', async () => {
+        it('should fall back to memory for unregistered redis provider', async () => {
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
             mockUseRuntimeConfig.mockReturnValue({
@@ -109,7 +110,7 @@ describe('Background Job Provider Factory', () => {
             const provider = await getJobProvider();
             expect(provider.name).toBe('memory');
             expect(consoleWarnSpy).toHaveBeenCalledWith(
-                expect.stringContaining('Redis provider not yet implemented')
+                expect.stringContaining('Provider \"redis\" not registered')
             );
 
             consoleWarnSpy.mockRestore();
@@ -149,11 +150,11 @@ describe('Background Job Provider Factory', () => {
                 backgroundJobs: {
                     storageProvider: 'convex',
                 },
-                public: {
-                    sync: {
-                        convexUrl: 'https://test.convex.cloud',
-                    },
-                },
+            });
+
+            registerBackgroundJobProvider({
+                id: 'convex',
+                create: () => ({ name: 'convex' } as any),
             });
 
             const provider2 = await getJobProvider();

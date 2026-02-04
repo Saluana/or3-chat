@@ -1,15 +1,15 @@
 /**
- * Convex Sync Plugin
+ * Sync Engine Plugin
  *
  * Bootstraps the sync engine when an authenticated session is active.
  * Client-only plugin that starts/stops sync based on session state.
  */
-import { createConvexSyncProvider } from '~/core/sync/providers/convex-sync-provider';
 import { createGatewaySyncProvider } from '~/core/sync/providers/gateway-sync-provider';
 import {
     registerSyncProvider,
     getActiveSyncProvider,
     getSyncProvider,
+    setActiveSyncProvider,
 } from '~/core/sync/sync-provider-registry';
 import { getHookBridge, cleanupHookBridge } from '~/core/sync/hook-bridge';
 import { OutboxManager } from '~/core/sync/outbox-manager';
@@ -17,7 +17,6 @@ import { createSubscriptionManager, cleanupSubscriptionManager } from '~/core/sy
 import { GcManager } from '~/core/sync/gc-manager';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { createWorkspaceDb, setActiveWorkspaceDb, type Or3DB } from '~/db/client';
-import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useWorkspaceManager } from '~/composables/workspace/useWorkspaceManager';
 import {
     useAuthTokenBroker,
@@ -25,11 +24,6 @@ import {
 } from '~/composables/auth/useAuthTokenBroker.client';
 import { watch } from 'vue';
 import type { SyncProvider, SyncScope } from '~~/shared/sync/types';
-import { useConvexClient } from 'convex-vue';
-import {
-    CONVEX_GATEWAY_PROVIDER_ID,
-    CONVEX_PROVIDER_ID,
-} from '~~/shared/cloud/provider-ids';
 
 /** Sync engine state */
 interface SyncEngineState {
@@ -43,10 +37,10 @@ interface SyncEngineState {
 }
 
 let engineState: SyncEngineState | null = null;
-let convexClient: ReturnType<typeof useConvexClient> | null = null;
 let authRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 const AUTH_RETRY_DELAYS = [500, 1000, 2000, 5000];
 let stopInFlight: Promise<void> | null = null;
+const GATEWAY_PROVIDER_ID = 'gateway';
 
 function getActiveWorkspaceId(): string | null {
     return engineState?.scope.workspaceId ?? null;
@@ -64,7 +58,7 @@ function scheduleAuthRetry(workspaceId: string, attempt: number): void {
     authRetryTimeout = setTimeout(() => {
         authRetryTimeout = null;
         void startSyncEngine(workspaceId).catch((error) => {
-            console.error('[convex-sync] Auth retry failed:', error);
+            console.error('[sync-engine] Auth retry failed:', error);
             scheduleAuthRetry(workspaceId, attempt + 1);
         });
     }, delay);
@@ -75,7 +69,7 @@ function scheduleAuthRetry(workspaceId: string, attempt: number): void {
  */
 async function startSyncEngine(workspaceId: string): Promise<void> {
     if (engineState) {
-        console.warn('[convex-sync] Engine already running, stopping first');
+        console.warn('[sync-engine] Engine already running, stopping first');
         await stopSyncEngine();
     }
 
@@ -84,7 +78,7 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
         authRetryTimeout = null;
     }
 
-    console.log('[convex-sync] Starting sync engine for workspace:', workspaceId);
+    console.log('[sync-engine] Starting sync engine for workspace:', workspaceId);
 
     // Create workspace-specific DB
     const db = createWorkspaceDb(workspaceId);
@@ -92,14 +86,14 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
     // Get or create provider
     const provider = getActiveSyncProvider();
     if (!provider) {
-        console.error('[convex-sync] No sync provider available');
+        console.error('[sync-engine] No sync provider available');
         scheduleAuthRetry(workspaceId, 1);
         return;
     }
 
     const resolvedProvider = await ensureProviderAuth(provider);
     if (!resolvedProvider) {
-        console.error('[convex-sync] Provider auth unavailable');
+        console.error('[sync-engine] Provider auth unavailable');
         scheduleAuthRetry(workspaceId, 1);
         return;
     }
@@ -128,7 +122,7 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
         gcManager,
     };
 
-    console.log('[convex-sync] Sync engine started');
+    console.log('[sync-engine] Sync engine started');
 }
 
 /**
@@ -138,7 +132,7 @@ async function stopSyncEngine(): Promise<void> {
     if (!engineState) return;
     if (stopInFlight) return stopInFlight;
 
-    console.log('[convex-sync] Stopping sync engine');
+    console.log('[sync-engine] Stopping sync engine');
 
     if (authRetryTimeout) {
         clearTimeout(authRetryTimeout);
@@ -156,7 +150,7 @@ async function stopSyncEngine(): Promise<void> {
         try {
             await engineState?.provider.dispose();
         } catch (error) {
-            console.warn('[convex-sync] Provider dispose failed:', error);
+            console.warn('[sync-engine] Provider dispose failed:', error);
         }
 
         if (engineState) {
@@ -168,7 +162,7 @@ async function stopSyncEngine(): Promise<void> {
 
         engineState = null;
         stopInFlight = null;
-        console.log('[convex-sync] Sync engine stopped');
+        console.log('[sync-engine] Sync engine stopped');
     })();
 
     return stopInFlight;
@@ -202,37 +196,26 @@ export default defineNuxtPlugin(async () => {
     }
 
     // Only run when SSR auth and sync are enabled
-    if (
-        !runtimeConfig.public.ssrAuthEnabled ||
-        !runtimeConfig.public.sync?.enabled ||
-        runtimeConfig.public.sync?.provider !== CONVEX_PROVIDER_ID
-    ) {
-        console.log('[convex-sync] Sync disabled, skipping sync');
+    if (!runtimeConfig.public.ssrAuthEnabled || !runtimeConfig.public.sync?.enabled) {
+        console.log('[sync-engine] Sync disabled, skipping sync');
         return;
     }
 
-    // Get Convex client first (must be in Vue setup context where inject() works)
+    // Register gateway provider by default
     try {
-        convexClient = useConvexClient();
+        registerSyncProvider(createGatewaySyncProvider({ id: GATEWAY_PROVIDER_ID }));
     } catch (error) {
-        console.error('[convex-sync] Failed to get Convex client:', error);
-        return;
+        console.error('[sync-engine] Failed to register gateway provider:', error);
     }
 
-    // Register Convex provider with the captured client
-    try {
-        const convexProvider = createConvexSyncProvider(convexClient);
-        registerSyncProvider(convexProvider);
-        const gatewayProvider = createGatewaySyncProvider({ id: CONVEX_GATEWAY_PROVIDER_ID });
-        registerSyncProvider(gatewayProvider);
-        console.log('[convex-sync] Registered Convex sync provider');
-    } catch (error) {
-        console.error('[convex-sync] Failed to create Convex provider:', error);
-        return;
+    const configuredProviderId = runtimeConfig.public.sync?.provider;
+    if (configuredProviderId && getSyncProvider(configuredProviderId)) {
+        setActiveSyncProvider(configuredProviderId);
+    } else if (getSyncProvider(GATEWAY_PROVIDER_ID)) {
+        setActiveSyncProvider(GATEWAY_PROVIDER_ID);
     }
 
     // Watch for session changes
-    const { data: sessionData } = useSessionContext();
     const { activeWorkspaceId } = useWorkspaceManager();
     const nuxtApp = useNuxtApp();
     const router = useRouter();
@@ -244,33 +227,21 @@ export default defineNuxtPlugin(async () => {
 
         if (isAdmin) {
             // Admin routes shouldn't run the user sync engine (heavy + irrelevant).
-            // Special case: Admin routes explicitly set workspace to null, overriding
-            // the workspace manager. This is intentional to ensure admin operations
-            // run in the default DB context rather than a workspace-scoped DB.
-            // 
-            // Note: This creates a potential race condition with useWorkspaceManager.
-            // In practice, this is acceptable because:
-            // 1. Admin routes are accessed infrequently
-            // 2. The workspace manager's watch runs synchronously after this
-            // 3. Admin route access typically follows a page navigation which
-            //    gives the workspace manager time to settle
             setActiveWorkspaceDb(null);
             if (authRetryTimeout) {
                 clearTimeout(authRetryTimeout);
                 authRetryTimeout = null;
             }
             void stopSyncEngine().catch((error) => {
-                console.error('[convex-sync] Failed to stop sync engine:', error);
+                console.error('[sync-engine] Failed to stop sync engine:', error);
             });
             return;
         }
 
         // Manage sync engine based on workspace ID
-        // Note: Workspace DB switching is handled separately by useWorkspaceManager
-        // in 00-workspace-db.client.ts. This function only starts/stops the sync engine.
         if (workspaceId) {
             void startSyncEngine(workspaceId).catch((error) => {
-                console.error('[convex-sync] Failed to start sync engine:', error);
+                console.error('[sync-engine] Failed to start sync engine:', error);
             });
         } else {
             if (authRetryTimeout) {
@@ -278,7 +249,7 @@ export default defineNuxtPlugin(async () => {
                 authRetryTimeout = null;
             }
             void stopSyncEngine().catch((error) => {
-                console.error('[convex-sync] Failed to stop sync engine:', error);
+                console.error('[sync-engine] Failed to stop sync engine:', error);
             });
         }
     }
@@ -295,7 +266,6 @@ export default defineNuxtPlugin(async () => {
     );
 
     // Expose sync control functions for advanced callers
-    // Expose sync control functions
     nuxtApp.provide('syncEngine', {
         start: startSyncEngine,
         stop: stopSyncEngine,
@@ -326,10 +296,10 @@ async function ensureProviderAuth(provider: SyncProvider): Promise<SyncProvider 
     const providerAuth = provider.auth as ProviderTokenRequest;
     const token = await tokenBroker.getProviderToken(providerAuth);
     if (!token) {
-        const gatewayFallback = getSyncProvider(CONVEX_GATEWAY_PROVIDER_ID);
+        const gatewayFallback = getSyncProvider(GATEWAY_PROVIDER_ID);
         if (gatewayFallback) {
             console.warn(
-                '[convex-sync] Provider token unavailable, falling back to gateway mode'
+                '[sync-engine] Provider token unavailable, falling back to gateway mode'
             );
             const workspaceId = getActiveWorkspaceId();
             if (workspaceId) {
@@ -338,14 +308,6 @@ async function ensureProviderAuth(provider: SyncProvider): Promise<SyncProvider 
             return gatewayFallback;
         }
         return null;
-    }
-
-    if (provider.id === CONVEX_PROVIDER_ID) {
-        if (!convexClient) {
-            console.warn('[convex-sync] Convex client unavailable for auth');
-        } else if (providerAuth) {
-            convexClient.setAuth(() => tokenBroker.getProviderToken(providerAuth));
-        }
     }
 
     return provider;

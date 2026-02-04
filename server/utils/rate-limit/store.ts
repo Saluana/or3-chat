@@ -15,8 +15,7 @@
 
 import type { RateLimitProvider } from './types';
 import { memoryRateLimitProvider } from './providers/memory';
-import { convexRateLimitProvider } from './providers/convex';
-import { LIMITS_PROVIDER_IDS } from '~~/shared/cloud/provider-ids';
+import { getRateLimitProviderById } from './registry';
 
 let cachedProvider: RateLimitProvider | null = null;
 
@@ -36,34 +35,19 @@ export function getRateLimitProvider(): RateLimitProvider {
 
     const config = useRuntimeConfig();
     const storageProvider = config.limits.storageProvider;
+    const resolved = storageProvider
+        ? getRateLimitProviderById(storageProvider)
+        : null;
 
-    switch (storageProvider) {
-        case LIMITS_PROVIDER_IDS.convex:
-            // Check if Convex is actually available
-            if ((config.sync as { convexUrl?: string } | undefined)?.convexUrl ?? config.public.sync.convexUrl) {
-                cachedProvider = convexRateLimitProvider;
-            } else {
-                console.warn('[rate-limit] Convex URL not configured, using memory');
-                cachedProvider = memoryRateLimitProvider;
-            }
-            break;
-
-        case LIMITS_PROVIDER_IDS.redis:
-            // Future: Redis provider
-            console.warn('[rate-limit] Redis provider not yet implemented, using memory');
-            cachedProvider = memoryRateLimitProvider;
-            break;
-
-        case LIMITS_PROVIDER_IDS.postgres:
-            // Future: Postgres provider
-            console.warn('[rate-limit] Postgres provider not yet implemented, using memory');
-            cachedProvider = memoryRateLimitProvider;
-            break;
-
-        case LIMITS_PROVIDER_IDS.memory:
-        default:
-            cachedProvider = memoryRateLimitProvider;
-            break;
+    if (!resolved) {
+        if (storageProvider && storageProvider !== 'memory') {
+            console.warn(
+                `[rate-limit] Provider "${storageProvider}" not registered, using memory`
+            );
+        }
+        cachedProvider = memoryRateLimitProvider;
+    } else {
+        cachedProvider = resolved;
     }
 
     return cachedProvider;

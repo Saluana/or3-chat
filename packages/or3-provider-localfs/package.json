@@ -1,0 +1,6 @@
+{
+  "name": "or3-provider-localfs",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/module.ts"
+}

@@ -1,7 +1,6 @@
 import { createRegistry } from '~/composables/_registry';
 import { useRuntimeConfig } from '#imports';
 import type { ObjectStorageProvider } from './types';
-import { CONVEX_STORAGE_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 export interface StorageProviderRegistryItem {
     id: string;
@@ -24,14 +23,16 @@ let cachedProviderId: string | null = null;
 
 function getConfiguredProviderId(): string {
     const config = useRuntimeConfig();
-    return config.public.storage.provider || CONVEX_STORAGE_PROVIDER_ID;
+    return config.public.storage.provider || 'gateway';
 }
 
 function createProviderFromConfig(): ObjectStorageProvider | null {
     const providerId = getConfiguredProviderId();
     const items = registry.snapshot();
     const entry = items.find((item) => item.id === providerId);
-    return entry?.create() ?? null;
+    if (entry) return entry.create();
+    const fallback = items.find((item) => item.id === 'gateway');
+    return fallback?.create() ?? null;
 }
 
 export function getActiveStorageProvider(): ObjectStorageProvider | null {
