@@ -15,7 +15,6 @@
  *   backend queries for the same provider.
  */
 import type { H3Event } from 'h3';
-import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { useRuntimeConfig } from '#imports';
 
 /**
@@ -32,6 +31,22 @@ export interface DeploymentAdminChecker {
      * @returns A promise resolving to `true` if the user is a deployment admin.
      */
     checkDeploymentAdmin(providerUserId: string, provider: string): Promise<boolean>;
+}
+
+export interface DeploymentAdminCheckerRegistryItem {
+    id: string;
+    create: () => DeploymentAdminChecker;
+}
+
+const registry = new Map<string, DeploymentAdminCheckerRegistryItem>();
+
+export function registerDeploymentAdminChecker(
+    item: DeploymentAdminCheckerRegistryItem
+): void {
+    if (import.meta.dev && registry.has(item.id)) {
+        console.warn(`[auth:deployment-admin] Replacing checker: ${item.id}`);
+    }
+    registry.set(item.id, item);
 }
 
 let cachedChecker: DeploymentAdminChecker | null = null;
@@ -60,7 +75,7 @@ const CACHE_TTL_MS = 60000; // 1 minute
  */
 export function getDeploymentAdminChecker(event?: H3Event): DeploymentAdminChecker {
     const config = useRuntimeConfig(event);
-    const syncProviderId = config.sync.provider || CONVEX_PROVIDER_ID;
+    const syncProviderId = config.sync.provider;
     const now = Date.now();
 
     // Return cached checker if valid and provider hasn't changed
@@ -71,7 +86,7 @@ export function getDeploymentAdminChecker(event?: H3Event): DeploymentAdminCheck
     }
 
     // Create implementation based on provider
-    const checker = createChecker(syncProviderId);
+    const checker = resolveChecker(syncProviderId);
     cachedChecker = checker;
     cachedProviderId = syncProviderId;
     cacheTimestamp = now;
@@ -83,55 +98,14 @@ export function getDeploymentAdminChecker(event?: H3Event): DeploymentAdminCheck
  * Purpose:
  * Instantiates a checker implementation based on the provider ID.
  */
-function createChecker(providerId: string): DeploymentAdminChecker {
-    switch (providerId) {
-        case CONVEX_PROVIDER_ID:
-            return new ConvexDeploymentAdminChecker();
-        default:
-            // For unsupported providers, always return false
-            // This means only super admin JWT auth will work
-            return new NoOpDeploymentAdminChecker();
-    }
-}
-
-/**
- * Purpose:
- * Convex-backed implementation of the deployment admin check.
- *
- * Behavior:
- * - Queries the Convex backend to map the provider identity to an internal user.
- * - Checks the `admin` table for an active admin grant for that user.
- */
-class ConvexDeploymentAdminChecker implements DeploymentAdminChecker {
-    async checkDeploymentAdmin(providerUserId: string, provider: string): Promise<boolean> {
-        // Lazy import to avoid loading Convex when not needed
-        const { getConvexClient } = await import('../utils/convex-client');
-        const { api } = await import('~~/convex/_generated/api');
-
-        try {
-            const convex = getConvexClient();
-
-            // Get the internal user ID from auth account
-            const authAccount = await convex.query(api.users.getAuthAccountByProvider, {
-                provider,
-                provider_user_id: providerUserId,
-            });
-
-            if (!authAccount) {
-                return false;
-            }
-
-            // Check if user has admin grant
-            const isAdmin = await convex.query(api.admin.isAdmin, {
-                user_id: authAccount.user_id,
-            });
-
-            return isAdmin;
-        } catch {
-            // If anything fails, assume not an admin to maintain safe defaults
-            return false;
+function resolveChecker(providerId: string | undefined): DeploymentAdminChecker {
+    if (providerId) {
+        const item = registry.get(providerId);
+        if (item) {
+            return item.create();
         }
     }
+    return new NoOpDeploymentAdminChecker();
 }
 
 /**

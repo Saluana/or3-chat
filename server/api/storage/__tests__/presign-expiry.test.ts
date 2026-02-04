@@ -46,20 +46,13 @@ vi.mock('../../../utils/sync/rate-limiter', () => ({
     recordSyncRequest: vi.fn(),
 }));
 
-const getConvexGatewayClientMock = vi.fn();
-
-vi.mock('../../../utils/sync/convex-gateway', () => ({
-    getClerkProviderToken: vi.fn().mockResolvedValue('token'),
-    getConvexGatewayClient: () => getConvexGatewayClientMock(),
-}));
-
-vi.mock('~~/convex/_generated/api', () => ({
-    api: {
-        storage: {
-            generateUploadUrl: 'storage.generateUploadUrl',
-            getFileUrl: 'storage.getFileUrl',
-        },
-    },
+const presignUploadMock = vi.fn();
+const presignDownloadMock = vi.fn();
+vi.mock('../../../storage/gateway/resolve', () => ({
+    getActiveStorageGatewayAdapterOrThrow: () => ({
+        presignUpload: presignUploadMock,
+        presignDownload: presignDownloadMock,
+    }),
 }));
 
 vi.mock('~~/config.or3', () => ({
@@ -89,7 +82,8 @@ describe('presign expiry handling', () => {
     beforeEach(() => {
         readBodyMock.mockReset();
         setResponseHeaderMock.mockReset();
-        getConvexGatewayClientMock.mockReset();
+        presignUploadMock.mockReset();
+        presignDownloadMock.mockReset();
     });
 
     it('clamps expires_in_ms to server max', () => {
@@ -104,11 +98,9 @@ describe('presign expiry handling', () => {
         ) => Promise<{ expiresAt: number }>;
 
         const providerExpiry = new Date('2025-01-01T00:00:00.000Z');
-        getConvexGatewayClientMock.mockReturnValue({
-            mutation: vi.fn().mockResolvedValue({
-                uploadUrl: 'https://upload.example.com',
-                expiresAt: providerExpiry,
-            }),
+        presignUploadMock.mockResolvedValue({
+            url: 'https://upload.example.com',
+            expiresAt: providerExpiry.getTime(),
         });
 
         readBodyMock.mockResolvedValue(baseBody);
@@ -126,10 +118,11 @@ describe('presign expiry handling', () => {
             event: H3Event
         ) => Promise<{ expiresAt: number }>;
 
-        getConvexGatewayClientMock.mockReturnValue({
-            query: vi.fn().mockResolvedValue({
-                url: 'https://download.example.com',
-            }),
+        presignDownloadMock.mockResolvedValue({
+            url: 'https://download.example.com',
+            expiresAt:
+                new Date('2025-01-01T00:00:00.000Z').getTime() +
+                DEFAULT_PRESIGN_EXPIRY_MS,
         });
 
         readBodyMock.mockResolvedValue({

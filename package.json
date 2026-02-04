@@ -17,14 +17,17 @@
         "analyze": "bun run build && npx vite-bundle-visualizer dist/stats.html",
         "eslint": "eslint",
         "lint": "echo 'Lint script would go here'",
+        "check:provider-imports": "bun scripts/check-provider-imports.ts",
         "type-check": "SSR_AUTH_ENABLED=true nuxt typecheck",
         "theme:validate": "tsx scripts/cli/validate-theme.ts",
         "theme:create": "tsx scripts/cli/create-theme.ts",
         "theme:switch": "tsx scripts/cli/switch-theme.ts",
         "theme:build-css": "bun run scripts/build-theme-css.ts"
     },
+    "workspaces": [
+        "packages/*"
+    ],
     "dependencies": {
-        "@clerk/nuxt": "^1.13.12",
         "@nuxt/ui": "^3.3.7",
         "@openrouter/sdk": "^0.3.11",
         "@orama/orama": "^3.1.16",
@@ -40,9 +43,6 @@
         "@vue-flow/core": "^1.48.0",
         "@vueuse/core": "^13.9.0",
         "bcryptjs": "^3.0.3",
-        "convex": "^1.31.3",
-        "convex-nuxt": "0.1.5",
-        "convex-vue": "^0.1.4",
         "dexie": "^4.2.1",
         "dexie-export-import": "^4.1.4",
         "gpt-tokenizer": "^3.4.0",
@@ -62,6 +62,10 @@
         "vue": "^3.5.25",
         "vue-router": "^4.6.3",
         "zod": "^4.1.13"
+    },
+    "optionalDependencies": {
+        "or3-provider-clerk": "workspace:*",
+        "or3-provider-convex": "workspace:*"
     },
     "devDependencies": {
         "@eslint/js": "^9.39.1",

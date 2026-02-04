@@ -150,6 +150,11 @@ export interface BackgroundJobProvider {
      * Optional count of active streaming jobs.
      */
     getActiveJobCount?(): Promise<number>;
+
+    /**
+     * Optional abort polling for external providers.
+     */
+    checkJobAborted?(jobId: string): Promise<boolean>;
 }
 
 /**

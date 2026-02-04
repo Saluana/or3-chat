@@ -110,7 +110,7 @@ describe('defineOr3CloudConfig', () => {
         ).toThrow(/allowUserOverride must be true when requireUserKey/i);
     });
 
-    it('throws when invalid provider ID is used', () => {
+    it('accepts custom provider IDs in config schema', () => {
         expect(() =>
             defineOr3CloudConfig({
                 ...baseConfig,
@@ -120,7 +120,7 @@ describe('defineOr3CloudConfig', () => {
                     clerk: {},
                 },
             })
-        ).toThrow();
+        ).not.toThrow();
     });
 
     it('merges nested objects correctly', () => {

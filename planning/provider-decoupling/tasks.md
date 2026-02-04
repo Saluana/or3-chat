@@ -164,12 +164,12 @@ This phase is what makes “optional dependencies” actually real.
 ### 2.3 Reference/example providers (to prove extensibility)
 
 **Storage: `or3-provider-localfs`**
-- [ ] Implements `StorageGatewayAdapter` using local disk
-- [ ] Adds local upload/download endpoints using short-lived signed tokens
+- [x] Implements `StorageGatewayAdapter` using local disk
+- [x] Adds local upload/download endpoints using short-lived signed tokens
 
 **Sync: `or3-provider-sqlite`**
-- [ ] Implements `SyncGatewayAdapter` using SQLite (gateway mode)
-- [ ] Implements `AuthWorkspaceStore` using the same SQLite DB
+- [x] Implements `SyncGatewayAdapter` using SQLite (gateway mode)
+- [x] Implements `AuthWorkspaceStore` using the same SQLite DB
 - [ ] (Optional) Provides admin adapter for GC/health checks
 
 ### 2.4 Remove provider code from core

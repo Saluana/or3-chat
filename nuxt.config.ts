@@ -3,23 +3,13 @@ import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
 import { resolve } from 'path';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
-import {
-    AUTH_PROVIDER_IDS,
-    CONVEX_PROVIDER_ID,
-    CONVEX_STORAGE_PROVIDER_ID,
-} from './shared/cloud/provider-ids';
+import { or3ProviderModules } from './or3.providers.generated';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
 
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
 const convexAdminKey = or3CloudConfig.sync.convex?.adminKey || '';
-const convexEnabled =
-    (or3CloudConfig.sync.enabled &&
-        or3CloudConfig.sync.provider === CONVEX_PROVIDER_ID) ||
-    (or3CloudConfig.storage.enabled &&
-        or3CloudConfig.storage.provider === CONVEX_STORAGE_PROVIDER_ID);
-
 // Branding defaults (sourced from or3Config)
 const appName = or3Config.site.name;
 const appShortName = appName.length > 12 ? appName.slice(0, 12) : appName;
@@ -247,11 +237,7 @@ export default defineNuxtConfig({
         '@nuxt/ui',
         '@nuxt/fonts',
         '@vite-pwa/nuxt',
-        ...(convexEnabled ? ['convex-nuxt'] : []),
-        // Only include Clerk when SSR auth is enabled to preserve static builds
-        ...(isSsrAuthEnabled && or3CloudConfig.auth.provider === AUTH_PROVIDER_IDS.clerk
-            ? ['@clerk/nuxt']
-            : []),
+        ...or3ProviderModules,
     ],
     // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
     srcDir: 'app',

@@ -15,10 +15,7 @@ import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
-import { api } from '~~/convex/_generated/api';
-import type { Id } from '~~/convex/_generated/dataModel';
-import { getClerkProviderToken, getConvexGatewayClient } from '../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+import { getActiveSyncGatewayAdapterOrThrow } from '../../sync/gateway/resolve';
 
 const GcRequestSchema = z.object({
     scope: SyncScopeSchema,
@@ -52,16 +49,10 @@ export default defineEventHandler(async (event) => {
         id: parsed.data.scope.workspaceId,
     });
 
-    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
-    if (!token) {
-        throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+    const adapter = getActiveSyncGatewayAdapterOrThrow();
+    if (!adapter.gcChangeLog) {
+        return { ok: true };
     }
-
-    const client = getConvexGatewayClient(event, token);
-    const result = await client.mutation(api.sync.gcChangeLog, {
-        workspace_id: parsed.data.scope.workspaceId as Id<'workspaces'>,
-        retention_seconds: parsed.data.retentionSeconds,
-    });
-
-    return result;
+    await adapter.gcChangeLog(event, parsed.data);
+    return { ok: true };
 });

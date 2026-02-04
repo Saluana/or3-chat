@@ -26,7 +26,6 @@ import {
     getJobProvider,
     isBackgroundStreamingEnabled,
 } from '../background-jobs/store';
-import { checkJobAborted } from '../background-jobs/providers/convex';
 import {
     parseOpenRouterSSE,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
@@ -37,7 +36,6 @@ import {
     hasJobViewers,
     initJobLiveState,
 } from './viewers';
-import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -181,8 +179,8 @@ export async function consumeBackgroundStream(params: {
             : flushEveryChunk
             ? 30
             : 120;
-    const isConvexProvider = params.provider.name === CONVEX_PROVIDER_ID;
     const shouldNotify = params.shouldNotify ?? (() => true);
+    const shouldCheckAbort = typeof params.provider.checkJobAborted === 'function';
     let pendingChunk = '';
     let lastUpdateAt = 0;
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -220,9 +218,8 @@ export async function consumeBackgroundStream(params: {
             });
             lastUpdateAt = Date.now();
 
-            // For Convex provider, poll for abort status
-            if (isConvexProvider) {
-                const aborted = await checkJobAborted(params.jobId);
+            if (shouldCheckAbort) {
+                const aborted = await params.provider.checkJobAborted?.(params.jobId);
                 if (aborted) {
                     const abortErr = new Error('Job aborted by user');
                     abortErr.name = 'AbortError';

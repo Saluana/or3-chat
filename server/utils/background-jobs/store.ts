@@ -19,7 +19,7 @@
 import type { BackgroundJobProvider, BackgroundJobConfig } from './types';
 import { DEFAULT_CONFIG } from './types';
 import { memoryJobProvider } from './providers/memory';
-import { BACKGROUND_PROVIDER_IDS } from '~~/shared/cloud/provider-ids';
+import { getBackgroundJobProviderById } from './registry';
 
 let cachedProvider: BackgroundJobProvider | null = null;
 
@@ -42,34 +42,20 @@ export async function getJobProvider(): Promise<BackgroundJobProvider> {
 
     const config = useRuntimeConfig();
     const bgConfig = config.backgroundJobs as { storageProvider?: string } | undefined;
-    const storageProvider = bgConfig?.storageProvider ?? BACKGROUND_PROVIDER_IDS.memory;
+    const storageProvider = bgConfig?.storageProvider;
+    const resolved = storageProvider
+        ? getBackgroundJobProviderById(storageProvider)
+        : null;
 
-    switch (storageProvider) {
-        case BACKGROUND_PROVIDER_IDS.convex: {
-            // Dynamically import to avoid loading if not used
-            const convexUrl =
-                (config.sync as { convexUrl?: string } | undefined)?.convexUrl ??
-                config.public.sync.convexUrl;
-            if (convexUrl) {
-                const { convexJobProvider } = await import('./providers/convex');
-                cachedProvider = convexJobProvider;
-            } else {
-                console.warn('[background-jobs] Convex URL not configured, using memory');
-                cachedProvider = memoryJobProvider;
-            }
-            break;
+    if (!resolved) {
+        if (storageProvider && storageProvider !== 'memory') {
+            console.warn(
+                `[background-jobs] Provider "${storageProvider}" not registered, using memory`
+            );
         }
-
-        case BACKGROUND_PROVIDER_IDS.redis:
-            // Future: Redis provider
-            console.warn('[background-jobs] Redis provider not yet implemented, using memory');
-            cachedProvider = memoryJobProvider;
-            break;
-
-        case BACKGROUND_PROVIDER_IDS.memory:
-        default:
-            cachedProvider = memoryJobProvider;
-            break;
+        cachedProvider = memoryJobProvider;
+    } else {
+        cachedProvider = resolved;
     }
 
     return cachedProvider;

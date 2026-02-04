@@ -12,15 +12,12 @@ import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
-import { api } from '~~/convex/_generated/api';
-import type { Id } from '~~/convex/_generated/dataModel';
-import { getClerkProviderToken, getConvexGatewayClient } from '../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
 import {
     checkSyncRateLimit,
     recordSyncRequest,
     getSyncRateLimitStats,
 } from '../../utils/sync/rate-limiter';
+import { getActiveSyncGatewayAdapterOrThrow } from '../../sync/gateway/resolve';
 
 const UpdateCursorSchema = z.object({
     scope: SyncScopeSchema,
@@ -60,7 +57,6 @@ export default defineEventHandler(async (event) => {
     });
 
     // Rate limiting (per-user)
-    const retryAfterDefaultMs = 1000;
     const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:cursor');
     if (!rateLimitResult.allowed) {
         const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
@@ -78,17 +74,8 @@ export default defineEventHandler(async (event) => {
         setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
     }
 
-    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
-    if (!token) {
-        throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
-    }
-
-    const client = getConvexGatewayClient(event, token);
-    await client.mutation(api.sync.updateDeviceCursor, {
-        workspace_id: parsed.data.scope.workspaceId as Id<'workspaces'>,
-        device_id: parsed.data.deviceId,
-        last_seen_version: parsed.data.version,
-    });
+    const adapter = getActiveSyncGatewayAdapterOrThrow();
+    await adapter.updateCursor(event, parsed.data);
 
     // Record successful request for rate limiting
     recordSyncRequest(session.user.id, 'sync:cursor');

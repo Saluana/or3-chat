@@ -63,7 +63,48 @@ export interface AuthWorkspaceStore {
      */
     listUserWorkspaces(
         userId: string
-    ): Promise<Array<{ id: string; name: string; role: WorkspaceRole }>>;
+    ): Promise<Array<{ id: string; name: string; role: WorkspaceRole; description?: string | null }>>;
+
+    /**
+     * Purpose:
+     * Resolve a workspace by ID for session hydration.
+     */
+    getWorkspace(input: {
+        workspaceId: string;
+    }): Promise<{ id: string; name: string; description?: string | null } | null>;
+
+    /**
+     * Purpose:
+     * Create a new workspace for a user.
+     */
+    createWorkspace(input: {
+        userId: string;
+        name: string;
+        description?: string | null;
+    }): Promise<{ id: string }>;
+
+    /**
+     * Purpose:
+     * Update workspace metadata.
+     */
+    updateWorkspace(input: {
+        userId: string;
+        id: string;
+        name: string;
+        description?: string | null;
+    }): Promise<void>;
+
+    /**
+     * Purpose:
+     * Remove (or archive) a workspace.
+     */
+    removeWorkspace(input: { userId: string; id: string }): Promise<void>;
+
+    /**
+     * Purpose:
+     * Set the active workspace for the user session.
+     */
+    setActiveWorkspace(input: { userId: string; id: string }): Promise<void>;
 }
 
 /**

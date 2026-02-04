@@ -218,6 +218,11 @@ export const memoryJobProvider: BackgroundJobProvider = {
     async getActiveJobCount(): Promise<number> {
         return Array.from(jobs.values()).filter((j) => j.status === 'streaming').length;
     },
+
+    async checkJobAborted(jobId: string): Promise<boolean> {
+        const job = jobs.get(jobId);
+        return job?.status === 'aborted';
+    },
 };
 
 /**
