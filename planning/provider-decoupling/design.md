@@ -13,6 +13,9 @@ This doc describes the simplest architecture that:
 - keeps provider boundaries boring (registries + small interfaces)
 - makes new providers (LocalFS storage, SQLite sync) straightforward
 
+For the step-by-step checklist and concrete code sketches, see:
+- `planning/provider-decoupling/implementation-guide.md`
+
 ---
 
 ## Reality check: why “dynamic import behind config” is not enough in Nuxt
@@ -220,11 +223,38 @@ Installing a package alone does not make Nuxt execute it. You need either:
 **Minimal (fine for built-ins):**
 - core `nuxt.config.ts` conditionally includes the known provider modules (Clerk/Convex) based on config.
 
+**Install-wizard friendly (recommended for OR3):**
+- add a generated file like `or3.providers.generated.ts` that exports the list of Nuxt modules to include
+- the install wizard overwrites that file based on the chosen providers, then triggers rebuild/restart
+
+This avoids “scan node_modules” discovery and keeps the provider set explicit and reproducible.
+
 **Fully extensible (no core edits for new providers):**
 - add a small build-time “provider discovery” step that generates a static import map from installed `or3-provider-*` packages
 - core uses that generated map to register client/server providers without hardcoding IDs
 
 If we don’t do discovery, external providers will still require editing `nuxt.config.ts` to include their module.
+
+### OR3 simplification: install-time provider selection (recommended)
+If we only select providers during an install/setup wizard (and never hot-swap while the server is already running), we can simplify a lot:
+
+- Wizard installs the chosen provider packages (Bun).
+- Wizard writes the provider config (env / config file).
+- Wizard triggers a rebuild + restart (or instructs the operator to do so).
+
+After that, provider selection is effectively **build/start-time**, not runtime.
+
+Why this is a better plan for “keep behavior identical”:
+- Providers can register Nuxt client plugins that preserve existing behavior (e.g., Convex realtime subscriptions).
+- We can drop a lot of complicated runtime fallback logic (“if provider missing, soft-disable”) because the wizard guarantees install correctness.
+
+### Nuxt typecheck constraint: don’t put provider code in `modules/`
+Nuxt’s generated TS configs include module runtime sources:
+- `app` typecheck includes `../modules/*/runtime/**/*`
+
+So if you put `or3-provider-convex` under `modules/` in this repo, it will be typechecked even when “not selected”, and will still require Convex deps.
+
+**Put provider implementations in installable packages (node_modules) or a non-included folder (e.g., `packages/`) and only include them when installed.**
 
 ### Why *not* a “core ProviderLoader that imports providers”
 A core loader that maps `providerId -> import('./providers/convex')` reintroduces coupling:

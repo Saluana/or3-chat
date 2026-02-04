@@ -81,6 +81,14 @@ If we ignore these, “sync/storage decoupled” is still a lie because the repo
     - strict mode ⇒ fail fast with a clear startup error
     - non-strict ⇒ disable auth with a clear warning + degrade to unauthenticated
 
+**Install-time constraint (OR3 recommended)**
+- Provider changes are applied at **install/setup time** via the wizard:
+  - install/uninstall packages
+  - write config
+  - rebuild/restart
+- We do **not** require hot-swapping providers without a rebuild.
+- For install-time selection, default to **strict** behavior: missing provider package/registration is a startup error (do not “soft disable” silently).
+
 **1.2 Sync provider swappable without core edits**
 - Acceptance:
   - WHEN `sync.enabled=true` and `sync.provider=<id>` THEN the client uses `<id>` if registered.

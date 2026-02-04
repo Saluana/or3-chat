@@ -12,24 +12,24 @@ If you remember only one thing, remember this:
 
 ## TL;DR recommendations (simplest + best DX)
 
-### 1) Gateway-first (recommended)
-Prefer a design where the client *always* talks to core SSR endpoints for:
-- workspaces (`/api/workspaces/*`)
-- storage (`/api/storage/*`)
-- sync (`/api/sync/*`)
+### 1) Install-time selection + provider Nuxt modules (recommended for OR3)
+Treat provider choice as **install/setup time** (wizard), applied via **rebuild/restart**.
 
-Providers then implement **server adapters** only (plus auth middleware/broker), which is dramatically easier to decouple from the client build graph.
+Providers should ship **Nuxt modules** that can:
+- register client plugins (Convex realtime, auth bridges)
+- register server middleware/plugins (Clerk request context, adapters)
 
-Why this route is best:
-- avoids pulling provider SDKs into `app/**` (client build graph)
-- keeps UI stable and backend-swappable
-- reduces provider permutations (no “direct client SDK” vs “gateway” confusion)
-- improves DX: adding a provider is mostly “implement an adapter + register it”
+Why this route is best (given “keep behavior identical”):
+- preserves the existing Convex realtime path (no accidental downgrade to polling)
+- keeps provider SDK imports out of core hot zones
+- makes the wizard UX clean: install packages + write config + rebuild
 
-### 2) Minimize client provider code
-If we keep *any* “direct” providers (e.g., Convex direct sync), keep them strictly optional and provider-owned (Nuxt module adds its own client plugin).
+### 2) Use gateway endpoints where they simplify without changing behavior
+Gateway-first is a great simplification for **storage** and **workspaces** (both already behave like gateways in practice).
 
-Honest take: direct providers are “nice-to-have perf”, not necessary for correctness. Gateway-first is simpler to get right.
+For **sync**, gateway-only usually changes realtime characteristics (polling) unless you add a realtime gateway channel. Keep the direct Convex sync provider for parity.
+
+Honest take: gateway-only sync is correct, but not identical-feeling unless you preserve realtime.
 
 ### 3) Invest early in guard rails
 Add a check (CI + local) that fails if core hot zones import provider modules:
@@ -189,4 +189,3 @@ Generalize this into a single gateway provider:
 - Sync works in gateway mode through `/api/sync/*`.
 - Storage works through `/api/storage/*`.
 - Admin actions authenticate via `ProviderTokenBroker` (no Clerk hardcodes outside provider package).
-
