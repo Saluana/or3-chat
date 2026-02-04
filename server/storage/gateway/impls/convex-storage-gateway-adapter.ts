@@ -16,9 +16,9 @@ import { createError } from 'h3';
 import type { StorageGatewayAdapter, PresignUploadRequest, PresignUploadResponse, PresignDownloadRequest, PresignDownloadResponse } from '../types';
 import type { Id } from '~~/convex/_generated/dataModel';
 import { api } from '~~/convex/_generated/api';
-import { getClerkProviderToken, getConvexGatewayClient } from '~/server/utils/sync/convex-gateway';
+import { getClerkProviderToken, getConvexGatewayClient } from '../../../utils/sync/convex-gateway';
 import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
-import { resolvePresignExpiresAt } from '~/server/utils/storage/presign-expiry';
+import { resolvePresignExpiresAt } from '../../../utils/storage/presign-expiry';
 
 /**
  * Convex-backed StorageGatewayAdapter implementation.

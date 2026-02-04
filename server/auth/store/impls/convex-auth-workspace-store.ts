@@ -12,7 +12,7 @@
  * DO NOT import this file directly. Use getAuthWorkspaceStore('convex') instead.
  */
 import type { AuthWorkspaceStore } from '../types';
-import type { WorkspaceRole } from '~/core/hooks/hook-types';
+import type { WorkspaceRole } from '~~/app/core/hooks/hook-types';
 
 /**
  * Convex-backed AuthWorkspaceStore implementation.
@@ -29,7 +29,7 @@ export class ConvexAuthWorkspaceStore implements AuthWorkspaceStore {
         email?: string;
         displayName?: string;
     }): Promise<{ userId: string }> {
-        const { getConvexClient } = await import('~/server/utils/convex-client');
+        const { getConvexClient } = await import('../../../utils/convex-client');
         const { api } = await import('~~/convex/_generated/api');
         const convex = getConvexClient();
 
@@ -56,7 +56,7 @@ export class ConvexAuthWorkspaceStore implements AuthWorkspaceStore {
     async getOrCreateDefaultWorkspace(
         userId: string
     ): Promise<{ workspaceId: string; workspaceName: string }> {
-        const { getConvexClient } = await import('~/server/utils/convex-client');
+        const { getConvexClient } = await import('../../../utils/convex-client');
         const { api } = await import('~~/convex/_generated/api');
         const convex = getConvexClient();
 
@@ -83,7 +83,7 @@ export class ConvexAuthWorkspaceStore implements AuthWorkspaceStore {
         userId: string;
         workspaceId: string;
     }): Promise<WorkspaceRole | null> {
-        const { getConvexClient } = await import('~/server/utils/convex-client');
+        const { getConvexClient } = await import('../../../utils/convex-client');
         const { api } = await import('~~/convex/_generated/api');
         const convex = getConvexClient();
 
@@ -102,7 +102,7 @@ export class ConvexAuthWorkspaceStore implements AuthWorkspaceStore {
     async listUserWorkspaces(
         userId: string
     ): Promise<Array<{ id: string; name: string; role: WorkspaceRole }>> {
-        const { getConvexClient } = await import('~/server/utils/convex-client');
+        const { getConvexClient } = await import('../../../utils/convex-client');
         const { api } = await import('~~/convex/_generated/api');
         const convex = getConvexClient();
 

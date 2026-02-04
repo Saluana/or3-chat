@@ -22,7 +22,7 @@ import type {
 } from '~~/shared/sync/types';
 import type { Id } from '~~/convex/_generated/dataModel';
 import { api } from '~~/convex/_generated/api';
-import { getClerkProviderToken, getConvexGatewayClient } from '~/server/utils/sync/convex-gateway';
+import { getClerkProviderToken, getConvexGatewayClient } from '../../../utils/sync/convex-gateway';
 import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
 
 /**
@@ -50,7 +50,32 @@ export class ConvexSyncGatewayAdapter implements SyncGatewayAdapter {
             tables: input.tables,
         });
 
-        return result;
+        // Map Convex result to PullResponse type
+        // Convex returns op as string, but we need 'put' | 'delete'
+        return {
+            changes: result.changes.map((change: {
+                serverVersion: number;
+                tableName: string;
+                pk: string;
+                op: string;
+                payload?: unknown;
+                stamp: {
+                    clock: number;
+                    hlc: string;
+                    deviceId: string;
+                    opId: string;
+                };
+            }) => ({
+                serverVersion: change.serverVersion,
+                tableName: change.tableName,
+                pk: change.pk,
+                op: change.op as 'put' | 'delete',
+                payload: change.payload,
+                stamp: change.stamp,
+            })),
+            nextCursor: result.nextCursor,
+            hasMore: result.hasMore,
+        };
     }
 
     async push(event: H3Event, input: PushBatch): Promise<PushResult> {
