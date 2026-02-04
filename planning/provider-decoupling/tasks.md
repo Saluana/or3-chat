@@ -75,14 +75,21 @@ If any of the above still select Convex by default, `sync/storage != convex` is 
 - [x] Introduce a `SyncGatewayAdapter` interface + registry:
   - [x] `registerSyncGatewayAdapter({ id, create })` (or `registerSyncGatewayAdapter(adapter)`)
   - [x] `getActiveSyncGatewayAdapter()` from config
-- [ ] Refactor core endpoints:
-  - [ ] `server/api/sync/push.post.ts`
-  - [ ] `server/api/sync/pull.post.ts`
-  - [ ] `server/api/sync/update-cursor.post.ts`
-  - [ ] `server/api/sync/gc-*.post.ts`
+- [x] Refactor core endpoints:
+  - [x] `server/api/sync/push.post.ts`
+  - [x] `server/api/sync/pull.post.ts`
+  - [x] `server/api/sync/update-cursor.post.ts`
+  - [x] `server/api/sync/gc-*.post.ts`
   - …so they do **no provider imports** and dispatch to the adapter.
 
 ### 1.4 Storage gateway adapter + endpoint dispatch (server)
+- [x] Introduce a `StorageGatewayAdapter` interface + registry
+- [x] Refactor core endpoints:
+  - [x] `server/api/storage/presign-upload.post.ts`
+  - [x] `server/api/storage/presign-download.post.ts`
+  - [x] `server/api/storage/commit.post.ts`
+  - [x] `server/api/storage/gc/*.post.ts`
+  - …so they do **no provider imports** and dispatch to the adapter.
 - [x] Introduce a `StorageGatewayAdapter` interface + registry
 - [ ] Refactor core endpoints:
   - [ ] `server/api/storage/presign-upload.post.ts`
