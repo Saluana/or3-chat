@@ -18,14 +18,19 @@ const MAX_INLINE_DATA_URL_SIZE = 10000; // 10KB - small icons/thumbnails OK, lar
  * @param tableName - The table the payload belongs to
  * @param payload - The raw payload to sanitize
  * @param operation - Whether this is a put or delete operation
- * @returns Sanitized payload or undefined for delete operations
+ * @returns Sanitized payload or undefined for delete operations with no payload
  */
 export function sanitizePayloadForSync(
     tableName: string,
     payload: unknown,
     operation: 'put' | 'delete'
 ): Record<string, unknown> | undefined {
-    // Delete operations don't need payload
+    // Delete operations with no payload return undefined
+    if (operation === 'delete' && (!payload || typeof payload !== 'object')) {
+        return undefined;
+    }
+
+    // If no payload provided, return undefined
     if (!payload || typeof payload !== 'object') {
         return undefined;
     }

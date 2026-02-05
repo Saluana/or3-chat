@@ -141,7 +141,7 @@ export interface SyncProvider {
     subscribe(
         scope: SyncScope,
         tables: string[],
-        onChanges: (changes: SyncChange[]) => void,
+        onChanges: (changes: SyncChange[]) => void | Promise<void>,
         options?: SyncSubscribeOptions
     ): Promise<() => void>;
 
