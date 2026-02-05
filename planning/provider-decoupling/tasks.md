@@ -21,17 +21,17 @@ OR3 assumption (recommended for simplicity + "same behavior"):
 
 ### 0.1 Map the current coupling graph (one-time audit)
 
-- [ ] Enumerate provider imports in core hot zones:
-  - [ ] `app/pages/**` (especially `app/pages/_tests/**`)
-  - [ ] `app/plugins/**`
-  - [ ] `server/api/**`
-  - [ ] `server/middleware/**`
-  - [ ] `server/plugins/**`
-- [ ] Make a list of "provider SDK import strings" to ban in core:
-  - [ ] `@clerk/nuxt`
-  - [ ] `convex`
-  - [ ] `convex-vue`
-  - [ ] `~~/convex/_generated/*`
+- [x] Enumerate provider imports in core hot zones:
+  - [x] `app/pages/**` (especially `app/pages/_tests/**`)
+  - [x] `app/plugins/**`
+  - [x] `server/api/**`
+  - [x] `server/middleware/**`
+  - [x] `server/plugins/**`
+- [x] Make a list of "provider SDK import strings" to ban in core:
+  - [x] `@clerk/nuxt`
+  - [x] `convex`
+  - [x] `convex-vue`
+  - [x] `~~/convex/_generated/*`
 
 ### 0.2 Decide what "no Convex build" means (scope alignment)
 
@@ -232,7 +232,7 @@ This phase is what makes "optional dependencies" actually real.
 
 ## Current Status Summary
 
-**Last Updated**: 2026-02-04
+**Last Updated**: 2026-02-05
 
 ### ✅ Completed
 
@@ -244,7 +244,7 @@ This phase is what makes "optional dependencies" actually real.
 
 ### ⏳ In Progress / Remaining
 
-- Phase 0: Audit and guardrails (not started)
+- Phase 0: Audit complete; guardrails + config alignment pending
 - Phase 1.2: ProviderTokenBroker integration (9+ call sites still use getClerkProviderToken)
 - Phase 1.5: Workspace SSR endpoints + UI refactoring
 - Phase 1.6: Client plugin cleanup
