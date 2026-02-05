@@ -25,12 +25,7 @@ export function sanitizePayloadForSync(
     payload: unknown,
     operation: 'put' | 'delete'
 ): Record<string, unknown> | undefined {
-    // Delete operations with no payload return undefined
-    if (operation === 'delete' && (!payload || typeof payload !== 'object')) {
-        return undefined;
-    }
-
-    // If no payload provided, return undefined
+    // If no payload provided or invalid type, return undefined
     if (!payload || typeof payload !== 'object') {
         return undefined;
     }
