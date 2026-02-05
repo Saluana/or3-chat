@@ -136,6 +136,19 @@ export class HookBridge {
             updatingHook.hook('updating', (modifications, primKey, obj, transaction) => {
                 if (!this.captureEnabled || this.syncTransactions.get(transaction)) return;
 
+                // Guard: obj should be the existing record. If undefined, skip capture.
+                // This can happen in rare race conditions or if the record doesn't exist.
+                if (!obj || typeof obj !== 'object') {
+                    if (import.meta.dev) {
+                        console.warn('[HookBridge] Skipping update capture for missing obj:', {
+                            tableName,
+                            primKey,
+                            modifications,
+                        });
+                    }
+                    return;
+                }
+
                 // Dexie passes modifications with dot-notation keys like 'data.content'
                 // We need to properly merge these into the existing object
                 const merged = deepClone(obj);
@@ -224,6 +237,23 @@ export class HookBridge {
         if (tableName === 'messages' && operation === 'put') {
             if (safePayload.pending === true) {
                 return; // Skip intermediate streaming updates, wait for finalization
+            }
+
+            // Validate that required message fields are present
+            // If any are missing, the payload is corrupt and cannot be synced
+            const requiredFields = ['thread_id', 'role', 'index'];
+            const missingFields = requiredFields.filter(
+                (f) => safePayload[f] === undefined || safePayload[f] === null
+            );
+            if (missingFields.length > 0) {
+                if (import.meta.dev) {
+                    console.error('[HookBridge] Skipping corrupt message payload (missing fields):', {
+                        pk,
+                        missingFields,
+                        payload: safePayload,
+                    });
+                }
+                return; // Skip corrupt payloads - they will fail server validation anyway
             }
         }
 

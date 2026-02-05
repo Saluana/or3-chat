@@ -148,8 +148,8 @@ export const ThreadCreateSchema = ThreadSchema.partial({
             .int()
             .optional()
             .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
+        created_at: z.number().int().default(() => nowSec()),
+        updated_at: z.number().int().default(() => nowSec()),
     });
 // Use z.input so defaulted fields are optional for callers
 /**
@@ -307,8 +307,8 @@ export const PostCreateSchema = PostSchema.partial({
         .string()
         .optional()
         .transform((v) => v ?? newId()),
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
+    created_at: z.number().int().default(() => nowSec()),
+    updated_at: z.number().int().default(() => nowSec()),
 });
 /**
  * Purpose:
@@ -353,8 +353,8 @@ export const MessageCreateSchema = MessageSchema.partial({ index: true })
             .int()
             .optional()
             .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
+        created_at: z.number().int().default(() => nowSec()),
+        updated_at: z.number().int().default(() => nowSec()),
     });
 // Use input type so callers can omit defaulted fields
 /**
@@ -431,8 +431,8 @@ export const KvCreateSchema = KvSchema.omit({
     created_at: true,
     updated_at: true,
 }).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
+    created_at: z.number().int().default(() => nowSec()),
+    updated_at: z.number().int().default(() => nowSec()),
 });
 /**
  * Purpose:
@@ -509,8 +509,8 @@ export const AttachmentCreateSchema = AttachmentSchema.omit({
     created_at: true,
     updated_at: true,
 }).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
+    created_at: z.number().int().default(() => nowSec()),
+    updated_at: z.number().int().default(() => nowSec()),
 });
 /**
  * Purpose:
@@ -597,8 +597,8 @@ export const FileMetaCreateSchema = FileMetaSchema.omit({
     updated_at: true,
     ref_count: true,
 }).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
+    created_at: z.number().int().default(() => nowSec()),
+    updated_at: z.number().int().default(() => nowSec()),
     ref_count: z.number().int().default(1),
     clock: z.number().int().default(0),
 });
@@ -742,8 +742,8 @@ export const NotificationCreateSchema = NotificationSchema.partial({
             .int()
             .optional()
             .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
+        created_at: z.number().int().default(() => nowSec()),
+        updated_at: z.number().int().default(() => nowSec()),
     });
 /**
  * Purpose:

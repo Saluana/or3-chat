@@ -77,6 +77,7 @@ export function createGatewaySyncProvider(
             let cursor = options?.cursor ?? 0;
             const limit = options?.limit ?? pullLimit;
             let timeout: ReturnType<typeof setTimeout> | null = null;
+            let running = false;
 
             const poll = async () => {
                 let hasMore = true;
@@ -93,7 +94,13 @@ export function createGatewaySyncProvider(
                     );
 
                     if (response.changes.length) {
-                        onChanges(response.changes);
+                        // Allow async handlers (SubscriptionManager) to provide backpressure.
+                        // This prevents overlapping apply cycles which can break cursor accounting.
+                        await Promise.resolve(
+                            (onChanges as unknown as (c: SyncChange[]) => void | Promise<void>)(
+                                response.changes
+                            )
+                        );
                     }
 
                     if (response.nextCursor > cursor) {
@@ -104,21 +111,25 @@ export function createGatewaySyncProvider(
                 }
             };
 
-            await poll();
-
             const run = async () => {
-                if (!active) return;
+                if (!active || running) return;
+                running = true;
                 try {
                     await poll();
                 } catch (error) {
                     console.error('[gateway-sync] Poll failed:', error);
+                } finally {
+                    running = false;
                 }
+                if (!active) return;
                 // Add random jitter (0-500ms) to prevent thundering herd
                 const jitter = Math.floor(Math.random() * 500);
                 timeout = setTimeout(run, pollIntervalMs + jitter);
             };
 
-            timeout = setTimeout(run, pollIntervalMs);
+            // Start immediately. Do not await initial poll; callers expect subscribe() to resolve quickly
+            // with an unsubscribe handle. Awaiting the initial poll can deadlock resubscribe logic.
+            timeout = setTimeout(run, 0);
 
             const unsubscribe = () => {
                 active = false;

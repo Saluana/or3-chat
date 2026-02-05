@@ -1,7 +1,7 @@
 // Multi-pane state management composable for chat & documents
 // Keeps pane logic outside of UI components for easier testing & extension.
 
-import { ref, computed, onScopeDispose, type Ref, type ComputedRef } from 'vue';
+import { ref, computed, onScopeDispose, getCurrentScope, type Ref, type ComputedRef } from 'vue';
 import { useLocalStorage } from '@vueuse/core';
 import Dexie from 'dexie';
 import { db } from '~/db';
@@ -929,11 +929,13 @@ export function useMultiPane(
     }
 
     // Clean up global reference on scope disposal to prevent memory leaks
-    onScopeDispose(() => {
-        if (getGlobalMultiPaneApi() === api) {
-            setGlobalMultiPaneApi(undefined);
-        }
-    });
+    if (getCurrentScope()) {
+        onScopeDispose(() => {
+            if (getGlobalMultiPaneApi() === api) {
+                setGlobalMultiPaneApi(undefined);
+            }
+        });
+    }
 
     // Width restoration removed - useLocalStorage handles it automatically
 

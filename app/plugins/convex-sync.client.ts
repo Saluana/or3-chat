@@ -36,6 +36,8 @@ let engineState: SyncEngineState | null = null;
 let authRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 const AUTH_RETRY_DELAYS = [500, 1000, 2000, 5000];
 let stopInFlight: Promise<void> | null = null;
+let startInFlight: Promise<void> | null = null;
+let startWorkspaceIdInFlight: string | null = null;
 
 function getActiveWorkspaceId(): string | null {
     return engineState?.scope.workspaceId ?? null;
@@ -63,9 +65,13 @@ function scheduleAuthRetry(workspaceId: string, attempt: number): void {
  * Start the sync engine for a workspace
  */
 async function startSyncEngine(workspaceId: string): Promise<void> {
-    if (engineState) {
-        console.warn('[sync-engine] Engine already running, stopping first');
-        await stopSyncEngine();
+    // Idempotent: avoid duplicate engines for the same workspace (common during hydration/watch storms).
+    if (engineState?.scope.workspaceId === workspaceId) return;
+
+    // Serialize starts to prevent multiple engines racing on the same DB/provider.
+    if (startInFlight) {
+        if (startWorkspaceIdInFlight === workspaceId) return startInFlight;
+        await startInFlight.catch(() => {});
     }
 
     if (authRetryTimeout) {
@@ -73,53 +79,67 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
         authRetryTimeout = null;
     }
 
-    console.log('[sync-engine] Starting sync engine for workspace:', workspaceId);
+    startWorkspaceIdInFlight = workspaceId;
+    startInFlight = (async () => {
+        if (engineState) {
+            console.warn('[sync-engine] Engine already running, stopping first');
+            await stopSyncEngine();
+        }
 
-    // Create workspace-specific DB
-    const db = createWorkspaceDb(workspaceId);
+        console.log('[sync-engine] Starting sync engine for workspace:', workspaceId);
 
-    // Get or create provider
-    const provider = getActiveSyncProvider();
-    if (!provider) {
-        console.error('[sync-engine] No sync provider available');
-        scheduleAuthRetry(workspaceId, 1);
-        return;
+        // Create workspace-specific DB
+        const db = createWorkspaceDb(workspaceId);
+
+        // Get or create provider
+        const provider = getActiveSyncProvider();
+        if (!provider) {
+            console.error('[sync-engine] No sync provider available');
+            scheduleAuthRetry(workspaceId, 1);
+            return;
+        }
+
+        const resolvedProvider = provider;
+
+        const scope: SyncScope = { workspaceId };
+        // Initialize components
+        const hookBridge = getHookBridge(db);
+        hookBridge.start();
+
+        const outboxManager = new OutboxManager(db, resolvedProvider, scope);
+        outboxManager.start();
+
+        const subscriptionManager = createSubscriptionManager(db, resolvedProvider, scope);
+        await subscriptionManager.start();
+
+        const gcManager = new GcManager(db, resolvedProvider, scope);
+        gcManager.start();
+
+        engineState = {
+            db,
+            provider: resolvedProvider,
+            scope,
+            hookBridge,
+            outboxManager,
+            subscriptionManager,
+            gcManager,
+        };
+
+        console.log('[sync-engine] Sync engine started');
+    })();
+
+    try {
+        await startInFlight;
+    } finally {
+        startInFlight = null;
+        startWorkspaceIdInFlight = null;
     }
-
-    const resolvedProvider = provider;
-
-    const scope: SyncScope = { workspaceId };
-    // Initialize components
-    const hookBridge = getHookBridge(db);
-    hookBridge.start();
-
-    const outboxManager = new OutboxManager(db, resolvedProvider, scope);
-    outboxManager.start();
-
-    const subscriptionManager = createSubscriptionManager(db, resolvedProvider, scope);
-    await subscriptionManager.start();
-
-    const gcManager = new GcManager(db, resolvedProvider, scope);
-    gcManager.start();
-
-    engineState = {
-        db,
-        provider: resolvedProvider,
-        scope,
-        hookBridge,
-        outboxManager,
-        subscriptionManager,
-        gcManager,
-    };
-
-    console.log('[sync-engine] Sync engine started');
 }
 
 /**
  * Stop the sync engine
  */
 async function stopSyncEngine(): Promise<void> {
-    if (!engineState) return;
     if (stopInFlight) return stopInFlight;
 
     console.log('[sync-engine] Stopping sync engine');
@@ -130,6 +150,17 @@ async function stopSyncEngine(): Promise<void> {
     }
 
     stopInFlight = (async () => {
+        // If a start is in progress and hasn't published engineState yet, wait so we can
+        // stop cleanly and avoid leaving background loops running.
+        if (startInFlight && !engineState) {
+            await startInFlight.catch(() => {});
+        }
+
+        if (!engineState) {
+            stopInFlight = null;
+            return;
+        }
+
         // Stop outbox
         engineState?.outboxManager.stop();
         engineState?.hookBridge.stop();
@@ -212,7 +243,12 @@ export default defineNuxtPlugin(async () => {
     const nuxtApp = useNuxtApp();
     const router = useRouter();
 
-    let currentPath = getCurrentPath();
+    function getRoutePathSafe(): string {
+        const maybeRouter = router as unknown as { currentRoute?: { value?: { path?: unknown } } };
+        const raw = maybeRouter.currentRoute?.value?.path;
+        if (typeof raw === 'string') return raw;
+        return getCurrentPath();
+    }
 
     function updateSyncForRouteAndSession(workspaceId: string | null, path: string): void {
         const isAdmin = isAdminPath(path);
@@ -258,14 +294,9 @@ export default defineNuxtPlugin(async () => {
         }
     }
 
-    const removeAfterEach = router.afterEach((to) => {
-        currentPath = to.path;
-        updateSyncForRouteAndSession(activeWorkspaceId.value, currentPath);
-    });
-
     watch(
-        activeWorkspaceId,
-        (workspaceId) => updateSyncForRouteAndSession(workspaceId, currentPath),
+        () => ({ workspaceId: activeWorkspaceId.value, path: getRoutePathSafe() }),
+        ({ workspaceId, path }) => updateSyncForRouteAndSession(workspaceId, path),
         { immediate: true }
     );
 
@@ -286,7 +317,6 @@ export default defineNuxtPlugin(async () => {
     // Handle HMR cleanup
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
-            removeAfterEach();
             stopSyncEngine();
         });
     }

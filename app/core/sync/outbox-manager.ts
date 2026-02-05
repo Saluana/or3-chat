@@ -361,6 +361,11 @@ export class OutboxManager {
         if (error.includes('missing the required field')) return true;
         if (error.includes('Value does not match validator')) return true;
 
+        // Empty payload errors - payload was captured incorrectly (HookBridge bug)
+        // These can't be fixed by retrying; the data is permanently missing
+        if (error.includes('Invalid payload for') && error.includes('received undefined')) return true;
+        if (error.includes('invalid_type') && error.includes('received undefined')) return true;
+
         return false;
     }
 
@@ -408,5 +413,44 @@ export class OutboxManager {
             .where('status')
             .equals('failed')
             .modify({ status: 'pending', attempts: 0, nextAttemptAt: undefined });
+    }
+
+    /**
+     * Purge corrupt ops that have empty or invalid payloads.
+     * These ops cannot be synced and will continuously fail with validation errors.
+     * Returns the count of deleted ops.
+     */
+    async purgeCorruptOps(): Promise<number> {
+        const allPending = await this.db.pending_ops.toArray();
+        const corruptIds: string[] = [];
+
+        for (const op of allPending) {
+            // Check for delete ops (which don't need full payload)
+            if (op.operation === 'delete') continue;
+
+            // Check if payload is missing or empty
+            if (!op.payload || typeof op.payload !== 'object') {
+                corruptIds.push(op.id);
+                continue;
+            }
+
+            // For message ops, check required fields
+            if (op.tableName === 'messages') {
+                const requiredFields = ['thread_id', 'role', 'index'];
+                const hasAllRequired = requiredFields.every(
+                    (field) => (op.payload as Record<string, unknown>)[field] !== undefined
+                );
+                if (!hasAllRequired) {
+                    corruptIds.push(op.id);
+                }
+            }
+        }
+
+        if (corruptIds.length > 0) {
+            await this.db.pending_ops.where('id').anyOf(corruptIds).delete();
+            console.log(`[OutboxManager] Purged ${corruptIds.length} corrupt ops`);
+        }
+
+        return corruptIds.length;
     }
 }

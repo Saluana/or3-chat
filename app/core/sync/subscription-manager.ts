@@ -54,6 +54,7 @@ export class SubscriptionManager {
     private isBootstrapping = false;
     private boundBeforeUnload: (() => void) | null = null;
     private lastSubscriptionCursor: number | null = null;
+    private changeQueue: Promise<void> = Promise.resolve();
 
     constructor(
         db: Or3DB,
@@ -371,14 +372,22 @@ export class SubscriptionManager {
         this.unsubscribe = await this.provider.subscribe(
             this.scope,
             this.config.tables,
-            (changes) => {
-                this.handleChanges(changes).catch((err) => {
-                    console.error('[SubscriptionManager] handleChanges error:', err);
-                    this.handleError(err);
-                });
-            },
+            (changes) => this.enqueueChanges(changes),
             { cursor, limit: this.config.bootstrapPageSize }
         );
+    }
+
+    private enqueueChanges(changes: SyncChange[]): Promise<void> {
+        // Providers can emit change batches back-to-back (especially gateway polling).
+        // Serialize apply cycles to keep cursor accounting correct and avoid races.
+        this.changeQueue = this.changeQueue
+            .then(() => this.handleChanges(changes))
+            .catch((err) => {
+                console.error('[SubscriptionManager] handleChanges error:', err);
+                this.handleError(err);
+            });
+
+        return this.changeQueue;
     }
 
     /**

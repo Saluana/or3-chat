@@ -22,7 +22,7 @@
  * - Abort always finalizes stream accumulator state
  */
 
-import { ref, computed, watch, onScopeDispose } from 'vue';
+import { ref, computed, watch, onScopeDispose, getCurrentScope } from 'vue';
 import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
 import { create, tx, upsert, type Message } from '~/db';
@@ -1956,9 +1956,11 @@ export function useChat(
 
     void reattachBackgroundJobs();
 
-    onScopeDispose(() => {
-        clear();
-    });
+    if (getCurrentScope()) {
+        onScopeDispose(() => {
+            clear();
+        });
+    }
 
     /**
      * Purpose:

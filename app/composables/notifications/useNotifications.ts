@@ -16,7 +16,7 @@
  * - Persisting notification preferences outside the local KV table
  */
 
-import { ref, computed, onScopeDispose, watch, type ComputedRef } from 'vue';
+import { ref, computed, onScopeDispose, watch, type ComputedRef, getCurrentScope } from 'vue';
 import Dexie, { liveQuery, type Subscription } from 'dexie';
 import { z } from 'zod';
 import { useRuntimeConfig } from '#imports';
@@ -275,20 +275,22 @@ export function useNotifications(): NotificationsComposable {
     });
 
     // Cleanup subscriptions and service ref count
-    onScopeDispose(() => {
-        stopNotificationSubscriptions();
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- guard handles async race between init and dispose
-        if (mutedThreadsSubscription) mutedThreadsSubscription.unsubscribe();
+    if (getCurrentScope()) {
+        onScopeDispose(() => {
+            stopNotificationSubscriptions();
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- guard handles async race between init and dispose
+            if (mutedThreadsSubscription) mutedThreadsSubscription.unsubscribe();
 
-        // Decrement service ref count and cleanup when no more users
-        serviceRefCount--;
-        if (serviceRefCount === 0 && serviceCleanup) {
-            serviceCleanup();
-            sharedService = null;
-            sharedServiceUserId = null;
-            serviceCleanup = null;
-        }
-    });
+            // Decrement service ref count and cleanup when no more users
+            serviceRefCount--;
+            if (serviceRefCount === 0 && serviceCleanup) {
+                serviceCleanup();
+                sharedService = null;
+                sharedServiceUserId = null;
+                serviceCleanup = null;
+            }
+        });
+    }
 
     const isThreadMuted = (threadId: string): boolean => {
         return mutedThreadsData.value.includes(threadId);

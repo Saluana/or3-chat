@@ -418,4 +418,77 @@ describe('SubscriptionManager', () => {
         const cursorState = (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState;
         expect(cursorState.cursor).toBe(5);
     });
+
+    it('serializes apply cycles from rapid subscription emissions', async () => {
+        (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 1;
+
+        let release: (() => void) | null = null;
+        const barrier = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+
+        let updateCalls = 0;
+
+        const provider: SyncProvider = {
+            id: 'sub-provider-serial',
+            mode: 'direct',
+            auth: undefined,
+            subscribe: vi.fn(async (
+                _scope: SyncScope,
+                _tables: string[],
+                _onChanges: (changes: SyncChange[]) => void,
+                _options?: SyncSubscribeOptions
+            ) => () => undefined),
+            pull: vi.fn(async (request: PullRequest) => ({
+                changes: [],
+                nextCursor: request.cursor,
+                hasMore: false,
+            })),
+            push: vi.fn(async () => {
+                throw new Error('push not used');
+            }),
+            updateCursor: vi.fn(async () => {
+                updateCalls += 1;
+                if (updateCalls === 1) {
+                    await barrier;
+                }
+            }),
+            dispose: vi.fn(async () => undefined),
+        };
+
+        const messages = createMemoryTable('id');
+        const tombstones = createMemoryTable('id');
+        const pending_ops = createMemoryTable('id');
+        const db = createMockDb({ messages, tombstones, pending_ops });
+
+        const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
+        await manager.start();
+        expect((cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor).toBe(1);
+
+        const onChanges = (provider.subscribe as unknown as { mock: { calls: unknown[][] } }).mock
+            .calls[0]![2] as (changes: SyncChange[]) => Promise<void> | void;
+
+        // Emit two batches back-to-back. Without serialization, the second batch would run
+        // while the first is awaiting updateCursor().
+        void onChanges([buildChange(2)]);
+        void onChanges([buildChange(3)]);
+
+        // Wait until the first updateCursor is reached (it will block on the barrier).
+        for (let i = 0; i < 200; i++) {
+            if ((provider.updateCursor as unknown as { mock: { calls: unknown[][] } }).mock.calls.length >= 1) break;
+            await Promise.resolve();
+        }
+
+        expect((cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor).toBeGreaterThanOrEqual(2);
+        expect(provider.updateCursor).toHaveBeenCalledTimes(1);
+
+        release?.();
+        for (let i = 0; i < 200; i++) {
+            if ((provider.updateCursor as unknown as { mock: { calls: unknown[][] } }).mock.calls.length >= 2) break;
+            await Promise.resolve();
+        }
+        await vi.runAllTimersAsync();
+
+        expect(provider.updateCursor).toHaveBeenCalledTimes(2);
+    });
 });
