@@ -215,7 +215,7 @@ export class OutboxManager {
                 for (const op of batch) {
                     const res = resultsById.get(op.stamp.opId);
                     if (!res) {
-                        await this.handleFailedOp(op, 'Missing push result');
+                        await this.handleFailedOp(op, 'Missing push result', 'UNKNOWN');
                         failCount += 1;
                         continue;
                     }
@@ -229,7 +229,7 @@ export class OutboxManager {
                         successCount += 1;
                     } else {
                         // Failed - handle retry
-                        await this.handleFailedOp(op, res.error);
+                        await this.handleFailedOp(op, res.error, res.errorCode);
                         failCount += 1;
                     }
                 }
@@ -349,7 +349,26 @@ export class OutboxManager {
     /**
      * Check if an error is permanent and should not be retried
      */
-    private isPermanentFailure(error?: string): boolean {
+    private isPermanentFailure(errorCode?: string, error?: string): boolean {
+        // Use error code if available (preferred)
+        if (errorCode) {
+            switch (errorCode) {
+                case 'VALIDATION_ERROR':
+                case 'OVERSIZED':
+                case 'UNAUTHORIZED':
+                    return true;
+                case 'CONFLICT':
+                case 'NETWORK_ERROR':
+                case 'RATE_LIMITED':
+                case 'SERVER_ERROR':
+                case 'UNKNOWN':
+                    return false;
+                default:
+                    return false;
+            }
+        }
+
+        // Fallback to string matching for legacy/unstructured errors
         if (!error) return false;
 
         // Oversized document - can't be fixed without app changes

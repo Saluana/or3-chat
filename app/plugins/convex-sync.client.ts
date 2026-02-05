@@ -250,7 +250,11 @@ export default defineNuxtPlugin(async () => {
         return getCurrentPath();
     }
 
-    function updateSyncForRouteAndSession(workspaceId: string | null, path: string): void {
+    function updateSyncForRouteAndSession(
+        workspaceId: string | null, 
+        path: string, 
+        authenticated: boolean
+    ): void {
         const isAdmin = isAdminPath(path);
 
         if (isAdmin) {
@@ -276,10 +280,10 @@ export default defineNuxtPlugin(async () => {
             return;
         }
 
-        // Manage sync engine based on workspace ID
+        // Manage sync engine based on workspace ID AND authentication status
         // Note: Workspace DB switching is handled separately by useWorkspaceManager
         // in 00-workspace-db.client.ts. This function only starts/stops the sync engine.
-        if (workspaceId) {
+        if (workspaceId && authenticated) {
             void startSyncEngine(workspaceId).catch((error) => {
                 console.error('[sync-engine] Failed to start sync engine:', error);
             });
@@ -295,8 +299,12 @@ export default defineNuxtPlugin(async () => {
     }
 
     watch(
-        () => ({ workspaceId: activeWorkspaceId.value, path: getRoutePathSafe() }),
-        ({ workspaceId, path }) => updateSyncForRouteAndSession(workspaceId, path),
+        () => ({ 
+            workspaceId: activeWorkspaceId.value, 
+            path: getRoutePathSafe(),
+            authenticated: sessionData.value?.authenticated ?? false
+        }),
+        ({ workspaceId, path, authenticated }) => updateSyncForRouteAndSession(workspaceId, path, authenticated),
         { immediate: true }
     );
 

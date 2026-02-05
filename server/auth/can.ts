@@ -71,8 +71,9 @@ const ROLE_PERMISSIONS: Record<WorkspaceRole, Permission[]> = {
  * Behavior:
  * 1. Checks if the session is authenticated.
  * 2. Checks if the user's role has the required permission.
- * 3. Handles special cases (e.g., deployment admin overrides).
- * 4. Applies dynamic filters via the hook engine.
+ * 3. Enforces workspace-scoped permissions when resource.kind === 'workspace' and resource.id is provided.
+ * 4. Handles special cases (e.g., deployment admin overrides).
+ * 5. Applies dynamic filters via the hook engine.
  *
  * @param session - The resolved session context (or null if anonymous).
  * @param permission - The specific capability being requested.
@@ -119,6 +120,16 @@ export function can(
     // Special case: deployment admin grants admin.access regardless of role
     if (permission === 'admin.access' && session.deploymentAdmin) {
         allowed = true;
+    }
+
+    // Enforce workspace scoping: when checking workspace-scoped permissions,
+    // verify the session workspace matches the requested workspace resource.
+    // This prevents cross-workspace access when a resource.id is explicitly provided.
+    if (allowed && resource?.kind === 'workspace' && resource.id) {
+        const sessionWorkspaceId = session.workspace?.id;
+        if (!sessionWorkspaceId || sessionWorkspaceId !== resource.id) {
+            allowed = false;
+        }
     }
 
     const base: AccessDecision = {
