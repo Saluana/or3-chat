@@ -13,12 +13,43 @@
  */
 import type { AuthWorkspaceStore } from '../types';
 import type { WorkspaceRole } from '~~/app/core/hooks/hook-types';
+import { ConvexHttpClient } from 'convex/browser';
+import { useRuntimeConfig } from '#imports';
+
+/**
+ * Get an admin-authenticated Convex client for server-to-server calls.
+ * Uses the admin key to bypass JWT validation since these are trusted server operations.
+ */
+function getAdminConvexClient(providerUserId: string): ConvexHttpClient {
+    const config = useRuntimeConfig();
+    const url = config.sync?.convexUrl;
+    const adminKey = config.sync?.convexAdminKey;
+
+    if (!url) {
+        throw new Error('Convex URL not configured');
+    }
+    if (!adminKey) {
+        throw new Error('Convex admin key not configured - required for server-side auth operations');
+    }
+
+    const client = new ConvexHttpClient(url as string);
+    
+    // Use admin auth to authenticate as the provider user
+    // This allows the Convex mutations to verify identity.subject matches the request
+    client.setAdminAuth(adminKey as string, {
+        subject: providerUserId,
+        issuer: 'https://clerk.or3.ai', // Standard Clerk issuer format
+        tokenIdentifier: `https://clerk.or3.ai|${providerUserId}`,
+    });
+
+    return client;
+}
 
 /**
  * Convex-backed AuthWorkspaceStore implementation.
  *
  * Implementation:
- * - Uses Convex HTTP client for server-side queries/mutations
+ * - Uses Convex HTTP client with admin auth for server-side queries/mutations
  * - Calls workspaces.resolveSession and workspaces.ensure
  * - Maps Convex workspace data to AuthWorkspaceStore interface
  */
@@ -29,9 +60,8 @@ export class ConvexAuthWorkspaceStore implements AuthWorkspaceStore {
         email?: string;
         displayName?: string;
     }): Promise<{ userId: string }> {
-        const { getConvexClient } = await import('../../../utils/convex-client');
         const { api } = await import('~~/convex/_generated/api');
-        const convex = getConvexClient();
+        const convex = getAdminConvexClient(input.providerUserId);
 
         const resolved = await convex.query(api.workspaces.resolveSession, {
             provider: input.provider,
@@ -56,18 +86,12 @@ export class ConvexAuthWorkspaceStore implements AuthWorkspaceStore {
     async getOrCreateDefaultWorkspace(
         userId: string
     ): Promise<{ workspaceId: string; workspaceName: string }> {
-        const { getConvexClient } = await import('../../../utils/convex-client');
         const { api } = await import('~~/convex/_generated/api');
-        const convex = getConvexClient();
+        const convex = getAdminConvexClient(userId);
 
-        // For Convex, we need the provider and provider_user_id
-        // This is a limitation of the current API - we'll need to pass this through
-        // For now, we'll use a workaround: query with the userId
-        // This assumes userId is the provider_user_id (which it is in current impl)
-        
         // Get or create workspace via ensure
         const workspaceInfo = await convex.mutation(api.workspaces.ensure, {
-            provider: 'clerk', // TODO: Pass provider through properly
+            provider: 'clerk',
             provider_user_id: userId,
             email: undefined,
             name: undefined,
@@ -83,12 +107,11 @@ export class ConvexAuthWorkspaceStore implements AuthWorkspaceStore {
         userId: string;
         workspaceId: string;
     }): Promise<WorkspaceRole | null> {
-        const { getConvexClient } = await import('../../../utils/convex-client');
         const { api } = await import('~~/convex/_generated/api');
-        const convex = getConvexClient();
+        const convex = getAdminConvexClient(input.userId);
 
         const resolved = await convex.query(api.workspaces.resolveSession, {
-            provider: 'clerk', // TODO: Pass provider through properly
+            provider: 'clerk',
             provider_user_id: input.userId,
         });
 
@@ -102,10 +125,6 @@ export class ConvexAuthWorkspaceStore implements AuthWorkspaceStore {
     async listUserWorkspaces(
         userId: string
     ): Promise<Array<{ id: string; name: string; role: WorkspaceRole }>> {
-        const { getConvexClient } = await import('../../../utils/convex-client');
-        const { api } = await import('~~/convex/_generated/api');
-        const convex = getConvexClient();
-
         // This is a limitation - Convex doesn't have a direct listUserWorkspaces query
         // For now, return empty array - this will be implemented properly in the provider package
         // The primary use case (session resolution) doesn't need this method
