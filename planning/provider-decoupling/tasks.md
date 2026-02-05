@@ -78,7 +78,7 @@ If any of the above still select Convex by default, `sync/storage != convex` is 
 - [x] Define a server `ProviderTokenBroker` interface:
   - [x] `getProviderToken({ providerId, template? }): Promise<string | null>`
 - [x] Add a server registry/resolver for the broker keyed by `auth.provider`
-- [ ] Replace all direct Clerk token minting calls in core server code with broker calls.
+- [x] Replace all direct Clerk token minting calls in core server code with broker calls.
   - This includes gateway endpoints and admin adapters.
   - **Note**: Convex adapters currently use `getClerkProviderToken()` directly (9+ call sites)
 
@@ -108,27 +108,27 @@ If any of the above still select Convex by default, `sync/storage != convex` is 
 ### 1.5 Workspace API boundary (client)
 
 - [x] Introduce `WorkspaceApi` interface + `useWorkspaceApi()` resolver
-- [ ] Decide server backing model:
-  - [ ] Extend `AuthWorkspaceStore` for workspace CRUD (recommended), or introduce `WorkspaceStore`
-- [ ] Add SSR endpoints for workspace lifecycle (`/api/workspaces/*`) that call the configured store adapter
-- [ ] Refactor workspace UI component(s) to only use `WorkspaceApi`
-  - [ ] Remove `convex-vue` and `~~/convex/_generated/*` imports from UI
+- [x] Decide server backing model:
+  - [x] Extend `AuthWorkspaceStore` for workspace CRUD (recommended), or introduce `WorkspaceStore`
+- [x] Add SSR endpoints for workspace lifecycle (`/api/workspaces/*`) that call the configured store adapter
+- [x] Refactor workspace UI component(s) to only use `WorkspaceApi`
+  - [x] Remove `convex-vue` and `~~/convex/_generated/*` imports from UI
   - **Note**: `WorkspaceManager.vue` and `convex-sync-provider.ts` still use convex-vue
 
 ### 1.6 Client plugin cleanup (remove provider-specific auto-plugins)
 
-- [ ] Replace `app/plugins/convex-sync.client.ts` with provider-agnostic behavior:
-  - [ ] core sync engine plugin starts/stops based on session/workspace
-  - [ ] core plugin uses `getActiveSyncProvider()` only (registry), no Convex imports
-- [ ] Replace `app/plugins/storage-transfer.client.ts` with provider-agnostic behavior:
-  - [ ] core plugin wires the transfer queue to session/workspace
-  - [ ] core registers a generic "gateway storage provider" that calls `/api/storage/*`
-  - [ ] server dispatch picks the actual backend (`storage.provider`)
-- [ ] Delete or relocate `app/plugins/convex-clerk.client.ts` (provider-owned)
+- [x] Replace `app/plugins/convex-sync.client.ts` with provider-agnostic behavior:
+  - [x] core sync engine plugin starts/stops based on session/workspace
+  - [x] core plugin uses `getActiveSyncProvider()` only (registry), no Convex imports
+- [x] Replace `app/plugins/storage-transfer.client.ts` with provider-agnostic behavior:
+  - [x] core plugin wires the transfer queue to session/workspace
+  - [x] core registers a generic "gateway storage provider" that calls `/api/storage/*`
+  - [x] server dispatch picks the actual backend (`storage.provider`)
+- [x] Delete or relocate `app/plugins/convex-clerk.client.ts` (provider-owned)
 
 ### 1.7 Remove/relocate provider-specific dev pages
 
-- [ ] Move `app/pages/_tests/_test-*.vue` pages that import provider SDKs into provider packages
+- [x] Move `app/pages/_tests/_test-*.vue` pages that import provider SDKs into provider packages
   - Or gate them behind a build-time flag and keep them out of `app/pages/**` by default.
   - **Note**: These files still reference convex-vue:
     - `_test-sync.vue`
@@ -139,10 +139,10 @@ If any of the above still select Convex by default, `sync/storage != convex` is 
 
 ### 1.8 Config: provider IDs become runtime-extensible
 
-- [ ] Replace provider ID unions (`z.enum([...])`) with `string` fields in config schemas.
-- [ ] Add strict-mode startup validation:
-  - [ ] selected provider id must be registered for each enabled surface (auth/sync/storage)
-  - [ ] error message should include "install package X" style guidance
+- [x] Replace provider ID unions (`z.enum([...])`) with `string` fields in config schemas.
+- [x] Add strict-mode startup validation:
+  - [x] selected provider id must be registered for each enabled surface (auth/sync/storage)
+  - [x] error message should include "install package X" style guidance
 
 ---
 
@@ -237,19 +237,17 @@ This phase is what makes "optional dependencies" actually real.
 ### ✅ Completed
 
 - Phase 1.1: AuthWorkspaceStore registry + session.ts refactoring
-- Phase 1.2: ProviderTokenBroker interface + registry (not yet integrated)
+- Phase 1.2: ProviderTokenBroker interface + registry + core integration
 - Phase 1.3: SyncGatewayAdapter + all 5 sync endpoints refactored
 - Phase 1.4: StorageGatewayAdapter + all 4 storage endpoints refactored
-- Phase 1.5 partial: WorkspaceApi interface exists
+- Phase 1.5: WorkspaceApi + SSR endpoints + UI refactor
+- Phase 1.6: Client plugin cleanup (sync/storage + Convex/Clerk bridge removal)
+- Phase 1.7: Provider-specific dev pages relocated out of app/pages
+- Phase 1.8: Config provider IDs extensible + strict validation
 
 ### ⏳ In Progress / Remaining
 
 - Phase 0: Audit complete; guardrails + config alignment pending
-- Phase 1.2: ProviderTokenBroker integration (9+ call sites still use getClerkProviderToken)
-- Phase 1.5: Workspace SSR endpoints + UI refactoring
-- Phase 1.6: Client plugin cleanup
-- Phase 1.7: Test page cleanup (5 files still reference convex-vue)
-- Phase 1.8: Config schema updates
 - Phase 2: Provider packages (not started)
 - Phase 3: Verification gates (not started)
 

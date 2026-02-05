@@ -44,11 +44,6 @@ vi.mock('../../../utils/sync/rate-limiter', () => ({
     recordSyncRequest: (...args: unknown[]) => recordSyncRequestMock(...args),
 }));
 
-vi.mock('../../../utils/sync/convex-gateway', () => ({
-    getClerkProviderToken: vi.fn().mockResolvedValue('token'),
-    getConvexGatewayClient: () => ({ mutation: vi.fn().mockResolvedValue(null) }),
-}));
-
 vi.mock('~~/convex/_generated/api', () => ({
     api: {
         storage: {

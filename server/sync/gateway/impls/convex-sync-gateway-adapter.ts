@@ -22,8 +22,9 @@ import type {
 } from '~~/shared/sync/types';
 import type { Id } from '~~/convex/_generated/dataModel';
 import { api } from '~~/convex/_generated/api';
-import { getClerkProviderToken, getConvexGatewayClient } from '../../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+import { getConvexGatewayClient } from '../../../utils/sync/convex-gateway';
+import { CONVEX_JWT_TEMPLATE, CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
+import { resolveProviderToken } from '../../../auth/token-broker/resolve';
 
 /**
  * Convex-backed SyncGatewayAdapter implementation.
@@ -37,7 +38,10 @@ export class ConvexSyncGatewayAdapter implements SyncGatewayAdapter {
     id = 'convex';
 
     async pull(event: H3Event, input: PullRequest): Promise<PullResponse> {
-        const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
+        const token = await resolveProviderToken(event, {
+            providerId: CONVEX_PROVIDER_ID,
+            template: CONVEX_JWT_TEMPLATE,
+        });
         if (!token) {
             throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
         }
@@ -79,7 +83,10 @@ export class ConvexSyncGatewayAdapter implements SyncGatewayAdapter {
     }
 
     async push(event: H3Event, input: PushBatch): Promise<PushResult> {
-        const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
+        const token = await resolveProviderToken(event, {
+            providerId: CONVEX_PROVIDER_ID,
+            template: CONVEX_JWT_TEMPLATE,
+        });
         if (!token) {
             throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
         }
@@ -106,7 +113,10 @@ export class ConvexSyncGatewayAdapter implements SyncGatewayAdapter {
         event: H3Event,
         input: { scope: { workspaceId: string }; deviceId: string; version: number }
     ): Promise<void> {
-        const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
+        const token = await resolveProviderToken(event, {
+            providerId: CONVEX_PROVIDER_ID,
+            template: CONVEX_JWT_TEMPLATE,
+        });
         if (!token) {
             throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
         }
@@ -123,7 +133,10 @@ export class ConvexSyncGatewayAdapter implements SyncGatewayAdapter {
         event: H3Event,
         input: { scope: { workspaceId: string }; retentionSeconds: number }
     ): Promise<void> {
-        const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
+        const token = await resolveProviderToken(event, {
+            providerId: CONVEX_PROVIDER_ID,
+            template: CONVEX_JWT_TEMPLATE,
+        });
         if (!token) {
             throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
         }
@@ -139,7 +152,10 @@ export class ConvexSyncGatewayAdapter implements SyncGatewayAdapter {
         event: H3Event,
         input: { scope: { workspaceId: string }; retentionSeconds: number }
     ): Promise<void> {
-        const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
+        const token = await resolveProviderToken(event, {
+            providerId: CONVEX_PROVIDER_ID,
+            template: CONVEX_JWT_TEMPLATE,
+        });
         if (!token) {
             throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
         }

@@ -63,7 +63,52 @@ export interface AuthWorkspaceStore {
      */
     listUserWorkspaces(
         userId: string
-    ): Promise<Array<{ id: string; name: string; role: WorkspaceRole }>>;
+    ): Promise<
+        Array<{
+            id: string;
+            name: string;
+            description?: string | null;
+            role: WorkspaceRole;
+            createdAt?: number;
+            isActive?: boolean;
+        }>
+    >;
+
+    /**
+     * Purpose:
+     * Creates a new workspace and assigns the user as owner.
+     */
+    createWorkspace(input: {
+        userId: string;
+        name: string;
+        description?: string | null;
+    }): Promise<{ workspaceId: string }>;
+
+    /**
+     * Purpose:
+     * Updates workspace metadata.
+     */
+    updateWorkspace(input: {
+        userId: string;
+        workspaceId: string;
+        name: string;
+        description?: string | null;
+    }): Promise<void>;
+
+    /**
+     * Purpose:
+     * Removes a workspace.
+     */
+    removeWorkspace(input: { userId: string; workspaceId: string }): Promise<void>;
+
+    /**
+     * Purpose:
+     * Sets the active workspace for the current user.
+     */
+    setActiveWorkspace(input: {
+        userId: string;
+        workspaceId: string;
+    }): Promise<void>;
 }
 
 /**

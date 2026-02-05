@@ -34,13 +34,14 @@ import type {
     AdminUserInfo,
 } from '../types';
 import {
-    getClerkProviderToken,
     getConvexAdminGatewayClient,
     getConvexGatewayClient,
 } from '../../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+import { CONVEX_JWT_TEMPLATE, CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { ADMIN_IDENTITY_ISSUER } from '~~/shared/cloud/admin-identity';
 import { useRuntimeConfig } from '#imports';
+import { resolveProviderToken } from '../../../auth/token-broker/resolve';
+import { listProviderTokenBrokerIds } from '../../../auth/token-broker/registry';
 
 type AdminContextShape = {
     principal?: { kind?: string; username?: string };
@@ -183,21 +184,25 @@ async function getConvexClientWithAuth(event: H3Event) {
         }
     }
 
-    // Check if Clerk is configured (Convex store requires Clerk JWT for server-to-server auth)
-    if (authProvider !== 'clerk') {
+    const brokerIds = listProviderTokenBrokerIds();
+    if (!brokerIds.includes(authProvider)) {
         throw createError({
             statusCode: 501,
-            statusMessage: `Convex-based admin dashboard requires Clerk auth or ` +
-                `a server-side Convex admin key (CONVEX_SELF_HOSTED_ADMIN_KEY). ` +
-                `Current provider: ${authProvider || 'none'}`,
+            statusMessage:
+                `Convex-based admin dashboard requires a ProviderTokenBroker for ` +
+                `auth provider "${authProvider}". Install the provider package that ` +
+                `registers this broker (e.g. or3-provider-${authProvider}).`,
         });
     }
 
-    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
+    const token = await resolveProviderToken(event, {
+        providerId: CONVEX_PROVIDER_ID,
+        template: CONVEX_JWT_TEMPLATE,
+    });
     if (!token) {
         throw createError({
             statusCode: 401,
-            statusMessage: 'Missing Clerk authentication token',
+            statusMessage: 'Missing authentication token',
         });
     }
     const client = getConvexGatewayClient(event, token);

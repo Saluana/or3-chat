@@ -6,27 +6,9 @@ const mockSession = {
     data: sessionState,
 };
 
-const tokenState = {
-    token: null as string | null,
-};
-
-const tokenBroker = {
-    getProviderToken: vi.fn(async () => tokenState.token),
-};
-
 const providerRegistry = {
     active: {
         id: 'convex',
-        mode: 'direct' as const,
-        auth: { providerId: 'convex', template: 'convex' },
-        subscribe: vi.fn(async (_scope, _tables, _onChanges, _options) => () => undefined),
-        pull: vi.fn(async () => ({ changes: [], nextCursor: 0, hasMore: false })),
-        push: vi.fn(async () => ({ results: [], serverVersion: 0 })),
-        updateCursor: vi.fn(async () => undefined),
-        dispose: vi.fn(async () => undefined),
-    },
-    gateway: {
-        id: 'convex-gateway',
         mode: 'gateway' as const,
         subscribe: vi.fn(async (_scope, _tables, _onChanges, _options) => () => undefined),
         pull: vi.fn(async () => ({ changes: [], nextCursor: 0, hasMore: false })),
@@ -39,7 +21,7 @@ const providerRegistry = {
 const providerRegistryMock = {
     registerSyncProvider: vi.fn(),
     getActiveSyncProvider: vi.fn(() => providerRegistry.active),
-    getSyncProvider: vi.fn((id: string) => (id === 'convex-gateway' ? providerRegistry.gateway : null)),
+    setActiveSyncProvider: vi.fn(),
 };
 
 const hookBridgeMock = {
@@ -53,10 +35,6 @@ const gcStart = vi.fn();
 
 vi.mock('~/composables/auth/useSessionContext', () => ({
     useSessionContext: () => mockSession,
-}));
-
-vi.mock('~/composables/auth/useAuthTokenBroker.client', () => ({
-    useAuthTokenBroker: () => tokenBroker,
 }));
 
 vi.mock('~/core/sync/sync-provider-registry', () => providerRegistryMock);
@@ -94,10 +72,6 @@ const workspaceManagerMock = {
 
 vi.mock('~/composables/workspace/useWorkspaceManager', () => ({
     useWorkspaceManager: () => workspaceManagerMock,
-}));
-
-vi.mock('convex-vue', () => ({
-    useConvexClient: () => ({ setAuth: vi.fn() }),
 }));
 
 vi.mock('vue', async () => {
@@ -142,17 +116,16 @@ vi.mock('#app', () => ({
     }),
 }));
 
-describe('convex-sync auth retry', () => {
+describe('sync engine plugin', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         vi.resetModules();
         outboxStart.mockClear();
         subscriptionStart.mockClear();
         gcStart.mockClear();
-        tokenBroker.getProviderToken.mockClear();
         providerRegistryMock.getActiveSyncProvider.mockClear();
-        providerRegistryMock.getSyncProvider.mockClear();
-        tokenState.token = null;
+        providerRegistryMock.registerSyncProvider.mockClear();
+        providerRegistryMock.setActiveSyncProvider.mockClear();
         sessionState.value.session = {
             authenticated: true,
             workspace: { id: 'ws-1' },
@@ -178,52 +151,13 @@ describe('convex-sync auth retry', () => {
             () => ({ afterEach: vi.fn(() => () => undefined) });
     });
 
-    it('retries start until token is available', async () => {
-        // First: no active provider available - sync should not start
-        providerRegistryMock.getActiveSyncProvider.mockReturnValueOnce(null as unknown as typeof providerRegistry.active);
+    it('starts sync engine when provider and workspace are available', async () => {
+        providerRegistryMock.getActiveSyncProvider.mockReturnValue(providerRegistry.active);
         await import('~/plugins/convex-sync.client');
-
-        // No provider, so no token check and no sync
-        expect(tokenBroker.getProviderToken).not.toHaveBeenCalled();
-        expect(outboxStart).not.toHaveBeenCalled();
-
-        // Second: provider becomes available and token is set
-        tokenState.token = 'token-1';
-        providerRegistryMock.getActiveSyncProvider.mockReturnValueOnce(providerRegistry.active);
-
-        await vi.advanceTimersByTimeAsync(500);
         await vi.runOnlyPendingTimersAsync();
 
-        // Now token broker should be called and sync should start
-        expect(tokenBroker.getProviderToken).toHaveBeenCalled();
         expect(outboxStart).toHaveBeenCalled();
         expect(subscriptionStart).toHaveBeenCalled();
         expect(gcStart).toHaveBeenCalled();
-    });
-
-    it('uses gateway fallback when direct token unavailable', async () => {
-        providerRegistryMock.getActiveSyncProvider.mockReturnValueOnce(providerRegistry.active);
-        providerRegistryMock.getSyncProvider.mockReturnValueOnce(providerRegistry.gateway);
-        await import('~/plugins/convex-sync.client');
-        await vi.runOnlyPendingTimersAsync();
-
-        tokenState.token = null;
-        await vi.advanceTimersByTimeAsync(500);
-        await vi.runOnlyPendingTimersAsync();
-
-        expect(providerRegistryMock.getSyncProvider).toHaveBeenCalledWith('convex-gateway');
-    });
-
-    it('retries direct auth after gateway fallback', async () => {
-        providerRegistryMock.getActiveSyncProvider.mockReturnValueOnce(providerRegistry.active);
-        providerRegistryMock.getSyncProvider.mockReturnValueOnce(providerRegistry.gateway);
-        await import('~/plugins/convex-sync.client');
-        await vi.runOnlyPendingTimersAsync();
-
-        tokenState.token = 'token-2';
-        await vi.advanceTimersByTimeAsync(500);
-        await vi.runOnlyPendingTimersAsync();
-
-        expect(providerRegistryMock.getActiveSyncProvider).toHaveBeenCalled();
     });
 });

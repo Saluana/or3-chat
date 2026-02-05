@@ -17,6 +17,8 @@
 // Use relative paths since Nitro plugins don't resolve the ~ alias
 import { registerAuthWorkspaceStore } from '../auth/store/registry';
 import { createConvexAuthWorkspaceStore } from '../auth/store/impls/convex-auth-workspace-store';
+import { registerProviderTokenBroker } from '../auth/token-broker/registry';
+import { createClerkTokenBroker } from '../auth/token-broker/impls/clerk-token-broker';
 import { registerSyncGatewayAdapter } from '../sync/gateway/registry';
 import { createConvexSyncGatewayAdapter } from '../sync/gateway/impls/convex-sync-gateway-adapter';
 import { registerStorageGatewayAdapter } from '../storage/gateway/registry';
@@ -37,6 +39,13 @@ export default defineNitroPlugin(() => {
         });
     } catch (error) {
         console.error('[providers] Failed to register Convex AuthWorkspaceStore:', error);
+    }
+
+    // Register Clerk ProviderTokenBroker (temporary - will move to provider package)
+    try {
+        registerProviderTokenBroker('clerk', createClerkTokenBroker);
+    } catch (error) {
+        console.error('[providers] Failed to register Clerk ProviderTokenBroker:', error);
     }
 
     // Register Convex SyncGatewayAdapter (temporary - will move to provider package)

@@ -18,15 +18,14 @@ import type { H3Event } from 'h3';
 import { createError } from 'h3';
 import { api } from '~~/convex/_generated/api';
 import type { Id } from '~~/convex/_generated/dataModel';
-import {
-    getClerkProviderToken,
-    getConvexGatewayClient,
-} from '../../../utils/sync/convex-gateway';
+import { getConvexGatewayClient } from '../../../utils/sync/convex-gateway';
 import {
     CLERK_PROVIDER_ID,
     CONVEX_JWT_TEMPLATE,
     CONVEX_PROVIDER_ID,
 } from '~~/shared/cloud/provider-ids';
+import { resolveProviderToken } from '../../../auth/token-broker/resolve';
+import { listProviderTokenBrokerIds } from '../../../auth/token-broker/registry';
 import type {
     ProviderAdminAdapter,
     ProviderAdminStatusResult,
@@ -72,12 +71,22 @@ export const convexSyncAdminAdapter: ProviderAdminAdapter = {
                 message: 'Convex sync is enabled but no Convex URL is configured in the environment.',
             });
         }
-        if (ctx.enabled && config.auth.provider !== CLERK_PROVIDER_ID) {
-            warnings.push({
-                level: 'warning',
-                message:
-                    'Convex admin actions currently expect Clerk gateway tokens for authentication.',
-            });
+        if (ctx.enabled) {
+            const brokerIds = listProviderTokenBrokerIds();
+            if (!brokerIds.includes(config.auth.provider)) {
+                warnings.push({
+                    level: 'warning',
+                    message:
+                        `No ProviderTokenBroker registered for auth provider "${config.auth.provider}". ` +
+                        `Install the provider package that registers this broker (e.g. or3-provider-${config.auth.provider}).`,
+                });
+            } else if (config.auth.provider !== CLERK_PROVIDER_ID) {
+                warnings.push({
+                    level: 'warning',
+                    message:
+                        `Convex admin actions will use the "${config.auth.provider}" token broker for authentication.`,
+                });
+            }
         }
 
         return {
@@ -125,7 +134,10 @@ export const convexSyncAdminAdapter: ProviderAdminAdapter = {
             });
         }
 
-        const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
+        const token = await resolveProviderToken(event, {
+            providerId: CONVEX_PROVIDER_ID,
+            template: CONVEX_JWT_TEMPLATE,
+        });
         if (!token) {
             throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
         }

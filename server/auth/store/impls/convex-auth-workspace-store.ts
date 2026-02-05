@@ -13,6 +13,7 @@
  */
 import type { AuthWorkspaceStore } from '../types';
 import type { WorkspaceRole } from '~~/app/core/hooks/hook-types';
+import type { Id } from '~~/convex/_generated/dataModel';
 import { ConvexHttpClient } from 'convex/browser';
 import { useRuntimeConfig } from '#imports';
 
@@ -124,11 +125,88 @@ export class ConvexAuthWorkspaceStore implements AuthWorkspaceStore {
 
     async listUserWorkspaces(
         userId: string
-    ): Promise<Array<{ id: string; name: string; role: WorkspaceRole }>> {
-        // This is a limitation - Convex doesn't have a direct listUserWorkspaces query
-        // For now, return empty array - this will be implemented properly in the provider package
-        // The primary use case (session resolution) doesn't need this method
-        return [];
+    ): Promise<
+        Array<{
+            id: string;
+            name: string;
+            description?: string | null;
+            role: WorkspaceRole;
+            createdAt?: number;
+            isActive?: boolean;
+        }>
+    > {
+        const { api } = await import('~~/convex/_generated/api');
+        const convex = getAdminConvexClient(userId);
+
+        const workspaces = await convex.query(api.workspaces.listMyWorkspaces, {});
+        const normalized = Array.isArray(workspaces)
+            ? workspaces.filter(
+                  (workspace): workspace is NonNullable<typeof workspace> =>
+                      Boolean(workspace)
+              )
+            : [];
+
+        return normalized.map((workspace) => ({
+            id: workspace._id,
+            name: workspace.name,
+            description: workspace.description ?? null,
+            role: workspace.role,
+            createdAt: workspace.created_at,
+            isActive: Boolean(workspace.is_active),
+        }));
+    }
+
+    async createWorkspace(input: {
+        userId: string;
+        name: string;
+        description?: string | null;
+    }): Promise<{ workspaceId: string }> {
+        const { api } = await import('~~/convex/_generated/api');
+        const convex = getAdminConvexClient(input.userId);
+
+        const workspaceId = await convex.mutation(api.workspaces.create, {
+            name: input.name,
+            description: input.description ?? undefined,
+        });
+
+        return { workspaceId };
+    }
+
+    async updateWorkspace(input: {
+        userId: string;
+        workspaceId: string;
+        name: string;
+        description?: string | null;
+    }): Promise<void> {
+        const { api } = await import('~~/convex/_generated/api');
+        const convex = getAdminConvexClient(input.userId);
+
+        await convex.mutation(api.workspaces.update, {
+            workspace_id: input.workspaceId as Id<'workspaces'>,
+            name: input.name,
+            description: input.description ?? undefined,
+        });
+    }
+
+    async removeWorkspace(input: { userId: string; workspaceId: string }): Promise<void> {
+        const { api } = await import('~~/convex/_generated/api');
+        const convex = getAdminConvexClient(input.userId);
+
+        await convex.mutation(api.workspaces.remove, {
+            workspace_id: input.workspaceId as Id<'workspaces'>,
+        });
+    }
+
+    async setActiveWorkspace(input: {
+        userId: string;
+        workspaceId: string;
+    }): Promise<void> {
+        const { api } = await import('~~/convex/_generated/api');
+        const convex = getAdminConvexClient(input.userId);
+
+        await convex.mutation(api.workspaces.setActive, {
+            workspace_id: input.workspaceId as Id<'workspaces'>,
+        });
     }
 }
 

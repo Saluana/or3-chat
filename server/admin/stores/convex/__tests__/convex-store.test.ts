@@ -1,14 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const getClerkProviderToken = vi.fn<() => Promise<string | null>>();
 const getConvexGatewayClient = vi.fn();
 const getConvexAdminGatewayClient = vi.fn();
 const useRuntimeConfig = vi.fn();
+const resolveProviderToken = vi.fn<(...args: unknown[]) => Promise<string | null>>();
+const listProviderTokenBrokerIds = vi.fn<() => string[]>();
 
 vi.mock('../../../../utils/sync/convex-gateway', () => ({
-    getClerkProviderToken: () => getClerkProviderToken(),
     getConvexGatewayClient: (...args: any[]) => getConvexGatewayClient(...args),
     getConvexAdminGatewayClient: (...args: any[]) => getConvexAdminGatewayClient(...args),
+}));
+
+vi.mock('../../../../auth/token-broker/resolve', () => ({
+    resolveProviderToken: (...args: unknown[]) => resolveProviderToken(...args),
+}));
+
+vi.mock('../../../../auth/token-broker/registry', () => ({
+    listProviderTokenBrokerIds: (...args: unknown[]) => listProviderTokenBrokerIds(...args),
 }));
 
 vi.mock('#imports', () => ({
@@ -18,10 +26,11 @@ vi.mock('#imports', () => ({
 describe('createConvexWorkspaceAccessStore', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        getClerkProviderToken.mockReset();
         getConvexGatewayClient.mockReset();
         getConvexAdminGatewayClient.mockReset();
         useRuntimeConfig.mockReset();
+        resolveProviderToken.mockReset();
+        listProviderTokenBrokerIds.mockReset();
     });
 
     it('uses admin key for super_admin without Clerk', async () => {
@@ -32,7 +41,8 @@ describe('createConvexWorkspaceAccessStore', () => {
         getConvexAdminGatewayClient.mockReturnValue({
             query: vi.fn().mockResolvedValue([]),
         });
-        getClerkProviderToken.mockResolvedValue('clerk-token');
+        resolveProviderToken.mockResolvedValue('clerk-token');
+        listProviderTokenBrokerIds.mockReturnValue(['clerk']);
 
         const { createConvexWorkspaceAccessStore } = await import('../convex-store');
         const event = {
@@ -45,6 +55,6 @@ describe('createConvexWorkspaceAccessStore', () => {
         await store.listMembers({ workspaceId: 'workspaces:123' });
 
         expect(getConvexAdminGatewayClient).toHaveBeenCalledTimes(1);
-        expect(getClerkProviderToken).not.toHaveBeenCalled();
+        expect(resolveProviderToken).not.toHaveBeenCalled();
     });
 });

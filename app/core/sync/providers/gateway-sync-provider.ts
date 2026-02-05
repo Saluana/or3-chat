@@ -25,7 +25,12 @@ export interface GatewaySyncProviderConfig {
     pullLimit?: number;
 }
 
-async function requestJson<T>(path: string, body: unknown, baseUrl: string): Promise<T> {
+async function requestJson<T>(
+    path: string,
+    body: unknown,
+    baseUrl: string,
+    options: { allowEmpty?: boolean } = {}
+): Promise<T> {
     const res = await fetch(`${baseUrl}${path}`, {
         method: 'POST',
         headers: {
@@ -39,7 +44,15 @@ async function requestJson<T>(path: string, body: unknown, baseUrl: string): Pro
         throw new Error(`[gateway-sync] ${path} failed: ${res.status} ${text}`);
     }
 
-    return (await res.json()) as T;
+    const text = await res.text();
+    if (!text || text.trim().length === 0) {
+        if (options.allowEmpty) {
+            return undefined as T;
+        }
+        throw new Error(`[gateway-sync] ${path} returned empty response`);
+    }
+
+    return JSON.parse(text) as T;
 }
 
 export function createGatewaySyncProvider(
@@ -135,7 +148,8 @@ export function createGatewaySyncProvider(
             await requestJson(
                 '/api/sync/update-cursor',
                 { scope, deviceId, version },
-                baseUrl
+                baseUrl,
+                { allowEmpty: true }
             );
         },
 
@@ -143,7 +157,8 @@ export function createGatewaySyncProvider(
             await requestJson(
                 '/api/sync/gc-tombstones',
                 { scope, retentionSeconds },
-                baseUrl
+                baseUrl,
+                { allowEmpty: true }
             );
         },
 
@@ -151,7 +166,8 @@ export function createGatewaySyncProvider(
             await requestJson(
                 '/api/sync/gc-change-log',
                 { scope, retentionSeconds },
-                baseUrl
+                baseUrl,
+                { allowEmpty: true }
             );
         },
 
