@@ -9,6 +9,13 @@ const adminCheckerMock = vi.hoisted(() => ({
     checkDeploymentAdmin: vi.fn().mockResolvedValue(false),
 }));
 
+// Hoisted mock for AuthWorkspaceStore so tests can control its behavior
+const authWorkspaceStoreMock = vi.hoisted(() => ({
+    getOrCreateUser: vi.fn().mockResolvedValue({ id: 'user-1' }),
+    getOrCreateDefaultWorkspace: vi.fn().mockResolvedValue({ id: 'ws-1', name: 'Default', role: 'owner' }),
+    getWorkspaceRole: vi.fn().mockResolvedValue('owner'),
+}));
+
 vi.mock('../../utils/convex-client', () => ({
     getConvexClient: getConvexClientMock,
 }));
@@ -24,6 +31,11 @@ vi.mock('~~/convex/_generated/api', () => ({
 
 vi.mock('../deployment-admin', () => ({
     getDeploymentAdminChecker: () => adminCheckerMock,
+}));
+
+// Mock AuthWorkspaceStore registry with controllable mock
+vi.mock('../store/registry', () => ({
+    getAuthWorkspaceStore: () => authWorkspaceStoreMock,
 }));
 
 const PROVIDER_ID = 'test-provider';
@@ -51,6 +63,11 @@ function makeEvent(): H3Event {
 describe('resolveSessionContext provisioning failure modes', () => {
     beforeEach(() => {
         getConvexClientMock.mockReset();
+        // Reset store mock to success defaults
+        authWorkspaceStoreMock.getOrCreateUser.mockReset().mockResolvedValue({ id: 'user-1' });
+        authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockReset().mockResolvedValue({ id: 'ws-1', name: 'Default', role: 'owner' });
+        authWorkspaceStoreMock.getWorkspaceRole.mockReset().mockResolvedValue('owner');
+        
         testRuntimeConfig.value = {
             ...testRuntimeConfig.value,
             auth: {
@@ -70,10 +87,8 @@ describe('resolveSessionContext provisioning failure modes', () => {
             },
         };
 
-        getConvexClientMock.mockReturnValue({
-            query: vi.fn().mockRejectedValueOnce(new Error('boom')),
-            mutation: vi.fn(),
-        });
+        // Make the store throw to simulate provisioning failure
+        authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockRejectedValueOnce(new Error('boom'));
 
         const session = await resolveSessionContext(makeEvent());
 
@@ -89,10 +104,8 @@ describe('resolveSessionContext provisioning failure modes', () => {
             },
         };
 
-        getConvexClientMock.mockReturnValue({
-            query: vi.fn().mockRejectedValueOnce(new Error('boom')),
-            mutation: vi.fn(),
-        });
+        // Make the store throw to simulate provisioning failure
+        authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockRejectedValueOnce(new Error('boom'));
 
         await expect(resolveSessionContext(makeEvent())).rejects.toMatchObject({
             statusCode: 503,
@@ -108,10 +121,8 @@ describe('resolveSessionContext provisioning failure modes', () => {
             },
         };
 
-        getConvexClientMock.mockReturnValue({
-            query: vi.fn().mockRejectedValueOnce(new Error('boom')),
-            mutation: vi.fn(),
-        });
+        // Make the store throw to simulate provisioning failure
+        authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockRejectedValueOnce(new Error('boom'));
 
         await expect(resolveSessionContext(makeEvent())).rejects.toThrow('boom');
     });

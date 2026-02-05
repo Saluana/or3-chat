@@ -29,6 +29,8 @@ describe('sync rate limiter', () => {
     beforeEach(() => {
         // Reset all rate limits before each test
         resetSyncRateLimits();
+        // Rate limiter bypasses checks in non-production; mock to production for tests
+        vi.stubEnv('NODE_ENV', 'production');
     });
 
     describe('checkSyncRateLimit', () => {

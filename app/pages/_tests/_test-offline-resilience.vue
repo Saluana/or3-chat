@@ -16,6 +16,7 @@ definePageMeta({ ssr: false });
 import { getDb, getActiveWorkspaceId } from '~/db/client';
 import { getHookBridge } from '~/core/sync/hook-bridge';
 import { nowSec } from '~/db/util';
+import { useNuxtApp } from '#app';
 
 // Access sync engine for manual flush
 const nuxtApp = useNuxtApp();

@@ -12,6 +12,8 @@ describe('Admin Auth - Rate Limiting', () => {
     // Clear rate limits before each test
     beforeEach(() => {
         clearRateLimit(testIp, testUsername);
+        // Rate limiter bypasses checks in non-production; mock to production for tests
+        vi.stubEnv('NODE_ENV', 'production');
     });
 
     describe('checkRateLimit', () => {
@@ -19,7 +21,7 @@ describe('Admin Auth - Rate Limiting', () => {
             const result = checkRateLimit(testIp, testUsername);
 
             expect(result.allowed).toBe(true);
-            expect(result.remaining).toBe(4); // 5 max - 1 = 4 remaining
+            expect(result.remaining).toBe(4); // 5 max - 1 = 4 remaining (first check counts)
             expect(result.resetAt).toBeGreaterThan(Date.now());
         });
 
