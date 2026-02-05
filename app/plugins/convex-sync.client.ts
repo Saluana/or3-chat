@@ -312,6 +312,17 @@ export default defineNuxtPlugin(async () => {
             }
             return false;
         },
+        retryFailed: async () => {
+            if (engineState?.outboxManager) {
+                await engineState.outboxManager.retryFailed();
+            }
+        },
+        purgeCorruptOps: async () => {
+            if (engineState?.outboxManager) {
+                return engineState.outboxManager.purgeCorruptOps();
+            }
+            return 0;
+        },
     });
 
     // Handle HMR cleanup

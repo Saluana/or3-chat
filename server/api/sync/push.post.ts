@@ -51,9 +51,12 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid push request' });
     }
 
-    // Validate each op payload
+    // Validate each op payload.
+    // IMPORTANT: Only validate `put` payloads against table schemas.
+    // Delete ops intentionally send minimal tombstone-ish payloads (or none at all),
+    // and must not be rejected for missing non-delete fields.
     for (const op of parsed.data.ops) {
-        if (op.payload) {
+        if (op.operation === 'put' && op.payload) {
             const schema = TABLE_PAYLOAD_SCHEMAS[op.tableName];
             if (schema) {
                 // Convert to client format for validation against shared schema (which expects camelCase)

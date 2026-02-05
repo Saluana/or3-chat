@@ -422,7 +422,7 @@ describe('SubscriptionManager', () => {
     it('serializes apply cycles from rapid subscription emissions', async () => {
         (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 1;
 
-        let release: (() => void) | null = null;
+        let release: (() => void) | undefined;
         const barrier = new Promise<void>((resolve) => {
             release = resolve;
         });

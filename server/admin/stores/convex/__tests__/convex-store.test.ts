@@ -16,7 +16,7 @@ vi.mock('../../../../auth/token-broker/resolve', () => ({
 }));
 
 vi.mock('../../../../auth/token-broker/registry', () => ({
-    listProviderTokenBrokerIds: (...args: unknown[]) => listProviderTokenBrokerIds(...args),
+    listProviderTokenBrokerIds: () => listProviderTokenBrokerIds(),
 }));
 
 vi.mock('#imports', () => ({
