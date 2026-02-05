@@ -119,6 +119,7 @@ import {
     getPanePendingPrompt,
     clearPanePendingPrompt,
     setPanePendingPrompt,
+    setupPanePromptCleanup,
 } from '~/composables/core/usePanePrompt';
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 import { Or3Scroll } from 'or3-scroll';
@@ -208,6 +209,9 @@ const emit = defineEmits<{
     (e: 'reached-top'): void;
     (e: 'reached-bottom'): void;
 }>();
+
+// Register pane-close cleanup after Nuxt app context is available.
+setupPanePromptCleanup();
 
 // Initialize chat composable and make it refresh when threadId changes
 // Initialized defensively (HMR can briefly leave it null in re-eval window)

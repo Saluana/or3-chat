@@ -299,13 +299,17 @@ export class OutboxManager {
     /**
      * Handle a failed operation
      */
-    private async handleFailedOp(op: PendingOp, error?: string): Promise<void> {
+    private async handleFailedOp(
+        op: PendingOp,
+        error?: string,
+        errorCode?: string
+    ): Promise<void> {
         const hooks = useHooks();
         const attempts = op.attempts + 1;
         const maxAttempts = this.config.retryDelays.length;
 
         // Check for permanent failures that should not be retried
-        const isPermanent = this.isPermanentFailure(error);
+        const isPermanent = this.isPermanentFailure(errorCode, error);
 
         if (isPermanent || attempts >= maxAttempts) {
             // Max retries reached or permanent failure - mark as failed

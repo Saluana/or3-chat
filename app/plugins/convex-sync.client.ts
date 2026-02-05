@@ -302,7 +302,7 @@ export default defineNuxtPlugin(async () => {
         () => ({ 
             workspaceId: activeWorkspaceId.value, 
             path: getRoutePathSafe(),
-            authenticated: sessionData.value?.authenticated ?? false
+            authenticated: sessionData.value?.session?.authenticated ?? false
         }),
         ({ workspaceId, path, authenticated }) => updateSyncForRouteAndSession(workspaceId, path, authenticated),
         { immediate: true }

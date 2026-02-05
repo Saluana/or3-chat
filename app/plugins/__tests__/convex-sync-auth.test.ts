@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const sessionState = { value: { session: null as null | { authenticated: boolean; workspace?: { id: string } } } };
+const sessionState = {
+    value: {
+        authenticated: false,
+        session: null as null | { authenticated?: boolean; workspace?: { id: string } },
+    },
+};
 
 const mockSession = {
     data: sessionState,
@@ -126,9 +131,12 @@ describe('sync engine plugin', () => {
         providerRegistryMock.getActiveSyncProvider.mockClear();
         providerRegistryMock.registerSyncProvider.mockClear();
         providerRegistryMock.setActiveSyncProvider.mockClear();
-        sessionState.value.session = {
+        sessionState.value = {
             authenticated: true,
-            workspace: { id: 'ws-1' },
+            session: {
+                authenticated: true,
+                workspace: { id: 'ws-1' },
+            },
         };
         (globalThis as typeof globalThis & { defineNuxtPlugin: (plugin: () => unknown) => unknown }).defineNuxtPlugin =
             (plugin) => plugin();

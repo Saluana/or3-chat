@@ -13,6 +13,13 @@ import { useHooks } from '~/core/hooks/useHooks';
 import { NotificationService } from '~/core/notifications/notification-service';
 import { newId, nowSec } from '~/db/util';
 
+const hooksMock = {
+    addAction: vi.fn(),
+    removeAction: vi.fn(),
+    doAction: vi.fn(),
+    applyFilters: vi.fn((_, value) => Promise.resolve(value)),
+};
+
 // Mock modules
 vi.mock('#imports', () => ({
     useHooks: () => ({
@@ -20,6 +27,10 @@ vi.mock('#imports', () => ({
         doAction: vi.fn(),
         applyFilters: vi.fn((_, value) => value),
     }),
+}));
+
+vi.mock('~/core/hooks/useHooks', () => ({
+    useHooks: () => hooksMock,
 }));
 
 // Helper function to emit system notification (same logic as plugin)
