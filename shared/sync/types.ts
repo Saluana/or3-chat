@@ -87,6 +87,20 @@ export interface PushBatch {
 }
 
 /**
+ * Error codes for sync operations
+ */
+export type SyncErrorCode = 
+    | 'VALIDATION_ERROR'      // Schema validation failed
+    | 'UNAUTHORIZED'          // Auth/permission denied
+    | 'CONFLICT'              // Optimistic lock conflict
+    | 'NOT_FOUND'             // Resource not found
+    | 'RATE_LIMITED'          // Rate limit exceeded
+    | 'OVERSIZED'             // Payload too large
+    | 'NETWORK_ERROR'         // Network/transport failure
+    | 'SERVER_ERROR'          // Internal server error
+    | 'UNKNOWN';              // Unclassified error
+
+/**
  * Result of a push operation
  */
 export interface PushResult {
@@ -95,6 +109,7 @@ export interface PushResult {
         success: boolean;
         serverVersion?: number;
         error?: string;
+        errorCode?: SyncErrorCode;
     }>;
     serverVersion: number;
 }
@@ -141,7 +156,7 @@ export interface SyncProvider {
     subscribe(
         scope: SyncScope,
         tables: string[],
-        onChanges: (changes: SyncChange[]) => void,
+        onChanges: (changes: SyncChange[]) => void | Promise<void>,
         options?: SyncSubscribeOptions
     ): Promise<() => void>;
 

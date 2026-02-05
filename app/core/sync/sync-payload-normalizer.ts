@@ -9,7 +9,7 @@
 import { TABLE_PAYLOAD_SCHEMAS } from '~~/shared/sync/schemas';
 import { hlcToOrderKey } from './hlc';
 import { getPkField } from '~~/shared/sync/table-metadata';
-import { toClientFormat } from '~~/shared/sync/field-mappings';
+import { toClientFormat, toServerFormat } from '~~/shared/sync/field-mappings';
 
 export interface NormalizedPayload {
     payload: Record<string, unknown>;
@@ -55,10 +55,12 @@ export function normalizeSyncPayload(
         payload.order_key = hlcToOrderKey(stamp.hlc);
     }
 
-    // Validate against schema
+    // Validate against canonical wire schema (snake_case).
+    // We normalize to client format for local usage, so convert back for validation.
     const schema = TABLE_PAYLOAD_SCHEMAS[tableName];
     if (schema) {
-        const result = schema.safeParse(payload);
+        const wirePayload = toServerFormat(tableName, payload);
+        const result = schema.safeParse(wirePayload);
         if (!result.success) {
             const errors = result.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`);
             return {

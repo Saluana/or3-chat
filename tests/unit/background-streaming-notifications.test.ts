@@ -17,6 +17,13 @@ import { NotificationService } from '~/core/notifications/notification-service';
 import { newId, nowSec } from '~/db/util';
 import type { Notification } from '~/db/schema';
 
+const hooksMock = {
+    addAction: vi.fn(),
+    removeAction: vi.fn(),
+    doAction: vi.fn(),
+    applyFilters: vi.fn((_, value) => Promise.resolve(value)),
+};
+
 // Mock modules
 vi.mock('#imports', () => ({
     useHooks: () => ({
@@ -41,6 +48,10 @@ vi.mock('#imports', () => ({
     }),
     getDefaultPromptId: vi.fn(() => null),
     navigateTo: vi.fn(),
+}));
+
+vi.mock('~/core/hooks/useHooks', () => ({
+    useHooks: () => hooksMock,
 }));
 
 describe('Background Streaming + Notifications Integration', () => {

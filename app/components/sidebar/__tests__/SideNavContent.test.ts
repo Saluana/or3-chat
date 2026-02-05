@@ -7,6 +7,17 @@ import {
     setupSidebarTestEnvironment,
 } from '../../../../tests/utils/sidebar-test-helpers';
 
+vi.mock('~/core/hooks/useHooks', () => ({
+    useHooks: () => ({
+        on: vi.fn().mockReturnValue(() => {}),
+        off: vi.fn(),
+        addAction: vi.fn(),
+        removeAction: vi.fn(),
+        doAction: vi.fn(),
+        applyFilters: vi.fn((_, value) => Promise.resolve(value)),
+    }),
+}));
+
 // Setup test environment
 setupSidebarTestEnvironment();
 mockSidebarComposables();

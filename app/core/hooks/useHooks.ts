@@ -3,7 +3,6 @@ import { createTypedHookEngine, type TypedHookEngine } from './typed-hooks';
 import { useNuxtApp as useNuxtAppBase } from 'nuxt/app';
 
 let cached: { engine: HookEngine; typed: TypedHookEngine } | null = null;
-let fallback: { engine: HookEngine; typed: TypedHookEngine } | null = null;
 
 type UseNuxtApp = typeof useNuxtAppBase;
 
@@ -12,30 +11,28 @@ function resolveUseNuxtApp(): UseNuxtApp {
     return g.useNuxtApp ?? useNuxtAppBase;
 }
 
-// Return a typed wrapper around the global HookEngine (singleton per engine instance).
+/**
+ * Return a typed wrapper around the global HookEngine.
+ * 
+ * Behavior:
+ * - Returns the typed hook engine provided by the 00-hooks plugin
+ * - Throws in dev if the hook engine is not available (indicates plugin not loaded)
+ * - In production, throws an error to avoid silent failures
+ * 
+ * This ensures all hooks go through the same engine instance and prevents
+ * the creation of disconnected fallback engines that would cause hooks to not fire.
+ */
 export function useHooks(): TypedHookEngine {
     const nuxt = resolveUseNuxtApp()();
-    const provided = nuxt.$hooks as HookEngine | undefined;
+    const provided = nuxt.$hooks as TypedHookEngine | undefined;
 
     if (!provided) {
-        if (!fallback) {
-            const engine = createHookEngine();
-            const typed = createTypedHookEngine(engine);
-            fallback = { engine, typed };
-            if (import.meta.dev) {
-                console.warn(
-                    '[useHooks] No hook engine injected; using local fallback'
-                );
-            }
+        const errorMsg = '[useHooks] Hook engine not initialized. Ensure 00-hooks plugin is loaded.';
+        if (import.meta.dev) {
+            console.error(errorMsg);
         }
-        return fallback.typed;
+        throw new Error(errorMsg);
     }
 
-    if (!cached || cached.engine !== provided) {
-        cached = {
-            engine: provided,
-            typed: createTypedHookEngine(provided),
-        };
-    }
-    return cached.typed;
+    return provided;
 }

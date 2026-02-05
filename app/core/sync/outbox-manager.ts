@@ -215,7 +215,7 @@ export class OutboxManager {
                 for (const op of batch) {
                     const res = resultsById.get(op.stamp.opId);
                     if (!res) {
-                        await this.handleFailedOp(op, 'Missing push result');
+                        await this.handleFailedOp(op, 'Missing push result', 'UNKNOWN');
                         failCount += 1;
                         continue;
                     }
@@ -229,7 +229,7 @@ export class OutboxManager {
                         successCount += 1;
                     } else {
                         // Failed - handle retry
-                        await this.handleFailedOp(op, res.error);
+                        await this.handleFailedOp(op, res.error, res.errorCode);
                         failCount += 1;
                     }
                 }
@@ -299,13 +299,17 @@ export class OutboxManager {
     /**
      * Handle a failed operation
      */
-    private async handleFailedOp(op: PendingOp, error?: string): Promise<void> {
+    private async handleFailedOp(
+        op: PendingOp,
+        error?: string,
+        errorCode?: string
+    ): Promise<void> {
         const hooks = useHooks();
         const attempts = op.attempts + 1;
         const maxAttempts = this.config.retryDelays.length;
 
         // Check for permanent failures that should not be retried
-        const isPermanent = this.isPermanentFailure(error);
+        const isPermanent = this.isPermanentFailure(errorCode, error);
 
         if (isPermanent || attempts >= maxAttempts) {
             // Max retries reached or permanent failure - mark as failed
@@ -349,7 +353,26 @@ export class OutboxManager {
     /**
      * Check if an error is permanent and should not be retried
      */
-    private isPermanentFailure(error?: string): boolean {
+    private isPermanentFailure(errorCode?: string, error?: string): boolean {
+        // Use error code if available (preferred)
+        if (errorCode) {
+            switch (errorCode) {
+                case 'VALIDATION_ERROR':
+                case 'OVERSIZED':
+                case 'UNAUTHORIZED':
+                    return true;
+                case 'CONFLICT':
+                case 'NETWORK_ERROR':
+                case 'RATE_LIMITED':
+                case 'SERVER_ERROR':
+                case 'UNKNOWN':
+                    return false;
+                default:
+                    return false;
+            }
+        }
+
+        // Fallback to string matching for legacy/unstructured errors
         if (!error) return false;
 
         // Oversized document - can't be fixed without app changes

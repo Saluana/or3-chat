@@ -97,7 +97,7 @@ export const PostPayloadSchema = z
         id: z.string(),
         title: z.string(),
         content: z.string(),
-        postType: z.string(), // Client-side uses camelCase
+        post_type: z.string(), // Wire schema uses snake_case
         deleted: z.boolean(),
         created_at: z.number(),
         updated_at: z.number(),

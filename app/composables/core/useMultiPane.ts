@@ -5,7 +5,7 @@ import { ref, computed, onScopeDispose, getCurrentScope, type Ref, type Computed
 import { useLocalStorage } from '@vueuse/core';
 import Dexie from 'dexie';
 import { db } from '~/db';
-import { useHooks } from '../../core/hooks/useHooks';
+import { useHooks } from '~/core/hooks/useHooks';
 import {
     getGlobalMultiPaneApi,
     setGlobalMultiPaneApi,

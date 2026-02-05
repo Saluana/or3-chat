@@ -25,6 +25,34 @@ export interface GatewaySyncProviderConfig {
     pullLimit?: number;
 }
 
+/**
+ * Truncate and sanitize error text for user-facing display.
+ * Removes JSON blobs, stack traces, and limits length.
+ */
+function sanitizeErrorText(text: string, maxLength: number = 200): string {
+    // Try to parse as JSON and extract a meaningful error message
+    try {
+        const parsed = JSON.parse(text);
+        if (parsed.message) {
+            return parsed.message.slice(0, maxLength);
+        }
+        if (parsed.error) {
+            return String(parsed.error).slice(0, maxLength);
+        }
+    } catch {
+        // Not JSON, continue with text sanitization
+    }
+
+    // Remove stack traces (lines starting with "at " or containing file paths)
+    const lines = text.split('\n').filter(line => {
+        const trimmed = line.trim();
+        return !trimmed.startsWith('at ') && !trimmed.match(/\.(ts|js|vue):\d+/);
+    });
+
+    const cleaned = lines.join(' ').trim();
+    return cleaned.slice(0, maxLength);
+}
+
 async function requestJson<T>(
     path: string,
     body: unknown,
@@ -41,7 +69,8 @@ async function requestJson<T>(
 
     if (!res.ok) {
         const text = await res.text();
-        throw new Error(`[gateway-sync] ${path} failed: ${res.status} ${text}`);
+        const sanitized = sanitizeErrorText(text);
+        throw new Error(`[gateway-sync] ${path} failed (${res.status}): ${sanitized}`);
     }
 
     const text = await res.text();
@@ -70,7 +99,7 @@ export function createGatewaySyncProvider(
         async subscribe(
             scope: SyncScope,
             tables: string[],
-            onChanges: (changes: SyncChange[]) => void,
+            onChanges: (changes: SyncChange[]) => void | Promise<void>,
             options?: SyncSubscribeOptions
         ): Promise<() => void> {
             let active = true;
@@ -96,11 +125,7 @@ export function createGatewaySyncProvider(
                     if (response.changes.length) {
                         // Allow async handlers (SubscriptionManager) to provide backpressure.
                         // This prevents overlapping apply cycles which can break cursor accounting.
-                        await Promise.resolve(
-                            (onChanges as unknown as (c: SyncChange[]) => void | Promise<void>)(
-                                response.changes
-                            )
-                        );
+                        await Promise.resolve(onChanges(response.changes));
                     }
 
                     if (response.nextCursor > cursor) {

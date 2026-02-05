@@ -20,19 +20,35 @@ beforeEach(async () => {
     }));
 
     // Mock hooks
-    vi.doMock('../../core/hooks/useHooks', () => ({
-        useHooks: () => ({
-            doAction: vi.fn(),
-            applyFilters: vi.fn((name: string, value: any) =>
-                Promise.resolve(value)
-            ),
-        }),
-    }));
+    vi.doMock('~/core/hooks/useHooks', () => {
+        const actions = new Map<string, Array<(payload: unknown) => unknown>>();
+
+        return {
+            useHooks: () => ({
+                addAction: vi.fn(
+                    (name: string, fn: (payload: unknown) => unknown) => {
+                        const existing = actions.get(name) || [];
+                        existing.push(fn);
+                        actions.set(name, existing);
+                    }
+                ),
+                doAction: vi.fn(async (name: string, payload: unknown) => {
+                    const listeners = actions.get(name) || [];
+                    for (const listener of listeners) {
+                        await listener(payload);
+                    }
+                }),
+                applyFilters: vi.fn((name: string, value: any) =>
+                    Promise.resolve(value)
+                ),
+            }),
+        };
+    });
 });
 
 afterEach(() => {
     vi.doUnmock('~/db');
-    vi.doUnmock('../../core/hooks/useHooks');
+    vi.doUnmock('~/core/hooks/useHooks');
 });
 
 describe('useMultiPane - newPaneForApp', () => {

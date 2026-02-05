@@ -1,6 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { effectScope, nextTick, ref } from 'vue';
 
+vi.mock('~/core/hooks/useHooks', () => ({
+    useHooks: () => ({
+        addAction: vi.fn(),
+        removeAction: vi.fn(),
+        doAction: vi.fn(),
+        applyFilters: vi.fn((_, value) => Promise.resolve(value)),
+    }),
+}));
+
 // Mock useSessionContext to prevent fetch calls in test environment
 vi.mock('~/composables/auth/useSessionContext', () => ({
     useSessionContext: () => ({
