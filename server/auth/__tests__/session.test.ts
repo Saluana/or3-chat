@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 import { registerAuthProvider } from '../registry';
-import { resolveSessionContext } from '../session';
+import { resolveSessionContext, _resetSharedSessionCache } from '../session';
 import { testRuntimeConfig } from '../../../tests/setup';
 
 const getConvexClientMock = vi.hoisted(() => vi.fn());
@@ -62,6 +62,7 @@ function makeEvent(): H3Event {
 
 describe('resolveSessionContext provisioning failure modes', () => {
     beforeEach(() => {
+        _resetSharedSessionCache();
         getConvexClientMock.mockReset();
         // Reset store mock to success defaults
         authWorkspaceStoreMock.getOrCreateUser.mockReset().mockResolvedValue({ id: 'user-1' });
@@ -125,5 +126,43 @@ describe('resolveSessionContext provisioning failure modes', () => {
         authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockRejectedValueOnce(new Error('boom'));
 
         await expect(resolveSessionContext(makeEvent())).rejects.toThrow('boom');
+    });
+
+    it('reuses workspace provisioning from shared cache across requests', async () => {
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            auth: {
+                ...testRuntimeConfig.value.auth,
+                sessionCacheTtlMs: 10_000,
+            },
+        };
+
+        await resolveSessionContext(makeEvent());
+        await resolveSessionContext(makeEvent());
+
+        expect(authWorkspaceStoreMock.getOrCreateUser).toHaveBeenCalledTimes(1);
+        expect(authWorkspaceStoreMock.getOrCreateDefaultWorkspace).toHaveBeenCalledTimes(1);
+        expect(authWorkspaceStoreMock.getWorkspaceRole).toHaveBeenCalledTimes(1);
+    });
+
+    it('expires shared cache entries after ttl', async () => {
+        vi.useFakeTimers();
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            auth: {
+                ...testRuntimeConfig.value.auth,
+                sessionCacheTtlMs: 100,
+            },
+        };
+
+        await resolveSessionContext(makeEvent());
+        vi.advanceTimersByTime(150);
+        await resolveSessionContext(makeEvent());
+
+        expect(authWorkspaceStoreMock.getOrCreateUser).toHaveBeenCalledTimes(2);
+        expect(authWorkspaceStoreMock.getOrCreateDefaultWorkspace).toHaveBeenCalledTimes(2);
+        expect(authWorkspaceStoreMock.getWorkspaceRole).toHaveBeenCalledTimes(2);
+
+        vi.useRealTimers();
     });
 });

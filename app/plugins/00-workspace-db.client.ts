@@ -7,6 +7,22 @@ import { cleanupHookBridge } from '~/core/sync/hook-bridge';
 import { cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
 import { logoutCleanup } from '~/utils/logout-cleanup';
 
+type ClerkClient = {
+    loaded?: boolean;
+    session?: unknown;
+};
+
+function shouldRunLogoutCleanup(
+    authenticated: boolean | undefined
+): boolean {
+    if (authenticated) return false;
+    if (typeof window === 'undefined') return true;
+    const clerk = (window as unknown as { Clerk?: ClerkClient }).Clerk;
+    if (!clerk) return true;
+    if (!clerk.loaded) return false;
+    return !clerk.session;
+}
+
 export default defineNuxtPlugin(async () => {
     if (import.meta.server) return;
 
@@ -20,7 +36,7 @@ export default defineNuxtPlugin(async () => {
     const nuxtApp = useNuxtApp();
 
     await refresh();
-    if (!data.value?.session?.authenticated) {
+    if (shouldRunLogoutCleanup(data.value?.session?.authenticated)) {
         await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
     }
 
@@ -46,7 +62,11 @@ export default defineNuxtPlugin(async () => {
     watch(
         () => data.value?.session,
         async (newSession, oldSession) => {
-            if (oldSession?.authenticated && !newSession?.authenticated) {
+            if (
+                oldSession?.authenticated &&
+                !newSession?.authenticated &&
+                shouldRunLogoutCleanup(newSession?.authenticated)
+            ) {
                 await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
             }
         }

@@ -219,7 +219,7 @@ describe('SubscriptionManager', () => {
         await vi.runAllTimersAsync();
 
         expect(provider.subscribe).toHaveBeenCalledTimes(2);
-        expect(provider.subscribe.mock.calls[1]![3]).toEqual({ cursor: 120, limit: 100 });
+        expect(provider.subscribe.mock.calls[1]![3]).toEqual({ cursor: 120, limit: 300 });
     });
 
     it('drains backlog after subscription changes', async () => {

@@ -2,8 +2,10 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Or3DB } from '~/db/client';
 import { getWriteTxTableNames, nowSec } from '~/db/util';
-import { HookBridge, _resetHookBridge } from '../hook-bridge';
+import { getHookBridge, _resetHookBridge } from '../hook-bridge';
 import { _resetHLC } from '../hlc';
+import { ConflictResolver } from '../conflict-resolver';
+import type { SyncChange } from '~~/shared/sync/types';
 
 const hooksMock = vi.hoisted(() => ({
     doAction: vi.fn(async () => undefined),
@@ -21,7 +23,6 @@ vi.mock('~/core/hooks/useHooks', () => ({
 
 describe('atomic sync capture integration', () => {
     let db: Or3DB;
-    let bridge: HookBridge;
 
     beforeEach(async () => {
         hooksMock.doAction.mockClear();
@@ -30,7 +31,7 @@ describe('atomic sync capture integration', () => {
         _resetHookBridge();
         db = new Or3DB(`or3-test-sync-${Date.now()}-${Math.random()}`);
         await db.open();
-        bridge = new HookBridge(db);
+        const bridge = getHookBridge(db);
         bridge.start();
     });
 
@@ -173,5 +174,64 @@ describe('atomic sync capture integration', () => {
         expect(ops[0]?.pk).toBe('m-delete');
         expect(tombstones).toHaveLength(1);
         expect(tombstones[0]?.id).toBe('messages:m-delete');
+    });
+
+    it('does not enqueue pending_ops when applying remote deletes', async () => {
+        const now = nowSec();
+        await db.transaction(
+            'rw',
+            getWriteTxTableNames(db, 'messages'),
+            async () => {
+                await db.messages.put({
+                    id: 'm-remote-delete',
+                    thread_id: 't-1',
+                    role: 'assistant',
+                    index: 1,
+                    created_at: now,
+                    updated_at: now,
+                    deleted: false,
+                    clock: 1,
+                    hlc: '0000000000001:0000:node',
+                    data: { content: 'bye' },
+                    pending: false,
+                    error: null,
+                    file_hashes: null,
+                });
+            }
+        );
+
+        await db.pending_ops.clear();
+        await db.tombstones.clear();
+
+        const resolver = new ConflictResolver(db);
+        const remoteDelete: SyncChange = {
+            serverVersion: 100,
+            tableName: 'messages',
+            pk: 'm-remote-delete',
+            op: 'delete',
+            payload: {
+                id: 'm-remote-delete',
+                deleted_at: now + 1,
+                deleted: true,
+            },
+            stamp: {
+                clock: 2,
+                hlc: '0000000000002:0000:node',
+                deviceId: 'remote-device',
+                opId: 'remote-op-1',
+            },
+        };
+
+        const result = await resolver.applyChanges([remoteDelete]);
+        const ops = await db.pending_ops.toArray();
+        const tombstones = await db.tombstones.toArray();
+        const updated = await db.messages.get('m-remote-delete');
+
+        expect(result.applied).toBe(1);
+        expect(ops).toHaveLength(0);
+        expect(updated?.deleted).toBe(true);
+        expect(updated?.clock).toBe(2);
+        expect(tombstones).toHaveLength(1);
+        expect(tombstones[0]?.id).toBe('messages:m-remote-delete');
     });
 });

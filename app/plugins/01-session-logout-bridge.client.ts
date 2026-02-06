@@ -7,6 +7,16 @@ type ClerkClient = {
     addListener?: (callback: () => void) => () => void;
 };
 
+function shouldRunLogoutCleanup(
+    authenticated: boolean | undefined,
+    clerk: ClerkClient | null
+): boolean {
+    if (authenticated) return false;
+    if (!clerk) return true;
+    if (!clerk.loaded) return false;
+    return !clerk.session;
+}
+
 async function waitForClerk(maxWaitMs = 5000): Promise<ClerkClient | null> {
     const start = Date.now();
     while (Date.now() - start < maxWaitMs) {
@@ -29,7 +39,7 @@ export default defineNuxtPlugin(async () => {
 
     const unsubscribe = clerk.addListener(async () => {
         await refresh();
-        if (!data.value?.session?.authenticated) {
+        if (shouldRunLogoutCleanup(data.value?.session?.authenticated, clerk)) {
             await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
         }
     });

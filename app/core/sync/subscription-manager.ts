@@ -41,7 +41,7 @@ import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 const DEFAULT_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta', 'notifications'];
 
 /** Bootstrap pull page size */
-const BOOTSTRAP_PAGE_SIZE = 100;
+const BOOTSTRAP_PAGE_SIZE = 300;
 
 /** Reconnect delays (exponential backoff) */
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];

@@ -22,6 +22,7 @@
  */
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
+import { LRUCache } from 'lru-cache';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import type { ProviderSession } from './types';
 import { getAuthProvider } from './registry';
@@ -33,6 +34,44 @@ import { getDeploymentAdminChecker } from './deployment-admin';
 
 const SESSION_CONTEXT_KEY_PREFIX = '__or3_session_context_';
 const REQUEST_ID_KEY = '__or3_request_id';
+const DEFAULT_SHARED_SESSION_CACHE_TTL_MS = 10_000;
+const MAX_SHARED_SESSION_CACHE_ENTRIES = 2_000;
+
+type SharedSessionCacheEntry = {
+    session: SessionContext;
+    expiresAtMs: number;
+};
+
+const sharedSessionCache = new LRUCache<string, SharedSessionCacheEntry>({
+    max: MAX_SHARED_SESSION_CACHE_ENTRIES,
+});
+
+function getSharedSessionCacheKey(providerId: string, providerUserId: string): string {
+    return `${providerId}:${providerUserId}`;
+}
+
+function getConfiguredSessionCacheTtlMs(config: ReturnType<typeof useRuntimeConfig>): number {
+    const candidate = Number(
+        (config.auth as { sessionCacheTtlMs?: unknown } | undefined)
+            ?.sessionCacheTtlMs
+    );
+    if (!Number.isFinite(candidate) || candidate <= 0) {
+        return DEFAULT_SHARED_SESSION_CACHE_TTL_MS;
+    }
+    return Math.floor(candidate);
+}
+
+function getSessionCacheTtlMs(
+    config: ReturnType<typeof useRuntimeConfig>,
+    providerSession: ProviderSession
+): number {
+    const configured = getConfiguredSessionCacheTtlMs(config);
+    const untilProviderExpiry = providerSession.expiresAt.getTime() - Date.now();
+    if (!Number.isFinite(untilProviderExpiry) || untilProviderExpiry <= 0) {
+        return 1;
+    }
+    return Math.max(1, Math.min(configured, Math.floor(untilProviderExpiry)));
+}
 
 /**
  * Purpose:
@@ -122,6 +161,20 @@ export async function resolveSessionContext(
         return nullSession;
     }
 
+    const sharedCacheKey = getSharedSessionCacheKey(
+        providerSession.provider,
+        providerSession.user.id
+    );
+    const sharedCached = sharedSessionCache.get(sharedCacheKey);
+    if (sharedCached) {
+        if (sharedCached.expiresAtMs > Date.now()) {
+            recordSessionResolution(true);
+            event.context[cacheKey] = sharedCached.session;
+            return sharedCached.session;
+        }
+        sharedSessionCache.delete(sharedCacheKey);
+    }
+
     // Map provider session to internal user/workspace via the configured AuthWorkspaceStore
     try {
         // Get the configured workspace store based on sync provider
@@ -190,6 +243,10 @@ export async function resolveSessionContext(
         recordSessionResolution(true);
         // Cache result
         event.context[cacheKey] = sessionContext;
+        sharedSessionCache.set(sharedCacheKey, {
+            session: sessionContext,
+            expiresAtMs: Date.now() + getSessionCacheTtlMs(config, providerSession),
+        });
         return sessionContext;
     } catch (error) {
         recordSessionResolution(false);
@@ -222,4 +279,14 @@ export async function resolveSessionContext(
 
         throw error;
     }
+}
+
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Clear shared cross-request session cache. Intended for tests.
+ */
+export function _resetSharedSessionCache(): void {
+    sharedSessionCache.clear();
 }

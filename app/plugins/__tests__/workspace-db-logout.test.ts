@@ -41,6 +41,9 @@ vi.mock('vue', async () => {
 
 describe('workspace logout cleanup plugin', () => {
     beforeEach(() => {
+        vi.resetModules();
+        logoutCleanup.mockClear();
+        sessionState.value.session = null;
         (globalThis as typeof globalThis & {
             defineNuxtPlugin?: (plugin: () => unknown) => unknown;
             useRuntimeConfig?: () => { public: { ssrAuthEnabled: boolean } };
@@ -56,12 +59,20 @@ describe('workspace logout cleanup plugin', () => {
         }).useNuxtApp = () => ({
             provide: vi.fn(),
         });
+        delete (globalThis as typeof globalThis & { Clerk?: unknown }).Clerk;
     });
 
     it('clears workspace DBs when session is unauthenticated on load', async () => {
-        logoutCleanup.mockClear();
-        sessionState.value.session = null;
         await import('~/plugins/00-workspace-db.client');
         expect(logoutCleanup).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not clear workspace DBs when Clerk still has an active session', async () => {
+        (globalThis as typeof globalThis & { Clerk?: unknown }).Clerk = {
+            loaded: true,
+            session: { id: 'sess-1' },
+        };
+        await import('~/plugins/00-workspace-db.client');
+        expect(logoutCleanup).toHaveBeenCalledTimes(0);
     });
 });
