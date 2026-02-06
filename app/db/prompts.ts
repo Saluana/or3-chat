@@ -87,6 +87,53 @@ export interface PromptRecord {
 
 const PROMPT_TABLE = 'prompts';
 
+function getPromptWriteTxTableNames(
+    includeTombstones: boolean = false
+): string[] {
+    const db = getDb();
+    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
+        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
+        : [];
+    const names = ['posts'];
+    if (tableNames.includes('pending_ops')) {
+        names.push('pending_ops');
+    }
+    if (includeTombstones && tableNames.includes('tombstones')) {
+        names.push('tombstones');
+    }
+    return names;
+}
+
+async function putPromptPostRow(row: Post): Promise<void> {
+    const db = getDb();
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        await db.posts.put(row);
+        return;
+    }
+    await db.transaction(
+        'rw',
+        getPromptWriteTxTableNames(false),
+        async () => {
+            await db.posts.put(row);
+        }
+    );
+}
+
+async function deletePromptPostRow(id: string): Promise<void> {
+    const db = getDb();
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        await db.posts.delete(id);
+        return;
+    }
+    await db.transaction(
+        'rw',
+        getPromptWriteTxTableNames(true),
+        async () => {
+            await db.posts.delete(id);
+        }
+    );
+}
+
 function toPromptEntity(row: PromptRow): PromptEntity {
     return {
         id: row.id,
@@ -268,7 +315,7 @@ export async function createPrompt(
         meta: '',
         clock: persistedRow.clock ?? 0,
     };
-    await getDb().posts.put(postRow); // reuse posts table
+    await putPromptPostRow(postRow); // reuse posts table
     actionPayload = {
         ...actionPayload,
         entity: toPromptEntity(persistedRow),
@@ -440,7 +487,7 @@ export async function updatePrompt(
         meta: '',
         clock: persistedRow.clock ?? 0,
     };
-    await getDb().posts.put(postRow);
+    await putPromptPostRow(postRow);
     actionPayload = {
         ...actionPayload,
         updated: toPromptEntity(persistedRow),
@@ -500,7 +547,7 @@ export async function softDeletePrompt(id: string): Promise<void> {
         meta: '',
         clock: updatedRow.clock,
     };
-    await getDb().posts.put(postRow);
+    await putPromptPostRow(postRow);
     await hooks.doAction('db.prompts.delete:action:soft:after', payload);
 }
 
@@ -537,7 +584,7 @@ export async function hardDeletePrompt(id: string): Promise<void> {
         tableName: PROMPT_TABLE,
     };
     await hooks.doAction('db.prompts.delete:action:hard:before', payload);
-    await getDb().posts.delete(id);
+    await deletePromptPostRow(id);
     await hooks.doAction('db.prompts.delete:action:hard:after', payload);
 }
 

@@ -11,6 +11,7 @@
 import { defineNuxtPlugin } from '#app';
 import { useAppConfig, useHooks, useToast, useModelStore } from '#imports';
 import { useOr3Config } from '~/composables/useOr3Config';
+import type { Or3DB } from '~/db/client';
 import type { Extension, Node } from '@tiptap/core';
 import type {
     ToolCallEventWithNode,
@@ -684,6 +685,20 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     const hooks = useHooks();
 
+    const withMessageSyncTransaction = async <T>(
+        db: Or3DB,
+        fn: () => Promise<T>
+    ): Promise<T> => {
+        const tableNames = Array.isArray(db.tables)
+            ? db.tables.map((table) => table.name)
+            : [];
+        const txTables = ['messages'];
+        if (tableNames.includes('pending_ops')) {
+            txTables.push('pending_ops');
+        }
+        return await db.transaction('rw', txTables, fn);
+    };
+
     hooks.on(
         'ui.chat.editor:action:before_send',
         (payload: unknown) => {
@@ -706,42 +721,44 @@ export default defineNuxtPlugin((nuxtApp) => {
 
             if (!stale.length) return;
 
-            await db.messages
-                .where('[data.type+data.executionState]')
-                .equals(['workflow-execution', 'running'])
-                .modify((m: any) => {
-                    const data = m.data || {};
-                    const nodeOutputs = data.nodeOutputs || {};
-                    const startNodeId = deriveStartNodeId({
-                        resumeState: data.resumeState,
-                        failedNodeId: data.failedNodeId,
-                        currentNodeId: data.currentNodeId,
-                        nodeStates: data.nodeStates,
-                        lastActiveNodeId: data.lastActiveNodeId,
-                    });
-
-                    m.data.executionState = 'interrupted';
-                    if (startNodeId) {
-                        m.data.resumeState = {
-                            startNodeId,
-                            nodeOutputs,
-                            executionOrder:
-                                data.executionOrder || Object.keys(nodeOutputs),
+            await withMessageSyncTransaction(db, async () => {
+                await db.messages
+                    .where('[data.type+data.executionState]')
+                    .equals(['workflow-execution', 'running'])
+                    .modify((m: any) => {
+                        const data = m.data || {};
+                        const nodeOutputs = data.nodeOutputs || {};
+                        const startNodeId = deriveStartNodeId({
+                            resumeState: data.resumeState,
+                            failedNodeId: data.failedNodeId,
+                            currentNodeId: data.currentNodeId,
+                            nodeStates: data.nodeStates,
                             lastActiveNodeId: data.lastActiveNodeId,
-                            sessionMessages: data.sessionMessages,
-                            resumeInput: data.lastActiveNodeId
-                                ? nodeOutputs[data.lastActiveNodeId]
-                                : undefined,
+                        });
+
+                        m.data.executionState = 'interrupted';
+                        if (startNodeId) {
+                            m.data.resumeState = {
+                                startNodeId,
+                                nodeOutputs,
+                                executionOrder:
+                                    data.executionOrder || Object.keys(nodeOutputs),
+                                lastActiveNodeId: data.lastActiveNodeId,
+                                sessionMessages: data.sessionMessages,
+                                resumeInput: data.lastActiveNodeId
+                                    ? nodeOutputs[data.lastActiveNodeId]
+                                    : undefined,
+                            };
+                        }
+                        m.data.result = {
+                            success: false,
+                            duration: 0,
+                            error: 'Execution interrupted',
                         };
-                    }
-                    m.data.result = {
-                        success: false,
-                        duration: 0,
-                        error: 'Execution interrupted',
-                    };
-                    m.updated_at = now;
-                    m.pending = false;
-                });
+                        m.updated_at = now;
+                        m.pending = false;
+                    });
+            });
 
             stale.forEach((m) => {
                 if (!isWorkflowMessageData(m.data)) return;
@@ -1085,45 +1102,44 @@ export default defineNuxtPlugin((nuxtApp) => {
                 )
             );
 
-            db.messages
-                .get(assistantContext.id)
-                .then(async (msg) => {
-                    const timestamp = nowSec();
-                    if (msg) {
-                        return db.messages.put({
-                            ...msg,
-                            data,
-                            pending: data.executionState === 'running',
-                            updated_at: timestamp,
-                            clock: nextClock(msg.clock),
-                        });
-                    }
-
-                    // Create placeholder assistant message so UI can render it
-                    const index = Math.floor(Date.now());
-                    return db.messages.put({
-                        id: assistantContext.id,
-                        role: 'assistant',
+            withMessageSyncTransaction(db, async () => {
+                const msg = await db.messages.get(assistantContext.id);
+                const timestamp = nowSec();
+                if (msg) {
+                    await db.messages.put({
+                        ...msg,
                         data,
                         pending: data.executionState === 'running',
-                        created_at: timestamp,
                         updated_at: timestamp,
-                        error: null,
-                        deleted: false,
-                        thread_id: assistantContext.threadId || '',
-                        index,
-                        clock: nextClock(),
-                        stream_id: assistantContext.streamId,
-                        file_hashes: null,
+                        clock: nextClock(msg.clock),
                     });
+                    return;
+                }
+
+                // Create placeholder assistant message so UI can render it
+                const index = Math.floor(Date.now());
+                await db.messages.put({
+                    id: assistantContext.id,
+                    role: 'assistant',
+                    data,
+                    pending: data.executionState === 'running',
+                    created_at: timestamp,
+                    updated_at: timestamp,
+                    error: null,
+                    deleted: false,
+                    thread_id: assistantContext.threadId || '',
+                    index,
+                    clock: nextClock(),
+                    stream_id: assistantContext.streamId,
+                    file_hashes: null,
+                });
+            }).catch((e) =>
+                reportError(e, {
+                    code: 'ERR_DB_WRITE_FAILED',
+                    message: 'Persist failed',
+                    silent: true,
                 })
-                .catch((e) =>
-                    reportError(e, {
-                        code: 'ERR_DB_WRITE_FAILED',
-                        message: 'Persist failed',
-                        silent: true,
-                    })
-                );
+            );
         };
 
         const resolveHitlRequestsForNode = (nodeId: string) => {

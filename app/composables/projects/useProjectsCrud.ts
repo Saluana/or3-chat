@@ -153,7 +153,20 @@ export function useProjectsCrud() {
             }
         }
         if (updates.length) {
-            await db.projects.bulkPut(updates);
+            const tableNames = Array.isArray(
+                (db as { tables?: Array<{ name: string }> }).tables
+            )
+                ? (db as { tables: Array<{ name: string }> }).tables.map(
+                      (table) => table.name
+                  )
+                : [];
+            const txTables = ['projects'];
+            if (tableNames.includes('pending_ops')) {
+                txTables.push('pending_ops');
+            }
+            await db.transaction('rw', txTables, async () => {
+                await db.projects.bulkPut(updates);
+            });
         }
         return updates.length;
     }

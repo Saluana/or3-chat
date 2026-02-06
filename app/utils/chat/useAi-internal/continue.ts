@@ -27,8 +27,8 @@
 
 import type { Ref } from 'vue';
 import type { Message } from '~/db';
-import type { ChatMessage, ContentPart, SendMessageParams } from '~/utils/chat/types';
-import type { UiChatMessage, ToolCallInfo } from '~/utils/chat/uiMessages';
+import type { ChatMessage, ContentPart } from '~/utils/chat/types';
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { getDb } from '~/db/client';
 import { newId } from '~/db/util';
 import { parseHashes } from '~/utils/files/attachments';
@@ -478,8 +478,6 @@ export async function continueMessageImpl(
         let existingUi: UiChatMessage | null = null;
         if (existingUiIndex >= 0) {
             existingUi = ctx.messages.value[existingUiIndex] ?? null;
-            ctx.messages.value.splice(existingUiIndex, 1);
-            ctx.messages.value = [...ctx.messages.value];
         }
 
         const current =

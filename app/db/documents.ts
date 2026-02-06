@@ -90,6 +90,53 @@ export interface DocumentRecord {
 
 const DOCUMENT_TABLE = 'documents';
 
+function getDocumentWriteTxTableNames(
+    includeTombstones: boolean = false
+): string[] {
+    const db = getDb();
+    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
+        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
+        : [];
+    const names = ['posts'];
+    if (tableNames.includes('pending_ops')) {
+        names.push('pending_ops');
+    }
+    if (includeTombstones && tableNames.includes('tombstones')) {
+        names.push('tombstones');
+    }
+    return names;
+}
+
+async function putDocumentPostRow(row: Post): Promise<void> {
+    const db = getDb();
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        await db.posts.put(row);
+        return;
+    }
+    await db.transaction(
+        'rw',
+        getDocumentWriteTxTableNames(false),
+        async () => {
+            await db.posts.put(row);
+        }
+    );
+}
+
+async function deleteDocumentPostRow(id: string): Promise<void> {
+    const db = getDb();
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        await db.posts.delete(id);
+        return;
+    }
+    await db.transaction(
+        'rw',
+        getDocumentWriteTxTableNames(true),
+        async () => {
+            await db.posts.delete(id);
+        }
+    );
+}
+
 function toDocumentEntity(row: DocumentRow): DocumentEntity {
     return {
         id: row.id,
@@ -294,7 +341,7 @@ export async function createDocument(
         clock: persistedRow.clock ?? 0,
     };
     await dbTry(
-        () => getDb().posts.put(postRow),
+        () => putDocumentPostRow(postRow),
         { op: 'write', entity: 'posts', action: 'createDocument' },
         { rethrow: true }
     );
@@ -490,7 +537,7 @@ export async function updateDocument(
         clock: persistedRow.clock ?? 0,
     };
     await dbTry(
-        () => getDb().posts.put(postRow),
+        () => putDocumentPostRow(postRow),
         { op: 'write', entity: 'posts', action: 'updateDocument' },
         { rethrow: true }
     );
@@ -559,7 +606,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         clock: updatedRow.clock,
     };
     await dbTry(
-        () => getDb().posts.put(postRow),
+        () => putDocumentPostRow(postRow),
         { op: 'write', entity: 'posts', action: 'softDeleteDocument' },
         { rethrow: true }
     );
@@ -604,7 +651,7 @@ export async function hardDeleteDocument(id: string): Promise<void> {
     };
     await hooks.doAction('db.documents.delete:action:hard:before', payload);
     await dbTry(
-        () => getDb().posts.delete(id),
+        () => deleteDocumentPostRow(id),
         { op: 'write', entity: 'posts', action: 'hardDeleteDocument' },
         { rethrow: true }
     );

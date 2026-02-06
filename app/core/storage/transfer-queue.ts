@@ -627,7 +627,15 @@ export class FileTransferQueue {
         meta: FileMeta,
         storageId: string
     ): Promise<void> {
-        await this.db.transaction('rw', this.db.file_meta, async () => {
+        const tableNames = Array.isArray((this.db as { tables?: Array<{ name: string }> }).tables)
+            ? (this.db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
+            : [];
+        const txTables = ['file_meta'];
+        if (tableNames.includes('pending_ops')) {
+            txTables.push('pending_ops');
+        }
+
+        await this.db.transaction('rw', txTables, async () => {
             const existing = await this.db.file_meta.get(meta.hash);
             if (!existing) return;
             await this.db.file_meta.put({

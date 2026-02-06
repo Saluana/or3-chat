@@ -164,11 +164,20 @@ export async function forkThread({
     anchorMessageId = filteredOptions.anchorMessageId;
     const branchMode = normalizeBranchMode(filteredOptions.mode ?? mode);
     titleOverride = filteredOptions.titleOverride;
-    return getDb().transaction('rw', getDb().threads, getDb().messages, async () => {
-        const src = await getDb().threads.get(sourceThreadId);
+    const db = getDb();
+    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
+        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
+        : [];
+    const txTables = ['threads', 'messages'];
+    if (tableNames.includes('pending_ops')) {
+        txTables.push('pending_ops');
+    }
+
+    return db.transaction('rw', txTables, async () => {
+        const src = await db.threads.get(sourceThreadId);
         if (!src) throw new Error('Source thread not found');
 
-        const anchor = await getDb().messages.get(anchorMessageId);
+        const anchor = await db.messages.get(anchorMessageId);
         if (!anchor || anchor.thread_id !== sourceThreadId)
             throw new Error('Invalid anchor message');
         // Minimal model: allow either user OR assistant anchor. (User anchors enable alt assistant responses; assistant anchors capture existing reply.)
@@ -200,10 +209,10 @@ export async function forkThread({
         };
         await hooks.doAction('branch.fork:action:before', beforePayload);
 
-        await getDb().threads.put(fork);
+        await db.threads.put(fork);
 
         if (branchMode === 'copy') {
-            const ancestors = await getDb().messages
+            const ancestors = await db.messages
                 .where('[thread_id+index]')
                 // includeLower=true, includeUpper=true to include anchor row
                 .between(
@@ -221,8 +230,8 @@ export async function forkThread({
                 index: i, // normalize sequential indexes starting at 0
                 clock: nextClock(),
             }));
-            await getDb().messages.bulkPut(messagesToCopy);
-            await getDb().threads.put({
+            await db.messages.bulkPut(messagesToCopy);
+            await db.threads.put({
                 ...fork,
                 last_message_at: anchor.created_at,
                 updated_at: nowSec(),

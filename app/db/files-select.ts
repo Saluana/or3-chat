@@ -98,12 +98,31 @@ export async function updateFileName(
     hash: string,
     name: string
 ): Promise<void> {
-    const meta = await getDb().file_meta.get(hash);
+    const db = getDb();
+    const meta = await db.file_meta.get(hash);
     if (!meta) return;
-    await getDb().file_meta.put({
-        ...meta,
-        name,
-        updated_at: nowSec(),
-        clock: nextClock(meta.clock),
+    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
+        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
+        : [];
+    const txTables = ['file_meta'];
+    if (tableNames.includes('pending_ops')) {
+        txTables.push('pending_ops');
+    }
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        await db.file_meta.put({
+            ...meta,
+            name,
+            updated_at: nowSec(),
+            clock: nextClock(meta.clock),
+        });
+        return;
+    }
+    await db.transaction('rw', txTables, async () => {
+        await db.file_meta.put({
+            ...meta,
+            name,
+            updated_at: nowSec(),
+            clock: nextClock(meta.clock),
+        });
     });
 }

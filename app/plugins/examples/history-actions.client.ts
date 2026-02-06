@@ -72,11 +72,25 @@ export function setupHistoryActionsExample() {
                     return;
                 }
 
-                await db.threads.put({
-                    ...row,
-                    pinned: !row.pinned,
-                    updated_at: nowSec(),
-                    clock: nextClock(row.clock),
+                const tableNames = Array.isArray(
+                    (db as { tables?: Array<{ name: string }> }).tables
+                )
+                    ? (db as { tables: Array<{ name: string }> }).tables.map(
+                          (table) => table.name
+                      )
+                    : [];
+                const txTables = ['threads'];
+                if (tableNames.includes('pending_ops')) {
+                    txTables.push('pending_ops');
+                }
+
+                await db.transaction('rw', txTables, async () => {
+                    await db.threads.put({
+                        ...row,
+                        pinned: !row.pinned,
+                        updated_at: nowSec(),
+                        clock: nextClock(row.clock),
+                    });
                 });
 
                 toast.add({

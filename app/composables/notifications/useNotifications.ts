@@ -296,35 +296,45 @@ export function useNotifications(): NotificationsComposable {
         return mutedThreadsData.value.includes(threadId);
     };
 
-    const muteThread = async (threadId: string): Promise<void> => {
-        const muted = [...mutedThreadsData.value];
-        if (!muted.includes(threadId)) {
-            muted.push(threadId);
+    const persistMutedThreads = async (muted: string[]): Promise<void> => {
+        const tableNames = Array.isArray(
+            (db as { tables?: Array<{ name: string }> }).tables
+        )
+            ? (db as { tables: Array<{ name: string }> }).tables.map(
+                  (table) => table.name
+              )
+            : [];
+        const txTables = ['kv'];
+        if (tableNames.includes('pending_ops')) {
+            txTables.push('pending_ops');
+        }
+
+        await db.transaction('rw', txTables, async () => {
+            const existing = await db.kv.get('notification_muted_threads');
             const now = nowSec();
             await db.kv.put({
                 id: 'notification_muted_threads',
                 name: 'notification_muted_threads',
                 value: JSON.stringify(muted),
                 deleted: false,
-                created_at: now,
+                created_at: existing?.created_at ?? now,
                 updated_at: now,
                 clock: now,
             });
+        });
+    };
+
+    const muteThread = async (threadId: string): Promise<void> => {
+        const muted = [...mutedThreadsData.value];
+        if (!muted.includes(threadId)) {
+            muted.push(threadId);
+            await persistMutedThreads(muted);
         }
     };
 
     const unmuteThread = async (threadId: string): Promise<void> => {
         const muted = mutedThreadsData.value.filter((id) => id !== threadId);
-        const now = nowSec();
-        await db.kv.put({
-            id: 'notification_muted_threads',
-            name: 'notification_muted_threads',
-            value: JSON.stringify(muted),
-            deleted: false,
-            created_at: now,
-            updated_at: now,
-            clock: now,
-        });
+        await persistMutedThreads(muted);
     };
 
     const push = async (payload: NotificationCreatePayload): Promise<void> => {

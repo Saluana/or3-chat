@@ -1595,7 +1595,24 @@ export function useChat(
                 // Only delete if there's no text; otherwise preserve with 'stopped' status
                 if (tailAssistant.value?.id && !tailAssistant.value.text) {
                     try {
-                        await getDb().messages.delete(tailAssistant.value.id);
+                        const db = getDb();
+                        const tableNames = Array.isArray(
+                            (db as { tables?: Array<{ name: string }> }).tables
+                        )
+                            ? (db as { tables: Array<{ name: string }> }).tables.map(
+                                  (table) => table.name
+                              )
+                            : [];
+                        const txTables = ['messages'];
+                        if (tableNames.includes('pending_ops')) {
+                            txTables.push('pending_ops');
+                        }
+                        if (tableNames.includes('tombstones')) {
+                            txTables.push('tombstones');
+                        }
+                        await db.transaction('rw', txTables, async () => {
+                            await db.messages.delete(tailAssistant.value!.id);
+                        });
                         const idx = rawMessages.value.findIndex(
                             (m) => m.id === tailAssistant.value!.id
                         );
@@ -1709,7 +1726,24 @@ export function useChat(
                 });
                 if (!tailAssistant.value?.text && tailAssistant.value?.id) {
                     try {
-                        await getDb().messages.delete(tailAssistant.value.id);
+                        const db = getDb();
+                        const tableNames = Array.isArray(
+                            (db as { tables?: Array<{ name: string }> }).tables
+                        )
+                            ? (db as { tables: Array<{ name: string }> }).tables.map(
+                                  (table) => table.name
+                              )
+                            : [];
+                        const txTables = ['messages'];
+                        if (tableNames.includes('pending_ops')) {
+                            txTables.push('pending_ops');
+                        }
+                        if (tableNames.includes('tombstones')) {
+                            txTables.push('tombstones');
+                        }
+                        await db.transaction('rw', txTables, async () => {
+                            await db.messages.delete(tailAssistant.value!.id);
+                        });
                         const idx = rawMessages.value.findIndex(
                             (m) => m.id === tailAssistant.value!.id
                         );
@@ -1876,13 +1910,20 @@ export function useChat(
         const isBackgroundActive =
             backgroundStreamingAllowed.value &&
             (backgroundJobId.value || backgroundJobMode.value !== 'none');
+        const isForegroundStreamActive =
+            loading.value &&
+            !backgroundJobId.value &&
+            backgroundJobMode.value === 'none' &&
+            Boolean(abortController.value);
 
-        if (isBackgroundActive) {
+        if (isBackgroundActive || isForegroundStreamActive) {
             detached.value = true;
             clearBackgroundJobSubscriptions({ keepTracking: true });
             disposeHooks();
             // Do NOT reset backgroundJobId, backgroundJobMode, or backgroundJobInfo
-            // This allows reattachment or background processing to continue
+            // This allows reattachment or background processing to continue.
+            // Foreground streams are also detached here so they can finish when
+            // users switch threads/routes mid-stream.
             return;
         }
         if (abortController.value) {

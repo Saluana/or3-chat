@@ -115,6 +115,33 @@ export class NotificationService {
         }
     }
 
+    private getNotificationWriteTxTables(): string[] {
+        const tableNames = Array.isArray(
+            (this.db as { tables?: Array<{ name: string }> }).tables
+        )
+            ? (this.db as { tables: Array<{ name: string }> }).tables.map(
+                  (table) => table.name
+              )
+            : [];
+        const txTables = ['notifications'];
+        if (tableNames.includes('pending_ops')) {
+            txTables.push('pending_ops');
+        }
+        return txTables;
+    }
+
+    private async runNotificationWriteTx<T>(fn: () => Promise<T>): Promise<T> {
+        const tx = (this.db as { transaction?: unknown }).transaction;
+        if (typeof tx !== 'function') {
+            return await fn();
+        }
+        return await this.db.transaction(
+            'rw',
+            this.getNotificationWriteTxTables(),
+            fn
+        );
+    }
+
     /**
      * Create a new notification
      * Applies filter hooks before storage
@@ -166,7 +193,9 @@ export class NotificationService {
             clock: now,
         };
 
-        await this.db.notifications.add(notification);
+        await this.runNotificationWriteTx(async () => {
+            await this.db.notifications.add(notification);
+        });
         return notification;
     }
 
@@ -175,10 +204,12 @@ export class NotificationService {
      */
     async markRead(id: string): Promise<void> {
         const readAt = nowSec();
-        await this.db.notifications.update(id, {
-            read_at: readAt,
-            updated_at: readAt,
-            clock: readAt,
+        await this.runNotificationWriteTx(async () => {
+            await this.db.notifications.update(id, {
+                read_at: readAt,
+                updated_at: readAt,
+                clock: readAt,
+            });
         });
         await this.hooks.doAction('notify:action:read', { id, readAt });
     }
@@ -188,15 +219,17 @@ export class NotificationService {
      */
     async markAllRead(): Promise<void> {
         const readAt = nowSec();
-        await this.db.notifications
-            .where('user_id')
-            .equals(this.userId)
-            .and((n: Notification) => n.read_at === undefined && !n.deleted)
-            .modify({
-                read_at: readAt,
-                updated_at: readAt,
-                clock: readAt,
-            });
+        await this.runNotificationWriteTx(async () => {
+            await this.db.notifications
+                .where('user_id')
+                .equals(this.userId)
+                .and((n: Notification) => n.read_at === undefined && !n.deleted)
+                .modify({
+                    read_at: readAt,
+                    updated_at: readAt,
+                    clock: readAt,
+                });
+        });
     }
 
     /**
@@ -205,16 +238,18 @@ export class NotificationService {
      */
     async clearAll(): Promise<number> {
         const deletedAt = nowSec();
-        const result = await this.db.notifications
-            .where('user_id')
-            .equals(this.userId)
-            .and((n: Notification) => !n.deleted)
-            .modify({
-                deleted: true,
-                deleted_at: deletedAt,
-                updated_at: deletedAt,
-                clock: deletedAt,
-            });
+        const result = await this.runNotificationWriteTx(async () => {
+            return await this.db.notifications
+                .where('user_id')
+                .equals(this.userId)
+                .and((n: Notification) => !n.deleted)
+                .modify({
+                    deleted: true,
+                    deleted_at: deletedAt,
+                    updated_at: deletedAt,
+                    clock: deletedAt,
+                });
+        });
         // Dexie modify() returns number of modified records
         const count = typeof result === 'number' ? result : 0;
         await this.hooks.doAction('notify:action:cleared', { count });
