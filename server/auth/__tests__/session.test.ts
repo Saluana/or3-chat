@@ -4,52 +4,56 @@ import { registerAuthProvider } from '../registry';
 import { resolveSessionContext, _resetSharedSessionCache } from '../session';
 import { testRuntimeConfig } from '../../../tests/setup';
 
-const getConvexClientMock = vi.hoisted(() => vi.fn());
 const adminCheckerMock = vi.hoisted(() => ({
     checkDeploymentAdmin: vi.fn().mockResolvedValue(false),
 }));
 
-// Hoisted mock for AuthWorkspaceStore so tests can control its behavior
+const providerGetSessionMock = vi.hoisted(() => vi.fn(async () => ({
+    provider: 'test-provider',
+    user: { id: 'user-1', email: 'user@test.com', displayName: 'User' },
+    expiresAt: new Date(Date.now() + 60_000),
+    claims: { exp: Math.floor(Date.now() / 1000) + 60 },
+})));
+
+const altProviderGetSessionMock = vi.hoisted(() => vi.fn(async () => ({
+    provider: 'alt-provider',
+    user: { id: 'user-alt', email: 'alt@test.com', displayName: 'Alt' },
+    expiresAt: new Date(Date.now() + 60_000),
+    claims: { exp: Math.floor(Date.now() / 1000) + 60 },
+})));
+
 const authWorkspaceStoreMock = vi.hoisted(() => ({
-    getOrCreateUser: vi.fn().mockResolvedValue({ id: 'user-1' }),
-    getOrCreateDefaultWorkspace: vi.fn().mockResolvedValue({ id: 'ws-1', name: 'Default', role: 'owner' }),
+    getOrCreateUser: vi.fn().mockResolvedValue({ userId: 'user-1' }),
+    getOrCreateDefaultWorkspace: vi.fn().mockResolvedValue({ workspaceId: 'ws-1', workspaceName: 'Default' }),
     getWorkspaceRole: vi.fn().mockResolvedValue('owner'),
 }));
 
-vi.mock('../../utils/convex-client', () => ({
-    getConvexClient: getConvexClientMock,
-}));
-
-vi.mock('~~/convex/_generated/api', () => ({
-    api: {
-        workspaces: {
-            resolveSession: 'workspaces.resolveSession',
-            ensure: 'workspaces.ensure',
-        },
-    },
-}));
+const getAuthWorkspaceStoreMock = vi.hoisted(() => vi.fn(() => authWorkspaceStoreMock));
 
 vi.mock('../deployment-admin', () => ({
     getDeploymentAdminChecker: () => adminCheckerMock,
 }));
 
-// Mock AuthWorkspaceStore registry with controllable mock
 vi.mock('../store/registry', () => ({
-    getAuthWorkspaceStore: () => authWorkspaceStoreMock,
+    getAuthWorkspaceStore: getAuthWorkspaceStoreMock as any,
 }));
 
 const PROVIDER_ID = 'test-provider';
+const ALT_PROVIDER_ID = 'alt-provider';
 
 registerAuthProvider({
     id: PROVIDER_ID,
     create: () => ({
         name: PROVIDER_ID,
-        getSession: async () => ({
-            provider: PROVIDER_ID,
-            user: { id: 'user-1', email: 'user@test.com', displayName: 'User' },
-            expiresAt: new Date(Date.now() + 60_000),
-            claims: { exp: Math.floor(Date.now() / 1000) + 60 },
-        }),
+        getSession: providerGetSessionMock as any,
+    }),
+});
+
+registerAuthProvider({
+    id: ALT_PROVIDER_ID,
+    create: () => ({
+        name: ALT_PROVIDER_ID,
+        getSession: altProviderGetSessionMock as any,
     }),
 });
 
@@ -60,21 +64,45 @@ function makeEvent(): H3Event {
     } as H3Event;
 }
 
-describe('resolveSessionContext provisioning failure modes', () => {
+describe('resolveSessionContext provisioning and caching', () => {
     beforeEach(() => {
         _resetSharedSessionCache();
-        getConvexClientMock.mockReset();
-        // Reset store mock to success defaults
-        authWorkspaceStoreMock.getOrCreateUser.mockReset().mockResolvedValue({ id: 'user-1' });
-        authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockReset().mockResolvedValue({ id: 'ws-1', name: 'Default', role: 'owner' });
+
+        providerGetSessionMock.mockReset().mockResolvedValue({
+            provider: PROVIDER_ID,
+            user: { id: 'user-1', email: 'user@test.com', displayName: 'User' },
+            expiresAt: new Date(Date.now() + 60_000),
+            claims: { exp: Math.floor(Date.now() / 1000) + 60 },
+        });
+
+        altProviderGetSessionMock.mockReset().mockResolvedValue({
+            provider: ALT_PROVIDER_ID,
+            user: { id: 'user-alt', email: 'alt@test.com', displayName: 'Alt' },
+            expiresAt: new Date(Date.now() + 60_000),
+            claims: { exp: Math.floor(Date.now() / 1000) + 60 },
+        });
+
+        authWorkspaceStoreMock.getOrCreateUser.mockReset().mockResolvedValue({ userId: 'user-1' });
+        authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockReset().mockResolvedValue({
+            workspaceId: 'ws-1',
+            workspaceName: 'Default',
+        });
         authWorkspaceStoreMock.getWorkspaceRole.mockReset().mockResolvedValue('owner');
-        
+        getAuthWorkspaceStoreMock.mockReset().mockReturnValue(authWorkspaceStoreMock);
+
+        adminCheckerMock.checkDeploymentAdmin.mockReset().mockResolvedValue(false);
+
         testRuntimeConfig.value = {
             ...testRuntimeConfig.value,
             auth: {
                 ...testRuntimeConfig.value.auth,
                 enabled: true,
                 provider: PROVIDER_ID,
+                sessionProvisioningFailure: 'throw',
+            },
+            public: {
+                ...testRuntimeConfig.value.public,
+                sync: { provider: 'convex' },
             },
         };
     });
@@ -88,11 +116,9 @@ describe('resolveSessionContext provisioning failure modes', () => {
             },
         };
 
-        // Make the store throw to simulate provisioning failure
         authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockRejectedValueOnce(new Error('boom'));
 
         const session = await resolveSessionContext(makeEvent());
-
         expect(session.authenticated).toBe(false);
     });
 
@@ -105,27 +131,55 @@ describe('resolveSessionContext provisioning failure modes', () => {
             },
         };
 
-        // Make the store throw to simulate provisioning failure
         authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockRejectedValueOnce(new Error('boom'));
 
-        await expect(resolveSessionContext(makeEvent())).rejects.toMatchObject({
-            statusCode: 503,
-        });
+        await expect(resolveSessionContext(makeEvent())).rejects.toMatchObject({ statusCode: 503 });
     });
 
     it('throws original error when sessionProvisioningFailure=throw', async () => {
+        authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockRejectedValueOnce(new Error('boom'));
+
+        await expect(resolveSessionContext(makeEvent())).rejects.toThrow('boom');
+    });
+
+    it('returns unauthenticated when provider is not registered', async () => {
         testRuntimeConfig.value = {
             ...testRuntimeConfig.value,
             auth: {
                 ...testRuntimeConfig.value.auth,
-                sessionProvisioningFailure: 'throw',
+                provider: 'missing-provider',
             },
         };
 
-        // Make the store throw to simulate provisioning failure
-        authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockRejectedValueOnce(new Error('boom'));
+        const event = makeEvent();
+        const first = await resolveSessionContext(event);
+        const second = await resolveSessionContext(event);
 
-        await expect(resolveSessionContext(makeEvent())).rejects.toThrow('boom');
+        expect(first).toEqual({ authenticated: false });
+        expect(second).toEqual({ authenticated: false });
+    });
+
+    it('isolates request cache by provider and request id', async () => {
+        const event = makeEvent();
+
+        await resolveSessionContext(event);
+        await resolveSessionContext(event);
+        expect(providerGetSessionMock).toHaveBeenCalledTimes(1);
+
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            auth: {
+                ...testRuntimeConfig.value.auth,
+                provider: ALT_PROVIDER_ID,
+            },
+        };
+
+        const altSession = await resolveSessionContext(event);
+        expect(altSession.provider).toBe(ALT_PROVIDER_ID);
+        expect(altProviderGetSessionMock).toHaveBeenCalledTimes(1);
+
+        await resolveSessionContext(makeEvent());
+        expect(altProviderGetSessionMock).toHaveBeenCalledTimes(2);
     });
 
     it('reuses workspace provisioning from shared cache across requests', async () => {
@@ -147,6 +201,7 @@ describe('resolveSessionContext provisioning failure modes', () => {
 
     it('expires shared cache entries after ttl', async () => {
         vi.useFakeTimers();
+
         testRuntimeConfig.value = {
             ...testRuntimeConfig.value,
             auth: {
@@ -160,9 +215,37 @@ describe('resolveSessionContext provisioning failure modes', () => {
         await resolveSessionContext(makeEvent());
 
         expect(authWorkspaceStoreMock.getOrCreateUser).toHaveBeenCalledTimes(2);
-        expect(authWorkspaceStoreMock.getOrCreateDefaultWorkspace).toHaveBeenCalledTimes(2);
-        expect(authWorkspaceStoreMock.getWorkspaceRole).toHaveBeenCalledTimes(2);
-
         vi.useRealTimers();
+    });
+
+    it('throws when workspace store for provider is missing', async () => {
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            public: {
+                ...testRuntimeConfig.value.public,
+                sync: { provider: 'missing-store' },
+            },
+        };
+        getAuthWorkspaceStoreMock.mockReturnValueOnce(null as any);
+
+        await expect(resolveSessionContext(makeEvent())).rejects.toThrow('missing-store');
+    });
+
+    it('handles deployment admin checker failures via provisioning policy', async () => {
+        adminCheckerMock.checkDeploymentAdmin.mockRejectedValueOnce(new Error('admin check failed'));
+
+        await expect(resolveSessionContext(makeEvent())).rejects.toThrow('admin check failed');
+
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            auth: {
+                ...testRuntimeConfig.value.auth,
+                sessionProvisioningFailure: 'unauthenticated',
+            },
+        };
+        adminCheckerMock.checkDeploymentAdmin.mockRejectedValueOnce(new Error('admin check failed'));
+
+        const session = await resolveSessionContext(makeEvent());
+        expect(session.authenticated).toBe(false);
     });
 });

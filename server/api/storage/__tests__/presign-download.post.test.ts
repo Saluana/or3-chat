@@ -44,12 +44,16 @@ vi.mock('../../../utils/sync/rate-limiter', () => ({
     recordSyncRequest: recordSyncRequestMock as any,
 }));
 
-const recordUploadCompleteMock = vi.fn();
+const recordDownloadStartMock = vi.fn();
 vi.mock('../../../utils/storage/metrics', () => ({
-    recordUploadComplete: recordUploadCompleteMock as any,
+    recordDownloadStart: recordDownloadStartMock as any,
 }));
 
-const commitMock = vi.fn();
+vi.mock('../../../utils/storage/presign-expiry', () => ({
+    DEFAULT_PRESIGN_EXPIRY_MS: 60_000,
+}));
+
+const presignDownloadMock = vi.fn();
 const getActiveStorageGatewayAdapterMock = vi.fn();
 vi.mock('../../../storage/gateway/registry', () => ({
     getActiveStorageGatewayAdapter: getActiveStorageGatewayAdapterMock as any,
@@ -63,18 +67,11 @@ function makeValidBody() {
     return {
         workspace_id: 'ws-1',
         hash: 'sha256:abc',
-        storage_id: 'storage-1',
-        storage_provider_id: 'convex',
-        mime_type: 'image/png',
-        size_bytes: 100,
-        name: 'file.png',
-        kind: 'image',
-        width: 100,
-        height: 100,
+        disposition: 'attachment',
     };
 }
 
-describe('POST /api/storage/commit', () => {
+describe('POST /api/storage/presign-download', () => {
     beforeEach(() => {
         readBodyMock.mockReset();
         setResponseHeaderMock.mockReset();
@@ -88,16 +85,19 @@ describe('POST /api/storage/commit', () => {
         isStorageEnabledMock.mockReset().mockReturnValue(true);
         checkSyncRateLimitMock.mockReset().mockReturnValue({ allowed: true, remaining: 10 });
         recordSyncRequestMock.mockReset();
-        recordUploadCompleteMock.mockReset();
-        commitMock.mockReset().mockResolvedValue(undefined);
+        recordDownloadStartMock.mockReset();
+        presignDownloadMock.mockReset().mockResolvedValue({
+            url: 'https://download.example',
+            expiresAt: 9_999,
+        });
         getActiveStorageGatewayAdapterMock.mockReset().mockReturnValue({
             id: 'adapter-1',
-            commit: commitMock as any,
+            presignDownload: presignDownloadMock as any,
         });
     });
 
-    it('returns 404 when auth or storage is disabled', async () => {
-        const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
+    it('returns 404 when auth or storage flags are disabled', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
 
         isSsrAuthEnabledMock.mockReturnValue(false);
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 404 });
@@ -107,23 +107,23 @@ describe('POST /api/storage/commit', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 404 });
     });
 
-    it('returns 400 for invalid request body', async () => {
-        const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
+    it('returns 400 for body schema failures', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue({ workspace_id: 'ws-1' });
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
     });
 
-    it('returns 401 when user id is missing', async () => {
-        const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
+    it('returns 401 when session is unauthenticated', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue(makeValidBody());
-        resolveSessionContextMock.mockResolvedValue({ authenticated: true, workspace: { id: 'ws-1' } });
+        resolveSessionContextMock.mockResolvedValue({ authenticated: false });
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 401 });
     });
 
-    it('returns 403 when workspace.write permission fails', async () => {
-        const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
+    it('returns 403 when workspace.read fails', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue(makeValidBody());
         requireCanMock.mockImplementation(() => {
             const err = new Error('Forbidden') as Error & { statusCode: number };
@@ -134,60 +134,68 @@ describe('POST /api/storage/commit', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 403 });
     });
 
-    it('returns 429 when rate limit is exceeded', async () => {
-        const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
+    it('returns 429 and Retry-After when rate limited', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue(makeValidBody());
-        checkSyncRateLimitMock.mockReturnValue({
-            allowed: false,
-            remaining: 0,
-            retryAfterMs: 2000,
-        });
+        checkSyncRateLimitMock.mockReturnValue({ allowed: false, retryAfterMs: 1900 });
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 429 });
         expect(setResponseHeaderMock).toHaveBeenCalledWith(expect.anything(), 'Retry-After', 2);
     });
 
     it('returns 500 when adapter is missing', async () => {
-        const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue(makeValidBody());
         getActiveStorageGatewayAdapterMock.mockReturnValue(null);
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 500 });
     });
 
-    it('does not call adapter commit when capability is missing (no-op)', async () => {
-        const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
+    it('uses provider expiresAt when provided', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-02-06T12:00:00.000Z'));
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue(makeValidBody());
-        getActiveStorageGatewayAdapterMock.mockReturnValue({ id: 'adapter-1' });
+        presignDownloadMock.mockResolvedValue({
+            url: 'https://download.example',
+            expiresAt: 777_777,
+        });
 
-        await expect(handler(makeEvent())).resolves.toEqual({ ok: true });
-        expect(commitMock).not.toHaveBeenCalled();
+        await expect(handler(makeEvent())).resolves.toEqual({
+            url: 'https://download.example',
+            expiresAt: 777_777,
+            disposition: 'attachment',
+        });
+
+        vi.useRealTimers();
     });
 
-    it('calls adapter commit when available', async () => {
-        const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
-        const body = makeValidBody();
-        readBodyMock.mockResolvedValue(body);
+    it('falls back to default expiry when provider omits expiresAt', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-02-06T12:00:00.000Z'));
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue(makeValidBody());
+        presignDownloadMock.mockResolvedValue({
+            url: 'https://download.example',
+            expiresAt: undefined,
+        });
 
-        await expect(handler(makeEvent())).resolves.toEqual({ ok: true });
-        expect(commitMock).toHaveBeenCalledWith(expect.anything(), body);
+        await expect(handler(makeEvent())).resolves.toEqual({
+            url: 'https://download.example',
+            expiresAt: Date.now() + 60_000,
+            disposition: 'attachment',
+        });
+
+        vi.useRealTimers();
     });
 
-    it('records metrics and sync accounting only on success', async () => {
-        const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
+    it('records metrics and rate limit accounting on success', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue(makeValidBody());
 
         await handler(makeEvent());
 
-        expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'storage:commit');
-        expect(recordUploadCompleteMock).toHaveBeenCalledWith(100);
-
-        recordSyncRequestMock.mockClear();
-        recordUploadCompleteMock.mockClear();
-        checkSyncRateLimitMock.mockReturnValue({ allowed: false, retryAfterMs: 1000 });
-
-        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 429 });
-        expect(recordSyncRequestMock).not.toHaveBeenCalled();
-        expect(recordUploadCompleteMock).not.toHaveBeenCalled();
+        expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'storage:download');
+        expect(recordDownloadStartMock).toHaveBeenCalledTimes(1);
     });
 });

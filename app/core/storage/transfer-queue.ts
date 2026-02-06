@@ -85,6 +85,11 @@ export interface FileTransferQueueConfig {
     maxAttempts?: number;
     backoffBaseMs?: number;
     backoffMaxMs?: number;
+    /**
+     * Optional DB resolver for workspace-aware singleton usage.
+     * Internal-facing; tests can omit this and provide a static DB instance.
+     */
+    dbResolver?: () => Or3DB;
 }
 
 type TransferWaiter = {
@@ -117,6 +122,7 @@ export class FileTransferQueue {
     private processQueueTimeout: ReturnType<typeof setTimeout> | null = null;
     private processQueueAt: number | null = null;
     private lastCleanupAt = 0;
+    private dbResolver?: () => Or3DB;
 
     constructor(
         private db: Or3DB,
@@ -127,6 +133,7 @@ export class FileTransferQueue {
         this.maxAttempts = config.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
         this.backoffBaseMs = config.backoffBaseMs ?? DEFAULT_BACKOFF_BASE_MS;
         this.backoffMaxMs = config.backoffMaxMs ?? DEFAULT_BACKOFF_MAX_MS;
+        this.dbResolver = config.dbResolver;
     }
 
     setWorkspaceId(workspaceId: string | null) {
@@ -136,9 +143,15 @@ export class FileTransferQueue {
         // Cancel in-flight transfers for the old workspace when switching
         if (previousWorkspaceId && workspaceId !== previousWorkspaceId) {
             this.cancelAllRunning();
+            if (this.processQueueTimeout) {
+                clearTimeout(this.processQueueTimeout);
+                this.processQueueTimeout = null;
+                this.processQueueAt = null;
+            }
         }
 
         if (workspaceId) {
+            this.rebindDb();
             this.scheduleProcessQueue(0);
         }
     }
@@ -169,6 +182,8 @@ export class FileTransferQueue {
         if (!this.workspaceId) {
             return null;
         }
+
+        this.rebindDb();
 
         const existing = await this.findExistingTransfer(hash, direction);
         if (existing && existing.state !== 'failed') {
@@ -244,38 +259,54 @@ export class FileTransferQueue {
         hash: string,
         direction: FileTransferDirection
     ): Promise<FileTransfer | undefined> {
-        const existing = await this.db.file_transfers
-            .where('[hash+direction]')
-            .equals([hash, direction])
-            .toArray();
-        return existing.find((transfer) => transfer.state !== 'done');
+        try {
+            const existing = await this.db.file_transfers
+                .where('[hash+direction]')
+                .equals([hash, direction])
+                .toArray();
+            return existing.find((transfer) => transfer.state !== 'done');
+        } catch (error) {
+            if (!this.isDatabaseClosedError(error)) {
+                throw error;
+            }
+            this.rebindDb();
+            return undefined;
+        }
     }
 
     private async processQueue(): Promise<void> {
         if (!this.workspaceId) return;
         if (this.running.size >= this.concurrency) return;
 
-        await this.cleanupOldTransfers();
+        try {
+            await this.cleanupOldTransfers();
 
-        const available = this.concurrency - this.running.size;
-        // Use compound index for efficient workspace-scoped queries
-        const candidates = await this.db.file_transfers
-            .where('[state+workspace_id+created_at]')
-            .between(
-                ['queued', this.workspaceId, Dexie.minKey],
-                ['queued', this.workspaceId, Dexie.maxKey]
-            )
-            .limit(available)
-            .toArray();
+            const available = this.concurrency - this.running.size;
+            // Use compound index for efficient workspace-scoped queries
+            const candidates = await this.db.file_transfers
+                .where('[state+workspace_id+created_at]')
+                .between(
+                    ['queued', this.workspaceId, Dexie.minKey],
+                    ['queued', this.workspaceId, Dexie.maxKey]
+                )
+                .limit(available)
+                .toArray();
 
-        if (!candidates.length) return;
+            if (!candidates.length) return;
 
-        for (const transfer of candidates) {
-            this.running.add(transfer.id);
-            void this.processTransfer(transfer).finally(() => {
-                this.running.delete(transfer.id);
-                this.scheduleProcessQueue(0);
-            });
+            for (const transfer of candidates) {
+                this.running.add(transfer.id);
+                void this.processTransfer(transfer).finally(() => {
+                    this.running.delete(transfer.id);
+                    this.scheduleProcessQueue(0);
+                });
+            }
+        } catch (error) {
+            if (!this.isDatabaseClosedError(error)) {
+                throw error;
+            }
+            this.rebindDb();
+            this.scheduleProcessQueue(50);
         }
     }
 
@@ -283,9 +314,12 @@ export class FileTransferQueue {
         const controller = new AbortController();
         this.abortControllers.set(transfer.id, controller);
 
-        await this.updateTransfer(transfer.id, {
+        const markedRunning = await this.safeUpdateTransfer(transfer.id, {
             state: 'running',
         });
+        if (!markedRunning) {
+            return;
+        }
 
         try {
             if (transfer.direction === 'upload') {
@@ -295,15 +329,23 @@ export class FileTransferQueue {
             }
 
             const latest = await this.db.file_transfers.get(transfer.id);
-            await this.updateTransfer(transfer.id, {
+            const markedDone = await this.safeUpdateTransfer(transfer.id, {
                 state: 'done',
                 bytes_done: latest?.bytes_total ?? transfer.bytes_total,
             });
+            if (!markedDone) {
+                return;
+            }
             this.resolveWaiters(transfer.id);
         } catch (error) {
+            if (this.isDatabaseClosedError(error)) {
+                this.rebindDb();
+                return;
+            }
+
             // Handle abort specially - don't retry aborted transfers
             if (error instanceof Error && error.name === 'AbortError') {
-                await this.updateTransfer(transfer.id, {
+                await this.safeUpdateTransfer(transfer.id, {
                     state: 'failed',
                     last_error: 'Transfer cancelled',
                 });
@@ -326,11 +368,14 @@ export class FileTransferQueue {
 
             const failed = isNonRetryable || attempts >= this.maxAttempts;
             
-            await this.updateTransfer(transfer.id, {
+            const updated = await this.safeUpdateTransfer(transfer.id, {
                 state: failed ? 'failed' : 'queued',
                 attempts,
                 last_error: message,
             });
+            if (!updated) {
+                return;
+            }
 
             if (failed) {
                 this.rejectWaiters(transfer.id, message);
@@ -360,7 +405,16 @@ export class FileTransferQueue {
         this.processQueueTimeout = setTimeout(() => {
             this.processQueueTimeout = null;
             this.processQueueAt = null;
-            void this.processQueue();
+            void this.processQueue().catch((error) => {
+                if (this.isDatabaseClosedError(error)) {
+                    this.rebindDb();
+                    if (this.workspaceId) {
+                        this.scheduleProcessQueue(50);
+                    }
+                    return;
+                }
+                console.error('[storage-transfer-queue] processQueue failed', error);
+            });
         }, delayMs);
     }
 
@@ -653,6 +707,22 @@ export class FileTransferQueue {
         });
     }
 
+    private async safeUpdateTransfer(
+        id: string,
+        patch: Partial<FileTransfer>
+    ): Promise<boolean> {
+        try {
+            await this.updateTransfer(id, patch);
+            return true;
+        } catch (error) {
+            if (!this.isDatabaseClosedError(error)) {
+                throw error;
+            }
+            this.rebindDb();
+            return false;
+        }
+    }
+
     private async cleanupOldTransfers(): Promise<void> {
         const now = Date.now();
         if (now - this.lastCleanupAt < TRANSFER_CLEANUP_INTERVAL_MS) {
@@ -674,6 +744,19 @@ export class FileTransferQueue {
     private getBackoffDelay(attempt: number): number {
         const delay = this.backoffBaseMs * Math.pow(2, attempt - 1);
         return Math.min(delay, this.backoffMaxMs);
+    }
+
+    private rebindDb(): void {
+        if (!this.dbResolver) return;
+        this.db = this.dbResolver();
+    }
+
+    private isDatabaseClosedError(error: unknown): boolean {
+        if (!error || typeof error !== 'object') return false;
+        const name = (error as { name?: unknown }).name;
+        if (name === 'DatabaseClosedError') return true;
+        const message = (error as { message?: unknown }).message;
+        return typeof message === 'string' && message.includes('Database has been closed');
     }
 
     private resolveWaiters(id: string) {
@@ -719,7 +802,9 @@ export function getStorageTransferQueue(): FileTransferQueue | null {
     const provider = getActiveStorageProvider();
     if (!provider) return null;
 
-    queueInstance = new FileTransferQueue(getDb(), provider);
+    queueInstance = new FileTransferQueue(getDb(), provider, {
+        dbResolver: getDb,
+    });
     return queueInstance;
 }
 
