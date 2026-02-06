@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterAll } from 'vitest';
 import type { H3Event } from 'h3';
-import { ClerkTokenBroker } from '~~/packages/or3-provider-clerk/src/runtime/server/token-broker/clerk-token-broker';
+import { ClerkTokenBroker } from 'or3-provider-clerk/src/runtime/server/token-broker/clerk-token-broker';
 
 function makeEvent(authImpl?: () => unknown): H3Event {
     return {

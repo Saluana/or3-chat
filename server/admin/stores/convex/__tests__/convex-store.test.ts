@@ -6,7 +6,7 @@ const useRuntimeConfig = vi.fn();
 const resolveProviderToken = vi.fn<(...args: unknown[]) => Promise<string | null>>();
 const listProviderTokenBrokerIds = vi.fn<() => string[]>();
 
-vi.mock('~~/packages/or3-provider-convex/src/runtime/server/utils/convex-gateway', () => ({
+vi.mock('or3-provider-convex/src/runtime/server/utils/convex-gateway', () => ({
     getConvexGatewayClient: (...args: any[]) => getConvexGatewayClient(...args),
     getConvexAdminGatewayClient: (...args: any[]) => getConvexAdminGatewayClient(...args),
 }));
@@ -44,7 +44,7 @@ describe('createConvexWorkspaceAccessStore', () => {
         resolveProviderToken.mockResolvedValue('clerk-token');
         listProviderTokenBrokerIds.mockReturnValue(['clerk']);
 
-        const { createConvexWorkspaceAccessStore } = await import('~~/packages/or3-provider-convex/src/runtime/server/admin/stores/convex-store');
+        const { createConvexWorkspaceAccessStore } = await import('or3-provider-convex/src/runtime/server/admin/stores/convex-store');
         const event = {
             context: {
                 admin: { principal: { kind: 'super_admin', username: 'root' } },

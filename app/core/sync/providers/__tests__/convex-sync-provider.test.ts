@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createConvexSyncProvider } from '~~/packages/or3-provider-convex/src/runtime/app/sync/convex-sync-provider';
+import { createConvexSyncProvider } from 'or3-provider-convex/src/runtime/app/sync/convex-sync-provider';
 
 vi.mock('~~/convex/_generated/api', () => ({
     api: {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { H3Event } from 'h3';
-import { clerkAuthProvider } from '~~/packages/or3-provider-clerk/src/runtime/server/auth/clerk-auth-provider';
+import { clerkAuthProvider } from 'or3-provider-clerk/src/runtime/server/auth/clerk-auth-provider';
 
 vi.mock('@clerk/nuxt/server', () => ({
     clerkClient: vi.fn(() => ({

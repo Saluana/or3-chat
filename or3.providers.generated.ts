@@ -2,6 +2,6 @@
 // Keep this file tiny and explicit.
 
 export const or3ProviderModules = [
-    './packages/or3-provider-clerk/src/module',
-    './packages/or3-provider-convex/src/module',
+    'or3-provider-clerk/nuxt',
+    'or3-provider-convex/nuxt',
 ] as const;

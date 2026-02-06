@@ -16,7 +16,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     emitBackgroundJobComplete,
     emitBackgroundJobError,
-} from '~~/packages/or3-provider-convex/src/runtime/server/notifications/emit';
+} from 'or3-provider-convex/src/runtime/server/notifications/emit';
 
 const mutationMock = vi.hoisted(() => vi.fn().mockResolvedValue('notif-1'));
 const ConvexHttpClientMock = vi.hoisted(() =>

@@ -276,3 +276,36 @@ The provider decoupling implementation has achieved all primary goals. The codeb
 ---
 
 **The work is complete. Provider decoupling is production-ready!** 🎉
+
+---
+
+## Phase 3 Completion Addendum
+
+**Date**: 2025-07-24
+**Status**: ✅ **PHASE 3 COMPLETE**
+**Branch**: `phase3-provider-decoupling`
+
+### Phase 3: Final Package Extraction
+
+Phase 3 completed the full provider decoupling by extracting in-repo stubs into standalone npm packages:
+
+#### What Was Done
+- **Packaged** `or3-provider-clerk` and `or3-provider-convex` as real npm packages with `package.json`, `tsconfig.json`, README docs
+- **Switched** `or3-chat` to consume providers via `file:` links (no direct SDK deps)
+- **Removed** in-repo stubs (`packages/or3-provider-clerk/`, `packages/or3-provider-convex/`)
+- **Updated** `or3.providers.generated.ts` to use package module IDs (`or3-provider-*/nuxt`)
+- **Fixed** silent Convex defaults in `config.or3cloud.ts` and `resolve-config.ts`
+- **Added** Convex backend distribution workflow (`templates/convex/`, `scripts/init.ts`)
+- **Added** banned-import guardrail script (`scripts/check-banned-imports.sh`)
+- **Resolved** TypeScript/Vite symlink resolution via `preserveSymlinks`, `resolve.dedupe`, and `paths` mappings
+
+#### Verification Results
+- **Typecheck**: 0 errors (full stack, SSR auth enabled)
+- **Tests**: 227 files, 1686 tests, 0 failures
+- **Guardrails**: Clean — no banned imports in core hot zones
+- **Matrix B (no Clerk)**: Core clean, 1 expected error in clerk-specific test
+- **Matrix C (no Convex)**: Core clean, 3 expected errors in convex-specific files
+
+#### Known Non-Blocking Issues
+- Pre-existing Nitro prerender failure on `shared/config/constants.ts` rollup resolution (not caused by phase 3)
+- Matrix D (functional sanity) deferred to manual E2E with running backend

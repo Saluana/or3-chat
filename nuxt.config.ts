@@ -255,6 +255,21 @@ export default defineNuxtConfig({
     ],
     // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
     srcDir: 'app',
+    // Linked provider packages (or3-provider-*) are file-level symlinks.
+    // preserveSymlinks prevents TypeScript from resolving them to their real
+    // paths outside the project root, which would break module resolution.
+    // paths mappings enable deep imports (or3-provider-*/src/...) for test files.
+    typescript: {
+        tsConfig: {
+            compilerOptions: {
+                preserveSymlinks: true,
+                paths: {
+                    'or3-provider-clerk/src/*': ['../node_modules/or3-provider-clerk/src/*'],
+                    'or3-provider-convex/src/*': ['../node_modules/or3-provider-convex/src/*'],
+                },
+            },
+        },
+    },
     // Load Tailwind + theme variables globally
     css: ['~/assets/css/main.css'],
     fonts: {
@@ -293,6 +308,19 @@ export default defineNuxtConfig({
         },
     },
     nitro: {
+        // Server tsconfig needs the same provider paths + preserveSymlinks
+        // as the app tsconfig so server tests and provider runtime files resolve.
+        typescript: {
+            tsConfig: {
+                compilerOptions: {
+                    preserveSymlinks: true,
+                    paths: {
+                        'or3-provider-clerk/src/*': ['../node_modules/or3-provider-clerk/src/*'],
+                        'or3-provider-convex/src/*': ['../node_modules/or3-provider-convex/src/*'],
+                    },
+                },
+            },
+        },
         prerender: {
             routes: ['/openrouter-callback', '/documentation'],
         },

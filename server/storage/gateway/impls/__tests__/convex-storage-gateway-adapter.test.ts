@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
-import { ConvexStorageGatewayAdapter } from '~~/packages/or3-provider-convex/src/runtime/server/storage/convex-storage-gateway-adapter';
+import { ConvexStorageGatewayAdapter } from 'or3-provider-convex/src/runtime/server/storage/convex-storage-gateway-adapter';
 
 vi.mock('~~/convex/_generated/api', () => ({
     api: {
@@ -25,7 +25,7 @@ vi.mock('~~/server/utils/storage/presign-expiry', () => ({
 
 const queryMock = vi.hoisted(() => vi.fn());
 const mutationMock = vi.hoisted(() => vi.fn());
-vi.mock('~~/packages/or3-provider-convex/src/runtime/server/utils/convex-gateway', () => ({
+vi.mock('or3-provider-convex/src/runtime/server/utils/convex-gateway', () => ({
     getConvexGatewayClient: () => ({
         query: queryMock as any,
         mutation: mutationMock as any,
