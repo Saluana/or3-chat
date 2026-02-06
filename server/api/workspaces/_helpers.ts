@@ -36,9 +36,13 @@ export async function requireWorkspaceSession(
 
 export function resolveWorkspaceStore(event: H3Event): AuthWorkspaceStore {
     const config = useRuntimeConfig(event);
+    const publicSyncProvider = (
+        config.public as { sync?: { provider?: string } }
+    ).sync?.provider;
+    const serverSyncProvider = (config as { sync?: { provider?: string } }).sync?.provider;
     const storeId =
-        config.public.sync?.provider ||
-        config.sync?.provider ||
+        publicSyncProvider ||
+        serverSyncProvider ||
         'convex';
     const store = getAuthWorkspaceStore(storeId);
     if (!store) {

@@ -23,7 +23,7 @@ export default defineNitroPlugin(() => {
     const config = useRuntimeConfig();
     const errors: string[] = [];
 
-    if (config.auth?.enabled) {
+    if (config.auth.enabled) {
         const authProviderId = config.auth.provider;
         const authProviders = listProviderIds();
         if (!authProviders.includes(authProviderId)) {
@@ -34,7 +34,7 @@ export default defineNitroPlugin(() => {
         }
     }
 
-    if (config.sync?.enabled) {
+    if (config.sync.enabled) {
         const syncProviderId = config.sync.provider;
         const syncAdapters = listSyncGatewayAdapterIds();
         if (!syncAdapters.includes(syncProviderId)) {
@@ -52,7 +52,7 @@ export default defineNitroPlugin(() => {
         }
     }
 
-    if (config.storage?.enabled) {
+    if (config.storage.enabled) {
         const storageProviderId = config.storage.provider;
         const storageAdapters = listStorageGatewayAdapterIds();
         if (!storageAdapters.includes(storageProviderId)) {

@@ -36,7 +36,7 @@ import type {
 import {
     getConvexAdminGatewayClient,
     getConvexGatewayClient,
-} from '../utils/convex-gateway';
+} from '../../utils/convex-gateway';
 import { CONVEX_JWT_TEMPLATE, CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { ADMIN_IDENTITY_ISSUER } from '~~/shared/cloud/admin-identity';
 import { useRuntimeConfig } from '#imports';

@@ -1,14 +1,16 @@
-import { defineNuxtModule, addModule, addPlugin, addServerPlugin } from '@nuxt/kit';
+import { defineNuxtModule, installModule, addPlugin, addServerPlugin } from '@nuxt/kit';
 import { resolve } from 'pathe';
 
 export default defineNuxtModule({
     meta: { name: 'or3-provider-convex' },
     async setup() {
-        await addModule('convex-nuxt');
+        await installModule('convex-nuxt');
 
         const runtimeDir = resolve(__dirname, 'runtime');
-        addPlugin(resolve(runtimeDir, 'plugins/convex-sync.client'));
-        addPlugin(resolve(runtimeDir, 'plugins/convex-storage.client'));
+        // Append so convex-nuxt client context is initialized before provider plugins run.
+        addPlugin(resolve(runtimeDir, 'plugins/convex-auth.client'), { append: true });
+        addPlugin(resolve(runtimeDir, 'plugins/convex-sync.client'), { append: true });
+        addPlugin(resolve(runtimeDir, 'plugins/convex-storage.client'), { append: true });
         addServerPlugin(resolve(runtimeDir, 'server/plugins/register'));
     },
 });

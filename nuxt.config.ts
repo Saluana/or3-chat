@@ -1,6 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
 import { resolve } from 'path';
+import { createLogger } from 'vite';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
 import { or3ProviderModules } from './or3.providers.generated';
@@ -66,6 +67,18 @@ const adminConfig = {
             ? String(or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays)
             : '',
     },
+};
+
+const viteLogger = createLogger();
+const viteWarn = viteLogger.warn;
+viteLogger.warn = (msg, options) => {
+    if (
+        msg.includes('Failed to load source map for') &&
+        msg.includes('/node_modules/@openrouter/sdk/')
+    ) {
+        return;
+    }
+    viteWarn(msg, options);
 };
 
 export default defineNuxtConfig({
@@ -518,6 +531,7 @@ export default defineNuxtConfig({
         ],
     },
     vite: {
+        customLogger: viteLogger,
         server: {
             fs: {
                 allow: ['..'],

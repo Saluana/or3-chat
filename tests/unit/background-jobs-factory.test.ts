@@ -4,6 +4,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { BackgroundJobProvider } from '../../server/utils/background-jobs/types';
+import {
+    registerBackgroundJobProvider,
+    resetBackgroundJobProviders,
+} from '../../server/utils/background-jobs/registry';
 
 // Create a mock that will be shared and assigned to global scope
 const mockUseRuntimeConfig = vi.fn();
@@ -23,9 +28,22 @@ import {
     resetJobProvider,
 } from '../../server/utils/background-jobs/store';
 
+const mockConvexProvider: BackgroundJobProvider = {
+    name: 'convex',
+    createJob: vi.fn(async () => 'job-1'),
+    getJob: vi.fn(async () => null),
+    updateJob: vi.fn(async () => {}),
+    completeJob: vi.fn(async () => {}),
+    failJob: vi.fn(async () => {}),
+    abortJob: vi.fn(async () => false),
+    cleanupExpired: vi.fn(async () => 0),
+};
+
 describe('Background Job Provider Factory', () => {
     beforeEach(() => {
         resetJobProvider();
+        resetBackgroundJobProviders();
+        registerBackgroundJobProvider('convex', mockConvexProvider);
         vi.clearAllMocks();
         // Default mock return value
         mockUseRuntimeConfig.mockReturnValue({
@@ -37,6 +55,7 @@ describe('Background Job Provider Factory', () => {
 
     afterEach(() => {
         resetJobProvider();
+        resetBackgroundJobProviders();
     });
 
     describe('Provider Selection', () => {

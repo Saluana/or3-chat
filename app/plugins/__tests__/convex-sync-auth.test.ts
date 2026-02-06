@@ -9,7 +9,8 @@ type SessionRecord = {
 
 type MockProvider = {
     id: string;
-    mode: 'gateway';
+    mode: 'gateway' | 'direct';
+    auth?: { providerId: string; template?: string };
     subscribe: ReturnType<typeof vi.fn>;
     pull: ReturnType<typeof vi.fn>;
     push: ReturnType<typeof vi.fn>;
@@ -41,10 +42,16 @@ type GcInstance = {
     stop: ReturnType<typeof vi.fn>;
 };
 
-function createProvider(id = 'convex'): MockProvider {
+function createProvider(id = 'convex', mode: 'gateway' | 'direct' = 'gateway'): MockProvider {
     return {
         id,
-        mode: 'gateway',
+        mode,
+        auth: mode === 'direct'
+            ? {
+                providerId: id,
+                template: 'convex',
+            }
+            : undefined,
         subscribe: vi.fn(async () => () => undefined),
         pull: vi.fn(async () => ({ changes: [], nextCursor: 0, hasMore: false })),
         push: vi.fn(async () => ({ results: [], serverVersion: 0 })),
@@ -105,9 +112,16 @@ const gcInstances: GcInstance[] = [];
 
 const setActiveWorkspaceDb = vi.fn();
 const createWorkspaceDb = vi.fn((workspaceId: string) => ({ name: `or3-db-${workspaceId}` }));
+const authTokenBrokerMock = {
+    getProviderToken: vi.fn(async (): Promise<string | null> => 'token'),
+};
 
 vi.mock('~/composables/auth/useSessionContext', () => ({
     useSessionContext: () => ({ data: sessionState }),
+}));
+
+vi.mock('~/composables/auth/useAuthTokenBroker.client', () => ({
+    useAuthTokenBroker: () => authTokenBrokerMock,
 }));
 
 vi.mock('~/core/sync/providers/gateway-sync-provider', () => ({
@@ -274,6 +288,7 @@ describe('sync engine plugin', () => {
 
         setActiveWorkspaceDb.mockClear();
         createWorkspaceDb.mockClear();
+        authTokenBrokerMock.getProviderToken.mockClear();
 
         const globals = globalThis as NuxtTestGlobals;
         globals.defineNuxtPlugin = (plugin) => plugin();
@@ -349,6 +364,28 @@ describe('sync engine plugin', () => {
         expect(outboxInstances).toHaveLength(0);
 
         providerRegistryState.active = createProvider('convex');
+        await vi.advanceTimersByTimeAsync(1);
+        await Promise.resolve();
+
+        expect(outboxInstances).toHaveLength(1);
+        expect(outboxInstances[0]?.start).toHaveBeenCalledTimes(1);
+    });
+
+    it('defers direct-provider startup until auth token is available', async () => {
+        providerRegistryState.active = createProvider('convex', 'direct');
+        authTokenBrokerMock.getProviderToken
+            .mockResolvedValueOnce(null)
+            .mockResolvedValue('token');
+
+        await import('~/plugins/convex-sync.client');
+        await Promise.resolve();
+
+        expect(outboxInstances).toHaveLength(0);
+        expect(authTokenBrokerMock.getProviderToken).toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(499);
+        expect(outboxInstances).toHaveLength(0);
+
         await vi.advanceTimersByTimeAsync(1);
         await Promise.resolve();
 

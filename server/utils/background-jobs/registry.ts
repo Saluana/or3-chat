@@ -26,3 +26,7 @@ export function getBackgroundJobProviderById(
 export function listBackgroundJobProviderIds(): string[] {
     return Array.from(providers.keys());
 }
+
+export function resetBackgroundJobProviders(): void {
+    providers.clear();
+}

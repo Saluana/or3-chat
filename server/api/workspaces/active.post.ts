@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     const store = resolveWorkspaceStore(event);
 
     const body = (await readBody(event)) as SetActiveBody;
-    const workspaceId = body?.id;
+    const workspaceId = body.id;
 
     if (!workspaceId) {
         throw createError({ statusCode: 400, statusMessage: 'Workspace id is required' });

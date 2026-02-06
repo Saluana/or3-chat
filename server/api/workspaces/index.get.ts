@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
         isActive: workspace.isActive ?? (activeId ? workspace.id === activeId : false),
     }));
 
-    normalized.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+    normalized.sort((a, b) => b.createdAt - a.createdAt);
 
     return { workspaces: normalized };
 });

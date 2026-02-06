@@ -17,8 +17,8 @@ export default defineEventHandler(async (event) => {
     const store = resolveWorkspaceStore(event);
 
     const body = (await readBody(event)) as CreateWorkspaceBody;
-    const name = body?.name?.trim() ?? '';
-    const description = body?.description?.trim() ?? null;
+    const name = body.name?.trim() ?? '';
+    const description = body.description?.trim() ?? null;
 
     if (!name) {
         throw createError({ statusCode: 400, statusMessage: 'Workspace name is required' });

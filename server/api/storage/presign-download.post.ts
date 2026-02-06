@@ -93,9 +93,12 @@ export default defineEventHandler(async (event) => {
     recordSyncRequest(userId, 'storage:download');
     recordDownloadStart();
 
-    // Use provider expiry if available, otherwise fallback to server default
+    // Providers may omit expiresAt; keep a server-side default fallback.
     const { DEFAULT_PRESIGN_EXPIRY_MS } = await import('../../utils/storage/presign-expiry');
-    const expiresAt = result.expiresAt ?? Date.now() + DEFAULT_PRESIGN_EXPIRY_MS;
+    const expiresAt =
+        typeof result.expiresAt === 'number'
+            ? result.expiresAt
+            : Date.now() + DEFAULT_PRESIGN_EXPIRY_MS;
 
     return {
         url: result.url,

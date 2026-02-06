@@ -6,7 +6,7 @@ export default defineNuxtPlugin(() => {
     if (import.meta.server) return;
 
     const config = useRuntimeConfig();
-    if (!config.public.ssrAuthEnabled || !config.public.storage?.enabled) return;
+    if (!config.public.ssrAuthEnabled || !config.public.storage.enabled) return;
     if (config.public.storage.provider !== CONVEX_STORAGE_PROVIDER_ID) return;
 
     if (listStorageProviderIds().includes(CONVEX_STORAGE_PROVIDER_ID)) return;

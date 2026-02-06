@@ -36,7 +36,11 @@ export class ClerkTokenBroker implements ProviderTokenBroker {
         event: H3Event,
         req: ProviderTokenRequest
     ): Promise<string | null> {
-        const authResult: unknown = event.context.auth?.();
+        const authFactory = event.context.auth;
+        if (typeof authFactory !== 'function') {
+            return null;
+        }
+        const authResult: unknown = authFactory();
         if (!authResult) {
             return null;
         }

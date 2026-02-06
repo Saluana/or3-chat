@@ -1,5 +1,8 @@
 import { createGatewayStorageProvider } from '~/core/storage/providers/gateway-storage-provider';
-import { registerStorageProvider } from '~/core/storage/provider-registry';
+import {
+    registerStorageProvider,
+    listStorageProviderIds,
+} from '~/core/storage/provider-registry';
 import { getStorageTransferQueue } from '~/core/storage/transfer-queue';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { watch } from 'vue';
@@ -14,15 +17,17 @@ export default defineNuxtPlugin(() => {
     }
 
     try {
-        const providerId = runtimeConfig.public.storage?.provider ?? 'gateway';
-        registerStorageProvider({
-            id: providerId,
-            create: () =>
-                createGatewayStorageProvider({
-                    id: providerId,
-                    displayName: `Gateway (${providerId})`,
-                }),
-        });
+        const providerId = runtimeConfig.public.storage.provider ?? 'gateway';
+        if (!listStorageProviderIds().includes(providerId)) {
+            registerStorageProvider({
+                id: providerId,
+                create: () =>
+                    createGatewayStorageProvider({
+                        id: providerId,
+                        displayName: `Gateway (${providerId})`,
+                    }),
+            });
+        }
     } catch (error) {
         console.error('[storage] Failed to register storage provider:', error);
         return;

@@ -46,7 +46,7 @@ export default defineNuxtPlugin(async () => {
 
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
-            unsubscribe?.();
+            unsubscribe();
         });
     }
 });

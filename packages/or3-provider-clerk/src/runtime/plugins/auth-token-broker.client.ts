@@ -16,7 +16,7 @@ function waitForClerk(timeoutMs = 5000): Promise<ClerkClient | null> {
 
         const check = () => {
             const clerk = (window as unknown as { Clerk?: ClerkClient }).Clerk;
-            if (clerk) {
+            if (clerk?.loaded) {
                 resolve(clerk);
                 return;
             }

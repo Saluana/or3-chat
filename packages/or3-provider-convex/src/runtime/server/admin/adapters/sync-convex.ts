@@ -18,7 +18,7 @@ import type { H3Event } from 'h3';
 import { createError } from 'h3';
 import { api } from '~~/convex/_generated/api';
 import type { Id } from '~~/convex/_generated/dataModel';
-import { getConvexGatewayClient } from '../utils/convex-gateway';
+import { getConvexGatewayClient } from '../../utils/convex-gateway';
 import {
     CLERK_PROVIDER_ID,
     CONVEX_JWT_TEMPLATE,

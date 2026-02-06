@@ -29,7 +29,7 @@ import { useRuntimeConfig } from '#imports';
 
 export default defineNitroPlugin(() => {
     const config = useRuntimeConfig();
-    if (!config.auth?.enabled) return;
+    if (!config.auth.enabled) return;
 
     registerAuthWorkspaceStore({
         id: CONVEX_PROVIDER_ID,

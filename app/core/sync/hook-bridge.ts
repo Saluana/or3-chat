@@ -154,7 +154,7 @@ export class HookBridge {
 
                 // Dexie passes modifications with dot-notation keys like 'data.content'
                 // We need to properly merge these into the existing object
-                const merged = deepClone(obj);
+                const merged = deepClone(toRecord(obj));
                 const safeModifications = toRecord(modifications);
                 const modificationEntries = Object.entries(safeModifications);
                 for (const [key, value] of modificationEntries) {

@@ -47,6 +47,15 @@ export async function getJobProvider(): Promise<BackgroundJobProvider> {
 
     switch (storageProvider) {
         case BACKGROUND_PROVIDER_IDS.convex: {
+            const syncConfig = config.sync as { convexUrl?: string } | undefined;
+            const publicSyncConfig = (config.public as { sync?: { convexUrl?: string } } | undefined)?.sync;
+            const convexUrl = syncConfig?.convexUrl ?? publicSyncConfig?.convexUrl;
+            if (!convexUrl) {
+                console.warn('[background-jobs] Convex URL not configured, using memory');
+                cachedProvider = memoryJobProvider;
+                break;
+            }
+
             const registered = getBackgroundJobProviderById(storageProvider);
             if (registered) {
                 cachedProvider = registered;

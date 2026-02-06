@@ -60,6 +60,19 @@ describe('useAuthTokenBroker.client', () => {
         });
     });
 
+    it('uses the latest registered broker even if the instance was created earlier', async () => {
+        const broker = useAuthTokenBroker();
+        const lateGetTokenMock = vi.fn().mockResolvedValue('late-jwt-token');
+        registerAuthTokenBroker(() => ({
+            getProviderToken: lateGetTokenMock,
+        }));
+
+        await expect(
+            broker.getProviderToken({ providerId: 'convex', template: 'convex-sync' })
+        ).resolves.toBe('late-jwt-token');
+        expect(lateGetTokenMock).toHaveBeenCalledTimes(1);
+    });
+
     it('swallows thrown errors and logs, returning null', async () => {
         const getTokenMock = vi.fn().mockRejectedValue(new Error('boom'));
         registerAuthTokenBroker(() => ({

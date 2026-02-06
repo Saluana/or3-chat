@@ -103,7 +103,7 @@ export function getStorageGatewayAdapter(
  */
 export function getActiveStorageGatewayAdapter(): StorageGatewayAdapter | null {
     const config = useRuntimeConfig();
-    const providerId = config.public.storage?.provider;
+    const providerId = config.public.storage.provider;
     if (!providerId) return null;
     return getStorageGatewayAdapter(providerId);
 }

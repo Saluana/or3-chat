@@ -17,6 +17,7 @@ import { GcManager } from '~/core/sync/gc-manager';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { createWorkspaceDb, setActiveWorkspaceDb, type Or3DB } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useAuthTokenBroker, type AuthTokenBroker } from '~/composables/auth/useAuthTokenBroker.client';
 import { useWorkspaceManager } from '~/composables/workspace/useWorkspaceManager';
 import { watch } from 'vue';
 import type { SyncProvider, SyncScope } from '~~/shared/sync/types';
@@ -38,6 +39,7 @@ const AUTH_RETRY_DELAYS = [500, 1000, 2000, 5000];
 let stopInFlight: Promise<void> | null = null;
 let startInFlight: Promise<void> | null = null;
 let startWorkspaceIdInFlight: string | null = null;
+let authTokenBroker: AuthTokenBroker | null = null;
 
 function getActiveWorkspaceId(): string | null {
     return engineState?.scope.workspaceId ?? null;
@@ -59,6 +61,21 @@ function scheduleAuthRetry(workspaceId: string, attempt: number): void {
             scheduleAuthRetry(workspaceId, attempt + 1);
         });
     }, delay);
+}
+
+async function hasDirectProviderToken(provider: SyncProvider): Promise<boolean> {
+    if (provider.mode !== 'direct' || !provider.auth) return true;
+    if (!authTokenBroker) return false;
+
+    try {
+        const token = await authTokenBroker.getProviderToken({
+            providerId: provider.auth.providerId,
+            template: provider.auth.template,
+        });
+        return Boolean(token);
+    } catch {
+        return false;
+    }
 }
 
 /**
@@ -88,9 +105,6 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
 
         console.log('[sync-engine] Starting sync engine for workspace:', workspaceId);
 
-        // Create workspace-specific DB
-        const db = createWorkspaceDb(workspaceId);
-
         // Get or create provider
         const provider = getActiveSyncProvider();
         if (!provider) {
@@ -100,6 +114,18 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
         }
 
         const resolvedProvider = provider;
+        const hasAuth = await hasDirectProviderToken(resolvedProvider);
+        if (!hasAuth) {
+            console.warn('[sync-engine] Direct provider token unavailable; delaying sync start', {
+                providerId: resolvedProvider.id,
+                workspaceId,
+            });
+            scheduleAuthRetry(workspaceId, 1);
+            return;
+        }
+
+        // Create workspace-specific DB only after provider/auth are ready.
+        const db = createWorkspaceDb(workspaceId);
 
         const scope: SyncScope = { workspaceId };
         // Initialize components
@@ -221,6 +247,7 @@ export default defineNuxtPlugin(async () => {
         console.log('[sync-engine] Sync disabled, skipping sync');
         return;
     }
+    authTokenBroker = useAuthTokenBroker();
 
     const providerId = runtimeConfig.public.sync?.provider ?? 'gateway';
 

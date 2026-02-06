@@ -9,7 +9,7 @@ import { useRuntimeConfig } from '#imports';
 
 export default defineNitroPlugin(() => {
     const config = useRuntimeConfig();
-    if (!config.auth?.enabled) return;
+    if (!config.auth.enabled) return;
 
     registerAuthProvider({
         id: CLERK_PROVIDER_ID,

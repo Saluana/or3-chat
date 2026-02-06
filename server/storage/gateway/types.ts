@@ -52,7 +52,7 @@ export interface PresignUploadRequest {
  */
 export interface PresignUploadResponse {
     url: string;
-    expiresAt: number;
+    expiresAt?: number;
     headers?: Record<string, string>;
     method?: string;
     storageId?: string;
@@ -86,7 +86,7 @@ export interface PresignDownloadRequest {
  */
 export interface PresignDownloadResponse {
     url: string;
-    expiresAt: number;
+    expiresAt?: number;
     headers?: Record<string, string>;
     method?: string;
     storageId?: string;

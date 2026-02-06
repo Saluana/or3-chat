@@ -19,8 +19,7 @@ import { useRuntimeConfig } from '#imports';
  */
 function getAdminConvexClient(providerUserId: string): ConvexHttpClient {
     const config = useRuntimeConfig();
-    const url = config.sync?.convexUrl;
-    const adminKey = config.sync?.convexAdminKey;
+    const { convexUrl: url, convexAdminKey: adminKey } = config.sync;
 
     if (!url) {
         throw new Error('Convex URL not configured');
@@ -29,11 +28,11 @@ function getAdminConvexClient(providerUserId: string): ConvexHttpClient {
         throw new Error('Convex admin key not configured - required for server-side auth operations');
     }
 
-    const client = new ConvexHttpClient(url as string);
-    
+    const client = new ConvexHttpClient(url);
+
     // Use admin auth to authenticate as the provider user
     // This allows the Convex mutations to verify identity.subject matches the request
-    client.setAdminAuth(adminKey as string, {
+    client.setAdminAuth(adminKey, {
         subject: providerUserId,
         issuer: 'https://clerk.or3.ai', // Standard Clerk issuer format
         tokenIdentifier: `https://clerk.or3.ai|${providerUserId}`,

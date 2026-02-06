@@ -155,9 +155,9 @@ export function useProjectsCrud() {
         if (updates.length) {
             await db.transaction(
                 'rw',
-                getWriteTxTableNames(db as any, 'projects'),
+                getWriteTxTableNames(db, 'projects'),
                 async () => {
-                await db.projects.bulkPut(updates);
+                    await db.projects.bulkPut(updates);
                 }
             );
         }

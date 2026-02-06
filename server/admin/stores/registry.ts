@@ -126,7 +126,7 @@ export function getAdminStoreCapabilities(event?: H3Event): AdminStoreCapabiliti
         };
 
     cachedCapabilities = capabilities;
-    cachedProviderId = providerId ?? null;
+    cachedProviderId = providerId;
     cacheTimestamp = now;
 
     return capabilities;

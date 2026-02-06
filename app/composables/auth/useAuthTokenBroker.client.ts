@@ -44,15 +44,24 @@ export function registerAuthTokenBroker(factory: AuthTokenBrokerFactory): void {
 
 export function useAuthTokenBroker(): AuthTokenBroker {
     const runtimeConfig = useRuntimeConfig();
-    const registry = getRegistry();
-    const broker = registry.factory ? registry.factory() : DEFAULT_BROKER;
 
     return {
         async getProviderToken(input) {
             if (!runtimeConfig.public.ssrAuthEnabled) {
                 return null;
             }
-            return await broker.getProviderToken(input);
+            try {
+                // Resolve the broker lazily so late-registered providers are honored.
+                const registry = getRegistry();
+                const broker = registry.factory ? registry.factory() : DEFAULT_BROKER;
+                return await broker.getProviderToken(input);
+            } catch (error) {
+                console.error('[auth-token-broker] Failed to get provider token', {
+                    providerId: input.providerId,
+                    error,
+                });
+                return null;
+            }
         },
     };
 }
