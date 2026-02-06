@@ -41,6 +41,7 @@ This directory contains complete documentation for the provider decoupling imple
 ### Implementation Guides
 | Document | Purpose | Read Time |
 |----------|---------|-----------|
+| **[phase-3-task.md](phase-3-task.md)** | Final execution-order runbook to complete decoupling | 20 min |
 | **[QUICK_START_GUIDE.md](QUICK_START_GUIDE.md)** | Complete step-by-step implementation guide | 30 min |
 | **[implementation-guide.md](implementation-guide.md)** | Code patterns and examples | 20 min |
 | **[IMPLEMENTATION_FLOWCHART.md](IMPLEMENTATION_FLOWCHART.md)** | Visual diagrams and architecture | 15 min |
