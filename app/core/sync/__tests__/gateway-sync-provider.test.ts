@@ -107,8 +107,8 @@ describe('GatewaySyncProvider', () => {
             limit: 10,
         });
 
-        // Start initial run
-        await vi.advanceTimersByTimeAsync(0);
+        // Start initial run (first poll fires after pollIntervalMs + jitter)
+        await vi.advanceTimersByTimeAsync(10);
         await Promise.resolve();
         expect(fetchMock).toHaveBeenCalledTimes(1);
 
@@ -145,10 +145,44 @@ describe('GatewaySyncProvider', () => {
             limit: 10,
         });
 
-        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(1000);
         await Promise.resolve();
 
         // Without the loop guard this would spin inside one poll cycle.
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        unsubscribe();
+    });
+
+    it('delays first poll by pollInterval instead of firing immediately', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+
+        const fetchMock = vi.fn(async () =>
+            makeOkResponse({ changes: [], nextCursor: 0, hasMore: false })
+        );
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 500 });
+        const scope: SyncScope = { workspaceId: 'ws-1' };
+
+        const unsubscribe = await provider.subscribe(scope, ['messages'], () => undefined, {
+            cursor: 0,
+            limit: 10,
+        });
+
+        // Should NOT have polled yet at t=0
+        await vi.advanceTimersByTimeAsync(0);
+        await Promise.resolve();
+        expect(fetchMock).toHaveBeenCalledTimes(0);
+
+        // Should NOT have polled at t=250 (half the interval)
+        await vi.advanceTimersByTimeAsync(250);
+        await Promise.resolve();
+        expect(fetchMock).toHaveBeenCalledTimes(0);
+
+        // Should poll at t=500 (pollIntervalMs with jitter=0)
+        await vi.advanceTimersByTimeAsync(250);
+        await Promise.resolve();
         expect(fetchMock).toHaveBeenCalledTimes(1);
 
         unsubscribe();

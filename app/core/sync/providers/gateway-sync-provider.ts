@@ -61,12 +61,15 @@ export interface GatewaySyncProviderConfig {
 function sanitizeErrorText(text: string, maxLength: number = 200): string {
     // Try to parse as JSON and extract a meaningful error message
     try {
-        const parsed = JSON.parse(text);
-        if (parsed.message) {
-            return parsed.message.slice(0, maxLength);
-        }
-        if (parsed.error) {
-            return String(parsed.error).slice(0, maxLength);
+        const parsed: unknown = JSON.parse(text);
+        if (typeof parsed === 'object' && parsed !== null) {
+            const obj = parsed as Record<string, unknown>;
+            if (typeof obj.message === 'string') {
+                return obj.message.slice(0, maxLength);
+            }
+            if (obj.error !== undefined) {
+                return String(obj.error).slice(0, maxLength);
+            }
         }
     } catch {
         // Not JSON, continue with text sanitization
@@ -194,15 +197,18 @@ export function createGatewaySyncProvider(
                 } finally {
                     running = false;
                 }
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- active is mutated by unsubscribe() closure
                 if (!active) return;
                 // Add random jitter (0-500ms) to prevent thundering herd
                 const jitter = Math.floor(Math.random() * 500);
                 timeout = setTimeout(run, pollIntervalMs + jitter);
             };
 
-            // Start immediately. Do not await initial poll; callers expect subscribe() to resolve quickly
-            // with an unsubscribe handle. Awaiting the initial poll can deadlock resubscribe logic.
-            timeout = setTimeout(run, 0);
+            // Delay the first poll by the configured interval + jitter.
+            // This avoids a wasted round-trip immediately after bootstrap when the cursor
+            // is already up-to-date. Callers still get the unsubscribe handle synchronously.
+            const initialJitter = Math.floor(Math.random() * 500);
+            timeout = setTimeout(run, pollIntervalMs + initialJitter);
 
             const unsubscribe = () => {
                 active = false;

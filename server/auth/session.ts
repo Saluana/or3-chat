@@ -34,7 +34,7 @@ import { getDeploymentAdminChecker } from './deployment-admin';
 
 const SESSION_CONTEXT_KEY_PREFIX = '__or3_session_context_';
 const REQUEST_ID_KEY = '__or3_request_id';
-const DEFAULT_SHARED_SESSION_CACHE_TTL_MS = 10_000;
+const DEFAULT_SHARED_SESSION_CACHE_TTL_MS = 60_000;
 const MAX_SHARED_SESSION_CACHE_ENTRIES = 2_000;
 
 type SharedSessionCacheEntry = {
@@ -179,6 +179,7 @@ export async function resolveSessionContext(
     try {
         // Get the configured workspace store based on sync provider
         const { getAuthWorkspaceStore } = await import('./store/registry');
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- sync may be undefined in test/static-build configs
         const storeId = config.public.sync?.provider || 'convex';
         const store = getAuthWorkspaceStore(storeId);
 

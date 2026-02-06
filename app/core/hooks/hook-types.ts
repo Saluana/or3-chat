@@ -859,7 +859,7 @@ export type CoreHookPayloadMap = {
         }
     ];
     'sync.bootstrap:action:complete': [
-        { scope: SyncScopePayload; cursor: number; totalPulled: number }
+        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }
     ];
     'sync.pull:action:received': [
         { scope: SyncScopePayload; changeCount: number }

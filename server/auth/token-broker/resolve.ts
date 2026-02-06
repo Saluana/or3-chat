@@ -11,7 +11,7 @@ import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import type { ProviderTokenRequest } from './types';
 import { getProviderTokenBroker } from './registry';
 
-const DEFAULT_PROVIDER_TOKEN_CACHE_TTL_MS = 10_000;
+const DEFAULT_PROVIDER_TOKEN_CACHE_TTL_MS = 55_000;
 const MAX_PROVIDER_TOKEN_CACHE_ENTRIES = 2_000;
 
 type ProviderTokenCacheEntry = {
@@ -60,7 +60,7 @@ export async function resolveProviderToken(
     request: ProviderTokenRequest
 ): Promise<string | null> {
     const config = useRuntimeConfig(event);
-    const brokerId = config.auth?.provider ?? CLERK_PROVIDER_ID;
+    const brokerId = config.auth.provider || CLERK_PROVIDER_ID;
     const broker = getProviderTokenBroker(brokerId);
     if (!broker) {
         return null;

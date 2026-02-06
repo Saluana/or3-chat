@@ -584,4 +584,163 @@ describe('SubscriptionManager', () => {
         expect(pull).toHaveBeenCalledTimes(1);
         expect(result.cursor).toBe(10);
     });
+
+    it('prefetches next page during bootstrap while applying current page', async () => {
+        (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 0;
+        const cursorApi = (cursorManagerModule as unknown as { getCursorManager: () => { isBootstrapNeeded: ReturnType<typeof vi.fn> } }).getCursorManager();
+        cursorApi.isBootstrapNeeded = vi.fn(async () => true) as any;
+
+        const pullTimestamps: number[] = [];
+        let applyBarrierRelease: (() => void) | undefined;
+        const applyBarrier = new Promise<void>((resolve) => {
+            applyBarrierRelease = resolve;
+        });
+        let applyBarrierHit = false;
+
+        const pull = vi.fn(async (request: PullRequest): Promise<PullResponse> => {
+            pullTimestamps.push(Date.now());
+            if (request.cursor === 0) {
+                return {
+                    changes: [buildChange(1)],
+                    nextCursor: 1,
+                    hasMore: true,
+                };
+            }
+            if (request.cursor === 1) {
+                return {
+                    changes: [buildChange(2)],
+                    nextCursor: 2,
+                    hasMore: false,
+                };
+            }
+            return { changes: [], nextCursor: request.cursor, hasMore: false };
+        });
+
+        const provider: SyncProvider = {
+            id: 'sub-provider-prefetch',
+            mode: 'direct',
+            auth: undefined,
+            subscribe: vi.fn(async () => () => undefined),
+            pull,
+            push: vi.fn(async () => { throw new Error('push not used'); }),
+            updateCursor: vi.fn(async () => undefined),
+            dispose: vi.fn(async () => undefined),
+        };
+
+        const messages = createMemoryTable('id');
+        const tombstones = createMemoryTable('id');
+        const pending_ops = createMemoryTable('id');
+        const db = createMockDb({ messages, tombstones, pending_ops });
+
+        const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
+        await manager.start();
+
+        // Both pages should have been pulled
+        expect(pull).toHaveBeenCalledTimes(2);
+        // First pull at cursor 0, second at cursor 1
+        expect(pull.mock.calls[0]![0].cursor).toBe(0);
+        expect(pull.mock.calls[1]![0].cursor).toBe(1);
+
+        // Both changes should be applied
+        expect(await messages.get('m-1')).toBeDefined();
+        expect(await messages.get('m-2')).toBeDefined();
+
+        // Restore
+        cursorApi.isBootstrapNeeded = vi.fn(async () => false) as any;
+    });
+
+    it('does not await updateCursor during bootstrap (fire-and-forget)', async () => {
+        (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 0;
+        const cursorApi = (cursorManagerModule as unknown as { getCursorManager: () => { isBootstrapNeeded: ReturnType<typeof vi.fn> } }).getCursorManager();
+        cursorApi.isBootstrapNeeded = vi.fn(async () => true) as any;
+
+        let updateCursorResolved = false;
+        let updateCursorRelease: (() => void) | undefined;
+        const updateCursorBarrier = new Promise<void>((resolve) => {
+            updateCursorRelease = resolve;
+        });
+
+        const provider: SyncProvider = {
+            id: 'sub-provider-fire-forget',
+            mode: 'direct',
+            auth: undefined,
+            subscribe: vi.fn(async () => () => undefined),
+            pull: vi.fn(async (request: PullRequest): Promise<PullResponse> => ({
+                changes: request.cursor === 0 ? [buildChange(1)] : [],
+                nextCursor: request.cursor === 0 ? 1 : request.cursor,
+                hasMore: false,
+            })),
+            push: vi.fn(async () => { throw new Error('push not used'); }),
+            updateCursor: vi.fn(async () => {
+                await updateCursorBarrier;
+                updateCursorResolved = true;
+            }),
+            dispose: vi.fn(async () => undefined),
+        };
+
+        const messages = createMemoryTable('id');
+        const tombstones = createMemoryTable('id');
+        const pending_ops = createMemoryTable('id');
+        const db = createMockDb({ messages, tombstones, pending_ops });
+
+        const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
+
+        // start() should complete without waiting for updateCursor
+        await manager.start();
+
+        // updateCursor was called but hasn't resolved yet
+        expect(provider.updateCursor).toHaveBeenCalledTimes(1);
+        expect(updateCursorResolved).toBe(false);
+
+        // bootstrap hook should have fired even though updateCursor is still pending
+        const completeHookFired = hookState.doAction.mock.calls.some(
+            (call) => (call as unknown[])[0] === 'sync.bootstrap:action:complete'
+        );
+        expect(completeHookFired).toBe(true);
+
+        // Clean up
+        updateCursorRelease?.();
+        await vi.runAllTimersAsync();
+        cursorApi.isBootstrapNeeded = vi.fn(async () => false) as any;
+    });
+
+    it('emits elapsedMs in bootstrap complete hook', async () => {
+        (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 0;
+        const cursorApi = (cursorManagerModule as unknown as { getCursorManager: () => { isBootstrapNeeded: ReturnType<typeof vi.fn> } }).getCursorManager();
+        cursorApi.isBootstrapNeeded = vi.fn(async () => true) as any;
+
+        const provider: SyncProvider = {
+            id: 'sub-provider-elapsed',
+            mode: 'direct',
+            auth: undefined,
+            subscribe: vi.fn(async () => () => undefined),
+            pull: vi.fn(async (): Promise<PullResponse> => ({
+                changes: [],
+                nextCursor: 0,
+                hasMore: false,
+            })),
+            push: vi.fn(async () => { throw new Error('push not used'); }),
+            updateCursor: vi.fn(async () => undefined),
+            dispose: vi.fn(async () => undefined),
+        };
+
+        const messages = createMemoryTable('id');
+        const tombstones = createMemoryTable('id');
+        const pending_ops = createMemoryTable('id');
+        const db = createMockDb({ messages, tombstones, pending_ops });
+
+        const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
+        await manager.start();
+
+        const completeCall = hookState.doAction.mock.calls.find(
+            (call) => (call as unknown[])[0] === 'sync.bootstrap:action:complete'
+        );
+        expect(completeCall).toBeDefined();
+        const payload = (completeCall as unknown[])[1] as { elapsedMs?: number };
+        expect(typeof payload.elapsedMs).toBe('number');
+        expect(payload.elapsedMs).toBeGreaterThanOrEqual(0);
+
+        // Restore
+        cursorApi.isBootstrapNeeded = vi.fn(async () => false) as any;
+    });
 });

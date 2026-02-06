@@ -29,7 +29,7 @@
  * @see core/sync/recent-op-cache for echo filtering
  */
 import type { Or3DB } from '~/db/client';
-import type { SyncProvider, SyncScope, SyncChange } from '~~/shared/sync/types';
+import type { SyncProvider, SyncScope, SyncChange, PullResponse } from '~~/shared/sync/types';
 import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
 import { useHooks } from '~/core/hooks/useHooks';
@@ -203,6 +203,9 @@ export class SubscriptionManager {
 
     /**
      * Perform bootstrap pull (paginated)
+     *
+     * Uses prefetch overlap: while applying page N, the fetch for page N+1
+     * is already in flight. This hides network latency behind IndexedDB writes.
      */
     private async bootstrap(): Promise<void> {
         // Check circuit breaker to prevent retry storm during outages
@@ -213,6 +216,7 @@ export class SubscriptionManager {
         }
 
         this.isBootstrapping = true;
+        const startTime = Date.now();
 
         try {
             let cursor = 0;
@@ -221,6 +225,14 @@ export class SubscriptionManager {
 
             await useHooks().doAction('sync.bootstrap:action:start', {
                 scope: this.scope,
+            });
+
+            // Kick off the first fetch
+            let pendingFetch: Promise<PullResponse> | null = this.provider.pull({
+                scope: this.scope,
+                cursor,
+                limit: this.config.bootstrapPageSize,
+                tables: this.config.tables,
             });
 
             while (hasMore) {
@@ -232,20 +244,7 @@ export class SubscriptionManager {
                     break;
                 }
 
-                const response = await this.provider.pull({
-                    scope: this.scope,
-                    cursor,
-                    limit: this.config.bootstrapPageSize,
-                    tables: this.config.tables,
-                });
-
-                if (response.changes.length > 0) {
-                    const filtered = this.filterRecentOps(response.changes);
-                    if (filtered.length) {
-                        await this.applyChanges(filtered);
-                    }
-                    totalPulled += response.changes.length;
-                }
+                const response = await pendingFetch!;
 
                 // Loop guard: only error if backend says there is more data but cursor is stuck.
                 if (response.hasMore && response.nextCursor <= cursor) {
@@ -258,6 +257,26 @@ export class SubscriptionManager {
                         error: 'Infinite loop detected: cursor not advancing',
                     });
                     break;
+                }
+
+                // Start prefetching the next page while we apply the current one
+                if (response.hasMore && response.nextCursor > cursor) {
+                    pendingFetch = this.provider.pull({
+                        scope: this.scope,
+                        cursor: response.nextCursor,
+                        limit: this.config.bootstrapPageSize,
+                        tables: this.config.tables,
+                    });
+                } else {
+                    pendingFetch = null;
+                }
+
+                if (response.changes.length > 0) {
+                    const filtered = this.filterRecentOps(response.changes);
+                    if (filtered.length) {
+                        await this.applyChanges(filtered);
+                    }
+                    totalPulled += response.changes.length;
                 }
 
                 cursor = response.nextCursor;
@@ -274,17 +293,26 @@ export class SubscriptionManager {
             // Update cursor after bootstrap
             await this.cursorManager.setCursor(cursor);
             await this.cursorManager.markSyncComplete();
-            await this.provider.updateCursor(
+
+            // Fire-and-forget: remote cursor update is best-effort;
+            // the local cursor is already persisted above.
+            this.provider.updateCursor(
                 this.scope,
                 this.cursorManager.getDeviceId(),
                 cursor
-            );
+            ).catch((err) => {
+                console.warn('[SubscriptionManager] Failed to update remote cursor after bootstrap:', err);
+            });
 
+            const elapsedMs = Date.now() - startTime;
             await useHooks().doAction('sync.bootstrap:action:complete', {
                 scope: this.scope,
                 cursor,
                 totalPulled,
+                elapsedMs,
             });
+
+            console.log(`[SubscriptionManager] Bootstrap complete: ${totalPulled} changes in ${elapsedMs}ms`);
         } finally {
             this.isBootstrapping = false;
         }
@@ -351,11 +379,15 @@ export class SubscriptionManager {
 
             await this.cursorManager.setCursor(cursor);
             await this.cursorManager.markSyncComplete();
-            await this.provider.updateCursor(
+
+            // Fire-and-forget: remote cursor update is best-effort
+            this.provider.updateCursor(
                 this.scope,
                 this.cursorManager.getDeviceId(),
                 cursor
-            );
+            ).catch((err) => {
+                console.warn('[SubscriptionManager] Failed to update remote cursor after rescan:', err);
+            });
 
             await this.reapplyPendingOps();
 
