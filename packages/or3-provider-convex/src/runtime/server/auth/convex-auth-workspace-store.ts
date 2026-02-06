@@ -2,16 +2,12 @@
  * @module server/auth/store/impls/convex-auth-workspace-store.ts
  *
  * Purpose:
- * Convex implementation of AuthWorkspaceStore. This is a TEMPORARY location.
- * This implementation will be moved to the or3-provider-convex package in Phase 3.
+ * Convex implementation of AuthWorkspaceStore.
  *
- * Current Status:
- * - Lives in core to maintain existing behavior during refactoring
- * - Will be deleted from core once provider package is created
- *
- * DO NOT import this file directly. Use getAuthWorkspaceStore('convex') instead.
+ * DO NOT import this file directly in core. Use getAuthWorkspaceStore('convex')
+ * after the Convex provider package registers the store.
  */
-import type { AuthWorkspaceStore } from '../types';
+import type { AuthWorkspaceStore } from '~~/server/auth/store/types';
 import type { WorkspaceRole } from '~~/app/core/hooks/hook-types';
 import type { Id } from '~~/convex/_generated/dataModel';
 import { ConvexHttpClient } from 'convex/browser';

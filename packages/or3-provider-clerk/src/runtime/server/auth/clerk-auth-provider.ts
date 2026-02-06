@@ -17,7 +17,7 @@
  * - Throws in development if Clerk context is missing to aid debugging.
  */
 import type { H3Event } from 'h3';
-import type { AuthProvider, ProviderSession } from '../../types';
+import type { AuthProvider, ProviderSession } from '~~/server/auth/types';
 import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { clerkClient } from '@clerk/nuxt/server';
 

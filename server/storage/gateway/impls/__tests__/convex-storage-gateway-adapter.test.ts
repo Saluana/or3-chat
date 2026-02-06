@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
-import { ConvexStorageGatewayAdapter } from '../convex-storage-gateway-adapter';
+import { ConvexStorageGatewayAdapter } from '~~/packages/or3-provider-convex/src/runtime/server/storage/convex-storage-gateway-adapter';
 
 vi.mock('~~/convex/_generated/api', () => ({
     api: {
@@ -14,18 +14,18 @@ vi.mock('~~/convex/_generated/api', () => ({
 }));
 
 const resolveProviderTokenMock = vi.hoisted(() => vi.fn());
-vi.mock('../../../../auth/token-broker/resolve', () => ({
+vi.mock('~~/server/auth/token-broker/resolve', () => ({
     resolveProviderToken: resolveProviderTokenMock as any,
 }));
 
 const resolvePresignExpiresAtMock = vi.hoisted(() => vi.fn(() => 111_111));
-vi.mock('../../../../utils/storage/presign-expiry', () => ({
+vi.mock('~~/server/utils/storage/presign-expiry', () => ({
     resolvePresignExpiresAt: resolvePresignExpiresAtMock as any,
 }));
 
 const queryMock = vi.hoisted(() => vi.fn());
 const mutationMock = vi.hoisted(() => vi.fn());
-vi.mock('../../../../utils/sync/convex-gateway', () => ({
+vi.mock('~~/packages/or3-provider-convex/src/runtime/server/utils/convex-gateway', () => ({
     getConvexGatewayClient: () => ({
         query: queryMock as any,
         mutation: mutationMock as any,

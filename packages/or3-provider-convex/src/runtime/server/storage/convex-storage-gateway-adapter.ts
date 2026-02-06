@@ -2,24 +2,26 @@
  * @module server/storage/gateway/impls/convex-storage-gateway-adapter.ts
  *
  * Purpose:
- * Convex implementation of StorageGatewayAdapter. This is a TEMPORARY location.
- * This implementation will be moved to the or3-provider-convex package in Phase 3.
+ * Convex implementation of StorageGatewayAdapter.
  *
- * Current Status:
- * - Lives in core to maintain existing behavior during refactoring
- * - Will be deleted from core once provider package is created
- *
- * DO NOT import this file directly. Use getActiveStorageGatewayAdapter() instead.
+ * DO NOT import this file directly in core. Use getActiveStorageGatewayAdapter()
+ * after the Convex provider package registers the adapter.
  */
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
-import type { StorageGatewayAdapter, PresignUploadRequest, PresignUploadResponse, PresignDownloadRequest, PresignDownloadResponse } from '../types';
+import type {
+    StorageGatewayAdapter,
+    PresignUploadRequest,
+    PresignUploadResponse,
+    PresignDownloadRequest,
+    PresignDownloadResponse,
+} from '~~/server/storage/gateway/types';
 import type { Id } from '~~/convex/_generated/dataModel';
 import { api } from '~~/convex/_generated/api';
-import { getConvexGatewayClient } from '../../../utils/sync/convex-gateway';
+import { getConvexGatewayClient } from '../utils/convex-gateway';
 import { CONVEX_JWT_TEMPLATE, CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
-import { resolvePresignExpiresAt } from '../../../utils/storage/presign-expiry';
-import { resolveProviderToken } from '../../../auth/token-broker/resolve';
+import { resolvePresignExpiresAt } from '~~/server/utils/storage/presign-expiry';
+import { resolveProviderToken } from '~~/server/auth/token-broker/resolve';
 
 /**
  * Convex-backed StorageGatewayAdapter implementation.

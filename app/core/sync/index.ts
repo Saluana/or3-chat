@@ -37,7 +37,4 @@ export {
     getAllSyncProviders,
 } from './sync-provider-registry';
 
-// Convex provider
-export { createConvexSyncProvider } from './providers/convex-sync-provider';
 export { createGatewaySyncProvider } from './providers/gateway-sync-provider';
-

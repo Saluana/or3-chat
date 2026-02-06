@@ -1,39 +1,40 @@
 /**
- * @module server/admin/providers/adapters/storage-convex.ts
+ * @module server/admin/providers/adapters/sync-convex.ts
  *
  * Purpose:
- * Admin adapter for Convex storage. Provides maintenance tools for managing
- * blob data in the Convex backend.
+ * Admin adapter for the Convex sync provider. Provides maintenance tools for
+ * the sync change log and tombstone tracking.
  *
  * Key Operations:
- * - **Storage Garbage Collection**: Purges file blobs that were logically deleted
- *   from the database but still occupy space in the storage provider.
+ * - **Change Log GC**: Purges historical sync entries that have been fully
+ *   propagated to all devices beyond the retention window.
+ * - **Tombstone GC**: Permanently deletes metadata records of deleted entities.
  *
  * Constraints:
- * - Requires a valid Clerk gateway token to perform administrative mutations.
- * - Operates within a workspace scope.
+ * - Requires a valid Clerk gateway token for authentication.
+ * - Actions are workspace-scoped.
  */
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
 import { api } from '~~/convex/_generated/api';
 import type { Id } from '~~/convex/_generated/dataModel';
-import { getConvexGatewayClient } from '../../../utils/sync/convex-gateway';
+import { getConvexGatewayClient } from '../utils/convex-gateway';
 import {
     CLERK_PROVIDER_ID,
     CONVEX_JWT_TEMPLATE,
-    CONVEX_STORAGE_PROVIDER_ID,
+    CONVEX_PROVIDER_ID,
 } from '~~/shared/cloud/provider-ids';
-import { resolveProviderToken } from '../../../auth/token-broker/resolve';
-import { listProviderTokenBrokerIds } from '../../../auth/token-broker/registry';
+import { resolveProviderToken } from '~~/server/auth/token-broker/resolve';
+import { listProviderTokenBrokerIds } from '~~/server/auth/token-broker/registry';
 import type {
     ProviderAdminAdapter,
     ProviderAdminStatusResult,
     ProviderStatusContext,
     ProviderActionContext,
-} from '../types';
+} from '~~/server/admin/providers/types';
 import { useRuntimeConfig } from '#imports';
 
-/** Default retention window for deleted files (30 days). */
+/** Default retention window for sync metadata (30 days). */
 const DEFAULT_RETENTION_SECONDS = 30 * 24 * 3600;
 
 /**
@@ -50,26 +51,26 @@ function resolveRetentionSeconds(payload?: Record<string, unknown>): number {
 }
 
 /**
- * Singleton implementation of the Convex Storage admin adapter.
+ * Singleton implementation of the Convex Sync admin adapter.
  */
-export const convexStorageAdminAdapter: ProviderAdminAdapter = {
-    id: CONVEX_STORAGE_PROVIDER_ID,
-    kind: 'storage',
+export const convexSyncAdminAdapter: ProviderAdminAdapter = {
+    id: CONVEX_PROVIDER_ID,
+    kind: 'sync',
 
     /**
      * Purpose:
-     * Validates storage provider alignment and configuration.
-     * Warns if Clerk is not used, as many actions require Clerk JWTs.
+     * Checks sync configuration and reports warnings.
      */
     async getStatus(_event: H3Event, ctx: ProviderStatusContext): Promise<ProviderAdminStatusResult> {
+        const config = useRuntimeConfig();
         const warnings: ProviderAdminStatusResult['warnings'] = [];
-        if (ctx.enabled && ctx.provider !== CONVEX_STORAGE_PROVIDER_ID) {
+
+        if (ctx.enabled && !config.sync.convexUrl) {
             warnings.push({
-                level: 'warning',
-                message: 'Storage provider mismatch. The selected provider does not match this adapter.',
+                level: 'error',
+                message: 'Convex sync is enabled but no Convex URL is configured in the environment.',
             });
         }
-        const config = useRuntimeConfig();
         if (ctx.enabled) {
             const brokerIds = listProviderTokenBrokerIds();
             if (!brokerIds.includes(config.auth.provider)) {
@@ -83,17 +84,27 @@ export const convexStorageAdminAdapter: ProviderAdminAdapter = {
                 warnings.push({
                     level: 'warning',
                     message:
-                        `Convex storage admin actions will use the "${config.auth.provider}" token broker for authentication.`,
+                        `Convex admin actions will use the "${config.auth.provider}" token broker for authentication.`,
                 });
             }
         }
+
         return {
+            details: {
+                convexUrl: config.sync.convexUrl,
+            },
             warnings,
             actions: [
                 {
-                    id: 'storage.gc',
-                    label: 'Run Storage GC',
-                    description: 'Delete orphaned blobs from the primary storage backend after the retention window.',
+                    id: 'sync.gc-change-log',
+                    label: 'Run Sync Change Log GC',
+                    description: 'Purge old change_log entries from the database after the retention window.',
+                    danger: true,
+                },
+                {
+                    id: 'sync.gc-tombstones',
+                    label: 'Run Sync Tombstone GC',
+                    description: 'Purge metadata tombstones after the retention window.',
                     danger: true,
                 },
             ],
@@ -102,10 +113,11 @@ export const convexStorageAdminAdapter: ProviderAdminAdapter = {
 
     /**
      * Purpose:
-     * Executes the requested storage maintenance action.
+     * Executes sync maintenance tasks.
      *
      * Behavior:
-     * - `storage.gc`: Triggers a Convex mutation to purge deleted files.
+     * - `sync.gc-change-log`: Calls the purge mutation for historical change logs.
+     * - `sync.gc-tombstones`: Calls the purge mutation for entity tombstones.
      *
      * @throws 401 Unauthorized if a valid Clerk token cannot be resolved.
      */
@@ -123,29 +135,31 @@ export const convexStorageAdminAdapter: ProviderAdminAdapter = {
         }
 
         const token = await resolveProviderToken(event, {
-            providerId: CONVEX_STORAGE_PROVIDER_ID,
+            providerId: CONVEX_PROVIDER_ID,
             template: CONVEX_JWT_TEMPLATE,
         });
         if (!token) {
             throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
         }
 
-        if (actionId !== 'storage.gc') {
-            throw createError({ statusCode: 400, statusMessage: 'Unknown action' });
-        }
-
         const client = getConvexGatewayClient(event, token);
         const workspaceId = ctx.session.workspace.id as Id<'workspaces'>;
         const retentionSeconds = resolveRetentionSeconds(payload);
-        const limit =
-            typeof payload?.limit === 'number' && payload.limit > 0 ? payload.limit : undefined;
 
-        const result = await client.mutation(api.storage.gcDeletedFiles, {
-            workspace_id: workspaceId,
-            retention_seconds: retentionSeconds,
-            limit,
-        });
+        if (actionId === 'sync.gc-change-log') {
+            return await client.mutation(api.sync.gcChangeLog, {
+                workspace_id: workspaceId,
+                retention_seconds: retentionSeconds,
+            });
+        }
 
-        return { deleted_count: result.deletedCount };
+        if (actionId === 'sync.gc-tombstones') {
+            return await client.mutation(api.sync.gcTombstones, {
+                workspace_id: workspaceId,
+                retention_seconds: retentionSeconds,
+            });
+        }
+
+        throw createError({ statusCode: 400, statusMessage: 'Unknown action' });
     },
 };

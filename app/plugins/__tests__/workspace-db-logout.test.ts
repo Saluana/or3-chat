@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { registerClientAuthStatusResolver } from '~/composables/auth/useClientAuthStatus.client';
 
 const logoutCleanup = vi.fn(async () => undefined);
 
@@ -59,7 +60,10 @@ describe('workspace logout cleanup plugin', () => {
         }).useNuxtApp = () => ({
             provide: vi.fn(),
         });
-        delete (globalThis as typeof globalThis & { Clerk?: unknown }).Clerk;
+        registerClientAuthStatusResolver(() => ({
+            ready: true,
+            authenticated: undefined,
+        }));
     });
 
     it('clears workspace DBs when session is unauthenticated on load', async () => {
@@ -68,10 +72,10 @@ describe('workspace logout cleanup plugin', () => {
     });
 
     it('does not clear workspace DBs when Clerk still has an active session', async () => {
-        (globalThis as typeof globalThis & { Clerk?: unknown }).Clerk = {
-            loaded: true,
-            session: { id: 'sess-1' },
-        };
+        registerClientAuthStatusResolver(() => ({
+            ready: true,
+            authenticated: true,
+        }));
         await import('~/plugins/00-workspace-db.client');
         expect(logoutCleanup).toHaveBeenCalledTimes(0);
     });

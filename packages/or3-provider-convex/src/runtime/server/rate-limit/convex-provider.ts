@@ -20,9 +20,10 @@ import type {
     RateLimitConfig,
     RateLimitResult,
     RateLimitStats,
-} from '../types';
-import { memoryRateLimitProvider } from './memory';
+} from '~~/server/utils/rate-limit/types';
+import { memoryRateLimitProvider } from '~~/server/utils/rate-limit/providers/memory';
 import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
+import { useRuntimeConfig } from '#imports';
 
 /**
  * Purpose:

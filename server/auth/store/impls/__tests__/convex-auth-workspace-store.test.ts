@@ -47,7 +47,7 @@ vi.mock('convex/browser', () => ({
 }));
 
 async function loadStore() {
-    return import('../convex-auth-workspace-store');
+    return import('~~/packages/or3-provider-convex/src/runtime/server/auth/convex-auth-workspace-store');
 }
 
 describe('ConvexAuthWorkspaceStore', () => {

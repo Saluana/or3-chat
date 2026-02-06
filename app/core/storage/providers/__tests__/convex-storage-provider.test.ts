@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createConvexStorageProvider } from '../convex-storage-provider';
+import { createConvexStorageProvider } from '~~/packages/or3-provider-convex/src/runtime/app/storage/convex-storage-provider';
 
 function okJson(body: unknown) {
     return {

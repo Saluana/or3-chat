@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
-import { ConvexSyncGatewayAdapter } from '../convex-sync-gateway-adapter';
+import { ConvexSyncGatewayAdapter } from '~~/packages/or3-provider-convex/src/runtime/server/sync/convex-sync-gateway-adapter';
 
 vi.mock('~~/convex/_generated/api', () => ({
     api: {
@@ -15,13 +15,13 @@ vi.mock('~~/convex/_generated/api', () => ({
 }));
 
 const resolveProviderTokenMock = vi.hoisted(() => vi.fn());
-vi.mock('../../../../auth/token-broker/resolve', () => ({
+vi.mock('~~/server/auth/token-broker/resolve', () => ({
     resolveProviderToken: (...args: unknown[]) => resolveProviderTokenMock(...args),
 }));
 
 const queryMock = vi.hoisted(() => vi.fn());
 const mutationMock = vi.hoisted(() => vi.fn());
-vi.mock('../../../../utils/sync/convex-gateway', () => ({
+vi.mock('~~/packages/or3-provider-convex/src/runtime/server/utils/convex-gateway', () => ({
     getConvexGatewayClient: () => ({
         query: (...args: unknown[]) => queryMock(...args),
         mutation: (...args: unknown[]) => mutationMock(...args),

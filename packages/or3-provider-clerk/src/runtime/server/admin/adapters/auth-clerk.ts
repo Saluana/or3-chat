@@ -10,7 +10,11 @@
  * - Report configuration errors as alerts in the dashboard.
  */
 import type { H3Event } from 'h3';
-import type { ProviderAdminAdapter, ProviderAdminStatusResult, ProviderStatusContext } from '../types';
+import type {
+    ProviderAdminAdapter,
+    ProviderAdminStatusResult,
+    ProviderStatusContext,
+} from '~~/server/admin/providers/types';
 import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { useRuntimeConfig } from '#imports';
 

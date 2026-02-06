@@ -1,26 +1,21 @@
 import { watch } from 'vue';
 import { setActiveWorkspaceDb } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { resolveClientAuthStatus } from '~/composables/auth/useClientAuthStatus.client';
 import { useWorkspaceManager } from '~/composables/workspace/useWorkspaceManager';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { cleanupHookBridge } from '~/core/sync/hook-bridge';
 import { cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
 import { logoutCleanup } from '~/utils/logout-cleanup';
 
-type ClerkClient = {
-    loaded?: boolean;
-    session?: unknown;
-};
-
-function shouldRunLogoutCleanup(
+async function shouldRunLogoutCleanup(
     authenticated: boolean | undefined
-): boolean {
+): Promise<boolean> {
     if (authenticated) return false;
-    if (typeof window === 'undefined') return true;
-    const clerk = (window as unknown as { Clerk?: ClerkClient }).Clerk;
-    if (!clerk) return true;
-    if (!clerk.loaded) return false;
-    return !clerk.session;
+    const status = await resolveClientAuthStatus();
+    if (!status.ready) return false;
+    if (status.authenticated === undefined) return true;
+    return !status.authenticated;
 }
 
 export default defineNuxtPlugin(async () => {
@@ -36,7 +31,7 @@ export default defineNuxtPlugin(async () => {
     const nuxtApp = useNuxtApp();
 
     await refresh();
-    if (shouldRunLogoutCleanup(data.value?.session?.authenticated)) {
+    if (await shouldRunLogoutCleanup(data.value?.session?.authenticated)) {
         await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
     }
 
@@ -65,7 +60,7 @@ export default defineNuxtPlugin(async () => {
             if (
                 oldSession?.authenticated &&
                 !newSession?.authenticated &&
-                shouldRunLogoutCleanup(newSession?.authenticated)
+                (await shouldRunLogoutCleanup(newSession?.authenticated))
             ) {
                 await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
             }

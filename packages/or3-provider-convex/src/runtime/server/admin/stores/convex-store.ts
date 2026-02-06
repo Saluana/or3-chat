@@ -32,16 +32,16 @@ import type {
     AdminUserStore,
     WorkspaceSummary,
     AdminUserInfo,
-} from '../types';
+} from '~~/server/admin/stores/types';
 import {
     getConvexAdminGatewayClient,
     getConvexGatewayClient,
-} from '../../../utils/sync/convex-gateway';
+} from '../utils/convex-gateway';
 import { CONVEX_JWT_TEMPLATE, CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { ADMIN_IDENTITY_ISSUER } from '~~/shared/cloud/admin-identity';
 import { useRuntimeConfig } from '#imports';
-import { resolveProviderToken } from '../../../auth/token-broker/resolve';
-import { listProviderTokenBrokerIds } from '../../../auth/token-broker/registry';
+import { resolveProviderToken } from '~~/server/auth/token-broker/resolve';
+import { listProviderTokenBrokerIds } from '~~/server/auth/token-broker/registry';
 
 type AdminContextShape = {
     principal?: { kind?: string; username?: string };

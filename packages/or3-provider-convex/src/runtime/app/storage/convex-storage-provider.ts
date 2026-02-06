@@ -20,7 +20,10 @@
  * @see server/api/storage/ for the SSR endpoint implementations
  */
 import { z } from 'zod';
-import type { ObjectStorageProvider, PresignedUrlResult } from '../types';
+import type {
+    ObjectStorageProvider,
+    PresignedUrlResult,
+} from '~/core/storage/types';
 import { CONVEX_STORAGE_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 const PresignedUrlResponseSchema = z

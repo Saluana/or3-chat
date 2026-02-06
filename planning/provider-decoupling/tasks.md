@@ -113,7 +113,6 @@ If any of the above still select Convex by default, `sync/storage != convex` is 
 - [x] Add SSR endpoints for workspace lifecycle (`/api/workspaces/*`) that call the configured store adapter
 - [x] Refactor workspace UI component(s) to only use `WorkspaceApi`
   - [x] Remove `convex-vue` and `~~/convex/_generated/*` imports from UI
-  - **Note**: `WorkspaceManager.vue` and `convex-sync-provider.ts` still use convex-vue
 
 ### 1.6 Client plugin cleanup (remove provider-specific auto-plugins)
 
@@ -154,35 +153,35 @@ This phase is what makes "optional dependencies" actually real.
 
 **Auth: `or3-provider-clerk`**
 
-- [ ] Nuxt module installs/configures `@clerk/nuxt`
-- [ ] Adds server middleware to populate request auth context
-- [ ] Registers:
-  - [ ] `AuthProvider` implementation (Clerk)
-  - [ ] `ProviderTokenBroker` implementation (Clerk)
-  - [ ] Admin adapter for auth status/config
+- [x] Nuxt module installs/configures `@clerk/nuxt`
+- [x] Adds server middleware to populate request auth context
+- [x] Registers:
+  - [x] `AuthProvider` implementation (Clerk)
+  - [x] `ProviderTokenBroker` implementation (Clerk)
+  - [x] Admin adapter for auth status/config
 
 **Sync/Storage/Canonical store: `or3-provider-convex`**
 
-- [ ] Nuxt module installs/configures `convex-nuxt` + client wiring
-- [ ] Registers:
-  - [ ] client `SyncProvider` (direct, Convex SDK)
+- [x] Nuxt module installs/configures `convex-nuxt` + client wiring
+- [x] Registers:
+  - [x] client `SyncProvider` (direct, Convex SDK)
   - [ ] optional client `WorkspaceApi` (direct or via SSR)
-  - [ ] server `AuthWorkspaceStore` (Convex-backed)
-  - [ ] server `SyncGatewayAdapter` (Convex gateway)
-  - [ ] server `StorageGatewayAdapter` (Convex storage gateway)
-  - [ ] admin adapters for sync/storage maintenance
+  - [x] server `AuthWorkspaceStore` (Convex-backed)
+  - [x] server `SyncGatewayAdapter` (Convex gateway)
+  - [x] server `StorageGatewayAdapter` (Convex storage gateway)
+  - [x] admin adapters for sync/storage maintenance
 
 **Behavior parity requirements (Convex path must behave like today)**
 
-- [ ] Convex provider preserves realtime updates (direct subscribe via Convex client) when configured for direct mode.
+- [x] Convex provider preserves realtime updates (direct subscribe via Convex client) when configured for direct mode.
 - [ ] Convex provider preserves existing Clerk↔Convex auth wiring (`setAuth` behavior).
-- [ ] Convex provider preserves background jobs + server notification emission + rate limits when those features are enabled and configured for Convex.
+- [x] Convex provider preserves background jobs + server notification emission + rate limits when those features are enabled and configured for Convex.
 
 **Provider inclusion (Nuxt constraint)**
 
-- [ ] Decide how provider modules are included:
+- [x] Decide how provider modules are included:
   - [ ] Minimal: hardcode built-in provider modules (Clerk/Convex) in `nuxt.config.ts` conditionals
-  - [ ] Wizard-generated: add `or3.providers.generated.ts` and let the install wizard overwrite it with the selected provider modules (recommended for OR3)
+  - [x] Wizard-generated: add `or3.providers.generated.ts` and let the install wizard overwrite it with the selected provider modules (recommended for OR3)
   - [ ] Extensible: add a build-time discovery step that generates a static import map from installed `or3-provider-*` packages (recommended if we want true third-party "install-only" UX)
 
 ### 2.2 Convex backend distribution workflow
@@ -208,8 +207,8 @@ This phase is what makes "optional dependencies" actually real.
 
 - [ ] Core app no longer contains:
   - [ ] `convex/**`
-  - [ ] Convex/Clerk-specific plugins, middleware, endpoints, or utils
-  - [ ] provider-only type augmentations (e.g., `server/types/convex-http-client.d.ts`)
+  - [x] Convex/Clerk-specific plugins, middleware, endpoints, or utils
+  - [x] provider-only type augmentations (e.g., `server/types/convex-http-client.d.ts`)
 - [ ] Core `package.json` no longer depends on provider SDKs
 
 ---
@@ -248,12 +247,9 @@ This phase is what makes "optional dependencies" actually real.
 ### ⏳ In Progress / Remaining
 
 - Phase 0: Audit complete; guardrails + config alignment pending
-- Phase 2: Provider packages (not started)
+- Phase 2: Provider packages (in progress)
 - Phase 3: Verification gates (not started)
 
 ### Temporary Implementations (in core, to move to packages)
 
-- `server/auth/store/impls/convex-auth-workspace-store.ts`
-- `server/sync/gateway/impls/convex-sync-gateway-adapter.ts`
-- `server/storage/gateway/impls/convex-storage-gateway-adapter.ts`
-- `server/plugins/00.register-providers.ts`
+- None (moved into provider packages).

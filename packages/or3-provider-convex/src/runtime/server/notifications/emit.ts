@@ -19,7 +19,7 @@
 
 import { api } from '~~/convex/_generated/api';
 import type { Id } from '~~/convex/_generated/dataModel';
-import { getConvexClient } from '../convex-client';
+import { getConvexClient } from '../utils/convex-client';
 
 /**
  * Purpose:

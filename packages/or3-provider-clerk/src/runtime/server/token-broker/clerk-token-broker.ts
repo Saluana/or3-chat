@@ -10,7 +10,10 @@
  * - Relies on `event.context.auth()` shape provided by @clerk/nuxt middleware.
  */
 import type { H3Event } from 'h3';
-import type { ProviderTokenBroker, ProviderTokenRequest } from '../types';
+import type {
+    ProviderTokenBroker,
+    ProviderTokenRequest,
+} from '~~/server/auth/token-broker/types';
 
 type ClerkAuthContext = {
     getToken: (options?: { template?: string }) => Promise<string | null>;
