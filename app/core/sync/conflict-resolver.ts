@@ -1,10 +1,26 @@
 /**
- * ConflictResolver - Applies remote changes with LWW conflict resolution
+ * @module app/core/sync/conflict-resolver
  *
- * Implements Last-Write-Wins (LWW) conflict resolution:
- * - Higher clock value wins
- * - If clocks are equal, HLC breaks the tie
- * - Emits conflict hooks for observability
+ * Purpose:
+ * Applies incoming remote changes to the local Dexie database using
+ * Last-Write-Wins (LWW) conflict resolution with HLC tie-breaking.
+ *
+ * Behavior:
+ * - Higher `clock` value wins unconditionally
+ * - Equal clocks are tie-broken by lexicographic HLC comparison
+ * - Delete and put operations each have dedicated resolution logic
+ * - Tombstones are maintained for deleted records
+ * - Conflict hooks are emitted after the transaction completes
+ *   (avoids Dexie PrematureCommitError from async hooks inside tx)
+ *
+ * Constraints:
+ * - All changes in a batch are applied in a single Dexie transaction for atomicity
+ * - Payloads are normalized via `sync-payload-normalizer` before storage
+ * - Invalid payloads (failing Zod validation) are skipped, not thrown
+ *
+ * @see core/sync/hlc for HLC comparison
+ * @see core/sync/sync-payload-normalizer for payload normalization
+ * @see core/sync/hook-bridge for sync transaction suppression
  */
 import type { Or3DB } from '~/db/client';
 import type { SyncChange, Tombstone } from '~~/shared/sync/types';
@@ -23,6 +39,20 @@ interface LocalRecord {
     [key: string]: unknown;
 }
 
+/**
+ * Purpose:
+ * Apply remote SyncChange batches to the local Dexie database using LWW + HLC tie-breaking.
+ *
+ * Behavior:
+ * - Applies changes in a single Dexie transaction for atomicity
+ * - Uses `clock` as the primary ordering, then compares `hlc` on ties
+ * - Maintains tombstones for deletes to prevent resurrection
+ * - Emits conflict hooks after the transaction completes
+ *
+ * Constraints:
+ * - Invalid payloads (schema failures) are skipped, not thrown
+ * - Callers should ensure HookBridge suppression is active for the tx
+ */
 export class ConflictResolver {
     private db: Or3DB;
 
@@ -147,7 +177,8 @@ export class ConflictResolver {
         } else if (stamp.clock === localClock) {
             // Tie-break with HLC
             const localHlc = local.hlc ?? '';
-            if (compareHLC(stamp.hlc, localHlc) > 0) {
+            const cmp = compareHLC(stamp.hlc, localHlc);
+            if (cmp > 0) {
                 const remotePayload = change.payload as { deleted_at?: number } | undefined;
                 const deletedAt = remotePayload?.deleted_at ?? nowSec();
 
@@ -171,6 +202,10 @@ export class ConflictResolver {
                 // Queue conflict for hook emission after transaction
                 conflicts.push({ tableName, pk, local, remote: { deleted: true }, winner: 'remote' });
                 return { applied: true, skipped: false, isConflict: true, winner: 'remote' };
+            }
+            if (cmp === 0) {
+                // Exact duplicate delivery, not a conflict.
+                return { applied: false, skipped: true, isConflict: false };
             }
             // Queue conflict for hook emission after transaction
             if (import.meta.dev) {
@@ -240,7 +275,8 @@ export class ConflictResolver {
         } else if (remoteClock === localClock) {
             // Tie-break with HLC
             const localHlc = local.hlc ?? '';
-            if (compareHLC(stamp.hlc, localHlc) > 0) {
+            const cmp = compareHLC(stamp.hlc, localHlc);
+            if (cmp > 0) {
                 await table.put(remotePayload);
                 if (tombstone && tombstone.clock < remoteClock) {
                     await this.clearTombstone(tableName, pk);
@@ -258,6 +294,10 @@ export class ConflictResolver {
                 // Queue conflict for hook emission after transaction
                 conflicts.push({ tableName, pk, local, remote: payload, winner: 'remote' });
                 return { applied: true, skipped: false, isConflict: true, winner: 'remote' };
+            }
+            if (cmp === 0) {
+                // Exact duplicate delivery, not a conflict.
+                return { applied: false, skipped: true, isConflict: false };
             }
             // Queue conflict for hook emission after transaction
             if (import.meta.dev) {
@@ -307,12 +347,20 @@ export class ConflictResolver {
     }
 }
 
+/**
+ * Purpose:
+ * Summary of a batch apply operation.
+ */
 export interface ApplyResult {
     applied: number;
     skipped: number;
     conflicts: number;
 }
 
+/**
+ * Purpose:
+ * Per-change apply result used internally and for diagnostics.
+ */
 export interface ChangeResult {
     applied: boolean;
     skipped: boolean;

@@ -338,10 +338,21 @@ export async function retryMessageImpl(
             );
         }
 
-        // Delete from database
-        await getDb().transaction('rw', getDb().messages, async () => {
-            await getDb().messages.delete(userMsg.id);
-            if (assistant) await getDb().messages.delete(assistant.id);
+        // Delete from database with sync tables in scope for atomic outbox+tombstone capture.
+        const db = getDb();
+        const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
+            ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
+            : [];
+        const txTables = ['messages'];
+        if (tableNames.includes('pending_ops')) {
+            txTables.push('pending_ops');
+        }
+        if (tableNames.includes('tombstones')) {
+            txTables.push('tombstones');
+        }
+        await db.transaction('rw', txTables, async () => {
+            await db.messages.delete(userMsg.id);
+            if (assistant) await db.messages.delete(assistant.id);
         });
 
         // Remove deleted messages from in-memory arrays

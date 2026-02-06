@@ -7,7 +7,7 @@
 import { toServerFormat } from './field-mappings';
 
 /** Tables that require a `deleted` field */
-const TABLES_WITH_DELETED = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'];
+const TABLES_WITH_DELETED = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta', 'notifications'];
 
 /** Max inline data URL size in bytes (anything larger will be stripped) */
 const MAX_INLINE_DATA_URL_SIZE = 10000; // 10KB - small icons/thumbnails OK, large images stripped

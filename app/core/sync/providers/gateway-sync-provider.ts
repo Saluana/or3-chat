@@ -1,8 +1,29 @@
 /**
- * Gateway Sync Provider
+ * @module app/core/sync/providers/gateway-sync-provider
  *
- * Uses SSR endpoints for sync operations (push/pull/update cursor).
- * Suitable for providers that cannot be accessed directly from the client.
+ * Purpose:
+ * Implements `SyncProvider` using SSR gateway endpoints. Provides real-time
+ * sync via polling (not WebSockets) and proxies all operations through
+ * `/api/sync/*` server routes.
+ *
+ * Behavior:
+ * - `subscribe()`: Polls `/api/sync/pull` on an interval (default 2s)
+ *   with random jitter to prevent thundering herd. Supports backpressure
+ *   by awaiting async `onChanges` handlers before re-polling.
+ * - `pull()`: Single request to `/api/sync/pull`
+ * - `push()`: Sends batched ops to `/api/sync/push`
+ * - `updateCursor()` / `gcTombstones()` / `gcChangeLog()`: Proxied via
+ *   corresponding gateway endpoints
+ *
+ * Constraints:
+ * - Polling-based (no true real-time push); latency = poll interval + jitter
+ * - Auth is session-based (cookies); no client-side JWT needed
+ * - Error messages are sanitized to a max of 200 chars for user-facing display
+ * - Subscribe resolves immediately (does not await first poll) to avoid
+ *   deadlocking resubscribe logic in SubscriptionManager
+ *
+ * @see shared/sync/types for SyncProvider interface
+ * @see server/api/sync/ for the SSR endpoint implementations
  */
 import type {
     SyncProvider,
@@ -18,6 +39,14 @@ import type {
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const DEFAULT_PULL_LIMIT = 100;
 
+/**
+ * Purpose:
+ * Configuration for the gateway (SSR-proxied) sync provider.
+ *
+ * Constraints:
+ * - `baseUrl` should typically be same-origin for cookie auth
+ * - Polling has inherent latency; keep `pollIntervalMs` conservative
+ */
 export interface GatewaySyncProviderConfig {
     id?: string;
     baseUrl?: string;
@@ -84,6 +113,17 @@ async function requestJson<T>(
     return JSON.parse(text) as T;
 }
 
+/**
+ * Purpose:
+ * Create a SyncProvider that proxies sync operations through SSR `/api/sync/*` endpoints.
+ *
+ * Behavior:
+ * - Uses polling for `subscribe()` (awaits handlers for backpressure)
+ * - Uses `pull()`/`push()` gateway endpoints for transport
+ *
+ * Constraints:
+ * - Requires SSR routes; not available in static-only builds
+ */
 export function createGatewaySyncProvider(
     config: GatewaySyncProviderConfig = {}
 ): SyncProvider {
@@ -111,6 +151,7 @@ export function createGatewaySyncProvider(
             const poll = async () => {
                 let hasMore = true;
                 while (active && hasMore) {
+                    const previousCursor = cursor;
                     const response = await requestJson<PullResponse>(
                         '/api/sync/pull',
                         {
@@ -133,6 +174,13 @@ export function createGatewaySyncProvider(
                     }
 
                     hasMore = response.hasMore;
+                    if (hasMore && cursor <= previousCursor) {
+                        console.error('[gateway-sync] Non-advancing cursor during poll loop', {
+                            cursor: previousCursor,
+                            nextCursor: response.nextCursor,
+                        });
+                        break;
+                    }
                 }
             };
 

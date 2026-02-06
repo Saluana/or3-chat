@@ -1,12 +1,31 @@
 /**
- * OutboxManager - Manages the push loop for syncing local changes
+ * @module app/core/sync/outbox-manager
+ *
+ * Purpose:
+ * Manages the push loop that flushes locally captured writes
+ * (`pending_ops`) to the sync provider. Handles coalescing,
+ * batching, retry with exponential backoff, and circuit-breaker
+ * coordination.
  *
  * Responsibilities:
- * - Periodically flush pending_ops to the server
- * - Coalesce multiple updates to same record
- * - Retry failed operations with exponential backoff
- * - Coordinate retries with circuit breaker
- * - Emit hooks for observability
+ * - Periodically flush pending_ops to the server (default 1s heartbeat)
+ * - Coalesce multiple updates to the same record (keep latest only)
+ * - Retry transient failures with configurable delays
+ * - Detect permanent failures (validation, oversized) and stop retrying
+ * - Emit `sync.push:action:before/after`, `sync.error:action`, and
+ *   `sync.retry:action` hooks for observability
+ * - Emit `sync.queue:action:full` when the queue nears capacity
+ *
+ * Constraints:
+ * - Maximum batch size: 50 ops per push (configurable)
+ * - Capacity warning at 500 pending ops
+ * - Retry delays: [250ms, 1s, 3s, 5s] (4 attempts, then permanent failure)
+ * - Circuit breaker prevents flush attempts when the provider is down
+ * - Payloads are re-sanitized before each push for safety
+ *
+ * @see core/sync/hook-bridge for the write capture side
+ * @see shared/sync/circuit-breaker for circuit breaker implementation
+ * @see shared/sync/sanitize for payload sanitization
  */
 import type { Or3DB } from '~/db/client';
 import type { SyncProvider, SyncScope, PendingOp } from '~~/shared/sync/types';
@@ -28,12 +47,33 @@ const DEFAULT_MAX_BATCH_SIZE = 50;
 /** Max pending ops before emitting capacity warning */
 const MAX_PENDING_OPS = 500;
 
+/**
+ * Purpose:
+ * Configuration for OutboxManager push loop behavior.
+ *
+ * Constraints:
+ * - Defaults are chosen to balance responsiveness with backend load
+ */
 export interface OutboxManagerConfig {
     flushIntervalMs?: number;
     maxBatchSize?: number;
     retryDelays?: number[];
 }
 
+/**
+ * Purpose:
+ * Flush locally captured pending ops to the active SyncProvider.
+ *
+ * Behavior:
+ * - Runs a periodic loop that coalesces and batches `pending_ops`
+ * - Retries transient failures with backoff and respects circuit breaker
+ * - Marks pushed opIds in the recent-op cache to drop echoed changes
+ * - Emits hooks for observability (`sync.push:*`, `sync.retry:*`, `sync.error:*`)
+ *
+ * Constraints:
+ * - Designed to be long-lived per workspace scope
+ * - `start()` is idempotent; caller owns lifecycle
+ */
 export class OutboxManager {
     private db: Or3DB;
     private provider: SyncProvider;

@@ -5,7 +5,7 @@
  * enqueues them in the pending_ops table for pushing to the server.
  *
  * Key features:
- * - Atomic: Uses Dexie hooks so outbox write is in same transaction
+ * - Atomic when transaction scope includes sync tables (`pending_ops`, `tombstones`)
  * - Suppression: Can disable capture when applying remote changes
  * - Auto order_key: Generates HLC-based order_key for messages
  */
@@ -77,6 +77,20 @@ function toRecord(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
 }
 
+/**
+ * Purpose:
+ * Bridge between local Dexie writes and the sync outbox (`pending_ops`).
+ *
+ * Behavior:
+ * - Installs Dexie hooks on synced tables to capture puts/deletes
+ * - Writes outbox entries within the same transaction when possible
+ * - Supports suppression to avoid re-enqueueing remote-applied writes
+ * - Derives message `order_key` from HLC when missing
+ *
+ * Constraints:
+ * - Must be started via `start()` to install hooks
+ * - Suppression must be enabled during remote apply transactions
+ */
 export class HookBridge {
     private db: Or3DB;
     private deviceId: string;
@@ -335,6 +349,17 @@ export class HookBridge {
         if (hasPendingOps) {
             transaction.table('pending_ops').add(pendingOp);
         } else {
+            const message =
+                '[HookBridge] Non-atomic sync capture: pending_ops missing from transaction scope';
+            console.error(message, { tableName, pk, storeNames: [...tableNames] });
+            void useHooks().doAction('sync.capture:action:nonAtomic', {
+                tableName,
+                pk,
+                storeNames: [...tableNames],
+            });
+            if (import.meta.dev && process.env.NODE_ENV !== 'test') {
+                throw new Error(message);
+            }
             transaction.on('complete', () => {
                 enqueuePendingOp().catch((error) => {
                     console.error(
@@ -374,6 +399,17 @@ export class HookBridge {
             if (hasTombstones) {
                 transaction.table('tombstones').put(tombstone);
             } else {
+                console.error('[HookBridge] Non-atomic tombstone capture: tombstones missing from transaction scope', {
+                    tableName,
+                    pk,
+                    storeNames: [...tableNames],
+                });
+                void useHooks().doAction('sync.capture:action:nonAtomic', {
+                    tableName,
+                    pk,
+                    storeNames: [...tableNames],
+                    kind: 'tombstone',
+                });
                 transaction.on('complete', () => {
                     enqueueTombstone().catch((error) => {
                         console.error(
@@ -408,7 +444,11 @@ export class HookBridge {
 const hookBridgeInstances = new Map<string, HookBridge>();
 
 /**
- * Get or create the HookBridge instance
+ * Purpose:
+ * Get or create the HookBridge singleton for a given workspace DB.
+ *
+ * Constraints:
+ * - Singleton is held in module state; use cleanup/reset in tests and HMR
  */
 export function getHookBridge(db: Or3DB): HookBridge {
     const key = db.name;
@@ -420,7 +460,10 @@ export function getHookBridge(db: Or3DB): HookBridge {
 }
 
 /**
- * Reset the HookBridge (for testing)
+ * Internal API.
+ *
+ * Purpose:
+ * Stop and clear all HookBridge instances. Intended for tests.
  */
 export function _resetHookBridge(): void {
     for (const bridge of hookBridgeInstances.values()) {
@@ -430,7 +473,8 @@ export function _resetHookBridge(): void {
 }
 
 /**
- * Cleanup HookBridge instance for a database
+ * Purpose:
+ * Stop and remove the HookBridge instance for a specific DB name.
  */
 export function cleanupHookBridge(dbName: string): void {
     const bridge = hookBridgeInstances.get(dbName);

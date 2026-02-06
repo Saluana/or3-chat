@@ -1,5 +1,25 @@
-// Typed Hook Engine wrapper — Types-first, zero runtime overhead.
-// Delegates to the existing HookEngine, preserving all behavior.
+/**
+ * @module app/core/hooks/typed-hooks.ts
+ *
+ * Purpose:
+ * Type-safe wrapper around `HookEngine`. Provides full type inference for
+ * action and filter registration/dispatch based on the `HookPayloadMap`.
+ * Zero runtime overhead: all type narrowing happens at compile time.
+ *
+ * Responsibilities:
+ * - Define `TypedHookEngine` interface with generically-constrained signatures
+ * - Provide `createTypedHookEngine()` factory that delegates all calls to the
+ *   underlying `HookEngine` instance
+ *
+ * Constraints:
+ * - The wrapper is purely additive; it does not change runtime behavior
+ * - Uses `as any` casts internally to bridge the generic/untyped boundary;
+ *   this is intentional and safe because the type contracts are enforced
+ *   at call sites via the `TypedHookEngine` interface
+ *
+ * @see core/hooks/hooks.ts for the runtime engine
+ * @see core/hooks/hook-types.ts for payload definitions
+ */
 
 import type { HookEngine, HookKind, OnOptions } from '~/core/hooks/hooks';
 import type {

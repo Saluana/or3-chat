@@ -128,4 +128,29 @@ describe('GatewaySyncProvider', () => {
 
         unsubscribe();
     });
+
+    it('breaks polling loop when hasMore is true and cursor does not advance', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+
+        const fetchMock = vi.fn(async () =>
+            makeOkResponse({ changes: [], nextCursor: 0, hasMore: true })
+        );
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 1000 });
+        const scope: SyncScope = { workspaceId: 'ws-1' };
+
+        const unsubscribe = await provider.subscribe(scope, ['messages'], () => undefined, {
+            cursor: 0,
+            limit: 10,
+        });
+
+        await vi.advanceTimersByTimeAsync(0);
+        await Promise.resolve();
+
+        // Without the loop guard this would spin inside one poll cycle.
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        unsubscribe();
+    });
 });

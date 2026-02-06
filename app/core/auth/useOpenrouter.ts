@@ -1,3 +1,30 @@
+/**
+ * @module app/core/auth/useOpenrouter
+ *
+ * Purpose:
+ * Vue composable that provides the OpenRouter OAuth PKCE login and logout flow.
+ * Handles PKCE challenge generation, state parameters, redirect construction,
+ * and key cleanup on logout.
+ *
+ * Behavior:
+ * - `startLogin()`: Generates PKCE verifier/challenge, builds the OpenRouter
+ *   OAuth redirect URL, and navigates the browser to it.
+ * - `logoutOpenRouter()`: Removes the API key from localStorage and KV, then
+ *   dispatches a `openrouter:connected` event to notify UI listeners.
+ *
+ * Constraints:
+ * - Client-only (accesses `window`, `sessionStorage`, `localStorage`)
+ * - PKCE prefers S256 but falls back to "plain" when SubtleCrypto is unavailable
+ * - Stores verifier in both sessionStorage and localStorage as fallback
+ * - Redirect URL is configurable via `OPENROUTER_REDIRECT_URI` runtime config
+ *
+ * Non-goals:
+ * - Does not perform the code exchange (see openrouter-auth.ts)
+ * - Does not manage the API key state (see useUserApiKey.ts)
+ *
+ * @see core/auth/openrouter-auth for the code-to-key exchange
+ * @see core/auth/useUserApiKey for reactive key state
+ */
 import { ref } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { kv } from '~/db';
@@ -15,6 +42,24 @@ async function sha256(plain: string) {
     return await crypto.subtle.digest('SHA-256', data);
 }
 
+/**
+ * Purpose:
+ * Provide the OpenRouter OAuth PKCE login/logout flow as a Vue composable.
+ *
+ * Behavior:
+ * - `startLogin()` redirects the browser to OpenRouter with PKCE parameters
+ * - `logoutOpenRouter()` clears local key state and emits `openrouter:connected`
+ *
+ * Constraints:
+ * - Client-only; relies on Web Crypto and storage APIs
+ * - Does not exchange the auth code; see `exchangeOpenRouterCode`
+ *
+ * @example
+ * ```ts
+ * const { startLogin, logoutOpenRouter, isLoggingIn } = useOpenRouterAuth();
+ * await startLogin();
+ * ```
+ */
 export function useOpenRouterAuth() {
     const isLoggingIn = ref(false);
 

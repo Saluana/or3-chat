@@ -1,6 +1,33 @@
-// Hook & Plugin Type System — Core Types (non-breaking, types-only)
-// This file provides compile-time types and utilities for amazing DX.
-// Runtime behavior is unchanged: wrappers will delegate to the existing HookEngine.
+/**
+ * @module app/core/hooks/hook-types.ts
+ *
+ * Purpose:
+ * Comprehensive type system for the OR3 hook engine. Provides compile-time
+ * type safety for hook names, payloads, callbacks, and return types.
+ * Runtime behavior is unchanged; all definitions here are types-only.
+ *
+ * Responsibilities:
+ * - Define payload interfaces for all core hooks (AI, UI, Pane, Sync, Storage, etc.)
+ * - Define DB entity types used in hook payloads
+ * - Define template-literal hook name types for DB hooks
+ * - Provide `HookPayloadMap` mapping hook names to their parameter tuples
+ * - Provide utility types: `InferHookParams`, `InferHookReturn`, `InferHookCallback`
+ * - Support plugin augmentation via `Or3ActionHooks` / `Or3FilterHooks` global interfaces
+ * - Provide developer-friendly error diagnostics via `ValidateHookName` / `SuggestSimilar`
+ *
+ * Non-responsibilities:
+ * - Runtime hook dispatch (see hooks.ts)
+ * - Component lifecycle (see useHookEffect / useHooks)
+ *
+ * Constraints:
+ * - Keep expansions small and additive to avoid TS performance degradation
+ * - Payload interfaces should use plain data types (no Vue reactivity, no class instances)
+ * - Wire-format fields use snake_case (aligned with Dexie and sync layer)
+ *
+ * @see core/hooks/hooks.ts for the runtime engine
+ * @see core/hooks/hook-keys.ts for the known hook key unions
+ * @see docs/core-hook-map.md for the human-readable hook reference
+ */
 import type { PaneState as MultiPaneState } from '../../composables/core/useMultiPane';
 import type { ChatMessage } from '~/utils/chat/types';
 import type { ORMessage } from '~/core/auth/openrouter-build';

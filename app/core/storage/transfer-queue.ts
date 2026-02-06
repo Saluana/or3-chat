@@ -1,3 +1,36 @@
+/**
+ * @module app/core/storage/transfer-queue
+ *
+ * Purpose:
+ * Local-first file transfer queue that manages uploads and downloads
+ * through the active storage provider. Transfers are persisted in the
+ * `file_transfers` Dexie table so they survive page reloads.
+ *
+ * Responsibilities:
+ * - Enqueue upload and download transfers
+ * - Process transfers with configurable concurrency (adaptive to network type)
+ * - Retry failed transfers with exponential backoff
+ * - Verify download integrity via hash comparison
+ * - Emit storage hooks before/after upload and download operations
+ * - Apply upload policy filters via `storage.files.upload:filter:policy`
+ * - Clean up completed/failed transfers after a retention window (7 days)
+ *
+ * Constraints:
+ * - Client-only (accesses IndexedDB, navigator.connection)
+ * - Workspace-scoped: switching workspaces cancels in-flight transfers
+ * - Presigned URLs are short-lived (default 1 hour expiry)
+ * - Maximum 5 retry attempts per transfer by default
+ * - Non-retryable errors (413, validation) are marked as permanent failures
+ *
+ * Non-goals:
+ * - Does not manage file metadata (see db/files)
+ * - Does not handle multipart uploads
+ * - Does not provide streaming progress to UI (transfers are observable via Dexie liveQuery)
+ *
+ * @see core/storage/types for ObjectStorageProvider interface
+ * @see core/storage/provider-registry for provider resolution
+ * @see shared/storage/types for FileTransfer schema
+ */
 import Dexie from 'dexie';
 import { getDb } from '~/db/client';
 import type { Or3DB } from '~/db/client';
@@ -40,6 +73,13 @@ function getDefaultConcurrency(): number {
     }
 }
 
+/**
+ * Purpose:
+ * Configuration for the file transfer queue.
+ *
+ * Constraints:
+ * - Concurrency defaults are adaptive; override only for testing or tuning
+ */
 export interface FileTransferQueueConfig {
     concurrency?: number;
     maxAttempts?: number;
@@ -52,6 +92,19 @@ type TransferWaiter = {
     reject: (error: Error) => void;
 };
 
+/**
+ * Purpose:
+ * Workspace-scoped queue for upload and download transfers.
+ *
+ * Behavior:
+ * - Persists transfers in Dexie (`file_transfers`) so they survive reload
+ * - Processes work with limited concurrency and retries with backoff
+ * - Provides `waitForTransfer()` to await completion for UX flows
+ *
+ * Constraints:
+ * - `setWorkspaceId()` must be called to enable processing
+ * - Switching workspaces cancels in-flight transfers
+ */
 export class FileTransferQueue {
     private concurrency: number;
     private maxAttempts: number;
@@ -649,6 +702,13 @@ function toCommitMeta(meta: FileMeta) {
 
 let queueInstance: FileTransferQueue | null = null;
 
+/**
+ * Purpose:
+ * Return the singleton FileTransferQueue instance for the current client session.
+ *
+ * Constraints:
+ * - Client-only; returns null in SSR
+ */
 export function getStorageTransferQueue(): FileTransferQueue | null {
     if (!import.meta.client) return null;
     if (queueInstance) return queueInstance;
@@ -660,6 +720,12 @@ export function getStorageTransferQueue(): FileTransferQueue | null {
     return queueInstance;
 }
 
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Dispose and reset the singleton transfer queue. Intended for tests and HMR.
+ */
 export function _resetStorageTransferQueue(): void {
     if (queueInstance) {
         queueInstance.cancelAllRunning();

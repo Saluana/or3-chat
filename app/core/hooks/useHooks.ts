@@ -1,5 +1,25 @@
-import { createHookEngine, type HookEngine } from './hooks';
-import { createTypedHookEngine, type TypedHookEngine } from './typed-hooks';
+/**
+ * @module app/core/hooks/useHooks.ts
+ *
+ * Purpose:
+ * Composable that provides access to the global `TypedHookEngine` instance.
+ * This is the primary entry point for hook registration and dispatch in
+ * components, composables, and plugins.
+ *
+ * Behavior:
+ * - Resolves the typed hook engine from the Nuxt app context (`$hooks`)
+ * - Throws if the engine is not available (indicates the `00-hooks` plugin
+ *   has not loaded, which is a fatal configuration error)
+ *
+ * Constraints:
+ * - Must be called within a Nuxt/Vue context (setup, plugin, middleware)
+ * - Does not create fallback engines; a missing engine is always an error
+ *
+ * @see core/hooks/typed-hooks.ts for the TypedHookEngine interface
+ * @see plugins/00-hooks for engine initialization
+ */
+import { type HookEngine } from './hooks';
+import { type TypedHookEngine } from './typed-hooks';
 import { useNuxtApp as useNuxtAppBase } from 'nuxt/app';
 
 let cached: { engine: HookEngine; typed: TypedHookEngine } | null = null;

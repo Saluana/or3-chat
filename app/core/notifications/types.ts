@@ -1,8 +1,13 @@
 /**
- * Notification Center Types
- * 
- * Re-exports notification types from hook-types and db schema
- * for convenient access by notification service and components.
+ * @module app/core/notifications/types
+ *
+ * Purpose:
+ * Re-exports notification types from the canonical sources (hook-types and
+ * db/schema) so that notification consumers have a single, stable import
+ * path. Avoids leaking implementation details of where each type is defined.
+ *
+ * @see core/hooks/hook-types.ts for NotificationAction, NotificationCreatePayload
+ * @see db/schema for the Dexie Notification record shape
  */
 
 export type {

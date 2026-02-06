@@ -242,6 +242,26 @@ describe('SubscriptionManager', () => {
         expect(provider.subscribe).toHaveBeenCalledTimes(2);
     });
 
+    it('drains backlog from max version when subscription versions are contiguous', async () => {
+        (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 100;
+        const provider = new SubscriptionProvider();
+        const pullSpy = vi.spyOn(provider, 'pull');
+        const messages = createMemoryTable('id');
+        const tombstones = createMemoryTable('id');
+        const pending_ops = createMemoryTable('id');
+        const db = createMockDb({ messages, tombstones, pending_ops });
+
+        const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
+        await manager.start();
+
+        const onChanges = provider.subscribe.mock.calls[0]![2] as (changes: SyncChange[]) => void;
+        await onChanges([buildChange(101), buildChange(102)]);
+        await vi.runAllTimersAsync();
+
+        const pulledCursors = pullSpy.mock.calls.map((args) => args[0].cursor);
+        expect(pulledCursors).toContain(102);
+    });
+
     it('drains backlog from cursor when subscription skips versions', async () => {
         (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 100;
         const provider = new SubscriptionProvider();
@@ -490,5 +510,78 @@ describe('SubscriptionManager', () => {
         await vi.runAllTimersAsync();
 
         expect(provider.updateCursor).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not flag bootstrap completion as infinite loop when hasMore is false', async () => {
+        const provider: SyncProvider = {
+            id: 'sub-provider-bootstrap-terminal',
+            mode: 'direct',
+            auth: undefined,
+            subscribe: vi.fn(async () => () => undefined),
+            pull: vi.fn(async (request: PullRequest) => ({
+                changes: [],
+                nextCursor: request.cursor,
+                hasMore: false,
+            })),
+            push: vi.fn(async () => {
+                throw new Error('push not used');
+            }),
+            updateCursor: vi.fn(async () => undefined),
+            dispose: vi.fn(async () => undefined),
+        };
+
+        const messages = createMemoryTable('id');
+        const tombstones = createMemoryTable('id');
+        const pending_ops = createMemoryTable('id');
+        const db = createMockDb({ messages, tombstones, pending_ops });
+
+        const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
+        await (manager as unknown as { bootstrap: () => Promise<void> }).bootstrap();
+
+        expect(
+            hookState.doAction.mock.calls.some(
+                (call) => (call as unknown[])[0] === 'sync.bootstrap:action:error'
+            )
+        ).toBe(false);
+    });
+
+    it('breaks backlog drain when cursor does not advance and hasMore is true', async () => {
+        const pull = vi.fn(async (request: PullRequest): Promise<PullResponse> => ({
+            changes: [],
+            nextCursor: request.cursor,
+            hasMore: true,
+        }));
+
+        const provider: SyncProvider = {
+            id: 'sub-provider-backlog-loop-guard',
+            mode: 'direct',
+            auth: undefined,
+            subscribe: vi.fn(async () => () => undefined),
+            pull,
+            push: vi.fn(async () => {
+                throw new Error('push not used');
+            }),
+            updateCursor: vi.fn(async () => undefined),
+            dispose: vi.fn(async () => undefined),
+        };
+
+        const messages = createMemoryTable('id');
+        const tombstones = createMemoryTable('id');
+        const pending_ops = createMemoryTable('id');
+        const db = createMockDb({ messages, tombstones, pending_ops });
+
+        const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
+        (manager as unknown as { status: string }).status = 'connected';
+
+        const result = await (
+            manager as unknown as {
+                drainBacklog: (
+                    startCursor: number
+                ) => Promise<{ applied: number; skipped: number; conflicts: number; cursor: number }>;
+            }
+        ).drainBacklog(10);
+
+        expect(pull).toHaveBeenCalledTimes(1);
+        expect(result.cursor).toBe(10);
     });
 });

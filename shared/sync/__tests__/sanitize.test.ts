@@ -142,7 +142,15 @@ describe('sanitizePayloadForSync', () => {
     });
 
     it('adds deleted: false for synced tables that are missing it', () => {
-        const tablesWithDeleted = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'];
+        const tablesWithDeleted = [
+            'threads',
+            'messages',
+            'projects',
+            'posts',
+            'kv',
+            'file_meta',
+            'notifications',
+        ];
         for (const table of tablesWithDeleted) {
             const payload = { id: '123' };
             const result = sanitizePayloadForSync(table, payload, 'put');

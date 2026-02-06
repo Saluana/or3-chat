@@ -1,3 +1,24 @@
+/**
+ * @module app/core/storage/providers/convex-storage-provider
+ *
+ * Purpose:
+ * Implements `ObjectStorageProvider` for Convex storage. Makes HTTP
+ * calls to SSR endpoints (`/api/storage/*`) that proxy to Convex
+ * storage APIs. Validates responses with Zod schemas.
+ *
+ * Behavior:
+ * - `getPresignedUploadUrl`: Calls `/api/storage/presign-upload`
+ * - `getPresignedDownloadUrl`: Calls `/api/storage/presign-download`
+ * - `commitUpload`: Calls `/api/storage/commit` to register the upload
+ *   with the Convex file metadata table
+ *
+ * Constraints:
+ * - Requires SSR endpoints to be deployed (not available in static builds)
+ * - Convex uploads require `Content-Type` header set to the file's MIME type
+ *
+ * @see core/storage/types for ObjectStorageProvider interface
+ * @see server/api/storage/ for the SSR endpoint implementations
+ */
 import { z } from 'zod';
 import type { ObjectStorageProvider, PresignedUrlResult } from '../types';
 import { CONVEX_STORAGE_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
@@ -31,6 +52,18 @@ async function postJson<T extends z.ZodTypeAny>(
     return schema.parse(json);
 }
 
+/**
+ * Purpose:
+ * Create an ObjectStorageProvider implementation backed by Convex Storage.
+ *
+ * Behavior:
+ * - Uses SSR endpoints under `/api/storage/*` for presign and commit
+ * - Returns a provider with id `CONVEX_STORAGE_PROVIDER_ID`
+ *
+ * Constraints:
+ * - Requires SSR endpoints to be deployed and reachable from the client
+ * - Not suitable for static-only deployments
+ */
 export function createConvexStorageProvider(): ObjectStorageProvider {
     return {
         id: CONVEX_STORAGE_PROVIDER_ID,

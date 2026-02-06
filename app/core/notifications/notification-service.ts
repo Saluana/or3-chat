@@ -1,9 +1,29 @@
 /**
- * Notification Service
- * 
- * Core service for managing in-app notifications.
- * Handles create, read, mark-read, and clear operations.
- * Integrates with hook system for extensibility.
+ * @module app/core/notifications/notification-service
+ *
+ * Purpose:
+ * Core service for managing in-app notifications. Handles create, read,
+ * mark-read, and clear-all operations against the local Dexie database.
+ * Integrates with the hook system for extensibility.
+ *
+ * Responsibilities:
+ * - Listen for `notify:action:push` hook events and auto-create notifications
+ * - Apply `notify:filter:before_store` filter to allow modification or rejection
+ * - Validate incoming payloads with Zod before storage
+ * - Emit hooks on read and clear operations for observability
+ *
+ * Constraints:
+ * - One active listener per service instance (call `startListening()` once)
+ * - Notifications are soft-deleted (not removed from IndexedDB)
+ * - Timestamps use seconds (via `nowSec()`) for consistency with sync layer
+ * - Service must be explicitly started; constructor does not auto-listen
+ *
+ * Non-goals:
+ * - Does not handle push notification delivery to native OS
+ * - Does not sync notifications to remote (handled by sync layer)
+ *
+ * @see core/hooks/hook-types.ts for NotificationCreatePayload shape
+ * @see db/schema for the Notification Dexie table schema
  */
 
 import type { Or3DB } from '~/db/client';
@@ -26,6 +46,19 @@ const NotificationCreatePayloadSchema = z.object({
     actions: z.array(NotificationActionSchema).optional(),
 });
 
+/**
+ * Purpose:
+ * Local notification service backed by Dexie.
+ *
+ * Behavior:
+ * - `startListening()` registers a single hook listener for `notify:action:push`
+ * - `create()` validates and stores a notification, applying filter hooks
+ * - Read and clear operations emit corresponding hooks for observability
+ *
+ * Constraints:
+ * - Instances are lightweight, but listeners are not; call `startListening()` once
+ *   per session and use the returned cleanup function
+ */
 export class NotificationService {
     private db: Or3DB;
     private hooks: TypedHookEngine;

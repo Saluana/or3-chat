@@ -1,12 +1,32 @@
 /**
- * SubscriptionManager - Manages real-time sync subscriptions
+ * @module app/core/sync/subscription-manager
+ *
+ * Purpose:
+ * Manages the real-time sync subscription lifecycle for a workspace.
+ * Coordinates bootstrap pull, incremental subscription, change application,
+ * and reconnection with exponential backoff.
  *
  * Responsibilities:
- * - Subscribe to provider's real-time changes
- * - Route incoming changes to ConflictResolver
- * - Perform bootstrap pull on cold start
- * - Handle subscription errors with reconnect
- * - Update cursor after each batch
+ * - Perform paginated bootstrap pull on cold start (cursor = 0)
+ * - Perform full rescan when cursor is expired (stale > 24h)
+ * - Subscribe to real-time changes from the sync provider
+ * - Route incoming changes through the ConflictResolver
+ * - Filter echoed changes via the recent-op-cache
+ * - Drain any backlog between subscription cursor and current server version
+ * - Re-apply pending local ops after rescan to preserve unsynced work
+ * - Handle subscription errors with reconnection (exponential backoff)
+ * - Emit hooks for bootstrap, pull, subscription status, and errors
+ *
+ * Constraints:
+ * - Singleton per workspace scope (via `createSubscriptionManager`)
+ * - Maximum 20 reconnect attempts before giving up
+ * - Change application is serialized (queued) to prevent cursor races
+ * - Registers a `beforeunload` listener for clean shutdown
+ * - Circuit breaker prevents bootstrap/rescan during provider outages
+ *
+ * @see core/sync/conflict-resolver for LWW change application
+ * @see core/sync/cursor-manager for cursor persistence
+ * @see core/sync/recent-op-cache for echo filtering
  */
 import type { Or3DB } from '~/db/client';
 import type { SyncProvider, SyncScope, SyncChange } from '~~/shared/sync/types';
@@ -29,14 +49,36 @@ const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
 /** Max reconnect attempts before giving up (about 10 minutes of trying) */
 const MAX_RECONNECT_ATTEMPTS = 20;
 
+/**
+ * Purpose:
+ * High-level subscription lifecycle state for UI and diagnostics.
+ */
 export type SubscriptionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 
+/**
+ * Purpose:
+ * Configuration for subscription bootstrap, polling, and reconnect behavior.
+ */
 export interface SubscriptionManagerConfig {
     tables?: string[];
     bootstrapPageSize?: number;
     reconnectDelays?: number[];
 }
 
+/**
+ * Purpose:
+ * Drive the pull + subscribe lifecycle for a workspace scope.
+ *
+ * Behavior:
+ * - Performs bootstrap pull and incremental catch-up using a persisted cursor
+ * - Applies remote changes through ConflictResolver in a serialized queue
+ * - Filters echoed ops using recent-op-cache
+ * - Handles reconnect with exponential backoff
+ *
+ * Constraints:
+ * - Caller owns lifecycle; must call `stop()` when a workspace is disposed
+ * - Designed to be singleton per scope via `createSubscriptionManager`
+ */
 export class SubscriptionManager {
     private db: Or3DB;
     private provider: SyncProvider;
@@ -205,9 +247,8 @@ export class SubscriptionManager {
                     totalPulled += response.changes.length;
                 }
 
-                // Loop guard: If cursor doesn't advance but hasMore is true, we are stuck
-                // Note: hasMore is guaranteed true by while loop condition
-                if (response.nextCursor <= cursor) {
+                // Loop guard: only error if backend says there is more data but cursor is stuck.
+                if (response.hasMore && response.nextCursor <= cursor) {
                     console.error('[SubscriptionManager] Infinite loop detected during bootstrap: cursor not advancing', {
                         cursor,
                         nextCursor: response.nextCursor,
@@ -439,7 +480,8 @@ export class SubscriptionManager {
                 await this.cursorManager.setCursor(maxVersion);
             }
 
-            const drainResult = await this.drainBacklog(currentCursor);
+            const drainStartCursor = this.getBacklogDrainStartCursor(currentCursor, newChanges);
+            const drainResult = await this.drainBacklog(drainStartCursor);
             if (drainResult.cursor > maxVersion) {
                 maxVersion = drainResult.cursor;
                 await this.cursorManager.setCursor(maxVersion);
@@ -494,6 +536,28 @@ export class SubscriptionManager {
         return filtered;
     }
 
+    private getBacklogDrainStartCursor(currentCursor: number, changes: SyncChange[]): number {
+        const versions = changes
+            .map((change) => change.serverVersion)
+            .sort((a, b) => a - b);
+
+        if (versions.length === 0) {
+            return currentCursor;
+        }
+
+        let expected = currentCursor + 1;
+        for (const version of versions) {
+            if (version !== expected) {
+                // A gap means we need to re-pull from current cursor to avoid missing versions.
+                return currentCursor;
+            }
+            expected += 1;
+        }
+
+        // No observed gaps; continue from highest seen version to avoid duplicate re-pulls.
+        return versions[versions.length - 1] ?? currentCursor;
+    }
+
     private async drainBacklog(startCursor: number) {
         let cursor = startCursor;
         let hasMore = true;
@@ -521,9 +585,17 @@ export class SubscriptionManager {
                 totals.conflicts += result.conflicts;
             }
 
+            const previousCursor = cursor;
             cursor = response.nextCursor;
             totals.cursor = cursor;
             hasMore = response.hasMore;
+            if (hasMore && cursor <= previousCursor) {
+                console.error('[SubscriptionManager] Infinite loop detected during backlog drain', {
+                    cursor: previousCursor,
+                    nextCursor: response.nextCursor,
+                });
+                break;
+            }
         }
 
         return totals;
@@ -626,7 +698,11 @@ function getScopeKey(scope: SyncScope): string {
 }
 
 /**
- * Create a subscription manager for a scope
+ * Purpose:
+ * Create (or replace) the SubscriptionManager singleton for a scope.
+ *
+ * Behavior:
+ * - Stops any existing instance for the scope (best-effort)
  */
 export function createSubscriptionManager(
     db: Or3DB,
@@ -650,14 +726,18 @@ export function createSubscriptionManager(
 }
 
 /**
- * Get existing subscription manager for a scope
+ * Purpose:
+ * Return the existing SubscriptionManager for a scope, if created.
  */
 export function getSubscriptionManager(scope: SyncScope): SubscriptionManager | null {
     return subscriptionManagerInstances.get(getScopeKey(scope)) ?? null;
 }
 
 /**
- * Reset all subscription managers (for testing)
+ * Internal API.
+ *
+ * Purpose:
+ * Stop and clear all SubscriptionManager instances. Intended for tests.
  */
 export async function _resetSubscriptionManagers(): Promise<void> {
     for (const manager of subscriptionManagerInstances.values()) {
@@ -667,7 +747,8 @@ export async function _resetSubscriptionManagers(): Promise<void> {
 }
 
 /**
- * Cleanup SubscriptionManager instance for a scope
+ * Purpose:
+ * Stop and remove a SubscriptionManager instance by scope key.
  */
 export function cleanupSubscriptionManager(scopeKey: string): void {
     const manager = subscriptionManagerInstances.get(scopeKey);

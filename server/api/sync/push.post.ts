@@ -12,7 +12,6 @@
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { PushBatchSchema, TABLE_PAYLOAD_SCHEMAS } from '~~/shared/sync/schemas';
-import { toClientFormat } from '~~/shared/sync/field-mappings';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
@@ -56,19 +55,15 @@ export default defineEventHandler(async (event) => {
     // Delete ops intentionally send minimal tombstone-ish payloads (or none at all),
     // and must not be rejected for missing non-delete fields.
     for (const op of parsed.data.ops) {
-        if (op.operation === 'put' && op.payload) {
-            const schema = TABLE_PAYLOAD_SCHEMAS[op.tableName];
-            if (schema) {
-                // Convert to client format for validation against shared schema (which expects camelCase)
-                const normalizedPayload = toClientFormat(op.tableName, op.payload as Record<string, unknown>);
-                const result = schema.safeParse(normalizedPayload);
-                if (!result.success) {
-                    throw createError({
-                        statusCode: 400,
-                        statusMessage: `Invalid payload for ${op.tableName}: ${result.error.message}`
-                    });
-                }
-            }
+        if (op.operation !== 'put') continue;
+        const schema = TABLE_PAYLOAD_SCHEMAS[op.tableName];
+        if (!schema) continue;
+        const result = schema.safeParse(op.payload ?? {});
+        if (!result.success) {
+            throw createError({
+                statusCode: 400,
+                statusMessage: `Invalid payload for ${op.tableName}: ${result.error.message}`,
+            });
         }
     }
 

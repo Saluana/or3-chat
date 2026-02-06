@@ -1,8 +1,28 @@
 /**
- * Convex Sync Provider
+ * @module app/core/sync/providers/convex-sync-provider
  *
- * Implements SyncProvider interface for Convex backend.
- * Uses direct mode with Clerk JWT template for authentication.
+ * Purpose:
+ * Implements `SyncProvider` for the Convex backend using direct mode.
+ * Authenticates via Clerk JWT template and communicates with Convex
+ * functions for push, pull, subscription, and garbage collection.
+ *
+ * Behavior:
+ * - `subscribe()`: Uses `client.onUpdate()` for real-time reactivity
+ *   (Convex reactive queries). Validates incoming changes with Zod.
+ * - `pull()`: Paginates through `api.sync.pull` query
+ * - `push()`: Sends batched ops to `api.sync.push` mutation
+ * - `updateCursor()`: Reports device cursor to `api.sync.updateDeviceCursor`
+ * - `gcTombstones()` / `gcChangeLog()`: Invoke server-side GC mutations
+ *
+ * Constraints:
+ * - Convex client must be captured in Vue setup context (uses `useConvexClient()`)
+ * - Auth uses the Clerk JWT template name defined in `shared/cloud/provider-ids`
+ * - Subscription cleanup handles a known Convex SDK race condition gracefully
+ * - Responses are validated with Zod schemas for safety
+ *
+ * @see shared/sync/types for SyncProvider interface
+ * @see convex/sync.ts for the server-side Convex functions
+ * @see shared/cloud/provider-ids for provider/JWT constants
  */
 import { useConvexClient } from 'convex-vue';
 import { api } from '~~/convex/_generated/api';
@@ -29,9 +49,17 @@ const SYNCED_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_m
 type ConvexClient = ReturnType<typeof useConvexClient>;
 
 /**
- * Create a Convex sync provider instance.
- * 
- * @param client - The Convex client instance (must be captured in Vue setup context)
+ * Purpose:
+ * Create a direct-mode SyncProvider backed by Convex.
+ *
+ * Behavior:
+ * - Uses Convex queries/mutations for pull/push and device cursor updates
+ * - Uses `client.onUpdate()` for subscription-style change delivery
+ * - Declares `auth` config for AuthTokenBroker (Clerk JWT template)
+ *
+ * Constraints:
+ * - `client` must be created in a Vue setup context (Convex Vue composable)
+ * - Intended for deployments where the client can reach Convex directly
  */
 export function createConvexSyncProvider(client: ConvexClient): SyncProvider {
     const subscriptions = new Map<string, () => void>();
