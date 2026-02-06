@@ -8,7 +8,7 @@
             messageContainerProps?.class || '',
         ]"
         :data-theme-matches="messageContainerProps?.['data-theme-matches']"
-        class="p-2 min-w-[140px] rounded-[var(--md-border-radius)] first:mt-3 first:mb-6 not-first:my-6 relative"
+        class="p-2 min-w-[140px] max-w-full rounded-(--md-border-radius) first:mt-3 first:mb-6 not-first:my-6 relative"
     >
         <!-- Workflow Message Handling -->
         <WorkflowChatMessage
@@ -186,7 +186,7 @@
                     <div
                         v-if="props.message.role === 'user'"
                         :class="[
-                            'whitespace-pre-wrap relative',
+                            'whitespace-pre-wrap wrap-anywhere max-w-full relative',
                             'cm-text-user',
                         ]"
                     >
@@ -268,7 +268,7 @@
                 ]"
             >
                 <UButtonGroup
-                    class="bg-[var(--md-surface)] rounded-[var(--md-border-radius)] cm-action-group"
+                    class="bg-(--md-surface) rounded-(--md-border-radius) cm-action-group"
                 >
                     <UTooltip
                         :delay-duration="500"
@@ -567,7 +567,7 @@ function toggleUserMessage() {
 }
 
 const outerClass = computed(() => ({
-    'bg-primary text-white dark:text-white/95 retro-message-user px-4 backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
+    'bg-primary text-white dark:text-white/95 retro-message-user px-4 backdrop-blur-sm w-fit max-w-full self-end ml-auto pb-5 min-w-0':
         props.message.role === 'user',
     'bg-white/5 retro-message-assistant w-full backdrop-blur-sm min-w-0':
         props.message.role === 'assistant',

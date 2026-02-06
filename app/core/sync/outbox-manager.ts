@@ -110,6 +110,11 @@ export class OutboxManager {
         if (this.isRunning) return;
         this.isRunning = true;
         this.needsSyncingRecovery = true;
+        // Purge permanently failed ops on startup — they will never succeed
+        // and only generate noise (error notifications, wasted flush cycles).
+        this.purgeFailedOps().catch((err) =>
+            console.error('[OutboxManager] Failed to purge stale ops:', err)
+        );
         this.scheduleNextFlush(0);
     }
 
@@ -431,9 +436,12 @@ export class OutboxManager {
         if (error.includes('missing the required field')) return true;
         if (error.includes('Value does not match validator')) return true;
 
+        // Server-side Zod validation rejection (push.post.ts returns 400 with this prefix)
+        // These are permanent: the payload shape is wrong and retrying won't fix it
+        if (error.includes('Invalid payload for')) return true;
+
         // Empty payload errors - payload was captured incorrectly (HookBridge bug)
         // These can't be fixed by retrying; the data is permanently missing
-        if (error.includes('Invalid payload for') && error.includes('received undefined')) return true;
         if (error.includes('invalid_type') && error.includes('received undefined')) return true;
 
         return false;
@@ -522,5 +530,18 @@ export class OutboxManager {
         }
 
         return corruptIds.length;
+    }
+
+    /**
+     * Remove all permanently-failed ops from the outbox.
+     * These ops have exhausted retries or were classified as permanent failures.
+     * Leaving them pollutes future flush cycles and can re-trigger error notifications.
+     */
+    private async purgeFailedOps(): Promise<void> {
+        const count = await this.db.pending_ops.where('status').equals('failed').count();
+        if (count > 0) {
+            await this.db.pending_ops.where('status').equals('failed').delete();
+            console.log(`[OutboxManager] Purged ${count} permanently-failed ops on startup`);
+        }
     }
 }

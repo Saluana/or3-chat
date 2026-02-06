@@ -65,6 +65,17 @@ export function sanitizePayloadForSync(
         sanitized.forked = false;
     }
 
+    // Backfill required thread fields for legacy records that predate the sync schema.
+    // Without these, ThreadPayloadSchema rejects the entire push batch.
+    if (tableName === 'threads') {
+        const now = Date.now();
+        if (sanitized.status === undefined) sanitized.status = 'ready';
+        if (sanitized.pinned === undefined) sanitized.pinned = false;
+        if (typeof sanitized.created_at !== 'number') sanitized.created_at = now;
+        if (typeof sanitized.updated_at !== 'number') sanitized.updated_at = now;
+        if (typeof sanitized.clock !== 'number') sanitized.clock = 0;
+    }
+
     // Convert error: null to undefined for Convex schema compatibility
     // (Convex expects v.optional(v.string()), so null is invalid but undefined is fine)
     if (tableName === 'messages' && sanitized.error === null) {

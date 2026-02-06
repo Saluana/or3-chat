@@ -5,7 +5,11 @@ describe('sanitizePayloadForSync', () => {
     it('allows payload for delete operations (to carry deleted_at)', () => {
         const payload = { id: '123', deleted_at: (12345 as number) };
         const result = sanitizePayloadForSync('threads', payload, 'delete');
-        expect(result).toEqual({ ...payload, deleted: true, forked: false });
+        expect(result).toMatchObject({ ...payload, deleted: true, forked: false });
+        // Legacy thread backfill also adds status, pinned, created_at, updated_at, clock
+        expect(result).toHaveProperty('status', 'ready');
+        expect(result).toHaveProperty('pinned', false);
+        expect(result).toHaveProperty('clock', 0);
     });
 
     it('returns undefined for null or non-object payloads', () => {
@@ -37,12 +41,16 @@ describe('sanitizePayloadForSync', () => {
             hlc: '1234567890:0001:abc12345',
         };
         const result = sanitizePayloadForSync('threads', payload, 'put');
-        expect(result).toEqual({
+        expect(result).toMatchObject({
             id: '123',
             name: 'test',
-            deleted: false, // Added for legacy data compatibility
-            forked: false, // Added for legacy threads compatibility
+            deleted: false,
+            forked: false,
+            status: 'ready',
+            pinned: false,
+            clock: 0,
         });
+        expect(result).not.toHaveProperty('hlc');
     });
 
     it('removes ref_count for file_meta table', () => {
@@ -67,11 +75,14 @@ describe('sanitizePayloadForSync', () => {
             ref_count: 5,
         };
         const result = sanitizePayloadForSync('threads', payload, 'put');
-        expect(result).toEqual({
+        expect(result).toMatchObject({
             id: '123',
             ref_count: 5,
-            deleted: false, // Added for legacy data compatibility
-            forked: false, // Added for legacy threads compatibility
+            deleted: false,
+            forked: false,
+            status: 'ready',
+            pinned: false,
+            clock: 0,
         });
     });
 
@@ -132,13 +143,18 @@ describe('sanitizePayloadForSync', () => {
             nested: { data: 'kept' },
         };
         const result = sanitizePayloadForSync('threads', payload, 'put');
-        expect(result).toEqual({
+        expect(result).toMatchObject({
             id: '123',
             name: 'test',
             nested: { data: 'kept' },
-            deleted: false, // Added for legacy data compatibility
-            forked: false, // Added for legacy threads compatibility
+            deleted: false,
+            forked: false,
+            status: 'ready',
+            pinned: false,
+            clock: 0,
         });
+        expect(result).not.toHaveProperty('compound.key');
+        expect(result).not.toHaveProperty('hlc');
     });
 
     it('adds deleted: false for synced tables that are missing it', () => {
