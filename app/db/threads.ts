@@ -16,7 +16,13 @@
 import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { newId, nowSec, parseOrThrow, nextClock } from './util';
+import {
+    newId,
+    nowSec,
+    parseOrThrow,
+    nextClock,
+    getWriteTxTableNames,
+} from './util';
 import { generateHLC } from '../core/sync/hlc';
 import {
     ThreadCreateSchema,
@@ -25,36 +31,6 @@ import {
     type ThreadCreate,
     type Message,
 } from './schema';
-
-type ThreadWriteTxOptions = {
-    includeMessages?: boolean;
-    includeTombstones?: boolean;
-};
-
-function getThreadWriteTxTableNames(
-    db: ReturnType<typeof getDb>,
-    options: ThreadWriteTxOptions = {}
-): string[] {
-    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
-        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
-        : [];
-    const existing = new Set(tableNames);
-    const names = ['threads'];
-
-    if (options.includeMessages) {
-        names.push('messages');
-    }
-
-    if (existing.has('pending_ops')) {
-        names.push('pending_ops');
-    }
-
-    if (options.includeTombstones && existing.has('tombstones')) {
-        names.push('tombstones');
-    }
-
-    return names;
-}
 
 /**
  * Purpose:
@@ -107,7 +83,7 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
         tableName: 'threads',
     });
     const db = getDb();
-    await db.transaction('rw', getThreadWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
         await dbTry(
             () => db.threads.put(value),
             { op: 'write', entity: 'threads', action: 'create' },
@@ -142,7 +118,7 @@ export async function upsertThread(value: Thread): Promise<void> {
     );
     const validated = parseOrThrow(ThreadSchema, filtered);
     const db = getDb();
-    await db.transaction('rw', getThreadWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
         const existing = await dbTry(() => db.threads.get(validated.id), {
             op: 'read',
             entity: 'threads',
@@ -283,7 +259,7 @@ export function childThreads(parentThreadId: string) {
 export async function softDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getThreadWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
         const t = await dbTry(() => db.threads.get(id), {
             op: 'read',
             entity: 'threads',
@@ -326,19 +302,19 @@ export async function softDeleteThread(id: string): Promise<void> {
 export async function hardDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    const existing = await dbTry(() => db.threads.get(id), {
-        op: 'read',
-        entity: 'threads',
-        action: 'get',
-    });
-    if (!existing) return;
     await db.transaction(
         'rw',
-        getThreadWriteTxTableNames(db, {
-            includeMessages: true,
+        getWriteTxTableNames(db, 'threads', {
+            include: ['messages'],
             includeTombstones: true,
         }),
         async () => {
+        const existing = await dbTry(() => db.threads.get(id), {
+            op: 'read',
+            entity: 'threads',
+            action: 'get',
+        });
+        if (!existing) return;
         await hooks.doAction('db.threads.delete:action:hard:before', {
             entity: existing,
             id,
@@ -376,7 +352,7 @@ export async function forkThread(
     const db = getDb();
     return db.transaction(
         'rw',
-        getThreadWriteTxTableNames(db, { includeMessages: true }),
+        getWriteTxTableNames(db, 'threads', { include: ['messages'] }),
         async () => {
         const src = await dbTry(
             () => db.threads.get(sourceThreadId),
@@ -478,7 +454,7 @@ export async function updateThreadSystemPrompt(
 ): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getThreadWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
         const thread = await dbTry(() => db.threads.get(threadId), {
             op: 'read',
             entity: 'threads',

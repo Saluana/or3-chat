@@ -15,7 +15,7 @@
 import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { nowSec, parseOrThrow, nextClock } from './util';
+import { nowSec, parseOrThrow, nextClock, getWriteTxTableNames } from './util';
 import {
     PostSchema,
     PostCreateSchema,
@@ -23,31 +23,6 @@ import {
     type PostCreate,
 } from './schema';
 import type { PostEntity } from '../core/hooks/hook-types';
-
-type PostWriteTxOptions = {
-    includeTombstones?: boolean;
-};
-
-function getPostWriteTxTableNames(
-    db: ReturnType<typeof getDb>,
-    options: PostWriteTxOptions = {}
-): string[] {
-    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
-        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
-        : [];
-    const existing = new Set(tableNames);
-    const names = ['posts'];
-
-    if (existing.has('pending_ops')) {
-        names.push('pending_ops');
-    }
-
-    if (options.includeTombstones && existing.has('tombstones')) {
-        names.push('tombstones');
-    }
-
-    return names;
-}
 
 // Convert Post schema type to PostEntity for hooks (where applicable)
 function toPostEntity(post: Post): PostEntity {
@@ -121,7 +96,7 @@ export async function createPost(input: PostCreate): Promise<Post> {
         tableName: 'posts',
     });
     const db = getDb();
-    await db.transaction('rw', getPostWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
         await dbTry(
             () => db.posts.put(next),
             { op: 'write', entity: 'posts', action: 'create' },
@@ -162,7 +137,7 @@ export async function upsertPost(value: Post): Promise<void> {
         mutable.meta = normalizeMeta(mutable.meta);
     }
     const db = getDb();
-    await db.transaction('rw', getPostWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
         const validated = parseOrThrow(PostSchema, filtered);
         const existing = await dbTry(() => db.posts.get(validated.id), {
             op: 'read',
@@ -278,7 +253,7 @@ export function searchPosts(term: string) {
 export async function softDeletePost(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getPostWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
         const p = await dbTry(() => db.posts.get(id), {
             op: 'read',
             entity: 'posts',
@@ -320,7 +295,10 @@ export async function softDeletePost(id: string): Promise<void> {
 export async function hardDeletePost(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getPostWriteTxTableNames(db, { includeTombstones: true }), async () => {
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
+        async () => {
         const existing = await dbTry(() => db.posts.get(id), {
             op: 'read',
             entity: 'posts',
@@ -339,5 +317,6 @@ export async function hardDeletePost(id: string): Promise<void> {
             id,
             tableName: 'posts',
         });
-    });
+        }
+    );
 }

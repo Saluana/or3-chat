@@ -21,7 +21,7 @@ describe('HookBridge', () => {
         hookState.applyFiltersSync.mockClear();
     });
 
-    it('emits non-atomic capture hook when pending_ops is outside transaction scope', () => {
+    it('throws when pending_ops is outside transaction scope', () => {
         const db = {
             name: 'test-db',
             tables: [{ name: 'pending_ops' }, { name: 'tombstones' }, { name: 'messages' }],
@@ -33,14 +33,9 @@ describe('HookBridge', () => {
             },
         };
 
-        const onCompleteCallbacks: Array<() => void> = [];
         const tx = {
             storeNames: ['messages'],
-            on: vi.fn((event: string, callback: () => void) => {
-                if (event === 'complete') {
-                    onCompleteCallbacks.push(callback);
-                }
-            }),
+            on: vi.fn(),
             table: vi.fn(() => ({
                 add: vi.fn(),
                 put: vi.fn(),
@@ -57,30 +52,49 @@ describe('HookBridge', () => {
                     pk: unknown,
                     payload: unknown
                 ) => void;
-            }).captureWrite(
-                tx,
-                'messages',
-                'put',
-                'm1',
-                {
-                    id: 'm1',
-                    thread_id: 't1',
-                    role: 'user',
-                    index: 0,
-                    order_key: '0000000000001:0000:node',
-                    deleted: false,
-                    created_at: 1,
-                    updated_at: 1,
-                    clock: 1,
-                }
-            )
-        ).not.toThrow();
+            }).captureWrite(tx, 'messages', 'put', 'm1', {
+                id: 'm1',
+                thread_id: 't1',
+                role: 'user',
+                index: 0,
+                order_key: '0000000000001:0000:node',
+                deleted: false,
+                created_at: 1,
+                updated_at: 1,
+                clock: 1,
+            })
+        ).toThrowError(
+            '[HookBridge] Non-atomic sync capture: pending_ops missing from transaction scope'
+        );
 
         expect(
             hookState.doAction.mock.calls.some(
                 (call) => (call as unknown[])[0] === 'sync.capture:action:nonAtomic'
             )
         ).toBe(true);
-        expect(onCompleteCallbacks.length).toBe(1);
+        expect(db.pending_ops.add).not.toHaveBeenCalled();
+    });
+
+    it('suppresses capture for equivalent Dexie transaction wrappers', () => {
+        const db = {
+            name: 'test-db',
+            tables: [{ name: 'pending_ops' }, { name: 'messages' }],
+            table: vi.fn(() => ({ hook: vi.fn() })),
+        };
+
+        const bridge = new HookBridge(db as any);
+        const nativeTransaction = {};
+        const markedTx = { idbtrans: nativeTransaction } as any;
+        const wrappedTx = { idbtrans: nativeTransaction } as any;
+
+        bridge.markSyncTransaction(markedTx);
+
+        const isSyncTransaction = (
+            bridge as unknown as {
+                isSyncTransaction: (tx: unknown) => boolean;
+            }
+        ).isSyncTransaction.bind(bridge);
+
+        expect(isSyncTransaction(wrappedTx)).toBe(true);
     });
 });

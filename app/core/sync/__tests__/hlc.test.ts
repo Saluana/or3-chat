@@ -83,4 +83,15 @@ describe('HLC utility', () => {
         expect(first).toBe(second);
         expect(first).toBe(fixedUuid.slice(0, 8));
     });
+
+    it('throws when logical counter overflows in the same millisecond', () => {
+        const now = 1700000000000;
+        vi.spyOn(Date, 'now').mockReturnValue(now);
+
+        for (let i = 0; i < 36 ** 3; i++) {
+            generateHLC();
+        }
+
+        expect(() => generateHLC()).toThrowError('HLC counter overflow');
+    });
 });

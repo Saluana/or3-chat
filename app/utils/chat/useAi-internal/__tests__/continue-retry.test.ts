@@ -236,6 +236,99 @@ describe('continue/retry regressions', () => {
         expect(reportErrorSpy).not.toHaveBeenCalled();
     });
 
+    it('continue marks stream interruption on the target message when stream throws', async () => {
+        const target = {
+            id: 'a1',
+            thread_id: 't1',
+            role: 'assistant',
+            index: 2,
+            content: 'Hello',
+            data: { content: 'Hello' },
+            file_hashes: null,
+            stream_id: null,
+            error: null,
+            created_at: 1,
+            updated_at: 1,
+            deleted: false,
+            clock: 1,
+        };
+        dbState.messagesGet.mockResolvedValue(target);
+        const whereChain = {
+            between: vi.fn().mockReturnThis(),
+            filter: vi.fn().mockReturnThis(),
+            toArray: vi.fn().mockResolvedValue([target]),
+        };
+        dbState.where.mockReturnValue(whereChain);
+
+        makeAssistantPersisterSpy.mockReturnValue(vi.fn(async () => null));
+        openRouterStreamSpy.mockReturnValue(
+            (async function* () {
+                throw new Error('stream exploded');
+            })()
+        );
+
+        const tailAssistant = ref<{
+            id: string;
+            role: string;
+            text: string;
+            pending: boolean;
+            error: string | null;
+            reasoning_text: string | null;
+        } | null>(null);
+
+        await continueMessageImpl(
+            {
+                loading: ref(false),
+                aborted: ref(false),
+                abortController: ref(null),
+                threadIdRef: ref('t1'),
+                tailAssistant: tailAssistant as any,
+                rawMessages: ref([
+                    {
+                        id: 'a1',
+                        role: 'assistant',
+                        content: 'Hello',
+                        error: null,
+                    },
+                ]) as any,
+                messages: ref([
+                    {
+                        id: 'a1',
+                        role: 'assistant',
+                        text: 'Hello',
+                        pending: false,
+                        error: null,
+                        reasoning_text: null,
+                    },
+                ]) as any,
+                streamId: ref<string | undefined>(undefined),
+                streamAcc: {
+                    reset: vi.fn(),
+                    append: vi.fn(),
+                    finalize: vi.fn(),
+                    state: { finalized: false },
+                },
+                streamState: { finalized: false },
+                hooks: {
+                    applyFilters: vi.fn(async (_name, value) => value),
+                },
+                effectiveApiKey: ref('k'),
+                hasInstanceKey: ref(false),
+                defaultModelId: 'model-a',
+                getSystemPromptContent: async () => null,
+                useAiSettings: () => ({ settings: ref(undefined) }),
+                resetStream: vi.fn(),
+            },
+            'a1'
+        );
+
+        expect(updateMessageRecordSpy).toHaveBeenCalledWith('a1', {
+            error: 'stream_interrupted',
+        });
+        expect(reportErrorSpy).toHaveBeenCalled();
+        expect(tailAssistant.value?.pending).toBe(false);
+    });
+
     it('retry deletes inside sync-aware transaction and resends message', async () => {
         const userMsg = {
             id: 'u1',
@@ -317,5 +410,67 @@ describe('continue/retry regressions', () => {
             })
         );
         expect(reportErrorSpy).not.toHaveBeenCalled();
+    });
+
+    it('retry handles missing trailing assistant and still resends user message', async () => {
+        const userMsg = {
+            id: 'u2',
+            role: 'user',
+            thread_id: 't1',
+            index: 3,
+            content: 'retry solo',
+            data: { content: 'retry solo' },
+            file_hashes: null,
+            deleted: false,
+        };
+
+        dbState.messagesGet.mockResolvedValue(userMsg);
+        const assistantChain = {
+            between: vi.fn().mockReturnThis(),
+            filter: vi.fn().mockReturnThis(),
+            first: vi.fn().mockResolvedValue(undefined),
+        };
+        dbState.where.mockReturnValue(assistantChain);
+        dbState.transaction.mockImplementation(
+            async (_mode: string, _tables: string[], cb: () => Promise<void>) => {
+                await cb();
+            }
+        );
+        messagesByThreadSpy.mockResolvedValue([userMsg]);
+        parseFileHashesSpy.mockReturnValue([]);
+        const sendMessageSpy = vi.fn(async () => {});
+        const hooksSpy = { doAction: vi.fn(async () => {}) };
+
+        await retryMessageImpl(
+            {
+                loading: ref(false),
+                threadIdRef: ref('t1'),
+                tailAssistant: ref(null),
+                rawMessages: ref([
+                    { id: 'u2', role: 'user', content: 'retry solo' },
+                ]) as any,
+                messages: ref([
+                    { id: 'u2', role: 'user', text: 'retry solo' },
+                ]) as any,
+                hooks: hooksSpy,
+                sendMessage: sendMessageSpy,
+                defaultModelId: 'default-model',
+                suppressNextTailFlush: vi.fn(),
+            },
+            'u2'
+        );
+
+        const txTables = dbState.transaction.mock.calls[0]?.[1] as string[];
+        expect(txTables).toEqual(
+            expect.arrayContaining(['messages', 'pending_ops', 'tombstones'])
+        );
+        expect(dbState.messagesDelete).toHaveBeenCalledTimes(1);
+        expect(dbState.messagesDelete).toHaveBeenCalledWith('u2');
+        expect(sendMessageSpy).toHaveBeenCalledWith('retry solo', {
+            model: 'default-model',
+            file_hashes: [],
+            files: [],
+            online: false,
+        });
     });
 });

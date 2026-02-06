@@ -31,7 +31,7 @@ import { NotificationActionSchema } from '~/db/schema';
 import type { Notification } from '~/db/schema';
 import type { TypedHookEngine } from '../hooks/typed-hooks';
 import type { NotificationCreatePayload } from '../hooks/hook-types';
-import { nowSec } from '~/db/util';
+import { nowSec, getWriteTxTableNames } from '~/db/util';
 import { z } from 'zod';
 
 // Callback type for the push action handler
@@ -116,18 +116,7 @@ export class NotificationService {
     }
 
     private getNotificationWriteTxTables(): string[] {
-        const tableNames = Array.isArray(
-            (this.db as { tables?: Array<{ name: string }> }).tables
-        )
-            ? (this.db as { tables: Array<{ name: string }> }).tables.map(
-                  (table) => table.name
-              )
-            : [];
-        const txTables = ['notifications'];
-        if (tableNames.includes('pending_ops')) {
-            txTables.push('pending_ops');
-        }
-        return txTables;
+        return getWriteTxTableNames(this.db, 'notifications');
     }
 
     private async runNotificationWriteTx<T>(fn: () => Promise<T>): Promise<T> {

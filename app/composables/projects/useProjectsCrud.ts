@@ -1,5 +1,5 @@
 import { create, db, del, upsert, type Project } from '~/db';
-import { nowSec, newId } from '~/db/util';
+import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
 import {
     normalizeProjectData,
     type ProjectEntry,
@@ -153,20 +153,13 @@ export function useProjectsCrud() {
             }
         }
         if (updates.length) {
-            const tableNames = Array.isArray(
-                (db as { tables?: Array<{ name: string }> }).tables
-            )
-                ? (db as { tables: Array<{ name: string }> }).tables.map(
-                      (table) => table.name
-                  )
-                : [];
-            const txTables = ['projects'];
-            if (tableNames.includes('pending_ops')) {
-                txTables.push('pending_ops');
-            }
-            await db.transaction('rw', txTables, async () => {
+            await db.transaction(
+                'rw',
+                getWriteTxTableNames(db as any, 'projects'),
+                async () => {
                 await db.projects.bulkPut(updates);
-            });
+                }
+            );
         }
         return updates.length;
     }

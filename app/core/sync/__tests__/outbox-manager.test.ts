@@ -223,4 +223,99 @@ describe('OutboxManager', () => {
             )
         ).toBe(true);
     });
+
+    it('treats payload-too-large errors as permanent failures', async () => {
+        const pendingOp = createPendingOp({
+            id: 'pending-oversized',
+            stamp: {
+                deviceId: 'device-1',
+                opId: 'op-oversized',
+                hlc: '0000000000001:0000:node',
+                clock: 1,
+            },
+        });
+        const pendingOps = createPendingOpsTable([pendingOp]);
+        const db = createMockDb({ pending_ops: pendingOps });
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async () => ({
+            results: [
+                {
+                    opId: 'op-oversized',
+                    success: false,
+                    error: 'Payload too large for messages: exceeds 65536 bytes',
+                },
+            ],
+            serverVersion: 0,
+        }));
+
+        const outbox = new OutboxManager(
+            db as any,
+            provider,
+            { workspaceId: 'workspace-1' },
+            { retryDelays: [250, 1000, 3000] }
+        );
+
+        await outbox.flush();
+
+        const stored = pendingOps.__rows.get('pending-oversized');
+        expect(stored?.status).toBe('failed');
+        expect(stored?.attempts).toBe(1);
+        expect(
+            hookState.doAction.mock.calls.some(
+                (call) => call[0] === 'sync.retry:action'
+            )
+        ).toBe(false);
+    });
+
+    it('recovers syncing ops once per start cycle', async () => {
+        const pendingOp = createPendingOp({
+            id: 'pending-once',
+            stamp: {
+                deviceId: 'device-1',
+                opId: 'op-once',
+                hlc: '0000000000001:0000:node',
+                clock: 1,
+            },
+        });
+        const pendingOps = createPendingOpsTable([pendingOp]);
+        const originalWhere = pendingOps.where.bind(pendingOps);
+        const syncingModifySpy = vi.fn(async (patch: Partial<PendingOp>) => {
+            const collection = originalWhere('status').equals('syncing');
+            await collection.modify(patch);
+        });
+
+        pendingOps.where = ((field: keyof PendingOp) => {
+            const chain = originalWhere(field);
+            return {
+                equals: (value: PendingOp[keyof PendingOp]) => {
+                    const collection = chain.equals(value as never);
+                    if (field === 'status' && value === 'syncing') {
+                        return {
+                            ...collection,
+                            modify: syncingModifySpy,
+                        };
+                    }
+                    return collection;
+                },
+            };
+        }) as typeof pendingOps.where;
+
+        const db = createMockDb({ pending_ops: pendingOps });
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async (batch: PushBatch) => ({
+            results: batch.ops.map((op) => ({ opId: op.stamp.opId, success: true })),
+            serverVersion: 1,
+        }));
+
+        const outbox = new OutboxManager(db as any, provider, {
+            workspaceId: 'workspace-1',
+        });
+
+        outbox.start();
+        await outbox.flush();
+        await outbox.flush();
+
+        expect(syncingModifySpy).toHaveBeenCalledTimes(1);
+        outbox.stop();
+    });
 });

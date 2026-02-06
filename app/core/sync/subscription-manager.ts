@@ -464,8 +464,13 @@ export class SubscriptionManager {
                 ? await this.applyChanges(filteredChanges)
                 : { applied: 0, skipped: 0, conflicts: 0 };
 
-            // Update cursor to highest server version
-            let maxVersion = Math.max(...newChanges.map((c) => c.serverVersion));
+            // Update cursor to highest server version (loop-based to avoid spread stack overflow)
+            let maxVersion = currentCursor;
+            for (const change of newChanges) {
+                if (change.serverVersion > maxVersion) {
+                    maxVersion = change.serverVersion;
+                }
+            }
 
             if (import.meta.dev) {
                 console.debug('[sync] subscription apply', {
@@ -758,4 +763,21 @@ export function cleanupSubscriptionManager(scopeKey: string): void {
         });
     }
     subscriptionManagerInstances.delete(scopeKey);
+}
+
+/**
+ * Purpose:
+ * Stop and remove all SubscriptionManager instances for a workspace.
+ */
+export function cleanupSubscriptionManagersByWorkspace(
+    workspaceId: string
+): void {
+    const prefix = `${workspaceId}:`;
+    for (const [scopeKey, manager] of subscriptionManagerInstances.entries()) {
+        if (!scopeKey.startsWith(prefix)) continue;
+        manager.stop().catch((error) => {
+            console.error('[SubscriptionManager] Failed to stop instance:', error);
+        });
+        subscriptionManagerInstances.delete(scopeKey);
+    }
 }

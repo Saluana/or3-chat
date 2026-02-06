@@ -34,7 +34,7 @@
 import Dexie from 'dexie';
 import { getDb } from '~/db/client';
 import type { Or3DB } from '~/db/client';
-import { nowSec, nextClock } from '~/db/util';
+import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
 import { useHooks } from '~/core/hooks/useHooks';
 import type { FileMeta } from '~/db/schema';
 import type {
@@ -627,15 +627,10 @@ export class FileTransferQueue {
         meta: FileMeta,
         storageId: string
     ): Promise<void> {
-        const tableNames = Array.isArray((this.db as { tables?: Array<{ name: string }> }).tables)
-            ? (this.db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
-            : [];
-        const txTables = ['file_meta'];
-        if (tableNames.includes('pending_ops')) {
-            txTables.push('pending_ops');
-        }
-
-        await this.db.transaction('rw', txTables, async () => {
+        await this.db.transaction(
+            'rw',
+            getWriteTxTableNames(this.db, 'file_meta'),
+            async () => {
             const existing = await this.db.file_meta.get(meta.hash);
             if (!existing) return;
             await this.db.file_meta.put({

@@ -79,6 +79,18 @@ vi.mock('../util', () => ({
     newId: vi.fn(() => 'prompt-1'),
     nowSec: vi.fn(() => 1000),
     nextClock: vi.fn((clock?: number) => (clock ?? 0) + 1),
+    getWriteTxTableNames: vi.fn(
+        (
+            db: { tables?: Array<{ name: string }> },
+            primary: string | string[]
+        ) => {
+            const names = Array.isArray(primary) ? primary : [primary];
+            const hasPendingOps = (db.tables ?? []).some(
+                (table) => table.name === 'pending_ops'
+            );
+            return hasPendingOps ? [...names, 'pending_ops'] : names;
+        }
+    ),
 }));
 
 import { createPrompt, updatePrompt } from '../prompts';

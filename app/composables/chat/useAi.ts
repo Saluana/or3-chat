@@ -24,7 +24,7 @@
 
 import { ref, computed, watch, onScopeDispose, getCurrentScope } from 'vue';
 import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
-import { nowSec, newId } from '~/db/util';
+import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
 import { create, tx, upsert, type Message } from '~/db';
 import { getDb } from '~/db/client';
 import { serializeFileHashes } from '~/db/files-util';
@@ -1596,21 +1596,12 @@ export function useChat(
                 if (tailAssistant.value?.id && !tailAssistant.value.text) {
                     try {
                         const db = getDb();
-                        const tableNames = Array.isArray(
-                            (db as { tables?: Array<{ name: string }> }).tables
-                        )
-                            ? (db as { tables: Array<{ name: string }> }).tables.map(
-                                  (table) => table.name
-                              )
-                            : [];
-                        const txTables = ['messages'];
-                        if (tableNames.includes('pending_ops')) {
-                            txTables.push('pending_ops');
-                        }
-                        if (tableNames.includes('tombstones')) {
-                            txTables.push('tombstones');
-                        }
-                        await db.transaction('rw', txTables, async () => {
+                        await db.transaction(
+                            'rw',
+                            getWriteTxTableNames(db, 'messages', {
+                                includeTombstones: true,
+                            }),
+                            async () => {
                             await db.messages.delete(tailAssistant.value!.id);
                         });
                         const idx = rawMessages.value.findIndex(
@@ -1727,21 +1718,12 @@ export function useChat(
                 if (!tailAssistant.value?.text && tailAssistant.value?.id) {
                     try {
                         const db = getDb();
-                        const tableNames = Array.isArray(
-                            (db as { tables?: Array<{ name: string }> }).tables
-                        )
-                            ? (db as { tables: Array<{ name: string }> }).tables.map(
-                                  (table) => table.name
-                              )
-                            : [];
-                        const txTables = ['messages'];
-                        if (tableNames.includes('pending_ops')) {
-                            txTables.push('pending_ops');
-                        }
-                        if (tableNames.includes('tombstones')) {
-                            txTables.push('tombstones');
-                        }
-                        await db.transaction('rw', txTables, async () => {
+                        await db.transaction(
+                            'rw',
+                            getWriteTxTableNames(db, 'messages', {
+                                includeTombstones: true,
+                            }),
+                            async () => {
                             await db.messages.delete(tailAssistant.value!.id);
                         });
                         const idx = rawMessages.value.findIndex(

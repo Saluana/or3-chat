@@ -17,7 +17,7 @@ import type { FileMeta } from './schema';
 import { parseFileHashes, serializeFileHashes } from './files-util';
 import { createOrRefFile, derefFile, getFileMeta } from './files';
 import { useHooks } from '../core/hooks/useHooks';
-import { nowSec, nextClock } from './util';
+import { nowSec, nextClock, getWriteTxTableNames } from './util';
 
 /** Discriminated union for adding files to messages */
 /**
@@ -79,16 +79,11 @@ export async function addFilesToMessage(
     if (!files.length) return;
     const hooks = useHooks();
     const db = getDb();
-    const txTables = ['messages', 'file_meta', 'file_blobs'];
-    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
-        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
-        : [];
-    if (tableNames.includes('pending_ops')) {
-        txTables.push('pending_ops');
-    }
     await db.transaction(
         'rw',
-        txTables,
+        getWriteTxTableNames(db, 'messages', {
+            include: ['file_meta', 'file_blobs'],
+        }),
         async () => {
             const msg = await db.messages.get(messageId);
             if (!msg) throw new Error('message not found');
@@ -145,14 +140,10 @@ export async function removeFileFromMessage(
     hash: string
 ): Promise<void> {
     const db = getDb();
-    const txTables = ['messages', 'file_meta'];
-    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
-        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
-        : [];
-    if (tableNames.includes('pending_ops')) {
-        txTables.push('pending_ops');
-    }
-    await db.transaction('rw', txTables, async () => {
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages', { include: ['file_meta'] }),
+        async () => {
         const msg = await db.messages.get(messageId);
         if (!msg) return;
         const hashes = parseFileHashes(msg.file_hashes);

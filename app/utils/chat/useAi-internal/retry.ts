@@ -35,6 +35,7 @@ import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { getDb } from '~/db/client';
 import { messagesByThread } from '~/db/messages';
 import { parseFileHashes } from '~/db/files-util';
+import { getWriteTxTableNames } from '~/db/util';
 import { deriveMessageContent } from '~/utils/chat/messages';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
@@ -340,17 +341,10 @@ export async function retryMessageImpl(
 
         // Delete from database with sync tables in scope for atomic outbox+tombstone capture.
         const db = getDb();
-        const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
-            ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
-            : [];
-        const txTables = ['messages'];
-        if (tableNames.includes('pending_ops')) {
-            txTables.push('pending_ops');
-        }
-        if (tableNames.includes('tombstones')) {
-            txTables.push('tombstones');
-        }
-        await db.transaction('rw', txTables, async () => {
+        await db.transaction(
+            'rw',
+            getWriteTxTableNames(db, 'messages', { includeTombstones: true }),
+            async () => {
             await db.messages.delete(userMsg.id);
             if (assistant) await db.messages.delete(assistant.id);
         });

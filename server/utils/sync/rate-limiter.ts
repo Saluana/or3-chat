@@ -78,6 +78,10 @@ export const ALL_RATE_LIMITS = {
 /** Maximum age for entries before cleanup (10 minutes). */
 const MAX_ENTRY_AGE_MS = 10 * 60 * 1000;
 
+function isRateLimitingDisabled(): boolean {
+    return process.env.DISABLE_RATE_LIMIT === '1';
+}
+
 /**
  * Rate limit store using LRU cache to prevent unbounded growth.
  */
@@ -108,7 +112,7 @@ function getRateLimitKey(subjectKey: string, operation: string): string {
  * - Sliding window is computed in-process only.
  */
 export function checkSyncRateLimit(subjectKey: string, operation: string): RateLimitResult {
-    if (process.env.NODE_ENV !== 'production') {
+    if (isRateLimitingDisabled()) {
         return { allowed: true, remaining: Infinity };
     }
 

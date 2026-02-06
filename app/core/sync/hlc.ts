@@ -41,6 +41,7 @@
  * - Not a time sync mechanism; cross-device ordering is best-effort
  */
 export class HLCGenerator {
+    private static readonly MAX_COUNTER = 36 ** 3 - 1;
     private lastTimestamp = 0;
     private counter = 0;
     private nodeId: string | null = null;
@@ -78,6 +79,9 @@ export class HLCGenerator {
             this.lastTimestamp = now;
             this.counter = 0;
         } else {
+            if (this.counter >= HLCGenerator.MAX_COUNTER) {
+                throw new Error('HLC counter overflow');
+            }
             this.counter++;
         }
         const ts = this.lastTimestamp.toString(36).padStart(9, '0');

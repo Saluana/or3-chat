@@ -23,7 +23,7 @@ import { useRuntimeConfig } from '#imports';
 import { getDb } from '~/db/client';
 import { NotificationService } from '~/core/notifications/notification-service';
 import { useHooks } from '~/core/hooks/useHooks';
-import { nowSec } from '~/db/util';
+import { nowSec, getWriteTxTableNames } from '~/db/util';
 import type { Notification } from '~/db/schema';
 import type { NotificationCreatePayload } from '~/core/hooks/hook-types';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
@@ -297,19 +297,7 @@ export function useNotifications(): NotificationsComposable {
     };
 
     const persistMutedThreads = async (muted: string[]): Promise<void> => {
-        const tableNames = Array.isArray(
-            (db as { tables?: Array<{ name: string }> }).tables
-        )
-            ? (db as { tables: Array<{ name: string }> }).tables.map(
-                  (table) => table.name
-              )
-            : [];
-        const txTables = ['kv'];
-        if (tableNames.includes('pending_ops')) {
-            txTables.push('pending_ops');
-        }
-
-        await db.transaction('rw', txTables, async () => {
+        await db.transaction('rw', getWriteTxTableNames(db, 'kv'), async () => {
             const existing = await db.kv.get('notification_muted_threads');
             const now = nowSec();
             await db.kv.put({

@@ -13,7 +13,7 @@
  * - Server-side prompt synchronization
  */
 import { getDb } from './client';
-import { newId, nowSec, nextClock } from './util';
+import { newId, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { useHooks } from '../core/hooks/useHooks';
 import type {
     DbCreatePayload,
@@ -87,23 +87,6 @@ export interface PromptRecord {
 
 const PROMPT_TABLE = 'prompts';
 
-function getPromptWriteTxTableNames(
-    includeTombstones: boolean = false
-): string[] {
-    const db = getDb();
-    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
-        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
-        : [];
-    const names = ['posts'];
-    if (tableNames.includes('pending_ops')) {
-        names.push('pending_ops');
-    }
-    if (includeTombstones && tableNames.includes('tombstones')) {
-        names.push('tombstones');
-    }
-    return names;
-}
-
 async function putPromptPostRow(row: Post): Promise<void> {
     const db = getDb();
     if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
@@ -112,7 +95,7 @@ async function putPromptPostRow(row: Post): Promise<void> {
     }
     await db.transaction(
         'rw',
-        getPromptWriteTxTableNames(false),
+        getWriteTxTableNames(db, 'posts'),
         async () => {
             await db.posts.put(row);
         }
@@ -127,7 +110,7 @@ async function deletePromptPostRow(id: string): Promise<void> {
     }
     await db.transaction(
         'rw',
-        getPromptWriteTxTableNames(true),
+        getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
         async () => {
             await db.posts.delete(id);
         }

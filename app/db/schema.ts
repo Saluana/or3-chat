@@ -15,6 +15,37 @@ import { z } from 'zod';
 import { newId, nowSec } from './util';
 import { isValidHash } from '~/utils/hash';
 
+function isJsonSerializable(
+    value: unknown,
+    depth = 0,
+    seen: WeakSet<object> = new WeakSet()
+): boolean {
+    if (depth > 20) return false;
+    if (value === null) return true;
+
+    const kind = typeof value;
+    if (kind === 'string' || kind === 'number' || kind === 'boolean') {
+        return true;
+    }
+
+    if (kind !== 'object') {
+        return false;
+    }
+
+    if (seen.has(value as object)) {
+        return false;
+    }
+    seen.add(value as object);
+
+    if (Array.isArray(value)) {
+        return value.every((item) => isJsonSerializable(item, depth + 1, seen));
+    }
+
+    return Object.values(value as Record<string, unknown>).every((item) =>
+        isJsonSerializable(item, depth + 1, seen)
+    );
+}
+
 /**
  * `ProjectSchema`
  *
@@ -34,7 +65,12 @@ export const ProjectSchema = z.object({
     id: z.string(),
     name: z.string(),
     description: z.string().nullable().optional(),
-    data: z.any(),
+    data: z
+        .unknown()
+        .refine(
+            (value) => isJsonSerializable(value),
+            'Project data must be JSON-serializable'
+        ),
     created_at: z.number().int(),
     updated_at: z.number().int(),
     deleted: z.boolean().default(false),

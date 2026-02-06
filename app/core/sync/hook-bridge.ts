@@ -94,7 +94,7 @@ function toRecord(value: unknown): Record<string, unknown> {
 export class HookBridge {
     private db: Or3DB;
     private deviceId: string;
-    private syncTransactions = new WeakMap<Transaction, boolean>();
+    private syncTransactionTokens = new WeakSet<object>();
     private captureEnabled = true;
     private hooksInstalled = false;
 
@@ -131,24 +131,13 @@ export class HookBridge {
 
             // Hook: Creating (insert)
             table.hook('creating', (primKey, obj, transaction) => {
-                if (!this.captureEnabled || this.syncTransactions.get(transaction)) return;
+                if (!this.captureEnabled || this.isSyncTransaction(transaction)) return;
                 this.captureWrite(transaction, tableName, 'put', primKey, obj);
             });
 
             // Hook: Updating (modify)
-            const updatingHook = table as unknown as {
-                hook: (
-                    type: 'updating',
-                    fn: (
-                        modifications: unknown,
-                        primKey: unknown,
-                        obj: unknown,
-                        transaction: Transaction
-                    ) => void
-                ) => void;
-            };
-            updatingHook.hook('updating', (modifications, primKey, obj, transaction) => {
-                if (!this.captureEnabled || this.syncTransactions.get(transaction)) return;
+            table.hook('updating', (modifications, primKey, obj, transaction) => {
+                if (!this.captureEnabled || this.isSyncTransaction(transaction)) return;
 
                 // Guard: obj should be the existing record. If undefined, skip capture.
                 // This can happen in rare race conditions or if the record doesn't exist.
@@ -183,7 +172,7 @@ export class HookBridge {
 
             // Hook: Deleting
             table.hook('deleting', (primKey, obj, transaction) => {
-                if (!this.captureEnabled || this.syncTransactions.get(transaction)) return;
+                if (!this.captureEnabled || this.isSyncTransaction(transaction)) return;
                 this.captureWrite(transaction, tableName, 'delete', primKey, obj);
             });
         }
@@ -202,7 +191,30 @@ export class HookBridge {
      * Mark a transaction as initiated by sync (suppresses capture)
      */
     markSyncTransaction(tx: Transaction): void {
-        this.syncTransactions.set(tx, true);
+        this.markSyncToken(tx);
+        this.markSyncToken(this.getNativeTransactionToken(tx));
+    }
+
+    private isSyncTransaction(tx: Transaction | undefined): boolean {
+        if (!tx) return false;
+        if (this.syncTransactionTokens.has(tx as object)) {
+            return true;
+        }
+        const nativeToken = this.getNativeTransactionToken(tx);
+        return nativeToken ? this.syncTransactionTokens.has(nativeToken) : false;
+    }
+
+    private getNativeTransactionToken(tx: Transaction): object | null {
+        const candidate = (tx as unknown as { idbtrans?: unknown }).idbtrans;
+        return candidate && typeof candidate === 'object'
+            ? (candidate as object)
+            : null;
+    }
+
+    private markSyncToken(token: unknown): void {
+        if (token && typeof token === 'object') {
+            this.syncTransactionTokens.add(token as object);
+        }
     }
 
     /**
@@ -329,23 +341,6 @@ export class HookBridge {
             return;
         }
 
-        const enqueuePendingOp = () =>
-            this.db.pending_ops.add(pendingOp).catch((error) => {
-                console.error('[HookBridge] Failed to enqueue pending op', error);
-                // Emit hook for observability
-                useHooks()
-                    .doAction('sync.capture:action:failed', {
-                        tableName,
-                        pk,
-                        error: String(error),
-                    })
-                    .catch((hookError) => {
-                        console.error('[HookBridge] Failed to emit capture failure hook', hookError);
-                    });
-                // Rethrow to fail the transaction and prevent silent data loss
-                throw error;
-            });
-
         if (hasPendingOps) {
             transaction.table('pending_ops').add(pendingOp);
         } else {
@@ -357,27 +352,7 @@ export class HookBridge {
                 pk,
                 storeNames: [...tableNames],
             });
-            if (import.meta.dev && process.env.NODE_ENV !== 'test') {
-                throw new Error(message);
-            }
-            transaction.on('complete', () => {
-                enqueuePendingOp().catch((error) => {
-                    console.error(
-                        '[HookBridge] Deferred pending_ops insert failed. Op may be lost:',
-                        {
-                            tableName,
-                            pk,
-                            error: String(error),
-                        }
-                    );
-                    // Emit hook for observability
-                    void useHooks().doAction('sync.capture:action:deferredFailed', {
-                        tableName,
-                        pk,
-                        error: String(error),
-                    });
-                });
-            });
+            throw new Error(message);
         }
 
         if (operation === 'delete') {
@@ -391,37 +366,19 @@ export class HookBridge {
             if (!hasTombstonesTable) {
                 return;
             }
-            const enqueueTombstone = () =>
-                this.db.tombstones.put(tombstone).catch((error) => {
-                    console.error('[HookBridge] Failed to enqueue tombstone', error);
-                });
-
             if (hasTombstones) {
                 transaction.table('tombstones').put(tombstone);
             } else {
-                console.error('[HookBridge] Non-atomic tombstone capture: tombstones missing from transaction scope', {
-                    tableName,
-                    pk,
-                    storeNames: [...tableNames],
-                });
+                const message =
+                    '[HookBridge] Non-atomic tombstone capture: tombstones missing from transaction scope';
+                console.error(message, { tableName, pk, storeNames: [...tableNames] });
                 void useHooks().doAction('sync.capture:action:nonAtomic', {
                     tableName,
                     pk,
                     storeNames: [...tableNames],
                     kind: 'tombstone',
                 });
-                transaction.on('complete', () => {
-                    enqueueTombstone().catch((error) => {
-                        console.error(
-                            '[HookBridge] Deferred tombstone insert failed. Op may be lost:',
-                            {
-                                tableName,
-                                pk,
-                                error: String(error),
-                            }
-                        );
-                    });
-                });
+                throw new Error(message);
             }
         }
 

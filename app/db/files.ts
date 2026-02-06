@@ -31,7 +31,7 @@
 import Dexie from 'dexie';
 import { getDb } from './client';
 import { useHooks } from '../core/hooks/useHooks';
-import { parseOrThrow, nowSec, nextClock } from './util';
+import { parseOrThrow, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { FileMetaCreateSchema, FileMetaSchema, type FileMeta } from './schema';
 import { computeFileHash } from '../utils/hash';
 import { reportError, err } from '../utils/errors';
@@ -119,40 +119,10 @@ function createFileDeletePayload(
     };
 }
 
-type FileMetaWriteTxOptions = {
-    includeFileBlobs?: boolean;
-    includeTombstones?: boolean;
-};
-
-function getFileMetaWriteTxTableNames(
-    db: ReturnType<typeof getDb>,
-    options: FileMetaWriteTxOptions = {}
-): string[] {
-    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
-        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
-        : [];
-    const existing = new Set(tableNames);
-    const names = ['file_meta'];
-
-    if (options.includeFileBlobs) {
-        names.push('file_blobs');
-    }
-
-    if (existing.has('pending_ops')) {
-        names.push('pending_ops');
-    }
-
-    if (options.includeTombstones && existing.has('tombstones')) {
-        names.push('tombstones');
-    }
-
-    return names;
-}
-
 /** Internal helper to change ref_count and fire hook */
 async function changeRefCount(hash: string, delta: number) {
     const db = getDb();
-    await db.transaction('rw', getFileMetaWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
         const meta = await db.file_meta.get(hash);
         if (!meta) return;
         const next = {
@@ -265,7 +235,7 @@ export async function createOrRefFile(
     const db = getDb();
     await db.transaction(
         'rw',
-        getFileMetaWriteTxTableNames(db, { includeFileBlobs: true }),
+        getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs'] }),
         async () => {
         await hooks.doAction('db.files.create:action:before', actionPayload);
         const mergedMeta = parseOrThrow(
@@ -394,7 +364,7 @@ export async function ensureFileBlob(
 export async function softDeleteFile(hash: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getFileMetaWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
         const meta = await db.file_meta.get(hash);
         if (!meta) return;
         const payload = createFileDeletePayload(meta, hash);
@@ -429,7 +399,7 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
     if (!unique.length) return;
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getFileMetaWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
         const metas = await db.file_meta.bulkGet(unique);
         const updates: FileMeta[] = [];
         const payloads: DbDeletePayload<FileEntity>[] = [];
@@ -480,7 +450,7 @@ export async function restoreMany(hashes: string[]): Promise<void> {
     if (!unique.length) return;
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getFileMetaWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
         const metas = await db.file_meta.bulkGet(unique);
         const updates: FileMeta[] = [];
 
@@ -532,8 +502,8 @@ export async function hardDeleteMany(hashes: string[]): Promise<void> {
     const db = getDb();
     await db.transaction(
         'rw',
-        getFileMetaWriteTxTableNames(db, {
-            includeFileBlobs: true,
+        getWriteTxTableNames(db, 'file_meta', {
+            include: ['file_blobs'],
             includeTombstones: true,
         }),
         async () => {

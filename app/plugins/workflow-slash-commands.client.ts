@@ -23,7 +23,7 @@ import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type { WorkflowExecutionController } from './WorkflowSlashCommands/executeWorkflow';
 import type { Attachment } from 'or3-workflow-core';
 import { createWorkflowStreamAccumulator } from '~/composables/chat/useWorkflowStreamAccumulator';
-import { nowSec, nextClock } from '~/db/util';
+import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
 import { reportError } from '~/utils/errors';
 import {
     isWorkflowMessageData,
@@ -689,14 +689,11 @@ export default defineNuxtPlugin((nuxtApp) => {
         db: Or3DB,
         fn: () => Promise<T>
     ): Promise<T> => {
-        const tableNames = Array.isArray(db.tables)
-            ? db.tables.map((table) => table.name)
-            : [];
-        const txTables = ['messages'];
-        if (tableNames.includes('pending_ops')) {
-            txTables.push('pending_ops');
-        }
-        return await db.transaction('rw', txTables, fn);
+        return await db.transaction(
+            'rw',
+            getWriteTxTableNames(db, 'messages'),
+            fn
+        );
     };
 
     hooks.on(

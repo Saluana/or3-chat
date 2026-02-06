@@ -84,6 +84,7 @@ export class OutboxManager {
     private flushTimeout: ReturnType<typeof setTimeout> | null = null;
     private isFlushing = false;
     private isRunning = false;
+    private needsSyncingRecovery = true;
 
     constructor(
         db: Or3DB,
@@ -108,6 +109,7 @@ export class OutboxManager {
     start(): void {
         if (this.isRunning) return;
         this.isRunning = true;
+        this.needsSyncingRecovery = true;
         this.scheduleNextFlush(0);
     }
 
@@ -165,11 +167,14 @@ export class OutboxManager {
         try {
             const hooks = useHooks();
 
-            // Reset any syncing ops (e.g., after a crash) back to pending
-            await this.db.pending_ops
-                .where('status')
-                .equals('syncing')
-                .modify({ status: 'pending', nextAttemptAt: Date.now() });
+            // Crash recovery: reset stale syncing ops once when the loop starts.
+            if (this.needsSyncingRecovery) {
+                await this.db.pending_ops
+                    .where('status')
+                    .equals('syncing')
+                    .modify({ status: 'pending', nextAttemptAt: Date.now() });
+                this.needsSyncingRecovery = false;
+            }
 
             // Get pending ops (limited to prevent O(N) memory usage)
             // We fetch more than maxBatchSize to allow for some coalescing
@@ -417,6 +422,8 @@ export class OutboxManager {
 
         // Oversized document - can't be fixed without app changes
         if (error.includes('Value is too large')) return true;
+        if (error.includes('Payload too large for')) return true;
+        if (error.includes('exceeds 65536 bytes')) return true;
 
         // Schema validation errors - data doesn't match expected format
         if (error.includes('does not match the schema')) return true;

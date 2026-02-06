@@ -15,33 +15,8 @@
 import { getDb, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { parseOrThrow, nowSec, nextClock } from './util';
+import { parseOrThrow, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
-
-type KvWriteTxOptions = {
-    includeTombstones?: boolean;
-};
-
-function getKvWriteTxTableNames(
-    db: Or3DB,
-    options: KvWriteTxOptions = {}
-): string[] {
-    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
-        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
-        : [];
-    const existing = new Set(tableNames);
-    const names = ['kv'];
-
-    if (existing.has('pending_ops')) {
-        names.push('pending_ops');
-    }
-
-    if (options.includeTombstones && existing.has('tombstones')) {
-        names.push('tombstones');
-    }
-
-    return names;
-}
 
 async function ensureDbOpen(targetDb: Or3DB): Promise<void> {
     if (!targetDb.isOpen()) {
@@ -79,7 +54,7 @@ export async function createKv(input: KvCreate): Promise<Kv> {
         ...value,
         clock: nextClock(value.clock),
     };
-    await db.transaction('rw', getKvWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'kv'), async () => {
         await dbTry(
             () => db.kv.put(next),
             { op: 'write', entity: 'kv', action: 'create' },
@@ -118,7 +93,7 @@ export async function upsertKv(value: Kv): Promise<void> {
         entity: filtered,
         tableName: 'kv',
     });
-    await db.transaction('rw', getKvWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'kv'), async () => {
         const validated = parseOrThrow(KvSchema, filtered);
         const existing = await dbTry(() => db.kv.get(validated.id), {
             op: 'read',
@@ -158,7 +133,10 @@ export async function hardDeleteKv(id: string): Promise<void> {
     const db = getDb();
     await ensureDbOpen(db);
     const hooks = useHooks();
-    await db.transaction('rw', getKvWriteTxTableNames(db, { includeTombstones: true }), async () => {
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'kv', { includeTombstones: true }),
+        async () => {
         const existing = await dbTry(() => db.kv.get(id), {
             op: 'read',
             entity: 'kv',
@@ -272,7 +250,10 @@ export async function setKvByName(
         'id' in filtered && 'created_at' in filtered
             ? (filtered as Kv)
             : record;
-    await targetDb.transaction('rw', getKvWriteTxTableNames(targetDb), async () => {
+    await targetDb.transaction(
+        'rw',
+        getWriteTxTableNames(targetDb, 'kv'),
+        async () => {
         parseOrThrow(KvSchema, kvEntity);
         await dbTry(
             () => targetDb.kv.put(kvEntity),
@@ -310,7 +291,7 @@ export async function hardDeleteKvByName(
     if (!existing) return;
     await targetDb.transaction(
         'rw',
-        getKvWriteTxTableNames(targetDb, { includeTombstones: true }),
+        getWriteTxTableNames(targetDb, 'kv', { includeTombstones: true }),
         async () => {
             await hooks.doAction('db.kv.deleteByName:action:hard:before', {
                 entity: existing,

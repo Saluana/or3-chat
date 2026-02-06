@@ -17,7 +17,13 @@ import Dexie from 'dexie';
 import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { newId, nowSec, parseOrThrow, nextClock } from './util';
+import {
+    newId,
+    nowSec,
+    parseOrThrow,
+    nextClock,
+    getWriteTxTableNames,
+} from './util';
 import { generateHLC } from '../core/sync/hlc';
 import {
     MessageCreateSchema,
@@ -60,36 +66,6 @@ function hasFileHashesArray(obj: unknown): obj is { file_hashes: string[] } {
     );
 }
 
-type MessageWriteTxOptions = {
-    includeThreads?: boolean;
-    includeTombstones?: boolean;
-};
-
-function getMessageWriteTxTableNames(
-    db: ReturnType<typeof getDb>,
-    options: MessageWriteTxOptions = {}
-): string[] {
-    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
-        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
-        : [];
-    const existing = new Set(tableNames);
-    const names = ['messages'];
-
-    if (options.includeThreads) {
-        names.push('threads');
-    }
-
-    if (existing.has('pending_ops')) {
-        names.push('pending_ops');
-    }
-
-    if (options.includeTombstones && existing.has('tombstones')) {
-        names.push('tombstones');
-    }
-
-    return names;
-}
-
 /**
  * Purpose:
  * Create a message record in the local database.
@@ -126,7 +102,7 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
         tableName: 'messages',
     });
     const db = getDb();
-    await db.transaction('rw', getMessageWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
         await dbTry(
             () => db.messages.put(value),
             { op: 'write', entity: 'messages', action: 'create' },
@@ -161,7 +137,7 @@ export async function upsertMessage(value: Message): Promise<void> {
     );
     const validated = parseOrThrow(MessageSchema, filtered);
     const db = getDb();
-    await db.transaction('rw', getMessageWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
         const existing = await dbTry(() => db.messages.get(validated.id), {
             op: 'read',
             entity: 'messages',
@@ -276,7 +252,7 @@ export function messageByStream(streamId: string) {
 export async function softDeleteMessage(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getMessageWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
         const m = await dbTry(() => db.messages.get(id), {
             op: 'read',
             entity: 'messages',
@@ -323,7 +299,10 @@ export async function softDeleteMessage(id: string): Promise<void> {
 export async function hardDeleteMessage(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getMessageWriteTxTableNames(db, { includeTombstones: true }), async () => {
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages', { includeTombstones: true }),
+        async () => {
         const existing = await dbTry(() => db.messages.get(id), {
             op: 'read',
             entity: 'messages',
@@ -366,7 +345,10 @@ export async function hardDeleteMessage(id: string): Promise<void> {
 export async function appendMessage(input: MessageCreate): Promise<Message> {
     const hooks = useHooks();
     const db = getDb();
-    return db.transaction('rw', getMessageWriteTxTableNames(db, { includeThreads: true }), async () => {
+    return db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages', { include: ['threads'] }),
+        async () => {
         // Handle file_hashes array serialization
         const processedInput = { ...input };
         if (hasFileHashesArray(processedInput)) {
@@ -425,7 +407,10 @@ export async function moveMessage(
 ): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getMessageWriteTxTableNames(db, { includeThreads: true }), async () => {
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages', { include: ['threads'] }),
+        async () => {
         const m = await db.messages.get(messageId);
         if (!m) return;
         await hooks.doAction('db.messages.move:action:before', {
@@ -481,7 +466,10 @@ export async function copyMessage(
 ): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getMessageWriteTxTableNames(db, { includeThreads: true }), async () => {
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages', { include: ['threads'] }),
+        async () => {
         const m = await db.messages.get(messageId);
         if (!m) return;
         await hooks.doAction('db.messages.copy:action:before', {
@@ -539,7 +527,10 @@ export async function insertMessageAfter(
 ): Promise<Message> {
     const hooks = useHooks();
     const db = getDb();
-    return db.transaction('rw', getMessageWriteTxTableNames(db, { includeThreads: true }), async () => {
+    return db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages', { include: ['threads'] }),
+        async () => {
         const after = await db.messages.get(afterMessageId);
         if (!after) throw new Error('after message not found');
         const next = await db.messages
@@ -611,7 +602,7 @@ export async function normalizeThreadIndexes(
 ): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getMessageWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
         await hooks.doAction('db.messages.normalize:action:before', {
             threadId,
             start,

@@ -13,7 +13,7 @@
  * - Distributed rate limit verification.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     checkSyncRateLimit,
     recordSyncRequest,
@@ -29,11 +29,22 @@ describe('sync rate limiter', () => {
     beforeEach(() => {
         // Reset all rate limits before each test
         resetSyncRateLimits();
-        // Rate limiter bypasses checks in non-production; mock to production for tests
-        vi.stubEnv('NODE_ENV', 'production');
+        // Ensure limiter is enabled in tests unless explicitly disabled.
+        vi.stubEnv('DISABLE_RATE_LIMIT', '0');
+    });
+
+    afterEach(() => {
+        vi.unstubAllEnvs();
     });
 
     describe('checkSyncRateLimit', () => {
+        it('can be explicitly disabled via env flag', () => {
+            vi.stubEnv('DISABLE_RATE_LIMIT', '1');
+            const result = checkSyncRateLimit('user-1', 'sync:push');
+            expect(result.allowed).toBe(true);
+            expect(result.remaining).toBe(Infinity);
+        });
+
         it('should allow first request', () => {
             const result = checkSyncRateLimit('user-1', 'sync:push');
 

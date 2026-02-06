@@ -14,33 +14,8 @@
 import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { parseOrThrow, nowSec, nextClock } from './util';
+import { parseOrThrow, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { ProjectSchema, type Project } from './schema';
-
-type ProjectWriteTxOptions = {
-    includeTombstones?: boolean;
-};
-
-function getProjectWriteTxTableNames(
-    db: ReturnType<typeof getDb>,
-    options: ProjectWriteTxOptions = {}
-): string[] {
-    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
-        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
-        : [];
-    const existing = new Set(tableNames);
-    const names = ['projects'];
-
-    if (existing.has('pending_ops')) {
-        names.push('pending_ops');
-    }
-
-    if (options.includeTombstones && existing.has('tombstones')) {
-        names.push('tombstones');
-    }
-
-    return names;
-}
 
 /**
  * Purpose:
@@ -68,7 +43,7 @@ export async function createProject(input: Project): Promise<Project> {
         tableName: 'projects',
     });
     const db = getDb();
-    await db.transaction('rw', getProjectWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'projects'), async () => {
         await dbTry(
             () => db.projects.put(next),
             { op: 'write', entity: 'projects', action: 'create' },
@@ -106,7 +81,7 @@ export async function upsertProject(value: Project): Promise<void> {
         tableName: 'projects',
     });
     const db = getDb();
-    await db.transaction('rw', getProjectWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'projects'), async () => {
         const validated = parseOrThrow(ProjectSchema, filtered);
         const existing = await dbTry(() => db.projects.get(validated.id), {
             op: 'read',
@@ -145,7 +120,7 @@ export async function upsertProject(value: Project): Promise<void> {
 export async function softDeleteProject(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getProjectWriteTxTableNames(db), async () => {
+    await db.transaction('rw', getWriteTxTableNames(db, 'projects'), async () => {
         const p = await dbTry(() => db.projects.get(id), {
             op: 'read',
             entity: 'projects',
@@ -187,7 +162,10 @@ export async function softDeleteProject(id: string): Promise<void> {
 export async function hardDeleteProject(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getProjectWriteTxTableNames(db, { includeTombstones: true }), async () => {
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'projects', { includeTombstones: true }),
+        async () => {
         const existing = await dbTry(() => db.projects.get(id), {
             op: 'read',
             entity: 'projects',
@@ -206,7 +184,8 @@ export async function hardDeleteProject(id: string): Promise<void> {
             id,
             tableName: 'projects',
         });
-    });
+        }
+    );
 }
 
 /**

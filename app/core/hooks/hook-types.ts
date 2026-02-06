@@ -372,7 +372,7 @@ export interface ProjectEntity {
     id: string;
     name: string;
     description?: string | null;
-    data: Record<string, unknown>;
+    data: unknown;
     created_at: number;
     updated_at: number;
     deleted: boolean;

@@ -53,19 +53,27 @@ vi.mock('~/composables/posts/usePostsList', async () => {
 });
 
 import { useWorkflowList } from '../useWorkflows';
-import { usePostsList, __mock } from '~/composables/posts/usePostsList';
+import * as postsListModule from '~/composables/posts/usePostsList';
+
+const usePostsList = postsListModule.usePostsList;
+const mockState = (postsListModule as any).__mock as {
+    posts: { value: any[] };
+    loading: { value: boolean };
+    error: { value: Error | null };
+    refresh: ReturnType<typeof vi.fn>;
+};
 
 describe('useWorkflowList', () => {
     beforeEach(() => {
-        __mock.posts.value = [];
-        __mock.loading.value = false;
-        __mock.error.value = null;
-        __mock.refresh.mockClear();
+        mockState.posts.value = [];
+        mockState.loading.value = false;
+        mockState.error.value = null;
+        mockState.refresh.mockClear();
         vi.mocked(usePostsList).mockClear();
     });
 
     it('maps workflow posts and updates reactively when posts change', async () => {
-        __mock.posts.value = [
+        mockState.posts.value = [
             {
                 id: 'wf-1',
                 title: 'Existing Workflow',
@@ -86,8 +94,8 @@ describe('useWorkflowList', () => {
         expect(workflows.value).toHaveLength(1);
         expect(workflows.value[0]?.title).toBe('Existing Workflow');
 
-        __mock.posts.value = [
-            ...__mock.posts.value,
+        mockState.posts.value = [
+            ...mockState.posts.value,
             {
                 id: 'wf-2',
                 title: 'Synced Late Workflow',
@@ -106,8 +114,8 @@ describe('useWorkflowList', () => {
     });
 
     it('surfaces list loading and error state', () => {
-        __mock.loading.value = true;
-        __mock.error.value = new Error('sync pull failed');
+        mockState.loading.value = true;
+        mockState.error.value = new Error('sync pull failed');
 
         const { loading, error } = useWorkflowList(25);
 

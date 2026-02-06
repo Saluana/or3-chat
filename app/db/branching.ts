@@ -16,7 +16,7 @@
  */
 import Dexie from 'dexie';
 import { getDb } from './client';
-import { newId, nowSec, nextClock } from './util';
+import { newId, nowSec, nextClock, getWriteTxTableNames } from './util';
 import type { Thread, Message } from './schema';
 import { useHooks } from '../core/hooks/useHooks';
 import type {
@@ -165,15 +165,11 @@ export async function forkThread({
     const branchMode = normalizeBranchMode(filteredOptions.mode ?? mode);
     titleOverride = filteredOptions.titleOverride;
     const db = getDb();
-    const tableNames = Array.isArray((db as { tables?: Array<{ name: string }> }).tables)
-        ? (db as { tables: Array<{ name: string }> }).tables.map((table) => table.name)
-        : [];
-    const txTables = ['threads', 'messages'];
-    if (tableNames.includes('pending_ops')) {
-        txTables.push('pending_ops');
-    }
 
-    return db.transaction('rw', txTables, async () => {
+    return db.transaction(
+        'rw',
+        getWriteTxTableNames(db, ['threads', 'messages']),
+        async () => {
         const src = await db.threads.get(sourceThreadId);
         if (!src) throw new Error('Source thread not found');
 
