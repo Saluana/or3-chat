@@ -17,7 +17,7 @@ export default defineConfig({
         preserveSymlinks: true,
         // Force these modules to resolve from the host's node_modules, even when
         // files are loaded from linked provider packages with their own node_modules.
-        dedupe: ['zod', 'convex', '@clerk/nuxt', 'vue', 'nuxt'],
+        dedupe: ['vue', 'nuxt', 'zod'],
         alias: {
             '#imports': path.resolve(__dirname, 'tests/stubs/nuxt-imports.ts'),
             '~': path.resolve(__dirname, 'app'),

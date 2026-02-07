@@ -7,7 +7,15 @@ set -euo pipefail
 # Provider-specific code lives in external packages (or3-provider-clerk, or3-provider-convex).
 # Core app code must never import directly from provider SDKs.
 
-BANNED_PATTERN='@clerk/nuxt|convex-vue|from '\''convex'\''|from "convex"|~~/convex/_generated|packages/or3-provider'
+# Banned patterns:
+# 1. Direct provider SDK imports: @clerk/nuxt, convex-vue, from 'convex', from "convex"
+# 2. Convex subpath imports: from 'convex/...' or from "convex/..."
+# 3. Convex generated code: ~~/convex/_generated
+# 4. Old in-repo provider path: packages/or3-provider
+# 5. Deep imports into provider internals: or3-provider-*/src/
+# 6. Dynamic imports of provider internals: import(.*or3-provider
+
+BANNED_PATTERN='@clerk/nuxt|convex-vue|from '\''convex'\''|from "convex"|from '\''convex/|from "convex/|~~/convex/_generated|packages/or3-provider|or3-provider-[a-z]*/src/|import\(.*or3-provider'
 
 ZONES=(
     app/pages

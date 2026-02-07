@@ -258,15 +258,10 @@ export default defineNuxtConfig({
     // Linked provider packages (or3-provider-*) are file-level symlinks.
     // preserveSymlinks prevents TypeScript from resolving them to their real
     // paths outside the project root, which would break module resolution.
-    // paths mappings enable deep imports (or3-provider-*/src/...) for test files.
     typescript: {
         tsConfig: {
             compilerOptions: {
                 preserveSymlinks: true,
-                paths: {
-                    'or3-provider-clerk/src/*': ['../node_modules/or3-provider-clerk/src/*'],
-                    'or3-provider-convex/src/*': ['../node_modules/or3-provider-convex/src/*'],
-                },
             },
         },
     },
@@ -308,16 +303,11 @@ export default defineNuxtConfig({
         },
     },
     nitro: {
-        // Server tsconfig needs the same provider paths + preserveSymlinks
-        // as the app tsconfig so server tests and provider runtime files resolve.
+        // Server tsconfig needs preserveSymlinks for file:-linked provider packages.
         typescript: {
             tsConfig: {
                 compilerOptions: {
                     preserveSymlinks: true,
-                    paths: {
-                        'or3-provider-clerk/src/*': ['../node_modules/or3-provider-clerk/src/*'],
-                        'or3-provider-convex/src/*': ['../node_modules/or3-provider-convex/src/*'],
-                    },
                 },
             },
         },

@@ -182,13 +182,15 @@ Gate: ✅ a fresh host can install Convex provider, run init, and generate backe
 ## Stage 6: Guardrails (Required) ✅
 
 - [x] Add a repo script that fails on banned imports in core hot zones (`scripts/check-banned-imports.sh`).
-- [x] Add script to CI (`bun run check-imports`).
+- [x] Add script to CI (`.github/workflows/check-imports.yml` — added in remediation pass).
 - [x] Include banned patterns:
   - [x] `@clerk/nuxt`
-  - [x] `convex`
+  - [x] `convex` (bare and subpath `convex/*`)
   - [x] `convex-vue`
   - [x] `~~/convex/_generated`
   - [x] `packages/or3-provider` (stale in-repo stub references)
+  - [x] `or3-provider-*/src/` (deep internal imports)
+  - [x] `import(.*or3-provider` (dynamic import forms)
 - [x] Exclude `__tests__` directories from this check.
 
 Suggested check command:
@@ -217,13 +219,13 @@ Run these in clean states and capture outputs.
 
 - [x] generated provider list excludes Clerk module
 - [x] auth config is not `clerk`
-- [x] `bun run type-check` — 1 error in clerk-specific test file only (expected — test wouldn't exist without clerk). Core code clean.
+- [x] `bun run type-check` — clean after remediation (provider tests relocated to `or3-provider-clerk`)
 
 ### Matrix C: No Convex selected ✅
 
 - [x] generated provider list excludes Convex module
 - [x] sync/storage/limits/background provider configs do not target convex
-- [x] `bun run type-check` — 3 errors all in convex-specific files/config (expected when convex not installed). Core code clean.
+- [x] `bun run type-check` — clean after remediation (provider tests relocated to `or3-provider-convex`)
 
 ### Matrix D: Functional sanity
 
@@ -244,12 +246,18 @@ Gate: ✅ all automated matrix scenarios pass. Matrix D deferred to E2E.
   - [x] `planning/provider-decoupling/phase-3-task.md` (this file)
 - [x] Record final evidence:
   - [x] Typecheck: 0 errors (full stack)
-  - [x] Tests: 227 passed, 1686 tests, 0 failures
-  - [x] Banned imports: clean
+  - [x] Tests: 218 host tests passed (9 provider tests relocated to provider repos — 31 convex + 6 clerk pass independently)
+  - [x] Banned imports: clean (strengthened regex covers bare subpaths, dynamic imports, deep internals)
   - [x] Branch: `phase3-provider-decoupling`
 - [x] Known non-blocking warnings:
   - [x] Pre-existing Nitro prerender failure on `shared/config/constants.ts` rollup resolution (not caused by phase 3)
-  - [x] Matrix B/C typecheck errors are expected (provider-specific files/config only present when that provider is installed)
+- [x] Remediation applied:
+  - [x] Provider tests moved to provider repos (no host tests import provider internals)
+  - [x] tsconfig path hacks removed (paths entries for `or3-provider-*/src/*`)
+  - [x] `./src/*` exports and `typesVersions` removed from provider packages
+  - [x] Guardrail regex strengthened with additional patterns
+  - [x] CI workflow created (`.github/workflows/check-imports.yml`)
+  - [x] package.json portability addressed
 
 Final Gate: ✅ all DoD checkboxes checked (except Matrix D functional sanity — requires running backend).
 
