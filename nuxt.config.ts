@@ -30,6 +30,13 @@ function isPackageInstalled(pkgName: string): boolean {
     return existsSync(resolve(__dirname, 'node_modules', pkgName));
 }
 
+function isProviderAvailable(providerId: string): boolean {
+    const moduleId = providerIdToModuleId(providerId);
+    if (!moduleId) return true;
+    const pkgName = moduleId.split('/')[0];
+    return Boolean(pkgName && isPackageInstalled(pkgName));
+}
+
 const providerIdsFromConfig = new Set<string>();
 if (or3CloudConfig.auth.enabled) providerIdsFromConfig.add(or3CloudConfig.auth.provider);
 if (or3CloudConfig.sync.enabled) providerIdsFromConfig.add(or3CloudConfig.sync.provider);
@@ -61,6 +68,37 @@ for (const providerId of providerIdsFromConfig) {
 const activeProviderModules = Array.from(
     new Set([...or3ProviderModules, ...providerModulesFromConfig])
 );
+
+const authProviderAvailable = isProviderAvailable(or3CloudConfig.auth.provider);
+const syncProviderAvailable = isProviderAvailable(or3CloudConfig.sync.provider);
+const storageProviderAvailable = isProviderAvailable(or3CloudConfig.storage.provider);
+
+const effectiveSsrAuthEnabled =
+    isSsrAuthEnabled && authProviderAvailable;
+const effectiveSyncEnabled =
+    effectiveSsrAuthEnabled &&
+    or3CloudConfig.sync.enabled &&
+    syncProviderAvailable;
+const effectiveStorageEnabled =
+    effectiveSsrAuthEnabled &&
+    or3CloudConfig.storage.enabled &&
+    storageProviderAvailable;
+
+if (isSsrAuthEnabled && !authProviderAvailable) {
+    console.warn(
+        `[or3-provider] Auth provider "${or3CloudConfig.auth.provider}" is not available. Falling back to local-only auth mode.`
+    );
+}
+if (or3CloudConfig.sync.enabled && !syncProviderAvailable) {
+    console.warn(
+        `[or3-provider] Sync provider "${or3CloudConfig.sync.provider}" is not available. Sync is disabled.`
+    );
+}
+if (or3CloudConfig.storage.enabled && !storageProviderAvailable) {
+    console.warn(
+        `[or3-provider] Storage provider "${or3CloudConfig.storage.provider}" is not available. Cloud storage is disabled.`
+    );
+}
 
 // Branding defaults (sourced from or3Config)
 const appName = or3Config.site.name;
@@ -174,19 +212,19 @@ export default defineNuxtConfig({
             or3CloudConfig.services.llm?.openRouter?.requireUserKey ?? false,
         clerkSecretKey: '', // Auto-mapped from NUXT_CLERK_SECRET_KEY
         auth: {
-            enabled: isSsrAuthEnabled,
+            enabled: effectiveSsrAuthEnabled,
             provider: or3CloudConfig.auth.provider,
             sessionProvisioningFailure:
                 or3CloudConfig.auth.sessionProvisioningFailure ?? 'throw',
         },
         sync: {
-            enabled: or3CloudConfig.sync.enabled,
+            enabled: effectiveSyncEnabled,
             provider: or3CloudConfig.sync.provider,
             convexUrl,
             convexAdminKey,
         },
         storage: {
-            enabled: or3CloudConfig.storage.enabled,
+            enabled: effectiveStorageEnabled,
             provider: or3CloudConfig.storage.provider,
         },
         limits: limitsConfig,
@@ -213,7 +251,7 @@ export default defineNuxtConfig({
         public: {
             // Single source of truth for client gating.
             // Avoid inferring enablement from presence of publishable keys.
-            ssrAuthEnabled: isSsrAuthEnabled,
+            ssrAuthEnabled: effectiveSsrAuthEnabled,
             guestAccessEnabled: or3CloudConfig.auth.guestAccessEnabled ?? false,
             openRouter: {
                 allowUserOverride:
@@ -227,11 +265,11 @@ export default defineNuxtConfig({
                     false,
             },
             storage: {
-                enabled: or3CloudConfig.storage.enabled,
+                enabled: effectiveStorageEnabled,
                 provider: or3CloudConfig.storage.provider,
             },
             sync: {
-                enabled: or3CloudConfig.sync.enabled,
+                enabled: effectiveSyncEnabled,
                 provider: or3CloudConfig.sync.provider,
                 convexUrl,
             },
