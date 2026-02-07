@@ -6,6 +6,7 @@
  */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { requireWorkspaceSession, resolveWorkspaceStore } from './_helpers';
+import { invalidateSharedSessionCacheForIdentity } from '../../auth/session';
 
 type SetActiveBody = { id?: string };
 
@@ -27,6 +28,13 @@ export default defineEventHandler(async (event) => {
     await store.setActiveWorkspace({
         userId: session.user.id,
         workspaceId,
+    });
+
+    // Session cache includes workspace context; invalidate so the next session
+    // fetch reflects this switch immediately.
+    invalidateSharedSessionCacheForIdentity({
+        provider: session.provider,
+        providerUserId: session.providerUserId,
     });
 
     return { ok: true };

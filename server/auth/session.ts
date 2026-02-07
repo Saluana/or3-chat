@@ -50,6 +50,14 @@ function getSharedSessionCacheKey(providerId: string, providerUserId: string): s
     return `${providerId}:${providerUserId}`;
 }
 
+function clearSharedSessionCacheEntry(
+    providerId: string | undefined,
+    providerUserId: string | undefined
+): void {
+    if (!providerId || !providerUserId) return;
+    sharedSessionCache.delete(getSharedSessionCacheKey(providerId, providerUserId));
+}
+
 function getConfiguredSessionCacheTtlMs(config: ReturnType<typeof useRuntimeConfig>): number {
     const candidate = Number(
         (config.auth as { sessionCacheTtlMs?: unknown } | undefined)
@@ -290,4 +298,19 @@ export async function resolveSessionContext(
  */
 export function _resetSharedSessionCache(): void {
     sharedSessionCache.clear();
+}
+
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Invalidates cross-request session cache for a specific authenticated identity.
+ * Use this when workspace membership/selection mutates and the next request must
+ * resolve fresh session context immediately.
+ */
+export function invalidateSharedSessionCacheForIdentity(input: {
+    provider?: string;
+    providerUserId?: string;
+}): void {
+    clearSharedSessionCacheEntry(input.provider, input.providerUserId);
 }

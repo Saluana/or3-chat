@@ -17,11 +17,16 @@ vi.mock('h3', () => ({
 
 const requireWorkspaceSessionMock = vi.fn();
 const removeWorkspaceMock = vi.fn();
+const invalidateSharedSessionCacheForIdentityMock = vi.fn();
 vi.mock('../_helpers', () => ({
     requireWorkspaceSession: (...args: unknown[]) => requireWorkspaceSessionMock(...args),
     resolveWorkspaceStore: () => ({
         removeWorkspace: (...args: unknown[]) => removeWorkspaceMock(...args),
     }),
+}));
+vi.mock('../../../auth/session', () => ({
+    invalidateSharedSessionCacheForIdentity: (...args: unknown[]) =>
+        invalidateSharedSessionCacheForIdentityMock(...args),
 }));
 
 function makeEvent(): H3Event {
@@ -36,8 +41,11 @@ describe('DELETE /api/workspaces/:id', () => {
             user: { id: 'user-1' },
             workspace: { id: 'ws-1' },
             role: 'owner',
+            provider: 'test-provider',
+            providerUserId: 'provider-user-1',
         });
         removeWorkspaceMock.mockReset().mockResolvedValue(undefined);
+        invalidateSharedSessionCacheForIdentityMock.mockReset();
     });
 
     it('requires workspace id', async () => {
@@ -69,6 +77,10 @@ describe('DELETE /api/workspaces/:id', () => {
         expect(removeWorkspaceMock).toHaveBeenCalledWith({
             userId: 'user-1',
             workspaceId: 'ws-2',
+        });
+        expect(invalidateSharedSessionCacheForIdentityMock).toHaveBeenCalledWith({
+            provider: 'test-provider',
+            providerUserId: 'provider-user-1',
         });
     });
 
