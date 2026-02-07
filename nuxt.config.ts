@@ -1,5 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
+import { existsSync } from 'node:fs';
 import { resolve } from 'path';
 import { createLogger } from 'vite';
 import { or3CloudConfig } from './config.or3cloud';
@@ -11,6 +12,55 @@ const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
 
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
 const convexAdminKey = or3CloudConfig.sync.convex?.adminKey || '';
+
+const LOCAL_PROVIDER_IDS = new Set([
+    'custom',
+    'memory',
+    'redis',
+    'postgres',
+]);
+
+function providerIdToModuleId(providerId: string): string | null {
+    const id = providerId.trim();
+    if (!id || LOCAL_PROVIDER_IDS.has(id)) return null;
+    return `or3-provider-${id}/nuxt`;
+}
+
+function isPackageInstalled(pkgName: string): boolean {
+    return existsSync(resolve(__dirname, 'node_modules', pkgName));
+}
+
+const providerIdsFromConfig = new Set<string>();
+if (or3CloudConfig.auth.enabled) providerIdsFromConfig.add(or3CloudConfig.auth.provider);
+if (or3CloudConfig.sync.enabled) providerIdsFromConfig.add(or3CloudConfig.sync.provider);
+if (or3CloudConfig.storage.enabled) providerIdsFromConfig.add(or3CloudConfig.storage.provider);
+if (or3CloudConfig.limits?.enabled && or3CloudConfig.limits.storageProvider) {
+    providerIdsFromConfig.add(or3CloudConfig.limits.storageProvider);
+}
+if (
+    or3CloudConfig.backgroundStreaming?.enabled &&
+    or3CloudConfig.backgroundStreaming.storageProvider
+) {
+    providerIdsFromConfig.add(or3CloudConfig.backgroundStreaming.storageProvider);
+}
+
+const providerModulesFromConfig: string[] = [];
+for (const providerId of providerIdsFromConfig) {
+    const moduleId = providerIdToModuleId(providerId);
+    if (!moduleId) continue;
+    const pkgName = moduleId.split('/')[0];
+    if (pkgName && isPackageInstalled(pkgName)) {
+        providerModulesFromConfig.push(moduleId);
+    } else {
+        console.warn(
+            `[or3-provider] Configured provider "${providerId}" expects package "${pkgName}", but it is not installed.`
+        );
+    }
+}
+
+const activeProviderModules = Array.from(
+    new Set([...or3ProviderModules, ...providerModulesFromConfig])
+);
 
 // Branding defaults (sourced from or3Config)
 const appName = or3Config.site.name;
@@ -82,13 +132,6 @@ viteLogger.warn = (msg, options) => {
 };
 
 export default defineNuxtConfig({
-    // convex-nuxt module options (mirrors into runtimeConfig.public.convex)
-    convex: {
-        url: convexUrl,
-        // Avoid crashing the whole app when Convex isn't configured.
-        // Call sites can decide whether to require Convex.
-        manualInit: !convexUrl,
-    },
     app: {
         head: {
             link: [
@@ -251,7 +294,7 @@ export default defineNuxtConfig({
         '@nuxt/ui',
         '@nuxt/fonts',
         '@vite-pwa/nuxt',
-        ...or3ProviderModules,
+        ...activeProviderModules,
     ],
     // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
     srcDir: 'app',
