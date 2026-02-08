@@ -2,7 +2,6 @@ import 'dotenv/config';
 import { defineOr3CloudConfig } from './utils/or3-cloud-config';
 import {
     AUTH_PROVIDER_IDS,
-    BACKGROUND_PROVIDER_IDS,
     DEFAULT_BACKGROUND_PROVIDER_ID,
     DEFAULT_STORAGE_PROVIDER_ID,
     DEFAULT_SYNC_PROVIDER_ID,
@@ -68,8 +67,8 @@ export const or3CloudConfig = defineOr3CloudConfig({
         maxMessagesPerDay: process.env.OR3_MAX_MESSAGES_PER_DAY
             ? Number(process.env.OR3_MAX_MESSAGES_PER_DAY)
             : 0,
-        // Use Convex for persistent limits when sync is enabled, otherwise memory
-        storageProvider: (process.env.OR3_LIMITS_STORAGE_PROVIDER ?? (syncEnabled ? LIMITS_PROVIDER_IDS.convex : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
+        // Derive limits provider from sync provider when available, otherwise memory
+        storageProvider: (process.env.OR3_LIMITS_STORAGE_PROVIDER ?? (syncEnabled ? (process.env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
     },
     security: {
         allowedOrigins: process.env.OR3_ALLOWED_ORIGINS
@@ -127,7 +126,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
     // Enables AI streaming to continue on server when users navigate away (SSR only)
     backgroundStreaming: {
         enabled: process.env.OR3_BACKGROUND_STREAMING_ENABLED === 'true',
-        storageProvider: (process.env.OR3_BACKGROUND_STREAMING_PROVIDER ?? (syncEnabled ? BACKGROUND_PROVIDER_IDS.convex : DEFAULT_BACKGROUND_PROVIDER_ID)) as BackgroundProviderId,
+        storageProvider: (process.env.OR3_BACKGROUND_STREAMING_PROVIDER ?? (syncEnabled ? (process.env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) : DEFAULT_BACKGROUND_PROVIDER_ID)) as BackgroundProviderId,
         maxConcurrentJobs: process.env.OR3_BACKGROUND_MAX_JOBS
             ? Number(process.env.OR3_BACKGROUND_MAX_JOBS)
             : 20,

@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 import { registerAuthProvider } from '../registry';
-import { resolveSessionContext, _resetSharedSessionCache } from '../session';
+import {
+    resolveSessionContext,
+    _resetSharedSessionCache,
+    invalidateSharedSessionCacheForIdentity,
+} from '../session';
 import { testRuntimeConfig } from '../../../tests/setup';
 
 const adminCheckerMock = vi.hoisted(() => ({
@@ -216,6 +220,29 @@ describe('resolveSessionContext provisioning and caching', () => {
 
         expect(authWorkspaceStoreMock.getOrCreateUser).toHaveBeenCalledTimes(2);
         vi.useRealTimers();
+    });
+
+    it('invalidates shared cache entries for a specific identity', async () => {
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            auth: {
+                ...testRuntimeConfig.value.auth,
+                sessionCacheTtlMs: 10_000,
+            },
+        };
+
+        await resolveSessionContext(makeEvent());
+
+        invalidateSharedSessionCacheForIdentity({
+            provider: PROVIDER_ID,
+            providerUserId: 'user-1',
+        });
+
+        await resolveSessionContext(makeEvent());
+
+        expect(authWorkspaceStoreMock.getOrCreateUser).toHaveBeenCalledTimes(2);
+        expect(authWorkspaceStoreMock.getOrCreateDefaultWorkspace).toHaveBeenCalledTimes(2);
+        expect(authWorkspaceStoreMock.getWorkspaceRole).toHaveBeenCalledTimes(2);
     });
 
     it('throws when workspace store for provider is missing', async () => {

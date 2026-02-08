@@ -228,6 +228,9 @@ const syncUrl = or3CloudConfig.sync.convex?.url;
 ## Related
 
 - [or3-config](./or3-config) — Base configuration (branding, features, limits)
+- [providers](./providers) — Install provider packages + Clerk/Convex bridge wiring
+- [provider-clerk](./provider-clerk) — Dedicated Clerk provider install/setup guide
+- [provider-convex](./provider-convex) — Dedicated Convex provider install/setup guide
 - [auth-system](./auth-system) — Authentication architecture
 - [sync-layer](./sync-layer) — Sync system details
 - [storage-layer](./storage-layer) — Storage system details
