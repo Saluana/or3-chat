@@ -25,6 +25,7 @@ describe('config manager', () => {
                 OPENROUTER_API_KEY: 'secret',
                 OR3_SITE_NAME: 'My Site',
             },
+            path: '/tmp/.env',
         });
 
         const entries = await readConfigEntries();
@@ -36,7 +37,7 @@ describe('config manager', () => {
     });
 
     it('rejects non-whitelisted keys on write', async () => {
-        vi.mocked(readEnvFile).mockResolvedValue({ lines: [], map: {} });
+        vi.mocked(readEnvFile).mockResolvedValue({ lines: [], map: {}, path: '/tmp/.env' });
 
         await expect(
             writeConfigEntries([{ key: 'NOT_ALLOWED', value: 'nope' }])
@@ -50,6 +51,7 @@ describe('config manager', () => {
                 OPENROUTER_API_KEY: 'secret',
                 OR3_SITE_NAME: 'Old Name',
             },
+            path: '/tmp/.env',
         });
 
         await writeConfigEntries([
@@ -70,6 +72,7 @@ describe('config manager', () => {
             map: {
                 OR3_MAX_FILE_SIZE_BYTES: '123',
             },
+            path: '/tmp/.env',
         });
 
         await writeConfigEntries([{ key: 'OR3_MAX_FILE_SIZE_BYTES', value: null }]);

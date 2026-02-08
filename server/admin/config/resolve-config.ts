@@ -19,9 +19,9 @@
  * - Must handle undefined environment variables gracefully by providing defaults.
  * - Validates configuration against schemas provided by `defineOr3Config`.
  */
-import { defineOr3Config } from '~~/utils/or3-config';
-import { defineOr3CloudConfig } from '~~/utils/or3-cloud-config';
-import type { Or3CloudConfig } from '~~/types/or3-cloud-config';
+import { defineOr3Config } from '../../../utils/or3-config';
+import { defineOr3CloudConfig } from '../../../utils/or3-cloud-config';
+import type { Or3CloudConfig } from '../../../types/or3-cloud-config';
 import {
     AUTH_PROVIDER_IDS,
     DEFAULT_BACKGROUND_PROVIDER_ID,
@@ -33,7 +33,7 @@ import {
     type LimitsProviderId,
     type StorageProviderId,
     type SyncProviderId,
-} from '~~/shared/cloud/provider-ids';
+} from '../../../shared/cloud/provider-ids';
 import {
     DEFAULT_SITE_NAME,
     DEFAULT_REQUESTS_PER_MINUTE,
@@ -43,9 +43,12 @@ import {
     DEFAULT_REBUILD_COMMAND,
     DEFAULT_BACKGROUND_MAX_JOBS,
     DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
-} from '~~/shared/config/constants';
+} from '../../../shared/config/constants';
 
-type EnvMap = Record<string, string | undefined>;
+export type EnvMap = Record<string, string | undefined>;
+export type BuildOr3CloudConfigFromEnvOptions = {
+    strict?: boolean;
+};
 
 /**
  * Safely converts an environment variable string to a boolean.
@@ -84,6 +87,14 @@ function envNum(val: string | undefined, fallback?: number): number | undefined 
 function envFeature(val: string | undefined): boolean | undefined {
     if (val === undefined) return undefined;
     return val !== 'false';
+}
+
+function envFirst(env: EnvMap, ...keys: string[]): string | undefined {
+    for (const key of keys) {
+        const value = env[key];
+        if (value !== undefined) return value;
+    }
+    return undefined;
 }
 
 /**
@@ -160,15 +171,27 @@ export function buildOr3ConfigFromEnv(env: EnvMap) {
  *
  * @param env - A map of environment variable keys and values
  */
-export function buildOr3CloudConfigFromEnv(env: EnvMap) {
+export function buildOr3CloudConfigFromEnv(
+    env: EnvMap,
+    options: BuildOr3CloudConfigFromEnvOptions = {}
+) {
     const authEnabled = env.SSR_AUTH_ENABLED === 'true';
-    const syncEnabled = authEnabled && env.OR3_SYNC_ENABLED !== 'false';
-    const storageEnabled = authEnabled && env.OR3_STORAGE_ENABLED !== 'false';
+    const syncEnabledFlag = envFirst(env, 'OR3_CLOUD_SYNC_ENABLED', 'OR3_SYNC_ENABLED');
+    const storageEnabledFlag = envFirst(env, 'OR3_CLOUD_STORAGE_ENABLED', 'OR3_STORAGE_ENABLED');
+    const syncEnabled = authEnabled && syncEnabledFlag !== 'false';
+    const storageEnabled = authEnabled && storageEnabledFlag !== 'false';
+    const authProvider = envFirst(env, 'OR3_AUTH_PROVIDER', 'AUTH_PROVIDER') ?? AUTH_PROVIDER_IDS.clerk;
+    const syncProvider = env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID;
+    const storageProvider = env.NUXT_PUBLIC_STORAGE_PROVIDER ?? DEFAULT_STORAGE_PROVIDER_ID;
+    const strict =
+        options.strict ??
+        ((env.NODE_ENV ?? process.env.NODE_ENV) === 'production' ||
+            (env.OR3_STRICT_CONFIG ?? process.env.OR3_STRICT_CONFIG) === 'true');
 
     const config: Or3CloudConfig = {
         auth: {
             enabled: authEnabled,
-            provider: (env.AUTH_PROVIDER ?? AUTH_PROVIDER_IDS.clerk) as AuthProviderId,
+            provider: authProvider as AuthProviderId,
             clerk: {
                 publishableKey: env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY || undefined,
                 secretKey: env.NUXT_CLERK_SECRET_KEY || undefined,
@@ -176,7 +199,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
         },
         sync: {
             enabled: syncEnabled,
-            provider: (env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) as SyncProviderId,
+            provider: syncProvider as SyncProviderId,
             convex: {
                 url: env.VITE_CONVEX_URL || undefined,
                 adminKey: env.CONVEX_SELF_HOSTED_ADMIN_KEY || undefined,
@@ -184,7 +207,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
         },
         storage: {
             enabled: storageEnabled,
-            provider: (env.NUXT_PUBLIC_STORAGE_PROVIDER ?? DEFAULT_STORAGE_PROVIDER_ID) as StorageProviderId,
+            provider: storageProvider as StorageProviderId,
         },
         services: {
             llm: {
@@ -203,7 +226,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
             maxConversations: envNum(env.OR3_MAX_CONVERSATIONS, DEFAULT_MAX_CONVERSATIONS) ?? DEFAULT_MAX_CONVERSATIONS,
             maxMessagesPerDay: envNum(env.OR3_MAX_MESSAGES_PER_DAY, DEFAULT_MAX_MESSAGES_PER_DAY) ?? DEFAULT_MAX_MESSAGES_PER_DAY,
             storageProvider: (env.OR3_LIMITS_STORAGE_PROVIDER ??
-                (syncEnabled ? (env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
+                (syncEnabled ? syncProvider : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
         },
         security: {
             allowedOrigins: env.OR3_ALLOWED_ORIGINS
@@ -215,6 +238,14 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
                 env.OR3_FORCE_HTTPS,
                 env.NODE_ENV === 'production'
             ),
+            proxy: {
+                trustProxy: env.OR3_TRUST_PROXY === 'true',
+                forwardedForHeader:
+                    env.OR3_FORWARDED_FOR_HEADER === 'x-real-ip'
+                        ? 'x-real-ip'
+                        : 'x-forwarded-for',
+                forwardedHostHeader: 'x-forwarded-host',
+            },
         },
         admin: {
             basePath: env.OR3_ADMIN_BASE_PATH || DEFAULT_ADMIN_BASE_PATH,
@@ -238,14 +269,11 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
         backgroundStreaming: {
             enabled: env.OR3_BACKGROUND_STREAMING_ENABLED === 'true',
             storageProvider: (env.OR3_BACKGROUND_STREAMING_PROVIDER ??
-                (syncEnabled ? (env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) : DEFAULT_BACKGROUND_PROVIDER_ID)) as BackgroundProviderId,
+                (syncEnabled ? syncProvider : DEFAULT_BACKGROUND_PROVIDER_ID)) as BackgroundProviderId,
             maxConcurrentJobs: envNum(env.OR3_BACKGROUND_MAX_JOBS, DEFAULT_BACKGROUND_MAX_JOBS) ?? DEFAULT_BACKGROUND_MAX_JOBS,
             jobTimeoutSeconds: envNum(env.OR3_BACKGROUND_JOB_TIMEOUT, DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS) ?? DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
         },
     };
 
-    const strict =
-        process.env.NODE_ENV === 'production' ||
-        process.env.OR3_STRICT_CONFIG === 'true';
     return defineOr3CloudConfig(config, { strict });
 }

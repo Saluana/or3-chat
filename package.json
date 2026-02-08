@@ -22,7 +22,14 @@
         "theme:validate": "tsx scripts/cli/validate-theme.ts",
         "theme:create": "tsx scripts/cli/create-theme.ts",
         "theme:switch": "tsx scripts/cli/switch-theme.ts",
-        "theme:build-css": "bun run scripts/build-theme-css.ts"
+        "theme:build-css": "bun run scripts/build-theme-css.ts",
+        "or3-cloud": "bun run scripts/cli/or3-cloud.ts",
+        "or3-cloud:init": "bun run scripts/cli/or3-cloud.ts init",
+        "or3-cloud:validate": "bun run scripts/cli/or3-cloud.ts validate",
+        "or3-cloud:build": "bun build ./scripts/cli/or3-cloud.ts --target=node --format=esm --outfile ./dist/or3-cloud.mjs"
+    },
+    "bin": {
+        "or3-cloud": "./bin/or3-cloud.js"
     },
     "dependencies": {
         "@nuxt/ui": "^3.3.7",

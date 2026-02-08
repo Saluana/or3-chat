@@ -2,6 +2,8 @@
 
 This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works.
 
+For guided setup, use the [Cloud Install Wizard](./or3-cloud-wizard).
+
 ## Provider Model
 
 OR3 core is local-first and can run with zero cloud providers installed.

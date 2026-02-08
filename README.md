@@ -27,6 +27,16 @@ bun run dev
 
 Visit `http://localhost:3000`, connect your OpenRouter account via the built-in PKCE flow, and you’re ready to chat. Additional build, preview, and test commands live in `package.json`.
 
+## OR3 Cloud One-Command Wizard
+
+Use the install wizard to configure SSR auth + sync + storage:
+
+```bash
+bun run or3-cloud:init
+```
+
+The wizard validates your answers, writes `.env` safely, generates `or3.providers.generated.ts`, and can optionally run deploy commands.
+
 ## OR3 Cloud Configuration
 
 OR3 Cloud features are configured through `config.or3cloud.ts` at the project root. This file is the single source of truth for SSR auth, sync, storage, instance-level OpenRouter keys, branding, and limits.
@@ -38,7 +48,7 @@ Site branding, feature toggles, and client-side limits are configured in `config
 Key environment variables you can use inside `config.or3cloud.ts` and `config.or3.ts`:
 
 -   `SSR_AUTH_ENABLED` (true/false)
--   `NUXT_PUBLIC_CONVEX_URL` / `VITE_CONVEX_URL`
+-   `VITE_CONVEX_URL` (Convex sync/storage URL)
 -   `OPENROUTER_API_KEY`
 -   `OR3_OPENROUTER_ALLOW_USER_OVERRIDE` (true/false)
 -   `OR3_REQUESTS_PER_MINUTE`, `OR3_MAX_CONVERSATIONS`, `OR3_MAX_MESSAGES_PER_DAY`

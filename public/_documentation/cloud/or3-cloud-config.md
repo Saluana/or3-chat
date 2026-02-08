@@ -36,7 +36,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
 | Key | Env Variable | Default | Description |
 |-----|--------------|---------|-------------|
 | `auth.enabled` | `SSR_AUTH_ENABLED` | `false` | Enable SSR authentication |
-| `auth.provider` | `AUTH_PROVIDER` | `"clerk"` | Auth provider (`clerk` / `custom`) |
+| `auth.provider` | `AUTH_PROVIDER` | `"clerk"` | Auth provider (`basic-auth` / `clerk` / `custom`) |
 | `auth.clerk.publishableKey` | `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | — | Clerk publishable key |
 | `auth.clerk.secretKey` | `NUXT_CLERK_SECRET_KEY` | — | Clerk secret key |
 
@@ -45,7 +45,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
 | Key | Env Variable | Default | Description |
 |-----|--------------|---------|-------------|
 | `sync.enabled` | `OR3_SYNC_ENABLED` | `true` (if auth) | Enable cross-device sync |
-| `sync.provider` | `OR3_SYNC_PROVIDER` | `"convex"` | Backend (`convex` / `firebase` / `custom`) |
+| `sync.provider` | `OR3_SYNC_PROVIDER` | `"convex"` | Backend (`sqlite` / `convex` / `firebase` / `custom`) |
 | `sync.convex.url` | `VITE_CONVEX_URL` | — | Convex deployment URL |
 | `sync.convex.adminKey` | `CONVEX_SELF_HOSTED_ADMIN_KEY` | — | Server-side Convex admin key for super admin dashboard access |
 
@@ -89,7 +89,7 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 | Key | Env Variable | Default | Description |
 |-----|--------------|---------|-------------|
 | `storage.enabled` | `OR3_STORAGE_ENABLED` | `true` (if auth) | Enable cloud storage |
-| `storage.provider` | `NUXT_PUBLIC_STORAGE_PROVIDER` | `"convex"` | Backend (`convex` / `s3` / `custom`) |
+| `storage.provider` | `NUXT_PUBLIC_STORAGE_PROVIDER` | `"convex"` | Backend (`fs` / `convex` / `s3` / `custom`) |
 
 ### LLM Services
 

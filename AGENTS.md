@@ -221,3 +221,15 @@ Mock Externalities: Isolate business logic from side effects (databases, APIs) t
 9.  Use `server/admin/config/resolve-config.ts` as the authoritative “wizard validation entrypoint”, not ad-hoc env checks.
     - `buildOr3ConfigFromEnv(env)` and `buildOr3CloudConfigFromEnv(env)` already encode coercion/default behavior used by runtime/admin paths.
     - Important gotcha: `buildOr3CloudConfigFromEnv` strictness currently reads `process.env`, so a wizard should either run it in a controlled env context or call `defineOr3CloudConfig(config, { strict })` directly with explicit strict mode.
+
+10. **The wizard engine is already implemented in-core (not just planning docs)**
+    - The “API-first” wizard lives in `shared/cloud/wizard/*` with `Or3CloudWizardApi`, step graph generation, env derivation, apply/deploy, and disk-backed session/preset storage.
+    - Sessions persist to `~/.or3-cloud/` by default; secrets are kept in a transient in-memory map unless explicitly opted in.
+
+11. **Env var naming is intentionally messy (aliases exist; don’t “clean up” casually)**
+    - The wizard currently emits both legacy and canonical keys for forward-compat: e.g. `AUTH_PROVIDER` + `OR3_AUTH_PROVIDER`, `OR3_SYNC_ENABLED` + `OR3_CLOUD_SYNC_ENABLED`, `OR3_STORAGE_ENABLED` + `OR3_CLOUD_STORAGE_ENABLED`.
+    - The whitelist of “wizard-owned keys” is centralized in `shared/cloud/wizard/catalog.ts` (`WIZARD_OWNED_ENV_KEYS`). Touch that list or your env merge/apply behavior will silently drift.
+
+12. **Basic Auth needs bootstrap creds to be usable on first boot**
+    - The basic-auth provider is not just `OR3_BASIC_AUTH_JWT_SECRET`: it also supports/needs bootstrap email/password (`OR3_BASIC_AUTH_BOOTSTRAP_EMAIL`, `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD`) or you’ve built an instance nobody can log into.
+    - Basic-auth also has its own auth DB path (`OR3_BASIC_AUTH_DB_PATH`) that is separate from the sync SQLite DB (`OR3_SQLITE_DB_PATH`).
