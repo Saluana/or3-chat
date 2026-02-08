@@ -189,42 +189,42 @@ artifact_id: 83624487-1502-4840-a833-22d0a3e74e0a
 
 ### 4.1 Package scaffolding
 
-- [ ] Initialize package structure and Nuxt module entry (`or3-provider-fs/nuxt`)
+- [x] Initialize package structure and Nuxt module entry (`or3-provider-fs/nuxt`)
   - Requirements: 1.1, 4.1
-- [ ] Add provider README and env contract
+- [x] Add provider README and env contract
   - Requirements: 7.1
 
 ### 4.2 Storage adapter implementation
 
-- [ ] Implement `presignUpload` returning short-lived signed internal URL
+- [x] Implement `presignUpload` returning short-lived signed internal URL
   - Requirements: 4.1, 4.2
-- [ ] Implement `presignDownload` returning short-lived signed internal URL
+- [x] Implement `presignDownload` returning short-lived signed internal URL
   - Requirements: 4.1, 4.2
-- [ ] Implement optional `commit` behavior aligned with current metadata flow
+- [x] Implement optional `commit` behavior aligned with current metadata flow
   - Requirements: 4.1
-- [ ] Implement `gc` behavior for stale/orphaned files
+- [x] Implement `gc` behavior for stale/orphaned files
   - Requirements: 4.3
-- [ ] Register storage adapter in Nitro plugin
+- [x] Register storage adapter in Nitro plugin
   - Requirements: 4.1
 
 ### 4.3 Upload/download endpoint implementation
 
-- [ ] Implement upload endpoint with token verification, authz checks, MIME/size checks, atomic write
+- [x] Implement upload endpoint with token verification, authz checks, MIME/size checks, atomic write
   - Requirements: 4.2
-- [ ] Implement download endpoint with token verification, authz checks, stream response
+- [x] Implement download endpoint with token verification, authz checks, stream response
   - Requirements: 4.2
-- [ ] Implement path normalization and traversal protections
+- [x] Implement path normalization and traversal protections
   - Requirements: 4.2
 
 ### 4.4 FS tests
 
-- [ ] Unit tests: token sign/verify, expiry, tamper detection
+- [x] Unit tests: token sign/verify, expiry, tamper detection
   - Requirements: 4.2, 8.1
-- [ ] Unit tests: path traversal rejection
+- [x] Unit tests: path traversal rejection
   - Requirements: 4.2, 8.1
-- [ ] Integration tests: presign -> upload -> commit -> presign-download -> download
+- [x] Integration tests: presign -> upload -> commit -> presign-download -> download
   - Requirements: 4.1, 8.2
-- [ ] Integration tests: GC logic vs retention and references
+- [x] Integration tests: GC logic vs retention and references
   - Requirements: 4.3, 8.2
 
 ## 5. Wizard and Setup Defaults
