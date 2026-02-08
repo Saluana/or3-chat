@@ -59,6 +59,10 @@ function toBooleanFlag(flags: CliFlags, key: string): boolean {
     return flags[key] === true;
 }
 
+function hasFlag(flags: CliFlags, key: string): boolean {
+    return Object.prototype.hasOwnProperty.call(flags, key);
+}
+
 function toInt(value: string): number | null {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return null;
@@ -345,7 +349,7 @@ async function runInit(flags: CliFlags): Promise<void> {
     const prompt = new Prompt();
     const manualMode = toBooleanFlag(flags, 'manual');
     const dryRun = toBooleanFlag(flags, 'dry-run');
-    const strict = toBooleanFlag(flags, 'strict');
+    const strict = hasFlag(flags, 'strict') ? toBooleanFlag(flags, 'strict') : undefined;
     const autoInstallDependencies =
         toBooleanFlag(flags, 'enable-install') ||
         process.env.OR3_WIZARD_ENABLE_INSTALL === '1';
@@ -416,16 +420,19 @@ async function runInit(flags: CliFlags): Promise<void> {
                 if (field.help) {
                     printFieldHelp(field.help);
                 }
-                const value = await promptField(prompt, field, answers);
-                const validationError =
-                    typeof field.validate === 'function'
-                        ? field.validate(value as never, answers)
-                        : null;
-                if (validationError) {
-                    console.log(validationError);
-                    continue;
+                while (true) {
+                    const value = await promptField(prompt, field, answers);
+                    const validationError =
+                        typeof field.validate === 'function'
+                            ? field.validate(value as never, answers)
+                            : null;
+                    if (validationError) {
+                        console.log(validationError);
+                        continue;
+                    }
+                    patch[field.key] = value as never;
+                    break;
                 }
-                patch[field.key] = value as never;
             }
 
             if (step.id === 'target') {
@@ -438,7 +445,10 @@ async function runInit(flags: CliFlags): Promise<void> {
 
         const latestSession = await api.getSession(session.id, { includeSecrets: true });
         const answers = normalizeAnswers(latestSession.answers);
-        const validation = await api.validate(session.id, { strict });
+        const validation = await api.validate(
+            session.id,
+            strict === undefined ? {} : { strict }
+        );
         if (!validation.ok) {
             console.log('\n  ❌ Some settings need fixing:\n');
             console.log(summarizeValidationErrors(validation));
@@ -615,10 +625,10 @@ async function runValidate(flags: CliFlags): Promise<void> {
         instanceDir: process.cwd(),
         envFile,
     });
-    const strict = toBooleanFlag(flags, 'strict');
+    const strict = hasFlag(flags, 'strict') ? toBooleanFlag(flags, 'strict') : undefined;
     try {
         buildOr3ConfigFromEnv(map);
-        buildOr3CloudConfigFromEnv(map, { strict });
+        buildOr3CloudConfigFromEnv(map, strict === undefined ? {} : { strict });
         console.log(`Validation passed for ${envFile}.`);
     } catch (error) {
         console.log(`Validation failed for ${envFile}:`);

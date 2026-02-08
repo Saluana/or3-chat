@@ -154,7 +154,11 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
 
     setEnv(env, 'OR3_ALLOWED_ORIGINS', csv(answers.allowedOrigins));
     setEnv(env, 'OR3_FORCE_HTTPS', boolToEnv(answers.forceHttps));
-    setEnv(env, 'OR3_STRICT_CONFIG', boolToEnv(answers.strictConfig));
+    setEnv(
+        env,
+        'OR3_STRICT_CONFIG',
+        boolToEnv(answers.strictConfig || answers.deploymentTarget === 'prod-build')
+    );
     setEnv(env, 'OR3_TRUST_PROXY', boolToEnv(answers.trustProxy));
     setEnv(env, 'OR3_FORWARDED_FOR_HEADER', answers.forwardedForHeader);
 

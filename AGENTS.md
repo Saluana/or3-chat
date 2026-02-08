@@ -274,3 +274,53 @@ Mock Externalities: Isolate business logic from side effects (databases, APIs) t
 22. **Wizard success needs both wiring and installed packages**
     - `or3.providers.generated.ts` must include selected provider modules.
     - Selected provider packages must also be installed/resolvable in the target instance, or provider routes/components disappear at runtime.
+
+23. **Background streaming is SSR-only and is body-gated**
+    - Feature flag: `OR3_BACKGROUND_STREAMING_ENABLED=true` (maps to `runtimeConfig.backgroundJobs.enabled` and `runtimeConfig.public.backgroundStreaming.enabled`).
+    - The “start background job” signal is in the request body: `_background: true` plus `_threadId` + `_messageId`.
+    - Ignore the stale docstring mention of `x-or3-background` in `server/api/openrouter/stream.post.ts`—the implementation checks `_background`.
+
+24. **Client capability gating is cached and can lie**
+    - Server-route detection cache: `localStorage['or3:server-route-available']` with a 15-minute TTL in `app/utils/chat/openrouterStream.ts`.
+    - Background streaming cache: `localStorage['or3:background-streaming-available']` is a blunt `"true"|"false"` flag set after first successful/failed background start.
+    - If behavior looks inconsistent after toggling SSR/providers, clear both keys (or use a fresh profile) before debugging “404 means broken”.
+
+25. **What actually happens (end-to-end) and where to look**
+    - Start: `app/composables/chat/useAi.ts` calls `startBackgroundStream(...)` (client helper) when eligible.
+    - Server entry: `server/api/openrouter/stream.post.ts` detects `_background: true`, requires SSR auth session + workspace, then calls `startBackgroundStream(...)` (server) and returns `{ jobId, status: 'streaming' }`.
+    - Streaming loop: `server/utils/background-jobs/stream-handler.ts` fetches OpenRouter SSE, parses via `shared/openrouter/parseOpenRouterSSE`, flushes chunks to the provider, and emits live deltas.
+    - Client tracking: `app/utils/chat/useAi-internal/backgroundJobs.ts` maintains a global `backgroundJobTrackers` map, persists incremental updates to Dexie (throttled), and can attach via SSE (`/api/jobs/:id/stream`) or poll (`/api/jobs/:id/status`).
+    - Observe/attach routes:
+        - SSE: `GET /api/jobs/:id/stream?offset=N`
+        - Poll: `GET /api/jobs/:id/status?offset=N`
+        - Abort: `POST /api/jobs/:id/abort`
+
+26. **Eligibility rules (easy to forget) are intentionally strict**
+    - Background mode is only attempted when:
+        - `backgroundStreamingAllowed` is true
+        - no tool calls are enabled (`enabledToolDefs.length === 0`)
+        - modality is text-only (`modalities === ['text']`)
+    - If you’re testing tools/images and expecting background mode: you won’t get it.
+
+27. **Providers, abort semantics, and multi-instance gotchas**
+    - Memory provider (`server/utils/background-jobs/providers/memory.ts`):
+        - In-process `AbortController` stops the upstream fetch immediately.
+        - Jobs are lost on server restart.
+        - Timeouts are enforced during periodic cleanup (`jobTimeoutMs`).
+    - Convex provider is registered by the Convex package (`or3-provider-convex/src/runtime/server/plugins/register.ts`) and implemented at `or3-provider-convex/src/runtime/server/background-jobs/convex-provider.ts`.
+        - Abort is poll-based (`checkJobAborted`) so the streaming loop periodically checks.
+    - Viewer suppression is process-local:
+        - Server-side “don’t notify while someone is watching” is based on `server/utils/background-jobs/viewers.ts` and only reflects viewers connected to the *same* instance.
+        - In multi-instance setups, cross-instance “viewer presence” isn’t tracked; expect occasional notifications even if a user is watching on a different server.
+
+28. **Notifications: why you sometimes get none (and why that’s correct)**
+    - Client notifications are only created when there are no in-app subscribers (`tracker.subscribers.size === 0`) and the thread isn’t muted (`kv['notification_muted_threads']`).
+    - Server-side notifications only fire when no SSE viewers are connected to that instance (`!hasJobViewers(jobId)` in `server/utils/background-jobs/stream-handler.ts`).
+    - Practical effect: if the tab stays open, the SSE viewer often stays attached, so server notifications are suppressed; you’ll only get the local notification if the app decides you “navigated away” (no subscribers).
+
+29. **Debug checklist (fast path)**
+    - 401 on background start: you don’t have SSR auth session + workspace (background mode is forbidden for guests/unauth’d).
+    - 404/405 on `/api/openrouter/stream`: you’re on a static build or hitting the wrong dev process; clear `or3:server-route-available`.
+    - Background mode never triggers: you’re using tools/images or config flag is off.
+    - 503 “Server busy”: concurrency cap hit (`OR3_BACKGROUND_MAX_JOBS`).
+    - “It worked yesterday” weirdness: stale localStorage availability caches.

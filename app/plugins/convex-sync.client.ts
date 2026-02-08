@@ -15,7 +15,7 @@ import { OutboxManager } from '~/core/sync/outbox-manager';
 import { createSubscriptionManager, cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
 import { GcManager } from '~/core/sync/gc-manager';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
-import { createWorkspaceDb, setActiveWorkspaceDb, type Or3DB } from '~/db/client';
+import { createWorkspaceDb, type Or3DB } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useAuthTokenBroker, type AuthTokenBroker } from '~/composables/auth/useAuthTokenBroker.client';
 import { useWorkspaceManager } from '~/composables/workspace/useWorkspaceManager';
@@ -286,17 +286,8 @@ export default defineNuxtPlugin(async () => {
 
         if (isAdmin) {
             // Admin routes shouldn't run the user sync engine (heavy + irrelevant).
-            // Special case: Admin routes explicitly set workspace to null, overriding
-            // the workspace manager. This is intentional to ensure admin operations
-            // run in the default DB context rather than a workspace-scoped DB.
-            // 
-            // Note: This creates a potential race condition with useWorkspaceManager.
-            // In practice, this is acceptable because:
-            // 1. Admin routes are accessed infrequently
-            // 2. The workspace manager's watch runs synchronously after this
-            // 3. Admin route access typically follows a page navigation which
-            //    gives the workspace manager time to settle
-            setActiveWorkspaceDb(null);
+            // Keep the active workspace DB intact; clobbering it causes authenticated
+            // users to fall back to `or3-db` and leak local state into cloud sessions.
             if (authRetryTimeout) {
                 clearTimeout(authRetryTimeout);
                 authRetryTimeout = null;

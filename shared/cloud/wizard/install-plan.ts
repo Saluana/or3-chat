@@ -112,7 +112,7 @@ function addReason(
  * provider descriptors in the catalog.
  *
  * Behavior:
- * - Always includes auth provider dependencies.
+ * - Includes provider dependencies only when `ssrAuthEnabled` is true.
  * - Includes sync/storage provider dependencies only when enabled.
  * - Packages are deduplicated; reasons accumulate if multiple providers
  *   require the same package (e.g. `better-sqlite3`).
@@ -130,26 +130,28 @@ export function createDependencyInstallPlan(
     const packageSet = new Set<string>();
     const reasons: Record<string, string[]> = {};
 
-    const authProvider = getProviderDescriptor('auth', answers.authProvider);
-    authProvider?.dependencies.forEach((dependency) => {
-        packageSet.add(dependency.packageName);
-        addReason(reasons, dependency.packageName, dependency.reason);
-    });
-
-    if (answers.syncEnabled) {
-        const syncProvider = getProviderDescriptor('sync', answers.syncProvider);
-        syncProvider?.dependencies.forEach((dependency) => {
+    if (answers.ssrAuthEnabled) {
+        const authProvider = getProviderDescriptor('auth', answers.authProvider);
+        authProvider?.dependencies.forEach((dependency) => {
             packageSet.add(dependency.packageName);
             addReason(reasons, dependency.packageName, dependency.reason);
         });
-    }
 
-    if (answers.storageEnabled) {
-        const storageProvider = getProviderDescriptor('storage', answers.storageProvider);
-        storageProvider?.dependencies.forEach((dependency) => {
-            packageSet.add(dependency.packageName);
-            addReason(reasons, dependency.packageName, dependency.reason);
-        });
+        if (answers.syncEnabled) {
+            const syncProvider = getProviderDescriptor('sync', answers.syncProvider);
+            syncProvider?.dependencies.forEach((dependency) => {
+                packageSet.add(dependency.packageName);
+                addReason(reasons, dependency.packageName, dependency.reason);
+            });
+        }
+
+        if (answers.storageEnabled) {
+            const storageProvider = getProviderDescriptor('storage', answers.storageProvider);
+            storageProvider?.dependencies.forEach((dependency) => {
+                packageSet.add(dependency.packageName);
+                addReason(reasons, dependency.packageName, dependency.reason);
+            });
+        }
     }
 
     const packages = Array.from(packageSet).sort();
