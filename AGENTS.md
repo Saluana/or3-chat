@@ -324,3 +324,15 @@ Mock Externalities: Isolate business logic from side effects (databases, APIs) t
     - Background mode never triggers: you’re using tools/images or config flag is off.
     - 503 “Server busy”: concurrency cap hit (`OR3_BACKGROUND_MAX_JOBS`).
     - “It worked yesterday” weirdness: stale localStorage availability caches.
+
+30. **Background completion notifications should go through hooks first**
+    - For detached/background jobs, prefer `hooks.doAction('notify:action:push', payload)` over creating `NotificationService` directly with tracker state.
+    - This keeps notification writes aligned with the currently active `NotificationService` instance and avoids stale user scoping.
+
+31. **Non-component utilities need cached session access, not composable flows**
+    - Utility modules like `app/utils/chat/useAi-internal/backgroundJobs.ts` should not depend on setup-lifecycle composable behavior.
+    - Use a safe cached accessor (`getCachedSessionContext()`) and fallback logic for user resolution when emitting cross-cutting events.
+
+32. **If background jobs finish but Notification Center is empty, check scope first**
+    - Confirm notifications are written for the same resolved user ID used by `useNotifications()` (`resolveNotificationUserId(session)`), not an old tracker/session value.
+    - Mismatched user scope can make notifications “exist” in Dexie but be invisible in the panel query (`where('[user_id+created_at]')`).
