@@ -1,3 +1,33 @@
+/**
+ * @module app/core/theme/apply-merged-theme
+ *
+ * Purpose:
+ * Applies the final merged theme to the DOM by setting CSS custom properties
+ * on `document.documentElement.style`. Merges the base theme (loaded from the
+ * theme plugin registry) with user overrides (typography, colors, backgrounds).
+ *
+ * Responsibilities:
+ * - Apply typography overrides (font size, system font toggle)
+ * - Apply color palette overrides (Material Design tokens)
+ * - Build merged background layers and apply via `applyThemeBackgrounds`
+ * - Apply background color overrides
+ * - Handle gradient visibility toggles (header, bottom nav)
+ * - Clamp background opacities in high-contrast mode
+ *
+ * Constraints:
+ * - Client-only (early-returns on server via `isBrowser()` check)
+ * - Requires the theme plugin to be initialized (accesses `$theme` from Nuxt app)
+ * - Color overrides use Material Design CSS variable names (`--md-*`)
+ * - Background URLs may be `internal-file://` tokens that need async resolution
+ *
+ * Non-goals:
+ * - Does not persist overrides (see useUserThemeOverrides)
+ * - Does not manage the theme registry (see plugins/90.theme.client)
+ *
+ * @see core/theme/useUserThemeOverrides for the composable that calls this
+ * @see core/theme/backgrounds for background layer application
+ * @see docs/theme-backgrounds.md for background system documentation
+ */
 import type { UserThemeOverrides } from './user-overrides-types';
 import type { ThemeBackgrounds } from '../../theme/_shared/types';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
@@ -12,6 +42,19 @@ type NuxtAppGlobals = typeof globalThis & {
     useNuxtApp?: () => { $theme?: ThemePlugin };
 };
 
+/**
+ * Purpose:
+ * Apply the merged theme (base theme + user overrides) to the live DOM.
+ *
+ * Behavior:
+ * - Resolves the active base theme via the theme plugin
+ * - Applies typography and palette overrides via CSS variables
+ * - Builds merged background layers and resolves any `internal-file://` tokens
+ *
+ * Constraints:
+ * - Client-only; no-ops on SSR
+ * - Requires the theme plugin to be available on the Nuxt app
+ */
 export async function applyMergedTheme(
     mode: 'light' | 'dark',
     overrides: UserThemeOverrides

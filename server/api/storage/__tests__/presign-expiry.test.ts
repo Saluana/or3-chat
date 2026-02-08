@@ -46,12 +46,7 @@ vi.mock('../../../utils/sync/rate-limiter', () => ({
     recordSyncRequest: vi.fn(),
 }));
 
-const getConvexGatewayClientMock = vi.fn();
-
-vi.mock('../../../utils/sync/convex-gateway', () => ({
-    getClerkProviderToken: vi.fn().mockResolvedValue('token'),
-    getConvexGatewayClient: () => getConvexGatewayClientMock(),
-}));
+// Note: convex-gateway mock removed - now using storage adapter registry mock
 
 vi.mock('~~/convex/_generated/api', () => ({
     api: {
@@ -60,6 +55,15 @@ vi.mock('~~/convex/_generated/api', () => ({
             getFileUrl: 'storage.getFileUrl',
         },
     },
+}));
+
+// Mock storage gateway registry (added during provider decoupling)
+const mockStorageAdapter = {
+    presignUpload: vi.fn(),
+    presignDownload: vi.fn(),
+};
+vi.mock('../../../storage/gateway/registry', () => ({
+    getActiveStorageGatewayAdapter: () => mockStorageAdapter,
 }));
 
 vi.mock('~~/config.or3', () => ({
@@ -89,7 +93,8 @@ describe('presign expiry handling', () => {
     beforeEach(() => {
         readBodyMock.mockReset();
         setResponseHeaderMock.mockReset();
-        getConvexGatewayClientMock.mockReset();
+        mockStorageAdapter.presignUpload.mockReset();
+        mockStorageAdapter.presignDownload.mockReset();
     });
 
     it('clamps expires_in_ms to server max', () => {
@@ -104,11 +109,9 @@ describe('presign expiry handling', () => {
         ) => Promise<{ expiresAt: number }>;
 
         const providerExpiry = new Date('2025-01-01T00:00:00.000Z');
-        getConvexGatewayClientMock.mockReturnValue({
-            mutation: vi.fn().mockResolvedValue({
-                uploadUrl: 'https://upload.example.com',
-                expiresAt: providerExpiry,
-            }),
+        mockStorageAdapter.presignUpload.mockResolvedValue({
+            url: 'https://upload.example.com',
+            expiresAt: providerExpiry.getTime(),
         });
 
         readBodyMock.mockResolvedValue(baseBody);
@@ -126,10 +129,9 @@ describe('presign expiry handling', () => {
             event: H3Event
         ) => Promise<{ expiresAt: number }>;
 
-        getConvexGatewayClientMock.mockReturnValue({
-            query: vi.fn().mockResolvedValue({
-                url: 'https://download.example.com',
-            }),
+        mockStorageAdapter.presignDownload.mockResolvedValue({
+            url: 'https://download.example.com',
+            // No expiresAt - should use server default
         });
 
         readBodyMock.mockResolvedValue({

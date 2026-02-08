@@ -1,6 +1,26 @@
-// Centralized hook key typings and high-value payload interfaces.
-// This file complements the generic HookEngine and improves DX for common hooks
-// without constraining advanced usage. Keep additive and backwards compatible.
+/**
+ * @module app/core/hooks/hook-keys.ts
+ *
+ * Purpose:
+ * Centralized hook key typings and high-value payload interfaces.
+ * Complements the generic HookEngine with enumerated, well-known hook names
+ * that improve autocomplete and refactoring confidence.
+ *
+ * Responsibilities:
+ * - Define `KnownHookKey` union for the most commonly used hooks
+ * - Define `DbHookKey` template literal type for database table hooks
+ * - Export `HookKey` as the union of known + DB + arbitrary string hooks
+ * - Provide `typedOn()` helper for type-safe listener registration
+ * - Document filter return shapes via utility aliases
+ *
+ * Constraints:
+ * - Keep this file small and focused; add new keys incrementally as they stabilize
+ * - `HookKey` remains permissive (`string & {}`) so plugins can register custom hooks
+ * - This file is types-only except for `typedOn()` which is a thin runtime wrapper
+ *
+ * @see core/hooks/hook-types.ts for full payload map and type utilities
+ * @see core/hooks/typed-hooks.ts for the full TypedHookEngine wrapper
+ */
 
 import type { HookEngine, OnOptions } from './hooks';
 import type { HookPayloadMap, FilesAttachInputPayload } from './hook-types';
@@ -8,6 +28,13 @@ import type { HookPayloadMap, FilesAttachInputPayload } from './hook-types';
 // ---- Key unions ----
 
 // High-signal known hooks used across the app (enumerated for best DX)
+/**
+ * Purpose:
+ * Curated union of high-frequency hook keys used across core UI and sync.
+ *
+ * Constraints:
+ * - Keep this list stable; add only after a hook name is widely adopted
+ */
 export type KnownHookKey =
     | 'ui.chat.message:filter:outgoing'
     | 'ui.chat.message:filter:incoming'
@@ -58,6 +85,10 @@ export type KnownHookKey =
     | 'notify:filter:before_store';
 
 // Families for DB hooks as template literal types (broad coverage without listing all)
+/**
+ * Purpose:
+ * Enumerates Dexie tables that may emit DB-related hooks.
+ */
 export type DbFamily =
     | 'messages'
     | 'documents'
@@ -69,15 +100,36 @@ export type DbFamily =
     | 'attachments'
     | 'kv';
 
+/**
+ * Purpose:
+ * Template-literal key family for DB hooks.
+ *
+ * Example:
+ * - `db.messages.afterPut`
+ */
 export type DbHookKey = `db.${DbFamily}.${string}`;
 
 // Final public key union — includes known app hooks and DB families; allows any string to remain permissive
+/**
+ * Purpose:
+ * Public hook key type used by plugins.
+ *
+ * Constraints:
+ * - Remains permissive so third-party plugins can define custom keys
+ */
 export type HookKey = KnownHookKey | DbHookKey | (string & {});
 
 // ---- Typed ON helper ----
 
 type KnownKey = Extract<keyof HookPayloadMap, KnownHookKey>;
 
+/**
+ * Purpose:
+ * Thin helper that adds type inference when registering listeners for known hook keys.
+ *
+ * Behavior:
+ * Returns an object with a typed `on()` wrapper.
+ */
 export function typedOn(hooks: HookEngine) {
     return {
         on<K extends KnownKey>(
@@ -91,8 +143,28 @@ export function typedOn(hooks: HookEngine) {
 }
 
 // Utility aliases for filter return shapes (documentation aid)
+/**
+ * Purpose:
+ * Return type for `ui.chat.message:filter:outgoing`.
+ *
+ * Veto semantics:
+ * - Return `false` to cancel send entirely
+ */
 export type ChatOutgoingFilterReturn = string | false;
+
+/**
+ * Purpose:
+ * Return type for `ui.chat.message:filter:incoming`.
+ */
 export type ChatIncomingFilterReturn = string;
+
+/**
+ * Purpose:
+ * Return type for `files.attach:filter:input`.
+ *
+ * Veto semantics:
+ * - Return `false` to reject attachments
+ */
 export type FilesAttachFilterReturn = FilesAttachInputPayload | false;
 
 // Keep this file small and focused. Add new keys/payloads incrementally as they stabilize.

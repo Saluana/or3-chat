@@ -222,6 +222,7 @@ async function applyOpToTable(
         pk: string;
         payload?: unknown;
         clock: number;
+        hlc: string;
     }
 ): Promise<void> {
     const tableInfo = TABLE_INDEX_MAP[op.table_name];
@@ -257,6 +258,7 @@ async function applyOpToTable(
         _id: Id<TableNames>;
         deleted?: boolean;
         clock?: number;
+        hlc?: string;
     } & Record<string, unknown>;
     type QueryByIndex = {
         withIndex: (
@@ -287,23 +289,31 @@ async function applyOpToTable(
                 deleted_at: payloadDeletedAt ?? nowSec(),
                 updated_at: payloadUpdatedAt ?? nowSec(),
                 clock: op.clock,
+                hlc: op.hlc,
             });
         }
     } else {
         // Put operation
         if (existing) {
-            // LWW: only update if incoming clock >= existing
-            if (op.clock >= (existing.clock ?? 0)) {
+            const existingClock = existing.clock ?? 0;
+            const existingHlc = typeof existing.hlc === 'string' ? existing.hlc : '';
+            const shouldApply =
+                op.clock > existingClock || (op.clock === existingClock && op.hlc > existingHlc);
+            // LWW with deterministic HLC tie-break on equal clocks.
+            if (shouldApply) {
                 console.debug('[sync] apply put', {
                     table: op.table_name,
                     pk: op.pk,
                     clock: op.clock,
-                    existingClock: existing.clock ?? 0,
+                    existingClock,
+                    existingHlc,
+                    incomingHlc: op.hlc,
                     applied: true,
                 });
                 await ctx.db.patch(existing._id, {
                     ...(payload ?? {}),
                     clock: op.clock,
+                    hlc: op.hlc,
                     updated_at: payloadUpdatedAt ?? nowSec(),
                 });
             } else {
@@ -311,7 +321,9 @@ async function applyOpToTable(
                     table: op.table_name,
                     pk: op.pk,
                     clock: op.clock,
-                    existingClock: existing.clock ?? 0,
+                    existingClock,
+                    existingHlc,
+                    incomingHlc: op.hlc,
                     applied: false,
                 });
             }
@@ -332,6 +344,7 @@ async function applyOpToTable(
                 workspace_id: workspaceId,
                 [pkField]: op.pk,
                 clock: op.clock,
+                hlc: op.hlc,
                 created_at: payloadCreatedAt ?? nowSec(),
                 updated_at: payloadUpdatedAt ?? payloadCreatedAt ?? nowSec(),
             });
@@ -452,6 +465,16 @@ export const push = mutation({
             success: boolean;
             serverVersion?: number;
             error?: string;
+            errorCode?:
+                | 'VALIDATION_ERROR'
+                | 'UNAUTHORIZED'
+                | 'CONFLICT'
+                | 'NOT_FOUND'
+                | 'RATE_LIMITED'
+                | 'OVERSIZED'
+                | 'NETWORK_ERROR'
+                | 'SERVER_ERROR'
+                | 'UNKNOWN';
         }> = [];
 
         let latestVersion = 0;
@@ -484,6 +507,7 @@ export const push = mutation({
                     opId: op.op_id,
                     success: false,
                     error: `Unknown table: ${op.table_name}`,
+                    errorCode: 'VALIDATION_ERROR',
                 });
                 return;
             }
@@ -513,9 +537,9 @@ export const push = mutation({
             latestVersion = startVersion + newOps.length - 1;
         }
 
-        // Apply ops in parallel (Convex transactions are serializable)
-        const applyResults = await Promise.allSettled(
-            opsToApply.map(async ({ op, serverVersion }) => {
+        // Apply ops sequentially in allocated server-version order.
+        for (const { op, serverVersion } of opsToApply) {
+            try {
                 console.debug('[sync] push apply', {
                     table: op.table_name,
                     pk: op.pk,
@@ -556,21 +580,13 @@ export const push = mutation({
                     await upsertTombstone(ctx, args.workspace_id, op, serverVersion, deletedAt);
                 }
 
-                return { opId: op.op_id, serverVersion };
-            })
-        );
-
-        for (let i = 0; i < applyResults.length; i++) {
-            const result = applyResults[i];
-            if (!result) continue;
-
-            if (result.status === 'fulfilled') {
-                results.push({ ...result.value, success: true });
-            } else {
+                results.push({ opId: op.op_id, serverVersion, success: true });
+            } catch (error) {
                 results.push({
-                    opId: opsToApply[i]!.op.op_id,
+                    opId: op.op_id,
                     success: false,
-                    error: String(result.reason),
+                    error: String(error),
+                    errorCode: 'SERVER_ERROR',
                 });
             }
         }

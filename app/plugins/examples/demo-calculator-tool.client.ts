@@ -16,7 +16,7 @@
  */
 
 import { defineNuxtPlugin } from '#app';
-import { onScopeDispose } from 'vue';
+import { onScopeDispose, getCurrentScope } from 'vue';
 import { useToolRegistry, defineTool } from '~/utils/chat/tools-public';
 
 export default defineNuxtPlugin(() => {
@@ -101,7 +101,13 @@ export default defineNuxtPlugin(() => {
     );
 
     // Clean up when plugin is unmounted (e.g., during HMR)
-    onScopeDispose(() => {
+    const scope = getCurrentScope();
+    const cleanup = () => {
         unregisterTool('calculate');
-    });
+    };
+    if (scope) {
+        onScopeDispose(cleanup);
+    } else if (import.meta.hot) {
+        import.meta.hot.dispose(cleanup);
+    }
 });

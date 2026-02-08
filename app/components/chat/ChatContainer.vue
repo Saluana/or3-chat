@@ -119,6 +119,7 @@ import {
     getPanePendingPrompt,
     clearPanePendingPrompt,
     setPanePendingPrompt,
+    setupPanePromptCleanup,
 } from '~/composables/core/usePanePrompt';
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 import { Or3Scroll } from 'or3-scroll';
@@ -208,6 +209,9 @@ const emit = defineEmits<{
     (e: 'reached-top'): void;
     (e: 'reached-bottom'): void;
 }>();
+
+// Register pane-close cleanup after Nuxt app context is available.
+setupPanePromptCleanup();
 
 // Initialize chat composable and make it refresh when threadId changes
 // Initialized defensively (HMR can briefly leave it null in re-eval window)
@@ -441,8 +445,15 @@ function mergeWorkflowState(msg: UiChatMessage) {
 const allMessages = computed(() => {
     if (!chat.value) return [];
     const list = stableMessages.value.map(mergeWorkflowState);
-    if (streamingMessage.value) {
-        list.push(mergeWorkflowState(streamingMessage.value));
+    const tail = streamingMessage.value;
+    
+    if (tail) {
+        // Deduplicate: Don't add tail if it's already in the stable list
+        // (This happens during race conditions where sync adds it before tail is cleared)
+        const exists = list.some(m => m.id === tail.id || (m.stream_id && m.stream_id === tail.stream_id));
+        if (!exists) {
+            list.push(mergeWorkflowState(tail));
+        }
     }
     return list;
 });

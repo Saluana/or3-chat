@@ -5,6 +5,7 @@ export const TABLE_METADATA = {
     posts: { pk: 'id' },
     kv: { pk: 'id' },
     file_meta: { pk: 'hash' },
+    notifications: { pk: 'id' },
 } as const;
 
 export function getPkField(tableName: string): string {

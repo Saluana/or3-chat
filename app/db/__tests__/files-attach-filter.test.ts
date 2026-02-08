@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useHooks } from '~/core/hooks/useHooks';
 import {
     persistAttachment,
@@ -6,6 +6,32 @@ import {
 } from '~/components/chat/file-upload-utils';
 import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
 import { db } from '../client';
+
+const filterRegistry = new Map<
+    string,
+    Array<(payload: unknown) => unknown | Promise<unknown>>
+>();
+
+vi.mock('~/core/hooks/useHooks', () => ({
+    useHooks: () => ({
+        addFilter: (name: string, fn: (payload: unknown) => unknown) => {
+            const list = filterRegistry.get(name) || [];
+            list.push(fn);
+            filterRegistry.set(name, list);
+        },
+        applyFilters: async (name: string, payload: unknown) => {
+            let current = payload;
+            const list = filterRegistry.get(name) || [];
+            for (const fn of list) {
+                current = await fn(current);
+            }
+            return current;
+        },
+        removeAllCallbacks: () => {
+            filterRegistry.clear();
+        },
+    }),
+}));
 
 describe('files.attach:filter:input hook', () => {
     let hooks: ReturnType<typeof useHooks>;

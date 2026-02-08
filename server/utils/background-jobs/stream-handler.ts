@@ -26,18 +26,16 @@ import {
     getJobProvider,
     isBackgroundStreamingEnabled,
 } from '../background-jobs/store';
-import { checkJobAborted } from '../background-jobs/providers/convex';
 import {
     parseOpenRouterSSE,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
-import { emitBackgroundJobComplete, emitBackgroundJobError } from '../notifications/emit';
+import { getNotificationEmitter } from '../notifications/registry';
 import {
     emitJobDelta,
     emitJobStatus,
     hasJobViewers,
     initJobLiveState,
 } from './viewers';
-import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -181,7 +179,7 @@ export async function consumeBackgroundStream(params: {
             : flushEveryChunk
             ? 30
             : 120;
-    const isConvexProvider = params.provider.name === CONVEX_PROVIDER_ID;
+    const notificationEmitter = getNotificationEmitter(params.provider.name);
     const shouldNotify = params.shouldNotify ?? (() => true);
     let pendingChunk = '';
     let lastUpdateAt = 0;
@@ -220,9 +218,8 @@ export async function consumeBackgroundStream(params: {
             });
             lastUpdateAt = Date.now();
 
-            // For Convex provider, poll for abort status
-            if (isConvexProvider) {
-                const aborted = await checkJobAborted(params.jobId);
+            if (params.provider.checkJobAborted) {
+                const aborted = await params.provider.checkJobAborted(params.jobId);
                 if (aborted) {
                     const abortErr = new Error('Job aborted by user');
                     abortErr.name = 'AbortError';
@@ -293,7 +290,7 @@ export async function consumeBackgroundStream(params: {
         if (shouldNotify()) {
             // Emit server-side notification for job completion
             try {
-                await emitBackgroundJobComplete(
+                await notificationEmitter?.emitBackgroundJobComplete(
                     params.context.workspaceId,
                     params.context.userId,
                     params.context.threadId,
@@ -332,7 +329,7 @@ export async function consumeBackgroundStream(params: {
         if (shouldNotify()) {
             // Emit error notification
             try {
-                await emitBackgroundJobError(
+                await notificationEmitter?.emitBackgroundJobError(
                     params.context.workspaceId,
                     params.context.userId,
                     params.context.threadId,

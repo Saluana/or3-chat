@@ -13,7 +13,7 @@
  * - Server-side prompt synchronization
  */
 import { getDb } from './client';
-import { newId, nowSec, nextClock } from './util';
+import { newId, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { useHooks } from '../core/hooks/useHooks';
 import type {
     DbCreatePayload,
@@ -86,6 +86,36 @@ export interface PromptRecord {
 }
 
 const PROMPT_TABLE = 'prompts';
+
+async function putPromptPostRow(row: Post): Promise<void> {
+    const db = getDb();
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        await db.posts.put(row);
+        return;
+    }
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'posts'),
+        async () => {
+            await db.posts.put(row);
+        }
+    );
+}
+
+async function deletePromptPostRow(id: string): Promise<void> {
+    const db = getDb();
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        await db.posts.delete(id);
+        return;
+    }
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
+        async () => {
+            await db.posts.delete(id);
+        }
+    );
+}
 
 function toPromptEntity(row: PromptRow): PromptEntity {
     return {
@@ -268,7 +298,7 @@ export async function createPrompt(
         meta: '',
         clock: persistedRow.clock ?? 0,
     };
-    await getDb().posts.put(postRow); // reuse posts table
+    await putPromptPostRow(postRow); // reuse posts table
     actionPayload = {
         ...actionPayload,
         entity: toPromptEntity(persistedRow),
@@ -440,7 +470,7 @@ export async function updatePrompt(
         meta: '',
         clock: persistedRow.clock ?? 0,
     };
-    await getDb().posts.put(postRow);
+    await putPromptPostRow(postRow);
     actionPayload = {
         ...actionPayload,
         updated: toPromptEntity(persistedRow),
@@ -500,7 +530,7 @@ export async function softDeletePrompt(id: string): Promise<void> {
         meta: '',
         clock: updatedRow.clock,
     };
-    await getDb().posts.put(postRow);
+    await putPromptPostRow(postRow);
     await hooks.doAction('db.prompts.delete:action:soft:after', payload);
 }
 
@@ -537,7 +567,7 @@ export async function hardDeletePrompt(id: string): Promise<void> {
         tableName: PROMPT_TABLE,
     };
     await hooks.doAction('db.prompts.delete:action:hard:before', payload);
-    await getDb().posts.delete(id);
+    await deletePromptPostRow(id);
     await hooks.doAction('db.prompts.delete:action:hard:after', payload);
 }
 

@@ -114,7 +114,7 @@ export async function dbTry<T>(
         reportError(
             err(code, 'Database operation failed', {
                 severity: 'error',
-                retryable: tags.op === 'read' ? true : true, // allow manual re-invoke upstream
+                retryable: true, // allow manual re-invoke upstream
                 tags: { ...tags, domain: 'db', rw: tags.op }, // include rw convenience tag (Req 20.1)
                 cause: e,
             }),

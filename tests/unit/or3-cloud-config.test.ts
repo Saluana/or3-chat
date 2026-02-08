@@ -110,17 +110,17 @@ describe('defineOr3CloudConfig', () => {
         ).toThrow(/allowUserOverride must be true when requireUserKey/i);
     });
 
-    it('throws when invalid provider ID is used', () => {
+    it('allows custom provider IDs for extensibility', () => {
         expect(() =>
             defineOr3CloudConfig({
                 ...baseConfig,
                 auth: {
                     enabled: true,
-                    provider: 'fake-provider' as any,
+                    provider: 'fake-provider',
                     clerk: {},
                 },
             })
-        ).toThrow();
+        ).not.toThrow();
     });
 
     it('merges nested objects correctly', () => {

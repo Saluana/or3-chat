@@ -1,24 +1,104 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
+import { existsSync } from 'node:fs';
 import { resolve } from 'path';
+import { createLogger } from 'vite';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
-import {
-    AUTH_PROVIDER_IDS,
-    CONVEX_PROVIDER_ID,
-    CONVEX_STORAGE_PROVIDER_ID,
-} from './shared/cloud/provider-ids';
+import { or3ProviderModules } from './or3.providers.generated';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
 
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
 const convexAdminKey = or3CloudConfig.sync.convex?.adminKey || '';
-const convexEnabled =
-    (or3CloudConfig.sync.enabled &&
-        or3CloudConfig.sync.provider === CONVEX_PROVIDER_ID) ||
-    (or3CloudConfig.storage.enabled &&
-        or3CloudConfig.storage.provider === CONVEX_STORAGE_PROVIDER_ID);
+
+const LOCAL_PROVIDER_IDS = new Set([
+    'custom',
+    'memory',
+    'redis',
+    'postgres',
+]);
+
+function providerIdToModuleId(providerId: string): string | null {
+    const id = providerId.trim();
+    if (!id || LOCAL_PROVIDER_IDS.has(id)) return null;
+    return `or3-provider-${id}/nuxt`;
+}
+
+function isPackageInstalled(pkgName: string): boolean {
+    return existsSync(resolve(__dirname, 'node_modules', pkgName));
+}
+
+function isProviderAvailable(providerId: string): boolean {
+    const moduleId = providerIdToModuleId(providerId);
+    if (!moduleId) return true;
+    const pkgName = moduleId.split('/')[0];
+    return Boolean(pkgName && isPackageInstalled(pkgName));
+}
+
+const providerIdsFromConfig = new Set<string>();
+if (or3CloudConfig.auth.enabled) providerIdsFromConfig.add(or3CloudConfig.auth.provider);
+if (or3CloudConfig.sync.enabled) providerIdsFromConfig.add(or3CloudConfig.sync.provider);
+if (or3CloudConfig.storage.enabled) providerIdsFromConfig.add(or3CloudConfig.storage.provider);
+if (or3CloudConfig.limits?.enabled && or3CloudConfig.limits.storageProvider) {
+    providerIdsFromConfig.add(or3CloudConfig.limits.storageProvider);
+}
+if (
+    or3CloudConfig.backgroundStreaming?.enabled &&
+    or3CloudConfig.backgroundStreaming.storageProvider
+) {
+    providerIdsFromConfig.add(or3CloudConfig.backgroundStreaming.storageProvider);
+}
+
+const providerModulesFromConfig: string[] = [];
+for (const providerId of providerIdsFromConfig) {
+    const moduleId = providerIdToModuleId(providerId);
+    if (!moduleId) continue;
+    const pkgName = moduleId.split('/')[0];
+    if (pkgName && isPackageInstalled(pkgName)) {
+        providerModulesFromConfig.push(moduleId);
+    } else {
+        console.warn(
+            `[or3-provider] Configured provider "${providerId}" expects package "${pkgName}", but it is not installed.`
+        );
+    }
+}
+
+const activeProviderModules = Array.from(
+    new Set([...or3ProviderModules, ...providerModulesFromConfig])
+);
+
+const authProviderAvailable = isProviderAvailable(or3CloudConfig.auth.provider);
+const syncProviderAvailable = isProviderAvailable(or3CloudConfig.sync.provider);
+const storageProviderAvailable = isProviderAvailable(or3CloudConfig.storage.provider);
+
+const effectiveSsrAuthEnabled =
+    isSsrAuthEnabled && authProviderAvailable;
+const effectiveSyncEnabled =
+    effectiveSsrAuthEnabled &&
+    or3CloudConfig.sync.enabled &&
+    syncProviderAvailable;
+const effectiveStorageEnabled =
+    effectiveSsrAuthEnabled &&
+    or3CloudConfig.storage.enabled &&
+    storageProviderAvailable;
+
+if (isSsrAuthEnabled && !authProviderAvailable) {
+    console.warn(
+        `[or3-provider] Auth provider "${or3CloudConfig.auth.provider}" is not available. Falling back to local-only auth mode.`
+    );
+}
+if (or3CloudConfig.sync.enabled && !syncProviderAvailable) {
+    console.warn(
+        `[or3-provider] Sync provider "${or3CloudConfig.sync.provider}" is not available. Sync is disabled.`
+    );
+}
+if (or3CloudConfig.storage.enabled && !storageProviderAvailable) {
+    console.warn(
+        `[or3-provider] Storage provider "${or3CloudConfig.storage.provider}" is not available. Cloud storage is disabled.`
+    );
+}
 
 // Branding defaults (sourced from or3Config)
 const appName = or3Config.site.name;
@@ -77,14 +157,19 @@ const adminConfig = {
     },
 };
 
+const viteLogger = createLogger();
+const viteWarn = viteLogger.warn;
+viteLogger.warn = (msg, options) => {
+    if (
+        msg.includes('Failed to load source map for') &&
+        msg.includes('/node_modules/@openrouter/sdk/')
+    ) {
+        return;
+    }
+    viteWarn(msg, options);
+};
+
 export default defineNuxtConfig({
-    // convex-nuxt module options (mirrors into runtimeConfig.public.convex)
-    convex: {
-        url: convexUrl,
-        // Avoid crashing the whole app when Convex isn't configured.
-        // Call sites can decide whether to require Convex.
-        manualInit: !convexUrl,
-    },
     app: {
         head: {
             link: [
@@ -127,19 +212,19 @@ export default defineNuxtConfig({
             or3CloudConfig.services.llm?.openRouter?.requireUserKey ?? false,
         clerkSecretKey: '', // Auto-mapped from NUXT_CLERK_SECRET_KEY
         auth: {
-            enabled: isSsrAuthEnabled,
+            enabled: effectiveSsrAuthEnabled,
             provider: or3CloudConfig.auth.provider,
             sessionProvisioningFailure:
                 or3CloudConfig.auth.sessionProvisioningFailure ?? 'throw',
         },
         sync: {
-            enabled: or3CloudConfig.sync.enabled,
+            enabled: effectiveSyncEnabled,
             provider: or3CloudConfig.sync.provider,
             convexUrl,
             convexAdminKey,
         },
         storage: {
-            enabled: or3CloudConfig.storage.enabled,
+            enabled: effectiveStorageEnabled,
             provider: or3CloudConfig.storage.provider,
         },
         limits: limitsConfig,
@@ -166,7 +251,7 @@ export default defineNuxtConfig({
         public: {
             // Single source of truth for client gating.
             // Avoid inferring enablement from presence of publishable keys.
-            ssrAuthEnabled: isSsrAuthEnabled,
+            ssrAuthEnabled: effectiveSsrAuthEnabled,
             guestAccessEnabled: or3CloudConfig.auth.guestAccessEnabled ?? false,
             openRouter: {
                 allowUserOverride:
@@ -180,11 +265,11 @@ export default defineNuxtConfig({
                     false,
             },
             storage: {
-                enabled: or3CloudConfig.storage.enabled,
+                enabled: effectiveStorageEnabled,
                 provider: or3CloudConfig.storage.provider,
             },
             sync: {
-                enabled: or3CloudConfig.sync.enabled,
+                enabled: effectiveSyncEnabled,
                 provider: or3CloudConfig.sync.provider,
                 convexUrl,
             },
@@ -247,14 +332,20 @@ export default defineNuxtConfig({
         '@nuxt/ui',
         '@nuxt/fonts',
         '@vite-pwa/nuxt',
-        ...(convexEnabled ? ['convex-nuxt'] : []),
-        // Only include Clerk when SSR auth is enabled to preserve static builds
-        ...(isSsrAuthEnabled && or3CloudConfig.auth.provider === AUTH_PROVIDER_IDS.clerk
-            ? ['@clerk/nuxt']
-            : []),
+        ...activeProviderModules,
     ],
     // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
     srcDir: 'app',
+    // Linked provider packages (or3-provider-*) are file-level symlinks.
+    // preserveSymlinks prevents TypeScript from resolving them to their real
+    // paths outside the project root, which would break module resolution.
+    typescript: {
+        tsConfig: {
+            compilerOptions: {
+                preserveSymlinks: true,
+            },
+        },
+    },
     // Load Tailwind + theme variables globally
     css: ['~/assets/css/main.css'],
     fonts: {
@@ -293,6 +384,14 @@ export default defineNuxtConfig({
         },
     },
     nitro: {
+        // Server tsconfig needs preserveSymlinks for file:-linked provider packages.
+        typescript: {
+            tsConfig: {
+                compilerOptions: {
+                    preserveSymlinks: true,
+                },
+            },
+        },
         prerender: {
             routes: ['/openrouter-callback', '/documentation'],
         },
@@ -531,6 +630,7 @@ export default defineNuxtConfig({
         ],
     },
     vite: {
+        customLogger: viteLogger,
         server: {
             fs: {
                 allow: ['..'],

@@ -152,8 +152,13 @@ export default defineNuxtPlugin(() => {
             if (op.tableName === 'notifications' || op.tableName === 'pending_ops') {
                 return;
             }
-            const message =
-                error instanceof Error ? error.message : String(error || 'Sync error');
+            
+            // Truncate and sanitize error message (max 200 chars)
+            const rawMessage = error instanceof Error ? error.message : String(error || 'Sync error');
+            const message = rawMessage.length > 200 
+                ? rawMessage.slice(0, 197) + '...'
+                : rawMessage;
+                
             const errorKey = `${op.tableName}:${op.pk}:${message}`;
             const now = Date.now();
             const lastSeen = errorDedupe.get(errorKey);
@@ -163,21 +168,6 @@ export default defineNuxtPlugin(() => {
             await emitSystemNotification({
                 title: 'Sync error',
                 body: message,
-            });
-        } catch (err) {
-            console.error('[notification-listeners] Failed to create sync error notification:', err);
-        }
-    });
-    
-    // Task 13.1: Listen for sync errors
-    hooks.addAction('sync:action:error', async (error) => {
-        try {
-            // Skip error notifications during bootstrap/rescan to avoid noise
-            if (isInitialSyncing) return;
-
-            await emitSystemNotification({
-                title: 'Sync error',
-                body: error?.message || 'An error occurred during synchronization.',
             });
         } catch (err) {
             console.error('[notification-listeners] Failed to create sync error notification:', err);

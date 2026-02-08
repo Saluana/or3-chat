@@ -140,6 +140,11 @@ export interface BackgroundJobProvider {
     getAbortController?(jobId: string): AbortController | undefined;
 
     /**
+     * Optional poll-based abort detection for external providers.
+     */
+    checkJobAborted?(jobId: string): Promise<boolean>;
+
+    /**
      * Clean up expired or stale jobs.
      *
      * @returns Number of jobs removed or timed out.

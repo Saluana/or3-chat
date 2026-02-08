@@ -1,5 +1,5 @@
 import { create, db, del, upsert, type Project } from '~/db';
-import { nowSec, newId } from '~/db/util';
+import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
 import {
     normalizeProjectData,
     type ProjectEntry,
@@ -153,7 +153,13 @@ export function useProjectsCrud() {
             }
         }
         if (updates.length) {
-            await db.projects.bulkPut(updates);
+            await db.transaction(
+                'rw',
+                getWriteTxTableNames(db, 'projects'),
+                async () => {
+                    await db.projects.bulkPut(updates);
+                }
+            );
         }
         return updates.length;
     }

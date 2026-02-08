@@ -1,5 +1,14 @@
 import type { PendingOp } from '~~/shared/sync/types';
 
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Minimal in-memory table interface used to unit test sync components without Dexie.
+ *
+ * Constraints:
+ * - Only implements the methods exercised by HookBridge/OutboxManager tests
+ */
 export type MemoryTable<T extends Record<string, unknown>> = {
     __rows: Map<string, T>;
     get: (id: string) => Promise<T | undefined>;
@@ -10,6 +19,19 @@ export type MemoryTable<T extends Record<string, unknown>> = {
     hook: (event: string, callback: Function) => void;
 };
 
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Create a Dexie-like in-memory table implementation for tests.
+ *
+ * Behavior:
+ * - Stores rows in a Map keyed by the provided primary key field
+ * - Supports a small hook system to simulate Dexie `creating` hooks
+ *
+ * Constraints:
+ * - Not a full Dexie emulator; intended only for sync unit tests
+ */
 export function createMemoryTable<T extends Record<string, unknown>>(
     pkField: keyof T,
     initial: T[] = []
@@ -74,6 +96,12 @@ export function createMemoryTable<T extends Record<string, unknown>>(
     };
 }
 
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Create a minimal `pending_ops` table mock with the subset of query APIs used by sync tests.
+ */
 export function createPendingOpsTable(initial: PendingOp[] = []) {
     const rows = new Map<string, PendingOp>();
     for (const op of initial) {
@@ -141,6 +169,15 @@ export function createPendingOpsTable(initial: PendingOp[] = []) {
     };
 }
 
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Create a minimal DB object with `table()` and `transaction()` used by sync unit tests.
+ *
+ * Constraints:
+ * - Exposes the db on `global.__MOCK_DB__` to support HookBridge hook callbacks
+ */
 export function createMockDb<T extends Record<string, unknown>>(tables: T) {
     const db = {
         ...tables,

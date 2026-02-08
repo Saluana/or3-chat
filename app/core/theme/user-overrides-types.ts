@@ -1,6 +1,30 @@
 /**
- * User theme overrides - aligns with ThemeDefinition structure
- * Stored per mode (light/dark) in localStorage
+ * @module app/core/theme/user-overrides-types
+ *
+ * Purpose:
+ * Defines the shape of user-customizable theme overrides. Stored per
+ * color mode (light/dark) in localStorage. These overrides are merged
+ * on top of the active base theme at runtime.
+ *
+ * Architecture:
+ * - `UserThemeOverrides` is the top-level shape persisted to localStorage
+ * - `UserBackgroundLayer` describes a single background layer override
+ * - `EMPTY_USER_OVERRIDES` provides a safe default with all toggles off
+ *
+ * Constraints:
+ * - Color values are CSS color strings (hex, rgb, etc.)
+ * - Font size is clamped to 14-24 px by the composable
+ * - Background opacity is clamped to 0-1
+ * - This file is types-only plus the `EMPTY_USER_OVERRIDES` constant
+ *
+ * @see core/theme/useUserThemeOverrides for the composable that reads/writes these
+ * @see core/theme/apply-merged-theme for how overrides are applied to the DOM
+ */
+
+/**
+ * Purpose:
+ * Top-level user theme overrides. Each sub-object has an `enabled` toggle
+ * so overrides can be configured but temporarily disabled without losing values.
  */
 export interface UserThemeOverrides {
     /** Color palette overrides (Material Design colors) */
@@ -74,7 +98,14 @@ export interface UserThemeOverrides {
     };
 }
 
-/** Structure of a background layer in user overrides (different from theme DSL) */
+/**
+ * Purpose:
+ * A single user-configurable background layer override.
+ *
+ * Constraints:
+ * - This type is persisted to localStorage, so changes should be backwards compatible
+ * - `url` may be an `internal-file://` token resolved at runtime
+ */
 export interface UserBackgroundLayer {
     /** Image URL (public path, blob:, or internal-file://) */
     url: string | null;
@@ -88,7 +119,12 @@ export interface UserBackgroundLayer {
     repeat: 'repeat' | 'no-repeat';
     /** Fallback color (hex) */
     color: string;
-} /** Empty override set (used for defaults) */
+}
+
+/**
+ * Purpose:
+ * Safe default overrides object with all feature toggles disabled.
+ */
 export const EMPTY_USER_OVERRIDES: UserThemeOverrides = {
     colors: { enabled: false },
     backgrounds: { enabled: false },

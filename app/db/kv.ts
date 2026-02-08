@@ -15,7 +15,7 @@
 import { getDb, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { parseOrThrow, nowSec, nextClock } from './util';
+import { parseOrThrow, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
 
 async function ensureDbOpen(targetDb: Or3DB): Promise<void> {
@@ -54,11 +54,13 @@ export async function createKv(input: KvCreate): Promise<Kv> {
         ...value,
         clock: nextClock(value.clock),
     };
-    await dbTry(
-        () => db.kv.put(next),
-        { op: 'write', entity: 'kv', action: 'create' },
-        { rethrow: true }
-    );
+    await db.transaction('rw', getWriteTxTableNames(db, 'kv'), async () => {
+        await dbTry(
+            () => db.kv.put(next),
+            { op: 'write', entity: 'kv', action: 'create' },
+            { rethrow: true }
+        );
+    });
     await hooks.doAction('db.kv.create:action:after', {
         entity: next,
         tableName: 'kv',
@@ -91,24 +93,26 @@ export async function upsertKv(value: Kv): Promise<void> {
         entity: filtered,
         tableName: 'kv',
     });
-    const validated = parseOrThrow(KvSchema, filtered);
-    const existing = await dbTry(() => db.kv.get(validated.id), {
-        op: 'read',
-        entity: 'kv',
-        action: 'get',
-    });
-    const next = {
-        ...validated,
-        clock: nextClock(existing?.clock ?? validated.clock),
-    };
-    await dbTry(
-        () => db.kv.put(next),
-        { op: 'write', entity: 'kv', action: 'upsert' },
-        { rethrow: true }
-    );
-    await hooks.doAction('db.kv.upsert:action:after', {
-        entity: next,
-        tableName: 'kv',
+    await db.transaction('rw', getWriteTxTableNames(db, 'kv'), async () => {
+        const validated = parseOrThrow(KvSchema, filtered);
+        const existing = await dbTry(() => db.kv.get(validated.id), {
+            op: 'read',
+            entity: 'kv',
+            action: 'get',
+        });
+        const next = {
+            ...validated,
+            clock: nextClock(existing?.clock ?? validated.clock),
+        };
+        await dbTry(
+            () => db.kv.put(next),
+            { op: 'write', entity: 'kv', action: 'upsert' },
+            { rethrow: true }
+        );
+        await hooks.doAction('db.kv.upsert:action:after', {
+            entity: next,
+            tableName: 'kv',
+        });
     });
 }
 
@@ -129,21 +133,27 @@ export async function hardDeleteKv(id: string): Promise<void> {
     const db = getDb();
     await ensureDbOpen(db);
     const hooks = useHooks();
-    const existing = await dbTry(() => db.kv.get(id), {
-        op: 'read',
-        entity: 'kv',
-        action: 'get',
-    });
-    await hooks.doAction('db.kv.delete:action:hard:before', {
-        entity: existing!,
-        id,
-        tableName: 'kv',
-    });
-    await db.kv.delete(id);
-    await hooks.doAction('db.kv.delete:action:hard:after', {
-        entity: existing!,
-        id,
-        tableName: 'kv',
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'kv', { includeTombstones: true }),
+        async () => {
+        const existing = await dbTry(() => db.kv.get(id), {
+            op: 'read',
+            entity: 'kv',
+            action: 'get',
+        });
+        if (!existing) return;
+        await hooks.doAction('db.kv.delete:action:hard:before', {
+            entity: existing,
+            id,
+            tableName: 'kv',
+        });
+        await db.kv.delete(id);
+        await hooks.doAction('db.kv.delete:action:hard:after', {
+            entity: existing,
+            id,
+            tableName: 'kv',
+        });
     });
 }
 
@@ -240,13 +250,18 @@ export async function setKvByName(
         'id' in filtered && 'created_at' in filtered
             ? (filtered as Kv)
             : record;
-    parseOrThrow(KvSchema, kvEntity);
-    await dbTry(
-        () => targetDb.kv.put(kvEntity),
-        { op: 'write', entity: 'kv', action: 'upsertByName' },
-        { rethrow: true }
-    );
-    await hooks.doAction('db.kv.upsertByName:action:after', kvEntity);
+    await targetDb.transaction(
+        'rw',
+        getWriteTxTableNames(targetDb, 'kv'),
+        async () => {
+        parseOrThrow(KvSchema, kvEntity);
+        await dbTry(
+            () => targetDb.kv.put(kvEntity),
+            { op: 'write', entity: 'kv', action: 'upsertByName' },
+            { rethrow: true }
+        );
+        await hooks.doAction('db.kv.upsertByName:action:after', kvEntity);
+    });
     return kvEntity;
 }
 
@@ -274,19 +289,25 @@ export async function hardDeleteKvByName(
         { op: 'read', entity: 'kv', action: 'getByName' }
     );
     if (!existing) return;
-    await hooks.doAction('db.kv.deleteByName:action:hard:before', {
-        entity: existing,
-        id: existing.id,
-        tableName: 'kv',
-    });
-    await dbTry(
-        () => targetDb.kv.delete(existing.id),
-        { op: 'write', entity: 'kv', action: 'deleteByName' },
-        { rethrow: true }
+    await targetDb.transaction(
+        'rw',
+        getWriteTxTableNames(targetDb, 'kv', { includeTombstones: true }),
+        async () => {
+            await hooks.doAction('db.kv.deleteByName:action:hard:before', {
+                entity: existing,
+                id: existing.id,
+                tableName: 'kv',
+            });
+            await dbTry(
+                () => targetDb.kv.delete(existing.id),
+                { op: 'write', entity: 'kv', action: 'deleteByName' },
+                { rethrow: true }
+            );
+            await hooks.doAction('db.kv.deleteByName:action:hard:after', {
+                entity: existing,
+                id: existing.id,
+                tableName: 'kv',
+            });
+        }
     );
-    await hooks.doAction('db.kv.deleteByName:action:hard:after', {
-        entity: existing,
-        id: existing.id,
-        tableName: 'kv',
-    });
 }

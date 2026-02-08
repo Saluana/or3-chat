@@ -1,3 +1,31 @@
+/**
+ * @module app/core/search/useModelSearch
+ *
+ * Purpose:
+ * Vue composable that provides client-side full-text search over the
+ * OpenRouter model catalog using Orama. Builds an index on first use and
+ * rebuilds automatically when the model list changes.
+ *
+ * Behavior:
+ * - Creates an Orama index covering id, slug, name, description, context
+ *   length, and modalities
+ * - Debounces query input at ~120 ms to avoid excessive re-indexing
+ * - Falls back to substring search if Orama returns empty results or errors
+ * - Uses a token-based race guard to drop stale search results
+ *
+ * Constraints:
+ * - Client-only (`process.client` guard on index build)
+ * - Orama is dynamically imported to keep it off the critical path
+ * - Module-level singleton index (`currentDb`) is shared across instances
+ * - Index is rebuilt only when `models.value.length` changes
+ *
+ * Non-goals:
+ * - Does not handle model fetching (see core/auth/models-service)
+ * - Does not provide server-side search
+ *
+ * @see core/search/orama for the Orama wrapper utilities
+ * @see core/auth/models-service for the model catalog source
+ */
 import { ref, watch, type Ref } from 'vue';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 import {
@@ -51,6 +79,19 @@ async function buildIndex(
     return currentDb;
 }
 
+/**
+ * Purpose:
+ * Provide a reactive, client-side search experience over the OpenRouter model list.
+ *
+ * Behavior:
+ * - Builds (or rebuilds) an Orama index when model count changes
+ * - Debounces queries and maps hits back to `OpenRouterModel` objects
+ * - Falls back to substring search when Orama fails or returns empty results
+ *
+ * Constraints:
+ * - Client-only indexing
+ * - Index is a module-level singleton shared across composable instances
+ */
 export function useModelSearch(models: Ref<OpenRouterModel[]>) {
     const query = ref('');
     const results = ref<OpenRouterModel[]>([]);

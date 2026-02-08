@@ -17,7 +17,7 @@
 import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { parseOrThrow, nowSec } from './util';
+import { parseOrThrow, nowSec, getWriteTxTableNames } from './util';
 import {
     AttachmentCreateSchema,
     AttachmentSchema,
@@ -154,22 +154,30 @@ export async function softDeleteAttachment(id: string): Promise<void> {
  */
 export async function hardDeleteAttachment(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => getDb().attachments.get(id), {
-        op: 'read',
-        entity: 'attachments',
-        action: 'get',
-    });
-    await hooks.doAction('db.attachments.delete:action:hard:before', {
-        entity: existing!,
-        id,
-        tableName: 'attachments',
-    });
-    await getDb().attachments.delete(id);
-    await hooks.doAction('db.attachments.delete:action:hard:after', {
-        entity: existing!,
-        id,
-        tableName: 'attachments',
-    });
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'attachments', { includePendingOps: false }),
+        async () => {
+            const existing = await dbTry(() => db.attachments.get(id), {
+                op: 'read',
+                entity: 'attachments',
+                action: 'get',
+            });
+            if (!existing) return;
+            await hooks.doAction('db.attachments.delete:action:hard:before', {
+                entity: existing,
+                id,
+                tableName: 'attachments',
+            });
+            await db.attachments.delete(id);
+            await hooks.doAction('db.attachments.delete:action:hard:after', {
+                entity: existing,
+                id,
+                tableName: 'attachments',
+            });
+        }
+    );
 }
 
 /**

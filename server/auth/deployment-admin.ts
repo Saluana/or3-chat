@@ -7,7 +7,7 @@
  * for system-level settings, global user management, and infrastructure access.
  *
  * Architecture:
- * - **Provider-Agnostic**: The specific verification logic is delegated to
+ * - **Provider-Agnostic**: Specific verification logic is delegated to
  *   implementations of the `DeploymentAdminChecker` interface.
  * - **Sync-Linked**: The choice of checker depends on the configured sync provider
  *   (e.g., Convex), as global admin status is usually stored in the primary backend.
@@ -34,6 +34,21 @@ export interface DeploymentAdminChecker {
     checkDeploymentAdmin(providerUserId: string, provider: string): Promise<boolean>;
 }
 
+export type DeploymentAdminCheckerFactory = () => DeploymentAdminChecker;
+
+const registry = new Map<string, DeploymentAdminCheckerFactory>();
+
+export function registerDeploymentAdminChecker(
+    id: string,
+    create: DeploymentAdminCheckerFactory
+): void {
+    registry.set(id, create);
+}
+
+function getRegistryChecker(providerId: string): DeploymentAdminChecker | null {
+    return registry.get(providerId)?.() ?? null;
+}
+
 let cachedChecker: DeploymentAdminChecker | null = null;
 let cachedProviderId: string | null = null;
 let cacheTimestamp: number = 0;
@@ -43,20 +58,6 @@ const CACHE_TTL_MS = 60000; // 1 minute
  * Purpose:
  * Factory method to retrieve the appropriate deployment admin checker
  * for the current server configuration.
- *
- * Behavior:
- * - Memoizes the checker instance for 1 minute or until the sync provider changes.
- *
- * @param event - Optional H3 event for context-aware config resolution.
- *
- * @example
- * ```ts
- * const checker = getDeploymentAdminChecker(event);
- * const isAdmin = await checker.checkDeploymentAdmin('user_123', 'clerk');
- * if (isAdmin) {
- *   // Grant super-admin capabilities
- * }
- * ```
  */
 export function getDeploymentAdminChecker(event?: H3Event): DeploymentAdminChecker {
     const config = useRuntimeConfig(event);
@@ -64,74 +65,21 @@ export function getDeploymentAdminChecker(event?: H3Event): DeploymentAdminCheck
     const now = Date.now();
 
     // Return cached checker if valid and provider hasn't changed
-    if (cachedChecker && 
-        cachedProviderId === syncProviderId && 
-        now - cacheTimestamp < CACHE_TTL_MS) {
+    if (
+        cachedChecker &&
+        cachedProviderId === syncProviderId &&
+        now - cacheTimestamp < CACHE_TTL_MS
+    ) {
         return cachedChecker;
     }
 
-    // Create implementation based on provider
-    const checker = createChecker(syncProviderId);
+    const checker =
+        getRegistryChecker(syncProviderId) ?? new NoOpDeploymentAdminChecker();
     cachedChecker = checker;
     cachedProviderId = syncProviderId;
     cacheTimestamp = now;
 
     return checker;
-}
-
-/**
- * Purpose:
- * Instantiates a checker implementation based on the provider ID.
- */
-function createChecker(providerId: string): DeploymentAdminChecker {
-    switch (providerId) {
-        case CONVEX_PROVIDER_ID:
-            return new ConvexDeploymentAdminChecker();
-        default:
-            // For unsupported providers, always return false
-            // This means only super admin JWT auth will work
-            return new NoOpDeploymentAdminChecker();
-    }
-}
-
-/**
- * Purpose:
- * Convex-backed implementation of the deployment admin check.
- *
- * Behavior:
- * - Queries the Convex backend to map the provider identity to an internal user.
- * - Checks the `admin` table for an active admin grant for that user.
- */
-class ConvexDeploymentAdminChecker implements DeploymentAdminChecker {
-    async checkDeploymentAdmin(providerUserId: string, provider: string): Promise<boolean> {
-        // Lazy import to avoid loading Convex when not needed
-        const { getConvexClient } = await import('../utils/convex-client');
-        const { api } = await import('~~/convex/_generated/api');
-
-        try {
-            const convex = getConvexClient();
-
-            // Get the internal user ID from auth account
-            const authAccount = await convex.query(api.users.getAuthAccountByProvider, {
-                provider,
-                provider_user_id: providerUserId,
-            });
-
-            if (!authAccount) {
-                return false;
-            }
-
-            // Check if user has admin grant
-            const isAdmin = await convex.query(api.admin.isAdmin, {
-                user_id: authAccount.user_id,
-            });
-
-            return isAdmin;
-        } catch {
-            // If anything fails, assume not an admin to maintain safe defaults
-            return false;
-        }
-    }
 }
 
 /**

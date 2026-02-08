@@ -4,8 +4,6 @@ import type {
     Or3CloudConfigOptions,
 } from '../types/or3-cloud-config';
 import {
-    AUTH_PROVIDER_ID_LIST,
-    BACKGROUND_PROVIDER_ID_LIST,
     CLERK_PROVIDER_ID,
     CONVEX_PROVIDER_ID,
     DEFAULT_AUTH_PROVIDER_ID,
@@ -13,9 +11,6 @@ import {
     DEFAULT_LIMITS_PROVIDER_ID,
     DEFAULT_STORAGE_PROVIDER_ID,
     DEFAULT_SYNC_PROVIDER_ID,
-    LIMITS_PROVIDER_ID_LIST,
-    STORAGE_PROVIDER_ID_LIST,
-    SYNC_PROVIDER_ID_LIST,
 } from '../shared/cloud/provider-ids';
 import {
     DEFAULT_REQUESTS_PER_MINUTE,
@@ -132,10 +127,10 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
 };
 
 const cloudConfigSchema = z
-    .object({
+    .looseObject({
         auth: z.object({
             enabled: z.boolean(),
-            provider: z.enum(AUTH_PROVIDER_ID_LIST),
+            provider: z.string().min(1),
             guestAccessEnabled: z.boolean().optional(),
             sessionProvisioningFailure: z
                 .enum(['throw', 'unauthenticated', 'service-unavailable'])
@@ -149,7 +144,7 @@ const cloudConfigSchema = z
         }),
         sync: z.object({
             enabled: z.boolean(),
-            provider: z.enum(SYNC_PROVIDER_ID_LIST),
+            provider: z.string().min(1),
             convex: z
                 .object({
                     url: z.string().optional(),
@@ -159,7 +154,7 @@ const cloudConfigSchema = z
         }),
         storage: z.object({
             enabled: z.boolean(),
-            provider: z.enum(STORAGE_PROVIDER_ID_LIST),
+            provider: z.string().min(1),
         }),
         services: z
             .object({
@@ -183,7 +178,7 @@ const cloudConfigSchema = z
                 requestsPerMinute: z.number().int().min(1).optional(),
                 maxConversations: z.number().int().min(0).optional(),
                 maxMessagesPerDay: z.number().int().min(0).optional(),
-                storageProvider: z.enum(LIMITS_PROVIDER_ID_LIST).optional(),
+                storageProvider: z.string().min(1).optional(),
             })
             .optional(),
         security: z
@@ -226,13 +221,12 @@ const cloudConfigSchema = z
         backgroundStreaming: z
             .object({
                 enabled: z.boolean().optional(),
-                storageProvider: z.enum(BACKGROUND_PROVIDER_ID_LIST).optional(),
+                storageProvider: z.string().min(1).optional(),
                 maxConcurrentJobs: z.number().int().min(1).optional(),
                 jobTimeoutSeconds: z.number().int().min(1).optional(),
             })
             .optional(),
     })
-    .passthrough();
 
 const formatConfigErrors = (errors: string[]) => {
     const heading = '[or3-cloud-config] Configuration validation failed:';

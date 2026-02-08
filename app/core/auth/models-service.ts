@@ -1,6 +1,27 @@
-// ModelsService: Fetch OpenRouter models, cache, and provide simple filters
-// Uses OpenRouter SDK for API calls
-// Usage: import { modelsService } from "~/utils/models-service";
+/**
+ * @module app/core/auth/models-service
+ *
+ * Purpose:
+ * Fetches the OpenRouter model catalog, caches it in localStorage, and
+ * provides the canonical model list used by search, selectors, and chat.
+ *
+ * Responsibilities:
+ * - Fetch models from OpenRouter via the shared SDK client
+ * - Cache the catalog in localStorage with configurable TTL (default 1 hour)
+ * - Return cached data on network failure (resilient fallback)
+ * - Normalize SDK model types to the local `OpenRouterModel` shape
+ *
+ * Non-responsibilities:
+ * - Does not handle model search or indexing (see core/search/)
+ * - Does not manage the API key lifecycle (see useUserApiKey / useOpenrouter)
+ *
+ * Constraints:
+ * - Client-only (guards against SSR via `typeof window` checks)
+ * - localStorage may be unavailable in private browsing; cache writes fail silently
+ *
+ * @see shared/openrouter/client for SDK client factory
+ * @see core/search/useModelSearch for search indexing on top of this catalog
+ */
 
 import {
     createOpenRouterClient,
@@ -15,6 +36,7 @@ import {
 // Re-export the type from shared location for consumers
 export type { OpenRouterModel } from '~~/shared/openrouter/types';
 
+/** Shape of the cached model catalog stored in localStorage. */
 export interface ModelCatalogCache {
     data: OpenRouterModel[];
     fetchedAt: number;
@@ -60,6 +82,26 @@ function toNumber(x?: string | number | null): number | null {
     return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Purpose:
+ * Fetches the full OpenRouter model catalog, using localStorage as a
+ * read-through cache. Falls back to stale cache on network errors.
+ *
+ * Behavior:
+ * 1. Check localStorage cache; return if fresh (within `ttlMs`).
+ * 2. Call OpenRouter SDK `models.list()`.
+ * 3. Persist result to localStorage and return.
+ * 4. On error, return stale cache if available; otherwise throw.
+ *
+ * @param opts.force - Bypass cache and always fetch from network.
+ * @param opts.ttlMs - Cache lifetime in ms (default 1 hour).
+ *
+ * @example
+ * ```ts
+ * const models = await fetchModels();
+ * const fresh  = await fetchModels({ force: true });
+ * ```
+ */
 export async function fetchModels(opts?: {
     force?: boolean;
     ttlMs?: number;
@@ -99,7 +141,17 @@ export async function fetchModels(opts?: {
     }
 }
 
-// Filters
+/**
+ * Purpose:
+ * Substring match filter over the model catalog.
+ *
+ * Behavior:
+ * Matches against `id`, `name`, and `description` (case-insensitive).
+ *
+ * Constraints:
+ * - Pure function; does not mutate inputs
+ * - Intended for quick fallback search or client-side filtering
+ */
 export function filterByText(
     models: OpenRouterModel[],
     q: string
@@ -114,6 +166,16 @@ export function filterByText(
     });
 }
 
+/**
+ * Purpose:
+ * Filter models by declared input and output modalities.
+ *
+ * Behavior:
+ * - If `opts.input` is provided, all requested modalities must be present in
+ *   `architecture.input_modalities`
+ * - If `opts.output` is provided, all requested modalities must be present in
+ *   `architecture.output_modalities`
+ */
 export function filterByModalities(
     models: OpenRouterModel[],
     opts: { input?: string[]; output?: string[] } = {}
@@ -131,6 +193,10 @@ export function filterByModalities(
     });
 }
 
+/**
+ * Purpose:
+ * Filter models by minimum context length.
+ */
 export function filterByContextLength(
     models: OpenRouterModel[],
     minCtx: number
@@ -142,6 +208,13 @@ export function filterByContextLength(
     });
 }
 
+/**
+ * Purpose:
+ * Filter models by supported OpenAI-compatible parameters.
+ *
+ * Behavior:
+ * Requires every requested parameter to exist in `supported_parameters`.
+ */
 export function filterByParameters(
     models: OpenRouterModel[],
     params: string[]
@@ -153,8 +226,23 @@ export function filterByParameters(
     });
 }
 
+/**
+ * Purpose:
+ * Coarse price heuristic bucket for UI filtering.
+ *
+ * Constraints:
+ * - Buckets are not authoritative pricing tiers
+ * - Boundaries are intentionally heuristic and may change
+ */
 export type PriceBucket = 'free' | 'low' | 'medium' | 'any';
 
+/**
+ * Purpose:
+ * Filter models into a coarse price bucket.
+ *
+ * Behavior:
+ * Uses the maximum of prompt and completion price as the effective price.
+ */
 export function filterByPriceBucket(
     models: OpenRouterModel[],
     bucket: PriceBucket
@@ -171,6 +259,13 @@ export function filterByPriceBucket(
     });
 }
 
+/**
+ * Purpose:
+ * Convenience namespace export for the model catalog service.
+ *
+ * Constraints:
+ * - Prefer importing specific functions for tree-shaking in leaf modules
+ */
 export const modelsService = {
     fetchModels,
     filterByText,
@@ -183,17 +278,37 @@ export const modelsService = {
 export default modelsService;
 
 // --- Default model resolution (fixed vs last-selected with fallback) ---
+/**
+ * Purpose:
+ * Minimal AI settings needed to resolve the default model.
+ */
 export interface AiSettingsForModel {
     defaultModelMode: 'lastSelected' | 'fixed';
     fixedModelId: string | null;
 }
 
+/**
+ * Purpose:
+ * Dependency injection surface for default model resolution.
+ *
+ * Constraints:
+ * - `recommendedDefault()` must return an available model ID
+ */
 export interface ModelResolverDeps {
     isAvailable: (id: string) => boolean;
     lastSelectedModelId: () => string | null;
     recommendedDefault: () => string;
 }
 
+/**
+ * Purpose:
+ * Resolve which model ID should be used by default.
+ *
+ * Behavior:
+ * - If settings are fixed and the fixed model is available, returns it
+ * - Else, uses last selected model if available
+ * - Else, falls back to the provided recommended default
+ */
 export function resolveDefaultModel(
     set: AiSettingsForModel,
     d: ModelResolverDeps

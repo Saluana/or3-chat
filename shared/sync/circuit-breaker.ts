@@ -177,3 +177,15 @@ export function _resetSyncCircuitBreaker(): void {
     }
     circuitBreakers.clear();
 }
+
+/**
+ * Remove circuit breaker instances for a workspace prefix.
+ */
+export function cleanupSyncCircuitBreakers(workspaceId: string): void {
+    const prefix = `${workspaceId}:`;
+    for (const key of circuitBreakers.keys()) {
+        if (key.startsWith(prefix)) {
+            circuitBreakers.delete(key);
+        }
+    }
+}

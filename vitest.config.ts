@@ -12,6 +12,12 @@ export default defineConfig({
     // Casted plugin to avoid TS 2769 noise only in editor; runtime unaffected.
     plugins: [vueAny()],
     resolve: {
+        // Prevent Vite from following symlinks to real paths, which would move
+        // linked provider packages outside the project root and break bare imports.
+        preserveSymlinks: true,
+        // Force these modules to resolve from the host's node_modules, even when
+        // files are loaded from linked provider packages with their own node_modules.
+        dedupe: ['vue', 'nuxt', 'zod'],
         alias: {
             '#imports': path.resolve(__dirname, 'tests/stubs/nuxt-imports.ts'),
             '~': path.resolve(__dirname, 'app'),

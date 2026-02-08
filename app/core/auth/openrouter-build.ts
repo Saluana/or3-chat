@@ -1,34 +1,86 @@
-// Utility helpers to build OpenRouter payload messages including historical images.
-// Focus: hydrate file_hashes into base64 data URLs, enforce limits, dedupe, and
-// produce OpenAI-compatible content arrays.
-//
-// This module handles OpenRouter API response parsing which requires flexible typing.
+/**
+ * @module app/core/auth/openrouter-build
+ *
+ * Purpose:
+ * Transforms local chat messages into the OpenRouter/OpenAI-compatible wire
+ * format. The primary complexity is image handling: hydrating local file hashes
+ * and remote URLs into base64 data URLs suitable for multimodal API calls.
+ *
+ * Responsibilities:
+ * - Build `ORMessage[]` arrays from local `ChatMessageLike` records
+ * - Hydrate `file_hashes` (local blobs) into base64 data URLs
+ * - Hydrate remote/blob URLs into data URLs with size guards (5 MB cap)
+ * - Enforce image limits, deduplication, and inclusion policies
+ * - Decide output modalities based on prompt heuristics
+ *
+ * Non-responsibilities:
+ * - Does not send the request (see streaming composables)
+ * - Does not manage the model catalog or API key
+ * - Does not handle response parsing
+ *
+ * Constraints:
+ * - Global data URL cache is bounded (LRU, max 64 entries)
+ * - Remote fetches have an 8-second timeout to avoid blocking sends
+ * - File parts for non-image types (PDFs) are handled separately from image_url parts
+ * - Modality detection is intentionally conservative (text-only output)
+ *
+ * @see core/auth/models-service for model catalog
+ * @see db/files for local blob storage
+ */
 
 import { parseFileHashes } from '~/db/files-util';
 
+/**
+ * Purpose:
+ * Lightweight reference to an image-like input discovered while scanning message history.
+ * Used to apply inclusion policies (recent-only, user-only) and dedupe rules.
+ */
 export interface BuildImageCandidate {
     hash: string;
     role: 'user' | 'assistant';
     messageIndex: number; // chronological index in original messages array
 }
 
+/**
+ * Purpose:
+ * OpenRouter/OpenAI message content part for plain text.
+ */
 export interface ORContentPartText {
     type: 'text';
     text: string;
 }
+/**
+ * Purpose:
+ * OpenRouter/OpenAI message content part for images.
+ *
+ * Constraints:
+ * - `image_url.url` is typically a `data:image/*` URL when hydrated from local files
+ */
 export interface ORContentPartImageUrl {
     type: 'image_url';
     image_url: { url: string };
 }
+/**
+ * Purpose:
+ * OpenRouter/OpenAI message content part for non-image files.
+ */
 export interface ORContentPartFile {
     type: 'file';
     file: { filename: string; file_data: string };
 }
+/**
+ * Purpose:
+ * Union of supported content parts produced by this module.
+ */
 export type ORContentPart =
     | ORContentPartText
     | ORContentPartImageUrl
     | ORContentPartFile;
 
+/**
+ * Purpose:
+ * OpenRouter/OpenAI-compatible chat message.
+ */
 export interface ORMessage {
     role: 'user' | 'assistant' | 'system';
     content: ORContentPart[];
@@ -122,6 +174,14 @@ async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
     return p;
 }
 
+/**
+ * Purpose:
+ * Controls how message history is transformed into OpenRouter wire messages.
+ *
+ * Notes:
+ * - `filterIncludeImages` behaves like a filter hook and can drop or reorder candidates
+ * - `imageInclusionPolicy` affects how far back message scanning goes
+ */
 export interface BuildOptions {
     maxImageInputs?: number; // total images across history
     dedupeImages?: boolean; // skip duplicate hashes
@@ -160,6 +220,19 @@ interface ChatContentPart {
 }
 
 // Build OpenRouter messages with hydrated images.
+/**
+ * Purpose:
+ * Build OpenRouter/OpenAI-compatible message array from local chat records.
+ *
+ * Behavior:
+ * - Converts string content to a text part
+ * - Hydrates `file_hashes` and supported image refs into `data:image/*` URLs
+ * - Enforces image inclusion policy, dedupe, and max image count
+ *
+ * Constraints:
+ * - Hydration uses an in-memory global LRU cache to avoid repeated blob conversions
+ * - Remote and blob URLs are fetched and converted with size and timeout guards
+ */
 export async function buildOpenRouterMessages(
     messages: ChatMessageLike[],
     opts: BuildOptions = {}

@@ -14,7 +14,7 @@ export interface Or3CloudConfig {
          * Selected authentication provider.
          * @default 'clerk'
          */
-        provider: 'clerk' | 'custom';
+        provider: string;
         /**
          * Allow unauthenticated users to use the app with their own OpenRouter key.
          * Requires allowUserOverride to also be true.
@@ -58,7 +58,7 @@ export interface Or3CloudConfig {
          * Sync provider backend.
          * @default 'convex'
          */
-        provider: 'convex' | 'firebase' | 'custom';
+        provider: string;
         /**
          * Convex specific configuration.
          */
@@ -90,7 +90,7 @@ export interface Or3CloudConfig {
          * Storage provider.
          * @default 'convex'
          */
-        provider: 'convex' | 's3' | 'custom';
+        provider: string;
     };
 
     /**
@@ -162,7 +162,7 @@ export interface Or3CloudConfig {
          * - 'convex': Persistent via Convex
          * @default 'memory'
          */
-        storageProvider?: 'memory' | 'convex' | 'redis' | 'postgres';
+        storageProvider?: string;
     };
 
     /**
@@ -179,7 +179,7 @@ export interface Or3CloudConfig {
          * Storage provider for background jobs.
          * @default 'memory'
          */
-        storageProvider?: 'memory' | 'convex' | 'redis';
+        storageProvider?: string;
         /**
          * Maximum concurrent background jobs.
          * @default 20

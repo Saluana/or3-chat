@@ -9,7 +9,7 @@ import {
 import { useToast } from '#imports';
 import { db } from '~/db';
 import type { Post } from '~/db';
-import { nowSec, nextClock } from '~/db/util';
+import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
 
 /**
  * Example plugin: History Actions
@@ -72,11 +72,16 @@ export function setupHistoryActionsExample() {
                     return;
                 }
 
-                await db.threads.put({
-                    ...row,
-                    pinned: !row.pinned,
-                    updated_at: nowSec(),
-                    clock: nextClock(row.clock),
+                await db.transaction(
+                    'rw',
+                    getWriteTxTableNames(db, 'threads'),
+                    async () => {
+                    await db.threads.put({
+                        ...row,
+                        pinned: !row.pinned,
+                        updated_at: nowSec(),
+                        clock: nextClock(row.clock),
+                    });
                 });
 
                 toast.add({

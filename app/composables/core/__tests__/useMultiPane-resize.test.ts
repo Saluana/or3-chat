@@ -5,6 +5,15 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useMultiPane } from '../useMultiPane';
 import type { MultiPaneMessage } from '../useMultiPane';
 
+vi.mock('~/core/hooks/useHooks', () => ({
+    useHooks: () => ({
+        addAction: vi.fn(),
+        removeAction: vi.fn(),
+        doAction: vi.fn(),
+        applyFilters: vi.fn((_, value) => Promise.resolve(value)),
+    }),
+}));
+
 // Mock localStorage
 const localStorageMock = (() => {
     let store: Record<string, string> = {};

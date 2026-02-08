@@ -8,7 +8,7 @@
  * - Authorizes write access (`workspace.write`).
  * - Validates file constraints (Size, MIME type).
  * - Enforces rate limits (`storage:upload`).
- * - Generates URL via backend.
+ * - Dispatches to registered StorageGatewayAdapter.
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { z } from 'zod';
@@ -16,20 +16,13 @@ import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../utils/storage/is-storage-enabled';
-import { api } from '~~/convex/_generated/api';
-import type { Id } from '~~/convex/_generated/dataModel';
+import { getActiveStorageGatewayAdapter } from '../../storage/gateway/registry';
 import { or3Config } from '~~/config.or3';
-import {
-    getClerkProviderToken,
-    getConvexGatewayClient,
-} from '../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
 import {
     checkSyncRateLimit,
     recordSyncRequest,
 } from '../../utils/sync/rate-limiter';
 import { recordUploadStart } from '../../utils/storage/metrics';
-import { resolvePresignExpiresAt } from '../../utils/storage/presign-expiry';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -50,7 +43,7 @@ const BodySchema = z.object({
  * 1. Checks permissions.
  * 2. Checks strict file size limit (from config).
  * 3. Checks allowed MIME types allowlist.
- * 4. Returns signed URL.
+ * 4. Returns signed URL via registered StorageGatewayAdapter.
  *
  * Constraints:
  * - Max file size: `or3Config.limits.maxCloudFileSizeBytes`.
@@ -114,27 +107,26 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
-    if (!token) {
-        throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+    // Get storage gateway adapter from registry
+    const adapter = getActiveStorageGatewayAdapter();
+    if (!adapter) {
+        throw createError({ statusCode: 500, statusMessage: 'Storage adapter not configured' });
     }
 
-    const client = getConvexGatewayClient(event, token);
-    const result = await client.mutation(api.storage.generateUploadUrl, {
-        workspace_id: body.data.workspace_id as Id<'workspaces'>,
+    // Dispatch to adapter
+    const result = await adapter.presignUpload(event, {
+        workspaceId: body.data.workspace_id,
         hash: body.data.hash,
-        mime_type: body.data.mime_type,
-        size_bytes: body.data.size_bytes,
+        mimeType: body.data.mime_type,
+        sizeBytes: body.data.size_bytes,
     });
-
-    const expiresAt = resolvePresignExpiresAt(result, body.data.expires_in_ms);
 
     recordSyncRequest(userId, 'storage:upload');
     recordUploadStart();
 
     return {
-        url: result.uploadUrl,
-        expiresAt,
+        url: result.url,
+        expiresAt: result.expiresAt,
         disposition: body.data.disposition,
     };
 });

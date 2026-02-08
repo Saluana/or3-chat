@@ -1,8 +1,23 @@
 /**
- * SyncProvider Registry
+ * @module app/core/sync/sync-provider-registry
  *
- * Manages available sync providers and selects the active one.
- * Supports both direct (client-to-backend) and gateway (client-to-SSR) modes.
+ * Purpose:
+ * Registry for sync provider implementations. Maintains a map of available
+ * providers and tracks which one is currently active. Supports both direct
+ * (client-to-backend) and gateway (client-to-SSR) provider modes.
+ *
+ * Behavior:
+ * - Providers are registered by plugins at startup
+ * - Active provider can be set explicitly or defaults to the first registered
+ * - Registry is global (module-level state)
+ *
+ * Constraints:
+ * - Only one active provider at a time
+ * - Overwriting a provider ID logs a warning in development
+ * - Setting an unknown provider ID throws an error
+ *
+ * @see shared/sync/types for SyncProvider interface
+ * @see core/sync/providers/ for concrete implementations
  */
 import type { SyncProvider } from '~~/shared/sync/types';
 
@@ -13,7 +28,15 @@ const providers = new Map<string, SyncProvider>();
 let activeProviderId: string | null = null;
 
 /**
- * Register a sync provider
+ * Purpose:
+ * Register a SyncProvider implementation.
+ *
+ * Behavior:
+ * - Adds the provider to the registry keyed by `provider.id`
+ * - Logs a warning in dev if a provider with the same id already exists
+ *
+ * Constraints:
+ * - Does not automatically activate the provider
  */
 export function registerSyncProvider(provider: SyncProvider): void {
     if (providers.has(provider.id)) {
@@ -23,7 +46,11 @@ export function registerSyncProvider(provider: SyncProvider): void {
 }
 
 /**
- * Unregister a sync provider
+ * Purpose:
+ * Remove a SyncProvider from the registry.
+ *
+ * Behavior:
+ * - If the removed provider was active, clears the active provider id
  */
 export function unregisterSyncProvider(providerId: string): void {
     providers.delete(providerId);
@@ -33,7 +60,11 @@ export function unregisterSyncProvider(providerId: string): void {
 }
 
 /**
- * Set the active provider
+ * Purpose:
+ * Set the active SyncProvider by id.
+ *
+ * Constraints:
+ * - Throws if `providerId` is not registered
  */
 export function setActiveSyncProvider(providerId: string): void {
     if (!providers.has(providerId)) {
@@ -43,7 +74,11 @@ export function setActiveSyncProvider(providerId: string): void {
 }
 
 /**
- * Get the active sync provider
+ * Purpose:
+ * Return the active SyncProvider.
+ *
+ * Behavior:
+ * - If no active provider is set, returns the first registered provider
  */
 export function getActiveSyncProvider(): SyncProvider | null {
     if (!activeProviderId) {
@@ -55,21 +90,29 @@ export function getActiveSyncProvider(): SyncProvider | null {
 }
 
 /**
- * Get a provider by ID
+ * Purpose:
+ * Look up a registered SyncProvider by id.
  */
 export function getSyncProvider(providerId: string): SyncProvider | null {
     return providers.get(providerId) ?? null;
 }
 
 /**
- * Get all registered providers
+ * Purpose:
+ * Return all registered SyncProviders.
+ *
+ * Constraints:
+ * - Ordering matches insertion order
  */
 export function getAllSyncProviders(): SyncProvider[] {
     return Array.from(providers.values());
 }
 
 /**
- * Clear all providers (for testing)
+ * Internal API.
+ *
+ * Purpose:
+ * Clear the provider registry. Intended for tests.
  */
 export function _clearProviders(): void {
     providers.clear();

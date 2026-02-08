@@ -97,7 +97,7 @@ export const PostPayloadSchema = z
         id: z.string(),
         title: z.string(),
         content: z.string(),
-        postType: z.string(), // Client-side uses camelCase
+        post_type: z.string(), // Wire schema uses snake_case
         deleted: z.boolean(),
         created_at: z.number(),
         updated_at: z.number(),
@@ -129,6 +129,25 @@ export const KvPayloadSchema = z
     })
     .passthrough();
 
+export const NotificationPayloadSchema = z
+    .object({
+        id: z.string(),
+        user_id: z.string(),
+        thread_id: z.string().optional(),
+        document_id: z.string().optional(),
+        type: z.string(),
+        title: z.string(),
+        body: z.string().optional(),
+        actions: z.array(z.unknown()).optional(),
+        read_at: z.number().optional(),
+        deleted: z.boolean(),
+        deleted_at: z.number().optional(),
+        created_at: z.number(),
+        updated_at: z.number(),
+        clock: z.number(),
+    })
+    .passthrough();
+
 /**
  * Map of table names to their payload schemas
  */
@@ -139,6 +158,7 @@ export const TABLE_PAYLOAD_SCHEMAS: Record<string, z.ZodSchema> = {
     posts: PostPayloadSchema,
     file_meta: FileMetaPayloadSchema,
     kv: KvPayloadSchema,
+    notifications: NotificationPayloadSchema,
 };
 
 // ============================================================
@@ -168,6 +188,19 @@ export const PushResultItemSchema = z.object({
     success: z.boolean(),
     serverVersion: z.number().int().positive().optional(),
     error: z.string().optional(),
+    errorCode: z
+        .enum([
+            'VALIDATION_ERROR',
+            'UNAUTHORIZED',
+            'CONFLICT',
+            'NOT_FOUND',
+            'RATE_LIMITED',
+            'OVERSIZED',
+            'NETWORK_ERROR',
+            'SERVER_ERROR',
+            'UNKNOWN',
+        ])
+        .optional(),
 });
 
 export const PushResultSchema = z.object({

@@ -1,7 +1,11 @@
 /**
- * Sync Module Barrel Export
+ * @module app/core/sync
  *
- * Re-exports all sync components for convenient importing.
+ * Purpose:
+ * Barrel export for the sync subsystem. Re-exports all managers,
+ * utilities, and provider factories needed to set up workspace sync.
+ *
+ * @see planning/db-sync-layer for architecture documentation
  */
 
 // Core utilities
@@ -33,7 +37,4 @@ export {
     getAllSyncProviders,
 } from './sync-provider-registry';
 
-// Convex provider
-export { createConvexSyncProvider } from './providers/convex-sync-provider';
 export { createGatewaySyncProvider } from './providers/gateway-sync-provider';
-

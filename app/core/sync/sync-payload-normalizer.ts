@@ -1,16 +1,48 @@
 /**
- * Sync Payload Normalizer
+ * @module app/core/sync/sync-payload-normalizer
  *
- * Shared normalization logic for sync payloads:
- * - Handles snake_case to camelCase mapping for specific tables
- * - Validates payloads against Zod schemas
- * - Provides consistent transformation across rescan and subscription paths
+ * Purpose:
+ * Shared normalization logic for sync payloads. Transforms server-format
+ * data into the local Dexie format and validates against Zod schemas.
+ * Used by both the ConflictResolver (live apply) and rescan (staging).
+ *
+ * Behavior:
+ * 1. Convert server wire format to client format (field mapping)
+ * 2. Set the primary key field for the target table
+ * 3. Add clock and HLC metadata from the change stamp
+ * 4. Auto-generate `order_key` for messages if missing
+ * 5. Validate against the canonical wire schema (converting back for validation)
+ *
+ * Wire format:
+ * Server payloads use snake_case. Local storage also uses snake_case
+ * (aligned with Dexie conventions). Field mapping handles any
+ * backend-specific naming differences.
+ *
+ * Constraints:
+ * - Validation is best-effort; invalid payloads are flagged but still returned
+ *   so callers can decide whether to skip or force-apply
+ *
+ * @see shared/sync/schemas for Zod validation schemas
+ * @see shared/sync/field-mappings for toClientFormat/toServerFormat
+ * @see core/sync/conflict-resolver for the primary consumer
  */
 import { TABLE_PAYLOAD_SCHEMAS } from '~~/shared/sync/schemas';
 import { hlcToOrderKey } from './hlc';
 import { getPkField } from '~~/shared/sync/table-metadata';
-import { toClientFormat } from '~~/shared/sync/field-mappings';
+import { toClientFormat, toServerFormat } from '~~/shared/sync/field-mappings';
 
+/**
+ * Purpose:
+ * Result of normalizing a server change payload for local Dexie storage.
+ *
+ * Behavior:
+ * - `payload` is in the local (client) record shape
+ * - `isValid` reflects best-effort schema validation against canonical wire schema
+ * - `errors` contains human-readable issue strings when validation fails
+ *
+ * Constraints:
+ * - Validation failures do not prevent normalization; callers decide whether to apply
+ */
 export interface NormalizedPayload {
     payload: Record<string, unknown>;
     isValid: boolean;
@@ -18,20 +50,18 @@ export interface NormalizedPayload {
 }
 
 /**
- * Normalize a sync payload for client-side storage.
+ * Purpose:
+ * Normalize an incoming server payload into the shape expected by local Dexie tables.
  *
- * This handles:
- * 1. snake_case to camelCase field mapping for specific tables
- * 2. Setting the primary key field
- * 3. Adding order_key for messages if missing
- * 4. Clock and HLC metadata
- * 5. Schema validation
+ * Behavior:
+ * - Maps wire payload into client record shape via field mappings
+ * - Ensures the primary key field is present
+ * - Attaches sync metadata (`clock`, `hlc`) from the stamp
+ * - Ensures `order_key` exists for messages (derived from HLC)
+ * - Validates best-effort against the canonical wire schema
  *
- * @param tableName - The table the payload belongs to
- * @param pk - The primary key value
- * @param rawPayload - The raw payload from the server
- * @param stamp - The change stamp (clock, hlc)
- * @returns Normalized payload with validation result
+ * Constraints:
+ * - Does not throw on schema validation failure; returns `isValid: false`
  */
 export function normalizeSyncPayload(
     tableName: string,
@@ -55,10 +85,12 @@ export function normalizeSyncPayload(
         payload.order_key = hlcToOrderKey(stamp.hlc);
     }
 
-    // Validate against schema
+    // Validate against canonical wire schema (snake_case).
+    // We normalize to client format for local usage, so convert back for validation.
     const schema = TABLE_PAYLOAD_SCHEMAS[tableName];
     if (schema) {
-        const result = schema.safeParse(payload);
+        const wirePayload = toServerFormat(tableName, payload);
+        const result = schema.safeParse(wirePayload);
         if (!result.success) {
             const errors = result.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`);
             return {
@@ -76,14 +108,15 @@ export function normalizeSyncPayload(
 }
 
 /**
- * Normalize a sync payload for staging (rescan).
- * Similar to normalizeSyncPayload but returns the raw record format.
+ * Purpose:
+ * Normalize an incoming payload for staging flows (bootstrap/rescan).
  *
- * @param tableName - The table the payload belongs to
- * @param pk - The primary key value
- * @param rawPayload - The raw payload from the server
- * @param stamp - The change stamp (clock, hlc)
- * @returns Normalized record ready for staging
+ * Behavior:
+ * - Uses the same normalization pipeline as `normalizeSyncPayload`
+ * - Always returns the normalized record payload even if invalid
+ *
+ * Constraints:
+ * - Intended for staging tables and deferred validation during apply
  */
 export function normalizeSyncPayloadForStaging(
     tableName: string,
