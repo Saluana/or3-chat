@@ -5,8 +5,8 @@ let originalDb: any;
 
 beforeEach(async () => {
     // Mock db module
-    vi.doMock('~/db', () => ({
-        db: {
+    vi.doMock('~/db/client', () => ({
+        getDb: () => ({
             messages: {
                 where: () => ({
                     between: () => ({
@@ -16,7 +16,7 @@ beforeEach(async () => {
                     }),
                 }),
             },
-        },
+        }),
     }));
 
     // Mock hooks
@@ -47,7 +47,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-    vi.doUnmock('~/db');
+    vi.doUnmock('~/db/client');
     vi.doUnmock('~/core/hooks/useHooks');
 });
 
@@ -410,8 +410,8 @@ describe('useMultiPane - message loading with validation', () => {
 
     it('skips invalid message rows without crashing', async () => {
         // Mock db with mixed valid/invalid messages
-        vi.doMock('~/db', () => ({
-            db: {
+        vi.doMock('~/db/client', () => ({
+            getDb: () => ({
                 messages: {
                     where: () => ({
                         between: () => ({
@@ -450,7 +450,7 @@ describe('useMultiPane - message loading with validation', () => {
                         }),
                     }),
                 },
-            },
+            }),
         }));
 
         // Re-import to get the mocked version
@@ -467,8 +467,8 @@ describe('useMultiPane - message loading with validation', () => {
     });
 
     it('skips deleted messages even if they pass initial filter', async () => {
-        vi.doMock('~/db', () => ({
-            db: {
+        vi.doMock('~/db/client', () => ({
+            getDb: () => ({
                 messages: {
                     where: () => ({
                         between: () => ({
@@ -491,7 +491,7 @@ describe('useMultiPane - message loading with validation', () => {
                         }),
                     }),
                 },
-            },
+            }),
         }));
 
         const { useMultiPane } = await import('../useMultiPane');
@@ -504,8 +504,8 @@ describe('useMultiPane - message loading with validation', () => {
     });
 
     it('handles completely invalid data without crashing', async () => {
-        vi.doMock('~/db', () => ({
-            db: {
+        vi.doMock('~/db/client', () => ({
+            getDb: () => ({
                 messages: {
                     where: () => ({
                         between: () => ({
@@ -521,7 +521,7 @@ describe('useMultiPane - message loading with validation', () => {
                         }),
                     }),
                 },
-            },
+            }),
         }));
 
         const { useMultiPane } = await import('../useMultiPane');
