@@ -10,7 +10,7 @@
  * - Supports SSR background streaming jobs with polling and SSE helpers
  *
  * Constraints:
- * - Server routes are required when SSR auth background streaming is enabled
+ * - Server routes are required when SSR auth is enabled and no client key is available
  * - Client fallback requires an API key
  */
 
@@ -148,17 +148,15 @@ export async function* openRouterStream(params: {
     const hasApiKey = Boolean(apiKey);
     const runtimeConfig = useRuntimeConfig() as {
         public: {
-            ssrAuthEnabled: boolean;
-            backgroundStreaming: { enabled: boolean };
+            ssrAuthEnabled?: boolean;
+            backgroundStreaming?: { enabled?: boolean };
         };
     };
     const allowClientFallback = hasApiKey === true;
+    const isSsrAuthEnabled = runtimeConfig.public?.ssrAuthEnabled === true;
     const forceServerRoute = Boolean(
-        runtimeConfig.public.ssrAuthEnabled === true &&
-            runtimeConfig.public.backgroundStreaming.enabled === true &&
-            !allowClientFallback
+        isSsrAuthEnabled && !allowClientFallback
     );
-    const shouldForceServerRoute = () => forceServerRoute;
 
     const body: OpenRouterRequestBody = {
         model,
@@ -205,7 +203,7 @@ export async function* openRouterStream(params: {
                 // Server route not OK
                 if (forceServerRoute) {
                     throw new Error(
-                        'OpenRouter server route unavailable in SSR mode'
+                        'OpenRouter server route unavailable in SSR mode (/api/openrouter/stream)'
                     );
                 }
                 setServerRouteAvailable(false);
@@ -225,7 +223,7 @@ export async function* openRouterStream(params: {
             ) {
                 throw error;
             }
-            if (shouldForceServerRoute()) {
+            if (forceServerRoute) {
                 throw error instanceof Error
                     ? error
                     : new Error('OpenRouter server route failed in SSR mode');
@@ -235,7 +233,7 @@ export async function* openRouterStream(params: {
         }
     }
 
-    if (shouldForceServerRoute()) {
+    if (forceServerRoute) {
         throw new Error('OpenRouter server route required in SSR mode');
     }
 

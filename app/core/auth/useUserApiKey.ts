@@ -24,7 +24,7 @@
  * @see state/global for the reactive state singleton
  */
 import { computed } from 'vue';
-import { db } from '~/db';
+import { getDb } from '~/db/client';
 import { state } from '~/state/global';
 
 /**
@@ -43,6 +43,7 @@ import { state } from '~/state/global';
 export function useUserApiKey() {
     // Read from Dexie on client without awaiting the composable
     if (import.meta.client) {
+        const db = getDb();
         db.kv
             .where('name')
             .equals('openrouter_api_key')

@@ -8,6 +8,7 @@ import {
 
 const runtimeConfigMock = {
     public: {
+        ssrAuthEnabled: false,
         backgroundStreaming: { enabled: true },
     },
 };
@@ -43,6 +44,8 @@ describe('openrouterStream', () => {
         parseMock.mockClear();
         localStorage.clear();
         vi.restoreAllMocks();
+        runtimeConfigMock.public.ssrAuthEnabled = false;
+        runtimeConfigMock.public.backgroundStreaming.enabled = true;
     });
 
     afterEach(() => {
@@ -103,6 +106,37 @@ describe('openrouterStream', () => {
         const parsed = cached ? JSON.parse(cached) : null;
         expect(parsed?.available).toBe(false);
         expect(events).toHaveLength(1);
+    });
+
+    it('requires server route in SSR mode when no client API key is available', async () => {
+        runtimeConfigMock.public.ssrAuthEnabled = true;
+        runtimeConfigMock.public.backgroundStreaming.enabled = false;
+
+        const fetchMock = vi.fn((url: RequestInfo | URL) => {
+            if (url === '/api/openrouter/stream') {
+                return Promise.resolve(createJsonResponse({ error: 'missing' }, 404));
+            }
+            return Promise.resolve(createStreamResponse());
+        });
+        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+
+        await expect(
+            (async () => {
+                for await (const _event of openRouterStream({
+                    model: 'model-1',
+                    orMessages: [{ role: 'user', content: 'hi' }],
+                    modalities: ['text'],
+                })) {
+                    // noop
+                }
+            })()
+        ).rejects.toThrow('OpenRouter server route unavailable in SSR mode');
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledWith(
+            '/api/openrouter/stream',
+            expect.objectContaining({ method: 'POST' })
+        );
     });
 
     it('exposes background streaming availability cache', () => {

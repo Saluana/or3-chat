@@ -104,5 +104,8 @@ export default defineEventHandler(async (event) => {
         url: result.url,
         expiresAt,
         disposition: body.data.disposition,
+        ...(typeof result.method === 'string' ? { method: result.method } : {}),
+        ...(result.headers ? { headers: result.headers } : {}),
+        ...(typeof result.storageId === 'string' ? { storageId: result.storageId } : {}),
     };
 });
