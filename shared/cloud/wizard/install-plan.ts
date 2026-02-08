@@ -59,9 +59,26 @@ function resolveProviderLocalInstallSpec(
     instanceDir: string
 ): string | null {
     if (!packageName.startsWith('or3-provider-')) return null;
-    const localProviderDir = resolve(instanceDir, '..', packageName);
-    const providerPackageJson = resolve(localProviderDir, 'package.json');
-    if (!existsSync(providerPackageJson)) return null;
+    let cursor = instanceDir;
+    let localProviderDir: string | null = null;
+
+    while (true) {
+        const candidate = resolve(cursor, '..', packageName);
+        const providerPackageJson = resolve(candidate, 'package.json');
+        if (existsSync(providerPackageJson)) {
+            localProviderDir = candidate;
+            break;
+        }
+
+        const parent = resolve(cursor, '..');
+        if (parent === cursor) {
+            break;
+        }
+        cursor = parent;
+    }
+
+    if (!localProviderDir) return null;
+
     const providerPath = relative(instanceDir, localProviderDir).replaceAll('\\', '/');
     const normalizedPath = providerPath.startsWith('.') ? providerPath : `./${providerPath}`;
     return `file:${normalizedPath}`;

@@ -107,6 +107,9 @@ function validateFieldLevel(answers: WizardAnswers): {
 } {
     const errors: string[] = [];
     const warnings: string[] = [];
+    const usesConvex =
+        (answers.syncEnabled && answers.syncProvider === 'convex') ||
+        (answers.storageEnabled && answers.storageProvider === 'convex');
 
     if (!answers.instanceDir.trim()) {
         errors.push('instanceDir is required.');
@@ -164,10 +167,7 @@ function validateFieldLevel(answers: WizardAnswers): {
         if (!sqlitePath) errors.push('OR3_SQLITE_DB_PATH is required for sqlite sync.');
     }
 
-    const needsConvexUrl =
-        answers.ssrAuthEnabled &&
-        ((answers.syncEnabled && answers.syncProvider === 'convex') ||
-            (answers.storageEnabled && answers.storageProvider === 'convex'));
+    const needsConvexUrl = answers.ssrAuthEnabled && usesConvex;
     if (needsConvexUrl) {
         const url = answers.convexUrl?.trim() ?? '';
         if (!url) {

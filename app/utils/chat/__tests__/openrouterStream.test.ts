@@ -144,6 +144,13 @@ describe('openrouterStream', () => {
         const enabled = isBackgroundStreamingEnabled();
         expect(enabled).toBe(true);
     });
+
+    it('prefers explicit enabled config over stale false cache', () => {
+        runtimeConfigMock.public.backgroundStreaming.enabled = true;
+        localStorage.setItem('or3:background-streaming-available', 'false');
+        const enabled = isBackgroundStreamingEnabled();
+        expect(enabled).toBe(true);
+    });
 });
 
 describe('background streaming helpers', () => {

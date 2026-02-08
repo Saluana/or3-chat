@@ -41,6 +41,16 @@ type AdminActor = {
     userId?: Id<'users'>;
 };
 
+function inferProviderFromIssuer(issuer: string | undefined): string {
+    if (!issuer) return 'clerk';
+    if (issuer.includes('clerk')) return 'clerk';
+    const marker = '/auth/';
+    const markerIndex = issuer.lastIndexOf(marker);
+    if (markerIndex === -1) return 'clerk';
+    const provider = issuer.slice(markerIndex + marker.length).trim();
+    return provider || 'clerk';
+}
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -53,12 +63,13 @@ type AdminActor = {
  */
 async function getAuthAccount(
     ctx: MutationCtx | QueryCtx,
-    identity: { subject: string }
+    identity: { subject: string; issuer?: string }
 ): Promise<{ userId: Id<'users'> }> {
+    const provider = inferProviderFromIssuer(identity.issuer);
     const authAccount = await ctx.db
         .query('auth_accounts')
         .withIndex('by_provider', (q) =>
-            q.eq('provider', 'clerk').eq('provider_user_id', identity.subject)
+            q.eq('provider', provider).eq('provider_user_id', identity.subject)
         )
         .first();
 
@@ -171,11 +182,12 @@ export const ensureDeploymentAdmin = mutation({
         if (!identity) {
             throw new Error('Not authenticated');
         }
+        const provider = inferProviderFromIssuer(identity.issuer);
 
         const authAccount = await ctx.db
             .query('auth_accounts')
             .withIndex('by_provider', (q) =>
-                q.eq('provider', 'clerk').eq('provider_user_id', identity.subject)
+                q.eq('provider', provider).eq('provider_user_id', identity.subject)
             )
             .first();
 

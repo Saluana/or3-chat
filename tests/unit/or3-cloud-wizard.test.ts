@@ -59,6 +59,20 @@ describe('or3 cloud wizard validation', () => {
         );
     });
 
+    it('allows basic-auth with convex providers when convex url is set', () => {
+        const result = validateAnswers({
+            ...validRecommendedAnswers(),
+            authProvider: 'basic-auth',
+            syncEnabled: true,
+            syncProvider: 'convex',
+            storageEnabled: false,
+            storageProvider: 'fs',
+            convexUrl: 'https://demo-123.convex.cloud',
+        });
+        expect(result.ok).toBe(true);
+        expect(result.errors).toHaveLength(0);
+    });
+
     it('redacts secret values in review output', () => {
         const summary = buildRedactedSummary(validRecommendedAnswers());
         expect(summary).toContain('OR3_BASIC_AUTH_JWT_SECRET=<redacted>');
@@ -94,7 +108,7 @@ describe('or3 cloud wizard apply', () => {
         expect(result.providerModules).toContain('or3-provider-sqlite/nuxt');
     });
 
-    it('does not include convex dev command in deploy plan', () => {
+    it('includes convex dev --once command in deploy plan when convex is selected', () => {
         const plan = buildDeployPlan({
             ...validRecommendedAnswers(),
             deploymentTarget: 'local-dev',
@@ -105,7 +119,7 @@ describe('or3 cloud wizard apply', () => {
             (command) => `${command.command} ${command.args.join(' ')}`
         );
         expect(commands).toContain('bun run dev:ssr');
-        expect(commands).not.toContain('bunx convex dev');
+        expect(commands).toContain('bunx convex dev --once');
     });
 
     it('rejects invalid package manager values', async () => {
@@ -152,6 +166,38 @@ describe('or3 cloud wizard apply', () => {
         expect(plan.commands.bun).toContain('file:../or3-provider-fs');
         expect(plan.commands.bun).toContain('file:../or3-provider-sqlite');
         expect(plan.commands.bun).toContain('better-sqlite3');
+    });
+
+    it('resolves local provider package specs from ancestor directories', async () => {
+        const rootDir = await mkdtemp(resolve(tmpdir(), 'or3-wizard-ancestor-provider-'));
+        const instanceDir = resolve(rootDir, 'sandbox', 'bcx', 'or3-chat');
+        await mkdir(instanceDir, { recursive: true });
+
+        for (const packageName of [
+            'or3-provider-basic-auth',
+            'or3-provider-convex',
+        ]) {
+            const providerDir = resolve(rootDir, packageName);
+            await mkdir(providerDir, { recursive: true });
+            await writeFile(
+                resolve(providerDir, 'package.json'),
+                JSON.stringify({ name: packageName, version: '0.0.0' }),
+                'utf8'
+            );
+        }
+
+        const answers = {
+            ...validRecommendedAnswers(),
+            instanceDir,
+            syncProvider: 'convex',
+            storageEnabled: false,
+            storageProvider: 'fs',
+            convexUrl: 'https://demo-123.convex.cloud',
+        };
+        const plan = createDependencyInstallPlan(answers);
+
+        expect(plan.commands.bun).toContain('file:../../../or3-provider-basic-auth');
+        expect(plan.commands.bun).toContain('file:../../../or3-provider-convex');
     });
 
     it('merges env updates and preserves unrelated keys/comments', async () => {

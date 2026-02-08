@@ -309,6 +309,10 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 packageName: 'or3-provider-convex',
                 reason: 'Convex sync gateway and workspace store provider.',
             },
+            {
+                packageName: 'convex',
+                reason: 'Convex CLI/runtime needed for `bunx convex dev --once` and generated types.',
+            },
         ],
         fields: [
             {
@@ -374,6 +378,10 @@ export const providerCatalog: WizardProviderDescriptor[] = [
             {
                 packageName: 'or3-provider-convex',
                 reason: 'Convex storage adapter.',
+            },
+            {
+                packageName: 'convex',
+                reason: 'Convex CLI/runtime needed for `bunx convex dev --once` and generated types.',
             },
         ],
         fields: [],

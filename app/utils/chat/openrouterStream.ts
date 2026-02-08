@@ -390,6 +390,8 @@ export function isBackgroundStreamingEnabled(): boolean {
     };
     const configEnabled = runtimeConfig.public?.backgroundStreaming?.enabled;
     if (configEnabled === false) return false;
+    // Explicit config should win over stale local cache.
+    if (configEnabled === true) return true;
     
     // Check cached result
     if (typeof localStorage !== 'undefined') {
@@ -397,8 +399,6 @@ export function isBackgroundStreamingEnabled(): boolean {
         if (cached === 'true') return true;
         if (cached === 'false') return false;
     }
-
-    if (configEnabled === true) return true;
 
     // Default: assume not available until first successful background request
     return false;

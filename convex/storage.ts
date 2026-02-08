@@ -32,6 +32,16 @@ import type { Id } from './_generated/dataModel';
 /** Maximum file size in bytes (100MB) */
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 
+function inferProviderFromIssuer(issuer: string | undefined): string {
+    if (!issuer) return 'clerk';
+    if (issuer.includes('clerk')) return 'clerk';
+    const marker = '/auth/';
+    const markerIndex = issuer.lastIndexOf(marker);
+    if (markerIndex === -1) return 'clerk';
+    const provider = issuer.slice(markerIndex + marker.length).trim();
+    return provider || 'clerk';
+}
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -52,11 +62,12 @@ async function verifyWorkspaceMembership(
     if (!identity) {
         throw new Error('Unauthorized: No identity');
     }
+    const provider = inferProviderFromIssuer(identity.issuer);
 
     const authAccount = await ctx.db
         .query('auth_accounts')
         .withIndex('by_provider', (q) =>
-            q.eq('provider', 'clerk').eq('provider_user_id', identity.subject)
+            q.eq('provider', provider).eq('provider_user_id', identity.subject)
         )
         .first();
 
