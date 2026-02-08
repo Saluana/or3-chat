@@ -1441,3 +1441,174 @@ and are harder to debug. Explicit is better than implicit.
 ```
 
 Delete the "or use plugin-based approach" line entirely.
+
+---
+
+## 36) `file:../...` dependencies make the repo non-installable outside your local workspace
+
+**File**: `package.json:49-50`
+
+**Snippet**:
+```json
+"or3-provider-clerk": "file:../or3-provider-clerk",
+"or3-provider-convex": "file:../or3-provider-convex"
+```
+
+**Why this is bad**:
+This hard-codes parent-directory paths that only exist on your machine/workspace layout. Anyone cloning just `or3-chat` gets a broken install unless they manually recreate your sibling repo structure.
+
+**Real-world consequences**:
+1. Fresh clones fail `bun install`.
+2. CI/CD fails unless the pipeline checks out extra sibling repos.
+3. The repo is not self-contained, so reproducibility is gone.
+4. “Provider decoupling complete” is false for anyone outside your local setup.
+
+**Suggested fix**:
+Use one of these, in order:
+1. Real published versions: `"or3-provider-convex": "^x.y.z"`.
+2. Bun workspace setup inside one repository and `"workspace:*"`.
+3. If temporary local linking is required, keep it out of committed `package.json` (documented local override only).
+
+---
+
+## 37) You marked “CI integrated” complete, but there is no CI workflow using the check
+
+**File**: `planning/provider-decoupling/phase-3-task.md:185`
+
+**Snippet**:
+```md
+- [x] Add script to CI (`bun run check-imports`).
+```
+
+**Why this is bad**:
+You checked a gate that was never implemented. This is process fraud, not just docs drift.
+
+**Real-world consequences**:
+1. Guardrail only runs when someone remembers to run it locally.
+2. Provider imports can regress silently.
+3. Future contributors trust a protection that does not exist.
+
+**Suggested fix**:
+Either:
+1. Add an actual workflow in `.github/workflows/*.yml` that runs `bun run check-imports`.
+2. Or uncheck this item and mark it explicitly pending.
+
+---
+
+## 38) You declared no-provider matrix “green” while explicitly documenting typecheck failures
+
+**File**: `planning/provider-decoupling/phase-3-task.md:220`, `planning/provider-decoupling/phase-3-task.md:226`
+
+**Snippet**:
+```md
+- [x] `bun run type-check` — 1 error in clerk-specific test file only
+...
+- [x] `bun run type-check` — 3 errors all in convex-specific files/config
+```
+
+**Why this is bad**:
+The requirement is pass/fail, not “fails but I feel okay about it.” A matrix with errors is not passing.
+
+**Real-world consequences**:
+1. Release decisions are made on false signals.
+2. “No provider installed” compatibility remains unproven.
+3. People waste time debugging known failing states that were reported as complete.
+
+**Suggested fix**:
+Make the matrix binary again:
+1. Move provider-specific tests out of host or gate them.
+2. Make no-provider scenarios typecheck with zero errors.
+3. Only then check the matrix boxes.
+
+---
+
+## 39) Host tests now deep-import provider internals, forcing brittle tsconfig hacks
+
+**Files**:
+- `server/sync/gateway/impls/__tests__/convex-sync-gateway-adapter.test.ts:3`
+- `app/core/sync/providers/__tests__/convex-sync-provider.test.ts:2`
+- `nuxt.config.ts:267-268`
+- `nuxt.config.ts:318-319`
+
+**Snippet**:
+```ts
+import { ConvexSyncGatewayAdapter } from 'or3-provider-convex/src/runtime/server/sync/convex-sync-gateway-adapter';
+```
+
+```ts
+'or3-provider-convex/src/*': ['../node_modules/or3-provider-convex/src/*']
+```
+
+**Why this is bad**:
+You coupled host tests to package private internals (`src/runtime/**`). Then you patched Nuxt TS config to make those illegal imports resolve. That is backwards architecture: tests now dictate package internals.
+
+**Real-world consequences**:
+1. Any internal refactor in provider package breaks host tests.
+2. Dist-only package publishing breaks host typecheck immediately.
+3. You lock the package to source layout forever.
+
+**Suggested fix**:
+1. Move provider-internal tests to provider repos.
+2. Test host behavior through public package entrypoints/contracts only.
+3. Delete `or3-provider-*/src/*` path mappings from host Nuxt config.
+
+---
+
+## 40) Import guardrail pattern is easy to bypass and misses major Convex import forms
+
+**File**: `scripts/check-banned-imports.sh:10`
+
+**Snippet**:
+```bash
+BANNED_PATTERN='@clerk/nuxt|convex-vue|from '\''convex'\''|from "convex"|~~/convex/_generated|packages/or3-provider'
+```
+
+**Why this is bad**:
+This catches only exact `from 'convex'`/`from "convex"` forms. It misses:
+- `from 'convex/browser'`
+- `from 'convex/server'`
+- dynamic imports (`import('convex/...')`)
+- re-export forms
+
+**Real-world consequences**:
+1. Core hot zones can reintroduce Convex coupling without being caught.
+2. Guardrail gives false confidence.
+3. Review burden shifts back to humans for something automation should enforce.
+
+**Suggested fix**:
+Use a stronger pattern, e.g. `from ['"]convex(/|['"])|import\\(['"]convex/`.
+Or switch to a small AST-based import scanner and ban module specifiers by prefix.
+
+---
+
+## 41) “Real npm packages” claim is premature: source-only exports, no build artifact contract
+
+**Files**:
+- `/Users/brendon/Documents/or3/or3-provider-convex/package.json:5-8`
+- `/Users/brendon/Documents/or3/or3-provider-convex/package.json:23-27`
+- `/Users/brendon/Documents/or3/or3-provider-clerk/package.json:5-8`
+- `/Users/brendon/Documents/or3/or3-provider-clerk/package.json:18-21`
+
+**Snippet**:
+```json
+"exports": {
+  "./nuxt": "./src/module.ts",
+  "./src/*": "./src/*"
+},
+"scripts": {
+  "type-check": "tsc --noEmit"
+}
+```
+
+**Why this is bad**:
+You’re shipping raw source and exposing internal `./src/*` as public API while claiming package extraction is complete. There is no build pipeline, no stable dist contract, and no boundary between public surface and internals.
+
+**Real-world consequences**:
+1. Consumers are tied to your exact source layout.
+2. Any TS/loader change in host toolchain can break package loading.
+3. You cannot evolve internals without breaking downstream consumers importing `src/*`.
+
+**Suggested fix**:
+1. Define public API exports only (`./nuxt`, maybe `./testing` explicitly).
+2. Add a real build step that emits `dist/`.
+3. Stop exporting `./src/*` and stop deep-importing internals from host.

@@ -638,6 +638,24 @@
                     "summary": "Authoritative reference for every OR3 configuration setting (base + cloud). Documents all config paths and environment variables with defaults, validation rules, and how each setting affects behavior."
                 },
                 {
+                    "name": "providers.md",
+                    "path": "/cloud/providers",
+                    "category": "Guide",
+                    "summary": "Practical guide for installing cloud provider packages and wiring them through OR3 cloud config. Covers local-only mode, Clerk-only mode, Clerk + Convex setup, and the Clerk to Convex token-broker bridge flow."
+                },
+                {
+                    "name": "provider-clerk.md",
+                    "path": "/cloud/provider-clerk",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-clerk`. Covers install, required env vars, runtime registrations, and token broker behavior for Clerk-backed auth."
+                },
+                {
+                    "name": "provider-convex.md",
+                    "path": "/cloud/provider-convex",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-convex`. Covers install, Convex backend init/codegen, required config, and the Clerk to Convex bridge flow."
+                },
+                {
                     "name": "sync-layer.md",
                     "path": "/cloud/sync-layer",
                     "category": "Architecture",

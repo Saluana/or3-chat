@@ -17,11 +17,16 @@ vi.mock('h3', () => ({
 
 const requireWorkspaceSessionMock = vi.fn();
 const setActiveWorkspaceMock = vi.fn();
+const invalidateSharedSessionCacheForIdentityMock = vi.fn();
 vi.mock('../_helpers', () => ({
     requireWorkspaceSession: (...args: unknown[]) => requireWorkspaceSessionMock(...args),
     resolveWorkspaceStore: () => ({
         setActiveWorkspace: (...args: unknown[]) => setActiveWorkspaceMock(...args),
     }),
+}));
+vi.mock('../../../auth/session', () => ({
+    invalidateSharedSessionCacheForIdentity: (...args: unknown[]) =>
+        invalidateSharedSessionCacheForIdentityMock(...args),
 }));
 
 function makeEvent(): H3Event {
@@ -35,8 +40,11 @@ describe('POST /api/workspaces/active', () => {
             authenticated: true,
             user: { id: 'user-1' },
             workspace: { id: 'ws-1' },
+            provider: 'test-provider',
+            providerUserId: 'provider-user-1',
         });
         setActiveWorkspaceMock.mockReset().mockResolvedValue(undefined);
+        invalidateSharedSessionCacheForIdentityMock.mockReset();
     });
 
     it('returns 400 when workspace id is missing', async () => {
@@ -62,6 +70,10 @@ describe('POST /api/workspaces/active', () => {
         expect(setActiveWorkspaceMock).toHaveBeenCalledWith({
             userId: 'user-1',
             workspaceId: 'ws-2',
+        });
+        expect(invalidateSharedSessionCacheForIdentityMock).toHaveBeenCalledWith({
+            provider: 'test-provider',
+            providerUserId: 'provider-user-1',
         });
     });
 

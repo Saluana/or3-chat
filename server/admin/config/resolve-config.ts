@@ -24,7 +24,6 @@ import { defineOr3CloudConfig } from '~~/utils/or3-cloud-config';
 import type { Or3CloudConfig } from '~~/types/or3-cloud-config';
 import {
     AUTH_PROVIDER_IDS,
-    BACKGROUND_PROVIDER_IDS,
     DEFAULT_BACKGROUND_PROVIDER_ID,
     DEFAULT_STORAGE_PROVIDER_ID,
     DEFAULT_SYNC_PROVIDER_ID,
@@ -204,7 +203,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
             maxConversations: envNum(env.OR3_MAX_CONVERSATIONS, DEFAULT_MAX_CONVERSATIONS) ?? DEFAULT_MAX_CONVERSATIONS,
             maxMessagesPerDay: envNum(env.OR3_MAX_MESSAGES_PER_DAY, DEFAULT_MAX_MESSAGES_PER_DAY) ?? DEFAULT_MAX_MESSAGES_PER_DAY,
             storageProvider: (env.OR3_LIMITS_STORAGE_PROVIDER ??
-                (syncEnabled ? LIMITS_PROVIDER_IDS.convex : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
+                (syncEnabled ? (env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
         },
         security: {
             allowedOrigins: env.OR3_ALLOWED_ORIGINS
@@ -239,7 +238,7 @@ export function buildOr3CloudConfigFromEnv(env: EnvMap) {
         backgroundStreaming: {
             enabled: env.OR3_BACKGROUND_STREAMING_ENABLED === 'true',
             storageProvider: (env.OR3_BACKGROUND_STREAMING_PROVIDER ??
-                (syncEnabled ? BACKGROUND_PROVIDER_IDS.convex : DEFAULT_BACKGROUND_PROVIDER_ID)) as BackgroundProviderId,
+                (syncEnabled ? (env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) : DEFAULT_BACKGROUND_PROVIDER_ID)) as BackgroundProviderId,
             maxConcurrentJobs: envNum(env.OR3_BACKGROUND_MAX_JOBS, DEFAULT_BACKGROUND_MAX_JOBS) ?? DEFAULT_BACKGROUND_MAX_JOBS,
             jobTimeoutSeconds: envNum(env.OR3_BACKGROUND_JOB_TIMEOUT, DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS) ?? DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
         },
