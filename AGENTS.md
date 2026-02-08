@@ -254,3 +254,23 @@ Mock Externalities: Isolate business logic from side effects (databases, APIs) t
 17. **Stale dev servers can look like stale data bugs**
     - If ports (`3000`, `24678`) are already occupied, you may be hitting an old Nuxt process with stale transforms.
     - Always confirm/kill old dev processes before concluding a code change did not apply.
+
+18. **OpenRouter in SSR mode must use server route when no client key exists**
+    - If `ssrAuthEnabled=true` and no client/user OpenRouter key is available, do not fall back to direct OpenRouter.
+    - Require `/api/openrouter/stream` and fail loudly if it is missing/unavailable.
+
+19. **FS token upload endpoint is PUT-only**
+    - `/api/storage/fs/upload?token=...` must be called with `PUT`.
+    - If presign metadata is missing `method`, default to `PUT` for the FS upload endpoint to avoid silent `POST` -> `404`.
+
+20. **Server-route availability cache can cause false negatives**
+    - `localStorage` keys like `or3:server-route-available` and `or3:background-streaming-available` can persist stale state across runtime/provider switches.
+    - Clear or invalidate these caches when behavior looks inconsistent after changing setup.
+
+21. **“404 on API route” is often the wrong dev process**
+    - If `3000`/HMR ports are already occupied, requests may hit an old Nuxt instance.
+    - Verify/kill stale processes before treating 404s as code regressions.
+
+22. **Wizard success needs both wiring and installed packages**
+    - `or3.providers.generated.ts` must include selected provider modules.
+    - Selected provider packages must also be installed/resolvable in the target instance, or provider routes/components disappear at runtime.
