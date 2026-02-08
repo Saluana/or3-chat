@@ -58,7 +58,7 @@ function providerFieldsStep(
     return {
         id,
         title,
-        description: `Configure ${descriptor.label}`,
+        description: `Configure your ${descriptor.label.replace(/ \(.*\)$/, '')} settings. Press Enter to accept defaults.`,
         fields: descriptor.fields,
         canSkip: (current) => {
             if (!current.ssrAuthEnabled) return true;
@@ -96,19 +96,21 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
     const steps: WizardStep[] = [
         {
             id: 'target',
-            title: 'Target',
-            description: 'Choose where to write config and what run mode to prepare.',
+            title: 'Getting Started',
+            description: 'First, let\'s figure out where your OR3 project lives and how you want to run it.',
             fields: [
                 {
                     key: 'instanceDir',
                     type: 'text',
-                    label: 'Instance Directory',
+                    label: 'Project folder',
+                    help: 'The folder where your OR3 Chat project is. Press Enter to use the current folder.',
                     required: true,
                 },
                 {
                     key: 'envFile',
                     type: 'select',
-                    label: 'Environment File',
+                    label: 'Settings file',
+                    help: 'Where to save your settings. .env is the standard choice.',
                     defaultValue: '.env',
                     options: [
                         { label: '.env (recommended)', value: '.env' },
@@ -118,36 +120,38 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 {
                     key: 'deploymentTarget',
                     type: 'select',
-                    label: 'Deployment Target',
+                    label: 'How will you run this?',
+                    help: 'Choose "Local Dev" to try things out, or "Production" when you\'re ready to go live.',
                     options: [
-                        { label: 'Local Dev', value: 'local-dev' },
-                        { label: 'Production Build', value: 'prod-build' },
+                        { label: 'Local Dev — for testing and development', value: 'local-dev' },
+                        { label: 'Production — ready to deploy', value: 'prod-build' },
                     ],
                 },
                 {
                     key: 'dryRun',
                     type: 'boolean',
-                    label: 'Dry Run (show changes only)',
+                    label: 'Preview only? (no files will be changed)',
                     defaultValue: false,
                 },
             ],
         },
         {
             id: 'preset',
-            title: 'Preset',
-            description: 'Choose a starting stack.',
+            title: 'Quick Setup',
+            description: 'Pick a starting template. The recommended option works out of the box — no external services needed.',
             fields: [
                 {
                     key: 'presetName',
                     type: 'select',
-                    label: 'Preset',
+                    label: 'Which setup do you want?',
+                    help: 'The recommended setup stores everything on your server. The legacy option uses external Clerk/Convex services.',
                     options: [
                         {
-                            label: 'Recommended: Basic Auth + SQLite + FS',
+                            label: 'Recommended — self-contained (no third-party accounts needed)',
                             value: 'recommended',
                         },
                         {
-                            label: 'Legacy: Clerk + Convex + Convex',
+                            label: 'Legacy — uses Clerk + Convex (requires accounts with those services)',
                             value: 'legacy-clerk-convex',
                         },
                     ],
@@ -156,112 +160,122 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
         },
         {
             id: 'branding',
-            title: 'Branding',
+            title: 'Your Brand',
+            description: 'Give your instance a name. You can always change this later.',
             fields: [
                 {
                     key: 'or3SiteName',
                     type: 'text',
-                    label: 'Site Name',
+                    label: 'What should your site be called?',
+                    help: 'This name appears in the browser tab and UI. Example: "Acme AI Chat"',
                     required: true,
                 },
                 {
                     key: 'or3LogoUrl',
                     type: 'text',
-                    label: 'Logo URL (optional)',
+                    label: 'Logo URL (optional, press Enter to skip)',
+                    help: 'A URL to your logo image. You can add this later.',
                 },
                 {
                     key: 'or3FaviconUrl',
                     type: 'text',
-                    label: 'Favicon URL (optional)',
+                    label: 'Favicon URL (optional, press Enter to skip)',
+                    help: 'The small icon shown in the browser tab.',
                 },
             ],
         },
         {
             id: 'themes',
-            title: 'Themes',
+            title: 'Look & Feel',
+            description: 'Choose how your chat app looks.',
             fields: [
                 {
                     key: 'or3DefaultTheme',
                     type: 'select',
-                    label: 'Default Theme',
+                    label: 'Visual style',
+                    help: '"retro" has a pixel-art CRT look. "blank" is a clean modern starting point.',
                     options: [
-                        { label: 'retro', value: 'retro' },
-                        { label: 'blank', value: 'blank' },
+                        { label: 'retro — pixel-art, CRT vibes', value: 'retro' },
+                        { label: 'blank — clean and minimal', value: 'blank' },
                     ],
                 },
                 {
                     key: 'themeInstallMode',
                     type: 'select',
-                    label: 'Theme Install Mode',
+                    label: 'Theme installation',
+                    help: 'You can install additional themes later. For now, using what\'s already included is fine.',
                     options: [
-                        { label: 'Use existing themes', value: 'use-existing' },
-                        { label: 'Install selected themes', value: 'install-selected' },
-                        { label: 'Install all themes', value: 'install-all' },
+                        { label: 'Use what\'s already installed', value: 'use-existing' },
+                        { label: 'Install specific themes', value: 'install-selected' },
+                        { label: 'Install all available themes', value: 'install-all' },
                     ],
                 },
                 {
                     key: 'themesToInstall',
                     type: 'multi-string',
-                    label: 'Themes to Install',
+                    label: 'Themes to install (comma-separated)',
                 },
             ],
         },
         {
             id: 'features',
             title: 'Features',
+            description: 'Turn features on or off. Everything is enabled by default — just press Enter to keep the defaults.',
             fields: [
-                { key: 'workflowsEnabled', type: 'boolean', label: 'Enable Workflows' },
-                { key: 'documentsEnabled', type: 'boolean', label: 'Enable Documents' },
-                { key: 'backupEnabled', type: 'boolean', label: 'Enable Backups' },
-                { key: 'mentionsEnabled', type: 'boolean', label: 'Enable Mentions' },
-                { key: 'dashboardEnabled', type: 'boolean', label: 'Enable Dashboard' },
+                { key: 'workflowsEnabled', type: 'boolean', label: 'Workflows (automation pipelines)' },
+                { key: 'documentsEnabled', type: 'boolean', label: 'Documents (rich text editor)' },
+                { key: 'backupEnabled', type: 'boolean', label: 'Backups (export/import conversations)' },
+                { key: 'mentionsEnabled', type: 'boolean', label: 'Mentions (@-mention users)' },
+                { key: 'dashboardEnabled', type: 'boolean', label: 'Dashboard (analytics overview)' },
             ],
         },
         {
             id: 'providers',
-            title: 'Providers',
+            title: 'Backend Services',
             description:
-                'Pick auth, sync, and storage providers. Only implemented providers are selectable.',
+                'These control how your instance handles user accounts, data sync, and file storage.\n' +
+                'The defaults are already set from your template choice — press Enter to keep them.',
             fields: [
                 {
                     key: 'ssrAuthEnabled',
                     type: 'boolean',
-                    label: 'Enable SSR Cloud Features',
+                    label: 'Enable cloud features (user accounts, sync, storage)',
+                    help: 'This must be on for multi-user or hosted deployments.',
                     defaultValue: true,
                 },
                 {
                     key: 'authProvider',
                     type: 'select',
-                    label: 'Auth Provider',
+                    label: 'How should users log in?',
                     options: providerOptions('auth'),
                 },
                 {
                     key: 'guestAccessEnabled',
                     type: 'boolean',
-                    label: 'Allow Guest Access',
+                    label: 'Allow guests to use the app without an account',
                 },
                 {
                     key: 'syncEnabled',
                     type: 'boolean',
-                    label: 'Enable Sync',
+                    label: 'Enable data sync (conversations sync across devices)',
                     defaultValue: true,
                 },
                 {
                     key: 'syncProvider',
                     type: 'select',
-                    label: 'Sync Provider',
+                    label: 'Where should synced data be stored?',
                     options: providerOptions('sync'),
                 },
                 {
                     key: 'storageEnabled',
                     type: 'boolean',
-                    label: 'Enable Storage',
+                    label: 'Enable file storage (attachments, images)',
                     defaultValue: true,
                 },
                 {
                     key: 'storageProvider',
                     type: 'select',
-                    label: 'Storage Provider',
+                    label: 'Where should uploaded files be stored?',
                     options: providerOptions('storage'),
                 },
             ],
@@ -270,7 +284,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
 
     const authStep = providerFieldsStep(
         'provider-auth',
-        'Auth Provider Details',
+        'Login Setup',
         answers,
         'auth'
     );
@@ -278,7 +292,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
 
     const syncStep = providerFieldsStep(
         'provider-sync',
-        'Sync Provider Details',
+        'Database Setup',
         answers,
         'sync'
     );
@@ -286,7 +300,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
 
     const storageStep = providerFieldsStep(
         'provider-storage',
-        'Storage Provider Details',
+        'File Storage Setup',
         answers,
         'storage'
     );
@@ -294,96 +308,110 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
 
     steps.push({
         id: 'openrouter-limits-security',
-        title: 'Cloud Options',
+        title: 'AI, Limits & Security',
+        description: 'Optional settings for AI access, usage limits, and security. Defaults are fine for most setups.',
         fields: [
             {
                 key: 'openrouterInstanceApiKey',
                 type: 'password',
-                label: 'OpenRouter Instance API Key (optional)',
+                label: 'OpenRouter API key (optional, press Enter to skip)',
+                help: 'If provided, your users can chat using your API key. Get one at openrouter.ai.',
                 secret: true,
             },
             {
                 key: 'openrouterAllowUserOverride',
                 type: 'boolean',
-                label: 'Allow User OpenRouter Key Override',
+                label: 'Let users bring their own OpenRouter key',
+                help: 'When on, users can enter their own API key in settings.',
             },
             {
                 key: 'openrouterRequireUserKey',
                 type: 'boolean',
-                label: 'Require User OpenRouter Keys',
+                label: 'Require users to provide their own key',
+                help: 'When on, users must enter their own key to use the app. Useful if you don\'t want to pay for API usage.',
             },
             {
                 key: 'limitsEnabled',
                 type: 'boolean',
-                label: 'Enable Rate Limits',
+                label: 'Enable usage limits',
+                help: 'Helps prevent abuse by capping how much users can do.',
             },
             {
                 key: 'requestsPerMinute',
                 type: 'number',
-                label: 'Requests Per Minute',
+                label: 'Max requests per minute per user',
             },
             {
                 key: 'maxConversations',
                 type: 'number',
-                label: 'Max Conversations (0 = unlimited)',
+                label: 'Max conversations per user (0 = unlimited)',
             },
             {
                 key: 'maxMessagesPerDay',
                 type: 'number',
-                label: 'Max Messages Per Day (0 = unlimited)',
+                label: 'Max messages per day per user (0 = unlimited)',
             },
             {
                 key: 'limitsStorageProvider',
                 type: 'text',
-                label: 'Limits Storage Provider (optional)',
+                label: 'Limits storage backend (optional, press Enter to skip)',
+                help: 'Where usage counters are stored. Leave blank for automatic.',
             },
             {
                 key: 'allowedOrigins',
                 type: 'multi-string',
-                label: 'Allowed Origins (CSV)',
+                label: 'Allowed web origins (comma-separated, press Enter to skip)',
+                help: 'Restrict which websites can access your instance. Example: https://my-app.com',
             },
             {
                 key: 'forceHttps',
                 type: 'boolean',
                 label: 'Force HTTPS',
+                help: 'Recommended for production. Ensures all traffic is encrypted.',
             },
             {
                 key: 'trustProxy',
                 type: 'boolean',
-                label: 'Trust Proxy Headers',
+                label: 'Behind a reverse proxy (nginx, Cloudflare, etc.)?',
+                help: 'Turn this on if your server is behind a load balancer or CDN.',
             },
             {
                 key: 'forwardedForHeader',
                 type: 'select',
-                label: 'Forwarded For Header',
+                label: 'Proxy IP header',
+                help: 'How your proxy passes the real user IP. Most proxies use x-forwarded-for.',
                 options: [
-                    { label: 'x-forwarded-for', value: 'x-forwarded-for' },
-                    { label: 'x-real-ip', value: 'x-real-ip' },
+                    { label: 'x-forwarded-for (most common)', value: 'x-forwarded-for' },
+                    { label: 'x-real-ip (nginx default)', value: 'x-real-ip' },
                 ],
             },
             {
                 key: 'strictConfig',
                 type: 'boolean',
-                label: 'Strict Config Validation',
+                label: 'Strict validation (fail on missing settings)',
+                help: 'Automatically enabled in production. In dev mode, missing optional settings just show warnings.',
             },
         ],
     });
 
     steps.push({
         id: 'convex-env',
-        title: 'Convex Backend Environment',
+        title: 'Convex Connection',
         description:
-            'Only needed for Clerk + Convex flows. Values are set using `bunx convex env set`.',
+            'Your Clerk + Convex setup needs a couple more values.\n' +
+            'These are set in the Convex dashboard, not in your project files.',
         fields: [
             {
                 key: 'convexClerkIssuerUrl',
                 type: 'text',
                 label: 'Clerk Issuer URL',
+                help: 'Find this in your Clerk dashboard under JWT Templates.',
             },
             {
                 key: 'convexAdminJwtSecret',
                 type: 'password',
-                label: 'OR3 Admin JWT Secret',
+                label: 'Admin JWT Secret',
+                help: 'A secret key for server-to-server auth with Convex.',
                 secret: true,
             },
         ],
@@ -397,8 +425,8 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
 
     steps.push({
         id: 'review',
-        title: 'Review',
-        description: 'Review redacted values before writing.',
+        title: 'Review & Confirm',
+        description: 'Here\'s what will be written. Secrets are hidden for safety.',
         fields: [],
     });
 

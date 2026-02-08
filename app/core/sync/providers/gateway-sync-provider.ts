@@ -54,6 +54,18 @@ export interface GatewaySyncProviderConfig {
     pullLimit?: number;
 }
 
+class GatewaySyncRequestError extends Error {
+    status: number;
+    path: string;
+
+    constructor(path: string, status: number, message: string) {
+        super(`[gateway-sync] ${path} failed (${status}): ${message}`);
+        this.name = 'GatewaySyncRequestError';
+        this.status = status;
+        this.path = path;
+    }
+}
+
 /**
  * Truncate and sanitize error text for user-facing display.
  * Removes JSON blobs, stack traces, and limits length.
@@ -102,7 +114,7 @@ async function requestJson<T>(
     if (!res.ok) {
         const text = await res.text();
         const sanitized = sanitizeErrorText(text);
-        throw new Error(`[gateway-sync] ${path} failed (${res.status}): ${sanitized}`);
+        throw new GatewaySyncRequestError(path, res.status, sanitized);
     }
 
     const text = await res.text();
@@ -194,6 +206,23 @@ export function createGatewaySyncProvider(
                     await poll();
                 } catch (error) {
                     console.error('[gateway-sync] Poll failed:', error);
+                    if (
+                        error instanceof GatewaySyncRequestError &&
+                        (error.status === 401 || error.status === 403)
+                    ) {
+                        active = false;
+                        if (typeof window !== 'undefined') {
+                            window.dispatchEvent(
+                                new CustomEvent('or3:sync-session-invalid', {
+                                    detail: {
+                                        status: error.status,
+                                        path: error.path,
+                                        workspaceId: scope.workspaceId,
+                                    },
+                                })
+                            );
+                        }
+                    }
                 } finally {
                     running = false;
                 }

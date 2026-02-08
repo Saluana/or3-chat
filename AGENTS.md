@@ -233,3 +233,24 @@ Mock Externalities: Isolate business logic from side effects (databases, APIs) t
 12. **Basic Auth needs bootstrap creds to be usable on first boot**
     - The basic-auth provider is not just `OR3_BASIC_AUTH_JWT_SECRET`: it also supports/needs bootstrap email/password (`OR3_BASIC_AUTH_BOOTSTRAP_EMAIL`, `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD`) or you’ve built an instance nobody can log into.
     - Basic-auth also has its own auth DB path (`OR3_BASIC_AUTH_DB_PATH`) that is separate from the sync SQLite DB (`OR3_SQLITE_DB_PATH`).
+
+13. **Provider edits must be rebuilt because `or3-chat` consumes provider `dist/`**
+    - With `file:` provider dependencies, the sandbox can be correctly linked but still show old behavior if provider `dist/` was not rebuilt.
+    - After changing `or3-provider-*` source, run the provider build before testing in `or3-chat`.
+
+14. **Session identity split matters: internal user ID vs provider user ID**
+    - `SessionContext.user.id` must be the internal store user ID (used by workspace/sync/storage APIs).
+    - `SessionContext.providerUserId` must remain the external provider subject for cache keys/admin checks.
+    - Mixing these IDs causes “workspace exists but list is empty” style bugs.
+
+15. **SQLite workspace resolution must respect `users.active_workspace_id`**
+    - When multiple memberships exist, default-workspace resolution must prefer the active pointer.
+    - Falling back to “first membership row” causes post-login drift where old workspace data appears after switch/reload.
+
+16. **Auth UI adapters must trigger global session refresh events**
+    - Provider-owned auth components should dispatch a session-change signal after sign-in/sign-out/password changes.
+    - Core should listen and call `useSessionContext().refresh()` so workspace DB switching happens immediately without manual refresh.
+
+17. **Stale dev servers can look like stale data bugs**
+    - If ports (`3000`, `24678`) are already occupied, you may be hitting an old Nuxt process with stale transforms.
+    - Always confirm/kill old dev processes before concluding a code change did not apply.

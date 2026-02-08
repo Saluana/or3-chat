@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -122,6 +122,36 @@ describe('or3 cloud wizard apply', () => {
                 packageManager: 'pnpm' as never,
             })
         ).rejects.toThrow('Invalid package manager');
+    });
+
+    it('uses local provider package specs when sibling workspaces exist', async () => {
+        const sandboxDir = await mkdtemp(resolve(tmpdir(), 'or3-wizard-local-provider-'));
+        const chatDir = resolve(sandboxDir, 'or3-chat');
+        await mkdir(chatDir, { recursive: true });
+
+        for (const packageName of [
+            'or3-provider-basic-auth',
+            'or3-provider-fs',
+            'or3-provider-sqlite',
+        ]) {
+            const providerDir = resolve(sandboxDir, packageName);
+            await mkdir(providerDir, { recursive: true });
+            await writeFile(
+                resolve(providerDir, 'package.json'),
+                JSON.stringify({ name: packageName, version: '0.0.0' }),
+                'utf8'
+            );
+        }
+
+        const answers = {
+            ...validRecommendedAnswers(),
+            instanceDir: chatDir,
+        };
+        const plan = createDependencyInstallPlan(answers);
+        expect(plan.commands.bun).toContain('file:../or3-provider-basic-auth');
+        expect(plan.commands.bun).toContain('file:../or3-provider-fs');
+        expect(plan.commands.bun).toContain('file:../or3-provider-sqlite');
+        expect(plan.commands.bun).toContain('better-sqlite3');
     });
 
     it('merges env updates and preserves unrelated keys/comments', async () => {

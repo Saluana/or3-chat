@@ -133,6 +133,10 @@ function validateFieldLevel(answers: WizardAnswers): {
             );
         } else if (!isEmail(email)) {
             errors.push('OR3_BASIC_AUTH_BOOTSTRAP_EMAIL must be a valid email.');
+        } else if (password.length < 8) {
+            errors.push(
+                'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD must be at least 8 characters.'
+            );
         }
 
         if (!answers.basicAuthDbPath?.trim()) {

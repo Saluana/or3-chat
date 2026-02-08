@@ -203,6 +203,18 @@ describe('resolveSessionContext provisioning and caching', () => {
         expect(authWorkspaceStoreMock.getWorkspaceRole).toHaveBeenCalledTimes(1);
     });
 
+    it('uses internal user id in session and preserves provider user id', async () => {
+        authWorkspaceStoreMock.getOrCreateUser.mockResolvedValueOnce({
+            userId: 'internal-user-42',
+        });
+
+        const session = await resolveSessionContext(makeEvent());
+
+        expect(session.authenticated).toBe(true);
+        expect(session.user?.id).toBe('internal-user-42');
+        expect(session.providerUserId).toBe('user-1');
+    });
+
     it('expires shared cache entries after ttl', async () => {
         vi.useFakeTimers();
 

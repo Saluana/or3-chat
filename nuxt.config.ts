@@ -252,6 +252,7 @@ export default defineNuxtConfig({
             // Single source of truth for client gating.
             // Avoid inferring enablement from presence of publishable keys.
             ssrAuthEnabled: effectiveSsrAuthEnabled,
+            authProvider: or3CloudConfig.auth.provider,
             guestAccessEnabled: or3CloudConfig.auth.guestAccessEnabled ?? false,
             openRouter: {
                 allowUserOverride:
