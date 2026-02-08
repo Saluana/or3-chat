@@ -186,3 +186,26 @@ Mock Externalities: Isolate business logic from side effects (databases, APIs) t
 -   ❌ **Don’t** introduce new styling systems, random CSS vars, or duplicate theme classes.
 -   ❌ **Don’t** store secrets in `localStorage`; use `kv` and short-lived memory for session only.
 -   ❌ **Don’t** bypass composables that already implement debouncing/indexing.
+
+---
+
+## Agent Accelerators (learned during `or3-provider-sqlite`)
+
+1. **Provider wiring is registry-first (Nitro plugin), not “Nuxt module magic”**
+    - Providers register implementations via server registries (e.g. `registerAuthWorkspaceStore(...)`, `registerSyncGatewayAdapter(...)`) inside a Nitro server plugin.
+    - The Nuxt module should stay thin and only `addServerPlugin(...)`.
+
+2. **SSR boundaries are non-negotiable**
+    - Provider runtime that touches auth/DB must live under `runtime/server/**`.
+    - Don’t import server SDKs or DB drivers into shared/client paths (static builds will explode in creative ways).
+
+3. **Sync invariants that prevent data loss (don’t “simplify”)**
+    - `op_id` is mandatory idempotency: duplicate pushes must replay, never double-apply.
+    - `server_version` must be allocated contiguously/monotonically per workspace (single transaction).
+    - LWW must compare `clock` then `hlc`; deletes are tombstones; GC must respect the **minimum device cursor** + retention.
+
+4.  For provider packages, copy `or3-provider-clerk`/`or3-provider-convex` structure first (`src/module.ts`, runtime register plugin, `vitest.config.ts`, shims). This avoids most registry/module wiring mistakes.
+
+5.   Core auth UI is still Clerk-tied in `app/components/sidebar/SidebarAuthButton.vue` (it renders `SidebarAuthButtonClerk`). The provider-agnostic auth UI adapter is planned in `planning/default-ssr-providers/*`, not fully in core yet.
+
+6.  Reuse the existing server security pattern for auth endpoints: `isSsrAuthEnabled` gate, `Cache-Control: no-store`, per-operation rate limits, and same-origin checks based on host/origin validation (see admin guard + request identity helpers).
