@@ -59,6 +59,16 @@ const MAX_GC_CONTINUATIONS = 10;
 /** Maximum workspaces to schedule for GC per scheduled run */
 const MAX_WORKSPACES_PER_GC_RUN = 50;
 
+function inferProviderFromIssuer(issuer: string | undefined): string {
+    if (!issuer) return 'clerk';
+    if (issuer.includes('clerk')) return 'clerk';
+    const marker = '/auth/';
+    const markerIndex = issuer.lastIndexOf(marker);
+    if (markerIndex === -1) return 'clerk';
+    const provider = issuer.slice(markerIndex + marker.length).trim();
+    return provider || 'clerk';
+}
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -366,12 +376,13 @@ async function verifyWorkspaceMembership(
     if (!identity) {
         throw new Error('Unauthorized: No identity');
     }
+    const provider = inferProviderFromIssuer(identity.issuer);
 
-    // Find user by Clerk subject
+    // Find user by provider subject
     const authAccount = await ctx.db
         .query('auth_accounts')
         .withIndex('by_provider', (q) =>
-            q.eq('provider', 'clerk').eq('provider_user_id', identity.subject)
+            q.eq('provider', provider).eq('provider_user_id', identity.subject)
         )
         .first();
 

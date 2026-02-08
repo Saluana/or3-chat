@@ -190,8 +190,19 @@ export async function applyConvexEnv(
  */
 export function buildDeployPlan(answers: WizardAnswers): CommandSpec[] {
     const commands: CommandSpec[] = [{ step: 'Install dependencies', command: 'bun', args: ['install'] }];
+    const usesConvexProvider =
+        (answers.syncEnabled && answers.syncProvider === 'convex') ||
+        (answers.storageEnabled && answers.storageProvider === 'convex');
 
     if (answers.deploymentTarget === 'local-dev') {
+        if (usesConvexProvider) {
+            commands.push({
+                step: 'Sync Convex backend',
+                command: 'bunx',
+                args: ['convex', 'dev', '--once'],
+                optional: true,
+            });
+        }
         commands.push({
             step: 'Start Nuxt SSR',
             command: 'bun',
@@ -226,16 +237,21 @@ export async function deployAnswers(
     const printableCommands = commands.map(
         (command) => `${command.command} ${command.args.join(' ')}`
     );
+    const optionalStepFailures: string[] = [];
 
     for (const command of commands) {
-        await runCommand(command, answers.instanceDir);
+        try {
+            await runCommand(command, answers.instanceDir);
+        } catch (error) {
+            if (command.optional) {
+                const message = error instanceof Error ? error.message : String(error);
+                optionalStepFailures.push(message);
+                console.warn(`[wizard:deploy] Optional step failed: ${message}`);
+                continue;
+            }
+            throw error;
+        }
     }
-
-    const usesConvexProvider =
-        (answers.syncEnabled && answers.syncProvider === 'convex') ||
-        (answers.storageEnabled && answers.storageProvider === 'convex');
-    const needsConvexDevHint =
-        answers.deploymentTarget === 'local-dev' && usesConvexProvider;
 
     if (answers.deploymentTarget === 'prod-build') {
         return {
@@ -249,8 +265,8 @@ export async function deployAnswers(
     return {
         started: true,
         commands: printableCommands,
-        instructions: needsConvexDevHint
-            ? 'Run `bunx convex dev` in a separate terminal before or alongside `bun run dev:ssr`.'
-            : undefined,
+        instructions: optionalStepFailures.length
+            ? 'Local dev is running. Convex backend sync failed; run `bunx convex dev --once` manually after fixing Convex deployment access.'
+            : 'Local dev is running. Re-run `bunx convex dev --once` after editing Convex functions.',
     };
 }

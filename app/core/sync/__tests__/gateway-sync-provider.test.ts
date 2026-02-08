@@ -10,6 +10,23 @@ function makeOkResponse(body: unknown) {
     } as unknown as Response;
 }
 
+function makeErrorResponse(
+    status: number,
+    body: unknown,
+    headers?: Record<string, string>
+) {
+    return {
+        ok: false,
+        status,
+        text: vi.fn(async () =>
+            typeof body === 'string' ? body : JSON.stringify(body)
+        ),
+        headers: {
+            get: (name: string) => headers?.[name] ?? headers?.[name.toLowerCase()] ?? null,
+        },
+    } as unknown as Response;
+}
+
 function change(version: number, opId: string): SyncChange {
     return {
         serverVersion: version,
@@ -186,5 +203,62 @@ describe('GatewaySyncProvider', () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
 
         unsubscribe();
+    });
+
+    it('stops polling and emits sync-session-invalid event on auth/permission failures', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+
+        const fetchMock = vi.fn(async () =>
+            makeErrorResponse(403, { statusMessage: 'Forbidden' })
+        );
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+
+        const sessionInvalidSpy = vi.fn();
+        window.addEventListener('or3:sync-session-invalid', sessionInvalidSpy);
+
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
+        const scope: SyncScope = { workspaceId: 'ws-1' };
+
+        const unsubscribe = await provider.subscribe(scope, ['messages'], () => undefined, {
+            cursor: 0,
+            limit: 10,
+        });
+
+        await vi.advanceTimersByTimeAsync(100);
+        await Promise.resolve();
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(sessionInvalidSpy).toHaveBeenCalledTimes(1);
+
+        // Provider should stop scheduling polls after 401/403.
+        await vi.advanceTimersByTimeAsync(1000);
+        await Promise.resolve();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        unsubscribe();
+        window.removeEventListener('or3:sync-session-invalid', sessionInvalidSpy);
+    });
+
+    it('surfaces retry-after metadata on 429 push failures', async () => {
+        const fetchMock = vi.fn(async () =>
+            makeErrorResponse(
+                429,
+                { statusMessage: 'Rate limit exceeded. Retry after 4s' },
+                { 'Retry-After': '4' }
+            )
+        );
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+
+        const provider = createGatewaySyncProvider();
+
+        await expect(
+            provider.push({
+                scope: { workspaceId: 'ws-1' },
+                ops: [],
+            })
+        ).rejects.toMatchObject({
+            status: 429,
+            retryAfterMs: 4000,
+        });
     });
 });

@@ -17,8 +17,20 @@ describe('createGatewayStorageProvider', () => {
     it('joins base URL and maps upload/download/commit payloads', async () => {
         const fetchMock = vi
             .fn()
-            .mockResolvedValueOnce(okJson({ url: 'u1', expiresAt: 1 }))
-            .mockResolvedValueOnce(okJson({ url: 'u2', expiresAt: 2 }))
+            .mockResolvedValueOnce(okJson({
+                url: 'u1',
+                expiresAt: 1,
+                method: 'PUT',
+                headers: { 'x-upload': '1' },
+                storageId: 'sid-1',
+            }))
+            .mockResolvedValueOnce(okJson({
+                url: 'u2',
+                expiresAt: 2,
+                method: 'GET',
+                headers: { 'x-download': '1' },
+                storageId: 'sid-2',
+            }))
             .mockResolvedValueOnce(okJson({ ok: true }));
         vi.stubGlobal('fetch', fetchMock);
 
@@ -31,7 +43,7 @@ describe('createGatewayStorageProvider', () => {
         expect(provider.id).toBe('custom-gateway');
         expect(provider.displayName).toBe('Custom Gateway');
 
-        await provider.getPresignedUploadUrl({
+        const uploadResult = await provider.getPresignedUploadUrl({
             workspaceId: 'ws-1',
             hash: 'sha256:abc',
             mimeType: 'image/png',
@@ -39,7 +51,7 @@ describe('createGatewayStorageProvider', () => {
             expiresInMs: 123,
             disposition: 'inline',
         });
-        await provider.getPresignedDownloadUrl({
+        const downloadResult = await provider.getPresignedDownloadUrl({
             workspaceId: 'ws-1',
             hash: 'sha256:abc',
             storageId: 's1',
@@ -76,6 +88,20 @@ describe('createGatewayStorageProvider', () => {
 
         const commitBody = JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string);
         expect(commitBody.storage_provider_id).toBe('custom-gateway');
+        expect(uploadResult).toEqual({
+            url: 'u1',
+            expiresAt: 1,
+            method: 'PUT',
+            headers: { 'x-upload': '1' },
+            storageId: 'sid-1',
+        });
+        expect(downloadResult).toEqual({
+            url: 'u2',
+            expiresAt: 2,
+            method: 'GET',
+            headers: { 'x-download': '1' },
+            storageId: 'sid-2',
+        });
     });
 
     it('includes endpoint and status text in error message', async () => {

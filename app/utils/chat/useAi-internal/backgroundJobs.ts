@@ -32,10 +32,13 @@
  * - Content is never truncated, only extended or synchronized
  */
 
-import { useHooks } from '#imports';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
+import type { HookEngine } from '~/core/hooks/hooks';
+import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
 import { nowSec, newId } from '~/db/util';
 import { upsert } from '~/db';
 import { getDb } from '~/db/client';
+import { resolveNotificationUserId } from '~/core/notifications/notification-user';
 import {
     pollJobStatus,
     subscribeBackgroundJobStream,
@@ -43,6 +46,7 @@ import {
     type BackgroundJobStatus,
 } from '~/utils/chat/openrouterStream';
 import { NotificationService } from '~/core/notifications/notification-service';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import type {
     BackgroundJobTracker,
     BackgroundJobSubscriber,
@@ -81,11 +85,27 @@ export const BACKGROUND_JOB_MUTED_KEY = 'notification_muted_threads';
  */
 export const backgroundJobTrackers = new Map<string, BackgroundJobTracker>();
 
+let cachedNotificationHooks: TypedHookEngine | null = null;
+
 /**
  * Internal helper. Promise-based delay for polling loops.
  */
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Internal helper. Resolves the global hook engine without relying on composable context.
+ * Background trackers can outlive setup/plugin contexts, so `useHooks()` is unsafe here.
+ */
+function resolveNotificationHooks(): TypedHookEngine | null {
+    if (cachedNotificationHooks) return cachedNotificationHooks;
+    const g = globalThis as typeof globalThis & {
+        __NUXT_HOOKS__?: HookEngine;
+    };
+    if (!g.__NUXT_HOOKS__) return null;
+    cachedNotificationHooks = createTypedHookEngine(g.__NUXT_HOOKS__);
+    return cachedNotificationHooks;
 }
 
 /**
@@ -112,13 +132,18 @@ async function emitBackgroundComplete(
 ): Promise<void> {
     if (!import.meta.client) return;
     if (!tracker.threadId) return;
-    // Only emit notification if no subscribers (user has navigated away)
-    if (tracker.subscribers.size > 0) return;
+    // Notify when detached OR when app tab is backgrounded.
+    // Hidden-tab sessions can keep SSE subscribers active, which otherwise
+    // suppresses completion notifications indefinitely.
+    const hasSubscribers = tracker.subscribers.size > 0;
+    const isTabHidden =
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'hidden';
+    if (hasSubscribers && !isTabHidden) return;
     if (await isThreadMuted(tracker.threadId)) return;
 
-    const hooks = useHooks();
-    const userId = tracker.userId;
-    const service = new NotificationService(getDb(), hooks, userId);
+    const hooks = resolveNotificationHooks();
+    if (!hooks) return;
     const isError = status.status === 'error';
     const isAbort = status.status === 'aborted';
     const type = isError || isAbort ? 'system.warning' : 'ai.message.received';
@@ -132,8 +157,7 @@ async function emitBackgroundComplete(
         : isAbort
             ? 'Background response was aborted.'
             : 'Your background response is ready.';
-
-    await service.create({
+    const payload = {
         type,
         title,
         body,
@@ -142,12 +166,33 @@ async function emitBackgroundComplete(
             {
                 id: newId(),
                 label: 'Open chat',
-                kind: 'navigate',
+                kind: 'navigate' as const,
                 target: { threadId: tracker.threadId },
                 data: { messageId: tracker.messageId },
             },
         ],
-    });
+    };
+
+    try {
+        // Prefer hook-based creation so the currently active NotificationService
+        // instance owns user scoping (prevents stale tracker user IDs).
+        if (hooks.hasAction('notify:action:push')) {
+            await hooks.doAction('notify:action:push', payload);
+            return;
+        }
+
+        const session = getCachedSessionContext();
+        const userId = resolveNotificationUserId(session) || tracker.userId;
+        const service = new NotificationService(getDb(), hooks, userId);
+        await service.create(payload);
+    } catch (error) {
+        if (import.meta.dev) {
+            console.warn(
+                '[background-jobs] Failed to emit completion notification',
+                error
+            );
+        }
+    }
 }
 
 /**
@@ -702,5 +747,20 @@ export function subscribeBackgroundJob(
     tracker.subscribers.add(subscriber);
     return () => {
         tracker.subscribers.delete(subscriber);
+        if (tracker.subscribers.size > 0 || !tracker.active) return;
+        // No active UI subscribers: drop SSE viewer so server-side notification
+        // suppression doesn't hide completion notifications.
+        if (tracker.streaming && tracker.streamUnsubscribe) {
+            try {
+                tracker.streamUnsubscribe();
+            } catch {
+                /* intentionally empty */
+            }
+        }
+        // Keep tracking via polling so local persistence and completion callbacks
+        // continue even while detached.
+        if (!tracker.polling && tracker.status === 'streaming') {
+            void pollBackgroundJob(tracker);
+        }
     };
 }

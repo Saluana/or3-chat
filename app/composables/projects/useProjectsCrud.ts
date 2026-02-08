@@ -1,4 +1,5 @@
-import { create, db, del, upsert, type Project } from '~/db';
+import { create, del, upsert, type Project } from '~/db';
+import { getDb } from '~/db/client';
 import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
 import {
     normalizeProjectData,
@@ -39,6 +40,7 @@ export function useProjectsCrud() {
     async function renameProject(id: string, name: string): Promise<void> {
         const trimmed = name.trim();
         if (!trimmed) throw new Error('Project name required');
+        const db = getDb();
         const existing = await db.projects.get(id);
         if (!existing) throw new Error('Project not found');
         await upsert.project({
@@ -62,6 +64,7 @@ export function useProjectsCrud() {
     async function createThreadEntry(
         projectId: string
     ): Promise<{ id: string; name: string } | null> {
+        const db = getDb();
         const project = await db.projects.get(projectId);
         if (!project) return null;
         const now = nowSec();
@@ -89,6 +92,7 @@ export function useProjectsCrud() {
     async function createDocumentEntry(
         projectId: string
     ): Promise<{ id: string; title: string } | null> {
+        const db = getDb();
         const project = await db.projects.get(projectId);
         if (!project) return null;
         const doc = await create.document({ title: 'Untitled' });
@@ -110,6 +114,7 @@ export function useProjectsCrud() {
         id: string,
         entries: ProjectEntry[]
     ): Promise<void> {
+        const db = getDb();
         const existing = await db.projects.get(id);
         if (!existing) throw new Error('Project not found');
         const normalized = entries.map((entry) => ({ ...entry }));
@@ -125,6 +130,7 @@ export function useProjectsCrud() {
         kind: ProjectEntryKind,
         title: string
     ): Promise<number> {
+        const db = getDb();
         const projects = await db.projects.toArray();
         if (!projects.length) return 0;
         const updates: Project[] = [];

@@ -5,6 +5,7 @@
  * Includes migration from legacy localStorage storage.
  */
 import { ref, readonly } from 'vue';
+import { getDb } from '~/db/client';
 import { getKvByName, setKvByName } from '~/db/kv';
 
 const THEME_SELECTION_KV_KEY = 'theme_selection';
@@ -14,6 +15,7 @@ const LEGACY_STORAGE_KEY = 'activeTheme';
 // Module-level singleton state
 const _selectedTheme = ref<string | null>(null);
 let _loaded = false;
+let _loadedDbName: string | null = null;
 let _loadPromise: Promise<void> | null = null;
 
 /**
@@ -36,8 +38,14 @@ function migrateFromLocalStorage(): string | null {
  * Load theme selection from KV, with localStorage migration fallback
  */
 async function loadSelection(): Promise<void> {
-    if (_loaded) return;
-    if (_loadPromise) return _loadPromise;
+    const dbName = getDb().name;
+    if (_loaded && _loadedDbName === dbName) return;
+    if (_loadPromise && _loadedDbName === dbName) return _loadPromise;
+    if (_loadedDbName !== dbName) {
+        _loaded = false;
+        _loadPromise = null;
+    }
+    _loadedDbName = dbName;
     
     _loadPromise = (async () => {
         try {

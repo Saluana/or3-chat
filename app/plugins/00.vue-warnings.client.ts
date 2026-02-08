@@ -18,6 +18,17 @@ export default defineNuxtPlugin((nuxtApp) => {
             return;
         }
 
+        // Suppress known theme runtime SSR/client class drift on Nuxt UI controls.
+        // v-theme and client-side theme enrichment can reorder/append classes after hydration.
+        const isThemeHydrationClassMismatch =
+            msg.includes('Hydration class mismatch') &&
+            (msg.includes('theme-btn') ||
+                msg.includes('theme-shadow') ||
+                msg.includes('retro-press'));
+        if (isThemeHydrationClassMismatch) {
+            return;
+        }
+
         // Call original handler for other warnings
         if (originalWarn) {
             originalWarn(msg, instance, trace);

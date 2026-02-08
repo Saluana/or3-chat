@@ -28,6 +28,8 @@
  * @see DependencyInstallPlan for the plan structure
  */
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { relative, resolve } from 'node:path';
 import { getProviderDescriptor } from './catalog';
 import type { WizardAnswers } from './types';
 
@@ -50,6 +52,46 @@ export interface DependencyInstallPlan {
         bun: string;
         npm: string;
     };
+}
+
+function resolveProviderLocalInstallSpec(
+    packageName: string,
+    instanceDir: string
+): string | null {
+    if (!packageName.startsWith('or3-provider-')) return null;
+    let cursor = instanceDir;
+    let localProviderDir: string | null = null;
+
+    while (true) {
+        const candidate = resolve(cursor, '..', packageName);
+        const providerPackageJson = resolve(candidate, 'package.json');
+        if (existsSync(providerPackageJson)) {
+            localProviderDir = candidate;
+            break;
+        }
+
+        const parent = resolve(cursor, '..');
+        if (parent === cursor) {
+            break;
+        }
+        cursor = parent;
+    }
+
+    if (!localProviderDir) return null;
+
+    const providerPath = relative(instanceDir, localProviderDir).replaceAll('\\', '/');
+    const normalizedPath = providerPath.startsWith('.') ? providerPath : `./${providerPath}`;
+    return `file:${normalizedPath}`;
+}
+
+function resolveInstallSpecs(
+    packageNames: string[],
+    instanceDir: string
+): string[] {
+    return packageNames.map(
+        (packageName) =>
+            resolveProviderLocalInstallSpec(packageName, instanceDir) ?? packageName
+    );
 }
 
 export function isInstallPackageManager(
@@ -87,7 +129,7 @@ function addReason(
  * provider descriptors in the catalog.
  *
  * Behavior:
- * - Always includes auth provider dependencies.
+ * - Includes provider dependencies only when `ssrAuthEnabled` is true.
  * - Includes sync/storage provider dependencies only when enabled.
  * - Packages are deduplicated; reasons accumulate if multiple providers
  *   require the same package (e.g. `better-sqlite3`).
@@ -96,7 +138,7 @@ function addReason(
  * ```ts
  * const plan = createDependencyInstallPlan(answers);
  * console.log(plan.commands.bun);
- * // => 'bun add better-sqlite3 or3-provider-basic-auth or3-provider-fs or3-provider-sqlite'
+ * // => 'bun add better-sqlite3 file:../or3-provider-basic-auth ...'
  * ```
  */
 export function createDependencyInstallPlan(
@@ -105,29 +147,32 @@ export function createDependencyInstallPlan(
     const packageSet = new Set<string>();
     const reasons: Record<string, string[]> = {};
 
-    const authProvider = getProviderDescriptor('auth', answers.authProvider);
-    authProvider?.dependencies.forEach((dependency) => {
-        packageSet.add(dependency.packageName);
-        addReason(reasons, dependency.packageName, dependency.reason);
-    });
-
-    if (answers.syncEnabled) {
-        const syncProvider = getProviderDescriptor('sync', answers.syncProvider);
-        syncProvider?.dependencies.forEach((dependency) => {
+    if (answers.ssrAuthEnabled) {
+        const authProvider = getProviderDescriptor('auth', answers.authProvider);
+        authProvider?.dependencies.forEach((dependency) => {
             packageSet.add(dependency.packageName);
             addReason(reasons, dependency.packageName, dependency.reason);
         });
-    }
 
-    if (answers.storageEnabled) {
-        const storageProvider = getProviderDescriptor('storage', answers.storageProvider);
-        storageProvider?.dependencies.forEach((dependency) => {
-            packageSet.add(dependency.packageName);
-            addReason(reasons, dependency.packageName, dependency.reason);
-        });
+        if (answers.syncEnabled) {
+            const syncProvider = getProviderDescriptor('sync', answers.syncProvider);
+            syncProvider?.dependencies.forEach((dependency) => {
+                packageSet.add(dependency.packageName);
+                addReason(reasons, dependency.packageName, dependency.reason);
+            });
+        }
+
+        if (answers.storageEnabled) {
+            const storageProvider = getProviderDescriptor('storage', answers.storageProvider);
+            storageProvider?.dependencies.forEach((dependency) => {
+                packageSet.add(dependency.packageName);
+                addReason(reasons, dependency.packageName, dependency.reason);
+            });
+        }
     }
 
     const packages = Array.from(packageSet).sort();
+    const installSpecs = resolveInstallSpecs(packages, answers.instanceDir);
     const themeArtifacts =
         answers.themeInstallMode === 'install-all'
             ? ['all-built-in-themes']
@@ -140,8 +185,8 @@ export function createDependencyInstallPlan(
         reasons,
         themeArtifacts,
         commands: {
-            bun: packages.length > 0 ? `bun add ${packages.join(' ')}` : 'bun add',
-            npm: packages.length > 0 ? `npm install ${packages.join(' ')}` : 'npm install',
+            bun: installSpecs.length > 0 ? `bun add ${installSpecs.join(' ')}` : 'bun add',
+            npm: installSpecs.length > 0 ? `npm install ${installSpecs.join(' ')}` : 'npm install',
         },
     };
 }
@@ -207,11 +252,12 @@ export async function executeDependencyInstallPlan(
     if (!options.enabled) return;
     if (plan.packages.length === 0) return;
     if (options.dryRun) return;
+    const installSpecs = resolveInstallSpecs(plan.packages, answers.instanceDir);
 
     if (options.packageManager === 'bun') {
-        await runCommand('bun', ['add', ...plan.packages], answers.instanceDir);
+        await runCommand('bun', ['add', ...installSpecs], answers.instanceDir);
         return;
     }
 
-    await runCommand('npm', ['install', ...plan.packages], answers.instanceDir);
+    await runCommand('npm', ['install', ...installSpecs], answers.instanceDir);
 }

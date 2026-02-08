@@ -24,8 +24,45 @@
  * @see state/global for the reactive state singleton
  */
 import { computed } from 'vue';
-import { db } from '~/db';
+import { getDb } from '~/db/client';
 import { state } from '~/state/global';
+
+let kvHydrationStarted = false;
+
+type KvApiKeyRow = {
+    id: string;
+    name: string;
+    value?: string | null;
+};
+
+function hasKvTable(db: { tables?: Array<{ name?: string }> }): boolean {
+    return Array.isArray(db.tables) && db.tables.some((t) => t?.name === 'kv');
+}
+
+export async function hydrateUserApiKeyFromKv(): Promise<void> {
+    let db: ReturnType<typeof getDb>;
+    try {
+        db = getDb();
+    } catch {
+        return;
+    }
+
+    if (!hasKvTable(db)) return;
+
+    try {
+        const kv = db.table<KvApiKeyRow, string>('kv');
+        const rec = await kv.where('name').equals('openrouter_api_key').first();
+        if (rec && typeof rec.value === 'string') {
+            state.value.openrouterKey = rec.value;
+        } else if (rec && rec.value == null) {
+            state.value.openrouterKey = null;
+        }
+    } catch (error) {
+        if (import.meta.dev) {
+            console.warn('[useUserApiKey] kv hydration skipped:', error);
+        }
+    }
+}
 
 /**
  * Purpose:
@@ -42,21 +79,9 @@ import { state } from '~/state/global';
  */
 export function useUserApiKey() {
     // Read from Dexie on client without awaiting the composable
-    if (import.meta.client) {
-        db.kv
-            .where('name')
-            .equals('openrouter_api_key')
-            .first()
-            .then((rec) => {
-                if (rec && typeof rec.value === 'string') {
-                    state.value.openrouterKey = rec.value;
-                } else if (rec && rec.value == null) {
-                    state.value.openrouterKey = null;
-                }
-            })
-            .catch(() => {
-                /* noop */
-            });
+    if (import.meta.client && !kvHydrationStarted) {
+        kvHydrationStarted = true;
+        void hydrateUserApiKeyFromKv();
     }
 
     function setKey(key: string) {

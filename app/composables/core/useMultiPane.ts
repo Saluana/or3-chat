@@ -4,7 +4,7 @@
 import { ref, computed, onScopeDispose, getCurrentScope, type Ref, type ComputedRef } from 'vue';
 import { useLocalStorage } from '@vueuse/core';
 import Dexie from 'dexie';
-import { db } from '~/db';
+import { getDb } from '~/db/client';
 import { useHooks } from '~/core/hooks/useHooks';
 import {
     getGlobalMultiPaneApi,
@@ -136,6 +136,7 @@ function isValidMessageRow(msg: unknown): msg is DbMessageRow {
 async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
     if (!id) return [];
     try {
+        const db = getDb();
         const msgs = await db.messages
             .where('[thread_id+index]')
             .between([id, Dexie.minKey], [id, Dexie.maxKey])

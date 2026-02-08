@@ -18,8 +18,9 @@
  * - Env file writing (see apply.ts)
  *
  * Constraints:
- * - Strict mode defaults to `true` when `OR3_STRICT_CONFIG` is set or
- *   `NODE_ENV === 'production'`. Can be overridden via `options.strict`.
+ * - Strict mode defaults to `true` when `OR3_STRICT_CONFIG` is set,
+ *   deploy target is production, or `NODE_ENV === 'production'`.
+ *   Can be overridden via `options.strict`.
  * - Secret values are never included in error messages.
  * - Authoritative validation catches errors from config builders and
  *   appends them to the errors array (does not throw).
@@ -106,6 +107,9 @@ function validateFieldLevel(answers: WizardAnswers): {
 } {
     const errors: string[] = [];
     const warnings: string[] = [];
+    const usesConvex =
+        (answers.syncEnabled && answers.syncProvider === 'convex') ||
+        (answers.storageEnabled && answers.storageProvider === 'convex');
 
     if (!answers.instanceDir.trim()) {
         errors.push('instanceDir is required.');
@@ -115,7 +119,7 @@ function validateFieldLevel(answers: WizardAnswers): {
         errors.push('OR3 site name is required.');
     }
 
-    if (answers.authProvider === 'basic-auth') {
+    if (answers.ssrAuthEnabled && answers.authProvider === 'basic-auth') {
         const jwtSecret = answers.basicAuthJwtSecret?.trim() ?? '';
         if (!jwtSecret) {
             errors.push('OR3_BASIC_AUTH_JWT_SECRET is required for basic-auth.');
@@ -133,6 +137,10 @@ function validateFieldLevel(answers: WizardAnswers): {
             );
         } else if (!isEmail(email)) {
             errors.push('OR3_BASIC_AUTH_BOOTSTRAP_EMAIL must be a valid email.');
+        } else if (password.length < 8) {
+            errors.push(
+                'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD must be at least 8 characters.'
+            );
         }
 
         if (!answers.basicAuthDbPath?.trim()) {
@@ -140,7 +148,7 @@ function validateFieldLevel(answers: WizardAnswers): {
         }
     }
 
-    if (answers.authProvider === 'clerk') {
+    if (answers.ssrAuthEnabled && answers.authProvider === 'clerk') {
         const pk = answers.clerkPublishableKey?.trim() ?? '';
         const sk = answers.clerkSecretKey?.trim() ?? '';
         if (!pk) errors.push('NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY is required for Clerk.');
@@ -154,14 +162,12 @@ function validateFieldLevel(answers: WizardAnswers): {
         }
     }
 
-    if (answers.syncEnabled && answers.syncProvider === 'sqlite') {
+    if (answers.ssrAuthEnabled && answers.syncEnabled && answers.syncProvider === 'sqlite') {
         const sqlitePath = answers.sqliteDbPath?.trim() ?? '';
         if (!sqlitePath) errors.push('OR3_SQLITE_DB_PATH is required for sqlite sync.');
     }
 
-    const needsConvexUrl =
-        (answers.syncEnabled && answers.syncProvider === 'convex') ||
-        (answers.storageEnabled && answers.storageProvider === 'convex');
+    const needsConvexUrl = answers.ssrAuthEnabled && usesConvex;
     if (needsConvexUrl) {
         const url = answers.convexUrl?.trim() ?? '';
         if (!url) {
@@ -171,7 +177,7 @@ function validateFieldLevel(answers: WizardAnswers): {
         }
     }
 
-    if (answers.storageEnabled && answers.storageProvider === 'fs') {
+    if (answers.ssrAuthEnabled && answers.storageEnabled && answers.storageProvider === 'fs') {
         const fsRoot = answers.fsRoot?.trim() ?? '';
         if (!fsRoot) {
             errors.push('OR3_STORAGE_FS_ROOT is required for fs storage.');
@@ -208,6 +214,7 @@ function validateFieldLevel(answers: WizardAnswers): {
     }
 
     if (
+        answers.ssrAuthEnabled &&
         answers.authProvider === 'clerk' &&
         (answers.syncProvider === 'convex' || answers.storageProvider === 'convex')
     ) {
@@ -279,7 +286,7 @@ export function pickSecretAnswers(
  *    `buildOr3CloudConfigFromEnv()` with strict mode control.
  *
  * Constraints:
- * - Strict mode defaults to `answers.strictConfig || NODE_ENV === 'production'`.
+ * - Strict mode defaults to `answers.strictConfig || answers.deploymentTarget === 'prod-build' || NODE_ENV === 'production'`.
  * - Config builder errors are caught and appended as error strings.
  * - Returns `ok: true` only when `errors` is empty.
  *
@@ -295,7 +302,9 @@ export function validateAnswers(
     const derived = deriveEnvFromAnswers(answers);
     const strict =
         options.strict ??
-        (answers.strictConfig || process.env.NODE_ENV === 'production');
+        (answers.strictConfig ||
+            answers.deploymentTarget === 'prod-build' ||
+            process.env.NODE_ENV === 'production');
 
     try {
         buildOr3ConfigFromEnv(derived.env);

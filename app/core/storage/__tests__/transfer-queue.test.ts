@@ -165,6 +165,48 @@ describe('FileTransferQueue', () => {
         expect(hookState.doAction).toHaveBeenCalledWith('storage.files.upload:action:after', expect.anything());
     });
 
+    it('defaults fs token upload URLs to PUT when presign method is missing', async () => {
+        const meta = makeMeta({ kind: 'image', mime_type: 'image/png', name: 'a.png', size_bytes: 3 });
+        const db = createDbStub([meta], [{ hash: meta.hash, blob: new Blob(['abc']) }]);
+
+        const provider: ObjectStorageProvider = {
+            id: 'provider-fs',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(async () => ({
+                url: '/api/storage/fs/upload?token=test-token',
+                expiresAt: Date.now(),
+                storageId: 'st_1',
+            })),
+            getPresignedDownloadUrl: vi.fn(async () => ({ url: 'https://download.example', expiresAt: Date.now() })),
+        };
+
+        const fetchMock = vi.fn(async () => new Response('', { status: 200 }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const queue = new FileTransferQueue(db as any, provider, { concurrency: 1, maxAttempts: 2 });
+        await (queue as any).doUpload(
+            {
+                id: 'upload-1',
+                hash: meta.hash,
+                workspace_id: 'ws-1',
+                direction: 'upload',
+                bytes_total: 0,
+                bytes_done: 0,
+                state: 'running',
+                attempts: 0,
+                created_at: 1,
+                updated_at: 1,
+            } as FileTransfer,
+            new AbortController().signal
+        );
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            '/api/storage/fs/upload?token=test-token',
+            expect.objectContaining({ method: 'PUT' })
+        );
+    });
+
     it('runs successful download flow with hash verification and blob persistence', async () => {
         const meta = makeMeta({ storage_id: 'st_1', storage_provider_id: 'provider-1' });
         const db = createDbStub([meta], []);

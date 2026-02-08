@@ -12,7 +12,7 @@
  * - `ensure` and `resolveSession` support session bootstrapping
  *
  * Constraints:
- * - Only Clerk is supported as an auth provider in this module
+ * - Provider identity is inferred from the JWT issuer
  * - Owner-only actions are enforced for updates and deletion
  *
  * Non-Goals:
@@ -27,15 +27,29 @@ import type { Id, TableNames } from './_generated/dataModel';
 // CONSTANTS
 // ============================================================
 
-// Valid auth provider - only Clerk is supported
-const VALID_AUTH_PROVIDER = 'clerk';
-
 /** Batch size for workspace data deletion operations */
 const DELETE_BATCH_SIZE = 100;
 
 // ============================================================
 // HELPERS
 // ============================================================
+
+function inferProviderFromIssuer(issuer: string | undefined): string {
+    if (!issuer) return 'clerk';
+
+    if (issuer.includes('clerk')) {
+        return 'clerk';
+    }
+
+    const marker = '/auth/';
+    const markerIndex = issuer.lastIndexOf(marker);
+    if (markerIndex === -1) {
+        return 'clerk';
+    }
+
+    const provider = issuer.slice(markerIndex + marker.length).trim();
+    return provider || 'clerk';
+}
 
 /**
  * Internal helper.
@@ -50,11 +64,12 @@ async function getAuthAccount(
     if (!identity) {
         throw new Error('Not authenticated');
     }
+    const provider = inferProviderFromIssuer(identity.issuer);
 
     const authAccount = await ctx.db
         .query('auth_accounts')
         .withIndex('by_provider', (q) =>
-            q.eq('provider', 'clerk').eq('provider_user_id', identity.subject)
+            q.eq('provider', provider).eq('provider_user_id', identity.subject)
         )
         .first();
 
@@ -163,11 +178,12 @@ export const listMyWorkspaces = query({
         if (!identity) {
             return [];
         }
+        const provider = inferProviderFromIssuer(identity.issuer);
 
         const authAccount = await ctx.db
             .query('auth_accounts')
             .withIndex('by_provider', (q) =>
-                q.eq('provider', 'clerk').eq('provider_user_id', identity.subject)
+                q.eq('provider', provider).eq('provider_user_id', identity.subject)
             )
             .first();
 
@@ -229,6 +245,7 @@ export const create = mutation({
         if (!identity) {
             throw new Error('Not authenticated');
         }
+        const provider = inferProviderFromIssuer(identity.issuer);
 
         const now = Date.now();
 
@@ -236,7 +253,7 @@ export const create = mutation({
         let authAccount = await ctx.db
             .query('auth_accounts')
             .withIndex('by_provider', (q) =>
-                q.eq('provider', 'clerk').eq('provider_user_id', identity.subject)
+                q.eq('provider', provider).eq('provider_user_id', identity.subject)
             )
             .first();
 
@@ -252,7 +269,7 @@ export const create = mutation({
             // Link auth account
             await ctx.db.insert('auth_accounts', {
                 user_id: userId,
-                provider: 'clerk',
+                provider,
                 provider_user_id: identity.subject,
                 created_at: now,
             });
@@ -409,15 +426,16 @@ export const ensure = mutation({
         name: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        // Validate provider
-        if (args.provider !== VALID_AUTH_PROVIDER) {
-            throw new Error(`Invalid provider: ${args.provider}. Only '${VALID_AUTH_PROVIDER}' is supported.`);
-        }
-
         // Verify JWT subject matches provider_user_id
         const identity = await ctx.auth.getUserIdentity();
         if (!identity || identity.subject !== args.provider_user_id) {
             throw new Error('Provider user ID mismatch: JWT subject does not match request');
+        }
+        const provider = inferProviderFromIssuer(identity.issuer);
+        if (args.provider !== provider) {
+            throw new Error(
+                `Provider mismatch: request "${args.provider}" does not match JWT "${provider}"`
+            );
         }
 
         const now = Date.now();
@@ -425,7 +443,7 @@ export const ensure = mutation({
         let authAccount = await ctx.db
             .query('auth_accounts')
             .withIndex('by_provider', (q) =>
-                q.eq('provider', args.provider).eq('provider_user_id', args.provider_user_id)
+                q.eq('provider', provider).eq('provider_user_id', args.provider_user_id)
             )
             .first();
 
@@ -439,7 +457,7 @@ export const ensure = mutation({
 
             await ctx.db.insert('auth_accounts', {
                 user_id: userId,
-                provider: args.provider,
+                provider,
                 provider_user_id: args.provider_user_id,
                 created_at: now,
             });

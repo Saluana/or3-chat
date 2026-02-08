@@ -59,6 +59,10 @@ function toBooleanFlag(flags: CliFlags, key: string): boolean {
     return flags[key] === true;
 }
 
+function hasFlag(flags: CliFlags, key: string): boolean {
+    return Object.prototype.hasOwnProperty.call(flags, key);
+}
+
 function toInt(value: string): number | null {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return null;
@@ -225,6 +229,39 @@ class Prompt {
     }
 }
 
+function printBanner(): void {
+    console.log(`
+  ╔══════════════════════════════════════╗
+  ║                                      ║
+  ║     ⚡  OR3 Cloud Setup Wizard  ⚡    ║
+  ║                                      ║
+  ╚══════════════════════════════════════╝
+
+  This wizard will walk you through setting up
+  your OR3 Chat instance step by step.
+
+  Press Enter to accept defaults shown in [brackets].
+  Type your answer to change a value.
+`);
+}
+
+function printStepHeader(index: number, total: number, title: string, description?: string): void {
+    const bar = '─'.repeat(40);
+    console.log(`\n${bar}`);
+    console.log(`  Step ${index + 1} of ${total}: ${title}`);
+    console.log(bar);
+    if (description) {
+        for (const line of description.split('\n')) {
+            console.log(`  ${line}`);
+        }
+        console.log('');
+    }
+}
+
+function printFieldHelp(help: string): void {
+    console.log(`  💡 ${help}`);
+}
+
 async function promptField(
     prompt: Prompt,
     field: WizardField,
@@ -307,12 +344,13 @@ function printHelp(): void {
 }
 
 async function runInit(flags: CliFlags): Promise<void> {
+    printBanner();
     const api = new Or3CloudWizardApi();
     const prompt = new Prompt();
     const manualMode = toBooleanFlag(flags, 'manual');
     const dryRun = toBooleanFlag(flags, 'dry-run');
-    const strict = toBooleanFlag(flags, 'strict');
-    const installEnabled =
+    const strict = hasFlag(flags, 'strict') ? toBooleanFlag(flags, 'strict') : undefined;
+    const autoInstallDependencies =
         toBooleanFlag(flags, 'enable-install') ||
         process.env.OR3_WIZARD_ENABLE_INSTALL === '1';
     const packageManager = parseInstallPackageManager(
@@ -343,17 +381,15 @@ async function runInit(flags: CliFlags): Promise<void> {
                 continue;
             }
 
-            console.log(`\n[${stepIndex + 1}/${steps.length}] ${step.title}`);
-            if (step.description) {
-                console.log(step.description);
-            }
+            printStepHeader(stepIndex, steps.length, step.title, step.description);
 
             if (step.id === 'review') {
                 const review = await api.review(session.id);
                 console.log('\n' + review.summary + '\n');
-                const confirm = await prompt.boolean('Apply this configuration?', true);
+                const confirm = await prompt.boolean('Does this look right? Apply it?', true);
                 if (confirm) break;
 
+                console.log('\n  Which step would you like to change?\n');
                 const editable = steps.filter((candidate) => candidate.id !== 'review');
                 editable.forEach((candidate, index) => {
                     console.log(`  ${index + 1}. ${candidate.title}`);
@@ -381,16 +417,22 @@ async function runInit(flags: CliFlags): Promise<void> {
 
             const patch: Partial<WizardAnswers> = {};
             for (const field of step.fields) {
-                const value = await promptField(prompt, field, answers);
-                const validationError =
-                    typeof field.validate === 'function'
-                        ? field.validate(value as never, answers)
-                        : null;
-                if (validationError) {
-                    console.log(validationError);
-                    continue;
+                if (field.help) {
+                    printFieldHelp(field.help);
                 }
-                patch[field.key] = value as never;
+                while (true) {
+                    const value = await promptField(prompt, field, answers);
+                    const validationError =
+                        typeof field.validate === 'function'
+                            ? field.validate(value as never, answers)
+                            : null;
+                    if (validationError) {
+                        console.log(validationError);
+                        continue;
+                    }
+                    patch[field.key] = value as never;
+                    break;
+                }
             }
 
             if (step.id === 'target') {
@@ -403,27 +445,31 @@ async function runInit(flags: CliFlags): Promise<void> {
 
         const latestSession = await api.getSession(session.id, { includeSecrets: true });
         const answers = normalizeAnswers(latestSession.answers);
-        const validation = await api.validate(session.id, { strict });
+        const validation = await api.validate(
+            session.id,
+            strict === undefined ? {} : { strict }
+        );
         if (!validation.ok) {
-            console.log('\nValidation failed:\n');
+            console.log('\n  ❌ Some settings need fixing:\n');
             console.log(summarizeValidationErrors(validation));
             return;
         }
 
         if (validation.warnings.length > 0) {
-            console.log('\nValidation warnings:');
+            console.log('\n  ⚠️  Heads up:');
             for (const warning of validation.warnings) {
-                console.log(`- ${warning}`);
+                console.log(`    - ${warning}`);
             }
         }
 
         const installPlan = createDependencyInstallPlan(answers);
+        let dependenciesInstalled = false;
         if (installPlan.packages.length > 0) {
-            console.log('\nDependency install plan:');
+            console.log('\n  📦 Packages to install:');
             installPlan.packages.forEach((packageName) => {
                 const reasons = installPlan.reasons[packageName] ?? [];
-                console.log(`- ${packageName}`);
-                reasons.forEach((reason) => console.log(`  ${reason}`));
+                console.log(`    - ${packageName}`);
+                reasons.forEach((reason) => console.log(`      ${reason}`));
             });
             if (installPlan.themeArtifacts.length > 0) {
                 console.log('- Theme artifacts (planned):');
@@ -433,19 +479,26 @@ async function runInit(flags: CliFlags): Promise<void> {
             }
             console.log(`- Bun command: ${installPlan.commands.bun}`);
             console.log(`- npm command: ${installPlan.commands.npm}`);
-        }
-
-        if (installEnabled && installPlan.packages.length > 0) {
-            const shouldInstall = await prompt.boolean(
-                `Install dependencies now with ${packageManager}?`,
-                true
-            );
-            if (shouldInstall) {
+            if (autoInstallDependencies) {
                 await executeDependencyInstallPlan(answers, installPlan, {
                     enabled: true,
                     packageManager,
                     dryRun,
                 });
+                dependenciesInstalled = !dryRun;
+            } else {
+                const shouldInstall = await prompt.boolean(
+                    `Install these packages now with ${packageManager}?`,
+                    true
+                );
+                if (shouldInstall) {
+                    await executeDependencyInstallPlan(answers, installPlan, {
+                        enabled: true,
+                        packageManager,
+                        dryRun,
+                    });
+                    dependenciesInstalled = !dryRun;
+                }
             }
         }
 
@@ -466,22 +519,22 @@ async function runInit(flags: CliFlags): Promise<void> {
             dryRun,
             createBackup: !toBooleanFlag(flags, 'no-backup'),
         });
-        console.log('\nApply result:');
+        console.log('\n  ✅ Setup complete!\n');
         if (applyResult.dryRun) {
-            console.log('- Dry run complete (no files written).');
+            console.log('  This was a dry run — no files were changed.');
         } else {
             if (applyResult.writtenFiles.length > 0) {
-                console.log('- Written files:');
+                console.log('  Files saved:');
                 for (const file of applyResult.writtenFiles) {
-                    console.log(`  ${file}`);
+                    console.log(`    ✓ ${file}`);
                 }
             } else {
-                console.log('- No file changes were required.');
+                console.log('  No file changes were needed.');
             }
             if (applyResult.backupFiles.length > 0) {
-                console.log('- Backup files:');
+                console.log('  Backups created:');
                 for (const file of applyResult.backupFiles) {
-                    console.log(`  ${file}`);
+                    console.log(`    ↩ ${file}`);
                 }
             }
         }
@@ -512,7 +565,7 @@ async function runInit(flags: CliFlags): Promise<void> {
         }
 
         const presetName = await prompt.text(
-            'Save as preset name (optional)',
+            'Save this setup as a reusable template? Enter a name or press Enter to skip',
             ''
         );
         if (presetName.trim()) {
@@ -527,6 +580,35 @@ async function runInit(flags: CliFlags): Promise<void> {
             !dryRun
         );
         if (deployNow) {
+            if (dryRun) {
+                console.log('\n  Dry run mode: skipping startup commands.');
+                return;
+            }
+            if (
+                installPlan.packages.length > 0 &&
+                !dependenciesInstalled
+            ) {
+                const shouldInstallBeforeDeploy = await prompt.boolean(
+                    `Starting OR3 Cloud requires these packages. Install now with ${packageManager}?`,
+                    true
+                );
+                if (!shouldInstallBeforeDeploy) {
+                    console.log('\n  Start skipped. Install dependencies first with:');
+                    console.log(
+                        `  ${
+                            packageManager === 'bun'
+                                ? installPlan.commands.bun
+                                : installPlan.commands.npm
+                        }`
+                    );
+                    return;
+                }
+                await executeDependencyInstallPlan(answers, installPlan, {
+                    enabled: true,
+                    packageManager,
+                    dryRun,
+                });
+            }
             const deployResult = await api.deploy(session.id);
             if (deployResult.instructions) {
                 console.log(deployResult.instructions);
@@ -543,10 +625,10 @@ async function runValidate(flags: CliFlags): Promise<void> {
         instanceDir: process.cwd(),
         envFile,
     });
-    const strict = toBooleanFlag(flags, 'strict');
+    const strict = hasFlag(flags, 'strict') ? toBooleanFlag(flags, 'strict') : undefined;
     try {
         buildOr3ConfigFromEnv(map);
-        buildOr3CloudConfigFromEnv(map, { strict });
+        buildOr3CloudConfigFromEnv(map, strict === undefined ? {} : { strict });
         console.log(`Validation passed for ${envFile}.`);
     } catch (error) {
         console.log(`Validation failed for ${envFile}:`);

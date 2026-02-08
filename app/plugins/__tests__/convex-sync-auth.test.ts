@@ -443,7 +443,7 @@ describe('sync engine plugin', () => {
         expect(outboxInstances[1]?.start).toHaveBeenCalledTimes(1);
     });
 
-    it('stops sync and clears active workspace DB on admin route transitions', async () => {
+    it('stops sync without clobbering active workspace DB on admin route transitions', async () => {
         await import('~/plugins/convex-sync.client');
         await flushPluginAsyncWork();
 
@@ -451,7 +451,7 @@ describe('sync engine plugin', () => {
         await triggerWatchers();
         await flushPluginAsyncWork();
 
-        expect(setActiveWorkspaceDb).toHaveBeenCalledWith(null);
+        expect(setActiveWorkspaceDb).not.toHaveBeenCalled();
         expect(outboxInstances).toHaveLength(1);
         expect(outboxInstances[0]?.stop).toHaveBeenCalledTimes(1);
         expect(subscriptionInstances[0]?.stop).toHaveBeenCalledTimes(1);
