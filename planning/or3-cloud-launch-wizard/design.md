@@ -20,7 +20,7 @@ Key repo facts the wizard must align with:
 - `config.or3.ts` reads base config from env (branding/features/limits/UI).
 - `config.or3cloud.ts` reads cloud config from env; cloud features are gated by `SSR_AUTH_ENABLED=true`.
 - Cloud strict validation is enforced by `defineOr3CloudConfig(config, { strict })`, where `strict` is effectively true in production.
-- Convex + Clerk requires Convex env vars `CLERK_ISSUER_URL` and `OR3_ADMIN_JWT_SECRET` set via Convex CLI.
+- Legacy Convex + Clerk stacks require Convex env vars `CLERK_ISSUER_URL` and `OR3_ADMIN_JWT_SECRET` set via Convex CLI.
 
 ### Reuse existing config plumbing (avoid drift)
 
@@ -43,29 +43,43 @@ Even if the wizard is later published as a standalone package, these files are u
 The wizard should feel like:
 
 1. “What are you trying to do?” (local dev vs production)
-2. “Use the defaults?” (Clerk + Convex is the default path)
+2. “Use the defaults?” (Basic Auth + SQLite + FS is the default path)
 3. “Paste these keys/URLs” (with clear links and examples)
 4. “Review (redacted), validate, write config”
 5. “Start the app / build it”
 
-### Default path (recommended)
+### Default path (recommended preset)
+
+- Auth: Basic Auth
+- Sync: SQLite
+- Storage: FS
+- Limits storage: sync provider if enabled, else memory (matches current behavior)
+
+### Legacy preset (still selectable)
 
 - Auth: Clerk
 - Sync: Convex
 - Storage: Convex
-- Limits storage: Convex if sync enabled, else memory (matches current behavior)
 
 ### Provider selection (UX principle)
 
-Even though v1 only exposes implemented providers (Clerk + Convex), the wizard must treat provider choice as a first-class concept:
+The wizard should treat provider choice as a first-class concept:
 
 - Users pick providers early.
 - The wizard asks only the questions relevant to the chosen providers.
-- Adding new providers later is primarily a matter of registering metadata + validation rules, not reworking the wizard flow.
+- v1 must include both the new default stack and the legacy Clerk+Convex preset.
+- Adding future providers later should be primarily metadata + validation updates, not reworking the flow.
 
 ### Minimal required inputs for default path
 
 - `SSR_AUTH_ENABLED=true`
+- `OR3_BASIC_AUTH_JWT_SECRET`
+- `OR3_SQLITE_DB_PATH`
+- `OR3_STORAGE_FS_ROOT`
+- `OR3_STORAGE_FS_TOKEN_SECRET`
+
+### Additional required inputs for legacy Clerk + Convex preset
+
 - `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `NUXT_CLERK_SECRET_KEY`
 - `VITE_CONVEX_URL`
@@ -141,17 +155,23 @@ export interface WizardAnswers {
   ssrAuthEnabled: boolean; // maps to SSR_AUTH_ENABLED
 
   // Auth
-  authProvider: 'clerk' | 'custom';
+  authProvider: 'basic-auth' | 'clerk' | 'custom';
+  basicAuthJwtSecret?: string;
+  basicAuthRefreshSecret?: string;
   clerkPublishableKey?: string;
   clerkSecretKey?: string;
 
   // Cloud providers
   syncEnabled: boolean;
-  syncProvider: 'convex' | 'firebase' | 'custom';
+  syncProvider: 'sqlite' | 'convex' | 'firebase' | 'custom';
+  sqliteDbPath?: string; // maps to OR3_SQLITE_DB_PATH
   convexUrl?: string; // maps to VITE_CONVEX_URL
 
   storageEnabled: boolean;
-  storageProvider: 'convex' | 's3' | 'custom';
+  storageProvider: 'fs' | 'convex' | 's3' | 'custom';
+  fsRoot?: string; // maps to OR3_STORAGE_FS_ROOT
+  fsTokenSecret?: string; // maps to OR3_STORAGE_FS_TOKEN_SECRET
+  fsUrlTtlSeconds?: number; // maps to OR3_STORAGE_FS_URL_TTL_SECONDS
 
   // Convex env (not .env):
   convexClerkIssuerUrl?: string; // CLERK_ISSUER_URL
@@ -177,9 +197,14 @@ Rather than hardcoding provider prompts into the CLI, define a small provider ca
 
 In v1, this catalog can be a plain in-repo constant populated from existing ids:
 
-- Auth: `clerk`, `custom` (but only show providers with implemented runtime support)
-- Sync: `convex`, `firebase`, `custom` (but only show `convex` initially)
-- Storage: `convex`, `s3`, `custom` (but only show `convex` initially)
+- Auth: `basic-auth`, `clerk`, `custom`
+- Sync: `sqlite`, `convex`, `firebase`, `custom`
+- Storage: `fs`, `convex`, `s3`, `custom`
+
+Preset defaults in catalog:
+
+- Recommended: `basic-auth` + `sqlite` + `fs`
+- Legacy: `clerk` + `convex` + `convex`
 
 Future providers can be added by extending the catalog and implementing the runtime provider.
 
@@ -211,7 +236,6 @@ export interface WizardProviderDescriptor {
 - The catalog is metadata, not a plugin system.
 - There’s no dynamic discovery in v1.
 - The step engine stays stable: it renders “provider selection” and then emits provider-specific sub-steps based on the catalog.
-```
 
 ### Presets
 
@@ -222,9 +246,12 @@ export interface WizardPreset {
   name: string;
   createdAt: string;
   answers: Partial<Omit<WizardAnswers,
+    | 'basicAuthJwtSecret'
+    | 'basicAuthRefreshSecret'
     | 'clerkSecretKey'
     | 'openrouterInstanceApiKey'
     | 'convexAdminJwtSecret'
+    | 'fsTokenSecret'
   >>;
 }
 ```
@@ -274,7 +301,6 @@ Implement provider choice as:
 - followed by provider-specific steps generated from `WizardProviderDescriptor.fields`
 
 This keeps UX linear and avoids showing irrelevant questions.
-```
 
 ### Validation strategy
 
@@ -282,7 +308,7 @@ Use a two-tier validation approach:
 
 1. **Fast local validation** (field-level):
    - required fields
-   - simple format checks (e.g., `pk_...`, URL parsing)
+   - simple format checks (URL parsing, minimum secret length)
    - cross-field rules (e.g., `requireUserKey` implies `allowUserOverride=true`)
 
 2. **Authoritative config validation** (final):
@@ -294,7 +320,7 @@ Use a two-tier validation approach:
 
 This ensures the wizard never diverges from the real runtime configuration rules.
 
-### Convex + Clerk validation
+### Legacy Convex + Clerk validation
 
 The wizard should detect the “Convex + Clerk” path and provide a focused checklist:
 
@@ -305,6 +331,14 @@ In early versions, we do not need to call Clerk/Convex APIs directly; instead:
 
 - Validate “looks like a URL/key” locally
 - Offer optional “run connectivity checks” (HTTP GET to Convex URL, etc.)
+
+### Provider module generation
+
+Apply must also write `or3.providers.generated.ts` from selected providers only.
+
+- Provider module IDs are derived by provider id: `or3-provider-${id}/nuxt`.
+- Local/non-package providers (for example `custom`, `memory`, `redis`, `postgres`) are excluded.
+- The generated module list must not include unselected providers.
 
 ## Apply (writing config)
 
@@ -319,6 +353,10 @@ The apply step must be non-destructive:
 Owned keys are the ones described in config docs, e.g.:
 
 - `SSR_AUTH_ENABLED`
+- `OR3_BASIC_AUTH_JWT_SECRET`
+- `OR3_SQLITE_DB_PATH`
+- `OR3_STORAGE_FS_ROOT`
+- `OR3_STORAGE_FS_TOKEN_SECRET`
 - `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `NUXT_CLERK_SECRET_KEY`
 - `VITE_CONVEX_URL`
@@ -327,7 +365,7 @@ Owned keys are the ones described in config docs, e.g.:
 
 ### Convex env setting
 
-For Convex settings (not read from OR3 `.env`), the wizard should optionally run:
+For Convex settings (not read from OR3 `.env`), the wizard should optionally run when a Convex+Clerk path is selected:
 
 - `bunx convex env set CLERK_ISSUER_URL=...`
 - `bunx convex env set OR3_ADMIN_JWT_SECRET=...`
@@ -361,7 +399,7 @@ This preserves a strong UX without locking us into a single packaging strategy.
 For “local dev” target, the wizard should run:
 
 - `bun install`
-- `bunx convex dev` (optional to run in background; depends on current workflow)
+- `bunx convex dev` only when a Convex provider is selected (optional background mode)
 - `SSR_AUTH_ENABLED=true bun run dev` (or `bun run dev:ssr` which already sets it)
 
 ### Production build
@@ -435,11 +473,12 @@ Rules:
 ## Testing strategy (for later implementation)
 
 - Unit tests:
-  - Field-level validation (Clerk key format, URL parsing)
+  - Field-level validation (Basic Auth secret rules, URL parsing, legacy Clerk key checks)
   - Strict-mode cloud config validation via `defineOr3CloudConfig`
   - Env writer merge behavior (preserve unknown vars)
 - Integration tests:
-  - “default path” end-to-end in a temp directory (dry-run mode)
+  - “default path” (`basic-auth` + `sqlite` + `fs`) end-to-end in a temp directory (dry-run mode)
+  - Legacy preset (`clerk` + `convex` + `convex`) dry-run verification
   - Deploy step in dry-run mode (command runner mocked)
 
 ## Scope boundaries (explicit)
@@ -448,7 +487,7 @@ In this phase we will design for but not implement:
 
 - Full deployment automation to third-party hosts
 - Web wizard UI
-- Provider expansions beyond the default Clerk + Convex path
+- Provider expansions beyond the documented default + legacy presets
 
 We will keep the design extensible enough to add:
 

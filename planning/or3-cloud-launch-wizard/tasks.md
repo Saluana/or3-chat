@@ -4,8 +4,10 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
 
 ## 0. Planning checkpoints
 
-- [ ] Confirm the default path is Clerk + Convex + Convex storage
+- [ ] Confirm the default path is Basic Auth + SQLite + FS storage
   - Requirements: 2.1, 3.1
+- [ ] Confirm legacy preset remains selectable as Clerk + Convex + Convex storage
+  - Requirements: 2.3, 3.1
 - [ ] Confirm deployment targets for v1 are only `local-dev` and `prod-build`
   - Requirements: 6.1
 - [ ] Confirm whether v1 operates “in-place” (current repo) vs scaffolding a fresh instance directory (or both)
@@ -23,6 +25,8 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
   - Requirements: 2.3, 3.1
   - Subtasks:
     - [ ] Define provider descriptors (id/label/implemented/fields/dependencies)
+    - [ ] Set recommended preset defaults to `basic-auth` + `sqlite` + `fs`
+    - [ ] Keep legacy preset option `clerk` + `convex` + `convex`
     - [ ] Wire provider selection step to generate provider-specific steps
 - [ ] Define the API methods (`createSession`, `submitAnswers`, `validate`, `apply`, `deploy`)
   - Requirements: 1.1, 4.1, 5.1, 6.1
@@ -32,6 +36,7 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
 - [ ] Implement field-level validation rules
   - Requirements: 2.1, 4.1
   - Subtasks:
+    - [ ] Secret/path validation for `OR3_BASIC_AUTH_JWT_SECRET`, `OR3_SQLITE_DB_PATH`, `OR3_STORAGE_FS_ROOT`, and `OR3_STORAGE_FS_TOKEN_SECRET`
     - [ ] URL parsing validation for `VITE_CONVEX_URL`
     - [ ] Basic pattern validation for Clerk keys (non-blocking warnings if unsure)
     - [ ] Cross-field validation: OpenRouter rules (`requireUserKey` vs `allowUserOverride`)
@@ -62,6 +67,11 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
     - [ ] Support writing to `(instanceDir, envFile)` instead of only `process.cwd()/.env`
     - [ ] Update only wizard-owned keys
     - [ ] Write in stable order (group by OR3/Cloud/Security)
+- [ ] Implement provider module file generation
+  - Requirements: 5.1
+  - Subtasks:
+    - [ ] Generate `or3.providers.generated.ts` from selected providers only
+    - [ ] Exclude local/non-package providers from generated module IDs
 - [ ] Add “dry-run” mode that prints planned changes without writing
   - Requirements: 4.1, 5.1
 
@@ -75,7 +85,7 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
 - [ ] Add a placeholder install pipeline interface (no-op in v1)
   - Requirements: 5.3
 
-## 5. Convex helper step (optional but strongly recommended)
+## 5. Convex helper step (legacy/mixed stacks only)
 
 - [ ] Add step for setting Convex environment variables (Clerk issuer + admin jwt)
   - Requirements: 3.1
@@ -90,7 +100,7 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
   - Requirements: 6.1, 6.2
   - Subtasks:
     - [ ] `bun install`
-    - [ ] Start Convex dev (foreground or background)
+    - [ ] Start Convex dev (foreground or background) only when a Convex provider is selected
     - [ ] Start Nuxt SSR (`bun run dev:ssr`)
 - [ ] Implement deploy plan for `prod-build`
   - Requirements: 6.1, 6.2
@@ -147,6 +157,10 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
     - [ ] Redaction
 - [ ] Integration tests (dry-run) that cover the default path
   - Requirements: 3.1, 6.1
+  - Subtasks:
+    - [ ] Validate recommended preset (`basic-auth` + `sqlite` + `fs`)
+    - [ ] Validate legacy preset (`clerk` + `convex` + `convex`)
+    - [ ] Validate generated provider module list matches only selected providers
 
 ## 10. Documentation updates
 

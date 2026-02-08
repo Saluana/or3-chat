@@ -209,3 +209,15 @@ Mock Externalities: Isolate business logic from side effects (databases, APIs) t
 5.   Core auth UI is still Clerk-tied in `app/components/sidebar/SidebarAuthButton.vue` (it renders `SidebarAuthButtonClerk`). The provider-agnostic auth UI adapter is planned in `planning/default-ssr-providers/*`, not fully in core yet.
 
 6.  Reuse the existing server security pattern for auth endpoints: `isSsrAuthEnabled` gate, `Cache-Control: no-store`, per-operation rate limits, and same-origin checks based on host/origin validation (see admin guard + request identity helpers).
+
+7.  Wizard-generated provider modules are merged with config-derived modules in `nuxt.config.ts`, not used in isolation.
+    - `activeProviderModules` is `or3.providers.generated.ts` **union** provider IDs derived from `or3CloudConfig.*`.
+    - Provider module ids are normalized via `or3-provider-${id}/nuxt`, but local ids (`custom`, `memory`, `redis`, `postgres`) are intentionally excluded.
+
+8.  The safe env editor already exists in `server/admin/config/env-file.ts`, but it is currently hardwired to `process.cwd()` + `.env`.
+    - It preserves comments/unknown lines and updates keys in place, which is exactly what the install wizard needs.
+    - For wizard work, extract/reuse this logic with `(instanceDir, envFile)` arguments instead of duplicating a new parser/writer.
+
+9.  Use `server/admin/config/resolve-config.ts` as the authoritative “wizard validation entrypoint”, not ad-hoc env checks.
+    - `buildOr3ConfigFromEnv(env)` and `buildOr3CloudConfigFromEnv(env)` already encode coercion/default behavior used by runtime/admin paths.
+    - Important gotcha: `buildOr3CloudConfigFromEnv` strictness currently reads `process.env`, so a wizard should either run it in a controlled env context or call `defineOr3CloudConfig(config, { strict })` directly with explicit strict mode.
