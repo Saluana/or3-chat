@@ -198,4 +198,25 @@ describe('POST /api/storage/presign-download', () => {
         expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'storage:download');
         expect(recordDownloadStartMock).toHaveBeenCalledTimes(1);
     });
+
+    it('passes through download method/headers/storageId from adapter response', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue(makeValidBody());
+        presignDownloadMock.mockResolvedValue({
+            url: '/api/storage/fs/download?token=abc',
+            expiresAt: 321,
+            method: 'GET',
+            headers: { 'x-download': '1' },
+            storageId: 'ws-1:sha256:abc',
+        });
+
+        await expect(handler(makeEvent())).resolves.toEqual({
+            url: '/api/storage/fs/download?token=abc',
+            expiresAt: 321,
+            disposition: 'attachment',
+            method: 'GET',
+            headers: { 'x-download': '1' },
+            storageId: 'ws-1:sha256:abc',
+        });
+    });
 });

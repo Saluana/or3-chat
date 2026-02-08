@@ -54,6 +54,37 @@ export interface GatewaySyncProviderConfig {
     pullLimit?: number;
 }
 
+class GatewaySyncRequestError extends Error {
+    status: number;
+    path: string;
+    retryAfterMs?: number;
+
+    constructor(path: string, status: number, message: string, retryAfterMs?: number) {
+        super(`[gateway-sync] ${path} failed (${status}): ${message}`);
+        this.name = 'GatewaySyncRequestError';
+        this.status = status;
+        this.path = path;
+        this.retryAfterMs = retryAfterMs;
+    }
+}
+
+function parseRetryAfterHeader(value: string | null): number | undefined {
+    if (!value) return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+
+    const seconds = Number(trimmed);
+    if (Number.isFinite(seconds) && seconds > 0) {
+        return Math.ceil(seconds * 1000);
+    }
+
+    const asDateMs = Date.parse(trimmed);
+    if (!Number.isFinite(asDateMs)) return undefined;
+    const delta = asDateMs - Date.now();
+    if (delta <= 0) return undefined;
+    return delta;
+}
+
 /**
  * Truncate and sanitize error text for user-facing display.
  * Removes JSON blobs, stack traces, and limits length.
@@ -100,9 +131,10 @@ async function requestJson<T>(
     });
 
     if (!res.ok) {
+        const retryAfterMs = parseRetryAfterHeader(res.headers?.get?.('Retry-After') ?? null);
         const text = await res.text();
         const sanitized = sanitizeErrorText(text);
-        throw new Error(`[gateway-sync] ${path} failed (${res.status}): ${sanitized}`);
+        throw new GatewaySyncRequestError(path, res.status, sanitized, retryAfterMs);
     }
 
     const text = await res.text();
@@ -194,6 +226,23 @@ export function createGatewaySyncProvider(
                     await poll();
                 } catch (error) {
                     console.error('[gateway-sync] Poll failed:', error);
+                    if (
+                        error instanceof GatewaySyncRequestError &&
+                        (error.status === 401 || error.status === 403)
+                    ) {
+                        active = false;
+                        if (typeof window !== 'undefined') {
+                            window.dispatchEvent(
+                                new CustomEvent('or3:sync-session-invalid', {
+                                    detail: {
+                                        status: error.status,
+                                        path: error.path,
+                                        workspaceId: scope.workspaceId,
+                                    },
+                                })
+                            );
+                        }
+                    }
                 } finally {
                     running = false;
                 }

@@ -236,7 +236,7 @@ export async function resolveSessionContext(
             provider: providerSession.provider,
             providerUserId: providerSession.user.id,
             user: {
-                id: providerSession.user.id,
+                id: userId,
                 email: providerSession.user.email,
                 displayName: providerSession.user.displayName,
             },

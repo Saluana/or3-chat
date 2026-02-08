@@ -121,46 +121,46 @@ artifact_id: 83624487-1502-4840-a833-22d0a3e74e0a
 
 ### 3.1 Package scaffolding and DB runtime
 
-- [ ] Initialize package structure and Nuxt module entry (`or3-provider-sqlite/nuxt`)
+- [x] Initialize package structure and Nuxt module entry (`or3-provider-sqlite/nuxt`)
   - Requirements: 1.1, 3.1
-- [ ] Add Kysely runtime with SQLite dialect and connection lifecycle management
+- [x] Add Kysely runtime with SQLite dialect and connection lifecycle management
   - Requirements: 3.1
-- [ ] Add migration runner and versioned migrations
+- [x] Add migration runner and versioned migrations
   - Requirements: 3.1
 
 ### 3.2 Schema and indexes
 
-- [ ] Create auth/workspace tables (`users`, `auth_accounts`, `workspaces`, `workspace_members`)
+- [x] Create auth/workspace tables (`users`, `auth_accounts`, `workspaces`, `workspace_members`)
   - Requirements: 3.1
-- [ ] Create sync infra tables (`server_version_counter`, `change_log`, `device_cursors`, `tombstones`)
+- [x] Create sync infra tables (`server_version_counter`, `change_log`, `device_cursors`, `tombstones`)
   - Requirements: 3.2, 3.3
-- [ ] Create synced data tables aligned to wire schema naming
+- [x] Create synced data tables aligned to wire schema naming
   - Requirements: 3.2
-- [ ] Add required indexes for pull windows, op idempotency, and workspace membership lookups
+- [x] Add required indexes for pull windows, op idempotency, and workspace membership lookups
   - Requirements: 3.2, 9.1
 
 ### 3.3 AuthWorkspaceStore implementation
 
-- [ ] Implement `getOrCreateUser` with provider identity mapping
+- [x] Implement `getOrCreateUser` with provider identity mapping
   - Requirements: 3.1
-- [ ] Implement `getOrCreateDefaultWorkspace`
+- [x] Implement `getOrCreateDefaultWorkspace`
   - Requirements: 3.1
-- [ ] Implement `getWorkspaceRole`
+- [x] Implement `getWorkspaceRole`
   - Requirements: 3.1
-- [ ] Implement workspace CRUD methods used by `/api/workspaces/*`
+- [x] Implement workspace CRUD methods used by `/api/workspaces/*`
   - Requirements: 3.1
 
 ### 3.4 SyncGatewayAdapter implementation
 
-- [ ] Implement `push` with op validation, idempotency, contiguous `server_version` allocation, and LWW
+- [x] Implement `push` with op validation, idempotency, contiguous `server_version` allocation, and LWW
   - Requirements: 3.2
-- [ ] Implement `pull` with cursor + limit + table filter support
+- [x] Implement `pull` with cursor + limit + table filter support
   - Requirements: 3.2
-- [ ] Implement `updateCursor`
+- [x] Implement `updateCursor`
   - Requirements: 3.3
-- [ ] Implement `gcTombstones` and `gcChangeLog`
+- [x] Implement `gcTombstones` and `gcChangeLog`
   - Requirements: 3.3
-- [ ] Register adapter/store in Nitro plugin
+- [x] Register adapter/store in Nitro plugin
   - Requirements: 3.1
 
 ### 3.5 Optional admin adapters
@@ -172,13 +172,13 @@ artifact_id: 83624487-1502-4840-a833-22d0a3e74e0a
 
 ### 3.6 SQLite tests
 
-- [ ] Unit tests: server_version allocation under concurrent push calls
+- [x] Unit tests: server_version allocation under concurrent push calls
   - Requirements: 3.2, 8.1
-- [ ] Unit tests: op_id idempotency and duplicate push replay
+- [x] Unit tests: op_id idempotency and duplicate push replay
   - Requirements: 3.2, 8.1
-- [ ] Unit tests: LWW + HLC tie-break behavior
+- [x] Unit tests: LWW + HLC tie-break behavior
   - Requirements: 3.2, 8.1
-- [ ] Unit tests: GC eligibility with min device cursor and retention windows
+- [x] Unit tests: GC eligibility with min device cursor and retention windows
   - Requirements: 3.3, 8.1
 - [ ] Integration tests: gateway sync endpoints end-to-end with sqlite adapter
   - Requirements: 3.2, 8.2
@@ -189,42 +189,42 @@ artifact_id: 83624487-1502-4840-a833-22d0a3e74e0a
 
 ### 4.1 Package scaffolding
 
-- [ ] Initialize package structure and Nuxt module entry (`or3-provider-fs/nuxt`)
+- [x] Initialize package structure and Nuxt module entry (`or3-provider-fs/nuxt`)
   - Requirements: 1.1, 4.1
-- [ ] Add provider README and env contract
+- [x] Add provider README and env contract
   - Requirements: 7.1
 
 ### 4.2 Storage adapter implementation
 
-- [ ] Implement `presignUpload` returning short-lived signed internal URL
+- [x] Implement `presignUpload` returning short-lived signed internal URL
   - Requirements: 4.1, 4.2
-- [ ] Implement `presignDownload` returning short-lived signed internal URL
+- [x] Implement `presignDownload` returning short-lived signed internal URL
   - Requirements: 4.1, 4.2
-- [ ] Implement optional `commit` behavior aligned with current metadata flow
+- [x] Implement optional `commit` behavior aligned with current metadata flow
   - Requirements: 4.1
-- [ ] Implement `gc` behavior for stale/orphaned files
+- [x] Implement `gc` behavior for stale/orphaned files
   - Requirements: 4.3
-- [ ] Register storage adapter in Nitro plugin
+- [x] Register storage adapter in Nitro plugin
   - Requirements: 4.1
 
 ### 4.3 Upload/download endpoint implementation
 
-- [ ] Implement upload endpoint with token verification, authz checks, MIME/size checks, atomic write
+- [x] Implement upload endpoint with token verification, authz checks, MIME/size checks, atomic write
   - Requirements: 4.2
-- [ ] Implement download endpoint with token verification, authz checks, stream response
+- [x] Implement download endpoint with token verification, authz checks, stream response
   - Requirements: 4.2
-- [ ] Implement path normalization and traversal protections
+- [x] Implement path normalization and traversal protections
   - Requirements: 4.2
 
 ### 4.4 FS tests
 
-- [ ] Unit tests: token sign/verify, expiry, tamper detection
+- [x] Unit tests: token sign/verify, expiry, tamper detection
   - Requirements: 4.2, 8.1
-- [ ] Unit tests: path traversal rejection
+- [x] Unit tests: path traversal rejection
   - Requirements: 4.2, 8.1
-- [ ] Integration tests: presign -> upload -> commit -> presign-download -> download
+- [x] Integration tests: presign -> upload -> commit -> presign-download -> download
   - Requirements: 4.1, 8.2
-- [ ] Integration tests: GC logic vs retention and references
+- [x] Integration tests: GC logic vs retention and references
   - Requirements: 4.3, 8.2
 
 ## 5. Wizard and Setup Defaults

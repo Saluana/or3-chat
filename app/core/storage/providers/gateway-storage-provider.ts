@@ -90,6 +90,9 @@ export function createGatewayStorageProvider(
             const result = await requestJson<{
                 url: string;
                 expiresAt: number;
+                headers?: Record<string, string>;
+                method?: string;
+                storageId?: string;
             }>('/api/storage/presign-upload', {
                 workspace_id: input.workspaceId,
                 hash: input.hash,
@@ -102,6 +105,9 @@ export function createGatewayStorageProvider(
             return {
                 url: result.url,
                 expiresAt: result.expiresAt,
+                headers: result.headers,
+                method: result.method,
+                storageId: result.storageId,
             };
         },
 
@@ -109,6 +115,9 @@ export function createGatewayStorageProvider(
             const result = await requestJson<{
                 url: string;
                 expiresAt: number;
+                headers?: Record<string, string>;
+                method?: string;
+                storageId?: string;
             }>('/api/storage/presign-download', {
                 workspace_id: input.workspaceId,
                 hash: input.hash,
@@ -120,6 +129,9 @@ export function createGatewayStorageProvider(
             return {
                 url: result.url,
                 expiresAt: result.expiresAt,
+                headers: result.headers,
+                method: result.method,
+                storageId: result.storageId,
             };
         },
 

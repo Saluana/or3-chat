@@ -14,7 +14,9 @@ async function shouldRunLogoutCleanup(
     if (authenticated) return false;
     const status = await resolveClientAuthStatus();
     if (!status.ready) return false;
-    if (status.authenticated === undefined) return true;
+    // Unknown auth state (no resolver or provider still booting) is treated as
+    // transient; do not run destructive logout cleanup in this case.
+    if (status.authenticated === undefined) return false;
     return !status.authenticated;
 }
 

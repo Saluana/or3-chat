@@ -183,4 +183,25 @@ describe('POST /api/storage/presign-upload', () => {
         expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'storage:upload');
         expect(recordUploadStartMock).toHaveBeenCalledTimes(1);
     });
+
+    it('passes through upload method/headers/storageId from adapter response', async () => {
+        const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue(makeValidBody());
+        presignUploadMock.mockResolvedValue({
+            url: '/api/storage/fs/upload?token=abc',
+            expiresAt: 456,
+            method: 'PUT',
+            headers: { 'x-upload': '1' },
+            storageId: 'ws-1:sha256:abc',
+        });
+
+        await expect(handler(makeEvent())).resolves.toEqual({
+            url: '/api/storage/fs/upload?token=abc',
+            expiresAt: 456,
+            disposition: 'inline',
+            method: 'PUT',
+            headers: { 'x-upload': '1' },
+            storageId: 'ws-1:sha256:abc',
+        });
+    });
 });

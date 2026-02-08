@@ -7,7 +7,7 @@ import {
     unregisterThreadHistoryAction,
 } from '~/composables/threads/useThreadHistoryActions';
 import { useToast } from '#imports';
-import { db } from '~/db';
+import { getDb } from '~/db/client';
 import type { Post } from '~/db';
 import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
 
@@ -19,6 +19,7 @@ import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
  */
 export function setupHistoryActionsExample() {
     const toast = useToast();
+    const db = getDb();
 
     registerDocumentHistoryAction({
         id: 'example:export-doc',

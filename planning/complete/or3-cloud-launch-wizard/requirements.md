@@ -66,23 +66,57 @@ The wizard must align with the existing configuration model:
 3.1 As an Instance Operator, I want the wizard to configure OR3 Cloud correctly, so that SSR auth + sync + storage work.
 
 - WHEN I enable OR3 Cloud THEN the wizard SHALL set `SSR_AUTH_ENABLED=true`.
-- WHEN I select an auth provider THEN the wizard SHALL write `AUTH_PROVIDER=<id>` (default `clerk`).
-- WHEN auth provider is Clerk THEN the wizard SHALL collect:
+- WHEN I select an auth provider THEN the wizard SHALL write `OR3_AUTH_PROVIDER=<id>` (default `basic-auth`).
+- WHEN auth provider is Basic Auth THEN the wizard SHALL collect:
+  - `OR3_BASIC_AUTH_JWT_SECRET`
+- WHEN auth provider is Basic Auth THEN the wizard SHALL prompt for initial admin credentials:
+  - `OR3_BASIC_AUTH_BOOTSTRAP_EMAIL` (required for first-boot login)
+  - `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD` (required for first-boot login; both must be set together)
+- WHEN auth provider is Basic Auth THEN the wizard SHOULD support collecting:
+  - `OR3_BASIC_AUTH_REFRESH_SECRET` (optional; falls back to JWT_SECRET)
+  - `OR3_BASIC_AUTH_ACCESS_TTL_SECONDS` (optional; default 900)
+  - `OR3_BASIC_AUTH_REFRESH_TTL_SECONDS` (optional; default 2592000)
+  - `OR3_BASIC_AUTH_DB_PATH` (optional; default `./.data/or3-basic-auth.sqlite`)
+- WHEN auth provider is Clerk (legacy option) THEN the wizard SHALL collect:
   - `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
   - `NUXT_CLERK_SECRET_KEY`
-- WHEN I choose whether sync is enabled THEN the wizard SHALL write `OR3_SYNC_ENABLED=true|false`.
-- WHEN I select a sync provider THEN the wizard SHALL write `OR3_SYNC_PROVIDER=<id>` (default `convex`).
+- WHEN I choose whether sync is enabled THEN the wizard SHALL write `OR3_CLOUD_SYNC_ENABLED=true|false`.
+- WHEN I select a sync provider THEN the wizard SHALL write `OR3_SYNC_PROVIDER=<id>` (default `sqlite`).
+- WHEN sync provider is SQLite THEN the wizard SHALL collect:
+  - `OR3_SQLITE_DB_PATH`
+- WHEN sync provider is SQLite THEN the wizard SHOULD support collecting:
+  - `OR3_SQLITE_PRAGMA_JOURNAL_MODE` (optional; default `WAL`)
+  - `OR3_SQLITE_PRAGMA_SYNCHRONOUS` (optional; default `NORMAL`)
+  - `OR3_SQLITE_ALLOW_IN_MEMORY` (optional; default `false`; dev-only)
+  - `OR3_SQLITE_STRICT` (optional; default `false`; forbids in-memory even with allow flag)
 - WHEN sync provider is Convex THEN the wizard SHALL collect:
   - `VITE_CONVEX_URL`
 - WHEN using Convex AND I am self-hosting THEN the wizard SHOULD support collecting `CONVEX_SELF_HOSTED_ADMIN_KEY` (optional; used for server-side admin access).
+- WHEN I choose whether storage is enabled THEN the wizard SHALL write `OR3_CLOUD_STORAGE_ENABLED=true|false`.
+- WHEN I select a storage provider THEN the wizard SHALL write `NUXT_PUBLIC_STORAGE_PROVIDER=<id>` (default `fs`).
+- WHEN storage provider is FS THEN the wizard SHALL collect:
+  - `OR3_STORAGE_FS_ROOT` (must be an absolute path)
+  - `OR3_STORAGE_FS_TOKEN_SECRET` (≥32 characters recommended)
+- WHEN storage provider is FS THEN the wizard SHOULD support collecting:
+  - `OR3_STORAGE_FS_URL_TTL_SECONDS` (optional; default `900`)
 - WHEN storage provider is Convex THEN the wizard SHALL not require extra env beyond the Convex URL.
-- WHEN I choose whether storage is enabled THEN the wizard SHALL write `OR3_STORAGE_ENABLED=true|false`.
-- WHEN I select a storage provider THEN the wizard SHALL write `NUXT_PUBLIC_STORAGE_PROVIDER=<id>` (default `convex`).
-- WHEN Convex + Clerk are used THEN the wizard SHALL guide/setup Convex env vars:
+- WHEN Convex + Clerk are used (legacy preset or mixed stack) THEN the wizard SHALL guide/setup Convex env vars:
   - `CLERK_ISSUER_URL`
   - `OR3_ADMIN_JWT_SECRET`
 
-3.1.1 As an Instance Operator, I want the wizard to clearly separate “OR3 env vars” vs “Convex env vars”, so that I don’t put secrets in the wrong place.
+3.1.1 As an Instance Operator, I want fast-start presets for common stacks, so that setup is quick without losing compatibility.
+
+- WHEN I start a new SSR wizard flow THEN the default recommended preset SHALL be:
+  - Auth `basic-auth`
+  - Sync `sqlite`
+  - Storage `fs`
+- WHEN I choose presets THEN the wizard SHALL keep a legacy preset option:
+  - Auth `clerk`
+  - Sync `convex`
+  - Storage `convex`
+- WHEN apply writes provider modules THEN it SHALL include only module IDs required by the selected providers.
+
+3.1.2 As an Instance Operator, I want the wizard to clearly separate “OR3 env vars” vs “Convex env vars”, so that I don’t put secrets in the wrong place.
 
 - WHEN the wizard presents a review screen THEN it SHALL label each value as either:
   - “OR3 `.env`” (Nuxt/OR3 runtime), or
@@ -114,6 +148,7 @@ The wizard must align with the existing configuration model:
 - WHEN I configure security THEN the wizard SHALL support:
   - `OR3_ALLOWED_ORIGINS` (comma-separated)
   - `OR3_FORCE_HTTPS` (default true in prod)
+  - `OR3_STRICT_CONFIG` (default `false`; auto-enabled in production; controls strict validation across all providers)
   - proxy/trust settings if relevant (`OR3_TRUST_PROXY`, `OR3_FORWARDED_FOR_HEADER`)
 
 ### 4. Validation (correctness and safety)
@@ -136,6 +171,7 @@ The wizard must align with the existing configuration model:
 
 - WHEN applying configuration THEN it SHALL write environment variables to a chosen env file (e.g. `.env`, `.env.local`) in the target instance directory.
 - WHEN applying configuration THEN it SHALL not require editing `config.or3.ts` or `config.or3cloud.ts`.
+- WHEN applying configuration THEN it SHALL write/update `or3.providers.generated.ts` from selected provider IDs only (for example `or3-provider-basic-auth/nuxt`, `or3-provider-sqlite/nuxt`, `or3-provider-fs/nuxt`).
 - WHEN writing an env file THEN it SHALL preserve unrelated existing variables (non-destructive merge).
 - WHEN choosing an env file THEN it SHOULD default to `.env` for compatibility with existing OR3 tooling (e.g. admin config writer); if `.env.local` is used, the wizard SHOULD warn about any known limitations.
 - WHEN updating an existing env file THEN it SHOULD create a timestamped backup before writing, so that mistakes are reversible.

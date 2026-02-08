@@ -1,5 +1,5 @@
 <template>
-    <!-- SSR Auth Mode: OpenRouter (optional) + Clerk SignIn/UserButton -->
+    <!-- SSR Auth Mode: OpenRouter (optional) + provider auth UI adapter -->
     <template v-if="isSsrAuthEnabled">
         <!-- Show OpenRouter button when user override is allowed -->
         <UButton
@@ -54,8 +54,7 @@
                 </span>
             </template>
         </UButton>
-        <!-- Clerk user button comes after OpenRouter -->
-        <SidebarAuthButtonClerk />
+        <component :is="authUiComponent" />
     </template>
 
     <!-- Static Build Mode: OpenRouter Auth Only -->
@@ -118,11 +117,17 @@
 import { computed, onMounted, ref } from 'vue';
 import { state } from '~/state/global';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import SidebarAuthButtonClerk from './SidebarAuthButtonClerk.client.vue';
+import SidebarAuthButtonFallback from './SidebarAuthButtonFallback.client.vue';
+import { resolveAuthUiAdapter } from '~/core/auth-ui/registry';
 
 // Check if SSR auth is enabled via runtime config
 const runtimeConfig = useRuntimeConfig();
 const ssrAuthEnabled = runtimeConfig.public?.ssrAuthEnabled === true;
 const isSsrAuthEnabled = computed(() => ssrAuthEnabled);
+const authProviderId = computed(() =>
+    String(runtimeConfig.public?.authProvider ?? 'clerk')
+);
 const openRouterConfig = computed(
     () => runtimeConfig.public?.openRouter ?? {}
 );
@@ -165,6 +170,16 @@ const connectionLabel = computed(() => {
 const isManaged = computed(
     () => usingInstanceKey.value && !allowUserOverride.value
 );
+const authUiComponent = computed(() => {
+    const adapter = resolveAuthUiAdapter(authProviderId.value);
+    if (adapter?.component) {
+        return adapter.component;
+    }
+    if (authProviderId.value === 'clerk') {
+        return SidebarAuthButtonClerk;
+    }
+    return SidebarAuthButtonFallback;
+});
 
 const ariaLabel = computed(() => {
     if (!hydrated.value) return 'Connect to OpenRouter';

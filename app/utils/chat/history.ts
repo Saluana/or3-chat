@@ -11,7 +11,7 @@
 import type { Ref } from 'vue';
 import type { ChatMessage, ContentPart } from './types';
 import { deriveMessageContent } from './messages';
-import { db } from '~/db';
+import { getDb } from '~/db/client';
 import type { Message } from '~/db/schema';
 
 /**
@@ -30,6 +30,7 @@ export async function ensureThreadHistoryLoaded(
 
     try {
         const DexieMod = (await import('dexie')).default;
+        const db = getDb();
         const all = await db.messages
             .where('[thread_id+index]')
             .between(

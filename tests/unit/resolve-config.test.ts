@@ -457,4 +457,24 @@ describe('buildOr3CloudConfigFromEnv', () => {
             })
         ).toThrow(/publishableKey/i);
     });
+
+    it('supports OR3_AUTH_PROVIDER alias', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_AUTH_PROVIDER: 'basic-auth',
+            OR3_SYNC_ENABLED: 'false',
+            OR3_STORAGE_ENABLED: 'false',
+        });
+        expect(config.auth.provider).toBe('basic-auth');
+    });
+
+    it('supports OR3_CLOUD_SYNC_ENABLED and OR3_CLOUD_STORAGE_ENABLED aliases', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_CLOUD_SYNC_ENABLED: 'false',
+            OR3_CLOUD_STORAGE_ENABLED: 'false',
+        });
+        expect(config.sync.enabled).toBe(false);
+        expect(config.storage.enabled).toBe(false);
+    });
 });

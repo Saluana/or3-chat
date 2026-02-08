@@ -66,7 +66,16 @@ describe('workspace logout cleanup plugin', () => {
         }));
     });
 
-    it('clears workspace DBs when session is unauthenticated on load', async () => {
+    it('does not clear workspace DBs when auth state is unknown on load', async () => {
+        await import('~/plugins/00-workspace-db.client');
+        expect(logoutCleanup).toHaveBeenCalledTimes(0);
+    });
+
+    it('clears workspace DBs when session is unauthenticated and resolver confirms logout', async () => {
+        registerClientAuthStatusResolver(() => ({
+            ready: true,
+            authenticated: false,
+        }));
         await import('~/plugins/00-workspace-db.client');
         expect(logoutCleanup).toHaveBeenCalledTimes(1);
     });

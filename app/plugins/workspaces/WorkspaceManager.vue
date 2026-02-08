@@ -212,6 +212,7 @@ const toast = useToast();
 const baseDb = getDefaultDb();
 const cacheKey = 'workspace.manager.cache';
 const logoutPolicyPrefix = 'workspace.logout.policy.';
+const authSessionStorageKey = 'or3:auth-session-changed';
 
 const workspaceApi = useWorkspaceApi();
 const workspaces = ref<WorkspaceSummary[]>([]);
@@ -269,6 +270,34 @@ async function refreshSessionUntilWorkspace(workspaceId: string): Promise<boolea
         if (current === workspaceId) return true;
     }
     return false;
+}
+
+async function refreshSessionAfterWorkspaceRemoval(
+    removedWorkspaceId: string
+): Promise<string | null> {
+    const delaysMs = [0, 100, 200, 400, 800];
+    let latestWorkspaceId: string | null = null;
+
+    for (const delay of delaysMs) {
+        if (delay) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+        await sessionContext.refresh();
+        latestWorkspaceId = sessionContext.data.value?.session?.workspace?.id ?? null;
+        if (latestWorkspaceId !== removedWorkspaceId) {
+            return latestWorkspaceId;
+        }
+    }
+
+    return latestWorkspaceId;
+}
+
+function notifyOtherTabsAuthSessionChanged(): void {
+    try {
+        localStorage.setItem(authSessionStorageKey, String(Date.now()));
+    } catch {
+        // Best effort only; ignore storage failures (private mode/quota/etc.)
+    }
 }
 
 const legacyHasData = computed(
@@ -585,13 +614,28 @@ async function deleteWorkspace(workspace: WorkspaceSummary) {
 
     deletingWorkspaceId.value = workspace.id;
     try {
+        const wasActive =
+            workspace.isActive ||
+            sessionContext.data.value?.session?.workspace?.id === workspace.id;
         await workspaceApi.remove({ id: workspace.id });
+        const nextWorkspaceId = await refreshSessionAfterWorkspaceRemoval(workspace.id);
         await refreshNuxtData('auth-session');
-        cachedWorkspaces.value = cachedWorkspaces.value.filter(
-            (item) => item.id !== workspace.id
-        );
-        workspaces.value = cachedWorkspaces.value;
-        await saveCache(cachedWorkspaces.value);
+        await fetchWorkspaces();
+        await saveCache(workspaces.value);
+        notifyOtherTabsAuthSessionChanged();
+
+        if (wasActive) {
+            toast.add({
+                title: 'Workspace deleted',
+                description: nextWorkspaceId
+                    ? 'Switching to the next available workspace...'
+                    : 'Workspace removed.',
+            });
+            reloadNuxtApp({ ttl: 500 });
+            return;
+        }
+
+        cachedWorkspaces.value = workspaces.value;
         toast.add({ title: 'Workspace deleted', description: 'Workspace removed.' });
     } catch (error) {
         toast.add({

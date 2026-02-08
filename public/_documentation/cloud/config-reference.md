@@ -275,7 +275,7 @@ Important default behavior when using env:
 
 #### `auth.provider`
 
-- Type: `'clerk' | 'custom'`
+- Type: `'basic-auth' | 'clerk' | 'custom'`
 - Default: `'clerk'`
 - Env: `AUTH_PROVIDER`
 - Purpose: Selects the SSR auth provider.
@@ -307,7 +307,7 @@ Important default behavior when using env:
 
 #### `sync.provider`
 
-- Type: `'convex' | 'firebase' | 'custom'`
+- Type: `'sqlite' | 'convex' | 'firebase' | 'custom'`
 - Default: `'convex'`
 - Env: `OR3_SYNC_PROVIDER`
 - Purpose: Selects backend implementation.
@@ -358,7 +358,7 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 
 #### `storage.provider`
 
-- Type: `'convex' | 's3' | 'custom'`
+- Type: `'fs' | 'convex' | 's3' | 'custom'`
 - Default: `'convex'`
 - Env: `NUXT_PUBLIC_STORAGE_PROVIDER`
 - Purpose: Selects object storage backend.
@@ -638,6 +638,7 @@ OR3_STRICT_CONFIG=true
 
 - [Base Config](./or3-config)
 - [Cloud Config](./or3-cloud-config)
+- [Cloud Install Wizard](./or3-cloud-wizard)
 - [Auth System](./auth-system)
 - [Sync Layer](./sync-layer)
 - [Storage Layer](./storage-layer)

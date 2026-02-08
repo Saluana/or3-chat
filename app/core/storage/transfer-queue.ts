@@ -56,6 +56,21 @@ const DEFAULT_PRESIGN_EXPIRY_MS = 60 * 60 * 1000;
 const TRANSFER_RETENTION_SEC = 7 * 24 * 60 * 60;
 const TRANSFER_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
+function resolveUploadMethod(presign: {
+    url: string;
+    method?: string;
+}): string {
+    const explicit =
+        typeof presign.method === 'string' ? presign.method.trim() : '';
+    if (explicit.length > 0) return explicit.toUpperCase();
+
+    // FS token upload endpoint is PUT-only; keep compatibility with older
+    // presign responses that omitted `method`.
+    if (presign.url.startsWith('/api/storage/fs/upload')) return 'PUT';
+
+    return 'POST';
+}
+
 function getDefaultConcurrency(): number {
     if (typeof navigator === 'undefined' || !('connection' in navigator)) {
         return 2; // Default fallback
@@ -480,7 +495,7 @@ export class FileTransferQueue {
         };
 
         const uploadResponse = await fetch(presign.url, {
-            method: presign.method ?? 'POST',
+            method: resolveUploadMethod(presign),
             headers: uploadHeaders,
             body: blobRow.blob,
             signal,

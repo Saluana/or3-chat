@@ -638,6 +638,12 @@
                     "summary": "Authoritative reference for every OR3 configuration setting (base + cloud). Documents all config paths and environment variables with defaults, validation rules, and how each setting affects behavior."
                 },
                 {
+                    "name": "or3-cloud-wizard.md",
+                    "path": "/cloud/or3-cloud-wizard",
+                    "category": "Guide",
+                    "summary": "Guide for the OR3 Cloud install wizard CLI. Covers session flow, provider presets, validation, safe env writes, dry-run mode, deploy commands, and Convex backend env setup."
+                },
+                {
                     "name": "providers.md",
                     "path": "/cloud/providers",
                     "category": "Guide",
