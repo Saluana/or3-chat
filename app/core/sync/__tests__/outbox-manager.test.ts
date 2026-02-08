@@ -224,6 +224,52 @@ describe('OutboxManager', () => {
         ).toBe(true);
     });
 
+    it('defers retries on transport 429 without incrementing attempts', async () => {
+        const pendingOp = createPendingOp({
+            id: 'pending-rate-limit',
+            stamp: {
+                deviceId: 'device-1',
+                opId: 'op-rate-limit',
+                hlc: '0000000000001:0000:node',
+                clock: 1,
+            },
+        });
+        const pendingOps = createPendingOpsTable([pendingOp]);
+        const db = createMockDb({ pending_ops: pendingOps });
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async () => {
+            const err = new Error('Rate limit exceeded. Retry after 4s') as Error & {
+                status: number;
+                retryAfterMs: number;
+            };
+            err.status = 429;
+            err.retryAfterMs = 4000;
+            throw err;
+        });
+
+        const outbox = new OutboxManager(
+            db as any,
+            provider,
+            { workspaceId: 'workspace-1' },
+            { retryDelays: [250, 1000] }
+        );
+
+        vi.spyOn(Date, 'now').mockReturnValue(1000);
+
+        const didWork = await outbox.flush();
+
+        expect(didWork).toBe(false);
+        const stored = pendingOps.__rows.get('pending-rate-limit');
+        expect(stored?.status).toBe('pending');
+        expect(stored?.attempts).toBe(0);
+        expect(stored?.nextAttemptAt).toBe(5000);
+        expect(
+            hookState.doAction.mock.calls.some(
+                (call) => call[0] === 'sync.error:action'
+            )
+        ).toBe(false);
+    });
+
     it('treats payload-too-large errors as permanent failures', async () => {
         const pendingOp = createPendingOp({
             id: 'pending-oversized',

@@ -336,3 +336,15 @@ Mock Externalities: Isolate business logic from side effects (databases, APIs) t
 32. **If background jobs finish but Notification Center is empty, check scope first**
     - Confirm notifications are written for the same resolved user ID used by `useNotifications()` (`resolveNotificationUserId(session)`), not an old tracker/session value.
     - Mismatched user scope can make notifications “exist” in Dexie but be invisible in the panel query (`where('[user_id+created_at]')`).
+
+33. **Sync push rate limiting is request-based, so flush cadence matters more than batch size**
+    - Server limit for push is enforced per request (`sync:push` in `server/utils/sync/rate-limiter.ts`), not per-op payload size.
+    - A hot outbox loop can hit 429s even with tiny batches; don’t assume “small batch” means “safe”.
+
+34. **Transport-level 429s must be treated as deferrals, not failures**
+    - In outbox push handling, 429 should move ops back to `pending` with `nextAttemptAt` from `Retry-After` and should not increment `attempts`.
+    - If 429s go through normal failure/retry accounting, healthy ops are eventually marked failed under sustained pressure.
+
+35. **Gateway sync errors should carry structured retry metadata**
+    - `gateway-sync-provider` should parse and propagate `Retry-After` as milliseconds (`retryAfterMs`) on request errors.
+    - Centralizing retry timing in the error object keeps provider-specific backoff logic out of higher layers and prevents string-parsing drift.

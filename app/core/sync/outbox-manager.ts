@@ -85,6 +85,7 @@ export class OutboxManager {
     private isFlushing = false;
     private isRunning = false;
     private needsSyncingRecovery = true;
+    private providerRateLimitedUntil = 0;
 
     constructor(
         db: Or3DB,
@@ -110,6 +111,7 @@ export class OutboxManager {
         if (this.isRunning) return;
         this.isRunning = true;
         this.needsSyncingRecovery = true;
+        this.providerRateLimitedUntil = 0;
         // Purge permanently failed ops on startup — they will never succeed
         // and only generate noise (error notifications, wasted flush cycles).
         this.purgeFailedOps().catch((err) =>
@@ -164,6 +166,9 @@ export class OutboxManager {
         // Check circuit breaker before attempting flush
         const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
         if (!circuitBreaker.canRetry()) {
+            return false;
+        }
+        if (Date.now() < this.providerRateLimitedUntil) {
             return false;
         }
 
@@ -305,6 +310,28 @@ export class OutboxManager {
                     circuitBreaker.recordFailure();
                 }
             } catch (error) {
+                const rateLimitDelayMs = this.getRateLimitDelayMs(error);
+                if (rateLimitDelayMs !== null) {
+                    await this.releaseBatchAfterRateLimit(batch, rateLimitDelayMs);
+                    this.providerRateLimitedUntil = Math.max(
+                        this.providerRateLimitedUntil,
+                        Date.now() + rateLimitDelayMs
+                    );
+                    await hooks.doAction('sync.push:action:after', {
+                        scope: this.scope,
+                        successCount: 0,
+                        failCount: 0,
+                    });
+                    if (import.meta.dev) {
+                        console.warn('[OutboxManager] Push deferred by rate limit', {
+                            scope: this.scope,
+                            batchSize: batch.length,
+                            retryAfterMs: rateLimitDelayMs,
+                        });
+                    }
+                    return false;
+                }
+
                 const message = error instanceof Error ? error.message : String(error);
                 let failCount = 0;
                 for (const op of batch) {
@@ -355,6 +382,24 @@ export class OutboxManager {
         errorCode?: string
     ): Promise<void> {
         const hooks = useHooks();
+        if (errorCode === 'RATE_LIMITED' || this.isRateLimitMessage(error)) {
+            const rateLimitDelayMs =
+                this.parseRetryAfterFromMessage(error) ??
+                this.config.retryDelays[0] ??
+                DEFAULT_RETRY_DELAYS[0] ??
+                250;
+            const nextAttemptAt = Date.now() + rateLimitDelayMs;
+            this.providerRateLimitedUntil = Math.max(this.providerRateLimitedUntil, nextAttemptAt);
+            const updatedOp = {
+                ...op,
+                status: 'pending' as const,
+                nextAttemptAt,
+            };
+            await this.db.pending_ops.put(updatedOp);
+            await hooks.doAction('sync.retry:action', { op: updatedOp, attempt: op.attempts });
+            return;
+        }
+
         const attempts = op.attempts + 1;
         const maxAttempts = this.config.retryDelays.length;
 
@@ -445,6 +490,57 @@ export class OutboxManager {
         if (error.includes('invalid_type') && error.includes('received undefined')) return true;
 
         return false;
+    }
+
+    private getRateLimitDelayMs(error: unknown): number | null {
+        if (!error || typeof error !== 'object') return null;
+        const candidate = error as {
+            status?: unknown;
+            retryAfterMs?: unknown;
+            message?: unknown;
+        };
+
+        if (candidate.status !== 429) return null;
+
+        if (
+            typeof candidate.retryAfterMs === 'number' &&
+            Number.isFinite(candidate.retryAfterMs) &&
+            candidate.retryAfterMs > 0
+        ) {
+            return candidate.retryAfterMs;
+        }
+
+        if (typeof candidate.message === 'string') {
+            const fromMessage = this.parseRetryAfterFromMessage(candidate.message);
+            if (fromMessage !== null) return fromMessage;
+        }
+
+        return this.config.retryDelays[0] ?? DEFAULT_RETRY_DELAYS[0] ?? 250;
+    }
+
+    private parseRetryAfterFromMessage(message?: string): number | null {
+        if (!message) return null;
+        const match = /retry after\s+(\d+(?:\.\d+)?)s/i.exec(message);
+        if (!match) return null;
+        const seconds = Number(match[1]);
+        if (!Number.isFinite(seconds) || seconds <= 0) return null;
+        return Math.ceil(seconds * 1000);
+    }
+
+    private isRateLimitMessage(message?: string): boolean {
+        if (!message) return false;
+        return message.toLowerCase().includes('rate limit');
+    }
+
+    private async releaseBatchAfterRateLimit(batch: PendingOp[], retryAfterMs: number): Promise<void> {
+        const nextAttemptAt = Date.now() + retryAfterMs;
+        await this.db.pending_ops.bulkPut(
+            batch.map((op) => ({
+                ...op,
+                status: 'pending' as const,
+                nextAttemptAt,
+            }))
+        );
     }
 
     private async markTombstoneSynced(op: PendingOp): Promise<void> {

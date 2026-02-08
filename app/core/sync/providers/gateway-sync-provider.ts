@@ -57,13 +57,32 @@ export interface GatewaySyncProviderConfig {
 class GatewaySyncRequestError extends Error {
     status: number;
     path: string;
+    retryAfterMs?: number;
 
-    constructor(path: string, status: number, message: string) {
+    constructor(path: string, status: number, message: string, retryAfterMs?: number) {
         super(`[gateway-sync] ${path} failed (${status}): ${message}`);
         this.name = 'GatewaySyncRequestError';
         this.status = status;
         this.path = path;
+        this.retryAfterMs = retryAfterMs;
     }
+}
+
+function parseRetryAfterHeader(value: string | null): number | undefined {
+    if (!value) return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+
+    const seconds = Number(trimmed);
+    if (Number.isFinite(seconds) && seconds > 0) {
+        return Math.ceil(seconds * 1000);
+    }
+
+    const asDateMs = Date.parse(trimmed);
+    if (!Number.isFinite(asDateMs)) return undefined;
+    const delta = asDateMs - Date.now();
+    if (delta <= 0) return undefined;
+    return delta;
 }
 
 /**
@@ -112,9 +131,10 @@ async function requestJson<T>(
     });
 
     if (!res.ok) {
+        const retryAfterMs = parseRetryAfterHeader(res.headers?.get?.('Retry-After') ?? null);
         const text = await res.text();
         const sanitized = sanitizeErrorText(text);
-        throw new GatewaySyncRequestError(path, res.status, sanitized);
+        throw new GatewaySyncRequestError(path, res.status, sanitized, retryAfterMs);
     }
 
     const text = await res.text();
