@@ -74,9 +74,13 @@ The wizard should treat provider choice as a first-class concept:
 
 - `SSR_AUTH_ENABLED=true`
 - `OR3_BASIC_AUTH_JWT_SECRET`
+- `OR3_BASIC_AUTH_BOOTSTRAP_EMAIL` (initial admin account)
+- `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD` (initial admin account)
 - `OR3_SQLITE_DB_PATH`
-- `OR3_STORAGE_FS_ROOT`
-- `OR3_STORAGE_FS_TOKEN_SECRET`
+- `OR3_STORAGE_FS_ROOT` (must be absolute path)
+- `OR3_STORAGE_FS_TOKEN_SECRET` (≥32 chars recommended)
+
+Note: Basic Auth also creates its own SQLite DB for user accounts at `OR3_BASIC_AUTH_DB_PATH` (default: `./.data/or3-basic-auth.sqlite`), separate from the sync DB.
 
 ### Additional required inputs for legacy Clerk + Convex preset
 
@@ -155,23 +159,30 @@ export interface WizardAnswers {
   ssrAuthEnabled: boolean; // maps to SSR_AUTH_ENABLED
 
   // Auth
-  authProvider: 'basic-auth' | 'clerk' | 'custom';
+  authProvider: 'basic-auth' | 'clerk' | 'custom'; // maps to OR3_AUTH_PROVIDER
   basicAuthJwtSecret?: string;
   basicAuthRefreshSecret?: string;
+  basicAuthAccessTtlSeconds?: number; // default: 900
+  basicAuthRefreshTtlSeconds?: number; // default: 2592000
+  basicAuthDbPath?: string; // maps to OR3_BASIC_AUTH_DB_PATH; default: ./.data/or3-basic-auth.sqlite
+  basicAuthBootstrapEmail?: string; // maps to OR3_BASIC_AUTH_BOOTSTRAP_EMAIL
+  basicAuthBootstrapPassword?: string; // maps to OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD
   clerkPublishableKey?: string;
   clerkSecretKey?: string;
 
   // Cloud providers
-  syncEnabled: boolean;
-  syncProvider: 'sqlite' | 'convex' | 'firebase' | 'custom';
+  syncEnabled: boolean; // maps to OR3_CLOUD_SYNC_ENABLED
+  syncProvider: 'sqlite' | 'convex' | 'firebase' | 'custom'; // maps to OR3_SYNC_PROVIDER
   sqliteDbPath?: string; // maps to OR3_SQLITE_DB_PATH
+  sqliteAllowInMemory?: boolean; // maps to OR3_SQLITE_ALLOW_IN_MEMORY; default: false
+  sqliteStrict?: boolean; // maps to OR3_SQLITE_STRICT; default: false
   convexUrl?: string; // maps to VITE_CONVEX_URL
 
-  storageEnabled: boolean;
-  storageProvider: 'fs' | 'convex' | 's3' | 'custom';
-  fsRoot?: string; // maps to OR3_STORAGE_FS_ROOT
-  fsTokenSecret?: string; // maps to OR3_STORAGE_FS_TOKEN_SECRET
-  fsUrlTtlSeconds?: number; // maps to OR3_STORAGE_FS_URL_TTL_SECONDS
+  storageEnabled: boolean; // maps to OR3_CLOUD_STORAGE_ENABLED
+  storageProvider: 'fs' | 'convex' | 's3' | 'custom'; // maps to NUXT_PUBLIC_STORAGE_PROVIDER
+  fsRoot?: string; // maps to OR3_STORAGE_FS_ROOT (must be absolute path)
+  fsTokenSecret?: string; // maps to OR3_STORAGE_FS_TOKEN_SECRET (≥32 chars recommended)
+  fsUrlTtlSeconds?: number; // maps to OR3_STORAGE_FS_URL_TTL_SECONDS; default: 900
 
   // Convex env (not .env):
   convexClerkIssuerUrl?: string; // CLERK_ISSUER_URL
@@ -183,6 +194,7 @@ export interface WizardAnswers {
   openrouterRequireUserKey: boolean;
 
   // Optional hardening
+  strictConfig?: boolean; // maps to OR3_STRICT_CONFIG; default: false (auto true in production)
   allowedOrigins?: string[];
   forceHttps?: boolean;
 }
@@ -207,6 +219,8 @@ Preset defaults in catalog:
 - Legacy: `clerk` + `convex` + `convex`
 
 Future providers can be added by extending the catalog and implementing the runtime provider.
+
+**Implementation note:** `basic-auth` and `sqlite` both depend on `better-sqlite3` but for separate databases — basic-auth has its own user account DB (`OR3_BASIC_AUTH_DB_PATH`), while sqlite has the sync DB (`OR3_SQLITE_DB_PATH`). All three providers share the `OR3_STRICT_CONFIG` pattern (auto-strict in production).
 
 ```ts
 export type ProviderKind = 'auth' | 'sync' | 'storage';
@@ -248,6 +262,7 @@ export interface WizardPreset {
   answers: Partial<Omit<WizardAnswers,
     | 'basicAuthJwtSecret'
     | 'basicAuthRefreshSecret'
+    | 'basicAuthBootstrapPassword'
     | 'clerkSecretKey'
     | 'openrouterInstanceApiKey'
     | 'convexAdminJwtSecret'
@@ -353,14 +368,31 @@ The apply step must be non-destructive:
 Owned keys are the ones described in config docs, e.g.:
 
 - `SSR_AUTH_ENABLED`
+- `OR3_AUTH_PROVIDER`
 - `OR3_BASIC_AUTH_JWT_SECRET`
+- `OR3_BASIC_AUTH_REFRESH_SECRET`
+- `OR3_BASIC_AUTH_ACCESS_TTL_SECONDS`
+- `OR3_BASIC_AUTH_REFRESH_TTL_SECONDS`
+- `OR3_BASIC_AUTH_DB_PATH`
+- `OR3_BASIC_AUTH_BOOTSTRAP_EMAIL`
+- `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD`
+- `OR3_CLOUD_SYNC_ENABLED`
+- `OR3_SYNC_PROVIDER`
 - `OR3_SQLITE_DB_PATH`
+- `OR3_SQLITE_PRAGMA_JOURNAL_MODE`
+- `OR3_SQLITE_PRAGMA_SYNCHRONOUS`
+- `OR3_SQLITE_ALLOW_IN_MEMORY`
+- `OR3_SQLITE_STRICT`
+- `OR3_CLOUD_STORAGE_ENABLED`
+- `NUXT_PUBLIC_STORAGE_PROVIDER`
 - `OR3_STORAGE_FS_ROOT`
 - `OR3_STORAGE_FS_TOKEN_SECRET`
+- `OR3_STORAGE_FS_URL_TTL_SECONDS`
 - `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `NUXT_CLERK_SECRET_KEY`
 - `VITE_CONVEX_URL`
 - `OPENROUTER_API_KEY`
+- `OR3_STRICT_CONFIG`
 - etc.
 
 ### Convex env setting

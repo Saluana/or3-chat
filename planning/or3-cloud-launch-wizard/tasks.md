@@ -28,6 +28,9 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
     - [ ] Set recommended preset defaults to `basic-auth` + `sqlite` + `fs`
     - [ ] Keep legacy preset option `clerk` + `convex` + `convex`
     - [ ] Wire provider selection step to generate provider-specific steps
+    - [ ] Include `OR3_BASIC_AUTH_DB_PATH` and bootstrap credentials in basic-auth provider fields
+    - [ ] Include `OR3_SQLITE_ALLOW_IN_MEMORY` and `OR3_SQLITE_STRICT` in sqlite provider fields
+    - [ ] Note: basic-auth and sqlite both depend on `better-sqlite3` (separate DBs)
 - [ ] Define the API methods (`createSession`, `submitAnswers`, `validate`, `apply`, `deploy`)
   - Requirements: 1.1, 4.1, 5.1, 6.1
 
@@ -36,10 +39,13 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
 - [ ] Implement field-level validation rules
   - Requirements: 2.1, 4.1
   - Subtasks:
-    - [ ] Secret/path validation for `OR3_BASIC_AUTH_JWT_SECRET`, `OR3_SQLITE_DB_PATH`, `OR3_STORAGE_FS_ROOT`, and `OR3_STORAGE_FS_TOKEN_SECRET`
+    - [ ] Secret/path validation for `OR3_BASIC_AUTH_JWT_SECRET`, `OR3_SQLITE_DB_PATH`, `OR3_STORAGE_FS_ROOT`, and `OR3_STORAGE_FS_TOKEN_SECRET` (≥32 chars)
+    - [ ] Bootstrap credential validation: `OR3_BASIC_AUTH_BOOTSTRAP_EMAIL` (valid email) + `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD` (both-or-neither rule)
+    - [ ] Path validation: `OR3_BASIC_AUTH_DB_PATH` defaults to `./.data/or3-basic-auth.sqlite`; `OR3_STORAGE_FS_ROOT` must be absolute path
     - [ ] URL parsing validation for `VITE_CONVEX_URL`
     - [ ] Basic pattern validation for Clerk keys (non-blocking warnings if unsure)
     - [ ] Cross-field validation: OpenRouter rules (`requireUserKey` vs `allowUserOverride`)
+    - [ ] Strict config validation: `OR3_STRICT_CONFIG` interaction with `NODE_ENV=production` auto-strict
 - [ ] Implement authoritative validation by calling existing config builders
   - Requirements: 4.1
   - Subtasks:
@@ -158,9 +164,10 @@ artifact_id: 3f7ea845-195b-4ed2-a8f6-f0f9f41a5b74
 - [ ] Integration tests (dry-run) that cover the default path
   - Requirements: 3.1, 6.1
   - Subtasks:
-    - [ ] Validate recommended preset (`basic-auth` + `sqlite` + `fs`)
+    - [ ] Validate recommended preset (`basic-auth` + `sqlite` + `fs`) incl. bootstrap credentials
     - [ ] Validate legacy preset (`clerk` + `convex` + `convex`)
     - [ ] Validate generated provider module list matches only selected providers
+    - [ ] Validate correct env var names (`OR3_AUTH_PROVIDER`, `OR3_CLOUD_SYNC_ENABLED`, `OR3_CLOUD_STORAGE_ENABLED`, `NUXT_PUBLIC_STORAGE_PROVIDER`)
 
 ## 10. Documentation updates
 

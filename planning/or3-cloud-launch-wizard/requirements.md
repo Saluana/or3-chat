@@ -66,33 +66,39 @@ The wizard must align with the existing configuration model:
 3.1 As an Instance Operator, I want the wizard to configure OR3 Cloud correctly, so that SSR auth + sync + storage work.
 
 - WHEN I enable OR3 Cloud THEN the wizard SHALL set `SSR_AUTH_ENABLED=true`.
-- WHEN I select an auth provider THEN the wizard SHALL write `AUTH_PROVIDER=<id>` (default `basic-auth`).
+- WHEN I select an auth provider THEN the wizard SHALL write `OR3_AUTH_PROVIDER=<id>` (default `basic-auth`).
 - WHEN auth provider is Basic Auth THEN the wizard SHALL collect:
   - `OR3_BASIC_AUTH_JWT_SECRET`
+- WHEN auth provider is Basic Auth THEN the wizard SHALL prompt for initial admin credentials:
+  - `OR3_BASIC_AUTH_BOOTSTRAP_EMAIL` (required for first-boot login)
+  - `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD` (required for first-boot login; both must be set together)
 - WHEN auth provider is Basic Auth THEN the wizard SHOULD support collecting:
-  - `OR3_BASIC_AUTH_REFRESH_SECRET` (optional)
-  - `OR3_BASIC_AUTH_ACCESS_TTL_SECONDS` (optional)
-  - `OR3_BASIC_AUTH_REFRESH_TTL_SECONDS` (optional)
+  - `OR3_BASIC_AUTH_REFRESH_SECRET` (optional; falls back to JWT_SECRET)
+  - `OR3_BASIC_AUTH_ACCESS_TTL_SECONDS` (optional; default 900)
+  - `OR3_BASIC_AUTH_REFRESH_TTL_SECONDS` (optional; default 2592000)
+  - `OR3_BASIC_AUTH_DB_PATH` (optional; default `./.data/or3-basic-auth.sqlite`)
 - WHEN auth provider is Clerk (legacy option) THEN the wizard SHALL collect:
   - `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
   - `NUXT_CLERK_SECRET_KEY`
-- WHEN I choose whether sync is enabled THEN the wizard SHALL write `OR3_SYNC_ENABLED=true|false`.
+- WHEN I choose whether sync is enabled THEN the wizard SHALL write `OR3_CLOUD_SYNC_ENABLED=true|false`.
 - WHEN I select a sync provider THEN the wizard SHALL write `OR3_SYNC_PROVIDER=<id>` (default `sqlite`).
 - WHEN sync provider is SQLite THEN the wizard SHALL collect:
   - `OR3_SQLITE_DB_PATH`
 - WHEN sync provider is SQLite THEN the wizard SHOULD support collecting:
-  - `OR3_SQLITE_PRAGMA_JOURNAL_MODE` (optional)
-  - `OR3_SQLITE_PRAGMA_SYNCHRONOUS` (optional)
+  - `OR3_SQLITE_PRAGMA_JOURNAL_MODE` (optional; default `WAL`)
+  - `OR3_SQLITE_PRAGMA_SYNCHRONOUS` (optional; default `NORMAL`)
+  - `OR3_SQLITE_ALLOW_IN_MEMORY` (optional; default `false`; dev-only)
+  - `OR3_SQLITE_STRICT` (optional; default `false`; forbids in-memory even with allow flag)
 - WHEN sync provider is Convex THEN the wizard SHALL collect:
   - `VITE_CONVEX_URL`
 - WHEN using Convex AND I am self-hosting THEN the wizard SHOULD support collecting `CONVEX_SELF_HOSTED_ADMIN_KEY` (optional; used for server-side admin access).
-- WHEN I choose whether storage is enabled THEN the wizard SHALL write `OR3_STORAGE_ENABLED=true|false`.
+- WHEN I choose whether storage is enabled THEN the wizard SHALL write `OR3_CLOUD_STORAGE_ENABLED=true|false`.
 - WHEN I select a storage provider THEN the wizard SHALL write `NUXT_PUBLIC_STORAGE_PROVIDER=<id>` (default `fs`).
 - WHEN storage provider is FS THEN the wizard SHALL collect:
-  - `OR3_STORAGE_FS_ROOT`
-  - `OR3_STORAGE_FS_TOKEN_SECRET`
+  - `OR3_STORAGE_FS_ROOT` (must be an absolute path)
+  - `OR3_STORAGE_FS_TOKEN_SECRET` (≥32 characters recommended)
 - WHEN storage provider is FS THEN the wizard SHOULD support collecting:
-  - `OR3_STORAGE_FS_URL_TTL_SECONDS` (optional)
+  - `OR3_STORAGE_FS_URL_TTL_SECONDS` (optional; default `900`)
 - WHEN storage provider is Convex THEN the wizard SHALL not require extra env beyond the Convex URL.
 - WHEN Convex + Clerk are used (legacy preset or mixed stack) THEN the wizard SHALL guide/setup Convex env vars:
   - `CLERK_ISSUER_URL`
@@ -142,6 +148,7 @@ The wizard must align with the existing configuration model:
 - WHEN I configure security THEN the wizard SHALL support:
   - `OR3_ALLOWED_ORIGINS` (comma-separated)
   - `OR3_FORCE_HTTPS` (default true in prod)
+  - `OR3_STRICT_CONFIG` (default `false`; auto-enabled in production; controls strict validation across all providers)
   - proxy/trust settings if relevant (`OR3_TRUST_PROXY`, `OR3_FORWARDED_FOR_HEADER`)
 
 ### 4. Validation (correctness and safety)
