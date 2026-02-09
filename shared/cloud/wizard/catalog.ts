@@ -131,9 +131,9 @@ export const WIZARD_OWNED_ENV_KEYS = [
  * prompt steps, and dependency install plans.
  *
  * v1 providers:
- * - Auth: `basic-auth` (recommended), `clerk` (legacy)
- * - Sync: `sqlite` (recommended), `convex` (legacy)
- * - Storage: `fs` (recommended), `convex` (legacy)
+ * - Auth: `basic-auth`, `clerk`
+ * - Sync: `sqlite`, `convex`
+ * - Storage: `fs`, `convex`
  *
  * Future providers (e.g. `firebase`, `s3`) are added by extending
  * this array and setting `implemented: true` once the runtime exists.
@@ -142,7 +142,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
     {
         kind: 'auth',
         id: 'basic-auth',
-        label: 'Basic Auth (Recommended)',
+        label: 'Basic Auth (Default)',
         implemented: true,
         docsUrl: '/cloud/provider-basic-auth',
         dependencies: [
@@ -219,7 +219,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
     {
         kind: 'auth',
         id: 'clerk',
-        label: 'Clerk (Legacy)',
+        label: 'Clerk',
         implemented: true,
         docsUrl: '/cloud/provider-clerk',
         dependencies: [
@@ -249,7 +249,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
     {
         kind: 'sync',
         id: 'sqlite',
-        label: 'SQLite (Recommended)',
+        label: 'SQLite (Default)',
         implemented: true,
         docsUrl: '/cloud/provider-sqlite',
         dependencies: [
@@ -303,7 +303,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
     {
         kind: 'sync',
         id: 'convex',
-        label: 'Convex (Legacy)',
+        label: 'Convex',
         implemented: true,
         docsUrl: '/cloud/provider-convex',
         dependencies: [
@@ -342,7 +342,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
     {
         kind: 'storage',
         id: 'fs',
-        label: 'Filesystem (Recommended)',
+        label: 'Filesystem (Default)',
         implemented: true,
         docsUrl: '/cloud/provider-fs',
         dependencies: [
@@ -379,7 +379,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
     {
         kind: 'storage',
         id: 'convex',
-        label: 'Convex (Legacy)',
+        label: 'Convex',
         implemented: true,
         docsUrl: '/cloud/provider-convex',
         dependencies: [
@@ -416,8 +416,8 @@ export function getProviderDescriptor(kind: WizardProviderDescriptor['kind'], id
  * Creates a complete `WizardAnswers` object populated with sensible defaults.
  *
  * Behavior:
- * - When `presetName` is `'legacy-clerk-convex'`, providers default to
- *   Clerk + Convex + Convex instead of Basic Auth + SQLite + FS.
+ * - When `presetName` is `'legacy-clerk-convex'` (or alias `'clerk-convex'`),
+ *   providers default to Clerk + Convex + Convex instead of Basic Auth + SQLite + FS.
  * - All non-secret fields receive a value; secret fields remain `undefined`.
  * - `instanceDir` defaults to `process.cwd()` when not provided.
  *
@@ -484,7 +484,7 @@ export function createDefaultAnswers(
         forwardedForHeader: 'x-forwarded-for',
     };
 
-    if (presetName === 'legacy-clerk-convex') {
+    if (presetName === 'legacy-clerk-convex' || presetName === 'clerk-convex') {
         return {
             ...base,
             authProvider: 'clerk',

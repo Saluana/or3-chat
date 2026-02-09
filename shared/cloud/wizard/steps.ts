@@ -110,10 +110,10 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     key: 'envFile',
                     type: 'select',
                     label: 'Settings file',
-                    help: 'Where to save your settings. .env is the standard choice.',
+                    help: 'Where to save your settings. `.env` is the default choice.',
                     defaultValue: '.env',
                     options: [
-                        { label: '.env (recommended)', value: '.env' },
+                        { label: '.env (default)', value: '.env' },
                         { label: '.env.local', value: '.env.local' },
                     ],
                 },
@@ -137,21 +137,23 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
         },
         {
             id: 'preset',
-            title: 'Quick Setup',
-            description: 'Pick a starting template. The recommended option works out of the box — no external services needed.',
+            title: 'Starting Template',
+            description:
+                'Pick a starting point.\n' +
+                'This only sets defaults for the next step — you can still choose any providers you want.',
             fields: [
                 {
                     key: 'presetName',
                     type: 'select',
-                    label: 'Which setup do you want?',
-                    help: 'The recommended setup stores everything on your server. The legacy option uses external Clerk/Convex services.',
+                    label: 'Which starting point do you want?',
+                    help: 'This does not lock anything in. You can change auth, sync, and storage providers in the next step.',
                     options: [
                         {
-                            label: 'Recommended — self-contained (no third-party accounts needed)',
+                            label: 'Default local stack — Basic Auth + SQLite + Filesystem',
                             value: 'recommended',
                         },
                         {
-                            label: 'Legacy — uses Clerk + Convex (requires accounts with those services)',
+                            label: 'Clerk + Convex stack — Clerk + Convex + Convex',
                             value: 'legacy-clerk-convex',
                         },
                     ],
@@ -233,8 +235,8 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
             id: 'providers',
             title: 'Backend Services',
             description:
-                'These control how your instance handles user accounts, data sync, and file storage.\n' +
-                'The defaults are already set from your template choice — press Enter to keep them.',
+                'Choose how your instance handles accounts, sync, and file storage.\n' +
+                'Defaults are pre-filled from your template, and you can mix providers however you want.',
             fields: [
                 {
                     key: 'ssrAuthEnabled',
@@ -396,10 +398,10 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
 
     steps.push({
         id: 'convex-env',
-        title: 'Convex Connection',
+        title: 'Clerk + Convex Connection',
         description:
-            'Your Clerk + Convex setup needs a couple more values.\n' +
-            'These are set in the Convex dashboard, not in your project files.',
+            'You selected Clerk with Convex.\n' +
+            'Add the auth values Convex needs to validate Clerk sessions.',
         fields: [
             {
                 key: 'convexClerkIssuerUrl',
@@ -422,6 +424,16 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     current.storageProvider === 'convex')
             ),
     });
+
+    const openRouterStepIndex = steps.findIndex(
+        (step) => step.id === 'openrouter-limits-security'
+    );
+    if (openRouterStepIndex >= 0) {
+        const [openRouterStep] = steps.splice(openRouterStepIndex, 1);
+        if (openRouterStep) {
+            steps.push(openRouterStep);
+        }
+    }
 
     steps.push({
         id: 'review',

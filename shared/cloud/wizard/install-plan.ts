@@ -28,7 +28,7 @@
  * @see DependencyInstallPlan for the plan structure
  */
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { getProviderDescriptor } from './catalog';
 import type { WizardAnswers } from './types';
@@ -92,6 +92,29 @@ function resolveInstallSpecs(
         (packageName) =>
             resolveProviderLocalInstallSpec(packageName, instanceDir) ?? packageName
     );
+}
+
+function readExistingDependencySpecs(instanceDir: string): Map<string, string> {
+    const packageJsonPath = resolve(instanceDir, 'package.json');
+    if (!existsSync(packageJsonPath)) {
+        return new Map();
+    }
+
+    const raw = readFileSync(packageJsonPath, 'utf8');
+    const parsed = JSON.parse(raw) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+        peerDependencies?: Record<string, string>;
+        optionalDependencies?: Record<string, string>;
+    };
+
+    const all = {
+        ...parsed.dependencies,
+        ...parsed.devDependencies,
+        ...parsed.peerDependencies,
+        ...parsed.optionalDependencies,
+    };
+    return new Map(Object.entries(all));
 }
 
 export function isInstallPackageManager(
@@ -253,11 +276,18 @@ export async function executeDependencyInstallPlan(
     if (plan.packages.length === 0) return;
     if (options.dryRun) return;
     const installSpecs = resolveInstallSpecs(plan.packages, answers.instanceDir);
+    const existingSpecs = readExistingDependencySpecs(answers.instanceDir);
+    const specsToInstall = installSpecs.filter((spec, index) => {
+        const packageName = plan.packages[index];
+        if (!packageName) return true;
+        return existingSpecs.get(packageName) !== spec;
+    });
+    if (specsToInstall.length === 0) return;
 
     if (options.packageManager === 'bun') {
-        await runCommand('bun', ['add', ...installSpecs], answers.instanceDir);
+        await runCommand('bun', ['add', ...specsToInstall], answers.instanceDir);
         return;
     }
 
-    await runCommand('npm', ['install', ...installSpecs], answers.instanceDir);
+    await runCommand('npm', ['install', ...specsToInstall], answers.instanceDir);
 }

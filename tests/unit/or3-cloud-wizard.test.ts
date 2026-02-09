@@ -6,6 +6,7 @@ import { createDefaultAnswers } from '../../shared/cloud/wizard/catalog';
 import { applyAnswers } from '../../shared/cloud/wizard/apply';
 import { buildDeployPlan } from '../../shared/cloud/wizard/deploy';
 import { deriveEnvFromAnswers } from '../../shared/cloud/wizard/derive';
+import { getWizardSteps } from '../../shared/cloud/wizard/steps';
 import {
     createDependencyInstallPlan,
     executeDependencyInstallPlan,
@@ -87,6 +88,53 @@ describe('or3 cloud wizard validation', () => {
             'or3-provider-fs/nuxt',
             'or3-provider-sqlite/nuxt',
         ]);
+    });
+
+    it('uses neutral provider labels and template wording', () => {
+        const steps = getWizardSteps(validRecommendedAnswers());
+        const presetStep = steps.find((step) => step.id === 'preset');
+        const providerStep = steps.find((step) => step.id === 'providers');
+
+        expect(presetStep?.title).toBe('Starting Template');
+        expect(presetStep?.description).toContain(
+            'This only sets defaults for the next step'
+        );
+
+        const presetLabels = (presetStep?.fields[0]?.options ?? []).map(
+            (option) => option.label
+        );
+        expect(presetLabels).toContain(
+            'Default local stack — Basic Auth + SQLite + Filesystem'
+        );
+        expect(presetLabels).toContain(
+            'Clerk + Convex stack — Clerk + Convex + Convex'
+        );
+
+        const authOptions = providerStep?.fields.find(
+            (field) => field.key === 'authProvider'
+        )?.options;
+        expect(authOptions?.map((option) => option.label)).toEqual([
+            'Basic Auth (Default)',
+            'Clerk',
+        ]);
+    });
+
+    it('places Clerk + Convex connection step before AI/limits/security', () => {
+        const steps = getWizardSteps({
+            ...validRecommendedAnswers(),
+            authProvider: 'clerk',
+            syncProvider: 'convex',
+            storageProvider: 'convex',
+        });
+
+        const convexIndex = steps.findIndex((step) => step.id === 'convex-env');
+        const openRouterIndex = steps.findIndex(
+            (step) => step.id === 'openrouter-limits-security'
+        );
+
+        expect(convexIndex).toBeGreaterThan(-1);
+        expect(openRouterIndex).toBeGreaterThan(-1);
+        expect(convexIndex).toBeLessThan(openRouterIndex);
     });
 });
 

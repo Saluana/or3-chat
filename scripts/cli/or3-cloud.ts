@@ -26,6 +26,10 @@ type CliFlags = {
     [key: string]: string | boolean | undefined;
 };
 
+type PromptNavigation = 'nav-back' | 'nav-next';
+const NAV_BACK: PromptNavigation = 'nav-back';
+const NAV_NEXT: PromptNavigation = 'nav-next';
+
 function parseFlags(args: string[]): { command: string; rest: string[]; flags: CliFlags } {
     const [command = 'help', ...restArgs] = args;
     const rest: string[] = [];
@@ -87,10 +91,17 @@ class Prompt {
         this.rl.close();
     }
 
-    async text(label: string, defaultValue?: string, required = false): Promise<string> {
+    async text(
+        label: string,
+        defaultValue?: string,
+        required = false
+    ): Promise<string | PromptNavigation> {
         while (true) {
             const suffix = defaultValue !== undefined ? ` [${defaultValue}]` : '';
             const answer = (await this.rl.question(`${label}${suffix}: `)).trim();
+            const normalized = answer.toLowerCase();
+            if (normalized === '/back') return NAV_BACK;
+            if (normalized === '/next') return NAV_NEXT;
             if (!answer && defaultValue !== undefined) return defaultValue;
             if (!answer && required) {
                 console.log('Value is required.');
@@ -100,10 +111,15 @@ class Prompt {
         }
     }
 
-    async boolean(label: string, defaultValue: boolean): Promise<boolean> {
+    async boolean(
+        label: string,
+        defaultValue: boolean
+    ): Promise<boolean | PromptNavigation> {
         const suffix = defaultValue ? ' [Y/n]' : ' [y/N]';
         while (true) {
             const answer = (await this.rl.question(`${label}${suffix}: `)).trim().toLowerCase();
+            if (answer === '/back') return NAV_BACK;
+            if (answer === '/next') return NAV_NEXT;
             if (!answer) return defaultValue;
             if (['y', 'yes'].includes(answer)) return true;
             if (['n', 'no'].includes(answer)) return false;
@@ -115,7 +131,7 @@ class Prompt {
         label: string,
         options: Array<{ label: string; value: unknown }>,
         defaultValue?: unknown
-    ): Promise<unknown> {
+    ): Promise<unknown | PromptNavigation> {
         console.log(label);
         let defaultIndex = 0;
         options.forEach((option, index) => {
@@ -125,6 +141,9 @@ class Prompt {
             console.log(`  ${index + 1}. ${option.label}`);
         });
         const answer = await this.text('Choose number', String(defaultIndex + 1), true);
+        if (answer === NAV_BACK || answer === NAV_NEXT) {
+            return answer;
+        }
         const index = toInt(answer);
         if (index === null || index < 1 || index > options.length) {
             console.log('Invalid selection. Using default.');
@@ -133,9 +152,15 @@ class Prompt {
         return options[index - 1]?.value;
     }
 
-    async multiString(label: string, currentValue: string[]): Promise<string[]> {
+    async multiString(
+        label: string,
+        currentValue: string[]
+    ): Promise<string[] | PromptNavigation> {
         const defaultValue = currentValue.join(',');
         const answer = await this.text(label, defaultValue);
+        if (answer === NAV_BACK || answer === NAV_NEXT) {
+            return answer;
+        }
         if (!answer.trim()) return [];
         return answer
             .split(',')
@@ -202,7 +227,7 @@ class Prompt {
     async password(
         label: string,
         options: { required?: boolean; hasCurrent?: boolean } = {}
-    ): Promise<string> {
+    ): Promise<string | PromptNavigation> {
         const required = options.required ?? false;
         const hasCurrent = options.hasCurrent ?? false;
         if (!input.isTTY || !output.isTTY) {
@@ -219,6 +244,9 @@ class Prompt {
             const suffix = hasCurrent ? ' (leave blank to keep current value)' : '';
             output.write(`${label}${suffix}: `);
             const answer = await this.readHiddenLine();
+            const normalized = answer.trim().toLowerCase();
+            if (normalized === '/back') return NAV_BACK;
+            if (normalized === '/next') return NAV_NEXT;
             if (!answer && hasCurrent) return '';
             if (!answer && required) {
                 console.log('Value is required.');
@@ -242,6 +270,7 @@ function printBanner(): void {
 
   Press Enter to accept defaults shown in [brackets].
   Type your answer to change a value.
+  During setup questions, type /back or /next to navigate.
 `);
 }
 
@@ -254,19 +283,66 @@ function printStepHeader(index: number, total: number, title: string, descriptio
         for (const line of description.split('\n')) {
             console.log(`  ${line}`);
         }
-        console.log('');
     }
+    console.log('');
 }
 
 function printFieldHelp(help: string): void {
     console.log(`  💡 ${help}`);
+    console.log('');
+}
+
+async function promptBooleanNoNav(
+    prompt: Prompt,
+    label: string,
+    defaultValue: boolean
+): Promise<boolean> {
+    while (true) {
+        const value = await prompt.boolean(label, defaultValue);
+        if (value === NAV_BACK || value === NAV_NEXT) {
+            console.log('Navigation commands are only available inside setup questions.');
+            continue;
+        }
+        return value;
+    }
+}
+
+async function promptTextNoNav(
+    prompt: Prompt,
+    label: string,
+    defaultValue?: string,
+    required = false
+): Promise<string> {
+    while (true) {
+        const value = await prompt.text(label, defaultValue, required);
+        if (value === NAV_BACK || value === NAV_NEXT) {
+            console.log('Navigation commands are only available inside setup questions.');
+            continue;
+        }
+        return value;
+    }
+}
+
+function printFocusedFieldScreen(
+    stepIndex: number,
+    totalSteps: number,
+    stepTitle: string,
+    stepDescription: string | undefined,
+    fieldIndex: number,
+    totalFields: number
+): void {
+    console.clear();
+    printStepHeader(stepIndex, totalSteps, stepTitle, stepDescription);
+    console.log(`  Question ${fieldIndex + 1} of ${totalFields}`);
+    console.log('  Commands: /back = previous question, /next = skip this question');
+    console.log('');
 }
 
 async function promptField(
     prompt: Prompt,
     field: WizardField,
     answers: WizardAnswers
-): Promise<unknown> {
+): Promise<unknown | PromptNavigation> {
     const currentValue = answers[field.key];
     switch (field.type) {
         case 'boolean':
@@ -293,6 +369,9 @@ async function promptField(
                           : undefined,
                     field.required
                 );
+                if (answer === NAV_BACK || answer === NAV_NEXT) {
+                    return answer;
+                }
                 const parsed = toInt(answer);
                 if (parsed === null) {
                     console.log('Please enter a valid number.');
@@ -333,7 +412,7 @@ async function promptField(
 function printHelp(): void {
     console.log(`or3-cloud commands
 
-  or3-cloud init [--preset recommended|legacy-clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--manual] [--enable-install] [--package-manager bun|npm]
+  or3-cloud init [--preset recommended|clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--manual] [--enable-install] [--package-manager bun|npm] [--no-focused-prompts]
   or3-cloud validate [--env-file .env|.env.local] [--strict]
   or3-cloud presets list
   or3-cloud presets save <name> [--session <id>]
@@ -356,11 +435,17 @@ async function runInit(flags: CliFlags): Promise<void> {
     const packageManager = parseInstallPackageManager(
         toStringFlag(flags, 'package-manager')
     );
+    const focusedPrompts =
+        !toBooleanFlag(flags, 'no-focused-prompts') &&
+        Boolean(input.isTTY && output.isTTY);
+    const presetFlag = toStringFlag(flags, 'preset');
+    const normalizedPresetName =
+        presetFlag === 'clerk-convex' ? 'legacy-clerk-convex' : presetFlag;
 
     try {
         const session = await api.createSession({
             presetName:
-                toStringFlag(flags, 'preset') ?? recommendedPreset.name,
+                normalizedPresetName ?? recommendedPreset.name,
             instanceDir: toStringFlag(flags, 'instance-dir') ?? process.cwd(),
             envFile: (toStringFlag(flags, 'env-file') as '.env' | '.env.local') ?? '.env',
             includeSecrets: false,
@@ -381,12 +466,18 @@ async function runInit(flags: CliFlags): Promise<void> {
                 continue;
             }
 
-            printStepHeader(stepIndex, steps.length, step.title, step.description);
-
             if (step.id === 'review') {
+                if (focusedPrompts) {
+                    console.clear();
+                }
+                printStepHeader(stepIndex, steps.length, step.title, step.description);
                 const review = await api.review(session.id);
                 console.log('\n' + review.summary + '\n');
-                const confirm = await prompt.boolean('Does this look right? Apply it?', true);
+                const confirm = await promptBooleanNoNav(
+                    prompt,
+                    'Does this look right? Apply it?',
+                    true
+                );
                 if (confirm) break;
 
                 console.log('\n  Which step would you like to change?\n');
@@ -394,7 +485,8 @@ async function runInit(flags: CliFlags): Promise<void> {
                 editable.forEach((candidate, index) => {
                     console.log(`  ${index + 1}. ${candidate.title}`);
                 });
-                const selected = await prompt.text(
+                const selected = await promptTextNoNav(
+                    prompt,
                     'Enter step number to edit',
                     String(Math.max(1, editable.length))
                 );
@@ -415,13 +507,54 @@ async function runInit(flags: CliFlags): Promise<void> {
                 continue;
             }
 
+            if (!focusedPrompts) {
+                printStepHeader(stepIndex, steps.length, step.title, step.description);
+                console.log('  Commands: /back = previous question, /next = skip this question');
+                console.log('');
+            }
+
             const patch: Partial<WizardAnswers> = {};
-            for (const field of step.fields) {
+            let fieldIndex = 0;
+            let moveToPreviousStep = false;
+            while (fieldIndex < step.fields.length) {
+                const field = step.fields[fieldIndex];
+                if (!field) {
+                    fieldIndex += 1;
+                    continue;
+                }
+
+                if (focusedPrompts) {
+                    printFocusedFieldScreen(
+                        stepIndex,
+                        steps.length,
+                        step.title,
+                        step.description,
+                        fieldIndex,
+                        step.fields.length
+                    );
+                } else {
+                    console.log('');
+                }
+
                 if (field.help) {
                     printFieldHelp(field.help);
                 }
+
                 while (true) {
                     const value = await promptField(prompt, field, answers);
+                    if (value === NAV_BACK) {
+                        if (fieldIndex === 0) {
+                            moveToPreviousStep = true;
+                            break;
+                        }
+                        fieldIndex -= 1;
+                        break;
+                    }
+                    if (value === NAV_NEXT) {
+                        fieldIndex += 1;
+                        break;
+                    }
+
                     const validationError =
                         typeof field.validate === 'function'
                             ? field.validate(value as never, answers)
@@ -430,9 +563,20 @@ async function runInit(flags: CliFlags): Promise<void> {
                         console.log(validationError);
                         continue;
                     }
+
                     patch[field.key] = value as never;
+                    fieldIndex += 1;
                     break;
                 }
+
+                if (moveToPreviousStep) {
+                    break;
+                }
+            }
+
+            if (moveToPreviousStep) {
+                stepIndex = Math.max(0, stepIndex - 1);
+                continue;
             }
 
             if (step.id === 'target') {
@@ -487,7 +631,8 @@ async function runInit(flags: CliFlags): Promise<void> {
                 });
                 dependenciesInstalled = !dryRun;
             } else {
-                const shouldInstall = await prompt.boolean(
+                const shouldInstall = await promptBooleanNoNav(
+                    prompt,
                     `Install these packages now with ${packageManager}?`,
                     true
                 );
@@ -505,7 +650,11 @@ async function runInit(flags: CliFlags): Promise<void> {
         if (manualMode) {
             console.log('\nManual setup summary:\n');
             console.log(buildRedactedSummary(answers));
-            const deployNow = await prompt.boolean('Run deploy commands now?', false);
+            const deployNow = await promptBooleanNoNav(
+                prompt,
+                'Run deploy commands now?',
+                false
+            );
             if (deployNow) {
                 const result = await api.deploy(session.id);
                 if (result.instructions) {
@@ -543,7 +692,8 @@ async function runInit(flags: CliFlags): Promise<void> {
             answers.authProvider === 'clerk' &&
             (answers.syncProvider === 'convex' || answers.storageProvider === 'convex')
         ) {
-            const shouldSetConvexEnv = await prompt.boolean(
+            const shouldSetConvexEnv = await promptBooleanNoNav(
+                prompt,
                 'Set Convex backend env vars now?',
                 true
             );
@@ -564,7 +714,8 @@ async function runInit(flags: CliFlags): Promise<void> {
             }
         }
 
-        const presetName = await prompt.text(
+        const presetName = await promptTextNoNav(
+            prompt,
             'Save this setup as a reusable template? Enter a name or press Enter to skip',
             ''
         );
@@ -573,7 +724,8 @@ async function runInit(flags: CliFlags): Promise<void> {
             console.log(`Preset "${presetName.trim()}" saved.`);
         }
 
-        const deployNow = await prompt.boolean(
+        const deployNow = await promptBooleanNoNav(
+            prompt,
             answers.deploymentTarget === 'local-dev'
                 ? 'Start local dev now?'
                 : 'Run production build now?',
@@ -588,7 +740,8 @@ async function runInit(flags: CliFlags): Promise<void> {
                 installPlan.packages.length > 0 &&
                 !dependenciesInstalled
             ) {
-                const shouldInstallBeforeDeploy = await prompt.boolean(
+                const shouldInstallBeforeDeploy = await promptBooleanNoNav(
+                    prompt,
                     `Starting OR3 Cloud requires these packages. Install now with ${packageManager}?`,
                     true
                 );
