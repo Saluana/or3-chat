@@ -348,3 +348,15 @@ Mock Externalities: Isolate business logic from side effects (databases, APIs) t
 35. **Gateway sync errors should carry structured retry metadata**
     - `gateway-sync-provider` should parse and propagate `Retry-After` as milliseconds (`retryAfterMs`) on request errors.
     - Centralizing retry timing in the error object keeps provider-specific backoff logic out of higher layers and prevents string-parsing drift.
+
+36. **`or3-provider-convex` no longer depends on `~~/convex/_generated/*` at compile-time**
+    - Runtime function references now come from `anyApi` (`convex/server`) and ID typing uses `GenericId` (`convex/values`).
+    - This is the key prerequisite for keeping `or3-chat` buildable when Convex is not selected and `convex/**` is absent.
+
+37. **When testing Convex adapters/providers, mock `convex/server` (not generated api paths)**
+    - Old tests mocking `~~/convex/_generated/api` will silently stop controlling function refs after decoupling.
+    - Use `vi.mock('convex/server', () => ({ anyApi: { ... } }))` so assertions still validate exact routed function names.
+
+38. **Wizard deploy should initialize Convex scaffold before `convex dev`/env commands**
+    - For Convex-selected stacks, include `bunx or3-provider-convex init` in deploy flow before `bunx convex dev --once`.
+    - Without this step, first-run sandboxes fail preflight with missing `convex/` even when dependencies are installed correctly.

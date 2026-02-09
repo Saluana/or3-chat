@@ -38,7 +38,47 @@ type CommandSpec = {
     command: string;
     args: string[];
     optional?: boolean;
+    env?: NodeJS.ProcessEnv;
 };
+
+function usesConvexProvider(
+    answers: Pick<
+        WizardAnswers,
+        'syncEnabled' | 'syncProvider' | 'storageEnabled' | 'storageProvider'
+    >
+): boolean {
+    return (
+        (answers.syncEnabled && answers.syncProvider === 'convex') ||
+        (answers.storageEnabled && answers.storageProvider === 'convex')
+    );
+}
+
+function isSelfHostedConvex(
+    answers: Pick<WizardAnswers, 'convexSelfHostedAdminKey' | 'convexUrl'>
+): boolean {
+    return (
+        (answers.convexSelfHostedAdminKey?.trim() ?? '').length > 0 &&
+        (answers.convexUrl?.trim() ?? '').length > 0
+    );
+}
+
+function buildConvexCliEnv(answers: WizardAnswers): NodeJS.ProcessEnv {
+    const nextEnv: NodeJS.ProcessEnv = { ...process.env };
+    if (!isSelfHostedConvex(answers)) {
+        return nextEnv;
+    }
+
+    nextEnv.CONVEX_SELF_HOSTED_URL = answers.convexUrl!.trim();
+    nextEnv.CONVEX_SELF_HOSTED_ADMIN_KEY = answers.convexSelfHostedAdminKey!.trim();
+    nextEnv.VITE_CONVEX_URL = answers.convexUrl!.trim();
+    if ((answers.convexSelfHostedSiteUrl?.trim() ?? '').length > 0) {
+        nextEnv.VITE_CONVEX_SITE_URL = answers.convexSelfHostedSiteUrl!.trim();
+    }
+    // Prevent mixed-mode conflict when a stale deployment value exists.
+    delete nextEnv.CONVEX_DEPLOYMENT;
+
+    return nextEnv;
+}
 
 function runCommand(spec: CommandSpec, cwd: string): Promise<void> {
     return new Promise((resolvePromise, rejectPromise) => {
@@ -46,7 +86,7 @@ function runCommand(spec: CommandSpec, cwd: string): Promise<void> {
             cwd,
             stdio: 'inherit',
             shell: false,
-            env: process.env,
+            env: spec.env ?? process.env,
         });
 
         child.on('error', (error) => {
@@ -132,7 +172,7 @@ export async function preflightConvex(instanceDir: string): Promise<string[]> {
 
     if (!hasConvexProject(instanceDir)) {
         warnings.push(
-            'No Convex project detected in instance directory (missing `convex/` or `convex.json`).'
+            'No Convex project detected in instance directory (missing `convex/` or `convex.json`). Run `bunx or3-provider-convex init` to scaffold it.'
         );
     }
 
@@ -159,8 +199,25 @@ export async function applyConvexEnv(
 ): Promise<{ commands: string[]; warnings: string[] }> {
     const { convexEnv } = deriveEnvFromAnswers(answers);
     const commands: string[] = [];
-    const warnings = await preflightConvex(answers.instanceDir);
     const dryRun = options.dryRun ?? answers.dryRun;
+    const initialWarnings = await preflightConvex(answers.instanceDir);
+    const convexCliEnv = buildConvexCliEnv(answers);
+
+    if (!hasConvexProject(answers.instanceDir)) {
+        const initArgs = ['or3-provider-convex', 'init'];
+        commands.push(`bunx ${initArgs.join(' ')}`);
+        if (!dryRun) {
+            await runCommand(
+                {
+                    step: 'Initialize Convex scaffold',
+                    command: 'bunx',
+                    args: initArgs,
+                    env: convexCliEnv,
+                },
+                answers.instanceDir
+            );
+        }
+    }
 
     for (const [key, value] of Object.entries(convexEnv)) {
         if (!value) continue;
@@ -173,12 +230,14 @@ export async function applyConvexEnv(
                     step: `Set Convex env ${key}`,
                     command: 'bunx',
                     args,
+                    env: convexCliEnv,
                 },
                 answers.instanceDir
             );
         }
     }
 
+    const warnings = dryRun ? initialWarnings : await preflightConvex(answers.instanceDir);
     return { commands, warnings };
 }
 
@@ -190,12 +249,19 @@ export async function applyConvexEnv(
  */
 export function buildDeployPlan(answers: WizardAnswers): CommandSpec[] {
     const commands: CommandSpec[] = [{ step: 'Install dependencies', command: 'bun', args: ['install'] }];
-    const usesConvexProvider =
-        (answers.syncEnabled && answers.syncProvider === 'convex') ||
-        (answers.storageEnabled && answers.storageProvider === 'convex');
+    const convexEnabled = usesConvexProvider(answers);
+    const selfHostedConvex = isSelfHostedConvex(answers);
+
+    if (convexEnabled) {
+        commands.push({
+            step: 'Initialize Convex scaffold',
+            command: 'bunx',
+            args: ['or3-provider-convex', 'init'],
+        });
+    }
 
     if (answers.deploymentTarget === 'local-dev') {
-        if (usesConvexProvider) {
+        if (convexEnabled && !selfHostedConvex) {
             commands.push({
                 step: 'Sync Convex backend',
                 command: 'bunx',
@@ -267,6 +333,8 @@ export async function deployAnswers(
         commands: printableCommands,
         instructions: optionalStepFailures.length
             ? 'Local dev is running. Convex backend sync failed; run `bunx convex dev --once` manually after fixing Convex deployment access.'
-            : 'Local dev is running. Re-run `bunx convex dev --once` after editing Convex functions.',
+            : usesConvexProvider(answers) && !isSelfHostedConvex(answers)
+                ? 'Local dev is running. Re-run `bunx convex dev --once` after editing Convex functions.'
+                : 'Local dev is running.',
     };
 }

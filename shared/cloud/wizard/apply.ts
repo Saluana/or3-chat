@@ -29,7 +29,10 @@
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { writeEnvFileDetailed } from '../../../server/admin/config/env-file';
-import { deriveWizardOwnedEnvUpdates } from './derive';
+import {
+    deriveLocalDevConvexEnvLocalUpdates,
+    deriveWizardOwnedEnvUpdates,
+} from './derive';
 import { validateAnswers } from './validation';
 import type { WizardAnswers, WizardApplyResult } from './types';
 
@@ -143,6 +146,7 @@ export async function applyAnswers(
 
     const dryRun = options.dryRun ?? answers.dryRun;
     const envUpdates = deriveWizardOwnedEnvUpdates(validation.derived.env);
+    const localDevConvexEnvLocalUpdates = deriveLocalDevConvexEnvLocalUpdates(answers);
     const providerModuleFilePath = getProviderModuleFilePath(answers.instanceDir);
     const backupFiles: string[] = [];
     const writtenFiles: string[] = [];
@@ -161,6 +165,19 @@ export async function applyAnswers(
         });
         if (envWrite.changed) writtenFiles.push(envWrite.path);
         if (envWrite.backupPath) backupFiles.push(envWrite.backupPath);
+
+        if (
+            answers.envFile !== '.env.local' &&
+            Object.keys(localDevConvexEnvLocalUpdates).length > 0
+        ) {
+            const envLocalWrite = await writeEnvFileDetailed(localDevConvexEnvLocalUpdates, {
+                instanceDir: answers.instanceDir,
+                envFile: '.env.local',
+                createBackup: options.createBackup ?? !answers.skipWriteBackup,
+            });
+            if (envLocalWrite.changed) writtenFiles.push(envLocalWrite.path);
+            if (envLocalWrite.backupPath) backupFiles.push(envLocalWrite.backupPath);
+        }
 
         await writeFile(
             providerModuleFilePath,

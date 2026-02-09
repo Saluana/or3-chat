@@ -219,10 +219,18 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
 
     if (answers.syncProvider === 'convex' || answers.storageProvider === 'convex') {
         setEnv(env, 'VITE_CONVEX_URL', answers.convexUrl);
+        if ((answers.convexSelfHostedAdminKey?.trim() ?? '').length > 0) {
+            setEnv(env, 'CONVEX_SELF_HOSTED_URL', answers.convexUrl);
+        }
         setEnv(
             env,
             'CONVEX_SELF_HOSTED_ADMIN_KEY',
             answers.convexSelfHostedAdminKey
+        );
+        setEnv(
+            env,
+            'VITE_CONVEX_SITE_URL',
+            answers.convexSelfHostedSiteUrl
         );
     }
 
@@ -246,6 +254,36 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
 
     const providerModules = deriveProviderModules(answers);
     return { env, convexEnv, providerModules };
+}
+
+/**
+ * Returns `.env.local` overrides for local-dev self-hosted Convex flows.
+ *
+ * Behavior:
+ * - Ensures Convex CLI sees self-hosted credentials without requiring `convex dev`.
+ * - Removes `CONVEX_DEPLOYMENT` to avoid mixed-mode conflicts.
+ */
+export function deriveLocalDevConvexEnvLocalUpdates(
+    answers: WizardAnswers
+): Record<string, string | null> {
+    const usesConvex =
+        (answers.syncEnabled && answers.syncProvider === 'convex') ||
+        (answers.storageEnabled && answers.storageProvider === 'convex');
+    const isSelfHosted =
+        (answers.convexSelfHostedAdminKey?.trim() ?? '').length > 0 &&
+        (answers.convexUrl?.trim() ?? '').length > 0;
+
+    if (answers.deploymentTarget !== 'local-dev' || !usesConvex || !isSelfHosted) {
+        return {};
+    }
+
+    return {
+        CONVEX_SELF_HOSTED_URL: answers.convexUrl?.trim() ?? null,
+        CONVEX_SELF_HOSTED_ADMIN_KEY: answers.convexSelfHostedAdminKey?.trim() ?? null,
+        VITE_CONVEX_URL: answers.convexUrl?.trim() ?? null,
+        VITE_CONVEX_SITE_URL: answers.convexSelfHostedSiteUrl?.trim() ?? null,
+        CONVEX_DEPLOYMENT: null,
+    };
 }
 
 /**

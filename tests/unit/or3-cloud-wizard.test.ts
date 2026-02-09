@@ -119,7 +119,42 @@ describe('or3 cloud wizard apply', () => {
             (command) => `${command.command} ${command.args.join(' ')}`
         );
         expect(commands).toContain('bun run dev:ssr');
+        expect(commands).toContain('bunx or3-provider-convex init');
         expect(commands).toContain('bunx convex dev --once');
+    });
+
+    it('skips convex dev --once for self-hosted convex setups', () => {
+        const plan = buildDeployPlan({
+            ...validRecommendedAnswers(),
+            deploymentTarget: 'local-dev',
+            syncEnabled: true,
+            syncProvider: 'convex',
+            storageEnabled: true,
+            storageProvider: 'convex',
+            convexUrl: 'http://self-hosted.convex.local',
+            convexSelfHostedAdminKey: 'convex-local|test-admin-key',
+        });
+        const commands = plan.map(
+            (command) => `${command.command} ${command.args.join(' ')}`
+        );
+        expect(commands).toContain('bunx or3-provider-convex init');
+        expect(commands).not.toContain('bunx convex dev --once');
+    });
+
+    it('does not include convex scaffold/dev steps when convex is not selected', () => {
+        const plan = buildDeployPlan({
+            ...validRecommendedAnswers(),
+            deploymentTarget: 'local-dev',
+            syncEnabled: true,
+            syncProvider: 'sqlite',
+            storageEnabled: true,
+            storageProvider: 'fs',
+        });
+        const commands = plan.map(
+            (command) => `${command.command} ${command.args.join(' ')}`
+        );
+        expect(commands).not.toContain('bunx or3-provider-convex init');
+        expect(commands).not.toContain('bunx convex dev --once');
     });
 
     it('rejects invalid package manager values', async () => {
@@ -223,5 +258,40 @@ describe('or3 cloud wizard apply', () => {
         expect(content).toContain('OR3_SITE_NAME="New Name"');
         expect(content).not.toContain('KEEP_ME=value');
         expect(content).toContain('NEW_KEY=123');
+    });
+
+    it('writes self-hosted convex runtime keys to .env.local for local-dev flows', async () => {
+        const dir = await mkdtemp(resolve(tmpdir(), 'or3-wizard-env-local-convex-'));
+        const result = await applyAnswers(
+            {
+                ...validRecommendedAnswers(),
+                instanceDir: dir,
+                envFile: '.env',
+                deploymentTarget: 'local-dev',
+                syncEnabled: true,
+                syncProvider: 'convex',
+                storageEnabled: true,
+                storageProvider: 'convex',
+                convexUrl: 'http://self-hosted.convex.local',
+                convexSelfHostedAdminKey: 'convex-local|test-admin-key',
+                convexSelfHostedSiteUrl: 'http://self-hosted.convex.local:3211',
+            },
+            { dryRun: false }
+        );
+
+        expect(result.writtenFiles).toContain(resolve(dir, '.env.local'));
+        const envLocal = await readFile(resolve(dir, '.env.local'), 'utf8');
+        expect(envLocal).toContain(
+            'CONVEX_SELF_HOSTED_URL=http://self-hosted.convex.local'
+        );
+        expect(envLocal).toContain(
+            'CONVEX_SELF_HOSTED_ADMIN_KEY=convex-local|test-admin-key'
+        );
+        expect(envLocal).toContain(
+            'VITE_CONVEX_URL=http://self-hosted.convex.local'
+        );
+        expect(envLocal).toContain(
+            'VITE_CONVEX_SITE_URL=http://self-hosted.convex.local:3211'
+        );
     });
 });

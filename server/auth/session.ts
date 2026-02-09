@@ -81,6 +81,26 @@ function getSessionCacheTtlMs(
     return Math.max(1, Math.min(configured, Math.floor(untilProviderExpiry)));
 }
 
+type SessionProvisioningFailureMode =
+    | 'throw'
+    | 'unauthenticated'
+    | 'service-unavailable';
+
+function getSessionProvisioningFailureMode(
+    config: ReturnType<typeof useRuntimeConfig>
+): SessionProvisioningFailureMode {
+    const candidate = (config.auth as { sessionProvisioningFailure?: unknown } | undefined)
+        ?.sessionProvisioningFailure;
+    if (
+        candidate === 'throw' ||
+        candidate === 'unauthenticated' ||
+        candidate === 'service-unavailable'
+    ) {
+        return candidate;
+    }
+    return 'throw';
+}
+
 /**
  * Purpose:
  * Resolves the full session context for an H3 event.
@@ -266,8 +286,7 @@ export async function resolveSessionContext(
             error: error instanceof Error ? error.message : String(error),
             stage: 'workspace.provision',
         });
-        const provisioningFailure =
-            config.auth.sessionProvisioningFailure;
+        const provisioningFailure = getSessionProvisioningFailureMode(config);
 
         if (provisioningFailure === 'unauthenticated') {
             console.error('[auth:session] Provisioning failure mode: unauthenticated', {

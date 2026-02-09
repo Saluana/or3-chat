@@ -159,6 +159,8 @@ export interface WizardAnswers {
     convexUrl?: string;
     /** Maps to `CONVEX_SELF_HOSTED_ADMIN_KEY`. Optional; for self-hosted Convex admin access. */
     convexSelfHostedAdminKey?: string;
+    /** Maps to `VITE_CONVEX_SITE_URL`. Optional; primarily used by self-hosted Convex setups. */
+    convexSelfHostedSiteUrl?: string;
 
     // ── Storage provider ──
     /** Maps to `OR3_CLOUD_STORAGE_ENABLED`. */
