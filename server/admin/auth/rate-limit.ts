@@ -27,19 +27,20 @@ interface RateLimitEntry {
 const rateLimitStore = new Map<string, RateLimitEntry>();
 
 // Periodic cleanup to prevent unbounded memory growth
-setInterval(() => {
+// Use unref() to allow process to exit cleanly
+const cleanupInterval = setInterval(() => {
     const now = Date.now();
-    let cleaned = 0;
     for (const [key, entry] of rateLimitStore) {
         if (now - entry.windowStart > WINDOW_MS) {
             rateLimitStore.delete(key);
-            cleaned++;
         }
     }
-    if (cleaned > 0) {
-        console.log(`[rate-limit] Cleaned up ${cleaned} expired rate limit entries`);
-    }
 }, CLEANUP_INTERVAL_MS);
+
+// Allow process to exit even if interval is pending
+if (typeof cleanupInterval.unref === 'function') {
+    cleanupInterval.unref();
+}
 
 /**
  * Generate the rate limit key from IP and username.

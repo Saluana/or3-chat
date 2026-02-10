@@ -137,10 +137,21 @@ function validateFieldLevel(answers: WizardAnswers): {
             );
         } else if (!isEmail(email)) {
             errors.push('OR3_BASIC_AUTH_BOOTSTRAP_EMAIL must be a valid email.');
-        } else if (password.length < 8) {
+        } else if (password.length < 12) {
             errors.push(
-                'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD must be at least 8 characters.'
+                'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD must be at least 12 characters.'
             );
+        } else {
+            // Check password complexity
+            if (!/[A-Z]/.test(password)) {
+                errors.push('OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD must contain at least one uppercase letter.');
+            }
+            if (!/[a-z]/.test(password)) {
+                errors.push('OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD must contain at least one lowercase letter.');
+            }
+            if (!/[0-9]/.test(password)) {
+                errors.push('OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD must contain at least one number.');
+            }
         }
 
         if (!answers.basicAuthDbPath?.trim()) {

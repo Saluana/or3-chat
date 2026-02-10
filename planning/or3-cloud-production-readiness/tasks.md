@@ -147,10 +147,10 @@
 ### 12. Quick production fixes
 > Requirements: 11, 12, 20
 
-- [ ] 12.1 Gate Nuxt DevTools on `NODE_ENV !== 'production'` in `nuxt.config.ts`
-- [ ] 12.2 Add `Access-Control-Max-Age: 3600` to CORS preflight response
-- [ ] 12.3 Fix password validation consistency — wizard minimum to 12 chars (match admin)
-- [ ] 12.4 Remove dead code: circuit breaker unreachable `return false`, unused `trackAuthorization` call
+- [x] 12.1 Gate Nuxt DevTools on `NODE_ENV !== 'production'` in `nuxt.config.ts`
+- [x] 12.2 Add `Access-Control-Max-Age: 3600` to CORS preflight response
+- [x] 12.3 Fix password validation consistency — wizard minimum to 12 chars (match admin)
+- [x] 12.4 Remove dead code: circuit breaker unreachable `return false`, unused `trackAuthorization` call
 
 ### 13. Configurable hardcoded values
 > Requirements: 15

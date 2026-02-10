@@ -79,7 +79,6 @@ async function getJwtSecret(event: H3Event): Promise<string> {
         }
         const secret = randomBytes(32).toString('hex');
         await writeFile(secretFile, secret, { mode: 0o600 });
-        console.log('[admin] Auto-generated JWT secret for development. Set OR3_ADMIN_JWT_SECRET for production.');
         return secret;
     }
 }

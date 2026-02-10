@@ -23,7 +23,7 @@ function validRecommendedAnswers() {
         ...answers,
         basicAuthJwtSecret: 'jwt-secret-jwt-secret-jwt-secret-1234',
         basicAuthBootstrapEmail: 'admin@example.com',
-        basicAuthBootstrapPassword: 'super-secure-password',
+        basicAuthBootstrapPassword: 'SuperSecurePassword123',
         fsTokenSecret: 'fs-token-secret-fs-token-secret-fs-token',
         fsRoot: '/tmp/or3-storage',
     };
