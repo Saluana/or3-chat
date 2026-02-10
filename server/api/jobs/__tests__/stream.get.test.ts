@@ -22,7 +22,18 @@ const baseJob: BackgroundJob = {
             result: 'ok',
         },
     ],
-    workflow_state: { type: 'workflow-execution', workflowId: 'wf-1' },
+    workflow_state: {
+        type: 'workflow-execution',
+        workflowId: 'wf-1',
+        workflowName: 'Workflow 1',
+        prompt: 'Run workflow',
+        executionState: 'running',
+        nodeStates: {},
+        executionOrder: [],
+        currentNodeId: null,
+        finalOutput: '',
+        version: 0,
+    },
 };
 
 beforeAll(async () => {

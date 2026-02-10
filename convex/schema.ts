@@ -356,6 +356,9 @@ export default defineSchema({
         thread_id: v.string(), // Thread the message belongs to
         message_id: v.string(), // Message ID being generated
         model: v.string(), // Model being used
+        kind: v.optional(
+            v.union(v.literal('chat'), v.literal('workflow'))
+        ),
         status: v.union(
             v.literal('streaming'),
             v.literal('complete'),
@@ -364,6 +367,8 @@ export default defineSchema({
         ),
         content: v.string(), // Accumulated content
         chunks_received: v.number(), // Progress tracking
+        tool_calls: v.optional(v.any()), // Tool call state snapshots
+        workflow_state: v.optional(v.any()), // Workflow execution state snapshots
         started_at: v.number(), // Unix timestamp
         completed_at: v.optional(v.number()),
         error: v.optional(v.string()),

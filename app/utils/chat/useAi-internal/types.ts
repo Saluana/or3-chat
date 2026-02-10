@@ -37,6 +37,7 @@ export type BackgroundJobTracker = {
     threadId: string;
     messageId: string;
     status: BackgroundJobStatus['status'];
+    lastWorkflowVersion: number;
     lastContent: string;
     lastPersistedLength: number;
     lastPersistAt: number;

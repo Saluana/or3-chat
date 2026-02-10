@@ -51,6 +51,9 @@ export const create = mutation({
         thread_id: v.string(),
         message_id: v.string(),
         model: v.string(),
+        kind: v.optional(v.union(v.literal('chat'), v.literal('workflow'))),
+        tool_calls: v.optional(v.any()),
+        workflow_state: v.optional(v.any()),
     },
     handler: async (ctx, args) => {
         const jobId = await ctx.db.insert('background_jobs', {
@@ -58,9 +61,16 @@ export const create = mutation({
             thread_id: args.thread_id,
             message_id: args.message_id,
             model: args.model,
+            kind: args.kind ?? 'chat',
             status: 'streaming',
             content: '',
             chunks_received: 0,
+            ...(args.tool_calls !== undefined
+                ? { tool_calls: args.tool_calls }
+                : {}),
+            ...(args.workflow_state !== undefined
+                ? { workflow_state: args.workflow_state }
+                : {}),
             started_at: Date.now(),
         });
 
@@ -98,12 +108,15 @@ export const get = query({
             threadId: job.thread_id,
             messageId: job.message_id,
             model: job.model,
+            kind: job.kind,
             status: job.status,
             content: job.content,
             chunksReceived: job.chunks_received,
             startedAt: job.started_at,
             completedAt: job.completed_at,
             error: job.error,
+            tool_calls: job.tool_calls,
+            workflow_state: job.workflow_state,
         };
     },
 });
@@ -122,6 +135,8 @@ export const update = mutation({
         job_id: v.id('background_jobs'),
         content_chunk: v.optional(v.string()),
         chunks_received: v.optional(v.number()),
+        tool_calls: v.optional(v.any()),
+        workflow_state: v.optional(v.any()),
     },
     handler: async (ctx, args) => {
         const job = await ctx.db.get(args.job_id);
@@ -134,6 +149,12 @@ export const update = mutation({
         }
         if (args.chunks_received !== undefined) {
             patch.chunks_received = args.chunks_received;
+        }
+        if (args.tool_calls !== undefined) {
+            patch.tool_calls = args.tool_calls;
+        }
+        if (args.workflow_state !== undefined) {
+            patch.workflow_state = args.workflow_state;
         }
 
         if (Object.keys(patch).length > 0) {
@@ -152,16 +173,25 @@ export const complete = mutation({
     args: {
         job_id: v.id('background_jobs'),
         content: v.string(),
+        tool_calls: v.optional(v.any()),
+        workflow_state: v.optional(v.any()),
     },
     handler: async (ctx, args) => {
         const job = await ctx.db.get(args.job_id);
         if (!job) return;
 
-        await ctx.db.patch(args.job_id, {
+        const patch: Record<string, unknown> = {
             status: 'complete',
             content: args.content,
             completed_at: Date.now(),
-        });
+        };
+        if (args.tool_calls !== undefined) {
+            patch.tool_calls = args.tool_calls;
+        }
+        if (args.workflow_state !== undefined) {
+            patch.workflow_state = args.workflow_state;
+        }
+        await ctx.db.patch(args.job_id, patch);
     },
 });
 

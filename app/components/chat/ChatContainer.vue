@@ -321,8 +321,10 @@ const backgroundStreaming = computed(
     () => Boolean(backgroundJobId.value) && backgroundJobMode.value !== 'none'
 );
 const workflowRunning = computed(() => {
-    for (const wf of workflowStates.values()) {
-        if (wf && wf.executionState === 'running') return true;
+    for (const msg of messages.value) {
+        if (!msg.id) continue;
+        const wf = workflowStates.get(msg.id);
+        if (wf?.executionState === 'running') return true;
     }
     return false;
 });
@@ -404,7 +406,9 @@ watch(
     () => messages.value,
     (list) => {
         if (!Array.isArray(list)) return;
+        const visibleIds = new Set<string>();
         for (const msg of list) {
+            if (msg.id) visibleIds.add(msg.id);
             const wf = msg.workflowState;
             if (!isUiWorkflowState(wf)) continue;
             const existing = workflowStates.get(msg.id);
@@ -414,8 +418,20 @@ watch(
                 workflowStates.set(msg.id, wf);
             }
         }
+        for (const id of Array.from(workflowStates.keys())) {
+            if (!visibleIds.has(id)) {
+                workflowStates.delete(id);
+            }
+        }
     },
     { immediate: true }
+);
+
+watch(
+    () => props.threadId,
+    () => {
+        workflowStates.clear();
+    }
 );
 
 function deriveWorkflowText(wf: UiWorkflowState): string {
@@ -774,6 +790,12 @@ const cleanupWorkflowHook = hooks.on(
     'workflow.execution:action:state_update',
     (payload: { messageId: string; state: unknown }) => {
         if (!isUiWorkflowState(payload.state)) return;
+        const activeIds = new Set(
+            messages.value
+                .map((m) => m.id)
+                .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        );
+        if (!activeIds.has(payload.messageId)) return;
         // Only set if not already the same reference (avoid unnecessary reactivity triggers)
         const existing = workflowStates.get(payload.messageId);
         if (existing !== payload.state) {

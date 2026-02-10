@@ -8,10 +8,37 @@
 import type { BackgroundStreamResult } from './openrouterStream';
 import type { Attachment } from 'or3-workflow-core';
 
+async function readWorkflowErrorMessage(
+    response: Response,
+    fallback: string
+): Promise<string> {
+    const data = (await response.json().catch(() => null)) as unknown;
+    if (data && typeof data === 'object') {
+        const error = data as Record<string, unknown>;
+        if (typeof error.error === 'string' && error.error.trim().length > 0) {
+            return error.error;
+        }
+        if (
+            typeof error.statusMessage === 'string' &&
+            error.statusMessage.trim().length > 0
+        ) {
+            return error.statusMessage;
+        }
+        if (
+            typeof error.message === 'string' &&
+            error.message.trim().length > 0
+        ) {
+            return error.message;
+        }
+    }
+    return fallback;
+}
+
 export async function startBackgroundWorkflow(params: {
-    workflow: unknown;
     workflowId: string;
-    workflowName: string;
+    workflowName?: string;
+    workflowUpdatedAt?: number;
+    workflowVersion?: string;
     prompt: string;
     threadId: string;
     messageId: string;
@@ -31,9 +58,10 @@ export async function startBackgroundWorkflow(params: {
         headers,
         credentials: 'include',
         body: JSON.stringify({
-            workflow: params.workflow,
             workflowId: params.workflowId,
             workflowName: params.workflowName,
+            workflowUpdatedAt: params.workflowUpdatedAt,
+            workflowVersion: params.workflowVersion,
             prompt: params.prompt,
             threadId: params.threadId,
             messageId: params.messageId,
@@ -43,8 +71,10 @@ export async function startBackgroundWorkflow(params: {
     });
 
     if (!resp.ok) {
-        const data = (await resp.json().catch(() => null)) as { error?: string } | null;
-        const message = data?.error || `Background workflow failed: ${resp.status}`;
+        const message = await readWorkflowErrorMessage(
+            resp,
+            `Background workflow failed: ${resp.status}`
+        );
         throw new Error(message);
     }
 
@@ -53,6 +83,7 @@ export async function startBackgroundWorkflow(params: {
 
 export async function respondHitlRequest(params: {
     requestId: string;
+    jobId: string;
     action: string;
     data?: unknown;
 }): Promise<void> {
@@ -64,14 +95,17 @@ export async function respondHitlRequest(params: {
         credentials: 'include',
         body: JSON.stringify({
             requestId: params.requestId,
+            jobId: params.jobId,
             action: params.action,
             data: params.data,
         }),
     });
 
     if (!resp.ok) {
-        const data = (await resp.json().catch(() => null)) as { error?: string } | null;
-        const message = data?.error || `HITL response failed: ${resp.status}`;
+        const message = await readWorkflowErrorMessage(
+            resp,
+            `HITL response failed: ${resp.status}`
+        );
         throw new Error(message);
     }
 }

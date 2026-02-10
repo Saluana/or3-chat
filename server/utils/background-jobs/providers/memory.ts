@@ -179,7 +179,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
 
     async completeJob(jobId: string, finalContent: string): Promise<void> {
         const job = jobs.get(jobId);
-        if (!job) return;
+        if (!job || job.status !== 'streaming') return;
 
         job.status = 'complete';
         job.content = finalContent;

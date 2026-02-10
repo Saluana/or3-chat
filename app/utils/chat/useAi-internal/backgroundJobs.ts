@@ -88,6 +88,14 @@ export const backgroundJobTrackers = new Map<string, BackgroundJobTracker>();
 let cachedNotificationHooks: TypedHookEngine | null = null;
 let cachedWorkflowHooks: TypedHookEngine | null = null;
 
+function workflowVersionOf(value: unknown): number {
+    if (!value || typeof value !== 'object') return -1;
+    const version = (value as { version?: unknown }).version;
+    return typeof version === 'number' && Number.isFinite(version)
+        ? version
+        : 0;
+}
+
 /**
  * Internal helper. Promise-based delay for polling loops.
  */
@@ -241,8 +249,19 @@ async function persistBackgroundJobUpdate(
             : status.status === 'aborted'
                 ? 'Background response aborted'
                 : null;
-    const baseMergedData = {
+    const workflowState =
+        status.workflow_state && typeof status.workflow_state === 'object'
+            ? status.workflow_state
+            : null;
+    const workflowVersion = workflowVersionOf(workflowState);
+    const includeWorkflowState =
+        workflowState !== null && workflowVersion >= tracker.lastWorkflowVersion;
+    if (includeWorkflowState) {
+        tracker.lastWorkflowVersion = workflowVersion;
+    }
+    const mergedData = {
         ...baseData,
+        ...(includeWorkflowState ? workflowState : {}),
         content:
             content.length > 0
                 ? content
@@ -253,13 +272,6 @@ async function persistBackgroundJobUpdate(
         ...(nextError ? { error: nextError } : {}),
         ...(status.tool_calls ? { tool_calls: status.tool_calls } : {}),
     };
-    const mergedData =
-        status.workflow_state && typeof status.workflow_state === 'object'
-            ? {
-                  ...(status.workflow_state as Record<string, unknown>),
-                  ...baseMergedData,
-              }
-            : baseMergedData;
 
     await upsert.message({
         ...existing,
@@ -372,7 +384,12 @@ async function handleBackgroundStatus(
         content: safeContent,
         delta,
     };
-    if (nextStatus.workflow_state && typeof nextStatus.workflow_state === 'object') {
+    const workflowVersion = workflowVersionOf(nextStatus.workflow_state);
+    if (
+        nextStatus.workflow_state &&
+        typeof nextStatus.workflow_state === 'object' &&
+        workflowVersion >= tracker.lastWorkflowVersion
+    ) {
         const workflowHooks = resolveWorkflowHooks();
         if (workflowHooks?.hasAction('workflow.execution:action:state_update')) {
             await workflowHooks.doAction('workflow.execution:action:state_update', {
@@ -399,11 +416,9 @@ async function handleBackgroundStatus(
         if (nextStatus.workflow_state && typeof nextStatus.workflow_state === 'object') {
             const workflowHooks = resolveWorkflowHooks();
             if (workflowHooks?.hasAction('workflow.execution:action:complete')) {
-                const state = nextStatus.workflow_state as Record<string, unknown>;
-                const workflowId =
-                    typeof state.workflowId === 'string' ? state.workflowId : undefined;
-                const finalOutput =
-                    typeof state.finalOutput === 'string' ? state.finalOutput : undefined;
+                const state = nextStatus.workflow_state;
+                const workflowId = state.workflowId;
+                const finalOutput = state.finalOutput || undefined;
                 if (workflowId) {
                     await workflowHooks.doAction('workflow.execution:action:complete', {
                         messageId: tracker.messageId,
@@ -704,6 +719,9 @@ export function ensureBackgroundJobTracker(
 ): BackgroundJobTracker {
     const existing = backgroundJobTrackers.get(params.jobId);
     if (existing) {
+        if (typeof existing.lastWorkflowVersion !== 'number') {
+            existing.lastWorkflowVersion = -1;
+        }
         if (params.userId && existing.userId !== params.userId) {
             existing.userId = params.userId;
         }
@@ -734,6 +752,7 @@ export function ensureBackgroundJobTracker(
         threadId: params.threadId,
         messageId: params.messageId,
         status: 'streaming',
+        lastWorkflowVersion: -1,
         lastContent: seedContent,
         lastPersistedLength: seedContent.length,
         lastPersistAt: 0,

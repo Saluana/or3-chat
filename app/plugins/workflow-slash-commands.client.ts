@@ -27,7 +27,7 @@ import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
 import { reportError } from '~/utils/errors';
 import { isBackgroundStreamingEnabled } from '~/utils/chat/openrouterStream';
 import { startBackgroundWorkflow, respondHitlRequest } from '~/utils/chat/backgroundWorkflow';
-import { ensureBackgroundJobTracker, subscribeBackgroundJob } from '~/utils/chat/useAi-internal/backgroundJobs';
+import { ensureBackgroundJobTracker } from '~/utils/chat/useAi-internal/backgroundJobs';
 import {
     isWorkflowMessageData,
     deriveStartNodeId,
@@ -633,19 +633,35 @@ export function isWorkflowExecuting(): boolean {
     return activeController !== null && activeController.isRunning();
 }
 
-function respondToHitlRequest(
+async function respondToHitlRequest(
     requestId: string,
     action: HitlAction,
-    data?: string | Record<string, unknown>
-): boolean {
+    data?: string | Record<string, unknown>,
+    jobId?: string
+): Promise<boolean> {
     const pending = pendingHitlRequests.get(requestId);
     if (!pending) {
-        void respondHitlRequest({
-            requestId,
-            action,
-            data,
-        });
-        return true;
+        if (!jobId) {
+            return false;
+        }
+        try {
+            await respondHitlRequest({
+                requestId,
+                jobId,
+                action,
+                data,
+            });
+            return true;
+        } catch (error) {
+            if (import.meta.dev) {
+                console.warn('[workflow-slash] HITL response failed', {
+                    requestId,
+                    jobId,
+                    error,
+                });
+            }
+            return false;
+        }
     }
 
     if (action === 'reject') {
@@ -1398,9 +1414,13 @@ export default defineNuxtPlugin((nuxtApp) => {
         if (backgroundAllowed) {
             try {
                 const result = await startBackgroundWorkflow({
-                    workflow: workflowPost.meta,
                     workflowId: workflowPost.id,
                     workflowName: workflowPost.title || 'Workflow',
+                    workflowUpdatedAt: workflowPost.updated_at,
+                    workflowVersion:
+                        typeof workflowPost.meta?.meta?.version === 'string'
+                            ? workflowPost.meta.meta.version
+                            : undefined,
                     prompt: executionPrompt,
                     threadId: assistantContext.threadId || '',
                     messageId: assistantContext.id,
@@ -1428,19 +1448,13 @@ export default defineNuxtPlugin((nuxtApp) => {
                     });
                 }
 
-                const tracker = ensureBackgroundJobTracker({
+                ensureBackgroundJobTracker({
                     jobId: result.jobId,
                     userId: session?.user?.id || '',
                     threadId: assistantContext.threadId || '',
                     messageId: assistantContext.id,
                     initialContent: '',
                     useSse: true,
-                });
-
-                subscribeBackgroundJob(tracker, {
-                    onComplete: () => {
-                        emitStateUpdateSync();
-                    },
                 });
 
                 return;

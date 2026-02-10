@@ -215,6 +215,7 @@ export default defineEventHandler(async (event) => {
                     if (liveEvent.type === 'delta') {
                         if (liveEvent.content_length <= lastContentLength)
                             return;
+                        const currentLiveState = getJobLiveState(jobId);
                         lastContentLength = liveEvent.content_length;
                         lastStatus = 'streaming';
                         write({
@@ -224,11 +225,25 @@ export default defineEventHandler(async (event) => {
                                     ...initialJob,
                                     status: 'streaming',
                                     chunksReceived: liveEvent.chunksReceived,
+                                    tool_calls:
+                                        liveEvent.tool_calls ??
+                                        currentLiveState?.tool_calls ??
+                                        initialJob.tool_calls,
+                                    workflow_state:
+                                        liveEvent.workflow_state ??
+                                        currentLiveState?.workflow_state ??
+                                        initialJob.workflow_state,
                                 },
                                 {
                                     includeContent: false,
                                     content_delta: liveEvent.content_delta,
                                     content_length: liveEvent.content_length,
+                                    tool_calls:
+                                        liveEvent.tool_calls ??
+                                        currentLiveState?.tool_calls,
+                                    workflow_state:
+                                        liveEvent.workflow_state ??
+                                        currentLiveState?.workflow_state,
                                 }
                             ),
                         });
@@ -236,30 +251,39 @@ export default defineEventHandler(async (event) => {
                     }
                     lastStatus = liveEvent.status;
                     lastContentLength = liveEvent.content_length;
-                        write({
-                            event: 'status',
-                            status: serializeJobStatus(
-                                {
-                                    ...initialJob,
-                                    status: liveEvent.status,
-                                    chunksReceived: liveEvent.chunksReceived,
-                                    completedAt: liveEvent.completedAt,
-                                    error: liveEvent.error,
-                                    content: liveEvent.content,
-                                    tool_calls: liveEvent.tool_calls ?? initialJob.tool_calls,
-                                    workflow_state:
-                                        liveEvent.workflow_state ??
-                                        initialJob.workflow_state,
-                                },
-                                {
-                                    includeContent: true,
-                                    content: liveEvent.content,
-                                    content_length: liveEvent.content_length,
-                                    tool_calls: liveEvent.tool_calls,
-                                    workflow_state: liveEvent.workflow_state,
-                                }
-                            ),
-                        });
+                    const currentLiveState = getJobLiveState(jobId);
+                    write({
+                        event: 'status',
+                        status: serializeJobStatus(
+                            {
+                                ...initialJob,
+                                status: liveEvent.status,
+                                chunksReceived: liveEvent.chunksReceived,
+                                completedAt: liveEvent.completedAt,
+                                error: liveEvent.error,
+                                content: liveEvent.content,
+                                tool_calls:
+                                    liveEvent.tool_calls ??
+                                    currentLiveState?.tool_calls ??
+                                    initialJob.tool_calls,
+                                workflow_state:
+                                    liveEvent.workflow_state ??
+                                    currentLiveState?.workflow_state ??
+                                    initialJob.workflow_state,
+                            },
+                            {
+                                includeContent: true,
+                                content: liveEvent.content,
+                                content_length: liveEvent.content_length,
+                                tool_calls:
+                                    liveEvent.tool_calls ??
+                                    currentLiveState?.tool_calls,
+                                workflow_state:
+                                    liveEvent.workflow_state ??
+                                    currentLiveState?.workflow_state,
+                            }
+                        ),
+                    });
                     if (liveEvent.status !== 'streaming') {
                         closeStream();
                     }

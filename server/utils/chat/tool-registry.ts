@@ -16,7 +16,7 @@ export type ToolHandler<TArgs = Record<string, unknown>> = (
 
 export interface RegisteredServerTool {
     definition: ToolDefinition;
-    handler: ToolHandler;
+    handler: ToolHandler<Record<string, unknown>>;
     runtime: ToolRuntime;
     timeoutMs: number;
 }
@@ -107,9 +107,11 @@ async function withTimeout(
     }
 }
 
-export function registerServerTool(
+export function registerServerTool<
+    TArgs extends Record<string, unknown> = Record<string, unknown>
+>(
     definition: ToolDefinition,
-    handler: ToolHandler,
+    handler: ToolHandler<TArgs>,
     opts: RegisterServerToolOptions = {}
 ): void {
     const name = definition.function.name;
@@ -118,12 +120,14 @@ export function registerServerTool(
     }
 
     const runtime = opts.runtime ?? definition.runtime ?? 'hybrid';
+    const normalizedHandler: ToolHandler<Record<string, unknown>> = (args) =>
+        handler(args as TArgs);
     registry.set(name, {
         definition: {
             ...definition,
             runtime,
         },
-        handler,
+        handler: normalizedHandler,
         runtime,
         timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     });

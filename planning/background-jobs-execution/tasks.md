@@ -31,10 +31,10 @@ artifact_id: 88b5c85d-e234-44ea-b752-b62f215fa28f
 
 ## 6. Security, observability, and hardening
 - [x] Gate all background execution endpoints with SSR auth and `can()` checks. (Requirements: 5)
-- [x] Add structured logging for background tool/workflow execution with secret redaction. (Requirements: 5, 7)
+- [ ] Add structured logging for background tool/workflow execution with secret redaction. (Requirements: 5, 7)
 - [x] Validate payload size limits for tool outputs and workflow state updates. (Requirements: 7)
 
 ## 7. Testing
 - [x] Add unit tests for tool runtime resolution, job metadata deltas, and workflow event mapping. (Requirements: 1, 2, 3, 6)
 - [x] Add integration tests for background tool execution and workflow HITL pause/resume. (Requirements: 1, 2, 6, 8)
-- [x] Add E2E tests for reattachment flow and notification emission. (Requirements: 6, 8)
+- [ ] Add E2E tests for reattachment flow and notification emission. (Requirements: 6, 8)

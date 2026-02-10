@@ -67,12 +67,24 @@ export const AUTH_RATE_LIMITS: Record<string, RateLimitConfig> = {
 
 /**
  * Purpose:
+ * Rate limits for workflow background execution endpoints.
+ */
+export const WORKFLOW_RATE_LIMITS: Record<string, RateLimitConfig> = {
+    // Background workflow starts: 30 per minute per user
+    'workflow:background': { windowMs: 60_000, maxRequests: 30 },
+    // HITL responses: 120 per minute per user
+    'workflow:hitl': { windowMs: 60_000, maxRequests: 120 },
+};
+
+/**
+ * Purpose:
  * Combined lookup table for all known rate limit operations.
  */
 export const ALL_RATE_LIMITS = {
     ...SYNC_RATE_LIMITS,
     ...STORAGE_RATE_LIMITS,
     ...AUTH_RATE_LIMITS,
+    ...WORKFLOW_RATE_LIMITS,
 };
 
 /** Maximum age for entries before cleanup (10 minutes). */

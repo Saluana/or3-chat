@@ -15,7 +15,8 @@
  */
 
 import { useRuntimeConfig } from '#imports';
-import type { ToolDefinition } from './types';
+import type { ToolDefinition, ToolChoice } from './types';
+import type { WorkflowMessageData } from './workflow-types';
 import {
     parseOpenRouterSSE,
     type ORStreamEvent,
@@ -49,7 +50,7 @@ type OpenRouterRequestBody = {
     stream: true;
     reasoning?: unknown;
     tools?: ToolDefinition[];
-    tool_choice?: 'auto';
+    tool_choice?: ToolChoice;
     _background?: true;
     _threadId?: string;
     _messageId?: string;
@@ -143,6 +144,7 @@ export async function* openRouterStream(params: {
     orMessages: ORMessage[];
     modalities: string[];
     tools?: ToolDefinition[];
+    toolChoice?: ToolChoice;
     signal?: AbortSignal;
     reasoning?: unknown;
 }): AsyncGenerator<ORStreamEvent, void, unknown> {
@@ -173,7 +175,7 @@ export async function* openRouterStream(params: {
 
     if (tools) {
         body.tools = tools.map(stripUiMetadata);
-        body.tool_choice = 'auto';
+        body.tool_choice = params.toolChoice ?? 'auto';
     }
 
     // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available
@@ -350,7 +352,7 @@ export interface BackgroundJobStatus {
         result?: string;
         error?: string;
     }>;
-    workflow_state?: Record<string, unknown>;
+    workflow_state?: WorkflowMessageData;
 }
 
 /**
@@ -438,6 +440,7 @@ export async function startBackgroundStream(params: {
     messageId: string;
     reasoning?: unknown;
     tools?: ToolDefinition[];
+    toolChoice?: ToolChoice;
     toolRuntime?: Record<string, string>;
 }): Promise<BackgroundStreamResult> {
     const body: OpenRouterRequestBody & {
@@ -460,7 +463,7 @@ export async function startBackgroundStream(params: {
 
     if (params.tools) {
         body.tools = params.tools.map(stripUiMetadata);
-        body.tool_choice = 'auto';
+        body.tool_choice = params.toolChoice ?? 'auto';
     }
     if (params.toolRuntime) {
         body._toolRuntime = params.toolRuntime;

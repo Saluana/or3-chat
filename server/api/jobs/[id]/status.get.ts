@@ -7,6 +7,7 @@
 import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
+import { getJobLiveState } from '../../../utils/background-jobs/viewers';
 
 /**
  * GET /api/jobs/:id/status
@@ -55,46 +56,73 @@ export default defineEventHandler(async (event) => {
     const query = getQuery(event);
     const offsetParam = typeof query.offset === 'string' ? query.offset : null;
     const offset = offsetParam ? Number(offsetParam) : null;
+    const liveState = getJobLiveState(jobId);
+    const effectiveContent =
+        liveState && liveState.content.length > job.content.length
+            ? liveState.content
+            : job.content;
+    const effectiveChunks =
+        liveState && liveState.chunksReceived > job.chunksReceived
+            ? liveState.chunksReceived
+            : job.chunksReceived;
+    const effectiveToolCalls =
+        liveState?.tool_calls !== undefined
+            ? liveState.tool_calls
+            : job.tool_calls;
+    const effectiveWorkflowState =
+        liveState?.workflow_state !== undefined
+            ? liveState.workflow_state
+            : job.workflow_state;
+    const effectiveError =
+        typeof liveState?.error === 'string' ? liveState.error : job.error;
+    const effectiveCompletedAt =
+        liveState?.completedAt !== undefined
+            ? liveState.completedAt
+            : job.completedAt;
+    const effectiveStatus =
+        liveState && liveState.status !== 'streaming'
+            ? liveState.status
+            : job.status;
 
     if (
         typeof offset === 'number' &&
         Number.isFinite(offset) &&
         offset >= 0 &&
-        typeof job.content === 'string'
+        typeof effectiveContent === 'string'
     ) {
-        const contentLength = job.content.length;
+        const contentLength = effectiveContent.length;
         const safeOffset = Math.min(offset, contentLength);
-        const contentDelta = job.content.slice(safeOffset);
+        const contentDelta = effectiveContent.slice(safeOffset);
         return {
             id: job.id,
-            status: job.status,
+            status: effectiveStatus,
             threadId: job.threadId,
             messageId: job.messageId,
             model: job.model,
-            chunksReceived: job.chunksReceived,
+            chunksReceived: effectiveChunks,
             startedAt: job.startedAt,
-            completedAt: job.completedAt,
-            error: job.error,
-            tool_calls: job.tool_calls,
-            workflow_state: job.workflow_state,
+            completedAt: effectiveCompletedAt,
+            error: effectiveError,
+            tool_calls: effectiveToolCalls,
+            workflow_state: effectiveWorkflowState,
             content_delta: contentDelta,
             content_length: contentLength,
-            content: safeOffset < offset ? job.content : undefined,
+            content: safeOffset < offset ? effectiveContent : undefined,
         };
     }
 
     return {
         id: job.id,
-        status: job.status,
+        status: effectiveStatus,
         threadId: job.threadId,
         messageId: job.messageId,
         model: job.model,
-        chunksReceived: job.chunksReceived,
+        chunksReceived: effectiveChunks,
         startedAt: job.startedAt,
-        completedAt: job.completedAt,
-        error: job.error,
-        tool_calls: job.tool_calls,
-        workflow_state: job.workflow_state,
-        content: job.content,
+        completedAt: effectiveCompletedAt,
+        error: effectiveError,
+        tool_calls: effectiveToolCalls,
+        workflow_state: effectiveWorkflowState,
+        content: effectiveContent,
     };
 });

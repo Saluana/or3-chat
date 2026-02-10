@@ -16,6 +16,8 @@
  * - Defining API routes or authorization.
  */
 
+import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
+
 /**
  * Purpose:
  * Represents a persisted background streaming job.
@@ -59,7 +61,7 @@ export interface BackgroundJob {
         error?: string;
     }>;
     /** Workflow execution state snapshot */
-    workflow_state?: Record<string, unknown>;
+    workflow_state?: WorkflowMessageData;
 }
 
 /**

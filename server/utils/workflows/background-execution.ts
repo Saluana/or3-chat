@@ -8,11 +8,13 @@
 import type { BackgroundJobProvider } from '../background-jobs/types';
 import { getJobProvider } from '../background-jobs/store';
 import { emitJobDelta, emitJobStatus, hasJobViewers, initJobLiveState } from '../background-jobs/viewers';
-import { executeServerTool } from '../chat/tool-registry';
+import { executeServerTool, listServerTools } from '../chat/tool-registry';
 import { getNotificationEmitter } from '../notifications/registry';
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
 import type { HITLRequest, HITLResponse, WorkflowData, Attachment } from 'or3-workflow-core';
 import { registerHitlRequest, clearHitlRequestsForJob } from './hitl-store';
+
+const MAX_WORKFLOW_STATE_BYTES = 64 * 1024;
 
 export interface BackgroundWorkflowParams {
     workflow: WorkflowData;
@@ -61,11 +63,30 @@ async function updateWorkflowJob(
     contentChunk?: string,
     chunksReceived?: number
 ): Promise<void> {
+    const serializedState = JSON.stringify(state);
+    if (serializedState.length > MAX_WORKFLOW_STATE_BYTES) {
+        throw new Error(
+            `Workflow state exceeded ${MAX_WORKFLOW_STATE_BYTES} bytes`
+        );
+    }
+
     await provider.updateJob(jobId, {
-        workflow_state: state as Record<string, unknown>,
+        workflow_state: state,
         ...(contentChunk ? { contentChunk } : {}),
         ...(typeof chunksReceived === 'number' ? { chunksReceived } : {}),
     });
+}
+
+async function executeWorkflowToolCall(
+    name: string,
+    args: unknown
+): Promise<string> {
+    const serialized = typeof args === 'string' ? args : JSON.stringify(args ?? {});
+    const execution = await executeServerTool(name, serialized);
+    if (execution.error) {
+        throw new Error(execution.error);
+    }
+    return execution.result ?? '';
 }
 
 export async function startBackgroundWorkflow(
@@ -110,22 +131,24 @@ async function runWorkflowInBackground(
     const client = new OpenRouter({ apiKey: params.apiKey });
 
     let chunks = 0;
+    let lastStateEmitAt = 0;
+    const workflowTools = listServerTools().map((tool) => ({
+        type: 'function' as const,
+        function: tool.definition.function,
+        handler: (args: unknown) =>
+            executeWorkflowToolCall(tool.definition.function.name, args),
+    }));
 
     const adapter = new OpenRouterExecutionAdapter(client as any, {
         defaultModel: 'openai/gpt-4o-mini',
         preflight: true,
-        tools: [],
-        onToolCall: async (name: string, args: unknown) => {
-            const serialized = typeof args === 'string' ? args : JSON.stringify(args ?? {});
-            const execution = await executeServerTool(name, serialized);
-            if (execution.error) {
-                throw new Error(execution.error);
-            }
-            return execution.result ?? '';
-        },
+        tools: workflowTools,
+        onToolCall: executeWorkflowToolCall,
         onHITLRequest: async (request: HITLRequest): Promise<HITLResponse> => {
             const requestState = {
                 id: request.id,
+                jobId,
+                workspaceId: params.workspaceId,
                 nodeId: request.nodeId,
                 nodeLabel: request.nodeLabel,
                 mode: request.mode,
@@ -140,7 +163,19 @@ async function runWorkflowInBackground(
                 ...(workflowState.hitlRequests ?? {}),
                 [request.id]: requestState,
             };
-            workflowState.executionState = 'pending';
+            const hitlNodeState = workflowState.nodeStates[request.nodeId];
+            if (hitlNodeState) {
+                hitlNodeState.status = 'waiting';
+            } else {
+                workflowState.nodeStates[request.nodeId] = {
+                    status: 'waiting',
+                    label: request.nodeLabel || request.nodeId,
+                    type: 'hitl',
+                    output: '',
+                };
+            }
+            workflowState.currentNodeId = request.nodeId;
+            workflowState.executionState = 'running';
             workflowState.version = (workflowState.version ?? 0) + 1;
             await updateWorkflowJob(provider, jobId, workflowState);
             emitJobStatus(jobId, 'streaming', {
@@ -153,15 +188,28 @@ async function runWorkflowInBackground(
                 userId: params.userId,
                 workspaceId: params.workspaceId,
                 jobId,
-                resolve: () => {},
             });
         },
     });
 
+    const emitWorkflowStreamingState = (force = false) => {
+        const now = Date.now();
+        if (!force && now - lastStateEmitAt < 120) {
+            return;
+        }
+        lastStateEmitAt = now;
+        emitJobStatus(jobId, 'streaming', {
+            content: workflowState.finalOutput ?? '',
+            contentLength: (workflowState.finalOutput ?? '').length,
+            chunksReceived: chunks,
+            workflow_state: workflowState,
+        });
+    };
+
     try {
         await updateWorkflowJob(provider, jobId, workflowState);
 
-        await adapter.execute(
+        const executionResult = (await adapter.execute(
             {
                 ...params.workflow,
                 conversationHistory: params.conversationHistory,
@@ -174,7 +222,7 @@ async function runWorkflowInBackground(
             {
                 onNodeStart: (nodeId: string, info?: { label?: string; type?: string }) => {
                     workflowState.nodeStates[nodeId] = {
-                        status: 'running',
+                        status: 'active',
                         label: info?.label || nodeId,
                         type: info?.type || 'unknown',
                         output: '',
@@ -185,17 +233,19 @@ async function runWorkflowInBackground(
                     workflowState.currentNodeId = nodeId;
                     workflowState.executionState = 'running';
                     workflowState.version = (workflowState.version ?? 0) + 1;
+                    emitWorkflowStreamingState(true);
                     void updateWorkflowJob(provider, jobId, workflowState);
                 },
                 onNodeFinish: (nodeId: string, output: string) => {
                     const nodeState = workflowState.nodeStates[nodeId];
                     if (nodeState) {
-                        nodeState.status = 'complete';
+                        nodeState.status = 'completed';
                         nodeState.output = output;
                         nodeState.streamingText = '';
                     }
                     workflowState.currentNodeId = null;
                     workflowState.version = (workflowState.version ?? 0) + 1;
+                    emitWorkflowStreamingState(true);
                     void updateWorkflowJob(provider, jobId, workflowState);
                 },
                 onNodeError: (nodeId: string, error: Error) => {
@@ -208,7 +258,18 @@ async function runWorkflowInBackground(
                     workflowState.failedNodeId = nodeId;
                     workflowState.currentNodeId = null;
                     workflowState.version = (workflowState.version ?? 0) + 1;
+                    emitWorkflowStreamingState(true);
                     void updateWorkflowJob(provider, jobId, workflowState);
+                },
+                onToken: (nodeId: string, token: string) => {
+                    if (!token) return;
+                    const nodeState = workflowState.nodeStates[nodeId];
+                    if (nodeState) {
+                        nodeState.streamingText =
+                            (nodeState.streamingText || '') + token;
+                        workflowState.version = (workflowState.version ?? 0) + 1;
+                        emitWorkflowStreamingState();
+                    }
                 },
                 onWorkflowToken: (token: string) => {
                     workflowState.finalOutput = (workflowState.finalOutput || '') + token;
@@ -218,16 +279,51 @@ async function runWorkflowInBackground(
                     emitJobDelta(jobId, token, {
                         contentLength: workflowState.finalOutput.length,
                         chunksReceived: chunks,
+                        workflow_state: workflowState,
                     });
                     void updateWorkflowJob(provider, jobId, workflowState, token, chunks);
                 },
             } as any
-        );
+        )) as
+            | { finalOutput?: string; output?: string }
+            | null
+            | undefined;
+
+        const resultFinalOutput =
+            typeof executionResult?.finalOutput === 'string' &&
+            executionResult.finalOutput.length > 0
+                ? executionResult.finalOutput
+                : typeof executionResult?.output === 'string' &&
+                    executionResult.output.length > 0
+                  ? executionResult.output
+                  : '';
+        if (
+            resultFinalOutput &&
+            resultFinalOutput !== workflowState.finalOutput
+        ) {
+            workflowState.finalOutput = resultFinalOutput;
+        }
 
         workflowState.executionState = 'completed';
         workflowState.currentNodeId = null;
         workflowState.version = (workflowState.version ?? 0) + 1;
         await updateWorkflowJob(provider, jobId, workflowState);
+
+        const latestJob = await provider.getJob(jobId, params.userId);
+        if (!latestJob) {
+            throw new Error('Background workflow job disappeared before completion');
+        }
+        if (latestJob.status !== 'streaming') {
+            if (latestJob.status === 'aborted') {
+                const abortErr = new Error('Workflow job aborted by user');
+                abortErr.name = 'AbortError';
+                throw abortErr;
+            }
+            throw new Error(
+                `Background workflow job is no longer streaming (status: ${latestJob.status})`
+            );
+        }
+
         await provider.completeJob(jobId, workflowState.finalOutput ?? '');
         emitJobStatus(jobId, 'complete', {
             content: workflowState.finalOutput ?? '',
@@ -246,6 +342,20 @@ async function runWorkflowInBackground(
             );
         }
     } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+            workflowState.executionState = 'stopped';
+            workflowState.version = (workflowState.version ?? 0) + 1;
+            await updateWorkflowJob(provider, jobId, workflowState);
+            emitJobStatus(jobId, 'aborted', {
+                content: workflowState.finalOutput ?? '',
+                contentLength: (workflowState.finalOutput ?? '').length,
+                chunksReceived: chunks,
+                completedAt: Date.now(),
+                workflow_state: workflowState,
+            });
+            return;
+        }
+
         workflowState.executionState = 'error';
         workflowState.version = (workflowState.version ?? 0) + 1;
         await updateWorkflowJob(provider, jobId, workflowState);

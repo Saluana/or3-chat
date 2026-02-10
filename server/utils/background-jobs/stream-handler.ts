@@ -41,6 +41,42 @@ import { executeServerTool } from '../chat/tool-registry';
 
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
+function createAbortError(message = 'Job aborted by user'): Error {
+    const err = new Error(message);
+    err.name = 'AbortError';
+    return err;
+}
+
+function isForcedFunctionToolChoice(
+    value: unknown
+): value is { type: 'function'; function: { name: string } } {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return false;
+    }
+    const candidate = value as Record<string, unknown>;
+    if (candidate.type !== 'function') return false;
+    const fn = candidate.function;
+    if (!fn || typeof fn !== 'object' || Array.isArray(fn)) return false;
+    const name = (fn as Record<string, unknown>).name;
+    return typeof name === 'string' && name.length > 0;
+}
+
+async function assertJobNotAborted(params: {
+    provider: BackgroundJobProvider;
+    jobId: string;
+    abortSignal?: AbortSignal;
+}): Promise<void> {
+    if (params.abortSignal?.aborted) {
+        throw createAbortError();
+    }
+    if (params.provider.checkJobAborted) {
+        const aborted = await params.provider.checkJobAborted(params.jobId);
+        if (aborted) {
+            throw createAbortError();
+        }
+    }
+}
+
 /**
  * Purpose:
  * Input required to start a background streaming job.
@@ -281,6 +317,22 @@ export async function consumeBackgroundStream(params: {
             throw flushError;
         }
 
+        const latestJob = await params.provider.getJob(
+            params.jobId,
+            params.context.userId
+        );
+        if (!latestJob) {
+            throw new Error('Background job disappeared before completion');
+        }
+        if (latestJob.status !== 'streaming') {
+            if (latestJob.status === 'aborted') {
+                throw createAbortError();
+            }
+            throw new Error(
+                `Background job is no longer streaming (status: ${latestJob.status})`
+            );
+        }
+
         // Complete the job
         await params.provider.completeJob(params.jobId, fullContent);
         emitJobStatus(params.jobId, 'complete', {
@@ -369,6 +421,7 @@ export async function consumeBackgroundStreamWithTools(params: {
     context: BackgroundStreamParams;
     toolRuntime?: Record<string, string>;
     shouldNotify?: () => boolean;
+    abortSignal?: AbortSignal;
 }): Promise<void> {
     const MAX_TOOL_ITERATIONS = 10;
     let fullContent = '';
@@ -379,6 +432,8 @@ export async function consumeBackgroundStreamWithTools(params: {
     const tools = Array.isArray(params.body.tools)
         ? (params.body.tools as ToolDefinition[])
         : undefined;
+    const requestedToolChoice = params.body.tool_choice;
+    let activeToolChoice: unknown = requestedToolChoice;
 
     const toolRuntime = params.toolRuntime ?? {};
     const toolStates = new Map<string, {
@@ -410,11 +465,23 @@ export async function consumeBackgroundStreamWithTools(params: {
     try {
         while (loopIteration < MAX_TOOL_ITERATIONS) {
             loopIteration += 1;
+            await assertJobNotAborted({
+                provider: params.provider,
+                jobId: params.jobId,
+                abortSignal: params.abortSignal,
+            });
+
             const requestBody = {
                 ...params.body,
                 messages: orMessages,
                 tools,
-                tool_choice: tools ? 'auto' : undefined,
+                tool_choice:
+                    tools &&
+                    activeToolChoice !== undefined
+                        ? activeToolChoice
+                        : tools
+                        ? 'auto'
+                        : undefined,
                 stream: true,
             } as Record<string, unknown>;
 
@@ -428,6 +495,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                     'X-Title': 'or3.chat',
                 },
                 body: JSON.stringify(requestBody),
+                signal: params.abortSignal,
             });
 
             if (!upstream.ok || !upstream.body) {
@@ -438,9 +506,16 @@ export async function consumeBackgroundStreamWithTools(params: {
             }
 
             const pendingToolCalls: ToolCall[] = [];
+            let loopContent = '';
             for await (const evt of parseOpenRouterSSE(upstream.body)) {
+                await assertJobNotAborted({
+                    provider: params.provider,
+                    jobId: params.jobId,
+                    abortSignal: params.abortSignal,
+                });
                 if (evt.type === 'text') {
                     fullContent += evt.text;
+                    loopContent += evt.text;
                     chunks += 1;
                     emitJobDelta(params.jobId, evt.text, {
                         contentLength: fullContent.length,
@@ -474,6 +549,11 @@ export async function consumeBackgroundStreamWithTools(params: {
             }> = [];
 
             for (const toolCall of pendingToolCalls) {
+                await assertJobNotAborted({
+                    provider: params.provider,
+                    jobId: params.jobId,
+                    abortSignal: params.abortSignal,
+                });
                 const runtimeHint = toolRuntime[toolCall.function.name];
                 let toolResultText = '';
                 let status: 'complete' | 'error' | 'skipped' = 'complete';
@@ -512,7 +592,7 @@ export async function consumeBackgroundStreamWithTools(params: {
 
             orMessages.push({
                 role: 'assistant',
-                content: [{ type: 'text', text: fullContent || '' }],
+                content: [{ type: 'text', text: loopContent || '' }],
                 tool_calls: pendingToolCalls.map((toolCall) => ({
                     id: toolCall.id,
                     type: 'function' as const,
@@ -531,6 +611,34 @@ export async function consumeBackgroundStreamWithTools(params: {
                     content: [{ type: 'text', text: payload.result }],
                 });
             }
+
+            // If the caller forced a specific function, only enforce that on the first
+            // turn; subsequent turns should allow the model to produce the final answer.
+            if (isForcedFunctionToolChoice(activeToolChoice)) {
+                activeToolChoice = 'auto';
+            }
+
+            if (loopIteration >= MAX_TOOL_ITERATIONS) {
+                throw new Error(
+                    `Background tool loop exceeded max iterations (${MAX_TOOL_ITERATIONS})`
+                );
+            }
+        }
+
+        const latestJob = await params.provider.getJob(
+            params.jobId,
+            params.context.userId
+        );
+        if (!latestJob) {
+            throw new Error('Background job disappeared before completion');
+        }
+        if (latestJob.status !== 'streaming') {
+            if (latestJob.status === 'aborted') {
+                throw createAbortError();
+            }
+            throw new Error(
+                `Background job is no longer streaming (status: ${latestJob.status})`
+            );
         }
 
         await params.provider.completeJob(params.jobId, fullContent);
@@ -555,6 +663,17 @@ export async function consumeBackgroundStreamWithTools(params: {
             }
         }
     } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+            emitJobStatus(params.jobId, 'aborted', {
+                content: fullContent,
+                contentLength: fullContent.length,
+                chunksReceived: chunks,
+                completedAt: Date.now(),
+                tool_calls: Array.from(toolStates.values()),
+            });
+            return;
+        }
+
         emitJobStatus(params.jobId, 'error', {
             content: fullContent,
             contentLength: fullContent.length,
@@ -619,6 +738,7 @@ async function streamInBackground(
             context: params,
             toolRuntime,
             shouldNotify: () => !hasJobViewers(jobId),
+            abortSignal: ac.signal,
         });
         return;
     }

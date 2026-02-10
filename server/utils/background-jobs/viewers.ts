@@ -42,6 +42,8 @@ type LiveJobEvent =
           content_delta: string;
           content_length: number;
           chunksReceived: number;
+          tool_calls?: BackgroundJob['tool_calls'];
+          workflow_state?: BackgroundJob['workflow_state'];
       }
     | {
           type: 'status';
@@ -145,18 +147,31 @@ export function initJobLiveState(jobId: string): void {
 export function emitJobDelta(
     jobId: string,
     delta: string,
-    meta: { contentLength: number; chunksReceived: number }
+    meta: {
+        contentLength: number;
+        chunksReceived: number;
+        tool_calls?: BackgroundJob['tool_calls'];
+        workflow_state?: BackgroundJob['workflow_state'];
+    }
 ): void {
     if (!delta) return;
     const state = ensureJobLiveState(jobId);
     state.content += delta;
     state.chunksReceived = meta.chunksReceived;
     state.status = 'streaming';
+    if (meta.tool_calls !== undefined) {
+        state.tool_calls = meta.tool_calls;
+    }
+    if (meta.workflow_state !== undefined) {
+        state.workflow_state = meta.workflow_state;
+    }
     const event: LiveJobEvent = {
         type: 'delta',
         content_delta: delta,
         content_length: meta.contentLength,
         chunksReceived: meta.chunksReceived,
+        tool_calls: meta.tool_calls,
+        workflow_state: meta.workflow_state,
     };
     for (const listener of state.listeners) {
         listener(event);
