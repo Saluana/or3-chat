@@ -506,6 +506,18 @@
                     "summary": "Simplified plugin API for tool registration. Re-exports registry functions and provides a helper for better TypeScript inference when defining tools. Recommended import path for plugins registering tools — keeps plugin code clean and isolated from internal implementation details. Exports useToolRegistry, defineTool helper, and all tool-related type definitions."
                 },
                 {
+                    "name": "tool-runtime.md",
+                    "path": "/utils/tool-runtime",
+                    "category": "Tools",
+                    "summary": "Runtime model for tools across client and server paths. Documents `hybrid|client|server` semantics, default runtime behavior, and how foreground/background execution chooses the correct registry."
+                },
+                {
+                    "name": "server-tool-registry.md",
+                    "path": "/utils/server-tool-registry",
+                    "category": "Tools",
+                    "summary": "Server-side tool registry reference used by SSR background chat/workflow execution. Covers registration API, runtime enforcement, timeout behavior, and Nitro plugin registration patterns."
+                },
+                {
                     "name": "uiMessages.md",
                     "path": "/utils/uiMessages",
                     "category": "Chat",
@@ -678,6 +690,12 @@
                     "path": "/cloud/storage-layer",
                     "category": "Architecture",
                     "summary": "Overview of the CAS (Content-Addressable Storage) system for large assets. Details the local-first 'Blob' architecture, FileTransferQueue for offline support, and pluggable ObjectStorageProvider interface."
+                },
+                {
+                    "name": "background-execution.md",
+                    "path": "/cloud/background-execution",
+                    "category": "Architecture",
+                    "summary": "Architecture and API reference for SSR background jobs powering chat streaming, tool execution, and workflow execution with HITL. Covers endpoint contracts, auth/rate-limit gates, reattach flows, and job metadata (`tool_calls`, `workflow_state`)."
                 },
                 {
                     "name": "notifications.md",
