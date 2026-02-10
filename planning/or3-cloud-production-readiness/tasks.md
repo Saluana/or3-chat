@@ -71,38 +71,38 @@
 ### 5. Add health check endpoint
 > Requirements: 3.1
 
-- [ ] 5.1 Create `server/api/health.get.ts` — return `{ status, timestamp, uptime }`
-- [ ] 5.2 Add optional deep mode (`?deep=true`) that checks provider connectivity
-- [ ] 5.3 Ensure endpoint requires no authentication
-- [ ] 5.4 Write tests for health endpoint response shape and deep mode
+- [x] 5.1 Create `server/api/health.get.ts` — return `{ status, timestamp, uptime }`
+- [x] 5.2 Add optional deep mode (`?deep=true`) that checks provider connectivity
+- [x] 5.3 Ensure endpoint requires no authentication
+- [x] 5.4 Write tests for health endpoint response shape and deep mode
 
 ### 6. Implement graceful shutdown
 > Requirements: 4.1
 
-- [ ] 6.1 Create Nitro plugin `server/plugins/graceful-shutdown.ts`
-- [ ] 6.2 Register SIGTERM + SIGINT handlers
-- [ ] 6.3 Log active background jobs count on shutdown signal
-- [ ] 6.4 Implement configurable drain timeout (default 15s)
-- [ ] 6.5 Clean up admin rate limit interval (`clearInterval` / `.unref()`)
+- [x] 6.1 Create Nitro plugin `server/plugins/graceful-shutdown.ts`
+- [x] 6.2 Register SIGTERM + SIGINT handlers
+- [x] 6.3 Log active background jobs count on shutdown signal
+- [x] 6.4 Implement configurable drain timeout (default 15s)
+- [x] 6.5 Clean up admin rate limit interval (`clearInterval` / `.unref()`)
 - [ ] 6.6 Test: server accepts no new connections after signal
 - [ ] 6.7 Test: in-flight requests complete before exit
 
 ### 7. Add structured error handling
 > Requirements: 5.1
 
-- [ ] 7.1 Create Nitro error handler plugin (`server/plugins/error-handler.ts`)
-- [ ] 7.2 Log errors as structured JSON (path, method, status, timestamp, message)
-- [ ] 7.3 Exclude stack traces from HTTP responses in production
-- [ ] 7.4 Remove stray `console.log` calls in server code (logout handler, admin rate limit cleanup, JWT auto-gen)
+- [x] 7.1 Create Nitro error handler plugin (`server/plugins/error-handler.ts`)
+- [x] 7.2 Log errors as structured JSON (path, method, status, timestamp, message)
+- [x] 7.3 Exclude stack traces from HTTP responses in production
+- [x] 7.4 Remove stray `console.log` calls in server code (logout handler, admin rate limit cleanup, JWT auto-gen)
 - [ ] 7.5 Test: 500 errors are logged with metadata, response is sanitized
 
 ### 8. Add Cache-Control to sensitive endpoints
 > Requirements: 6.1
 
-- [ ] 8.1 Create `setNoCacheHeaders(event)` utility in `server/utils/headers.ts`
-- [ ] 8.2 Apply to sync push/pull endpoints
-- [ ] 8.3 Apply to storage presign/upload/download endpoints
-- [ ] 8.4 Verify auth session endpoint already has it (it does — just confirm)
+- [x] 8.1 Create `setNoCacheHeaders(event)` utility in `server/utils/headers.ts`
+- [x] 8.2 Apply to sync push/pull endpoints
+- [x] 8.3 Apply to storage presign/upload/download endpoints
+- [x] 8.4 Verify auth session endpoint already has it (it does — just confirm)
 
 ---
 

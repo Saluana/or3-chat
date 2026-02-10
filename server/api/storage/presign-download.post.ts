@@ -22,6 +22,7 @@ import {
     recordSyncRequest,
 } from '../../utils/sync/rate-limiter';
 import { recordDownloadStart } from '../../utils/storage/metrics';
+import { setNoCacheHeaders } from '../../utils/headers';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -50,6 +51,9 @@ export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isStorageEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
+
+    // Prevent caching of sensitive storage presign URLs
+    setNoCacheHeaders(event);
 
     const body = BodySchema.safeParse(await readBody(event));
     if (!body.success) {
