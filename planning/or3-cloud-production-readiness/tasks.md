@@ -111,11 +111,11 @@
 ### 9. Admin auth hardening
 > Requirements: 7.1, 7.2, 7.3, 7.4
 
-- [ ] 9.1 Refactor admin login handler — always run bcrypt (even on username miss) using dummy hash
-- [ ] 9.2 Ensure login 401 response is identical for wrong username vs wrong password
-- [ ] 9.3 Update `grant.post.ts` to require `superAdminOnly: true`
-- [ ] 9.4 Update `revoke.post.ts` to require `superAdminOnly: true`
-- [ ] 9.5 Hard-fail in production when `OR3_ADMIN_JWT_SECRET` is not set (no auto-gen)
+- [x] 9.1 Refactor admin login handler — always run bcrypt (even on username miss) using dummy hash
+- [x] 9.2 Ensure login 401 response is identical for wrong username vs wrong password
+- [x] 9.3 Update `grant.post.ts` to require `superAdminOnly: true`
+- [x] 9.4 Update `revoke.post.ts` to require `superAdminOnly: true`
+- [x] 9.5 Hard-fail in production when `OR3_ADMIN_JWT_SECRET` is not set (no auto-gen)
 - [ ] 9.6 Audit all admin endpoints — classify read-only vs mutation, apply super admin where needed
 - [ ] 9.7 Document admin endpoint classification and role requirements
 - [ ] 9.8 Write tests: constant-time login (both failure modes same timing/message)
@@ -125,18 +125,18 @@
 ### 10. Sync endpoint hardening
 > Requirements: 9.1, 9.2
 
-- [ ] 10.1 Change sync GC endpoints to require `workspace.admin` permission (not `workspace.write`)
-- [ ] 10.2 Add rate limiting to sync GC endpoints
-- [ ] 10.3 Gate `OR3_SYNC_BYPASS_RATE_LIMIT` to `NODE_ENV === 'development'` only
+- [x] 10.1 Change sync GC endpoints to require `workspace.admin` permission (not `workspace.write`)
+- [x] 10.2 Add rate limiting to sync GC endpoints
+- [x] 10.3 Gate `OR3_SYNC_BYPASS_RATE_LIMIT` to `NODE_ENV === 'development'` only
 - [ ] 10.4 Write tests for GC authorization escalation
 - [ ] 10.5 Write tests for GC rate limiting
 
 ### 11. Auth auto-provisioning control
 > Requirements: 10.1
 
-- [ ] 11.1 Add `OR3_AUTH_AUTO_PROVISION` env var (default `true`)
-- [ ] 11.2 When `false`, `resolveSession` returns "unauthorized" for unknown provider users
-- [ ] 11.3 Return clear "registration disabled" error message
+- [x] 11.1 Add `OR3_AUTH_AUTO_PROVISION` env var (default `true`)
+- [x] 11.2 When `false`, `resolveSession` returns "unauthorized" for unknown provider users
+- [x] 11.3 Return clear "registration disabled" error message
 - [ ] 11.4 Document the env var and its behavior
 - [ ] 11.5 Write tests for both provisioning modes
 
