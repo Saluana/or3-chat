@@ -86,6 +86,7 @@ export const BACKGROUND_JOB_MUTED_KEY = 'notification_muted_threads';
 export const backgroundJobTrackers = new Map<string, BackgroundJobTracker>();
 
 let cachedNotificationHooks: TypedHookEngine | null = null;
+let cachedWorkflowHooks: TypedHookEngine | null = null;
 
 /**
  * Internal helper. Promise-based delay for polling loops.
@@ -106,6 +107,16 @@ function resolveNotificationHooks(): TypedHookEngine | null {
     if (!g.__NUXT_HOOKS__) return null;
     cachedNotificationHooks = createTypedHookEngine(g.__NUXT_HOOKS__);
     return cachedNotificationHooks;
+}
+
+function resolveWorkflowHooks(): TypedHookEngine | null {
+    if (cachedWorkflowHooks) return cachedWorkflowHooks;
+    const g = globalThis as typeof globalThis & {
+        __NUXT_HOOKS__?: HookEngine;
+    };
+    if (!g.__NUXT_HOOKS__) return null;
+    cachedWorkflowHooks = createTypedHookEngine(g.__NUXT_HOOKS__);
+    return cachedWorkflowHooks;
 }
 
 /**
@@ -230,7 +241,7 @@ async function persistBackgroundJobUpdate(
             : status.status === 'aborted'
                 ? 'Background response aborted'
                 : null;
-    const mergedData = {
+    const baseMergedData = {
         ...baseData,
         content:
             content.length > 0
@@ -240,7 +251,15 @@ async function persistBackgroundJobUpdate(
         background_job_status: status.status,
         ...(status.error ? { background_job_error: status.error } : {}),
         ...(nextError ? { error: nextError } : {}),
+        ...(status.tool_calls ? { tool_calls: status.tool_calls } : {}),
     };
+    const mergedData =
+        status.workflow_state && typeof status.workflow_state === 'object'
+            ? {
+                  ...(status.workflow_state as Record<string, unknown>),
+                  ...baseMergedData,
+              }
+            : baseMergedData;
 
     await upsert.message({
         ...existing,
@@ -353,6 +372,15 @@ async function handleBackgroundStatus(
         content: safeContent,
         delta,
     };
+    if (nextStatus.workflow_state && typeof nextStatus.workflow_state === 'object') {
+        const workflowHooks = resolveWorkflowHooks();
+        if (workflowHooks?.hasAction('workflow.execution:action:state_update')) {
+            await workflowHooks.doAction('workflow.execution:action:state_update', {
+                messageId: tracker.messageId,
+                state: nextStatus.workflow_state,
+            });
+        }
+    }
     for (const subscriber of tracker.subscribers) {
         subscriber.onUpdate?.(update);
     }
@@ -368,6 +396,23 @@ async function handleBackgroundStatus(
             }
         }
         await emitBackgroundComplete(tracker, nextStatus);
+        if (nextStatus.workflow_state && typeof nextStatus.workflow_state === 'object') {
+            const workflowHooks = resolveWorkflowHooks();
+            if (workflowHooks?.hasAction('workflow.execution:action:complete')) {
+                const state = nextStatus.workflow_state as Record<string, unknown>;
+                const workflowId =
+                    typeof state.workflowId === 'string' ? state.workflowId : undefined;
+                const finalOutput =
+                    typeof state.finalOutput === 'string' ? state.finalOutput : undefined;
+                if (workflowId) {
+                    await workflowHooks.doAction('workflow.execution:action:complete', {
+                        messageId: tracker.messageId,
+                        workflowId,
+                        finalOutput,
+                    });
+                }
+            }
+        }
         tracker.resolveCompletion(nextStatus);
         tracker.active = false;
         tracker.polling = false;

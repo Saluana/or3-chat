@@ -1383,7 +1383,6 @@ export function useChat(
 
             const allowBackgroundStreaming =
                 backgroundStreamingAllowed.value &&
-                enabledToolDefs.length === 0 &&
                 modalities.length === 1 &&
                 modalities[0] === 'text';
 
@@ -1405,6 +1404,19 @@ export function useChat(
                 tailAssistant.value = uiAssistant;
 
                 try {
+                    const toolRuntime =
+                        enabledToolDefs.length > 0
+                            ? enabledToolDefs.reduce<Record<string, string>>(
+                                  (acc, tool) => {
+                                      if (tool.runtime) {
+                                          acc[tool.function.name] = tool.runtime;
+                                      }
+                                      return acc;
+                                  },
+                                  {}
+                              )
+                            : undefined;
+
                     const result = await startBackgroundStream({
                         apiKey: effectiveApiKey.value,
                         model: modelId,
@@ -1418,6 +1430,7 @@ export function useChat(
                             enabledToolDefs.length > 0
                                 ? enabledToolDefs
                                 : undefined,
+                        toolRuntime,
                     });
 
                     backgroundJobId.value = result.jobId;

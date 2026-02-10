@@ -47,6 +47,19 @@ export interface BackgroundJob {
     completedAt?: number;
     /** Error message when status is `error` */
     error?: string;
+    /** Background job kind */
+    kind?: 'chat' | 'workflow';
+    /** Tool call state for background tool execution */
+    tool_calls?: Array<{
+        id?: string;
+        name: string;
+        status: 'loading' | 'complete' | 'error' | 'pending' | 'skipped';
+        args?: string;
+        result?: string;
+        error?: string;
+    }>;
+    /** Workflow execution state snapshot */
+    workflow_state?: Record<string, unknown>;
 }
 
 /**
@@ -58,6 +71,9 @@ export interface CreateJobParams {
     threadId: string;
     messageId: string;
     model: string;
+    kind?: BackgroundJob['kind'];
+    tool_calls?: BackgroundJob['tool_calls'];
+    workflow_state?: BackgroundJob['workflow_state'];
 }
 
 /**
@@ -72,6 +88,10 @@ export interface JobUpdate {
     contentChunk?: string;
     /** Updated total chunks received */
     chunksReceived?: number;
+    /** Tool call status updates */
+    tool_calls?: BackgroundJob['tool_calls'];
+    /** Workflow state snapshot updates */
+    workflow_state?: BackgroundJob['workflow_state'];
 }
 
 /**

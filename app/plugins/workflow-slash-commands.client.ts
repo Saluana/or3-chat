@@ -9,7 +9,7 @@
  */
 
 import { defineNuxtPlugin } from '#app';
-import { useAppConfig, useHooks, useToast, useModelStore } from '#imports';
+import { useAppConfig, useHooks, useToast, useModelStore, useRuntimeConfig, useSessionContext } from '#imports';
 import { useOr3Config } from '~/composables/useOr3Config';
 import type { Or3DB } from '~/db/client';
 import type { Extension, Node } from '@tiptap/core';
@@ -25,6 +25,9 @@ import type { Attachment } from 'or3-workflow-core';
 import { createWorkflowStreamAccumulator } from '~/composables/chat/useWorkflowStreamAccumulator';
 import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
 import { reportError } from '~/utils/errors';
+import { isBackgroundStreamingEnabled } from '~/utils/chat/openrouterStream';
+import { startBackgroundWorkflow, respondHitlRequest } from '~/utils/chat/backgroundWorkflow';
+import { ensureBackgroundJobTracker, subscribeBackgroundJob } from '~/utils/chat/useAi-internal/backgroundJobs';
 import {
     isWorkflowMessageData,
     deriveStartNodeId,
@@ -636,7 +639,14 @@ function respondToHitlRequest(
     data?: string | Record<string, unknown>
 ): boolean {
     const pending = pendingHitlRequests.get(requestId);
-    if (!pending) return false;
+    if (!pending) {
+        void respondHitlRequest({
+            requestId,
+            action,
+            data,
+        });
+        return true;
+    }
 
     if (action === 'reject') {
         stopWorkflowExecution();
@@ -1373,6 +1383,71 @@ export default defineNuxtPlugin((nuxtApp) => {
             messageId: assistantContext.id,
             workflowId: workflowPost.id,
         });
+
+        const runtimeConfig = useRuntimeConfig();
+        const sessionContext =
+            runtimeConfig.public.ssrAuthEnabled === true
+                ? useSessionContext()
+                : null;
+        const session = sessionContext?.data.value?.session ?? null;
+        const backgroundAllowed =
+            runtimeConfig.public.backgroundStreaming?.enabled === true &&
+            isBackgroundStreamingEnabled() &&
+            Boolean(session?.authenticated && session.user?.id);
+
+        if (backgroundAllowed) {
+            try {
+                const result = await startBackgroundWorkflow({
+                    workflow: workflowPost.meta,
+                    workflowId: workflowPost.id,
+                    workflowName: workflowPost.title || 'Workflow',
+                    prompt: executionPrompt,
+                    threadId: assistantContext.threadId || '',
+                    messageId: assistantContext.id,
+                    conversationHistory:
+                        conversationHistory ||
+                        (await execMod.getConversationHistory(
+                            assistantContext.threadId || ''
+                        )),
+                    apiKey,
+                    attachments,
+                });
+
+                const msg = await db.messages.get(assistantContext.id);
+                if (msg) {
+                    await db.messages.put({
+                        ...msg,
+                        data: {
+                            ...(msg.data as Record<string, unknown>),
+                            background_job_id: result.jobId,
+                            background_job_status: 'streaming',
+                        },
+                        pending: true,
+                        updated_at: nowSec(),
+                        clock: nextClock(msg.clock),
+                    });
+                }
+
+                const tracker = ensureBackgroundJobTracker({
+                    jobId: result.jobId,
+                    userId: session?.user?.id || '',
+                    threadId: assistantContext.threadId || '',
+                    messageId: assistantContext.id,
+                    initialContent: '',
+                    useSse: true,
+                });
+
+                subscribeBackgroundJob(tracker, {
+                    onComplete: () => {
+                        emitStateUpdateSync();
+                    },
+                });
+
+                return;
+            } catch (error) {
+                console.warn('[workflow-slash] Background workflow failed, falling back', error);
+            }
+        }
 
         // Create execution controller
         const controller = execMod.executeWorkflow({

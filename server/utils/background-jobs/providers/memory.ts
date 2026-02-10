@@ -136,6 +136,9 @@ export const memoryJobProvider: BackgroundJobProvider = {
             chunksReceived: 0,
             startedAt: Date.now(),
             abortController: new AbortController(),
+            kind: params.kind ?? 'chat',
+            tool_calls: params.tool_calls ?? undefined,
+            workflow_state: params.workflow_state ?? undefined,
         };
 
         jobs.set(id, job);
@@ -165,6 +168,12 @@ export const memoryJobProvider: BackgroundJobProvider = {
         }
         if (update.chunksReceived !== undefined) {
             job.chunksReceived = update.chunksReceived;
+        }
+        if (update.tool_calls !== undefined) {
+            job.tool_calls = update.tool_calls;
+        }
+        if (update.workflow_state !== undefined) {
+            job.workflow_state = update.workflow_state;
         }
     },
 

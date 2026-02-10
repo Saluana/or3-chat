@@ -53,6 +53,7 @@ type OpenRouterRequestBody = {
     _background?: true;
     _threadId?: string;
     _messageId?: string;
+    _toolRuntime?: Record<string, string>;
 };
 
 // Cache key for detecting static build (no server routes)
@@ -117,8 +118,9 @@ function setServerRouteAvailable(available: boolean): void {
 }
 
 function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
-    const { ui: _ui, ...rest } = tool as ToolDefinition & {
+    const { ui: _ui, runtime: _runtime, ...rest } = tool as ToolDefinition & {
         ui?: Record<string, unknown>;
+        runtime?: string;
     };
     return {
         ...rest,
@@ -340,6 +342,15 @@ export interface BackgroundJobStatus {
     content?: string;
     content_delta?: string;
     content_length?: number;
+    tool_calls?: Array<{
+        id?: string;
+        name: string;
+        status: 'loading' | 'complete' | 'error' | 'pending' | 'skipped';
+        args?: string;
+        result?: string;
+        error?: string;
+    }>;
+    workflow_state?: Record<string, unknown>;
 }
 
 /**
@@ -427,6 +438,7 @@ export async function startBackgroundStream(params: {
     messageId: string;
     reasoning?: unknown;
     tools?: ToolDefinition[];
+    toolRuntime?: Record<string, string>;
 }): Promise<BackgroundStreamResult> {
     const body: OpenRouterRequestBody & {
         _background: true;
@@ -449,6 +461,9 @@ export async function startBackgroundStream(params: {
     if (params.tools) {
         body.tools = params.tools.map(stripUiMetadata);
         body.tool_choice = 'auto';
+    }
+    if (params.toolRuntime) {
+        body._toolRuntime = params.toolRuntime;
     }
 
     const headers: Record<string, string> = {

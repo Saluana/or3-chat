@@ -75,6 +75,8 @@ export default defineEventHandler(async (event) => {
             startedAt: job.startedAt,
             completedAt: job.completedAt,
             error: job.error,
+            tool_calls: job.tool_calls,
+            workflow_state: job.workflow_state,
             content_delta: contentDelta,
             content_length: contentLength,
             content: safeOffset < offset ? job.content : undefined,
@@ -91,6 +93,8 @@ export default defineEventHandler(async (event) => {
         startedAt: job.startedAt,
         completedAt: job.completedAt,
         error: job.error,
+        tool_calls: job.tool_calls,
+        workflow_state: job.workflow_state,
         content: job.content,
     };
 });
