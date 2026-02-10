@@ -11,7 +11,7 @@ import type { FileMeta } from '../../db/schema';
 import { getFileBlob } from '../../db/files';
 import { reportError } from '../../utils/errors';
 import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 import { useIcon } from '#imports';
 
 const iconDownload = useIcon('image.download');
@@ -271,15 +271,14 @@ const downloadButtonProps = computed(() => {
         identifier: 'images.gallery.download',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         size: 'sm' as const,
         variant: 'solid' as const,
         color: 'neutral' as const,
         square: true as const,
         class: 'flex items-center justify-center',
         icon: iconDownload.value,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const copyButtonProps = computed(() => {
@@ -289,15 +288,14 @@ const copyButtonProps = computed(() => {
         identifier: 'images.gallery.copy',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         size: 'sm' as const,
         variant: 'solid' as const,
         color: 'neutral' as const,
         square: true as const,
         class: 'flex items-center justify-center',
         icon: iconCopy.value,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 defineExpose({ ensureUrl });

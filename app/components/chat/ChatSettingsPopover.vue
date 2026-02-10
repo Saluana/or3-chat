@@ -110,7 +110,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useToolRegistry } from '~/utils/chat/tools-public';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
     containerWidth?: number;
@@ -156,10 +156,9 @@ const switchProps = computed(() => {
         identifier: 'settings.switch',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         color: 'primary' as const,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 // Web search switch
@@ -170,12 +169,11 @@ const webSearchSwitchProps = computed(() => {
         identifier: 'settings.web-search',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         color: 'primary' as const,
         size: 'sm' as const,
         label: 'Enable web search',
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 // Thinking switch
@@ -186,12 +184,11 @@ const thinkingSwitchProps = computed(() => {
         identifier: 'settings.thinking',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         color: 'primary' as const,
         size: 'sm' as const,
         label: 'Enable thinking',
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 // Tool switch (dynamic per tool)
@@ -202,11 +199,10 @@ const getToolSwitchProps = (toolName: string) => {
         identifier: `settings.tool-${toolName}`,
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         color: 'primary' as const,
         size: 'sm' as const,
-        ...overrides.value,
-    };
+    }, overrides.value);
 };
 
 // System prompts button

@@ -93,7 +93,7 @@
 <script setup lang="ts">
 import { reactive, computed, watch } from 'vue';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 import { useClipboard } from '@vueuse/core';
 import { isBrowser } from '~/utils/env';
 import type { ColorKey } from './types';
@@ -295,11 +295,10 @@ const hexInputProps = computed(() => {
         identifier: 'dashboard.theme.hex-input',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         size: 'sm' as const,
         variant: 'outline' as const,
-        ...(overrides.value as any),
-    };
+    }, overrides.value as any);
 });
 
 const copyButtonProps = computed(() => {
@@ -309,13 +308,12 @@ const copyButtonProps = computed(() => {
         identifier: 'dashboard.theme.copy-color',
         isNuxtUI: true,
     });
-    return {
+    return mergeThemeProps({
         size: 'sm' as const,
         variant: 'ghost' as const,
         icon: useIcon('ui.copy').value,
         square: true,
-        ...(overrides.value as any),
-    };
+    }, overrides.value as any);
 });
 
 // Helper to get current color from CSS variables (base theme)

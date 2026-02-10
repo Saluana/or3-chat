@@ -207,7 +207,7 @@ import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import SideBottomNav from './SideBottomNav.vue';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useOr3Config } from '~/composables/useOr3Config';
 
@@ -239,12 +239,11 @@ const newChatButtonProps = computed(() => {
 
     const mergedUi = { ...themeUi };
 
-    return {
+    return mergeThemeProps({
         size: 'sb-square' as const,
         icon: iconNewChat.value,
-        ...(overrides.value as any),
         ui: mergedUi,
-    };
+    }, overrides.value as any);
 });
 
 const searchButtonProps = computed(() => {
@@ -258,14 +257,13 @@ const searchButtonProps = computed(() => {
     const themeUi = (overrides.value as any)?.ui || {};
     const mergedUi = { ...themeUi };
 
-    return {
+    return mergeThemeProps({
         size: 'sb-base' as const,
         color: 'on-surface' as const,
         square: false as const,
         icon: iconSearch.value,
-        ...(overrides.value as any),
         ui: mergedUi,
-    };
+    }, overrides.value as any);
 });
 
 const newDocButtonProps = computed(() => {
@@ -280,13 +278,12 @@ const newDocButtonProps = computed(() => {
 
     const mergedUi = { ...themeUi };
 
-    return {
+    return mergeThemeProps({
         icon: iconNewNote.value,
         size: 'sb-base' as const,
         color: 'on-surface' as const,
-        ...(overrides.value as any),
         ui: mergedUi,
-    };
+    }, overrides.value as any);
 });
 
 const newProjectButtonProps = computed(() => {
@@ -301,13 +298,12 @@ const newProjectButtonProps = computed(() => {
 
     const mergedUi = { ...themeUi };
 
-    return {
+    return mergeThemeProps({
         icon: iconNewFolder.value,
         size: 'sb-base' as const,
         color: 'on-surface' as const,
-        ...(overrides.value as any),
         ui: mergedUi,
-    };
+    }, overrides.value as any);
 });
 
 const collapsedPageButtonUiDefaults = {

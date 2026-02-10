@@ -265,7 +265,7 @@ import {
 import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
 
 import { isMobile } from '~/state/global';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useThemeOverrides, mergeThemeProps } from '~/composables/useThemeResolver';
 
 // Props & modal open bridging (like SettingsModal pattern)
 const props = defineProps<{
@@ -390,11 +390,10 @@ const newPromptButtonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
+    return mergeThemeProps({
         size: 'sm' as const,
         color: 'primary' as const,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const clearActiveButtonProps = computed(() => {
@@ -405,12 +404,11 @@ const clearActiveButtonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
+    return mergeThemeProps({
         size: 'sm' as const,
         color: 'neutral' as const,
         variant: 'outline' as const,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const selectButtonProps = computed(() => {
@@ -421,10 +419,9 @@ const selectButtonProps = computed(() => {
         isNuxtUI: true,
     });
 
-    return {
+    return mergeThemeProps({
         size: 'sm' as const,
-        ...overrides.value,
-    };
+    }, overrides.value);
 });
 
 const toggleDefaultButtonProps = computed(() => {
