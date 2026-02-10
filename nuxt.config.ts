@@ -214,6 +214,7 @@ export default defineNuxtConfig({
         auth: {
             enabled: effectiveSsrAuthEnabled,
             provider: or3CloudConfig.auth.provider,
+            autoProvision: or3CloudConfig.auth.autoProvision ?? true,
             sessionProvisioningFailure:
                 or3CloudConfig.auth.sessionProvisioningFailure ?? 'throw',
         },
