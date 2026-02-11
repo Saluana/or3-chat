@@ -221,8 +221,16 @@ export async function resolveSessionContext(
         const autoProvision = (config.auth as { autoProvision?: boolean } | undefined)?.autoProvision ?? true;
         
         if (!autoProvision) {
+            if (!store.getUser) {
+                throw createError({
+                    statusCode: 500,
+                    statusMessage:
+                        'Auth store must implement getUser when OR3_AUTH_AUTO_PROVISION=false',
+                });
+            }
+
             // Try to get existing user without creating
-            const existingUser = await store.getUser?.({
+            const existingUser = await store.getUser({
                 provider: providerSession.provider,
                 providerUserId: providerSession.user.id,
             });

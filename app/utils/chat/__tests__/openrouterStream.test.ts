@@ -108,6 +108,33 @@ describe('openrouterStream', () => {
         expect(events).toHaveLength(1);
     });
 
+    it('falls back to direct OpenRouter on proxy error when client key is available', async () => {
+        const fetchMock = vi.fn((url: RequestInfo | URL) => {
+            if (url === '/api/openrouter/stream') {
+                return Promise.resolve(createJsonResponse({ error: 'proxy-failed' }, 500));
+            }
+            return Promise.resolve(createStreamResponse());
+        });
+        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+
+        const events: Array<{ type: string; text?: string }> = [];
+        for await (const event of openRouterStream({
+            apiKey: 'key-1',
+            model: 'model-1',
+            orMessages: [{ role: 'user', content: 'hi' }],
+            modalities: ['text'],
+        })) {
+            events.push(event);
+        }
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(fetchMock).toHaveBeenCalledWith(
+            'https://openrouter.ai/api/v1/chat/completions',
+            expect.objectContaining({ method: 'POST' })
+        );
+        expect(events).toHaveLength(1);
+    });
+
     it('requires server route in SSR mode when no client API key is available', async () => {
         runtimeConfigMock.public.ssrAuthEnabled = true;
         runtimeConfigMock.public.backgroundStreaming.enabled = false;

@@ -10,6 +10,7 @@
  * - No authentication required.
  */
 import { defineEventHandler, getQuery } from 'h3';
+import { useRuntimeConfig } from '#imports';
 
 export interface HealthResponse {
     status: 'ok' | 'degraded';

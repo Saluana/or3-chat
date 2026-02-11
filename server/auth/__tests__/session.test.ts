@@ -102,6 +102,7 @@ describe('resolveSessionContext provisioning and caching', () => {
                 ...testRuntimeConfig.value.auth,
                 enabled: true,
                 provider: PROVIDER_ID,
+                autoProvision: true,
                 sessionProvisioningFailure: 'throw',
             },
             public: {
@@ -144,6 +145,23 @@ describe('resolveSessionContext provisioning and caching', () => {
         authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockRejectedValueOnce(new Error('boom'));
 
         await expect(resolveSessionContext(makeEvent())).rejects.toThrow('boom');
+    });
+
+    it('fails fast when autoProvision is disabled and store lacks getUser', async () => {
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            auth: {
+                ...testRuntimeConfig.value.auth,
+                autoProvision: false,
+            },
+        };
+
+        await expect(resolveSessionContext(makeEvent())).rejects.toMatchObject({
+            statusCode: 500,
+            statusMessage:
+                'Auth store must implement getUser when OR3_AUTH_AUTO_PROVISION=false',
+        });
+        expect(authWorkspaceStoreMock.getOrCreateUser).not.toHaveBeenCalled();
     });
 
     it('returns unauthenticated when provider is not registered', async () => {

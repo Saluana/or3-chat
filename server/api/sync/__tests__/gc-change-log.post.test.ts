@@ -77,7 +77,7 @@ describe('POST /api/sync/gc-change-log', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
     });
 
-    it('enforces workspace.write via requireCan', async () => {
+    it('enforces workspace.settings.manage via requireCan', async () => {
         const handler = (await import('../gc-change-log.post')).default as (event: H3Event) => Promise<unknown>;
         const body = makeValidBody();
         readBodyMock.mockResolvedValue(body);
@@ -86,12 +86,12 @@ describe('POST /api/sync/gc-change-log', () => {
 
         expect(requireCanMock).toHaveBeenCalledWith(
             expect.objectContaining({ authenticated: true }),
-            'workspace.write',
+            'workspace.settings.manage',
             { kind: 'workspace', id: 'ws-1' }
         );
     });
 
-    it('returns 403 when workspace.write check fails', async () => {
+    it('returns 403 when workspace.settings.manage check fails', async () => {
         const handler = (await import('../gc-change-log.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue(makeValidBody());
         requireCanMock.mockImplementation(() => {

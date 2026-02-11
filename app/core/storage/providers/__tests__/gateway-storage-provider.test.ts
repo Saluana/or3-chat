@@ -73,17 +73,26 @@ describe('createGatewayStorageProvider', () => {
         expect(fetchMock).toHaveBeenNthCalledWith(
             1,
             'https://gateway.example/api/storage/presign-upload',
-            expect.objectContaining({ method: 'POST' })
+            expect.objectContaining({
+                method: 'POST',
+                credentials: 'include',
+            })
         );
         expect(fetchMock).toHaveBeenNthCalledWith(
             2,
             'https://gateway.example/api/storage/presign-download',
-            expect.objectContaining({ method: 'POST' })
+            expect.objectContaining({
+                method: 'POST',
+                credentials: 'include',
+            })
         );
         expect(fetchMock).toHaveBeenNthCalledWith(
             3,
             'https://gateway.example/api/storage/commit',
-            expect.objectContaining({ method: 'POST' })
+            expect.objectContaining({
+                method: 'POST',
+                credentials: 'include',
+            })
         );
 
         const commitBody = JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string);

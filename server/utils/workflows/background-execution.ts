@@ -145,6 +145,31 @@ async function runWorkflowInBackground(
 
     let chunks = 0;
     let lastStateEmitAt = 0;
+    let writeQueue = Promise.resolve();
+    const queueWorkflowWrite = (
+        contentChunk?: string,
+        chunksReceived?: number
+    ): Promise<void> => {
+        const runWrite = () =>
+            updateWorkflowJob(
+                provider,
+                jobId,
+                workflowState,
+                contentChunk,
+                chunksReceived
+            );
+        const queuedWrite = writeQueue.then(runWrite, runWrite);
+        writeQueue = queuedWrite.catch(() => undefined);
+        return queuedWrite;
+    };
+    const queueWorkflowWriteBackground = (
+        contentChunk?: string,
+        chunksReceived?: number
+    ): void => {
+        void queueWorkflowWrite(contentChunk, chunksReceived).catch(() => {
+            // Intentionally ignored here; queued write failures are surfaced by awaited writes.
+        });
+    };
     const workflowTools = listServerTools().map((tool) => ({
         type: 'function' as const,
         function: tool.definition.function,
@@ -190,7 +215,7 @@ async function runWorkflowInBackground(
             workflowState.currentNodeId = request.nodeId;
             workflowState.executionState = 'running';
             workflowState.version = (workflowState.version ?? 0) + 1;
-            await updateWorkflowJob(provider, jobId, workflowState);
+            await queueWorkflowWrite();
             emitJobStatus(jobId, 'streaming', {
                 content: workflowState.finalOutput,
                 contentLength: workflowState.finalOutput.length,
@@ -220,7 +245,7 @@ async function runWorkflowInBackground(
     };
 
     try {
-        await updateWorkflowJob(provider, jobId, workflowState);
+        await queueWorkflowWrite();
 
         const workflowForExecution: WorkflowDataWithHistory = {
             ...params.workflow,
@@ -246,7 +271,7 @@ async function runWorkflowInBackground(
                 workflowState.executionState = 'running';
                 workflowState.version = (workflowState.version ?? 0) + 1;
                 emitWorkflowStreamingState(true);
-                void updateWorkflowJob(provider, jobId, workflowState);
+                queueWorkflowWriteBackground();
             },
             onNodeFinish: (nodeId, output) => {
                 const nodeState = workflowState.nodeStates[nodeId];
@@ -258,7 +283,7 @@ async function runWorkflowInBackground(
                 workflowState.currentNodeId = null;
                 workflowState.version = (workflowState.version ?? 0) + 1;
                 emitWorkflowStreamingState(true);
-                void updateWorkflowJob(provider, jobId, workflowState);
+                queueWorkflowWriteBackground();
             },
             onNodeError: (nodeId, error) => {
                 const nodeState = workflowState.nodeStates[nodeId];
@@ -271,7 +296,7 @@ async function runWorkflowInBackground(
                 workflowState.currentNodeId = null;
                 workflowState.version = (workflowState.version ?? 0) + 1;
                 emitWorkflowStreamingState(true);
-                void updateWorkflowJob(provider, jobId, workflowState);
+                queueWorkflowWriteBackground();
             },
             onToken: (nodeId, token) => {
                 if (!token) return;
@@ -292,7 +317,7 @@ async function runWorkflowInBackground(
                     chunksReceived: chunks,
                     workflow_state: workflowState,
                 });
-                void updateWorkflowJob(provider, jobId, workflowState, token, chunks);
+                queueWorkflowWriteBackground(token, chunks);
             },
         };
 
@@ -318,7 +343,7 @@ async function runWorkflowInBackground(
         workflowState.executionState = 'completed';
         workflowState.currentNodeId = null;
         workflowState.version = (workflowState.version ?? 0) + 1;
-        await updateWorkflowJob(provider, jobId, workflowState);
+        await queueWorkflowWrite();
 
         const latestJob = await provider.getJob(jobId, params.userId);
         if (!latestJob) {
@@ -356,7 +381,7 @@ async function runWorkflowInBackground(
         if (error instanceof Error && error.name === 'AbortError') {
             workflowState.executionState = 'stopped';
             workflowState.version = (workflowState.version ?? 0) + 1;
-            await updateWorkflowJob(provider, jobId, workflowState);
+            await queueWorkflowWrite();
             emitJobStatus(jobId, 'aborted', {
                 content: workflowState.finalOutput,
                 contentLength: workflowState.finalOutput.length,
@@ -369,7 +394,7 @@ async function runWorkflowInBackground(
 
         workflowState.executionState = 'error';
         workflowState.version = (workflowState.version ?? 0) + 1;
-        await updateWorkflowJob(provider, jobId, workflowState);
+        await queueWorkflowWrite();
         emitJobStatus(jobId, 'error', {
             content: workflowState.finalOutput,
             contentLength: workflowState.finalOutput.length,

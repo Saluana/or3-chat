@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { H3Event } from 'h3';
 
-const mockSetHeader = vi.fn();
+const mockSetHeader = vi.hoisted(() => vi.fn());
 
 vi.mock('h3', async () => {
     const actual = await vi.importActual<typeof import('h3')>('h3');

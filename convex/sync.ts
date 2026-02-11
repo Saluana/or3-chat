@@ -287,21 +287,29 @@ async function applyOpToTable(
         .first();
 
     if (op.operation === 'delete') {
-        if (existing && !existing.deleted) {
-            console.debug('[sync] apply delete', {
-                table: op.table_name,
-                pk: op.pk,
-                clock: op.clock,
-                existingClock: existing.clock ?? 0,
-            });
-            await ctx.db.patch(existing._id, {
-                deleted: true,
-                deleted_at: payloadDeletedAt ?? nowSec(),
-                updated_at: payloadUpdatedAt ?? nowSec(),
-                clock: op.clock,
-                hlc: op.hlc,
-            });
-        }
+        if (!existing) return;
+
+        const existingClock = existing.clock ?? 0;
+        const existingHlc = typeof existing.hlc === 'string' ? existing.hlc : '';
+        const shouldApplyDelete =
+            op.clock > existingClock || (op.clock === existingClock && op.hlc > existingHlc);
+        if (!shouldApplyDelete) return;
+
+        console.debug('[sync] apply delete', {
+            table: op.table_name,
+            pk: op.pk,
+            clock: op.clock,
+            existingClock,
+            existingHlc,
+            incomingHlc: op.hlc,
+        });
+        await ctx.db.patch(existing._id, {
+            deleted: true,
+            deleted_at: payloadDeletedAt ?? nowSec(),
+            updated_at: payloadUpdatedAt ?? nowSec(),
+            clock: op.clock,
+            hlc: op.hlc,
+        });
     } else {
         // Put operation
         if (existing) {
@@ -464,7 +472,17 @@ export const push = mutation({
             if (!VALID_TABLES.includes(op.table_name)) {
                 throw new Error(`Invalid table: ${op.table_name}`);
             }
-            if (op.payload && JSON.stringify(op.payload).length > MAX_PAYLOAD_SIZE_BYTES) {
+            let payloadSizeBytes = 0;
+            if (op.payload !== undefined) {
+                try {
+                    payloadSizeBytes = JSON.stringify(op.payload).length;
+                } catch {
+                    throw new Error(
+                        `Invalid payload for ${op.table_name}: payload is not serializable`
+                    );
+                }
+            }
+            if (payloadSizeBytes > MAX_PAYLOAD_SIZE_BYTES) {
                 throw new Error(
                     `Payload too large for ${op.table_name}: exceeds ${MAX_PAYLOAD_SIZE_BYTES} bytes`
                 );

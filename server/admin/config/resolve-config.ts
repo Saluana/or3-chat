@@ -97,6 +97,19 @@ function envFirst(env: EnvMap, ...keys: string[]): string | undefined {
     return undefined;
 }
 
+function parseSessionProvisioningFailureMode(
+    value: string | undefined
+): 'throw' | 'unauthenticated' | 'service-unavailable' | undefined {
+    if (
+        value === 'throw' ||
+        value === 'unauthenticated' ||
+        value === 'service-unavailable'
+    ) {
+        return value;
+    }
+    return undefined;
+}
+
 /**
  * Builds the standard OR3 configuration object from environment variables.
  *
@@ -192,6 +205,11 @@ export function buildOr3CloudConfigFromEnv(
         auth: {
             enabled: authEnabled,
             provider: authProvider as AuthProviderId,
+            guestAccessEnabled: env.OR3_GUEST_ACCESS_ENABLED === 'true',
+            autoProvision: env.OR3_AUTH_AUTO_PROVISION !== 'false',
+            sessionProvisioningFailure: parseSessionProvisioningFailureMode(
+                env.OR3_SESSION_PROVISIONING_FAILURE
+            ),
             clerk: {
                 publishableKey: env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY || undefined,
                 secretKey: env.NUXT_CLERK_SECRET_KEY || undefined,

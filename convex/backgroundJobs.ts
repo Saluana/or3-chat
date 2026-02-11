@@ -178,7 +178,7 @@ export const complete = mutation({
     },
     handler: async (ctx, args) => {
         const job = await ctx.db.get(args.job_id);
-        if (!job) return;
+        if (!job || job.status !== 'streaming') return;
 
         const patch: Record<string, unknown> = {
             status: 'complete',
@@ -208,7 +208,7 @@ export const fail = mutation({
     },
     handler: async (ctx, args) => {
         const job = await ctx.db.get(args.job_id);
-        if (!job) return;
+        if (!job || job.status !== 'streaming') return;
 
         await ctx.db.patch(args.job_id, {
             status: 'error',

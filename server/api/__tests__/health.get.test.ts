@@ -1,20 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createMockH3Event } from '../../../tests/utils/mock-h3';
+import type { H3Event } from 'h3';
+
+const runtimeConfigMock = {
+    sync: { enabled: true, provider: 'convex' },
+    storage: { enabled: true, provider: 'convex' },
+    auth: { enabled: true, provider: 'clerk' },
+};
+
+vi.mock('h3', () => ({
+    defineEventHandler: (handler: unknown) => handler,
+    getQuery: (event: H3Event & { node?: { req?: { url?: string } } }) => {
+        const rawUrl = event.node?.req?.url ?? '';
+        const search = rawUrl.includes('?') ? rawUrl.split('?')[1] ?? '' : '';
+        return Object.fromEntries(new URLSearchParams(search).entries());
+    },
+}));
+
+vi.mock('#imports', () => ({
+    useRuntimeConfig: () => runtimeConfigMock,
+}));
 
 describe('Health check endpoint', () => {
     let handler: any;
 
     beforeEach(async () => {
         vi.resetModules();
-        
-        // Mock runtime config
-        vi.mock('#imports', () => ({
-            useRuntimeConfig: () => ({
-                sync: { enabled: true, provider: 'convex' },
-                storage: { enabled: true, provider: 'convex' },
-                auth: { enabled: true, provider: 'clerk' },
-            }),
-        }));
+        runtimeConfigMock.sync = { enabled: true, provider: 'convex' };
+        runtimeConfigMock.storage = { enabled: true, provider: 'convex' };
+        runtimeConfigMock.auth = { enabled: true, provider: 'clerk' };
 
         const module = await import('../health.get');
         handler = module.default;
@@ -60,18 +74,9 @@ describe('Health check endpoint', () => {
     });
 
     it('marks as degraded when provider is enabled but not configured', async () => {
-        vi.resetModules();
-        
-        vi.mock('#imports', () => ({
-            useRuntimeConfig: () => ({
-                sync: { enabled: true, provider: '' },
-                storage: { enabled: false, provider: '' },
-                auth: { enabled: true, provider: 'clerk' },
-            }),
-        }));
-
-        const module = await import('../health.get');
-        const degradedHandler = module.default;
+        runtimeConfigMock.sync = { enabled: true, provider: '' };
+        runtimeConfigMock.storage = { enabled: false, provider: '' };
+        runtimeConfigMock.auth = { enabled: true, provider: 'clerk' };
 
         const event = createMockH3Event({
             method: 'GET',
@@ -79,7 +84,7 @@ describe('Health check endpoint', () => {
             query: { deep: 'true' },
         });
 
-        const response = await degradedHandler(event);
+        const response = await handler(event);
 
         expect(response.status).toBe('degraded');
     });

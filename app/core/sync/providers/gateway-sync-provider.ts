@@ -124,6 +124,7 @@ async function requestJson<T>(
 ): Promise<T> {
     const res = await fetch(`${baseUrl}${path}`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
         },
