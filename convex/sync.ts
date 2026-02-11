@@ -122,7 +122,7 @@ async function allocateServerVersions(
  * @remarks
  * `file_meta` uses `hash` as the primary key rather than `id`.
  */
-const TABLE_INDEX_MAP: Record<string, { table: string; indexName: string }> = {
+const TABLE_INDEX_MAP: Partial<Record<string, { table: string; indexName: string }>> = {
     threads: { table: 'threads', indexName: 'by_workspace_id' },
     messages: { table: 'messages', indexName: 'by_workspace_id' },
     projects: { table: 'projects', indexName: 'by_workspace_id' },
@@ -698,8 +698,8 @@ export const pull = query({
                 ? window.filter((c) => tableFilter.includes(c.table_name))
                 : window;
 
-        const lastChange = window[window.length - 1];
-        const nextCursor = lastChange ? lastChange.server_version : args.cursor;
+        const nextCursor =
+            window.length > 0 ? window[window.length - 1]!.server_version : args.cursor;
 
         console.debug('[sync] pull', {
             workspace: args.workspace_id,
@@ -770,8 +770,8 @@ export const watchChanges = query({
             .order('asc')
             .take(limit)) as ChangeLogRow[];
 
-        const latestChange = changes[changes.length - 1];
-        const latestVersion = latestChange ? latestChange.server_version : since;
+        const latestVersion =
+            changes.length > 0 ? changes[changes.length - 1]!.server_version : since;
 
         console.debug('[sync] watchChanges', {
             workspace: args.workspace_id,

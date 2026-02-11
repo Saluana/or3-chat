@@ -157,7 +157,7 @@ export async function* openRouterStream(params: {
         };
     };
     const allowClientFallback = hasApiKey === true;
-    const isSsrAuthEnabled = runtimeConfig.public?.ssrAuthEnabled === true;
+    const isSsrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;
     const forceServerRoute = Boolean(
         isSsrAuthEnabled && !allowClientFallback
     );
@@ -235,10 +235,6 @@ export async function* openRouterStream(params: {
             // Server route unavailable (404, network error, etc.); mark as unavailable and fall back
             setServerRouteAvailable(false);
         }
-    }
-
-    if (forceServerRoute) {
-        throw new Error('OpenRouter server route required in SSR mode');
     }
 
     if (!hasApiKey) {

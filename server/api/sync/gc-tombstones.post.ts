@@ -25,7 +25,7 @@ const GcRequestSchema = z.object({
  * Forget about deleted items after X time.
  *
  * Behavior:
- * - Requires `workspace.admin` permission (elevated from workspace.write for security).
+ * - Requires `workspace.settings.manage` permission (elevated from workspace.write for security).
  * - Rate limited to prevent abuse.
  * - Dispatches to registered SyncGatewayAdapter.
  *
@@ -44,7 +44,11 @@ export default defineEventHandler(async (event) => {
     }
 
     const session = await resolveSessionContext(event);
-    requireCan(session, 'workspace.admin', {
+    if (!session.authenticated || !session.user || !session.workspace) {
+        throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
+    }
+
+    requireCan(session, 'workspace.settings.manage', {
         kind: 'workspace',
         id: parsed.data.scope.workspaceId,
     });

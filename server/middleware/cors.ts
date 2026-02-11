@@ -78,7 +78,7 @@ export default defineEventHandler((event) => {
             'Access-Control-Allow-Headers',
             reqHeaders || 'Content-Type,Authorization'
         );
-        setHeader(event, 'Access-Control-Max-Age', '3600');
+        setHeader(event, 'Access-Control-Max-Age', 3600);
         setResponseStatus(event, 204);
         return '';
     }

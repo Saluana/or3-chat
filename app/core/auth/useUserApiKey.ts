@@ -36,7 +36,7 @@ type KvApiKeyRow = {
 };
 
 function hasKvTable(db: { tables?: Array<{ name?: string }> }): boolean {
-    return Array.isArray(db.tables) && db.tables.some((t) => t?.name === 'kv');
+    return Array.isArray(db.tables) && db.tables.some((t) => t.name === 'kv');
 }
 
 export async function hydrateUserApiKeyFromKv(): Promise<void> {

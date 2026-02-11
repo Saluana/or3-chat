@@ -22,6 +22,12 @@ export interface Or3CloudConfig {
          */
         guestAccessEnabled?: boolean;
         /**
+         * Automatically provision users/workspaces on first authenticated session.
+         * When false, only pre-provisioned users can sign in.
+         * @default true
+         */
+        autoProvision?: boolean;
+        /**
          * Behavior when workspace provisioning fails during session resolution.
          * - 'throw': preserve current behavior and throw (default)
          * - 'unauthenticated': return unauthenticated session

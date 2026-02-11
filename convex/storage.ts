@@ -197,7 +197,6 @@ export const commitUpload = mutation({
                 (a, b) => a._creationTime - b._creationTime
             );
             const keeper = sorted[0];
-            if (!keeper) return;
             for (const file of sorted.slice(1)) {
                 if (file._id === keeper._id) continue;
                 await ctx.db.delete(file._id);

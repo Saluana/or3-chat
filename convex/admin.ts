@@ -523,9 +523,7 @@ export const listWorkspaces = query({
         for (let i = 0; i < workspaceIds.length; i++) {
             const workspaceId = workspaceIds[i];
             const members = allMembers[i];
-            if (workspaceId && members) {
-                memberCounts.set(workspaceId, members.length);
-            }
+            memberCounts.set(workspaceId, members.length);
         }
 
         // Map results without additional queries

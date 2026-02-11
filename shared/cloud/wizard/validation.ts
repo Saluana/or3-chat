@@ -43,8 +43,7 @@ function isEmail(value: string): boolean {
 
 function parseUrl(value: string): boolean {
     try {
-        // eslint-disable-next-line no-new
-        new URL(value);
+        void new URL(value);
         return true;
     } catch {
         return false;
@@ -154,7 +153,7 @@ function validateFieldLevel(answers: WizardAnswers): {
             }
         }
 
-        if (!answers.basicAuthDbPath?.trim()) {
+        if (!answers.basicAuthDbPath.trim()) {
             errors.push('OR3_BASIC_AUTH_DB_PATH is required for basic-auth.');
         }
     }

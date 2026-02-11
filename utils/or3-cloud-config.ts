@@ -31,6 +31,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         enabled: false,
         provider: DEFAULT_AUTH_PROVIDER_ID,
         guestAccessEnabled: false,
+        autoProvision: true,
         sessionProvisioningFailure: 'throw',
         clerk: {
             publishableKey: undefined,
@@ -132,6 +133,7 @@ const cloudConfigSchema = z
             enabled: z.boolean(),
             provider: z.string().min(1),
             guestAccessEnabled: z.boolean().optional(),
+            autoProvision: z.boolean().optional(),
             sessionProvisioningFailure: z
                 .enum(['throw', 'unauthenticated', 'service-unavailable'])
                 .optional(),

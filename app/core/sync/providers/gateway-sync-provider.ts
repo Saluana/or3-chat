@@ -131,7 +131,7 @@ async function requestJson<T>(
     });
 
     if (!res.ok) {
-        const retryAfterMs = parseRetryAfterHeader(res.headers?.get?.('Retry-After') ?? null);
+        const retryAfterMs = parseRetryAfterHeader(res.headers.get('Retry-After'));
         const text = await res.text();
         const sanitized = sanitizeErrorText(text);
         throw new GatewaySyncRequestError(path, res.status, sanitized, retryAfterMs);
@@ -246,7 +246,6 @@ export function createGatewaySyncProvider(
                 } finally {
                     running = false;
                 }
-                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- active is mutated by unsubscribe() closure
                 if (!active) return;
                 // Add random jitter (0-500ms) to prevent thundering herd
                 const jitter = Math.floor(Math.random() * 500);

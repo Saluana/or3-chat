@@ -11,17 +11,33 @@ import { emitJobDelta, emitJobStatus, hasJobViewers, initJobLiveState } from '..
 import { executeServerTool, listServerTools } from '../chat/tool-registry';
 import { getNotificationEmitter } from '../notifications/registry';
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
-import type { HITLRequest, HITLResponse, WorkflowData, Attachment } from 'or3-workflow-core';
+import {
+    OpenRouterExecutionAdapter,
+    type Attachment,
+    type ExecutionCallbacks,
+    type ExecutionInput,
+    type HITLRequest,
+    type HITLResponse,
+    type WorkflowData,
+} from 'or3-workflow-core';
+import { OpenRouter } from '@openrouter/sdk';
 import { registerHitlRequest, clearHitlRequestsForJob } from './hitl-store';
 
 const MAX_WORKFLOW_STATE_BYTES = 64 * 1024;
+type ConversationHistoryMessage = { role: string; content: string };
+type ExecutionInputWithHistory = ExecutionInput & {
+    conversationHistory?: ConversationHistoryMessage[];
+};
+type WorkflowDataWithHistory = WorkflowData & {
+    conversationHistory?: ConversationHistoryMessage[];
+};
 
 export interface BackgroundWorkflowParams {
     workflow: WorkflowData;
     workflowId: string;
     workflowName: string;
     prompt: string;
-    conversationHistory: Array<{ role: string; content: string }>; // minimal shape
+    conversationHistory: ConversationHistoryMessage[];
     attachments?: Attachment[];
     apiKey: string;
     userId: string;
@@ -125,9 +141,6 @@ async function runWorkflowInBackground(
 
     initJobLiveState(jobId);
 
-    const { OpenRouterExecutionAdapter } = await import('or3-workflow-core');
-    const { OpenRouter } = await import('@openrouter/sdk');
-
     const client = new OpenRouter({ apiKey: params.apiKey });
 
     let chunks = 0;
@@ -139,7 +152,7 @@ async function runWorkflowInBackground(
             executeWorkflowToolCall(tool.definition.function.name, args),
     }));
 
-    const adapter = new OpenRouterExecutionAdapter(client as any, {
+    const adapter = new OpenRouterExecutionAdapter(client, {
         defaultModel: 'openai/gpt-4o-mini',
         preflight: true,
         tools: workflowTools,
@@ -179,8 +192,8 @@ async function runWorkflowInBackground(
             workflowState.version = (workflowState.version ?? 0) + 1;
             await updateWorkflowJob(provider, jobId, workflowState);
             emitJobStatus(jobId, 'streaming', {
-                content: workflowState.finalOutput ?? '',
-                contentLength: (workflowState.finalOutput ?? '').length,
+                content: workflowState.finalOutput,
+                contentLength: workflowState.finalOutput.length,
                 chunksReceived: chunks,
                 workflow_state: workflowState,
             });
@@ -199,8 +212,8 @@ async function runWorkflowInBackground(
         }
         lastStateEmitAt = now;
         emitJobStatus(jobId, 'streaming', {
-            content: workflowState.finalOutput ?? '',
-            contentLength: (workflowState.finalOutput ?? '').length,
+            content: workflowState.finalOutput,
+            contentLength: workflowState.finalOutput.length,
             chunksReceived: chunks,
             workflow_state: workflowState,
         });
@@ -209,92 +222,90 @@ async function runWorkflowInBackground(
     try {
         await updateWorkflowJob(provider, jobId, workflowState);
 
-        const executionResult = (await adapter.execute(
-            {
-                ...params.workflow,
-                conversationHistory: params.conversationHistory,
-            } as any,
-            {
-                text: params.prompt,
-                conversationHistory: params.conversationHistory,
-                attachments: params.attachments,
-            } as any,
-            {
-                onNodeStart: (nodeId: string, info?: { label?: string; type?: string }) => {
-                    workflowState.nodeStates[nodeId] = {
-                        status: 'active',
-                        label: info?.label || nodeId,
-                        type: info?.type || 'unknown',
-                        output: '',
-                    };
-                    if (!workflowState.executionOrder.includes(nodeId)) {
-                        workflowState.executionOrder.push(nodeId);
-                    }
-                    workflowState.currentNodeId = nodeId;
-                    workflowState.executionState = 'running';
+        const workflowForExecution: WorkflowDataWithHistory = {
+            ...params.workflow,
+            conversationHistory: params.conversationHistory,
+        };
+        const executionInput: ExecutionInputWithHistory = {
+            text: params.prompt,
+            conversationHistory: params.conversationHistory,
+            attachments: params.attachments,
+        };
+        const executionCallbacks: ExecutionCallbacks = {
+            onNodeStart: (nodeId, info) => {
+                workflowState.nodeStates[nodeId] = {
+                    status: 'active',
+                    label: info?.label || nodeId,
+                    type: info?.type || 'unknown',
+                    output: '',
+                };
+                if (!workflowState.executionOrder.includes(nodeId)) {
+                    workflowState.executionOrder.push(nodeId);
+                }
+                workflowState.currentNodeId = nodeId;
+                workflowState.executionState = 'running';
+                workflowState.version = (workflowState.version ?? 0) + 1;
+                emitWorkflowStreamingState(true);
+                void updateWorkflowJob(provider, jobId, workflowState);
+            },
+            onNodeFinish: (nodeId, output) => {
+                const nodeState = workflowState.nodeStates[nodeId];
+                if (nodeState) {
+                    nodeState.status = 'completed';
+                    nodeState.output = output;
+                    nodeState.streamingText = '';
+                }
+                workflowState.currentNodeId = null;
+                workflowState.version = (workflowState.version ?? 0) + 1;
+                emitWorkflowStreamingState(true);
+                void updateWorkflowJob(provider, jobId, workflowState);
+            },
+            onNodeError: (nodeId, error) => {
+                const nodeState = workflowState.nodeStates[nodeId];
+                if (nodeState) {
+                    nodeState.status = 'error';
+                    nodeState.error = error.message;
+                }
+                workflowState.executionState = 'error';
+                workflowState.failedNodeId = nodeId;
+                workflowState.currentNodeId = null;
+                workflowState.version = (workflowState.version ?? 0) + 1;
+                emitWorkflowStreamingState(true);
+                void updateWorkflowJob(provider, jobId, workflowState);
+            },
+            onToken: (nodeId, token) => {
+                if (!token) return;
+                const nodeState = workflowState.nodeStates[nodeId];
+                if (nodeState) {
+                    nodeState.streamingText = (nodeState.streamingText || '') + token;
                     workflowState.version = (workflowState.version ?? 0) + 1;
-                    emitWorkflowStreamingState(true);
-                    void updateWorkflowJob(provider, jobId, workflowState);
-                },
-                onNodeFinish: (nodeId: string, output: string) => {
-                    const nodeState = workflowState.nodeStates[nodeId];
-                    if (nodeState) {
-                        nodeState.status = 'completed';
-                        nodeState.output = output;
-                        nodeState.streamingText = '';
-                    }
-                    workflowState.currentNodeId = null;
-                    workflowState.version = (workflowState.version ?? 0) + 1;
-                    emitWorkflowStreamingState(true);
-                    void updateWorkflowJob(provider, jobId, workflowState);
-                },
-                onNodeError: (nodeId: string, error: Error) => {
-                    const nodeState = workflowState.nodeStates[nodeId];
-                    if (nodeState) {
-                        nodeState.status = 'error';
-                        nodeState.error = error.message;
-                    }
-                    workflowState.executionState = 'error';
-                    workflowState.failedNodeId = nodeId;
-                    workflowState.currentNodeId = null;
-                    workflowState.version = (workflowState.version ?? 0) + 1;
-                    emitWorkflowStreamingState(true);
-                    void updateWorkflowJob(provider, jobId, workflowState);
-                },
-                onToken: (nodeId: string, token: string) => {
-                    if (!token) return;
-                    const nodeState = workflowState.nodeStates[nodeId];
-                    if (nodeState) {
-                        nodeState.streamingText =
-                            (nodeState.streamingText || '') + token;
-                        workflowState.version = (workflowState.version ?? 0) + 1;
-                        emitWorkflowStreamingState();
-                    }
-                },
-                onWorkflowToken: (token: string) => {
-                    workflowState.finalOutput = (workflowState.finalOutput || '') + token;
-                    workflowState.executionState = 'running';
-                    workflowState.version = (workflowState.version ?? 0) + 1;
-                    chunks += 1;
-                    emitJobDelta(jobId, token, {
-                        contentLength: workflowState.finalOutput.length,
-                        chunksReceived: chunks,
-                        workflow_state: workflowState,
-                    });
-                    void updateWorkflowJob(provider, jobId, workflowState, token, chunks);
-                },
-            } as any
-        )) as
-            | { finalOutput?: string; output?: string }
-            | null
-            | undefined;
+                    emitWorkflowStreamingState();
+                }
+            },
+            onWorkflowToken: (token) => {
+                workflowState.finalOutput += token;
+                workflowState.executionState = 'running';
+                workflowState.version = (workflowState.version ?? 0) + 1;
+                chunks += 1;
+                emitJobDelta(jobId, token, {
+                    contentLength: workflowState.finalOutput.length,
+                    chunksReceived: chunks,
+                    workflow_state: workflowState,
+                });
+                void updateWorkflowJob(provider, jobId, workflowState, token, chunks);
+            },
+        };
+
+        const executionResult = await adapter.execute(
+            workflowForExecution,
+            executionInput,
+            executionCallbacks
+        );
 
         const resultFinalOutput =
-            typeof executionResult?.finalOutput === 'string' &&
             executionResult.finalOutput.length > 0
                 ? executionResult.finalOutput
-                : typeof executionResult?.output === 'string' &&
-                    executionResult.output.length > 0
+                : executionResult.output.length > 0
                   ? executionResult.output
                   : '';
         if (
@@ -324,10 +335,10 @@ async function runWorkflowInBackground(
             );
         }
 
-        await provider.completeJob(jobId, workflowState.finalOutput ?? '');
+        await provider.completeJob(jobId, workflowState.finalOutput);
         emitJobStatus(jobId, 'complete', {
-            content: workflowState.finalOutput ?? '',
-            contentLength: (workflowState.finalOutput ?? '').length,
+            content: workflowState.finalOutput,
+            contentLength: workflowState.finalOutput.length,
             chunksReceived: chunks,
             completedAt: Date.now(),
             workflow_state: workflowState,
@@ -347,8 +358,8 @@ async function runWorkflowInBackground(
             workflowState.version = (workflowState.version ?? 0) + 1;
             await updateWorkflowJob(provider, jobId, workflowState);
             emitJobStatus(jobId, 'aborted', {
-                content: workflowState.finalOutput ?? '',
-                contentLength: (workflowState.finalOutput ?? '').length,
+                content: workflowState.finalOutput,
+                contentLength: workflowState.finalOutput.length,
                 chunksReceived: chunks,
                 completedAt: Date.now(),
                 workflow_state: workflowState,
@@ -360,8 +371,8 @@ async function runWorkflowInBackground(
         workflowState.version = (workflowState.version ?? 0) + 1;
         await updateWorkflowJob(provider, jobId, workflowState);
         emitJobStatus(jobId, 'error', {
-            content: workflowState.finalOutput ?? '',
-            contentLength: (workflowState.finalOutput ?? '').length,
+            content: workflowState.finalOutput,
+            contentLength: workflowState.finalOutput.length,
             chunksReceived: chunks,
             completedAt: Date.now(),
             error: error instanceof Error ? error.message : String(error),

@@ -62,7 +62,7 @@ function resolveProviderLocalInstallSpec(
     let cursor = instanceDir;
     let localProviderDir: string | null = null;
 
-    while (true) {
+    for (;;) {
         const candidate = resolve(cursor, '..', packageName);
         const providerPackageJson = resolve(candidate, 'package.json');
         if (existsSync(providerPackageJson)) {
