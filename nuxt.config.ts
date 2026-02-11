@@ -22,6 +22,10 @@ export default defineNuxtConfig({
         // Server-only env variables
         openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
     },
+    // Explicitly disable type checking during build to save memory (CI runs it separately)
+    typescript: {
+        typeCheck: false,
+    },
     experimental: {
         defaults: {
             nuxtLink: {
@@ -34,11 +38,16 @@ export default defineNuxtConfig({
             },
         },
     },
+    // Explicitly disable sourcemaps for all builds to save memory
+    sourcemap: {
+        server: false,
+        client: false,
+    },
     devtools: {
-        enabled: true,
+        enabled: process.env.NODE_ENV !== 'production',
 
         timeline: {
-            enabled: true,
+            enabled: process.env.NODE_ENV !== 'production',
         },
     },
     modules: ['@nuxt/ui', '@nuxt/fonts', '@vite-pwa/nuxt'],
@@ -329,6 +338,7 @@ export default defineNuxtConfig({
             format: 'es',
         },
         build: {
+            sourcemap: false, // Disable sourcemaps to save memory during build
             rollupOptions: {
                 output: {
                     manualChunks(id) {
