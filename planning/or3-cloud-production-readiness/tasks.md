@@ -11,16 +11,16 @@
 ### 1. Fix or3-provider-fs critical bugs
 > Requirements: 1.1, 1.2, 8.1, 8.2, 8.3
 
-- [ ] 1.1 Fix `resolveFsObjectPath` to accept `sha256:<hex>` format — strip prefix, validate hex-only
-- [ ] 1.2 Add SHA-256 integrity verification after upload body is received (compare actual digest to claimed hash)
-- [ ] 1.3 Implement real GC — walk blob directory, check hash references, delete orphans with retention window
-- [ ] 1.4 Add startup config validation — fail fast if `OR3_STORAGE_FS_ROOT` or `OR3_STORAGE_FS_TOKEN_SECRET` is missing
-- [ ] 1.5 Bind presigned URLs to session identity — verify user matches on upload/download, not just token signature
-- [ ] 1.6 Add server-side file size enforcement in upload handler (not just client-side)
-- [ ] 1.7 Fix TTL parsing — validate bounds, reject NaN/0/negative values
-- [ ] 1.8 Write regression tests for hash format handling (both `sha256:<hex>` and bare hex)
-- [ ] 1.9 Write integration tests for upload → integrity verify → download → GC cycle
-- [ ] 1.10 Write tests for startup validation failure modes
+- [x] 1.1 Fix `resolveFsObjectPath` to accept `sha256:<hex>` format — strip prefix, validate hex-only
+- [x] 1.2 Add SHA-256 integrity verification after upload body is received (compare actual digest to claimed hash)
+- [x] 1.3 Implement real GC — walk blob directory, check hash references, delete orphans with retention window
+- [x] 1.4 Add startup config validation — fail fast if `OR3_STORAGE_FS_ROOT` or `OR3_STORAGE_FS_TOKEN_SECRET` is missing
+- [x] 1.5 Bind presigned URLs to session identity — verify user matches on upload/download, not just token signature
+- [x] 1.6 Add server-side file size enforcement in upload handler (not just client-side)
+- [x] 1.7 Fix TTL parsing — validate bounds, reject NaN/0/negative values
+- [x] 1.8 Write regression tests for hash format handling (both `sha256:<hex>` and bare hex)
+- [x] 1.9 Write integration tests for upload → integrity verify → download → GC cycle
+- [x] 1.10 Write tests for startup validation failure modes
 
 ### 2. Fix or3-provider-sqlite critical bugs
 > Requirements: 1.3, 1.4, 1.5

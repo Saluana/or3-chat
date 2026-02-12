@@ -122,7 +122,7 @@ export function getSyncGatewayAdapter(
  */
 export function getActiveSyncGatewayAdapter(): SyncGatewayAdapter | null {
     const config = useRuntimeConfig();
-    const providerId = config.public.sync.provider;
+    const providerId = config.public.sync?.provider ?? config.sync?.provider;
     if (!providerId) return null;
     return getSyncGatewayAdapter(providerId);
 }
