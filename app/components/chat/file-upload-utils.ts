@@ -3,12 +3,65 @@ import { createOrRefFile } from '~/db/files';
 import { useHooks } from '~/core/hooks/useHooks';
 import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
 
-export const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB
+export const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB (default, can be overridden via runtime config)
+
+// Default allowed MIME types (can be overridden via runtime config)
+const DEFAULT_ALLOWED_MIME_TYPES = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+    'image/svg+xml',
+    'image/avif',
+    'image/heic',
+    'image/heif',
+    'image/bmp',
+    'image/tiff',
+    'image/x-icon',
+    'application/pdf'
+];
+
+/**
+ * Get the maximum file size in bytes from runtime config
+ */
+export function getMaxFileSizeBytes(): number {
+    try {
+        const config = useRuntimeConfig();
+        return config.public?.maxFileSizeBytes || MAX_FILE_BYTES;
+    } catch {
+        // Runtime config not available (e.g., in tests)
+        return MAX_FILE_BYTES;
+    }
+}
+
+/**
+ * Get allowed MIME types from runtime config
+ */
+export function getAllowedMimeTypes(): string[] {
+    try {
+        const config = useRuntimeConfig();
+        const mimeString = config.public?.allowedMimeTypes || '';
+        if (mimeString) {
+            return mimeString.split(',').map(m => m.trim()).filter(Boolean);
+        }
+    } catch {
+        // Runtime config not available (e.g., in tests or server-side)
+    }
+    return DEFAULT_ALLOWED_MIME_TYPES;
+}
 
 export function classifyKind(mime: string): 'image' | 'pdf' | null {
     if (mime.startsWith('image/')) return 'image';
     if (mime === 'application/pdf') return 'pdf';
     return null;
+}
+
+/**
+ * Check if a MIME type is allowed based on runtime config
+ */
+export function isMimeTypeAllowed(mime: string): boolean {
+    const allowed = getAllowedMimeTypes();
+    return allowed.includes(mime);
 }
 
 export function validateFile(
@@ -17,6 +70,16 @@ export function validateFile(
     | { ok: true; kind: 'image' | 'pdf' }
     | { ok: false; code: 'ERR_FILE_VALIDATION'; message: string } {
     const mime = file.type || '';
+    
+    // Check if MIME type is in the allowlist
+    if (!isMimeTypeAllowed(mime)) {
+        return {
+            ok: false,
+            code: 'ERR_FILE_VALIDATION',
+            message: 'Unsupported file type',
+        };
+    }
+    
     const kind = classifyKind(mime);
     if (!kind)
         return {
@@ -24,12 +87,16 @@ export function validateFile(
             code: 'ERR_FILE_VALIDATION',
             message: 'Unsupported file type',
         };
-    if (file.size > MAX_FILE_BYTES)
+    
+    const maxSize = getMaxFileSizeBytes();
+    if (file.size > maxSize) {
+        const maxMB = Math.round(maxSize / (1024 * 1024));
         return {
             ok: false,
             code: 'ERR_FILE_VALIDATION',
-            message: 'File too large (max 20MB)',
+            message: `File too large (max ${maxMB}MB)`,
         };
+    }
     return { ok: true, kind };
 }
 

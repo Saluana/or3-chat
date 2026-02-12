@@ -11,8 +11,6 @@
  * Reqs: 1 (env-or-client key), 2 (streaming + abort), 4 (no logging keys)
  */
 
-const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
-
 export default defineEventHandler(async (event) => {
     // Read request body
     let body: Record<string, unknown>;
@@ -25,6 +23,7 @@ export default defineEventHandler(async (event) => {
 
     // Req 1, 4: Select API key: env > Authorization header. Never log keys.
     const config = useRuntimeConfig(event);
+    const OR_URL = config.openrouterUrl || 'https://openrouter.ai/api/v1/chat/completions';
     const authHeader = getHeader(event, 'authorization');
     const clientKey = authHeader?.startsWith('Bearer ')
         ? authHeader.slice(7)

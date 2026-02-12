@@ -21,6 +21,14 @@ export default defineNuxtConfig({
     runtimeConfig: {
         // Server-only env variables
         openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
+        openrouterUrl: process.env.OPENROUTER_URL || 'https://openrouter.ai/api/v1/chat/completions',
+        public: {
+            // Client-side accessible config
+            // MIME types allowlist (comma-separated)
+            allowedMimeTypes: process.env.NUXT_PUBLIC_ALLOWED_MIME_TYPES || 'image/jpeg,image/png,image/webp,image/gif,image/svg+xml,image/avif,image/heic,image/heif,image/bmp,image/tiff,image/x-icon,application/pdf',
+            // Max file size in bytes (default 20MB)
+            maxFileSizeBytes: parseInt(process.env.NUXT_PUBLIC_MAX_FILE_SIZE_BYTES || '20971520', 10),
+        }
     },
     experimental: {
         defaults: {
