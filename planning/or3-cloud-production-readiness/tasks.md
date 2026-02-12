@@ -71,38 +71,38 @@
 ### 5. Add health check endpoint
 > Requirements: 3.1
 
-- [ ] 5.1 Create `server/api/health.get.ts` — return `{ status, timestamp, uptime }`
-- [ ] 5.2 Add optional deep mode (`?deep=true`) that checks provider connectivity
-- [ ] 5.3 Ensure endpoint requires no authentication
-- [ ] 5.4 Write tests for health endpoint response shape and deep mode
+- [x] 5.1 Create `server/api/health.get.ts` — return `{ status, timestamp, uptime }`
+- [x] 5.2 Add optional deep mode (`?deep=true`) that checks provider connectivity
+- [x] 5.3 Ensure endpoint requires no authentication
+- [x] 5.4 Write tests for health endpoint response shape and deep mode
 
 ### 6. Implement graceful shutdown
 > Requirements: 4.1
 
-- [ ] 6.1 Create Nitro plugin `server/plugins/graceful-shutdown.ts`
-- [ ] 6.2 Register SIGTERM + SIGINT handlers
-- [ ] 6.3 Log active background jobs count on shutdown signal
-- [ ] 6.4 Implement configurable drain timeout (default 15s)
-- [ ] 6.5 Clean up admin rate limit interval (`clearInterval` / `.unref()`)
+- [x] 6.1 Create Nitro plugin `server/plugins/graceful-shutdown.ts`
+- [x] 6.2 Register SIGTERM + SIGINT handlers
+- [x] 6.3 Log active background jobs count on shutdown signal
+- [x] 6.4 Implement configurable drain timeout (default 15s)
+- [x] 6.5 Clean up admin rate limit interval (`clearInterval` / `.unref()`)
 - [ ] 6.6 Test: server accepts no new connections after signal
 - [ ] 6.7 Test: in-flight requests complete before exit
 
 ### 7. Add structured error handling
 > Requirements: 5.1
 
-- [ ] 7.1 Create Nitro error handler plugin (`server/plugins/error-handler.ts`)
-- [ ] 7.2 Log errors as structured JSON (path, method, status, timestamp, message)
-- [ ] 7.3 Exclude stack traces from HTTP responses in production
-- [ ] 7.4 Remove stray `console.log` calls in server code (logout handler, admin rate limit cleanup, JWT auto-gen)
+- [x] 7.1 Create Nitro error handler plugin (`server/plugins/error-handler.ts`)
+- [x] 7.2 Log errors as structured JSON (path, method, status, timestamp, message)
+- [x] 7.3 Exclude stack traces from HTTP responses in production
+- [x] 7.4 Remove stray `console.log` calls in server code (logout handler, admin rate limit cleanup, JWT auto-gen)
 - [ ] 7.5 Test: 500 errors are logged with metadata, response is sanitized
 
 ### 8. Add Cache-Control to sensitive endpoints
 > Requirements: 6.1
 
-- [ ] 8.1 Create `setNoCacheHeaders(event)` utility in `server/utils/headers.ts`
-- [ ] 8.2 Apply to sync push/pull endpoints
-- [ ] 8.3 Apply to storage presign/upload/download endpoints
-- [ ] 8.4 Verify auth session endpoint already has it (it does — just confirm)
+- [x] 8.1 Create `setNoCacheHeaders(event)` utility in `server/utils/headers.ts`
+- [x] 8.2 Apply to sync push/pull endpoints
+- [x] 8.3 Apply to storage presign/upload/download endpoints
+- [x] 8.4 Verify auth session endpoint already has it (it does — just confirm)
 
 ---
 
@@ -111,11 +111,11 @@
 ### 9. Admin auth hardening
 > Requirements: 7.1, 7.2, 7.3, 7.4
 
-- [ ] 9.1 Refactor admin login handler — always run bcrypt (even on username miss) using dummy hash
-- [ ] 9.2 Ensure login 401 response is identical for wrong username vs wrong password
-- [ ] 9.3 Update `grant.post.ts` to require `superAdminOnly: true`
-- [ ] 9.4 Update `revoke.post.ts` to require `superAdminOnly: true`
-- [ ] 9.5 Hard-fail in production when `OR3_ADMIN_JWT_SECRET` is not set (no auto-gen)
+- [x] 9.1 Refactor admin login handler — always run bcrypt (even on username miss) using dummy hash
+- [x] 9.2 Ensure login 401 response is identical for wrong username vs wrong password
+- [x] 9.3 Update `grant.post.ts` to require `superAdminOnly: true`
+- [x] 9.4 Update `revoke.post.ts` to require `superAdminOnly: true`
+- [x] 9.5 Hard-fail in production when `OR3_ADMIN_JWT_SECRET` is not set (no auto-gen)
 - [ ] 9.6 Audit all admin endpoints — classify read-only vs mutation, apply super admin where needed
 - [ ] 9.7 Document admin endpoint classification and role requirements
 - [ ] 9.8 Write tests: constant-time login (both failure modes same timing/message)
@@ -125,18 +125,18 @@
 ### 10. Sync endpoint hardening
 > Requirements: 9.1, 9.2
 
-- [ ] 10.1 Change sync GC endpoints to require `workspace.admin` permission (not `workspace.write`)
-- [ ] 10.2 Add rate limiting to sync GC endpoints
-- [ ] 10.3 Gate `OR3_SYNC_BYPASS_RATE_LIMIT` to `NODE_ENV === 'development'` only
+- [x] 10.1 Change sync GC endpoints to require `workspace.admin` permission (not `workspace.write`)
+- [x] 10.2 Add rate limiting to sync GC endpoints
+- [x] 10.3 Gate `OR3_SYNC_BYPASS_RATE_LIMIT` to `NODE_ENV === 'development'` only
 - [ ] 10.4 Write tests for GC authorization escalation
 - [ ] 10.5 Write tests for GC rate limiting
 
 ### 11. Auth auto-provisioning control
 > Requirements: 10.1
 
-- [ ] 11.1 Add `OR3_AUTH_AUTO_PROVISION` env var (default `true`)
-- [ ] 11.2 When `false`, `resolveSession` returns "unauthorized" for unknown provider users
-- [ ] 11.3 Return clear "registration disabled" error message
+- [x] 11.1 Add `OR3_AUTH_AUTO_PROVISION` env var (default `true`)
+- [x] 11.2 When `false`, `resolveSession` returns "unauthorized" for unknown provider users
+- [x] 11.3 Return clear "registration disabled" error message
 - [ ] 11.4 Document the env var and its behavior
 - [ ] 11.5 Write tests for both provisioning modes
 
@@ -147,10 +147,10 @@
 ### 12. Quick production fixes
 > Requirements: 11, 12, 20
 
-- [ ] 12.1 Gate Nuxt DevTools on `NODE_ENV !== 'production'` in `nuxt.config.ts`
-- [ ] 12.2 Add `Access-Control-Max-Age: 3600` to CORS preflight response
-- [ ] 12.3 Fix password validation consistency — wizard minimum to 12 chars (match admin)
-- [ ] 12.4 Remove dead code: circuit breaker unreachable `return false`, unused `trackAuthorization` call
+- [x] 12.1 Gate Nuxt DevTools on `NODE_ENV !== 'production'` in `nuxt.config.ts`
+- [x] 12.2 Add `Access-Control-Max-Age: 3600` to CORS preflight response
+- [x] 12.3 Fix password validation consistency — wizard minimum to 12 chars (match admin)
+- [x] 12.4 Remove dead code: circuit breaker unreachable `return false`, unused `trackAuthorization` call
 
 ### 13. Configurable hardcoded values
 > Requirements: 15

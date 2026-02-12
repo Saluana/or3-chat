@@ -270,6 +270,52 @@ describe('OutboxManager', () => {
         ).toBe(false);
     });
 
+    it('defers retries on transient upstream 503 without incrementing attempts', async () => {
+        const pendingOp = createPendingOp({
+            id: 'pending-upstream-unavailable',
+            stamp: {
+                deviceId: 'device-1',
+                opId: 'op-upstream-unavailable',
+                hlc: '0000000000001:0000:node',
+                clock: 1,
+            },
+        });
+        const pendingOps = createPendingOpsTable([pendingOp]);
+        const db = createMockDb({ pending_ops: pendingOps });
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async () => {
+            const err = new Error('Service unavailable') as Error & {
+                status: number;
+                retryAfterMs: number;
+            };
+            err.status = 503;
+            err.retryAfterMs = 3000;
+            throw err;
+        });
+
+        const outbox = new OutboxManager(
+            db as any,
+            provider,
+            { workspaceId: 'workspace-1' },
+            { retryDelays: [250, 1000] }
+        );
+
+        vi.spyOn(Date, 'now').mockReturnValue(2000);
+
+        const didWork = await outbox.flush();
+
+        expect(didWork).toBe(false);
+        const stored = pendingOps.__rows.get('pending-upstream-unavailable');
+        expect(stored?.status).toBe('pending');
+        expect(stored?.attempts).toBe(0);
+        expect(stored?.nextAttemptAt).toBe(5000);
+        expect(
+            hookState.doAction.mock.calls.some(
+                (call) => call[0] === 'sync.error:action'
+            )
+        ).toBe(false);
+    });
+
     it('treats payload-too-large errors as permanent failures', async () => {
         const pendingOp = createPendingOp({
             id: 'pending-oversized',

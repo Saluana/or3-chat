@@ -217,6 +217,36 @@ export async function resolveSessionContext(
             );
         }
 
+        // Check if auto-provisioning is enabled
+        const autoProvision = (config.auth as { autoProvision?: boolean } | undefined)?.autoProvision ?? true;
+        
+        if (!autoProvision) {
+            if (!store.getUser) {
+                throw createError({
+                    statusCode: 500,
+                    statusMessage:
+                        'Auth store must implement getUser when OR3_AUTH_AUTO_PROVISION=false',
+                });
+            }
+
+            // Try to get existing user without creating
+            const existingUser = await store.getUser({
+                provider: providerSession.provider,
+                providerUserId: providerSession.user.id,
+            });
+            
+            if (!existingUser) {
+                console.warn('[auth:session] Auto-provisioning disabled, rejecting unknown user', {
+                    provider: providerSession.provider,
+                    userId: providerSession.user.id,
+                });
+                throw createError({
+                    statusCode: 403,
+                    statusMessage: 'Registration is currently disabled. Please contact an administrator.',
+                });
+            }
+        }
+
         // Get or create user
         const { userId } = await store.getOrCreateUser({
             provider: providerSession.provider,

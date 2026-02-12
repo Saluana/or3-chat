@@ -8,11 +8,13 @@ import {
 
 const readBodyMock = vi.fn();
 const setResponseHeaderMock = vi.fn();
+const setHeaderMock = vi.fn();
 
 vi.mock('h3', async () => ({
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,
     setResponseHeader: setResponseHeaderMock,
+    setHeader: setHeaderMock,
     createError: (opts: { statusCode: number; statusMessage?: string }) => {
         const err = new Error(opts.statusMessage ?? 'Error') as Error & {
             statusCode: number;
@@ -93,6 +95,7 @@ describe('presign expiry handling', () => {
     beforeEach(() => {
         readBodyMock.mockReset();
         setResponseHeaderMock.mockReset();
+        setHeaderMock.mockReset();
         mockStorageAdapter.presignUpload.mockReset();
         mockStorageAdapter.presignDownload.mockReset();
     });

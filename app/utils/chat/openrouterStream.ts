@@ -157,7 +157,7 @@ export async function* openRouterStream(params: {
         };
     };
     const allowClientFallback = hasApiKey === true;
-    const isSsrAuthEnabled = runtimeConfig.public?.ssrAuthEnabled === true;
+    const isSsrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;
     const forceServerRoute = Boolean(
         isSsrAuthEnabled && !allowClientFallback
     );
@@ -221,24 +221,15 @@ export async function* openRouterStream(params: {
                 );
             }
         } catch (error) {
-            if (
-                error instanceof Error &&
-                error.message.startsWith('OpenRouter proxy error')
-            ) {
-                throw error;
-            }
             if (forceServerRoute) {
                 throw error instanceof Error
                     ? error
                     : new Error('OpenRouter server route failed in SSR mode');
             }
-            // Server route unavailable (404, network error, etc.); mark as unavailable and fall back
+            // Server route unavailable (404, network error, transient proxy errors, etc.);
+            // mark as unavailable and fall back to direct API when allowed.
             setServerRouteAvailable(false);
         }
-    }
-
-    if (forceServerRoute) {
-        throw new Error('OpenRouter server route required in SSR mode');
     }
 
     if (!hasApiKey) {

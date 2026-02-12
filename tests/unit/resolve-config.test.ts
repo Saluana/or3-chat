@@ -197,6 +197,31 @@ describe('buildOr3CloudConfigFromEnv', () => {
         expect(config.auth.enabled).toBe(false);
         expect(config.sync.enabled).toBe(false);
         expect(config.storage.enabled).toBe(false);
+        expect(config.auth.autoProvision).toBe(true);
+    });
+
+    it('maps auth provisioning controls from env', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_GUEST_ACCESS_ENABLED: 'true',
+            OR3_AUTH_AUTO_PROVISION: 'false',
+            OR3_SESSION_PROVISIONING_FAILURE: 'service-unavailable',
+            NODE_ENV: 'development',
+        });
+
+        expect(config.auth.guestAccessEnabled).toBe(true);
+        expect(config.auth.autoProvision).toBe(false);
+        expect(config.auth.sessionProvisioningFailure).toBe('service-unavailable');
+    });
+
+    it('ignores invalid provisioning failure mode values', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_SESSION_PROVISIONING_FAILURE: 'invalid',
+            NODE_ENV: 'development',
+        });
+
+        expect(config.auth.sessionProvisioningFailure).toBeUndefined();
     });
 
     it('enables auth when SSR_AUTH_ENABLED=true', () => {

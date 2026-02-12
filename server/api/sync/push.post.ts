@@ -22,6 +22,7 @@ import {
     recordSyncRequest,
     getSyncRateLimitStats,
 } from '../../utils/sync/rate-limiter';
+import { setNoCacheHeaders } from '../../utils/headers';
 
 /**
  * POST /api/sync/push
@@ -43,6 +44,9 @@ export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isSyncEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
+
+    // Prevent caching of sensitive sync data
+    setNoCacheHeaders(event);
 
     const body: unknown = await readBody(event);
     const parsed = PushBatchSchema.safeParse(body);

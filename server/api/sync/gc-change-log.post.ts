@@ -29,7 +29,8 @@ const GcRequestSchema = z.object({
  * Maintenance task for Sync Log.
  *
  * Behavior:
- * - Requires `workspace.write` permission.
+ * - Requires `workspace.settings.manage` permission (elevated from workspace.write for security).
+ * - Rate limited to prevent abuse.
  * - Dispatches to registered SyncGatewayAdapter.
  */
 export default defineEventHandler(async (event) => {
@@ -44,10 +45,24 @@ export default defineEventHandler(async (event) => {
     }
 
     const session = await resolveSessionContext(event);
-    requireCan(session, 'workspace.write', {
+    if (!session.authenticated || !session.user || !session.workspace) {
+        throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
+    }
+
+    requireCan(session, 'workspace.settings.manage', {
         kind: 'workspace',
         id: parsed.data.scope.workspaceId,
     });
+
+    // Rate limiting for GC operations (even admins need limits)
+    const { checkSyncRateLimit, recordSyncRequest } = await import('../../utils/sync/rate-limiter');
+    const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:gc');
+    if (!rateLimitResult.allowed) {
+        throw createError({
+            statusCode: 429,
+            statusMessage: 'Too many GC requests. Please wait before retrying.',
+        });
+    }
 
     // Get sync gateway adapter from registry
     const adapter = getActiveSyncGatewayAdapter();
@@ -62,6 +77,9 @@ export default defineEventHandler(async (event) => {
 
     // Dispatch to adapter
     const result = await adapter.gcChangeLog(event, parsed.data);
+
+    // Record successful request for rate limiting
+    recordSyncRequest(session.user.id, 'sync:gc');
 
     return result;
 });

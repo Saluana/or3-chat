@@ -29,7 +29,7 @@ describe('or3 cloud wizard dry-run flows', () => {
         await api.submitAnswers(session.id, {
             basicAuthJwtSecret: 'jwt-secret-jwt-secret-jwt-secret-1234',
             basicAuthBootstrapEmail: 'admin@example.com',
-            basicAuthBootstrapPassword: 'my-password-123',
+            basicAuthBootstrapPassword: 'MyPassword123',
             fsTokenSecret: 'fs-secret-fs-secret-fs-secret-fs-secret',
             fsRoot: '/tmp/or3-storage',
         });

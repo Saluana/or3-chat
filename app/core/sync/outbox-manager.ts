@@ -310,12 +310,12 @@ export class OutboxManager {
                     circuitBreaker.recordFailure();
                 }
             } catch (error) {
-                const rateLimitDelayMs = this.getRateLimitDelayMs(error);
-                if (rateLimitDelayMs !== null) {
-                    await this.releaseBatchAfterRateLimit(batch, rateLimitDelayMs);
+                const deferredRetryDelayMs = this.getDeferredRetryDelayMs(error);
+                if (deferredRetryDelayMs !== null) {
+                    await this.releaseBatchForDeferredRetry(batch, deferredRetryDelayMs);
                     this.providerRateLimitedUntil = Math.max(
                         this.providerRateLimitedUntil,
-                        Date.now() + rateLimitDelayMs
+                        Date.now() + deferredRetryDelayMs
                     );
                     await hooks.doAction('sync.push:action:after', {
                         scope: this.scope,
@@ -323,10 +323,10 @@ export class OutboxManager {
                         failCount: 0,
                     });
                     if (import.meta.dev) {
-                        console.warn('[OutboxManager] Push deferred by rate limit', {
+                        console.warn('[OutboxManager] Push deferred by transient upstream status', {
                             scope: this.scope,
                             batchSize: batch.length,
-                            retryAfterMs: rateLimitDelayMs,
+                            retryAfterMs: deferredRetryDelayMs,
                         });
                     }
                     return false;
@@ -492,7 +492,7 @@ export class OutboxManager {
         return false;
     }
 
-    private getRateLimitDelayMs(error: unknown): number | null {
+    private getDeferredRetryDelayMs(error: unknown): number | null {
         if (!error || typeof error !== 'object') return null;
         const candidate = error as {
             status?: unknown;
@@ -500,7 +500,8 @@ export class OutboxManager {
             message?: unknown;
         };
 
-        if (candidate.status !== 429) return null;
+        const status = typeof candidate.status === 'number' ? candidate.status : null;
+        if (status === null || ![429, 502, 503, 504].includes(status)) return null;
 
         if (
             typeof candidate.retryAfterMs === 'number' &&
@@ -532,7 +533,7 @@ export class OutboxManager {
         return message.toLowerCase().includes('rate limit');
     }
 
-    private async releaseBatchAfterRateLimit(batch: PendingOp[], retryAfterMs: number): Promise<void> {
+    private async releaseBatchForDeferredRetry(batch: PendingOp[], retryAfterMs: number): Promise<void> {
         const nextAttemptAt = Date.now() + retryAfterMs;
         await this.db.pending_ops.bulkPut(
             batch.map((op) => ({

@@ -108,11 +108,15 @@ async function fetchCoinGeckoPrice(
         );
     }
 
-    const data = (await response.json()) as Record<
-        string,
-        Record<string, number>
-    >;
-    const price = data?.[coinId]?.[vsCurrency];
+    const payload: unknown = await response.json();
+    if (!payload || typeof payload !== 'object') {
+        throw new Error('CoinGecko returned an invalid payload.');
+    }
+    const coinData = (payload as Record<string, unknown>)[coinId];
+    if (!coinData || typeof coinData !== 'object') {
+        throw new Error(`No price found for "${coinId}" in "${vsCurrency}".`);
+    }
+    const price = (coinData as Record<string, unknown>)[vsCurrency];
     if (typeof price !== 'number') {
         throw new Error(
             `No price found for "${coinId}" in "${vsCurrency}".`

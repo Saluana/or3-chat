@@ -66,10 +66,10 @@ export const create = mutation({
             content: '',
             chunks_received: 0,
             ...(args.tool_calls !== undefined
-                ? { tool_calls: args.tool_calls }
+                ? { tool_calls: args.tool_calls as unknown }
                 : {}),
             ...(args.workflow_state !== undefined
-                ? { workflow_state: args.workflow_state }
+                ? { workflow_state: args.workflow_state as unknown }
                 : {}),
             started_at: Date.now(),
         });
@@ -115,8 +115,8 @@ export const get = query({
             startedAt: job.started_at,
             completedAt: job.completed_at,
             error: job.error,
-            tool_calls: job.tool_calls,
-            workflow_state: job.workflow_state,
+            tool_calls: job.tool_calls as unknown,
+            workflow_state: job.workflow_state as unknown,
         };
     },
 });
@@ -151,10 +151,10 @@ export const update = mutation({
             patch.chunks_received = args.chunks_received;
         }
         if (args.tool_calls !== undefined) {
-            patch.tool_calls = args.tool_calls;
+            patch.tool_calls = args.tool_calls as unknown;
         }
         if (args.workflow_state !== undefined) {
-            patch.workflow_state = args.workflow_state;
+            patch.workflow_state = args.workflow_state as unknown;
         }
 
         if (Object.keys(patch).length > 0) {
@@ -178,7 +178,7 @@ export const complete = mutation({
     },
     handler: async (ctx, args) => {
         const job = await ctx.db.get(args.job_id);
-        if (!job) return;
+        if (!job || job.status !== 'streaming') return;
 
         const patch: Record<string, unknown> = {
             status: 'complete',
@@ -186,10 +186,10 @@ export const complete = mutation({
             completed_at: Date.now(),
         };
         if (args.tool_calls !== undefined) {
-            patch.tool_calls = args.tool_calls;
+            patch.tool_calls = args.tool_calls as unknown;
         }
         if (args.workflow_state !== undefined) {
-            patch.workflow_state = args.workflow_state;
+            patch.workflow_state = args.workflow_state as unknown;
         }
         await ctx.db.patch(args.job_id, patch);
     },
@@ -208,7 +208,7 @@ export const fail = mutation({
     },
     handler: async (ctx, args) => {
         const job = await ctx.db.get(args.job_id);
-        if (!job) return;
+        if (!job || job.status !== 'streaming') return;
 
         await ctx.db.patch(args.job_id, {
             status: 'error',

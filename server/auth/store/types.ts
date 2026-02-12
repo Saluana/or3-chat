@@ -24,6 +24,24 @@ import type { WorkspaceRole } from '~/core/hooks/hook-types';
 export interface AuthWorkspaceStore {
     /**
      * Purpose:
+     * Resolves an existing internal user without provisioning a new record.
+     *
+     * @returns Existing internal user metadata, or null when no mapping exists.
+     */
+    getUser?(input: {
+        provider: string;
+        providerUserId: string;
+    }): Promise<
+        | {
+              userId: string;
+              email?: string;
+              displayName?: string;
+          }
+        | null
+    >;
+
+    /**
+     * Purpose:
      * Resolves an internal user ID from an external provider's identity.
      * Must be idempotent; creates a new user if one does not exist.
      *

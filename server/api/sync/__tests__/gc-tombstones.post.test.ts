@@ -87,6 +87,11 @@ describe('POST /api/sync/gc-tombstones', () => {
         });
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 403 });
+        expect(requireCanMock).toHaveBeenCalledWith(
+            expect.objectContaining({ authenticated: true }),
+            'workspace.settings.manage',
+            { kind: 'workspace', id: 'ws-1' }
+        );
     });
 
     it('returns 500 when adapter is missing', async () => {

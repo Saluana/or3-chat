@@ -43,6 +43,8 @@ export const SYNC_RATE_LIMITS: Record<string, RateLimitConfig> = {
     'sync:pull': { windowMs: 60_000, maxRequests: 120 },
     // Cursor updates: 60 requests per minute
     'sync:cursor': { windowMs: 60_000, maxRequests: 60 },
+    // GC operations: 10 requests per minute (low limit for admin-only operations)
+    'sync:gc': { windowMs: 60_000, maxRequests: 10 },
 } as const;
 
 /**
@@ -91,7 +93,8 @@ export const ALL_RATE_LIMITS = {
 const MAX_ENTRY_AGE_MS = 10 * 60 * 1000;
 
 function isRateLimitingDisabled(): boolean {
-    return process.env.DISABLE_RATE_LIMIT === '1';
+    // Only allow rate limit bypass in development
+    return process.env.NODE_ENV !== 'production' && process.env.DISABLE_RATE_LIMIT === '1';
 }
 
 /**

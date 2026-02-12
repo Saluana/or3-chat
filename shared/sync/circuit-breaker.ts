@@ -60,8 +60,6 @@ export class SyncCircuitBreaker {
         if (this.probeInFlight) return false;
         this.probeInFlight = true;
         return true;
-
-        return false;
     }
 
     /**

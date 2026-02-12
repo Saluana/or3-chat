@@ -3,11 +3,13 @@ import type { H3Event } from 'h3';
 
 const readBodyMock = vi.fn();
 const setResponseHeaderMock = vi.fn();
+const setHeaderMock = vi.fn();
 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,
     setResponseHeader: setResponseHeaderMock,
+    setHeader: setHeaderMock,
     createError: (opts: { statusCode: number; statusMessage?: string }) => {
         const err = new Error(opts.statusMessage ?? 'Error') as Error & {
             statusCode: number;
@@ -70,6 +72,7 @@ describe('POST /api/sync/pull', () => {
     beforeEach(() => {
         readBodyMock.mockReset();
         setResponseHeaderMock.mockReset();
+        setHeaderMock.mockReset();
         resolveSessionContextMock.mockReset();
         requireCanMock.mockReset();
         isSsrAuthEnabledMock.mockReset().mockReturnValue(true);

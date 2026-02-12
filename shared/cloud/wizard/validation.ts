@@ -43,8 +43,7 @@ function isEmail(value: string): boolean {
 
 function parseUrl(value: string): boolean {
     try {
-        // eslint-disable-next-line no-new
-        new URL(value);
+        void new URL(value);
         return true;
     } catch {
         return false;
@@ -137,13 +136,24 @@ function validateFieldLevel(answers: WizardAnswers): {
             );
         } else if (!isEmail(email)) {
             errors.push('OR3_BASIC_AUTH_BOOTSTRAP_EMAIL must be a valid email.');
-        } else if (password.length < 8) {
+        } else if (password.length < 12) {
             errors.push(
-                'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD must be at least 8 characters.'
+                'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD must be at least 12 characters.'
             );
+        } else {
+            // Check password complexity
+            if (!/[A-Z]/.test(password)) {
+                errors.push('OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD must contain at least one uppercase letter.');
+            }
+            if (!/[a-z]/.test(password)) {
+                errors.push('OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD must contain at least one lowercase letter.');
+            }
+            if (!/[0-9]/.test(password)) {
+                errors.push('OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD must contain at least one number.');
+            }
         }
 
-        if (!answers.basicAuthDbPath?.trim()) {
+        if (!answers.basicAuthDbPath.trim()) {
             errors.push('OR3_BASIC_AUTH_DB_PATH is required for basic-auth.');
         }
     }

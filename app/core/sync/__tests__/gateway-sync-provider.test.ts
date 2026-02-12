@@ -89,6 +89,37 @@ describe('GatewaySyncProvider', () => {
         expect(resolved).toBe(true);
     });
 
+    it('sends credentials on gateway requests', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+
+        const fetchMock = vi.fn(async () =>
+            makeOkResponse({ changes: [], nextCursor: 0, hasMore: false })
+        );
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 1 });
+        const scope: SyncScope = { workspaceId: 'ws-1' };
+
+        const unsubscribe = await provider.subscribe(scope, ['messages'], () => undefined, {
+            cursor: 0,
+            limit: 10,
+        });
+
+        await vi.advanceTimersByTimeAsync(1);
+        await Promise.resolve();
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledWith(
+            '/api/sync/pull',
+            expect.objectContaining({
+                method: 'POST',
+                credentials: 'include',
+            })
+        );
+
+        unsubscribe();
+    });
+
     it('awaits async onChanges handler before continuing polling', async () => {
         // Make jitter deterministic so timer assertions don't flake.
         vi.spyOn(Math, 'random').mockReturnValue(0);
