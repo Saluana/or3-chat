@@ -205,6 +205,38 @@ function validateFieldLevel(answers: WizardAnswers): {
         }
     }
 
+    if (answers.ssrAuthEnabled && answers.storageEnabled && answers.storageProvider === 's3') {
+        const endpoint = answers.s3Endpoint?.trim() ?? '';
+        if (endpoint && !parseUrl(endpoint)) {
+            errors.push('OR3_STORAGE_S3_ENDPOINT must be a valid URL when provided.');
+        }
+
+        const region = answers.s3Region?.trim() ?? '';
+        if (!region) {
+            errors.push('OR3_STORAGE_S3_REGION is required for s3 storage.');
+        }
+
+        const bucket = answers.s3Bucket?.trim() ?? '';
+        if (!bucket) {
+            errors.push('OR3_STORAGE_S3_BUCKET is required for s3 storage.');
+        }
+
+        const accessKeyId = answers.s3AccessKeyId?.trim() ?? '';
+        const secretAccessKey = answers.s3SecretAccessKey?.trim() ?? '';
+        if (!accessKeyId) {
+            errors.push('OR3_STORAGE_S3_ACCESS_KEY_ID is required for s3 storage.');
+        }
+        if (!secretAccessKey) {
+            errors.push('OR3_STORAGE_S3_SECRET_ACCESS_KEY is required for s3 storage.');
+        }
+
+        if (!Number.isInteger(answers.s3UrlTtlSeconds)) {
+            errors.push('OR3_STORAGE_S3_URL_TTL_SECONDS must be an integer.');
+        } else if (answers.s3UrlTtlSeconds < 1 || answers.s3UrlTtlSeconds > 24 * 60 * 60) {
+            errors.push('OR3_STORAGE_S3_URL_TTL_SECONDS must be between 1 and 86400.');
+        }
+    }
+
     if (
         answers.openrouterRequireUserKey &&
         !answers.openrouterAllowUserOverride

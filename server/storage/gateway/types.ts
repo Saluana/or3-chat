@@ -37,6 +37,10 @@ export interface PresignUploadRequest {
     hash: string;
     mimeType: string;
     sizeBytes: number;
+    /** Optional client-requested TTL (ms). Provider must clamp/bound. */
+    expiresInMs?: number;
+    /** Optional disposition hint (e.g. inline/attachment). Provider may honor. */
+    disposition?: string;
 }
 
 /**
@@ -71,6 +75,10 @@ export interface PresignDownloadRequest {
     workspaceId: string;
     hash: string;
     storageId?: string;
+    /** Optional client-requested TTL (ms). Provider must clamp/bound. */
+    expiresInMs?: number;
+    /** Optional disposition hint (e.g. inline/attachment). Provider may honor. */
+    disposition?: string;
 }
 
 /**

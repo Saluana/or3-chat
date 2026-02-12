@@ -30,8 +30,8 @@ const BodySchema = z.object({
     hash: z.string(),
     mime_type: z.string(),
     size_bytes: z.number(),
-    expires_in_ms: z.number().optional(),
-    disposition: z.string().optional(),
+    expires_in_ms: z.number().int().min(1).max(86_400_000).optional(),
+    disposition: z.enum(['inline', 'attachment']).optional(),
 });
 
 /**
@@ -123,6 +123,8 @@ export default defineEventHandler(async (event) => {
         hash: body.data.hash,
         mimeType: body.data.mime_type,
         sizeBytes: body.data.size_bytes,
+        expiresInMs: body.data.expires_in_ms,
+        disposition: body.data.disposition,
     });
 
     recordSyncRequest(userId, 'storage:upload');

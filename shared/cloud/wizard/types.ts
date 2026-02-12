@@ -174,6 +174,28 @@ export interface WizardAnswers {
     /** Maps to `OR3_STORAGE_FS_URL_TTL_SECONDS`. Default: 900. */
     fsUrlTtlSeconds: number;
 
+    // ── S3 storage provider ──
+    /** Maps to `OR3_STORAGE_S3_ENDPOINT` (optional; needed for most non-AWS hosts). */
+    s3Endpoint?: string;
+    /** Maps to `OR3_STORAGE_S3_REGION`. */
+    s3Region?: string;
+    /** Maps to `OR3_STORAGE_S3_BUCKET`. */
+    s3Bucket?: string;
+    /** Maps to `OR3_STORAGE_S3_ACCESS_KEY_ID`. */
+    s3AccessKeyId?: string;
+    /** Maps to `OR3_STORAGE_S3_SECRET_ACCESS_KEY`. */
+    s3SecretAccessKey?: string;
+    /** Maps to `OR3_STORAGE_S3_SESSION_TOKEN` (optional). */
+    s3SessionToken?: string;
+    /** Maps to `OR3_STORAGE_S3_FORCE_PATH_STYLE`. */
+    s3ForcePathStyle: boolean;
+    /** Maps to `OR3_STORAGE_S3_KEY_PREFIX` (optional). */
+    s3KeyPrefix?: string;
+    /** Maps to `OR3_STORAGE_S3_URL_TTL_SECONDS`. Default: 900. */
+    s3UrlTtlSeconds: number;
+    /** Maps to `OR3_STORAGE_S3_REQUIRE_CHECKSUM`. Default: false. */
+    s3RequireChecksum: boolean;
+
     // ── Convex backend env (not .env) ──
     /** Set via `bunx convex env set CLERK_ISSUER_URL=...`. Clerk + Convex only. */
     convexClerkIssuerUrl?: string;

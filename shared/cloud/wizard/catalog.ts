@@ -48,6 +48,9 @@ export const SECRET_ANSWER_KEYS: Array<keyof WizardAnswers> = [
     'openrouterInstanceApiKey',
     'convexAdminJwtSecret',
     'fsTokenSecret',
+    's3AccessKeyId',
+    's3SecretAccessKey',
+    's3SessionToken',
     'convexSelfHostedAdminKey',
 ];
 
@@ -100,6 +103,16 @@ export const WIZARD_OWNED_ENV_KEYS = [
     'OR3_STORAGE_FS_ROOT',
     'OR3_STORAGE_FS_TOKEN_SECRET',
     'OR3_STORAGE_FS_URL_TTL_SECONDS',
+    'OR3_STORAGE_S3_ENDPOINT',
+    'OR3_STORAGE_S3_REGION',
+    'OR3_STORAGE_S3_BUCKET',
+    'OR3_STORAGE_S3_ACCESS_KEY_ID',
+    'OR3_STORAGE_S3_SECRET_ACCESS_KEY',
+    'OR3_STORAGE_S3_SESSION_TOKEN',
+    'OR3_STORAGE_S3_FORCE_PATH_STYLE',
+    'OR3_STORAGE_S3_KEY_PREFIX',
+    'OR3_STORAGE_S3_URL_TTL_SECONDS',
+    'OR3_STORAGE_S3_REQUIRE_CHECKSUM',
     'NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
     'NUXT_CLERK_SECRET_KEY',
     'OPENROUTER_API_KEY',
@@ -133,7 +146,7 @@ export const WIZARD_OWNED_ENV_KEYS = [
  * v1 providers:
  * - Auth: `basic-auth`, `clerk`
  * - Sync: `sqlite`, `convex`
- * - Storage: `fs`, `convex`
+ * - Storage: `fs`, `s3`, `convex`
  *
  * Future providers (e.g. `firebase`, `s3`) are added by extending
  * this array and setting `implemented: true` once the runtime exists.
@@ -387,6 +400,92 @@ export const providerCatalog: WizardProviderDescriptor[] = [
     },
     {
         kind: 'storage',
+        id: 's3',
+        label: 'S3 Compatible (AWS / R2 / MinIO)',
+        implemented: true,
+        docsUrl: '/cloud/provider-s3',
+        dependencies: [
+            {
+                packageName: 'or3-provider-s3',
+                reason: 'S3-compatible storage gateway provider (server-signed presigned URLs).',
+            },
+        ],
+        fields: [
+            {
+                key: 's3Endpoint',
+                type: 'text',
+                label: 'S3 endpoint URL (optional for AWS)',
+                help: 'Required for most S3-compatible hosts (MinIO, R2, B2). Example: https://<account>.r2.cloudflarestorage.com',
+            },
+            {
+                key: 's3Region',
+                type: 'text',
+                label: 'Region (default: us-east-1)',
+                help: 'AWS region, or a dummy region required by your S3 host. Most compat hosts accept "us-east-1".',
+                defaultValue: 'us-east-1',
+                required: true,
+            },
+            {
+                key: 's3Bucket',
+                type: 'text',
+                label: 'Bucket name',
+                help: 'Bucket where OR3 stores blob objects. Must allow PUT/GET/HEAD with CORS from your OR3 origin.',
+                required: true,
+            },
+            {
+                key: 's3AccessKeyId',
+                type: 'password',
+                label: 'Access key ID',
+                help: 'Server-only credential used to sign presigned URLs. Never exposed to the browser.',
+                required: true,
+                secret: true,
+            },
+            {
+                key: 's3SecretAccessKey',
+                type: 'password',
+                label: 'Secret access key',
+                help: 'Server-only credential used to sign presigned URLs. Never exposed to the browser.',
+                required: true,
+                secret: true,
+            },
+            {
+                key: 's3SessionToken',
+                type: 'password',
+                label: 'Session token (optional)',
+                help: 'Only needed for temporary credentials (STS). Leave blank for long-lived access keys.',
+                secret: true,
+            },
+            {
+                key: 's3ForcePathStyle',
+                type: 'boolean',
+                label: 'Force path-style URLs (MinIO/legacy)',
+                help: 'Enable this for MinIO or hosts that do not support virtual-hosted-style buckets.',
+                defaultValue: false,
+            },
+            {
+                key: 's3KeyPrefix',
+                type: 'text',
+                label: 'Key prefix (optional)',
+                help: 'Optional prefix within the bucket. Example: or3-storage',
+            },
+            {
+                key: 's3UrlTtlSeconds',
+                type: 'number',
+                label: 'Presigned URL TTL seconds (default: 900 = 15 minutes)',
+                help: 'How long presigned URLs stay valid. Keep this short.',
+                defaultValue: 900,
+            },
+            {
+                key: 's3RequireChecksum',
+                type: 'boolean',
+                label: 'Require checksum on upload (optional hardening)',
+                help: 'If enabled, uploads must include x-amz-checksum-sha256. Some S3-compatible hosts may not support this.',
+                defaultValue: false,
+            },
+        ],
+    },
+    {
+        kind: 'storage',
         id: 'convex',
         label: 'Convex',
         implemented: true,
@@ -481,6 +580,13 @@ export function createDefaultAnswers(
         storageProvider: 'fs',
         fsRoot: '/tmp/or3-storage',
         fsUrlTtlSeconds: 900,
+        s3Endpoint: '',
+        s3Region: 'us-east-1',
+        s3Bucket: '',
+        s3ForcePathStyle: false,
+        s3KeyPrefix: '',
+        s3UrlTtlSeconds: 900,
+        s3RequireChecksum: false,
         openrouterAllowUserOverride: true,
         openrouterRequireUserKey: false,
         limitsEnabled: true,

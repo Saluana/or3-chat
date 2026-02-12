@@ -564,10 +564,14 @@ export class FileTransferQueue {
     private async doDownload(transfer: FileTransfer, signal: AbortSignal): Promise<void> {
         const meta = await this.db.file_meta.get(transfer.hash);
         if (!meta?.storage_id) {
+            await this.markFileDeletedMissingRemote(transfer.hash);
             throw err(
                 'ERR_STORAGE_FILE_NOT_FOUND',
                 'Remote file not available',
-                { tags: { domain: 'storage', stage: 'download' } }
+                {
+                    tags: { domain: 'storage', stage: 'download' },
+                    retryable: false,
+                }
             );
         }
 
@@ -600,6 +604,17 @@ export class FileTransferQueue {
         });
 
         if (!response.ok) {
+            if (response.status === 404 || response.status === 410) {
+                await this.markFileDeletedMissingRemote(meta.hash);
+                throw err(
+                    'ERR_STORAGE_FILE_NOT_FOUND',
+                    'Remote file not available',
+                    {
+                        tags: { domain: 'storage', stage: 'download' },
+                        retryable: false,
+                    }
+                );
+            }
             throw err(
                 'ERR_STORAGE_DOWNLOAD_FAILED',
                 `Download failed (${response.status})`,
@@ -711,6 +726,26 @@ export class FileTransferQueue {
             });
         });
     }
+
+        private async markFileDeletedMissingRemote(hash: string): Promise<void> {
+            await this.db.transaction(
+                'rw',
+                getWriteTxTableNames(this.db, 'file_meta', { include: ['file_blobs'] }),
+                async () => {
+                    const existing = await this.db.file_meta.get(hash);
+                    if (!existing) return;
+                    const now = nowSec();
+                    await this.db.file_meta.put({
+                        ...existing,
+                        deleted: true,
+                        deleted_at: now,
+                        updated_at: now,
+                        clock: nextClock(existing.clock),
+                    });
+                    await this.db.file_blobs.delete(hash);
+                }
+            );
+        }
 
     private async updateTransfer(
         id: string,

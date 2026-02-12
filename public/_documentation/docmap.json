@@ -674,6 +674,12 @@
                     "summary": "Dedicated setup guide for `or3-provider-convex`. Covers install, Convex backend init/codegen, required config, and the Clerk to Convex bridge flow."
                 },
                 {
+                    "name": "provider-s3.md",
+                    "path": "/cloud/provider-s3",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-s3`. Covers server-only S3 credentials, required env vars, endpoint/path-style options for S3-compatible hosts, and required bucket CORS for direct browser uploads/downloads."
+                },
+                {
                     "name": "sync-layer.md",
                     "path": "/cloud/sync-layer",
                     "category": "Architecture",

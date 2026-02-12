@@ -244,6 +244,31 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
         );
     }
 
+    if (answers.storageProvider === 's3') {
+        setEnv(env, 'OR3_STORAGE_S3_ENDPOINT', answers.s3Endpoint);
+        setEnv(env, 'OR3_STORAGE_S3_REGION', answers.s3Region);
+        setEnv(env, 'OR3_STORAGE_S3_BUCKET', answers.s3Bucket);
+        setEnv(env, 'OR3_STORAGE_S3_ACCESS_KEY_ID', answers.s3AccessKeyId);
+        setEnv(env, 'OR3_STORAGE_S3_SECRET_ACCESS_KEY', answers.s3SecretAccessKey);
+        setEnv(env, 'OR3_STORAGE_S3_SESSION_TOKEN', answers.s3SessionToken);
+        setEnv(
+            env,
+            'OR3_STORAGE_S3_FORCE_PATH_STYLE',
+            boolToEnv(answers.s3ForcePathStyle)
+        );
+        setEnv(env, 'OR3_STORAGE_S3_KEY_PREFIX', answers.s3KeyPrefix);
+        setEnv(
+            env,
+            'OR3_STORAGE_S3_URL_TTL_SECONDS',
+            numberToEnv(answers.s3UrlTtlSeconds)
+        );
+        setEnv(
+            env,
+            'OR3_STORAGE_S3_REQUIRE_CHECKSUM',
+            boolToEnv(answers.s3RequireChecksum)
+        );
+    }
+
     if (
         answers.authProvider === 'clerk' &&
         (answers.syncProvider === 'convex' || answers.storageProvider === 'convex')

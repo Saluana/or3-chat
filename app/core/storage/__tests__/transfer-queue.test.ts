@@ -35,6 +35,10 @@ class TableStub<T extends Record<string, any>> {
         return 1;
     }
 
+    async delete(key: string): Promise<void> {
+        this.rows.delete(String(key));
+    }
+
     where(field: string) {
         return {
             equals: (value: unknown) => {
@@ -253,6 +257,49 @@ describe('FileTransferQueue', () => {
         expect(blobRow?.blob).toBeDefined();
         expect(hookState.doAction).toHaveBeenCalledWith('storage.files.download:action:before', expect.anything());
         expect(hookState.doAction).toHaveBeenCalledWith('storage.files.download:action:after', expect.anything());
+    });
+
+    it('marks file metadata deleted when remote blob is permanently missing (404)', async () => {
+        const meta = makeMeta({
+            hash: `sha256:${'c'.repeat(64)}`,
+            storage_id: 'missing-remote',
+            storage_provider_id: 'provider-1',
+            deleted: false,
+            deleted_at: undefined,
+        });
+        const db = createDbStub([meta], []);
+
+        const provider: ObjectStorageProvider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(async () => ({ url: 'https://upload.example', expiresAt: Date.now() })),
+            getPresignedDownloadUrl: vi.fn(async () => ({ url: 'https://download.example/missing', expiresAt: Date.now() })),
+        };
+
+        vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 404 })));
+
+        const queue = new FileTransferQueue(db as any, provider, { concurrency: 1, maxAttempts: 5 });
+
+        await expect((queue as any).doDownload(
+            {
+                id: 'download-404',
+                hash: meta.hash,
+                workspace_id: 'ws-1',
+                direction: 'download',
+                bytes_total: 0,
+                bytes_done: 0,
+                state: 'running',
+                attempts: 0,
+                created_at: 1,
+                updated_at: 1,
+            } as FileTransfer,
+            new AbortController().signal,
+        )).rejects.toThrow('Remote file not available');
+
+        const updatedMeta = await db.file_meta.get(meta.hash);
+        expect(updatedMeta?.deleted).toBe(true);
+        expect(updatedMeta?.deleted_at).toBeTypeOf('number');
     });
 
     it('cancels in-flight transfer on workspace switch and explicit cancellation', async () => {

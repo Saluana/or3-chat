@@ -67,6 +67,7 @@ function makeValidBody() {
         hash: 'sha256:abc',
         mime_type: 'image/png',
         size_bytes: 1024,
+        expires_in_ms: 12_345,
         disposition: 'inline',
     };
 }
@@ -111,6 +112,26 @@ describe('POST /api/storage/presign-upload', () => {
     it('returns 400 for body schema failures', async () => {
         const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue({ workspace_id: 'ws-1', hash: 'h' });
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+    });
+
+    it('returns 400 for invalid expires_in_ms bounds/type', async () => {
+        const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
+
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), expires_in_ms: 0 });
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), expires_in_ms: 1.5 });
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), expires_in_ms: 86_400_001 });
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+    });
+
+    it('returns 400 for invalid disposition values', async () => {
+        const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), disposition: 'attachment; filename="x"' });
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
     });
@@ -182,6 +203,8 @@ describe('POST /api/storage/presign-upload', () => {
             hash: 'sha256:abc',
             mimeType: 'image/png',
             sizeBytes: 1024,
+            expiresInMs: 12_345,
+            disposition: 'inline',
         });
         expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'storage:upload');
         expect(recordUploadStartMock).toHaveBeenCalledTimes(1);

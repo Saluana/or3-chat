@@ -25,18 +25,18 @@
 ### 2. Fix or3-provider-sqlite critical bugs
 > Requirements: 1.3, 1.4, 1.5
 
-- [ ] 2.1 Add migration `004_workspace_isolation` — composite primary key `(workspace_id, id)` on all `s_*` tables
-- [ ] 2.2 Update all `s_*` queries to include `workspace_id` in WHERE clauses
-- [ ] 2.3 Fix tombstone upsert — add unique index on `(workspace_id, table_name, entity_id)`, use proper ON CONFLICT
-- [ ] 2.4 Fix `getOrCreateUser` — use `INSERT OR IGNORE` + SELECT pattern for concurrency safety
-- [ ] 2.5 Handle duplicate `op_id` in push batch — deduplicate instead of crashing transaction
-- [ ] 2.6 Fix `removeWorkspace` to update `active_workspace_id` for ALL affected members
-- [ ] 2.7 Fix `setActiveWorkspace` to reject soft-deleted workspaces
-- [ ] 2.8 Add warning when `OR3_SQLITE_DB_PATH` falls back to `:memory:`
-- [ ] 2.9 Write regression tests for multi-workspace entity isolation
-- [ ] 2.10 Write regression tests for tombstone upsert idempotency
-- [ ] 2.11 Write regression tests for concurrent user creation (parallel inserts)
-- [ ] 2.12 Write tests for workspace deletion cascading effects
+- [x] 2.1 Ensure migration-based workspace isolation — composite primary key `(workspace_id, id)` on all `s_*` tables (implemented in `002_sync_tables` + `003_sync_hardening`)
+- [x] 2.2 Update all `s_*` queries to include `workspace_id` in WHERE clauses
+- [x] 2.3 Fix tombstone upsert — add unique index on `(workspace_id, table_name, entity_id)`, use proper ON CONFLICT
+- [x] 2.4 Fix `getOrCreateUser` — use `INSERT OR IGNORE` + SELECT pattern for concurrency safety
+- [x] 2.5 Handle duplicate `op_id` in push batch — deduplicate instead of crashing transaction
+- [x] 2.6 Fix `removeWorkspace` to update `active_workspace_id` for ALL affected members
+- [x] 2.7 Fix `setActiveWorkspace` to reject soft-deleted workspaces
+- [x] 2.8 Add warning when `OR3_SQLITE_DB_PATH` falls back to `:memory:`
+- [x] 2.9 Write regression tests for multi-workspace entity isolation
+- [x] 2.10 Write regression tests for tombstone upsert idempotency
+- [x] 2.11 Write regression tests for concurrent user creation (parallel inserts)
+- [x] 2.12 Write tests for workspace deletion cascading effects
 
 ### 3. Fix or3-provider-basic-auth critical bugs
 > Requirements: 1.6, 1.7, 1.8

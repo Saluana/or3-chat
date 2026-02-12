@@ -92,6 +92,7 @@ async function ensureUrl(meta: FileMeta) {
         reportError(error, {
             code: 'ERR_DB_READ_FAILED',
             message: `Couldn't load preview for "${meta.name || meta.hash}".`,
+            silent: true,
             tags: {
                 domain: 'images',
                 action: 'preview',

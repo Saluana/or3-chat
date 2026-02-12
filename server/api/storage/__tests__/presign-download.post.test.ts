@@ -69,6 +69,7 @@ function makeValidBody() {
     return {
         workspace_id: 'ws-1',
         hash: 'sha256:abc',
+        expires_in_ms: 54_321,
         disposition: 'attachment',
     };
 }
@@ -113,6 +114,26 @@ describe('POST /api/storage/presign-download', () => {
     it('returns 400 for body schema failures', async () => {
         const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue({ workspace_id: 'ws-1' });
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+    });
+
+    it('returns 400 for invalid expires_in_ms bounds/type', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
+
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), expires_in_ms: 0 });
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), expires_in_ms: 1.25 });
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), expires_in_ms: 86_400_001 });
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+    });
+
+    it('returns 400 for invalid disposition values', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), disposition: 'attachment; filename="x"' });
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
     });
@@ -200,6 +221,22 @@ describe('POST /api/storage/presign-download', () => {
 
         expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'storage:download');
         expect(recordDownloadStartMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('forwards expiry/disposition to adapter', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
+        const body = makeValidBody();
+        readBodyMock.mockResolvedValue(body);
+
+        await handler(makeEvent());
+
+        expect(presignDownloadMock).toHaveBeenCalledWith(expect.anything(), {
+            workspaceId: 'ws-1',
+            hash: 'sha256:abc',
+            storageId: undefined,
+            expiresInMs: 54_321,
+            disposition: 'attachment',
+        });
     });
 
     it('passes through download method/headers/storageId from adapter response', async () => {
