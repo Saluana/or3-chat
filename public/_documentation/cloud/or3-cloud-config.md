@@ -90,12 +90,17 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 |-----|--------------|---------|-------------|
 | `storage.enabled` | `OR3_STORAGE_ENABLED` | `true` (if auth) | Enable cloud storage |
 | `storage.provider` | `NUXT_PUBLIC_STORAGE_PROVIDER` | `"convex"` | Backend (`fs` / `convex` / `s3` / `custom`) |
+| `storage.allowedMimeTypes` | `OR3_STORAGE_ALLOWED_MIME_TYPES` | image/pdf/text allowlist | Comma-separated upload MIME allowlist |
+| `storage.workspaceQuotaBytes` | `OR3_STORAGE_WORKSPACE_QUOTA_BYTES` | unset | Optional per-workspace storage quota in bytes |
+| `storage.gcRetentionSeconds` | `OR3_STORAGE_GC_RETENTION_SECONDS` | `2592000` | Default retention used by storage GC |
+| `storage.gcCooldownMs` | `OR3_STORAGE_GC_COOLDOWN_MS` | `60000` | Cooldown between manual storage GC runs |
 
 ### LLM Services
 
 | Key | Env Variable | Default | Description |
 |-----|--------------|---------|-------------|
 | `services.llm.openRouter.instanceApiKey` | `OPENROUTER_API_KEY` | — | Managed API key (optional) |
+| `services.llm.openRouter.baseUrl` | `OR3_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible base URL for proxy setups |
 | `services.llm.openRouter.allowUserOverride` | `OR3_OPENROUTER_ALLOW_USER_OVERRIDE` | `true` | Allow user-provided keys |
 | `services.llm.openRouter.requireUserKey` | `OR3_OPENROUTER_REQUIRE_USER_KEY` | `false` | Require user keys and ignore instance key |
 
@@ -108,6 +113,26 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 | `limits.maxMessagesPerDay` | `OR3_MAX_MESSAGES_PER_DAY` | `0` (unlimited) | Daily message cap |
 | `limits.maxConversations` | `OR3_MAX_CONVERSATIONS` | `0` (unlimited) | Max conversations |
 | `limits.storageProvider` | `OR3_LIMITS_STORAGE_PROVIDER` | `"convex"` (if sync) | Rate limit backend |
+| `limits.operationRateLimits` | `OR3_RATE_LIMIT_OVERRIDES_JSON` | `{}` | Per-operation `{ windowMs, maxRequests }` override map |
+
+Example `OR3_RATE_LIMIT_OVERRIDES_JSON`:
+
+```json
+{
+  "storage:upload": { "maxRequests": 20, "windowMs": 60000 },
+  "workflow:background": { "maxRequests": 10, "windowMs": 60000 }
+}
+```
+
+### Background Streaming
+
+| Key | Env Variable | Default | Description |
+|-----|--------------|---------|-------------|
+| `backgroundStreaming.enabled` | `OR3_BACKGROUND_STREAMING_ENABLED` | `false` | Enable server background streaming |
+| `backgroundStreaming.storageProvider` | `OR3_BACKGROUND_STREAMING_PROVIDER` | `"convex"` (if sync) | Background job state backend |
+| `backgroundStreaming.maxConcurrentJobs` | `OR3_BACKGROUND_MAX_JOBS` | `20` | Global concurrent background jobs |
+| `backgroundStreaming.maxConcurrentJobsPerUser` | `OR3_BACKGROUND_MAX_JOBS_PER_USER` | `5` | Per-user concurrent background jobs |
+| `backgroundStreaming.jobTimeoutSeconds` | `OR3_BACKGROUND_JOB_TIMEOUT` | `300` | Background job timeout in seconds |
 
 ### Legal
 

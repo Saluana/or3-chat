@@ -25,6 +25,7 @@ import type { Or3DB } from '~/db/client';
 import type { SyncProvider, SyncScope } from '~~/shared/sync/types';
 import { nowSec } from '~/db/util';
 import { useHooks } from '~/core/hooks/useHooks';
+import { isAbortLikeError } from './providers/gateway-sync-provider';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 
 const DEFAULT_RETENTION_SECONDS = 30 * 24 * 60 * 60;
@@ -66,6 +67,7 @@ export class GcManager {
     private circuitBreakerKey: string;
     private interval: ReturnType<typeof setInterval> | null = null;
     private idleHandle: IdleHandle | null = null;
+    private active = false;
     private running = false;
 
     constructor(
@@ -87,6 +89,7 @@ export class GcManager {
 
     start(): void {
         if (this.interval) return;
+        this.active = true;
 
         this.interval = setInterval(() => {
             this.scheduleGc();
@@ -96,6 +99,7 @@ export class GcManager {
     }
 
     stop(): void {
+        this.active = false;
         if (this.interval) {
             clearInterval(this.interval);
             this.interval = null;
@@ -147,7 +151,7 @@ export class GcManager {
     }
 
     private async runGc(): Promise<void> {
-        if (this.running) return;
+        if (!this.active || this.running) return;
         this.running = true;
 
         try {
@@ -165,6 +169,10 @@ export class GcManager {
                 await this.db.tombstones.bulkDelete(eligibleIds);
             }
 
+            if (!this.active) {
+                return;
+            }
+
             // Check circuit breaker before external provider calls
             const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
             if (!circuitBreaker.canRetry()) {
@@ -179,6 +187,9 @@ export class GcManager {
                 await this.provider.gcChangeLog(this.scope, this.config.retentionSeconds);
             }
         } catch (error) {
+            if (!this.active || isAbortLikeError(error)) {
+                return;
+            }
             console.error('[GcManager] GC failed:', error);
             void useHooks().doAction('sync.gc:action:error', {
                 error: error instanceof Error ? error.message : String(error),

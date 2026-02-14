@@ -29,17 +29,15 @@ import { resolveSessionContext } from '../../auth/session';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import {
     checkAndRecordLlmRequest,
-    getLlmRateLimitStats,
 } from '../../utils/llm/rate-limiter';
 import { getRateLimitProvider } from '../../utils/rate-limit/store';
+import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
 import {
     isBackgroundModeRequest,
     validateBackgroundParams,
     startBackgroundStream,
     isBackgroundStreamingAvailable,
 } from '../../utils/background-jobs/stream-handler';
-
-const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 export default defineEventHandler(async (event) => {
     // Read request body
@@ -53,6 +51,9 @@ export default defineEventHandler(async (event) => {
 
     // Req 1, 4: Select API key. Prefer user key when connected.
     const config = useRuntimeConfig(event);
+    const openRouterUrl = getOpenRouterChatCompletionsUrl(
+        config.openrouterBaseUrl
+    );
     const allowUserOverride = config.openrouterAllowUserOverride !== false;
     const requireUserKey = config.openrouterRequireUserKey === true;
     const authHeader = getHeader(event, 'authorization');
@@ -258,7 +259,7 @@ export default defineEventHandler(async (event) => {
         );
         const proto = xfProto || (isLocal ? 'http' : 'https');
 
-        upstream = await fetch(OR_URL, {
+        upstream = await fetch(openRouterUrl, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${apiKey}`,

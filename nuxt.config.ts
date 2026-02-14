@@ -111,6 +111,7 @@ const limitsConfig = {
     maxConversations: or3CloudConfig.limits!.maxConversations!,
     maxMessagesPerDay: or3CloudConfig.limits!.maxMessagesPerDay!,
     storageProvider: or3CloudConfig.limits!.storageProvider || 'memory',
+    operationRateLimits: or3CloudConfig.limits!.operationRateLimits || {},
 };
 const publicLimitsConfig = {
     enabled: limitsConfig.enabled,
@@ -206,6 +207,9 @@ export default defineNuxtConfig({
         // Server-only env variables (auto-mapped from NUXT_*)
         openrouterApiKey:
             or3CloudConfig.services.llm?.openRouter?.instanceApiKey || '',
+        openrouterBaseUrl:
+            or3CloudConfig.services.llm?.openRouter?.baseUrl ||
+            'https://openrouter.ai/api/v1',
         openrouterAllowUserOverride:
             or3CloudConfig.services.llm?.openRouter?.allowUserOverride ?? true,
         openrouterRequireUserKey:
@@ -227,6 +231,21 @@ export default defineNuxtConfig({
         storage: {
             enabled: effectiveStorageEnabled,
             provider: or3CloudConfig.storage.provider,
+            allowedMimeTypes:
+                or3CloudConfig.storage.allowedMimeTypes ??
+                undefined,
+            workspaceQuotaBytes:
+                or3CloudConfig.storage.workspaceQuotaBytes !== undefined
+                    ? String(or3CloudConfig.storage.workspaceQuotaBytes)
+                    : undefined,
+            gcRetentionSeconds:
+                or3CloudConfig.storage.gcRetentionSeconds !== undefined
+                    ? String(or3CloudConfig.storage.gcRetentionSeconds)
+                    : undefined,
+            gcCooldownMs:
+                or3CloudConfig.storage.gcCooldownMs !== undefined
+                    ? String(or3CloudConfig.storage.gcCooldownMs)
+                    : undefined,
         },
         limits: limitsConfig,
         branding: brandingConfig,
@@ -246,6 +265,9 @@ export default defineNuxtConfig({
             enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
             storageProvider: or3CloudConfig.backgroundStreaming?.storageProvider ?? 'memory',
             maxConcurrentJobs: or3CloudConfig.backgroundStreaming?.maxConcurrentJobs ?? 20,
+            maxConcurrentJobsPerUser:
+                or3CloudConfig.backgroundStreaming?.maxConcurrentJobsPerUser ??
+                5,
             jobTimeoutMs: (or3CloudConfig.backgroundStreaming?.jobTimeoutSeconds ?? 300) * 1000,
             completedJobRetentionMs: 5 * 60 * 1000, // 5 minutes
         },
@@ -265,6 +287,9 @@ export default defineNuxtConfig({
                 requireUserKey:
                     or3CloudConfig.services.llm?.openRouter?.requireUserKey ??
                     false,
+                baseUrl:
+                    or3CloudConfig.services.llm?.openRouter?.baseUrl ||
+                    'https://openrouter.ai/api/v1',
             },
             storage: {
                 enabled: effectiveStorageEnabled,

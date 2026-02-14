@@ -104,6 +104,9 @@ export function getJobConfig(): BackgroundJobConfig {
 
     return {
         maxConcurrentJobs: bgConfig?.maxConcurrentJobs ?? DEFAULT_CONFIG.maxConcurrentJobs,
+        maxConcurrentJobsPerUser:
+            bgConfig?.maxConcurrentJobsPerUser ??
+            DEFAULT_CONFIG.maxConcurrentJobsPerUser,
         jobTimeoutMs: bgConfig?.jobTimeoutMs ?? DEFAULT_CONFIG.jobTimeoutMs,
         completedJobRetentionMs:
             bgConfig?.completedJobRetentionMs ?? DEFAULT_CONFIG.completedJobRetentionMs,

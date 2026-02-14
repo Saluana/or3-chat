@@ -5,6 +5,7 @@
  * Execute workflows in background jobs with server-side streaming updates.
  */
 
+import { useRuntimeConfig } from '#imports';
 import type { BackgroundJobProvider } from '../background-jobs/types';
 import { getJobProvider } from '../background-jobs/store';
 import { emitJobDelta, emitJobStatus, hasJobViewers, initJobLiveState } from '../background-jobs/viewers';
@@ -22,6 +23,7 @@ import {
 } from 'or3-workflow-core';
 import { OpenRouter } from '@openrouter/sdk';
 import { registerHitlRequest, clearHitlRequestsForJob } from './hitl-store';
+import { normalizeOpenRouterBaseUrl } from '~~/shared/openrouter/url';
 
 const MAX_WORKFLOW_STATE_BYTES = 64 * 1024;
 type ConversationHistoryMessage = { role: string; content: string };
@@ -141,7 +143,11 @@ async function runWorkflowInBackground(
 
     initJobLiveState(jobId);
 
-    const client = new OpenRouter({ apiKey: params.apiKey });
+    const runtimeConfig = useRuntimeConfig();
+    const client = new OpenRouter({
+        apiKey: params.apiKey,
+        serverURL: normalizeOpenRouterBaseUrl(runtimeConfig.openrouterBaseUrl),
+    });
 
     let chunks = 0;
     let lastStateEmitAt = 0;

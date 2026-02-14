@@ -35,6 +35,7 @@ import { getCursorManager, type CursorManager } from './cursor-manager';
 import { useHooks } from '~/core/hooks/useHooks';
 import { getHookBridge } from './hook-bridge';
 import { isRecentOpId } from './recent-op-cache';
+import { isAbortLikeError } from './providers/gateway-sync-provider';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 
 /** Default tables to sync */
@@ -160,6 +161,9 @@ export class SubscriptionManager {
             this.reconnectAttempts = 0;
             this.setStatus('connected');
         } catch (error) {
+            if (this.status === 'disconnected' || isAbortLikeError(error)) {
+                return;
+            }
             console.error('[SubscriptionManager] Failed to start:', error);
             this.setStatus('error');
             this.scheduleReconnect();
@@ -290,6 +294,10 @@ export class SubscriptionManager {
                 });
             }
 
+            if (this.status === 'disconnected') {
+                return;
+            }
+
             // Update cursor after bootstrap
             await this.cursorManager.setCursor(cursor);
             await this.cursorManager.markSyncComplete();
@@ -301,6 +309,9 @@ export class SubscriptionManager {
                 this.cursorManager.getDeviceId(),
                 cursor
             ).catch((err) => {
+                if (this.status === 'disconnected' || isAbortLikeError(err)) {
+                    return;
+                }
                 console.warn('[SubscriptionManager] Failed to update remote cursor after bootstrap:', err);
             });
 
@@ -377,6 +388,10 @@ export class SubscriptionManager {
                 hasMore = response.hasMore;
             }
 
+            if (this.status === 'disconnected') {
+                return;
+            }
+
             await this.cursorManager.setCursor(cursor);
             await this.cursorManager.markSyncComplete();
 
@@ -386,6 +401,9 @@ export class SubscriptionManager {
                 this.cursorManager.getDeviceId(),
                 cursor
             ).catch((err) => {
+                if (this.status === 'disconnected' || isAbortLikeError(err)) {
+                    return;
+                }
                 console.warn('[SubscriptionManager] Failed to update remote cursor after rescan:', err);
             });
 
@@ -456,6 +474,9 @@ export class SubscriptionManager {
         this.changeQueue = this.changeQueue
             .then(() => this.handleChanges(changes))
             .catch((err) => {
+                if (this.status === 'disconnected' || isAbortLikeError(err)) {
+                    return;
+                }
                 console.error('[SubscriptionManager] handleChanges error:', err);
                 this.handleError(err);
             });
@@ -540,6 +561,9 @@ export class SubscriptionManager {
                 conflicts: result.conflicts + drainResult.conflicts,
             });
         } catch (error) {
+            if (this.status === 'disconnected' || isAbortLikeError(error)) {
+                return;
+            }
             console.error('[SubscriptionManager] Failed to apply changes:', error);
             await useHooks().doAction('sync.pull:action:error', {
                 scope: this.scope,
@@ -642,6 +666,9 @@ export class SubscriptionManager {
      * Handle subscription error
      */
     private handleError(error: unknown): void {
+        if (this.status === 'disconnected' || isAbortLikeError(error)) {
+            return;
+        }
         console.error('[SubscriptionManager] Subscription error:', error);
         if (this.unsubscribe) {
             this.unsubscribe();

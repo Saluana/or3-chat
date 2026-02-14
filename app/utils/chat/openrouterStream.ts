@@ -21,6 +21,7 @@ import {
     parseOpenRouterSSE,
     type ORStreamEvent,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
+import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
 
 // Note: Streaming requires direct body access which the SDK doesn't expose.
 // Per design document, we keep raw fetch for streaming but use SDK for non-streaming calls.
@@ -154,8 +155,12 @@ export async function* openRouterStream(params: {
         public: {
             ssrAuthEnabled?: boolean;
             backgroundStreaming?: { enabled?: boolean };
+            openRouter?: { baseUrl?: string };
         };
     };
+    const openRouterChatUrl = getOpenRouterChatCompletionsUrl(
+        runtimeConfig.public.openRouter?.baseUrl
+    );
     const allowClientFallback = hasApiKey === true;
     const isSsrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;
     const forceServerRoute = Boolean(
@@ -242,7 +247,7 @@ export async function* openRouterStream(params: {
     delete fallbackBody._threadId;
     delete fallbackBody._messageId;
 
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const resp = await fetch(openRouterChatUrl, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${apiKey}`,

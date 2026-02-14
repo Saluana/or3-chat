@@ -12,18 +12,21 @@
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { z } from 'zod';
+import { useRuntimeConfig } from '#imports';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../utils/storage/is-storage-enabled';
 import { getActiveStorageGatewayAdapter } from '../../storage/gateway/registry';
 import { or3Config } from '~~/config.or3';
+import { DEFAULT_STORAGE_ALLOWED_MIME_TYPES } from '~~/shared/config/constants';
 import {
     checkSyncRateLimit,
     recordSyncRequest,
 } from '../../utils/sync/rate-limiter';
 import { recordUploadStart } from '../../utils/storage/metrics';
 import { setNoCacheHeaders } from '../../utils/headers';
+import { getWorkspaceStorageUsageSnapshot } from '../../utils/storage/quota';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -33,6 +36,27 @@ const BodySchema = z.object({
     expires_in_ms: z.number().int().min(1).max(86_400_000).optional(),
     disposition: z.enum(['inline', 'attachment']).optional(),
 });
+
+function normalizeMimeType(value: string): string {
+    return value.split(';', 1)[0]?.trim().toLowerCase() || '';
+}
+
+function normalizeHash(value: string): string {
+    return value.replace(/^sha256:/i, '').trim().toLowerCase();
+}
+
+function toPositiveFiniteNumber(value: unknown): number | undefined {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+        return value;
+    }
+    if (typeof value === 'string') {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed) && parsed > 0) {
+            return parsed;
+        }
+    }
+    return undefined;
+}
 
 /**
  * POST /api/storage/presign-upload
@@ -72,6 +96,14 @@ export default defineEventHandler(async (event) => {
         id: body.data.workspace_id,
     });
 
+    const runtimeConfig = useRuntimeConfig(event);
+    const storageConfig = runtimeConfig.storage as
+        | {
+              allowedMimeTypes?: unknown;
+              workspaceQuotaBytes?: unknown;
+          }
+        | undefined;
+
     // Rate limiting
     const userId = session.user.id;
     const rateLimitResult = checkSyncRateLimit(userId, 'storage:upload');
@@ -93,22 +125,46 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    // MIME type allowlist check
-    const ALLOWED_MIME_TYPES = [
-        'image/jpeg',
-        'image/png',
-        'image/gif',
-        'image/webp',
-        'application/pdf',
-        'text/plain',
-        'text/markdown',
-    ];
+    // MIME type allowlist check (runtime configurable)
+    const configuredAllowlist =
+        Array.isArray(storageConfig?.allowedMimeTypes) &&
+        storageConfig.allowedMimeTypes.length > 0
+            ? storageConfig.allowedMimeTypes
+            : [...DEFAULT_STORAGE_ALLOWED_MIME_TYPES];
+    const allowedMimeTypes = new Set(
+        configuredAllowlist.map((mime) => normalizeMimeType(mime))
+    );
+    const requestedMime = normalizeMimeType(body.data.mime_type);
 
-    if (!ALLOWED_MIME_TYPES.includes(body.data.mime_type)) {
+    if (!allowedMimeTypes.has(requestedMime)) {
         throw createError({
             statusCode: 415,
             statusMessage: `MIME type ${body.data.mime_type} not allowed`
         });
+    }
+
+    // Optional per-workspace storage quota enforcement
+    const workspaceQuotaBytes = toPositiveFiniteNumber(
+        storageConfig?.workspaceQuotaBytes
+    );
+    if (workspaceQuotaBytes !== undefined) {
+        const usage = await getWorkspaceStorageUsageSnapshot(
+            event,
+            body.data.workspace_id
+        );
+        const hashKey = normalizeHash(body.data.hash);
+        const alreadyStored = usage.filesByHash.has(hashKey);
+        const projectedBytes = alreadyStored
+            ? usage.usedBytes
+            : usage.usedBytes + body.data.size_bytes;
+        if (projectedBytes > workspaceQuotaBytes) {
+            throw createError({
+                statusCode: 413,
+                statusMessage:
+                    `Workspace storage quota exceeded (` +
+                    `${projectedBytes} > ${workspaceQuotaBytes} bytes)`,
+            });
+        }
     }
 
     // Get storage gateway adapter from registry

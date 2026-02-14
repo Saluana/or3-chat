@@ -24,6 +24,11 @@ import {
     DEFAULT_JWT_EXPIRY,
     DEFAULT_BACKGROUND_MAX_JOBS,
     DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
+    DEFAULT_BACKGROUND_MAX_JOBS_PER_USER,
+    DEFAULT_OPENROUTER_BASE_URL,
+    DEFAULT_STORAGE_ALLOWED_MIME_TYPES,
+    DEFAULT_STORAGE_GC_RETENTION_SECONDS,
+    DEFAULT_STORAGE_GC_COOLDOWN_MS,
 } from '../shared/config/constants';
 
 const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
@@ -49,6 +54,10 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
     storage: {
         enabled: false,
         provider: DEFAULT_STORAGE_PROVIDER_ID,
+        allowedMimeTypes: [...DEFAULT_STORAGE_ALLOWED_MIME_TYPES],
+        workspaceQuotaBytes: undefined,
+        gcRetentionSeconds: DEFAULT_STORAGE_GC_RETENTION_SECONDS,
+        gcCooldownMs: DEFAULT_STORAGE_GC_COOLDOWN_MS,
     },
     services: {
         llm: {
@@ -56,6 +65,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
                 instanceApiKey: undefined,
                 allowUserOverride: true,
                 requireUserKey: false,
+                baseUrl: DEFAULT_OPENROUTER_BASE_URL,
             },
         },
     },
@@ -65,6 +75,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         maxConversations: DEFAULT_MAX_CONVERSATIONS,
         maxMessagesPerDay: DEFAULT_MAX_MESSAGES_PER_DAY,
         storageProvider: DEFAULT_LIMITS_PROVIDER_ID,
+        operationRateLimits: {},
     },
     security: {
         allowedOrigins: [],
@@ -123,6 +134,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         enabled: false,
         storageProvider: DEFAULT_BACKGROUND_PROVIDER_ID,
         maxConcurrentJobs: DEFAULT_BACKGROUND_MAX_JOBS,
+        maxConcurrentJobsPerUser: DEFAULT_BACKGROUND_MAX_JOBS_PER_USER,
         jobTimeoutSeconds: DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
     },
 };
@@ -157,6 +169,10 @@ const cloudConfigSchema = z
         storage: z.object({
             enabled: z.boolean(),
             provider: z.string().min(1),
+            allowedMimeTypes: z.array(z.string().min(1)).optional(),
+            workspaceQuotaBytes: z.number().int().positive().optional(),
+            gcRetentionSeconds: z.number().int().min(0).optional(),
+            gcCooldownMs: z.number().int().min(0).optional(),
         }),
         services: z
             .object({
@@ -167,6 +183,7 @@ const cloudConfigSchema = z
                                 instanceApiKey: z.string().optional(),
                                 allowUserOverride: z.boolean().optional(),
                                 requireUserKey: z.boolean().optional(),
+                                baseUrl: z.string().url().optional(),
                             })
                             .optional(),
                     })
@@ -181,6 +198,15 @@ const cloudConfigSchema = z
                 maxConversations: z.number().int().min(0).optional(),
                 maxMessagesPerDay: z.number().int().min(0).optional(),
                 storageProvider: z.string().min(1).optional(),
+                operationRateLimits: z
+                    .record(
+                        z.string(),
+                        z.object({
+                            windowMs: z.number().int().min(1).optional(),
+                            maxRequests: z.number().int().min(1).optional(),
+                        })
+                    )
+                    .optional(),
             })
             .optional(),
         security: z
@@ -225,6 +251,7 @@ const cloudConfigSchema = z
                 enabled: z.boolean().optional(),
                 storageProvider: z.string().min(1).optional(),
                 maxConcurrentJobs: z.number().int().min(1).optional(),
+                maxConcurrentJobsPerUser: z.number().int().min(1).optional(),
                 jobTimeoutSeconds: z.number().int().min(1).optional(),
             })
             .optional(),
@@ -258,6 +285,9 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
         storage: {
             ...DEFAULT_OR3_CLOUD_CONFIG.storage,
             ...config.storage,
+            allowedMimeTypes:
+                config.storage.allowedMimeTypes ??
+                DEFAULT_OR3_CLOUD_CONFIG.storage.allowedMimeTypes,
         },
         services: {
             ...DEFAULT_OR3_CLOUD_CONFIG.services,
@@ -274,6 +304,10 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
         limits: {
             ...DEFAULT_OR3_CLOUD_CONFIG.limits,
             ...config.limits,
+            operationRateLimits: {
+                ...(DEFAULT_OR3_CLOUD_CONFIG.limits?.operationRateLimits ?? {}),
+                ...(config.limits?.operationRateLimits ?? {}),
+            },
         },
         security: {
             ...DEFAULT_OR3_CLOUD_CONFIG.security,

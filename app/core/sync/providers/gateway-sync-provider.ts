@@ -68,6 +68,11 @@ class GatewaySyncRequestError extends Error {
     }
 }
 
+export function isAbortLikeError(error: unknown): boolean {
+    if (error instanceof DOMException) return error.name === 'AbortError';
+    return error instanceof Error && error.name === 'AbortError';
+}
+
 function parseRetryAfterHeader(value: string | null): number | undefined {
     if (!value) return undefined;
     const trimmed = value.trim();
@@ -120,7 +125,7 @@ async function requestJson<T>(
     path: string,
     body: unknown,
     baseUrl: string,
-    options: { allowEmpty?: boolean } = {}
+    options: { allowEmpty?: boolean; signal?: AbortSignal } = {}
 ): Promise<T> {
     const res = await fetch(`${baseUrl}${path}`, {
         method: 'POST',
@@ -129,6 +134,7 @@ async function requestJson<T>(
             'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
+        signal: options.signal,
     });
 
     if (!res.ok) {
@@ -183,6 +189,7 @@ export function createGatewaySyncProvider(
             const limit = options?.limit ?? pullLimit;
             let timeout: ReturnType<typeof setTimeout> | null = null;
             let running = false;
+            const pollAbortController = new AbortController();
 
             const poll = async () => {
                 let hasMore = true;
@@ -196,7 +203,8 @@ export function createGatewaySyncProvider(
                             limit,
                             tables,
                         },
-                        baseUrl
+                        baseUrl,
+                        { signal: pollAbortController.signal }
                     );
 
                     if (response.changes.length) {
@@ -226,14 +234,18 @@ export function createGatewaySyncProvider(
                 try {
                     await poll();
                 } catch (error) {
+                    if (isAbortLikeError(error)) return;
                     console.error('[gateway-sync] Poll failed:', error);
                     if (
                         error instanceof GatewaySyncRequestError &&
                         (error.status === 401 || error.status === 403)
                     ) {
                         active = false;
-                        if (typeof window !== 'undefined') {
-                            window.dispatchEvent(
+                        const eventTarget = globalThis as {
+                            dispatchEvent?: (event: unknown) => boolean;
+                        };
+                        if (typeof eventTarget.dispatchEvent === 'function') {
+                            eventTarget.dispatchEvent(
                                 new CustomEvent('or3:sync-session-invalid', {
                                     detail: {
                                         status: error.status,
@@ -261,6 +273,7 @@ export function createGatewaySyncProvider(
 
             const unsubscribe = () => {
                 active = false;
+                pollAbortController.abort();
                 if (timeout) {
                     clearTimeout(timeout);
                     timeout = null;

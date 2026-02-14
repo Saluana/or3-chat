@@ -30,6 +30,23 @@ export const DEFAULT_EXTENSION_MAX_FILES = 2000;
 
 export const DEFAULT_BACKGROUND_MAX_JOBS = 20;
 export const DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS = 300; // 5 minutes
+export const DEFAULT_BACKGROUND_MAX_JOBS_PER_USER = 5;
+
+// OpenRouter
+export const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+
+// Storage policy defaults
+export const DEFAULT_STORAGE_ALLOWED_MIME_TYPES = [
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'application/pdf',
+    'text/plain',
+    'text/markdown',
+] as const;
+export const DEFAULT_STORAGE_GC_RETENTION_SECONDS = 30 * 24 * 3600; // 30 days
+export const DEFAULT_STORAGE_GC_COOLDOWN_MS = 60_000; // 1 minute
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UI Defaults

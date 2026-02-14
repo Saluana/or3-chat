@@ -43,6 +43,8 @@ import {
     DEFAULT_REBUILD_COMMAND,
     DEFAULT_BACKGROUND_MAX_JOBS,
     DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
+    DEFAULT_BACKGROUND_MAX_JOBS_PER_USER,
+    DEFAULT_OPENROUTER_BASE_URL,
 } from '../../../shared/config/constants';
 
 export type EnvMap = Record<string, string | undefined>;
@@ -108,6 +110,47 @@ function parseSessionProvisioningFailureMode(
         return value;
     }
     return undefined;
+}
+
+function parseRateLimitOverrides(
+    input: string | undefined
+): Record<string, { windowMs?: number; maxRequests?: number }> | undefined {
+    if (!input) return undefined;
+    try {
+        const parsed = JSON.parse(input) as unknown;
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return undefined;
+        }
+
+        const overrides: Record<
+            string,
+            { windowMs?: number; maxRequests?: number }
+        > = {};
+        for (const [operation, value] of Object.entries(parsed)) {
+            if (!value || typeof value !== 'object' || Array.isArray(value)) {
+                continue;
+            }
+            const raw = value as { windowMs?: unknown; maxRequests?: unknown };
+            const windowMs =
+                typeof raw.windowMs === 'number' &&
+                Number.isFinite(raw.windowMs) &&
+                raw.windowMs > 0
+                    ? Math.floor(raw.windowMs)
+                    : undefined;
+            const maxRequests =
+                typeof raw.maxRequests === 'number' &&
+                Number.isFinite(raw.maxRequests) &&
+                raw.maxRequests > 0
+                    ? Math.floor(raw.maxRequests)
+                    : undefined;
+            if (windowMs !== undefined || maxRequests !== undefined) {
+                overrides[operation] = { windowMs, maxRequests };
+            }
+        }
+        return Object.keys(overrides).length > 0 ? overrides : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 /**
@@ -226,6 +269,14 @@ export function buildOr3CloudConfigFromEnv(
         storage: {
             enabled: storageEnabled,
             provider: storageProvider as StorageProviderId,
+            allowedMimeTypes: env.OR3_STORAGE_ALLOWED_MIME_TYPES
+                ? env.OR3_STORAGE_ALLOWED_MIME_TYPES.split(',')
+                      .map((mime) => mime.trim())
+                      .filter(Boolean)
+                : undefined,
+            workspaceQuotaBytes: envNum(env.OR3_STORAGE_WORKSPACE_QUOTA_BYTES),
+            gcRetentionSeconds: envNum(env.OR3_STORAGE_GC_RETENTION_SECONDS),
+            gcCooldownMs: envNum(env.OR3_STORAGE_GC_COOLDOWN_MS),
         },
         services: {
             llm: {
@@ -235,6 +286,9 @@ export function buildOr3CloudConfigFromEnv(
                         env.OR3_OPENROUTER_ALLOW_USER_OVERRIDE !== 'false',
                     requireUserKey:
                         env.OR3_OPENROUTER_REQUIRE_USER_KEY === 'true',
+                    baseUrl:
+                        env.OR3_OPENROUTER_BASE_URL ||
+                        DEFAULT_OPENROUTER_BASE_URL,
                 },
             },
         },
@@ -245,6 +299,9 @@ export function buildOr3CloudConfigFromEnv(
             maxMessagesPerDay: envNum(env.OR3_MAX_MESSAGES_PER_DAY, DEFAULT_MAX_MESSAGES_PER_DAY) ?? DEFAULT_MAX_MESSAGES_PER_DAY,
             storageProvider: (env.OR3_LIMITS_STORAGE_PROVIDER ??
                 (syncEnabled ? syncProvider : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
+            operationRateLimits: parseRateLimitOverrides(
+                env.OR3_RATE_LIMIT_OVERRIDES_JSON
+            ),
         },
         security: {
             allowedOrigins: env.OR3_ALLOWED_ORIGINS
@@ -289,6 +346,11 @@ export function buildOr3CloudConfigFromEnv(
             storageProvider: (env.OR3_BACKGROUND_STREAMING_PROVIDER ??
                 (syncEnabled ? syncProvider : DEFAULT_BACKGROUND_PROVIDER_ID)) as BackgroundProviderId,
             maxConcurrentJobs: envNum(env.OR3_BACKGROUND_MAX_JOBS, DEFAULT_BACKGROUND_MAX_JOBS) ?? DEFAULT_BACKGROUND_MAX_JOBS,
+            maxConcurrentJobsPerUser:
+                envNum(
+                    env.OR3_BACKGROUND_MAX_JOBS_PER_USER,
+                    DEFAULT_BACKGROUND_MAX_JOBS_PER_USER
+                ) ?? DEFAULT_BACKGROUND_MAX_JOBS_PER_USER,
             jobTimeoutSeconds: envNum(env.OR3_BACKGROUND_JOB_TIMEOUT, DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS) ?? DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
         },
     };

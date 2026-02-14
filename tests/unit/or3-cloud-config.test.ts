@@ -31,6 +31,8 @@ describe('defineOr3CloudConfig', () => {
         const config = defineOr3CloudConfig(baseConfig, { strict: false });
         expect(config.limits?.requestsPerMinute).toBe(20);
         expect(config.services.llm?.openRouter?.allowUserOverride).toBe(true);
+        expect(config.storage.allowedMimeTypes?.length).toBeGreaterThan(0);
+        expect(config.backgroundStreaming?.maxConcurrentJobsPerUser).toBe(5);
     });
 
     it('throws in strict mode when instance key is required', () => {

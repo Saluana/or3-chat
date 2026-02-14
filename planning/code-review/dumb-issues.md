@@ -59,3 +59,45 @@
 - Why this is dumb: plugin/runtime glue is excluded from strict linting.
 - Consequence: unsafe patterns are allowed where integrations are most fragile.
 - Fix: remove blanket ignores; use narrow per-file exceptions.
+
+## 11) Runtime Config Typing Is Broken In `nuxt.config.ts`
+- Evidence: `nuxt.config.ts:237`, `nuxt.config.ts:240`, `nuxt.config.ts:242`
+- Why this is dumb: numeric values are assigned to runtime config keys Nuxt types as string runtime overrides (`NUXT_STORAGE_*`), which hard-breaks `bun run type-check`.
+- Consequence: CI/local typecheck is red, so this cannot be merged safely and blocks release hardening tasks marked as done.
+- Fix: align runtime config types with Nuxt expectations (string in runtime config + parse at read site), or move typed numeric values under non-env-overridden keys.
+
+## 12) Storage Endpoints Use Impossible Casts And Still Don’t Handle Real Runtime Types
+- Evidence: `server/api/storage/presign-upload.post.ts:87-91`, `server/api/storage/gc/run.post.ts:77-81`
+- Why this is dumb: both handlers force-cast `runtimeConfig.storage` to numeric fields even though runtime typing says these values may be strings; TypeScript rejects this and runtime behavior silently skips enforcement when values are stringy.
+- Consequence: compile failure now; after a cast “fix,” quota/GC defaults can still misbehave depending on env override shape.
+- Fix: add explicit runtime parsing/normalization helpers for `workspaceQuotaBytes`, `gcRetentionSeconds`, `gcCooldownMs` and use them in handlers instead of structural casts.
+
+## 13) Test Mock Narrowing Broke Health Endpoint Typecheck
+- Evidence: `server/api/__tests__/health.get.test.ts:37`, `server/api/__tests__/health.get.test.ts:85`
+- Why this is dumb: the mock object is initialized with the extended storage shape, then reassigned with a smaller object; TypeScript narrows to the larger shape and rejects later assignments.
+- Consequence: `bun run type-check` fails in test code, so you can’t claim quality gates are green.
+- Fix: keep reassigned mock shape consistent (include the added storage fields) or type the mock with a broader explicit interface before mutation.
+
+## 14) Quota Enforcement Has A Classic TOCTOU Race
+- Evidence: `server/api/storage/presign-upload.post.ts:141-157`
+- Why this is dumb: quota is checked before presign based on a snapshot with no reservation/lock, so concurrent uploads can both pass and exceed quota.
+- Consequence: “enforced quota” is not actually enforced under real load; tenants can burst past limits.
+- Fix: enforce quota at commit/write time in a transactional backend operation, or reserve bytes atomically during presign and reconcile on upload completion/expiry.
+
+## 15) Quota Check Does O(Change Log) Work On Every Upload
+- Evidence: `server/utils/storage/quota.ts:47-74`, `server/api/storage/presign-upload.post.ts:141-144`
+- Why this is dumb: every presign calls sync pull from cursor `0` and replays `file_meta` history into a map; that is linear-to-history network/CPU work on a hot path.
+- Consequence: upload latency and backend load scale with workspace age, not request size; this degrades badly in production.
+- Fix: maintain a materialized per-workspace usage counter (or cached snapshot with invalidation) and query that in O(1) for quota checks.
+
+## 16) New Sync GC Guards Trigger ESLint Warnings And Fail The Gate
+- Evidence: `app/core/sync/gc-manager.ts:172`, `app/core/sync/gc-manager.ts:190`
+- Why this is dumb: these guards are flagged as unnecessary conditionals, so the branch adds noise while failing `eslint --max-warnings 0`.
+- Consequence: lint gate is red even if runtime behavior is acceptable.
+- Fix: refactor the control flow so the guards are structurally necessary to the analyzer, or add a targeted lint suppression with rationale if this is intentionally defensive.
+
+## 17) Repo Still Has Existing Lint Debt In Sync Gateway Registry
+- Evidence: `server/sync/gateway/registry.ts:125`
+- Why this is dumb: optional chaining/nullish fallback is used where types already guarantee a value, so lint is right to call it dead defensive code.
+- Consequence: `bun run eslint . --max-warnings 0` fails, which violates the “no warnings/errors” quality bar requested here.
+- Fix: simplify to one concrete source of provider ID (or adjust runtime config typing) so the fallback chain is either necessary or removed.

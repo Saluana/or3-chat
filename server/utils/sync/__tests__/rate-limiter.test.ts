@@ -14,6 +14,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { testRuntimeConfig } from '../../../../tests/setup';
 import {
     checkSyncRateLimit,
     recordSyncRequest,
@@ -31,6 +32,7 @@ describe('sync rate limiter', () => {
         resetSyncRateLimits();
         // Ensure limiter is enabled in tests unless explicitly disabled.
         vi.stubEnv('DISABLE_RATE_LIMIT', '0');
+        testRuntimeConfig.value.limits.operationRateLimits = {};
     });
 
     afterEach(() => {
@@ -267,6 +269,23 @@ describe('sync rate limiter', () => {
             const result = checkSyncRateLimit('user-1', 'unknown:new-operation');
             expect(result.allowed).toBe(true);
             expect(result.remaining).toBe(Infinity);
+        });
+
+        it('applies runtime operation overrides', () => {
+            testRuntimeConfig.value.limits.operationRateLimits = {
+                'storage:upload': {
+                    maxRequests: 1,
+                    windowMs: 60_000,
+                },
+            };
+
+            expect(checkSyncRateLimit('user-override', 'storage:upload').allowed).toBe(
+                true
+            );
+            recordSyncRequest('user-override', 'storage:upload');
+            expect(checkSyncRateLimit('user-override', 'storage:upload').allowed).toBe(
+                false
+            );
         });
     });
 });

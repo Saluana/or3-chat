@@ -2,9 +2,29 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createMockH3Event } from '../../../tests/utils/mock-h3';
 import type { H3Event } from 'h3';
 
-const runtimeConfigMock = {
+type RuntimeConfigMock = {
+    sync: { enabled: boolean; provider: string };
+    storage: {
+        enabled: boolean;
+        provider: string;
+        allowedMimeTypes?: string[];
+        workspaceQuotaBytes?: number;
+        gcRetentionSeconds?: number;
+        gcCooldownMs?: number;
+    };
+    auth: { enabled: boolean; provider: string };
+};
+
+const runtimeConfigMock: RuntimeConfigMock = {
     sync: { enabled: true, provider: 'convex' },
-    storage: { enabled: true, provider: 'convex' },
+    storage: {
+        enabled: true,
+        provider: 'convex',
+        allowedMimeTypes: undefined,
+        workspaceQuotaBytes: undefined,
+        gcRetentionSeconds: 2592000,
+        gcCooldownMs: 60000,
+    },
     auth: { enabled: true, provider: 'clerk' },
 };
 

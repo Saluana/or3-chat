@@ -27,6 +27,7 @@ import {
     createOpenRouterClient,
     getRequestOptions,
 } from '~~/shared/openrouter/client';
+import { useRuntimeConfig } from '#imports';
 import { normalizeSDKError } from '~~/shared/openrouter/errors';
 import {
     sdkModelToLocal,
@@ -119,7 +120,13 @@ export async function fetchModels(opts?: {
     }
 
     const key = readApiKey();
-    const client = createOpenRouterClient({ apiKey: key ?? '' });
+    const runtimeConfig = useRuntimeConfig() as {
+        public?: { openRouter?: { baseUrl?: string } };
+    };
+    const client = createOpenRouterClient({
+        apiKey: key ?? '',
+        serverURL: runtimeConfig.public?.openRouter?.baseUrl,
+    });
 
     try {
         const response = await client.models.list({}, getRequestOptions());

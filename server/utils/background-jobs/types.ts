@@ -186,6 +186,8 @@ export interface BackgroundJobProvider {
 export interface BackgroundJobConfig {
     /** Maximum concurrent streaming jobs */
     maxConcurrentJobs: number;
+    /** Maximum concurrent streaming jobs per user */
+    maxConcurrentJobsPerUser: number;
     /** Job timeout in milliseconds */
     jobTimeoutMs: number;
     /** Retention window for completed jobs in milliseconds */
@@ -198,6 +200,7 @@ export interface BackgroundJobConfig {
  */
 export const DEFAULT_CONFIG: BackgroundJobConfig = {
     maxConcurrentJobs: 20,
+    maxConcurrentJobsPerUser: 5,
     jobTimeoutMs: 5 * 60 * 1000,
     completedJobRetentionMs: 5 * 60 * 1000,
 };

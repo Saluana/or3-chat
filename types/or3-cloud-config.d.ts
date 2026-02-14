@@ -97,6 +97,30 @@ export interface Or3CloudConfig {
          * @default 'convex'
          */
         provider: string;
+        /**
+         * Allowlisted MIME types for upload presign requests.
+         * @env OR3_STORAGE_ALLOWED_MIME_TYPES
+         */
+        allowedMimeTypes?: string[];
+        /**
+         * Optional per-workspace storage quota in bytes.
+         * When unset, quota enforcement is disabled.
+         * @env OR3_STORAGE_WORKSPACE_QUOTA_BYTES
+         */
+        workspaceQuotaBytes?: number;
+        /**
+         * Default GC retention window in seconds.
+         * Used when `/api/storage/gc/run` omits `retention_seconds`.
+         * @default 2592000 (30 days)
+         * @env OR3_STORAGE_GC_RETENTION_SECONDS
+         */
+        gcRetentionSeconds?: number;
+        /**
+         * Cooldown window for manual storage GC runs.
+         * @default 60000
+         * @env OR3_STORAGE_GC_COOLDOWN_MS
+         */
+        gcCooldownMs?: number;
     };
 
     /**
@@ -129,6 +153,13 @@ export interface Or3CloudConfig {
                  * @default false
                  */
                 requireUserKey?: boolean;
+                /**
+                 * Base URL for OpenRouter-compatible API endpoints.
+                 * Useful for proxy setups.
+                 * @default 'https://openrouter.ai/api/v1'
+                 * @env OR3_OPENROUTER_BASE_URL
+                 */
+                baseUrl?: string;
             };
         };
     };
@@ -169,6 +200,18 @@ export interface Or3CloudConfig {
          * @default 'memory'
          */
         storageProvider?: string;
+        /**
+         * Optional per-operation rate limit overrides.
+         * Keyed by operation name (e.g. 'sync:push', 'storage:upload').
+         * @env OR3_RATE_LIMIT_OVERRIDES_JSON
+         */
+        operationRateLimits?: Record<
+            string,
+            {
+                windowMs?: number;
+                maxRequests?: number;
+            }
+        >;
     };
 
     /**
@@ -191,6 +234,11 @@ export interface Or3CloudConfig {
          * @default 20
          */
         maxConcurrentJobs?: number;
+        /**
+         * Maximum concurrent background jobs per user.
+         * @default 5
+         */
+        maxConcurrentJobsPerUser?: number;
         /**
          * Background job timeout in seconds.
          * @default 300

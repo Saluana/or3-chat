@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 
 const readBodyMock = vi.fn();
+const useRuntimeConfigMock = vi.fn();
 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
@@ -13,6 +14,10 @@ vi.mock('h3', () => ({
         err.statusCode = opts.statusCode;
         return err;
     },
+}));
+
+vi.mock('#imports', () => ({
+    useRuntimeConfig: useRuntimeConfigMock as any,
 }));
 
 const resolveSessionContextMock = vi.fn();
@@ -74,6 +79,12 @@ describe('POST /api/storage/gc/run', () => {
             id: 'adapter-1',
             gc: gcMock as any,
         });
+        useRuntimeConfigMock.mockReset().mockReturnValue({
+            storage: {
+                gcRetentionSeconds: 30 * 24 * 3600,
+                gcCooldownMs: 60_000,
+            },
+        });
     });
 
     it('returns 400 for schema errors', async () => {
@@ -92,6 +103,25 @@ describe('POST /api/storage/gc/run', () => {
         expect(gcMock).toHaveBeenCalledWith(expect.anything(), {
             workspace_id: 'ws-1',
             retention_seconds: 30 * 24 * 3600,
+            limit: undefined,
+        });
+    });
+
+    it('uses runtime-config retention_seconds default when omitted', async () => {
+        const handler = await loadHandler();
+        useRuntimeConfigMock.mockReturnValue({
+            storage: {
+                gcRetentionSeconds: 7200,
+                gcCooldownMs: 60_000,
+            },
+        });
+        readBodyMock.mockResolvedValue({ workspace_id: 'ws-1' });
+
+        await handler(makeEvent());
+
+        expect(gcMock).toHaveBeenCalledWith(expect.anything(), {
+            workspace_id: 'ws-1',
+            retention_seconds: 7200,
             limit: undefined,
         });
     });

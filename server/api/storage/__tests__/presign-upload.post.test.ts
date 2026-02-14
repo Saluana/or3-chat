@@ -4,6 +4,7 @@ import type { H3Event } from 'h3';
 const readBodyMock = vi.fn();
 const setResponseHeaderMock = vi.fn();
 const setHeaderMock = vi.fn();
+const useRuntimeConfigMock = vi.fn();
 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
@@ -17,6 +18,10 @@ vi.mock('h3', () => ({
         err.statusCode = opts.statusCode;
         return err;
     },
+}));
+
+vi.mock('#imports', () => ({
+    useRuntimeConfig: useRuntimeConfigMock as any,
 }));
 
 const resolveSessionContextMock = vi.fn();
@@ -49,6 +54,11 @@ vi.mock('../../../utils/sync/rate-limiter', () => ({
 const recordUploadStartMock = vi.fn();
 vi.mock('../../../utils/storage/metrics', () => ({
     recordUploadStart: recordUploadStartMock as any,
+}));
+
+const getWorkspaceStorageUsageSnapshotMock = vi.fn();
+vi.mock('../../../utils/storage/quota', () => ({
+    getWorkspaceStorageUsageSnapshot: getWorkspaceStorageUsageSnapshotMock as any,
 }));
 
 const presignUploadMock = vi.fn();
@@ -88,6 +98,16 @@ describe('POST /api/storage/presign-upload', () => {
         checkSyncRateLimitMock.mockReset().mockReturnValue({ allowed: true, remaining: 10 });
         recordSyncRequestMock.mockReset();
         recordUploadStartMock.mockReset();
+        useRuntimeConfigMock.mockReset().mockReturnValue({
+            storage: {
+                allowedMimeTypes: undefined,
+                workspaceQuotaBytes: undefined,
+            },
+        });
+        getWorkspaceStorageUsageSnapshotMock.mockReset().mockResolvedValue({
+            usedBytes: 0,
+            filesByHash: new Map<string, number>(),
+        });
         presignUploadMock.mockReset().mockResolvedValue({
             url: 'https://upload.example',
             expiresAt: 123,
@@ -177,6 +197,45 @@ describe('POST /api/storage/presign-upload', () => {
         readBodyMock.mockResolvedValue({ ...makeValidBody(), mime_type: 'application/zip' });
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 415 });
+    });
+
+    it('uses runtime-config MIME allowlist when provided', async () => {
+        const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
+        useRuntimeConfigMock.mockReturnValue({
+            storage: {
+                allowedMimeTypes: ['application/json'],
+            },
+        });
+        readBodyMock.mockResolvedValue({
+            ...makeValidBody(),
+            mime_type: 'application/json',
+        });
+
+        await expect(handler(makeEvent())).resolves.toMatchObject({
+            url: 'https://upload.example',
+        });
+    });
+
+    it('returns 413 when workspace quota would be exceeded', async () => {
+        const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
+        useRuntimeConfigMock.mockReturnValue({
+            storage: {
+                allowedMimeTypes: ['image/png'],
+                workspaceQuotaBytes: 1_500,
+            },
+        });
+        getWorkspaceStorageUsageSnapshotMock.mockResolvedValue({
+            usedBytes: 1_000,
+            filesByHash: new Map<string, number>(),
+        });
+        readBodyMock.mockResolvedValue({
+            ...makeValidBody(),
+            size_bytes: 600,
+        });
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 413,
+        });
     });
 
     it('returns 500 when adapter is missing', async () => {

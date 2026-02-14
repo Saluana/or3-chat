@@ -363,6 +363,34 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 - Env: `NUXT_PUBLIC_STORAGE_PROVIDER`
 - Purpose: Selects object storage backend.
 
+#### `storage.allowedMimeTypes`
+
+- Type: `string[]`
+- Default: `['image/jpeg','image/png','image/gif','image/webp','application/pdf','text/plain','text/markdown']`
+- Env: `OR3_STORAGE_ALLOWED_MIME_TYPES` (comma-separated)
+- Purpose: Upload MIME allowlist enforced by storage presign endpoint.
+
+#### `storage.workspaceQuotaBytes`
+
+- Type: `number | undefined`
+- Default: `undefined`
+- Env: `OR3_STORAGE_WORKSPACE_QUOTA_BYTES`
+- Purpose: Optional per-workspace storage quota in bytes.
+
+#### `storage.gcRetentionSeconds`
+
+- Type: `number`
+- Default: `2592000`
+- Env: `OR3_STORAGE_GC_RETENTION_SECONDS`
+- Purpose: Default retention used by `POST /api/storage/gc/run` when not provided in request.
+
+#### `storage.gcCooldownMs`
+
+- Type: `number`
+- Default: `60000`
+- Env: `OR3_STORAGE_GC_COOLDOWN_MS`
+- Purpose: Cooldown between manual storage GC runs per workspace.
+
 ### `services.llm.openRouter`
 
 #### `services.llm.openRouter.instanceApiKey`
@@ -388,6 +416,13 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 - Env: `OR3_OPENROUTER_REQUIRE_USER_KEY`
 - Purpose: Forces users to supply their own keys.
 - Strict mode rule: cannot be `true` while `allowUserOverride` is `false`.
+
+#### `services.llm.openRouter.baseUrl`
+
+- Type: `string`
+- Default: `'https://openrouter.ai/api/v1'`
+- Env: `OR3_OPENROUTER_BASE_URL`
+- Purpose: OpenRouter-compatible base URL for proxy setups.
 
 ### `limits`
 
@@ -432,6 +467,21 @@ These are instance-level usage limits (mostly for SSR / hosted deployments).
 - Env: `OR3_LIMITS_STORAGE_PROVIDER`
 - Purpose: Where rate limit counters are stored.
 - Notes: use a persistent provider for production.
+
+#### `limits.operationRateLimits`
+
+- Type: `Record<string, { windowMs?: number; maxRequests?: number }>`
+- Default: `{}`
+- Env: `OR3_RATE_LIMIT_OVERRIDES_JSON`
+- Purpose: Override per-operation thresholds for sync/storage/auth/workflow rate limits.
+- Example:
+
+```json
+{
+  "storage:upload": { "maxRequests": 20, "windowMs": 60000 },
+  "workflow:background": { "maxRequests": 10, "windowMs": 60000 }
+}
+```
 
 ### `security`
 
@@ -490,6 +540,13 @@ SSR-only background processing for AI streams.
 - Default: `20`
 - Env: `OR3_BACKGROUND_MAX_JOBS`
 - Purpose: Global concurrency limit.
+
+#### `backgroundStreaming.maxConcurrentJobsPerUser`
+
+- Type: `number`
+- Default: `5`
+- Env: `OR3_BACKGROUND_MAX_JOBS_PER_USER`
+- Purpose: Per-user concurrency cap for background jobs.
 
 #### `backgroundStreaming.jobTimeoutSeconds`
 

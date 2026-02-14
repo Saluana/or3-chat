@@ -40,6 +40,7 @@
         <UModal
             v-model:open="showResetModal"
             :title="modalTitle"
+            :description="modalDescription"
             :ui="{ content: 'z-[20]' }"
         >
             <template #body>
@@ -109,6 +110,13 @@ const modalTargetLabel = computed(() => {
 const modalActionLabel = computed(() => {
     if (resetTarget.value === 'all') return 'All';
     return resetTarget.value === 'light' ? 'Light' : 'Dark';
+});
+
+const modalDescription = computed(() => {
+    if (resetTarget.value === 'all') {
+        return 'Reset both light and dark theme settings to defaults. This cannot be undone.';
+    }
+    return `Reset ${resetTarget.value} theme settings to defaults. This cannot be undone.`;
 });
 
 const openResetModal = (target: ResetTarget) => {

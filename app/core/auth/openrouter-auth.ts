@@ -25,6 +25,7 @@
 import { err, reportError, type ErrorCode } from '~/utils/errors';
 import { createOpenRouterClient } from '~~/shared/openrouter/client';
 import { normalizeSDKError } from '~~/shared/openrouter/errors';
+import { useRuntimeConfig } from '#imports';
 
 /** Successful code exchange: contains the user's API key. */
 export interface ExchangeResultSuccess {
@@ -94,7 +95,13 @@ export async function exchangeOpenRouterCode(
     p: ExchangeParams
 ): Promise<ExchangeResult> {
     // SDK OAuth doesn't require auth for exchange
-    const client = createOpenRouterClient({ apiKey: '' });
+    const runtimeConfig = useRuntimeConfig() as {
+        public?: { openRouter?: { baseUrl?: string } };
+    };
+    const client = createOpenRouterClient({
+        apiKey: '',
+        serverURL: runtimeConfig.public?.openRouter?.baseUrl,
+    });
 
     try {
         const response = await client.oAuth.exchangeAuthCodeForAPIKey({

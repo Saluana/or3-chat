@@ -21,6 +21,7 @@
  */
 
 import { LRUCache } from 'lru-cache';
+import { useRuntimeConfig } from '#imports';
 
 import type {
     RateLimitConfig,
@@ -89,6 +90,47 @@ export const ALL_RATE_LIMITS = {
     ...WORKFLOW_RATE_LIMITS,
 };
 
+function getRateLimitConfig(operation: string): RateLimitConfig | null {
+    const base =
+        ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS] ?? null;
+    if (!base) {
+        return null;
+    }
+
+    try {
+        const runtimeConfig = useRuntimeConfig();
+        const limits = runtimeConfig.limits as
+            | {
+                  operationRateLimits?: Record<
+                      string,
+                      { windowMs?: number; maxRequests?: number }
+                  >;
+              }
+            | undefined;
+        const override = limits?.operationRateLimits?.[operation];
+        if (!override || typeof override !== 'object') {
+            return base;
+        }
+
+        const windowMs =
+            typeof override.windowMs === 'number' &&
+            Number.isFinite(override.windowMs) &&
+            override.windowMs > 0
+                ? Math.floor(override.windowMs)
+                : base.windowMs;
+        const maxRequests =
+            typeof override.maxRequests === 'number' &&
+            Number.isFinite(override.maxRequests) &&
+            override.maxRequests > 0
+                ? Math.floor(override.maxRequests)
+                : base.maxRequests;
+
+        return { windowMs, maxRequests };
+    } catch {
+        return base;
+    }
+}
+
 /** Maximum age for entries before cleanup (10 minutes). */
 const MAX_ENTRY_AGE_MS = 10 * 60 * 1000;
 
@@ -131,7 +173,7 @@ export function checkSyncRateLimit(subjectKey: string, operation: string): RateL
         return { allowed: true, remaining: Infinity };
     }
 
-    const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
+    const config = getRateLimitConfig(operation);
     if (!config) {
         // Unknown operation - allow by default
         return { allowed: true, remaining: Infinity };
@@ -178,7 +220,7 @@ export function checkSyncRateLimit(subjectKey: string, operation: string): RateL
  * - Call only after a request is allowed.
  */
 export function recordSyncRequest(subjectKey: string, operation: string): void {
-    const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
+    const config = getRateLimitConfig(operation);
     if (!config) {
         return;
     }
@@ -230,7 +272,7 @@ export function getSyncRateLimitStats(
     subjectKey: string,
     operation: string
 ): { limit: number; remaining: number; resetMs: number } | null {
-    const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
+    const config = getRateLimitConfig(operation);
     if (!config) {
         return null;
     }

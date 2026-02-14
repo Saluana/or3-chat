@@ -12,6 +12,47 @@ import {
     type StorageProviderId,
     type SyncProviderId,
 } from './shared/cloud/provider-ids';
+import { DEFAULT_OPENROUTER_BASE_URL } from './shared/config/constants';
+
+function parseRateLimitOverrides(
+    input: string | undefined
+): Record<string, { windowMs?: number; maxRequests?: number }> | undefined {
+    if (!input) return undefined;
+    try {
+        const parsed = JSON.parse(input) as unknown;
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return undefined;
+        }
+        const overrides: Record<
+            string,
+            { windowMs?: number; maxRequests?: number }
+        > = {};
+        for (const [operation, value] of Object.entries(parsed)) {
+            if (!value || typeof value !== 'object' || Array.isArray(value)) {
+                continue;
+            }
+            const raw = value as { windowMs?: unknown; maxRequests?: unknown };
+            const windowMs =
+                typeof raw.windowMs === 'number' &&
+                Number.isFinite(raw.windowMs) &&
+                raw.windowMs > 0
+                    ? Math.floor(raw.windowMs)
+                    : undefined;
+            const maxRequests =
+                typeof raw.maxRequests === 'number' &&
+                Number.isFinite(raw.maxRequests) &&
+                raw.maxRequests > 0
+                    ? Math.floor(raw.maxRequests)
+                    : undefined;
+            if (windowMs !== undefined || maxRequests !== undefined) {
+                overrides[operation] = { windowMs, maxRequests };
+            }
+        }
+        return Object.keys(overrides).length > 0 ? overrides : undefined;
+    } catch {
+        return undefined;
+    }
+}
 
 const authEnabled = process.env.SSR_AUTH_ENABLED === 'true';
 // Auth is the gate - sync/storage require auth but can be individually disabled
@@ -45,6 +86,20 @@ export const or3CloudConfig = defineOr3CloudConfig({
     storage: {
         enabled: storageEnabled,
         provider: (process.env.NUXT_PUBLIC_STORAGE_PROVIDER ?? DEFAULT_STORAGE_PROVIDER_ID) as StorageProviderId,
+        allowedMimeTypes: process.env.OR3_STORAGE_ALLOWED_MIME_TYPES
+            ? process.env.OR3_STORAGE_ALLOWED_MIME_TYPES.split(',')
+                  .map((mime) => mime.trim())
+                  .filter(Boolean)
+            : undefined,
+        workspaceQuotaBytes: process.env.OR3_STORAGE_WORKSPACE_QUOTA_BYTES
+            ? Number(process.env.OR3_STORAGE_WORKSPACE_QUOTA_BYTES)
+            : undefined,
+        gcRetentionSeconds: process.env.OR3_STORAGE_GC_RETENTION_SECONDS
+            ? Number(process.env.OR3_STORAGE_GC_RETENTION_SECONDS)
+            : undefined,
+        gcCooldownMs: process.env.OR3_STORAGE_GC_COOLDOWN_MS
+            ? Number(process.env.OR3_STORAGE_GC_COOLDOWN_MS)
+            : undefined,
     },
     services: {
         llm: {
@@ -54,6 +109,9 @@ export const or3CloudConfig = defineOr3CloudConfig({
                     process.env.OR3_OPENROUTER_ALLOW_USER_OVERRIDE !== 'false',
                 requireUserKey:
                     process.env.OR3_OPENROUTER_REQUIRE_USER_KEY === 'true',
+                baseUrl:
+                    process.env.OR3_OPENROUTER_BASE_URL ??
+                    DEFAULT_OPENROUTER_BASE_URL,
             },
         },
     },
@@ -70,6 +128,9 @@ export const or3CloudConfig = defineOr3CloudConfig({
             : 0,
         // Derive limits provider from sync provider when available, otherwise memory
         storageProvider: (process.env.OR3_LIMITS_STORAGE_PROVIDER ?? (syncEnabled ? (process.env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID) : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
+        operationRateLimits: parseRateLimitOverrides(
+            process.env.OR3_RATE_LIMIT_OVERRIDES_JSON
+        ),
     },
     security: {
         allowedOrigins: process.env.OR3_ALLOWED_ORIGINS
@@ -131,6 +192,9 @@ export const or3CloudConfig = defineOr3CloudConfig({
         maxConcurrentJobs: process.env.OR3_BACKGROUND_MAX_JOBS
             ? Number(process.env.OR3_BACKGROUND_MAX_JOBS)
             : 20,
+        maxConcurrentJobsPerUser: process.env.OR3_BACKGROUND_MAX_JOBS_PER_USER
+            ? Number(process.env.OR3_BACKGROUND_MAX_JOBS_PER_USER)
+            : 5,
         jobTimeoutSeconds: process.env.OR3_BACKGROUND_JOB_TIMEOUT
             ? Number(process.env.OR3_BACKGROUND_JOB_TIMEOUT)
             : 300,

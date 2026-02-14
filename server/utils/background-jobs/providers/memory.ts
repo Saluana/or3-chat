@@ -117,10 +117,18 @@ export const memoryJobProvider: BackgroundJobProvider = {
         const activeCount = Array.from(jobs.values()).filter(
             (j) => j.status === 'streaming'
         ).length;
+        const activeCountForUser = Array.from(jobs.values()).filter(
+            (j) => j.status === 'streaming' && j.userId === params.userId
+        ).length;
 
         if (activeCount >= config.maxConcurrentJobs) {
             throw new Error(
                 `Max concurrent background jobs reached (${config.maxConcurrentJobs})`
+            );
+        }
+        if (activeCountForUser >= config.maxConcurrentJobsPerUser) {
+            throw new Error(
+                `Max concurrent background jobs per user reached (${config.maxConcurrentJobsPerUser})`
             );
         }
 

@@ -21,6 +21,7 @@
  * - Uses OpenRouter SSE payload format.
  */
 
+import { useRuntimeConfig } from '#imports';
 import type { BackgroundJobProvider } from '../background-jobs/types';
 import {
     getJobProvider,
@@ -38,13 +39,21 @@ import {
 } from './viewers';
 import type { ToolCall, ToolDefinition } from '~/utils/chat/types';
 import { executeServerTool } from '../chat/tool-registry';
-
-const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
+import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
 
 function createAbortError(message = 'Job aborted by user'): Error {
     const err = new Error(message);
     err.name = 'AbortError';
     return err;
+}
+
+function resolveOpenRouterChatCompletionsUrl(): string {
+    try {
+        const config = useRuntimeConfig();
+        return getOpenRouterChatCompletionsUrl(config.openrouterBaseUrl);
+    } catch {
+        return getOpenRouterChatCompletionsUrl(undefined);
+    }
 }
 
 function isForcedFunctionToolChoice(
@@ -463,6 +472,7 @@ export async function consumeBackgroundStreamWithTools(params: {
         : [];
 
     try {
+        const openRouterUrl = resolveOpenRouterChatCompletionsUrl();
         while (loopIteration < MAX_TOOL_ITERATIONS) {
             loopIteration += 1;
             await assertJobNotAborted({
@@ -485,7 +495,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                 stream: true,
             } as Record<string, unknown>;
 
-            const upstream = await fetch(OR_URL, {
+            const upstream = await fetch(openRouterUrl, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${params.apiKey}`,
@@ -743,7 +753,8 @@ async function streamInBackground(
         return;
     }
 
-    const upstream = await fetch(OR_URL, {
+    const openRouterUrl = resolveOpenRouterChatCompletionsUrl();
+    const upstream = await fetch(openRouterUrl, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${params.apiKey}`,
