@@ -62,6 +62,8 @@ export interface ToolCall {
     };
 }
 
+export type ToolRuntime = 'hybrid' | 'client' | 'server';
+
 /**
  * `ToolDefinition`
  *
@@ -86,6 +88,7 @@ export interface ToolDefinition {
         defaultEnabled?: boolean;
         category?: string;
     };
+    runtime?: ToolRuntime;
 }
 
 export type ToolChoice =

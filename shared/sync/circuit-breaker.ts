@@ -60,8 +60,6 @@ export class SyncCircuitBreaker {
         if (this.probeInFlight) return false;
         this.probeInFlight = true;
         return true;
-
-        return false;
     }
 
     /**
@@ -176,4 +174,16 @@ export function _resetSyncCircuitBreaker(): void {
         breaker.reset();
     }
     circuitBreakers.clear();
+}
+
+/**
+ * Remove circuit breaker instances for a workspace prefix.
+ */
+export function cleanupSyncCircuitBreakers(workspaceId: string): void {
+    const prefix = `${workspaceId}:`;
+    for (const key of circuitBreakers.keys()) {
+        if (key.startsWith(prefix)) {
+            circuitBreakers.delete(key);
+        }
+    }
 }

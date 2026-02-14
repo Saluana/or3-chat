@@ -10,6 +10,7 @@ import type { CreateJobParams } from '../../server/utils/background-jobs/types';
 vi.mock('../../server/utils/background-jobs/store', () => ({
     getJobConfig: vi.fn(() => ({
         maxConcurrentJobs: 20,
+        maxConcurrentJobsPerUser: 5,
         jobTimeoutMs: 5 * 60 * 1000,
         completedJobRetentionMs: 5 * 60 * 1000,
     })),
@@ -24,12 +25,14 @@ import {
 // Helper to update mock config
 async function setMockJobConfig(config: {
     maxConcurrentJobs?: number;
+    maxConcurrentJobsPerUser?: number;
     jobTimeoutMs?: number;
     completedJobRetentionMs?: number;
 }) {
     const { getJobConfig } = await import('../../server/utils/background-jobs/store');
     vi.mocked(getJobConfig).mockReturnValue({
         maxConcurrentJobs: config.maxConcurrentJobs ?? 20,
+        maxConcurrentJobsPerUser: config.maxConcurrentJobsPerUser ?? 5,
         jobTimeoutMs: config.jobTimeoutMs ?? 5 * 60 * 1000,
         completedJobRetentionMs: config.completedJobRetentionMs ?? 5 * 60 * 1000,
     });
@@ -318,6 +321,57 @@ describe('Memory Background Job Provider', () => {
             expect(job3).toBeTruthy();
 
             // Restore defaults
+            await resetMockJobConfig();
+        });
+
+        it('should enforce per-user concurrent job limit', async () => {
+            await setMockJobConfig({
+                maxConcurrentJobs: 10,
+                maxConcurrentJobsPerUser: 2,
+            });
+            clearAllJobs();
+
+            const params: CreateJobParams = {
+                userId: 'user-1',
+                threadId: 'thread-1',
+                messageId: 'msg-1',
+                model: 'test-model',
+            };
+
+            await memoryJobProvider.createJob({ ...params, messageId: 'msg-1' });
+            await memoryJobProvider.createJob({ ...params, messageId: 'msg-2' });
+
+            await expect(
+                memoryJobProvider.createJob({ ...params, messageId: 'msg-3' })
+            ).rejects.toThrow(/per user/);
+
+            await resetMockJobConfig();
+        });
+
+        it('should allow another user to create jobs when one user hits per-user limit', async () => {
+            await setMockJobConfig({
+                maxConcurrentJobs: 10,
+                maxConcurrentJobsPerUser: 2,
+            });
+            clearAllJobs();
+
+            const base: CreateJobParams = {
+                userId: 'user-1',
+                threadId: 'thread-1',
+                messageId: 'msg-1',
+                model: 'test-model',
+            };
+
+            await memoryJobProvider.createJob({ ...base, messageId: 'msg-1' });
+            await memoryJobProvider.createJob({ ...base, messageId: 'msg-2' });
+
+            const otherUserJob = await memoryJobProvider.createJob({
+                ...base,
+                userId: 'user-2',
+                messageId: 'msg-3',
+            });
+            expect(otherUserJob).toBeTruthy();
+
             await resetMockJobConfig();
         });
     });

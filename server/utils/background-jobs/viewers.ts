@@ -30,6 +30,8 @@ type LiveJobState = {
     chunksReceived: number;
     completedAt?: number;
     error?: string;
+    tool_calls?: BackgroundJob['tool_calls'];
+    workflow_state?: BackgroundJob['workflow_state'];
     cleanupTimer?: ReturnType<typeof setTimeout> | null;
     listeners: Set<(event: LiveJobEvent) => void>;
 };
@@ -40,6 +42,8 @@ type LiveJobEvent =
           content_delta: string;
           content_length: number;
           chunksReceived: number;
+          tool_calls?: BackgroundJob['tool_calls'];
+          workflow_state?: BackgroundJob['workflow_state'];
       }
     | {
           type: 'status';
@@ -49,6 +53,8 @@ type LiveJobEvent =
           chunksReceived: number;
           completedAt?: number;
           error?: string;
+          tool_calls?: BackgroundJob['tool_calls'];
+          workflow_state?: BackgroundJob['workflow_state'];
       };
 
 const jobStreams = new Map<string, LiveJobState>();
@@ -141,18 +147,31 @@ export function initJobLiveState(jobId: string): void {
 export function emitJobDelta(
     jobId: string,
     delta: string,
-    meta: { contentLength: number; chunksReceived: number }
+    meta: {
+        contentLength: number;
+        chunksReceived: number;
+        tool_calls?: BackgroundJob['tool_calls'];
+        workflow_state?: BackgroundJob['workflow_state'];
+    }
 ): void {
     if (!delta) return;
     const state = ensureJobLiveState(jobId);
     state.content += delta;
     state.chunksReceived = meta.chunksReceived;
     state.status = 'streaming';
+    if (meta.tool_calls !== undefined) {
+        state.tool_calls = meta.tool_calls;
+    }
+    if (meta.workflow_state !== undefined) {
+        state.workflow_state = meta.workflow_state;
+    }
     const event: LiveJobEvent = {
         type: 'delta',
         content_delta: delta,
         content_length: meta.contentLength,
         chunksReceived: meta.chunksReceived,
+        tool_calls: meta.tool_calls,
+        workflow_state: meta.workflow_state,
     };
     for (const listener of state.listeners) {
         listener(event);
@@ -172,6 +191,8 @@ export function emitJobStatus(
         chunksReceived: number;
         completedAt?: number;
         error?: string;
+        tool_calls?: BackgroundJob['tool_calls'];
+        workflow_state?: BackgroundJob['workflow_state'];
     }
 ): void {
     const state = ensureJobLiveState(jobId);
@@ -180,6 +201,8 @@ export function emitJobStatus(
     state.chunksReceived = meta.chunksReceived;
     state.completedAt = meta.completedAt;
     state.error = meta.error;
+    state.tool_calls = meta.tool_calls;
+    state.workflow_state = meta.workflow_state;
     const event: LiveJobEvent = {
         type: 'status',
         status,
@@ -188,6 +211,8 @@ export function emitJobStatus(
         chunksReceived: meta.chunksReceived,
         completedAt: meta.completedAt,
         error: meta.error,
+        tool_calls: meta.tool_calls,
+        workflow_state: meta.workflow_state,
     };
     for (const listener of state.listeners) {
         listener(event);

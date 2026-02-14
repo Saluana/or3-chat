@@ -11,10 +11,7 @@ import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
-import { api } from '~~/convex/_generated/api';
-import type { Id } from '~~/convex/_generated/dataModel';
-import { getClerkProviderToken, getConvexGatewayClient } from '../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
 
 const GcRequestSchema = z.object({
     scope: SyncScopeSchema,
@@ -28,8 +25,9 @@ const GcRequestSchema = z.object({
  * Forget about deleted items after X time.
  *
  * Behavior:
- * - Proxies `api.sync.gcTombstones`.
- * - Requires `workspace.write` permissions.
+ * - Requires `workspace.settings.manage` permission (elevated from workspace.write for security).
+ * - Rate limited to prevent abuse.
+ * - Dispatches to registered SyncGatewayAdapter.
  *
  * Impact:
  * - Clients that have been offline longer than `retentionSeconds` must do a full re-sync, as they will miss deletions.
@@ -46,21 +44,41 @@ export default defineEventHandler(async (event) => {
     }
 
     const session = await resolveSessionContext(event);
-    requireCan(session, 'workspace.write', {
+    if (!session.authenticated || !session.user || !session.workspace) {
+        throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
+    }
+
+    requireCan(session, 'workspace.settings.manage', {
         kind: 'workspace',
         id: parsed.data.scope.workspaceId,
     });
 
-    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
-    if (!token) {
-        throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+    // Rate limiting for GC operations (even admins need limits)
+    const { checkSyncRateLimit, recordSyncRequest } = await import('../../utils/sync/rate-limiter');
+    const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:gc');
+    if (!rateLimitResult.allowed) {
+        throw createError({
+            statusCode: 429,
+            statusMessage: 'Too many GC requests. Please wait before retrying.',
+        });
     }
 
-    const client = getConvexGatewayClient(event, token);
-    const result = await client.mutation(api.sync.gcTombstones, {
-        workspace_id: parsed.data.scope.workspaceId as Id<'workspaces'>,
-        retention_seconds: parsed.data.retentionSeconds,
-    });
+    // Get sync gateway adapter from registry
+    const adapter = getActiveSyncGatewayAdapter();
+    if (!adapter) {
+        throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
+    }
+
+    // Check if adapter supports GC tombstones
+    if (!adapter.gcTombstones) {
+        throw createError({ statusCode: 501, statusMessage: 'GC tombstones not supported by adapter' });
+    }
+
+    // Dispatch to adapter
+    const result = await adapter.gcTombstones(event, parsed.data);
+
+    // Record successful request for rate limiting
+    recordSyncRequest(session.user.id, 'sync:gc');
 
     return result;
 });

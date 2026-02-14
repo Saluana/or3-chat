@@ -35,8 +35,8 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    // Require admin context
-    await requireAdminApiContext(event);
+    // Require super admin context
+    await requireAdminApiContext(event, { superAdminOnly: true });
 
     const body = await readBody<RevokeAdminBody>(event);
     const { userId } = body;

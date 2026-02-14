@@ -12,6 +12,7 @@
  * - Business logic or persistence operations
  */
 import type { ZodTypeAny, infer as ZodInfer } from 'zod';
+import type { Or3DB } from './client';
 
 /**
  * Purpose:
@@ -87,4 +88,45 @@ export function newId(): string {
         return crypto.randomUUID();
     }
     return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+type WriteTxTableNamesOptions = {
+    include?: string[];
+    includePendingOps?: boolean;
+    includeTombstones?: boolean;
+};
+
+/**
+ * Build transaction table scopes that keep sync capture atomic when possible.
+ * - Always includes primary table(s)
+ * - Includes optional extra tables only when present in current DB schema
+ * - Includes `pending_ops` by default when available
+ * - Includes `tombstones` when explicitly requested and available
+ */
+export function getWriteTxTableNames(
+    db: Pick<Or3DB, 'tables'> | { tables?: Array<{ name: string }> },
+    primary: string | string[],
+    options: WriteTxTableNamesOptions = {}
+): string[] {
+    const tableList = Array.isArray(db.tables) ? db.tables : [];
+    const existing = new Set(tableList.map((table) => table.name));
+    const names = new Set<string>(
+        Array.isArray(primary) ? primary : [primary]
+    );
+
+    for (const tableName of options.include ?? []) {
+        if (existing.has(tableName)) {
+            names.add(tableName);
+        }
+    }
+
+    if ((options.includePendingOps ?? true) && existing.has('pending_ops')) {
+        names.add('pending_ops');
+    }
+
+    if (options.includeTombstones && existing.has('tombstones')) {
+        names.add('tombstones');
+    }
+
+    return [...names];
 }

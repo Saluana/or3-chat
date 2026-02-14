@@ -15,6 +15,37 @@ import { z } from 'zod';
 import { newId, nowSec } from './util';
 import { isValidHash } from '~/utils/hash';
 
+function isJsonSerializable(
+    value: unknown,
+    depth = 0,
+    seen: WeakSet<object> = new WeakSet()
+): boolean {
+    if (depth > 20) return false;
+    if (value === null) return true;
+
+    const kind = typeof value;
+    if (kind === 'string' || kind === 'number' || kind === 'boolean') {
+        return true;
+    }
+
+    if (kind !== 'object') {
+        return false;
+    }
+
+    if (seen.has(value as object)) {
+        return false;
+    }
+    seen.add(value as object);
+
+    if (Array.isArray(value)) {
+        return value.every((item) => isJsonSerializable(item, depth + 1, seen));
+    }
+
+    return Object.values(value as Record<string, unknown>).every((item) =>
+        isJsonSerializable(item, depth + 1, seen)
+    );
+}
+
 /**
  * `ProjectSchema`
  *
@@ -34,7 +65,12 @@ export const ProjectSchema = z.object({
     id: z.string(),
     name: z.string(),
     description: z.string().nullable().optional(),
-    data: z.any(),
+    data: z
+        .unknown()
+        .refine(
+            (value) => isJsonSerializable(value),
+            'Project data must be JSON-serializable'
+        ),
     created_at: z.number().int(),
     updated_at: z.number().int(),
     deleted: z.boolean().default(false),
@@ -148,8 +184,8 @@ export const ThreadCreateSchema = ThreadSchema.partial({
             .int()
             .optional()
             .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
+        created_at: z.number().int().default(() => nowSec()),
+        updated_at: z.number().int().default(() => nowSec()),
     });
 // Use z.input so defaulted fields are optional for callers
 /**
@@ -307,8 +343,8 @@ export const PostCreateSchema = PostSchema.partial({
         .string()
         .optional()
         .transform((v) => v ?? newId()),
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
+    created_at: z.number().int().default(() => nowSec()),
+    updated_at: z.number().int().default(() => nowSec()),
 });
 /**
  * Purpose:
@@ -353,8 +389,8 @@ export const MessageCreateSchema = MessageSchema.partial({ index: true })
             .int()
             .optional()
             .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
+        created_at: z.number().int().default(() => nowSec()),
+        updated_at: z.number().int().default(() => nowSec()),
     });
 // Use input type so callers can omit defaulted fields
 /**
@@ -431,8 +467,8 @@ export const KvCreateSchema = KvSchema.omit({
     created_at: true,
     updated_at: true,
 }).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
+    created_at: z.number().int().default(() => nowSec()),
+    updated_at: z.number().int().default(() => nowSec()),
 });
 /**
  * Purpose:
@@ -509,8 +545,8 @@ export const AttachmentCreateSchema = AttachmentSchema.omit({
     created_at: true,
     updated_at: true,
 }).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
+    created_at: z.number().int().default(() => nowSec()),
+    updated_at: z.number().int().default(() => nowSec()),
 });
 /**
  * Purpose:
@@ -597,8 +633,8 @@ export const FileMetaCreateSchema = FileMetaSchema.omit({
     updated_at: true,
     ref_count: true,
 }).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
+    created_at: z.number().int().default(() => nowSec()),
+    updated_at: z.number().int().default(() => nowSec()),
     ref_count: z.number().int().default(1),
     clock: z.number().int().default(0),
 });
@@ -742,8 +778,8 @@ export const NotificationCreateSchema = NotificationSchema.partial({
             .int()
             .optional()
             .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
+        created_at: z.number().int().default(() => nowSec()),
+        updated_at: z.number().int().default(() => nowSec()),
     });
 /**
  * Purpose:

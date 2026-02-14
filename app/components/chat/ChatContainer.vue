@@ -119,6 +119,7 @@ import {
     getPanePendingPrompt,
     clearPanePendingPrompt,
     setPanePendingPrompt,
+    setupPanePromptCleanup,
 } from '~/composables/core/usePanePrompt';
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 import { Or3Scroll } from 'or3-scroll';
@@ -208,6 +209,9 @@ const emit = defineEmits<{
     (e: 'reached-top'): void;
     (e: 'reached-bottom'): void;
 }>();
+
+// Register pane-close cleanup after Nuxt app context is available.
+setupPanePromptCleanup();
 
 // Initialize chat composable and make it refresh when threadId changes
 // Initialized defensively (HMR can briefly leave it null in re-eval window)
@@ -317,8 +321,10 @@ const backgroundStreaming = computed(
     () => Boolean(backgroundJobId.value) && backgroundJobMode.value !== 'none'
 );
 const workflowRunning = computed(() => {
-    for (const wf of workflowStates.values()) {
-        if (wf && wf.executionState === 'running') return true;
+    for (const msg of messages.value) {
+        if (!msg.id) continue;
+        const wf = workflowStates.get(msg.id);
+        if (wf?.executionState === 'running') return true;
     }
     return false;
 });
@@ -400,7 +406,9 @@ watch(
     () => messages.value,
     (list) => {
         if (!Array.isArray(list)) return;
+        const visibleIds = new Set<string>();
         for (const msg of list) {
+            if (msg.id) visibleIds.add(msg.id);
             const wf = msg.workflowState;
             if (!isUiWorkflowState(wf)) continue;
             const existing = workflowStates.get(msg.id);
@@ -410,8 +418,20 @@ watch(
                 workflowStates.set(msg.id, wf);
             }
         }
+        for (const id of Array.from(workflowStates.keys())) {
+            if (!visibleIds.has(id)) {
+                workflowStates.delete(id);
+            }
+        }
     },
     { immediate: true }
+);
+
+watch(
+    () => props.threadId,
+    () => {
+        workflowStates.clear();
+    }
 );
 
 function deriveWorkflowText(wf: UiWorkflowState): string {
@@ -441,8 +461,15 @@ function mergeWorkflowState(msg: UiChatMessage) {
 const allMessages = computed(() => {
     if (!chat.value) return [];
     const list = stableMessages.value.map(mergeWorkflowState);
-    if (streamingMessage.value) {
-        list.push(mergeWorkflowState(streamingMessage.value));
+    const tail = streamingMessage.value;
+    
+    if (tail) {
+        // Deduplicate: Don't add tail if it's already in the stable list
+        // (This happens during race conditions where sync adds it before tail is cleared)
+        const exists = list.some(m => m.id === tail.id || (m.stream_id && m.stream_id === tail.stream_id));
+        if (!exists) {
+            list.push(mergeWorkflowState(tail));
+        }
     }
     return list;
 });
@@ -763,6 +790,12 @@ const cleanupWorkflowHook = hooks.on(
     'workflow.execution:action:state_update',
     (payload: { messageId: string; state: unknown }) => {
         if (!isUiWorkflowState(payload.state)) return;
+        const activeIds = new Set(
+            messages.value
+                .map((m) => m.id)
+                .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        );
+        if (!activeIds.has(payload.messageId)) return;
         // Only set if not already the same reference (avoid unnecessary reactivity triggers)
         const existing = workflowStates.get(payload.messageId);
         if (existing !== payload.state) {

@@ -1,4 +1,4 @@
-import { ref, computed, onScopeDispose } from 'vue';
+import { ref, computed, onScopeDispose, getCurrentScope } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
 import { getDb } from '~/db/client';
 import type { Post } from '~/db/schema';
@@ -102,10 +102,12 @@ export function usePostsList(
     });
 
     // Cleanup on component unmount
-    onScopeDispose(() => {
-        subscription?.unsubscribe();
-        subscription = null;
-    });
+    if (getCurrentScope()) {
+        onScopeDispose(() => {
+            subscription?.unsubscribe();
+            subscription = null;
+        });
+    }
 
     // Manual refresh (subscription will auto-update)
     const refresh = () => {

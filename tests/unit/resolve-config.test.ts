@@ -197,6 +197,31 @@ describe('buildOr3CloudConfigFromEnv', () => {
         expect(config.auth.enabled).toBe(false);
         expect(config.sync.enabled).toBe(false);
         expect(config.storage.enabled).toBe(false);
+        expect(config.auth.autoProvision).toBe(true);
+    });
+
+    it('maps auth provisioning controls from env', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_GUEST_ACCESS_ENABLED: 'true',
+            OR3_AUTH_AUTO_PROVISION: 'false',
+            OR3_SESSION_PROVISIONING_FAILURE: 'service-unavailable',
+            NODE_ENV: 'development',
+        });
+
+        expect(config.auth.guestAccessEnabled).toBe(true);
+        expect(config.auth.autoProvision).toBe(false);
+        expect(config.auth.sessionProvisioningFailure).toBe('service-unavailable');
+    });
+
+    it('ignores invalid provisioning failure mode values', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_SESSION_PROVISIONING_FAILURE: 'invalid',
+            NODE_ENV: 'development',
+        });
+
+        expect(config.auth.sessionProvisioningFailure).toBeUndefined();
     });
 
     it('enables auth when SSR_AUTH_ENABLED=true', () => {
@@ -338,17 +363,61 @@ describe('buildOr3CloudConfigFromEnv', () => {
             OR3_BACKGROUND_MAX_JOBS: 'invalid',
         });
         expect(config.backgroundStreaming?.maxConcurrentJobs).toBe(20);
+        expect(config.backgroundStreaming?.maxConcurrentJobsPerUser).toBe(5);
     });
 
     it('parses background streaming config correctly', () => {
         const config = buildOr3CloudConfigFromEnv({
             OR3_BACKGROUND_STREAMING_ENABLED: 'true',
             OR3_BACKGROUND_MAX_JOBS: '50',
+            OR3_BACKGROUND_MAX_JOBS_PER_USER: '7',
             OR3_BACKGROUND_JOB_TIMEOUT: '600',
         });
         expect(config.backgroundStreaming?.enabled).toBe(true);
         expect(config.backgroundStreaming?.maxConcurrentJobs).toBe(50);
+        expect(config.backgroundStreaming?.maxConcurrentJobsPerUser).toBe(7);
         expect(config.backgroundStreaming?.jobTimeoutSeconds).toBe(600);
+    });
+
+    it('parses storage policy config correctly', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_STORAGE_ALLOWED_MIME_TYPES:
+                'image/png,application/pdf,text/plain',
+            OR3_STORAGE_WORKSPACE_QUOTA_BYTES: '1048576',
+            OR3_STORAGE_GC_RETENTION_SECONDS: '3600',
+            OR3_STORAGE_GC_COOLDOWN_MS: '15000',
+        });
+        expect(config.storage.allowedMimeTypes).toEqual([
+            'image/png',
+            'application/pdf',
+            'text/plain',
+        ]);
+        expect(config.storage.workspaceQuotaBytes).toBe(1048576);
+        expect(config.storage.gcRetentionSeconds).toBe(3600);
+        expect(config.storage.gcCooldownMs).toBe(15000);
+    });
+
+    it('parses OpenRouter base URL and rate limit overrides', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_OPENROUTER_BASE_URL: 'https://proxy.example.com/api/v1',
+            OR3_RATE_LIMIT_OVERRIDES_JSON: JSON.stringify({
+                'storage:upload': { maxRequests: 7, windowMs: 120000 },
+            }),
+        });
+        expect(config.services.llm?.openRouter?.baseUrl).toBe(
+            'https://proxy.example.com/api/v1'
+        );
+        expect(config.limits?.operationRateLimits?.['storage:upload']).toEqual({
+            maxRequests: 7,
+            windowMs: 120000,
+        });
+    });
+
+    it('ignores malformed rate limit overrides JSON', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_RATE_LIMIT_OVERRIDES_JSON: '{not-json',
+        });
+        expect(config.limits?.operationRateLimits).toEqual({});
     });
 
     it('respects forceHttps override', () => {
@@ -456,5 +525,25 @@ describe('buildOr3CloudConfigFromEnv', () => {
                 AUTH_PROVIDER: 'clerk',
             })
         ).toThrow(/publishableKey/i);
+    });
+
+    it('supports OR3_AUTH_PROVIDER alias', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_AUTH_PROVIDER: 'basic-auth',
+            OR3_SYNC_ENABLED: 'false',
+            OR3_STORAGE_ENABLED: 'false',
+        });
+        expect(config.auth.provider).toBe('basic-auth');
+    });
+
+    it('supports OR3_CLOUD_SYNC_ENABLED and OR3_CLOUD_STORAGE_ENABLED aliases', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_CLOUD_SYNC_ENABLED: 'false',
+            OR3_CLOUD_STORAGE_ENABLED: 'false',
+        });
+        expect(config.sync.enabled).toBe(false);
+        expect(config.storage.enabled).toBe(false);
     });
 });

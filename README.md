@@ -27,6 +27,16 @@ bun run dev
 
 Visit `http://localhost:3000`, connect your OpenRouter account via the built-in PKCE flow, and you’re ready to chat. Additional build, preview, and test commands live in `package.json`.
 
+## OR3 Cloud One-Command Wizard
+
+Use the install wizard to configure SSR auth + sync + storage:
+
+```bash
+bun run or3-cloud:init
+```
+
+The wizard validates your answers, writes `.env` safely, generates `or3.providers.generated.ts`, and can optionally run deploy commands.
+
 ## OR3 Cloud Configuration
 
 OR3 Cloud features are configured through `config.or3cloud.ts` at the project root. This file is the single source of truth for SSR auth, sync, storage, instance-level OpenRouter keys, branding, and limits.
@@ -38,12 +48,17 @@ Site branding, feature toggles, and client-side limits are configured in `config
 Key environment variables you can use inside `config.or3cloud.ts` and `config.or3.ts`:
 
 -   `SSR_AUTH_ENABLED` (true/false)
--   `NUXT_PUBLIC_CONVEX_URL` / `VITE_CONVEX_URL`
+-   `VITE_CONVEX_URL` (Convex sync/storage URL)
 -   `OPENROUTER_API_KEY`
+-   `OR3_OPENROUTER_BASE_URL`
 -   `OR3_OPENROUTER_ALLOW_USER_OVERRIDE` (true/false)
 -   `OR3_REQUESTS_PER_MINUTE`, `OR3_MAX_CONVERSATIONS`, `OR3_MAX_MESSAGES_PER_DAY`
+-   `OR3_RATE_LIMIT_OVERRIDES_JSON` (JSON map for per-operation rate-limit overrides)
+-   `OR3_STORAGE_ALLOWED_MIME_TYPES` (comma-separated allowlist)
+-   `OR3_STORAGE_WORKSPACE_QUOTA_BYTES` (optional per-workspace quota)
+-   `OR3_STORAGE_GC_RETENTION_SECONDS`, `OR3_STORAGE_GC_COOLDOWN_MS`
 -   `OR3_BACKGROUND_STREAMING_ENABLED`, `OR3_BACKGROUND_STREAMING_PROVIDER`
--   `OR3_BACKGROUND_MAX_JOBS`, `OR3_BACKGROUND_JOB_TIMEOUT`
+-   `OR3_BACKGROUND_MAX_JOBS`, `OR3_BACKGROUND_MAX_JOBS_PER_USER`, `OR3_BACKGROUND_JOB_TIMEOUT`
 -   `OR3_APP_NAME`, `OR3_LOGO_URL`, `OR3_DEFAULT_THEME`
 -   `OR3_TERMS_URL`, `OR3_PRIVACY_URL`
 -   `OR3_ALLOWED_ORIGINS`, `OR3_FORCE_HTTPS`

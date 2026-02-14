@@ -7,21 +7,20 @@
  * Responsibilities:
  * - Identifies files not referenced by any attachment/record.
  * - Enforces retention policies (default 30 days).
- * - Rate limits execution to prevent abuse (1 min cooldown per workspace).
+ * - Rate limits execution to prevent abuse (runtime-configurable cooldown per workspace).
  */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
+import { useRuntimeConfig } from '#imports';
 import { resolveSessionContext } from '../../../auth/session';
 import { requireCan } from '../../../auth/can';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../../utils/storage/is-storage-enabled';
-import { api } from '~~/convex/_generated/api';
-import type { Id } from '~~/convex/_generated/dataModel';
+import { getActiveStorageGatewayAdapter } from '../../../storage/gateway/registry';
 import {
-    getClerkProviderToken,
-    getConvexGatewayClient,
-} from '../../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+    DEFAULT_STORAGE_GC_COOLDOWN_MS,
+    DEFAULT_STORAGE_GC_RETENTION_SECONDS,
+} from '~~/shared/config/constants';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -30,14 +29,26 @@ const BodySchema = z.object({
 });
 
 // Simple in-memory rate limiting (resets on server restart)
-const GC_COOLDOWN_MS = 60_000; // 1 minute cooldown
 const MAX_TRACKED_WORKSPACES = 1000;
 const lastGcRunByWorkspace = new Map<string, number>();
 
-function recordGcRun(workspaceId: string, now: number): void {
+function toNonNegativeInt(value: unknown, fallback: number): number {
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+        return Math.floor(value);
+    }
+    if (typeof value === 'string') {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed) && parsed >= 0) {
+            return Math.floor(parsed);
+        }
+    }
+    return fallback;
+}
+
+function recordGcRun(workspaceId: string, now: number, cooldownMs: number): void {
     if (lastGcRunByWorkspace.size >= MAX_TRACKED_WORKSPACES) {
         for (const [id, timestamp] of lastGcRunByWorkspace) {
-            if (now - timestamp > GC_COOLDOWN_MS) {
+            if (now - timestamp > cooldownMs) {
                 lastGcRunByWorkspace.delete(id);
             }
         }
@@ -53,11 +64,11 @@ function recordGcRun(workspaceId: string, now: number): void {
  *
  * Behavior:
  * - Requires `admin.access` on the workspace.
- * - Delegates to `api.storage.gcDeletedFiles`.
+ * - Dispatches to registered StorageGatewayAdapter.
  * - Returns count of deleted objects.
  *
  * Constraints:
- * - Cooldown: 60s/workspace.
+ * - Cooldown: runtime-configurable per workspace (`storage.gcCooldownMs`).
  */
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isStorageEnabled(event)) {
@@ -75,30 +86,51 @@ export default defineEventHandler(async (event) => {
         id: body.data.workspace_id,
     });
 
+    const runtimeConfig = useRuntimeConfig(event);
+    const storageConfig = runtimeConfig.storage as
+        | {
+              gcRetentionSeconds?: unknown;
+              gcCooldownMs?: unknown;
+          }
+        | undefined;
+    const gcCooldownMs = toNonNegativeInt(
+        storageConfig?.gcCooldownMs,
+        DEFAULT_STORAGE_GC_COOLDOWN_MS
+    );
+    const defaultRetentionSeconds = toNonNegativeInt(
+        storageConfig?.gcRetentionSeconds,
+        DEFAULT_STORAGE_GC_RETENTION_SECONDS
+    );
+
     // Rate limit check
     const now = Date.now();
     const lastRun = lastGcRunByWorkspace.get(body.data.workspace_id) ?? 0;
-    if (now - lastRun < GC_COOLDOWN_MS) {
-        const waitSeconds = Math.ceil((GC_COOLDOWN_MS - (now - lastRun)) / 1000);
+    if (now - lastRun < gcCooldownMs) {
+        const waitSeconds = Math.ceil((gcCooldownMs - (now - lastRun)) / 1000);
         throw createError({
             statusCode: 429,
             statusMessage: `GC rate limited, wait ${waitSeconds} seconds`,
         });
     }
-    recordGcRun(body.data.workspace_id, now);
+    recordGcRun(body.data.workspace_id, now, gcCooldownMs);
 
-    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
-    if (!token) {
-        throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+    // Get storage gateway adapter from registry
+    const adapter = getActiveStorageGatewayAdapter();
+    if (!adapter) {
+        throw createError({ statusCode: 500, statusMessage: 'Storage adapter not configured' });
     }
 
-    const client = getConvexGatewayClient(event, token);
-    const retentionSeconds = body.data.retention_seconds ?? 30 * 24 * 3600;
-    const result = await client.mutation(api.storage.gcDeletedFiles, {
-        workspace_id: body.data.workspace_id as Id<'workspaces'>,
+    // Check if adapter supports GC
+    if (!adapter.gc) {
+        throw createError({ statusCode: 501, statusMessage: 'GC not supported by adapter' });
+    }
+
+    const retentionSeconds = body.data.retention_seconds ?? defaultRetentionSeconds;
+    const result = await adapter.gc(event, {
+        workspace_id: body.data.workspace_id,
         retention_seconds: retentionSeconds,
         limit: body.data.limit,
     });
 
-    return { deleted_count: result.deletedCount };
+    return result;
 });

@@ -279,7 +279,7 @@ import { parseToolArgs } from '~/utils/chat/internal-helpers';
 
 ## Limitations
 
-- **Client-only** — Tool registration is client-side only (no SSR support)
+- **Client registry only** — This API registers browser handlers. Background SSR execution uses the server registry.
 - **Runtime only** — Tools registered in plugins only, not at build time
 - **No validation** — Helper doesn't validate tool definitions (validation happens at registration)
 
@@ -288,6 +288,8 @@ import { parseToolArgs } from '~/utils/chat/internal-helpers';
 ## Related
 
 - [`tool-registry.md`](../utils/tool-registry.md) — Full registry API and internals
+- [`tool-runtime.md`](../utils/tool-runtime.md) — Runtime model for client/server tool execution
+- [`server-tool-registry.md`](../utils/server-tool-registry.md) — Server registry API for background execution
 - [`chat-types.md`](../types/chat-types.md) — Type definitions and schemas
 - [`plugin-quickstart.md`](../start/plugin-quickstart.md) — Plugin development guide
 - [`demo-calculator-tool.client.ts`](../../app/plugins/demo-calculator-tool.client.ts) — Reference implementation

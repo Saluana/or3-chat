@@ -22,6 +22,7 @@
  */
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
+import { LRUCache } from 'lru-cache';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import type { ProviderSession } from './types';
 import { getAuthProvider } from './registry';
@@ -33,6 +34,72 @@ import { getDeploymentAdminChecker } from './deployment-admin';
 
 const SESSION_CONTEXT_KEY_PREFIX = '__or3_session_context_';
 const REQUEST_ID_KEY = '__or3_request_id';
+const DEFAULT_SHARED_SESSION_CACHE_TTL_MS = 60_000;
+const MAX_SHARED_SESSION_CACHE_ENTRIES = 2_000;
+
+type SharedSessionCacheEntry = {
+    session: SessionContext;
+    expiresAtMs: number;
+};
+
+const sharedSessionCache = new LRUCache<string, SharedSessionCacheEntry>({
+    max: MAX_SHARED_SESSION_CACHE_ENTRIES,
+});
+
+function getSharedSessionCacheKey(providerId: string, providerUserId: string): string {
+    return `${providerId}:${providerUserId}`;
+}
+
+function clearSharedSessionCacheEntry(
+    providerId: string | undefined,
+    providerUserId: string | undefined
+): void {
+    if (!providerId || !providerUserId) return;
+    sharedSessionCache.delete(getSharedSessionCacheKey(providerId, providerUserId));
+}
+
+function getConfiguredSessionCacheTtlMs(config: ReturnType<typeof useRuntimeConfig>): number {
+    const candidate = Number(
+        (config.auth as { sessionCacheTtlMs?: unknown } | undefined)
+            ?.sessionCacheTtlMs
+    );
+    if (!Number.isFinite(candidate) || candidate <= 0) {
+        return DEFAULT_SHARED_SESSION_CACHE_TTL_MS;
+    }
+    return Math.floor(candidate);
+}
+
+function getSessionCacheTtlMs(
+    config: ReturnType<typeof useRuntimeConfig>,
+    providerSession: ProviderSession
+): number {
+    const configured = getConfiguredSessionCacheTtlMs(config);
+    const untilProviderExpiry = providerSession.expiresAt.getTime() - Date.now();
+    if (!Number.isFinite(untilProviderExpiry) || untilProviderExpiry <= 0) {
+        return 1;
+    }
+    return Math.max(1, Math.min(configured, Math.floor(untilProviderExpiry)));
+}
+
+type SessionProvisioningFailureMode =
+    | 'throw'
+    | 'unauthenticated'
+    | 'service-unavailable';
+
+function getSessionProvisioningFailureMode(
+    config: ReturnType<typeof useRuntimeConfig>
+): SessionProvisioningFailureMode {
+    const candidate = (config.auth as { sessionProvisioningFailure?: unknown } | undefined)
+        ?.sessionProvisioningFailure;
+    if (
+        candidate === 'throw' ||
+        candidate === 'unauthenticated' ||
+        candidate === 'service-unavailable'
+    ) {
+        return candidate;
+    }
+    return 'throw';
+}
 
 /**
  * Purpose:
@@ -122,28 +189,84 @@ export async function resolveSessionContext(
         return nullSession;
     }
 
-    // Map provider session to internal user/workspace via the configured sync provider
-    // TODO: Abstract this into a provider-agnostic SessionStore interface
-    try {
-        // For now, we use Convex directly as it's the only supported sync provider
-        // When adding new providers, this should be abstracted similar to AuthProvider
-        const { getConvexClient } = await import('../utils/convex-client');
-        const { api } = await import('~~/convex/_generated/api');
-        const convex = getConvexClient();
+    const sharedCacheKey = getSharedSessionCacheKey(
+        providerSession.provider,
+        providerSession.user.id
+    );
+    const sharedCached = sharedSessionCache.get(sharedCacheKey);
+    if (sharedCached) {
+        if (sharedCached.expiresAtMs > Date.now()) {
+            recordSessionResolution(true);
+            event.context[cacheKey] = sharedCached.session;
+            return sharedCached.session;
+        }
+        sharedSessionCache.delete(sharedCacheKey);
+    }
 
-        const resolved = await convex.query(api.workspaces.resolveSession, {
+    // Map provider session to internal user/workspace via the configured AuthWorkspaceStore
+    try {
+        // Get the configured workspace store based on sync provider
+        const { getAuthWorkspaceStore } = await import('./store/registry');
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- sync may be undefined in test/static-build configs
+        const storeId = config.public.sync?.provider || 'convex';
+        const store = getAuthWorkspaceStore(storeId);
+
+        if (!store) {
+            throw new Error(
+                `[auth:session] AuthWorkspaceStore not registered for provider: ${storeId}`
+            );
+        }
+
+        // Check if auto-provisioning is enabled
+        const autoProvision = (config.auth as { autoProvision?: boolean } | undefined)?.autoProvision ?? true;
+        
+        if (!autoProvision) {
+            if (!store.getUser) {
+                throw createError({
+                    statusCode: 500,
+                    statusMessage:
+                        'Auth store must implement getUser when OR3_AUTH_AUTO_PROVISION=false',
+                });
+            }
+
+            // Try to get existing user without creating
+            const existingUser = await store.getUser({
+                provider: providerSession.provider,
+                providerUserId: providerSession.user.id,
+            });
+            
+            if (!existingUser) {
+                console.warn('[auth:session] Auto-provisioning disabled, rejecting unknown user', {
+                    provider: providerSession.provider,
+                    userId: providerSession.user.id,
+                });
+                throw createError({
+                    statusCode: 403,
+                    statusMessage: 'Registration is currently disabled. Please contact an administrator.',
+                });
+            }
+        }
+
+        // Get or create user
+        const { userId } = await store.getOrCreateUser({
             provider: providerSession.provider,
-            provider_user_id: providerSession.user.id,
+            providerUserId: providerSession.user.id,
+            email: providerSession.user.email,
+            displayName: providerSession.user.displayName,
         });
 
-        const workspaceInfo =
-            resolved ??
-            (await convex.mutation(api.workspaces.ensure, {
-                provider: providerSession.provider,
-                provider_user_id: providerSession.user.id,
-                email: providerSession.user.email,
-                name: providerSession.user.displayName,
-            }));
+        // Get or create default workspace
+        const { workspaceId, workspaceName } =
+            await store.getOrCreateDefaultWorkspace(userId);
+
+        // Get workspace role
+        const role = await store.getWorkspaceRole({ userId, workspaceId });
+
+        if (!role) {
+            throw new Error(
+                `[auth:session] User ${userId} has no access to workspace ${workspaceId}`
+            );
+        }
 
         // Check if user has deployment admin access using the provider-agnostic checker
         const adminChecker = getDeploymentAdminChecker(event);
@@ -152,12 +275,18 @@ export async function resolveSessionContext(
             providerSession.provider
         );
 
+        const workspaceInfo = {
+            id: workspaceId,
+            name: workspaceName,
+            role,
+        };
+
         const sessionContext: SessionContext = {
             authenticated: true,
             provider: providerSession.provider,
             providerUserId: providerSession.user.id,
             user: {
-                id: providerSession.user.id,
+                id: userId,
                 email: providerSession.user.email,
                 displayName: providerSession.user.displayName,
             },
@@ -173,6 +302,10 @@ export async function resolveSessionContext(
         recordSessionResolution(true);
         // Cache result
         event.context[cacheKey] = sessionContext;
+        sharedSessionCache.set(sharedCacheKey, {
+            session: sessionContext,
+            expiresAtMs: Date.now() + getSessionCacheTtlMs(config, providerSession),
+        });
         return sessionContext;
     } catch (error) {
         recordSessionResolution(false);
@@ -183,8 +316,7 @@ export async function resolveSessionContext(
             error: error instanceof Error ? error.message : String(error),
             stage: 'workspace.provision',
         });
-        const provisioningFailure =
-            config.auth.sessionProvisioningFailure;
+        const provisioningFailure = getSessionProvisioningFailureMode(config);
 
         if (provisioningFailure === 'unauthenticated') {
             console.error('[auth:session] Provisioning failure mode: unauthenticated', {
@@ -205,4 +337,29 @@ export async function resolveSessionContext(
 
         throw error;
     }
+}
+
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Clear shared cross-request session cache. Intended for tests.
+ */
+export function _resetSharedSessionCache(): void {
+    sharedSessionCache.clear();
+}
+
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Invalidates cross-request session cache for a specific authenticated identity.
+ * Use this when workspace membership/selection mutates and the next request must
+ * resolve fresh session context immediately.
+ */
+export function invalidateSharedSessionCacheForIdentity(input: {
+    provider?: string;
+    providerUserId?: string;
+}): void {
+    clearSharedSessionCacheEntry(input.provider, input.providerUserId);
 }

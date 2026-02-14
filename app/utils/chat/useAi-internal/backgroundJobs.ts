@@ -32,10 +32,13 @@
  * - Content is never truncated, only extended or synchronized
  */
 
-import { useHooks } from '#imports';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
+import type { HookEngine } from '~/core/hooks/hooks';
+import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
 import { nowSec, newId } from '~/db/util';
 import { upsert } from '~/db';
 import { getDb } from '~/db/client';
+import { resolveNotificationUserId } from '~/core/notifications/notification-user';
 import {
     pollJobStatus,
     subscribeBackgroundJobStream,
@@ -43,6 +46,7 @@ import {
     type BackgroundJobStatus,
 } from '~/utils/chat/openrouterStream';
 import { NotificationService } from '~/core/notifications/notification-service';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import type {
     BackgroundJobTracker,
     BackgroundJobSubscriber,
@@ -81,11 +85,46 @@ export const BACKGROUND_JOB_MUTED_KEY = 'notification_muted_threads';
  */
 export const backgroundJobTrackers = new Map<string, BackgroundJobTracker>();
 
+let cachedNotificationHooks: TypedHookEngine | null = null;
+let cachedWorkflowHooks: TypedHookEngine | null = null;
+
+function workflowVersionOf(value: unknown): number {
+    if (!value || typeof value !== 'object') return -1;
+    const version = (value as { version?: unknown }).version;
+    return typeof version === 'number' && Number.isFinite(version)
+        ? version
+        : 0;
+}
+
 /**
  * Internal helper. Promise-based delay for polling loops.
  */
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Internal helper. Resolves the global hook engine without relying on composable context.
+ * Background trackers can outlive setup/plugin contexts, so `useHooks()` is unsafe here.
+ */
+function resolveNotificationHooks(): TypedHookEngine | null {
+    if (cachedNotificationHooks) return cachedNotificationHooks;
+    const g = globalThis as typeof globalThis & {
+        __NUXT_HOOKS__?: HookEngine;
+    };
+    if (!g.__NUXT_HOOKS__) return null;
+    cachedNotificationHooks = createTypedHookEngine(g.__NUXT_HOOKS__);
+    return cachedNotificationHooks;
+}
+
+function resolveWorkflowHooks(): TypedHookEngine | null {
+    if (cachedWorkflowHooks) return cachedWorkflowHooks;
+    const g = globalThis as typeof globalThis & {
+        __NUXT_HOOKS__?: HookEngine;
+    };
+    if (!g.__NUXT_HOOKS__) return null;
+    cachedWorkflowHooks = createTypedHookEngine(g.__NUXT_HOOKS__);
+    return cachedWorkflowHooks;
 }
 
 /**
@@ -112,13 +151,18 @@ async function emitBackgroundComplete(
 ): Promise<void> {
     if (!import.meta.client) return;
     if (!tracker.threadId) return;
-    // Only emit notification if no subscribers (user has navigated away)
-    if (tracker.subscribers.size > 0) return;
+    // Notify when detached OR when app tab is backgrounded.
+    // Hidden-tab sessions can keep SSE subscribers active, which otherwise
+    // suppresses completion notifications indefinitely.
+    const hasSubscribers = tracker.subscribers.size > 0;
+    const isTabHidden =
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'hidden';
+    if (hasSubscribers && !isTabHidden) return;
     if (await isThreadMuted(tracker.threadId)) return;
 
-    const hooks = useHooks();
-    const userId = tracker.userId;
-    const service = new NotificationService(getDb(), hooks, userId);
+    const hooks = resolveNotificationHooks();
+    if (!hooks) return;
     const isError = status.status === 'error';
     const isAbort = status.status === 'aborted';
     const type = isError || isAbort ? 'system.warning' : 'ai.message.received';
@@ -132,8 +176,7 @@ async function emitBackgroundComplete(
         : isAbort
             ? 'Background response was aborted.'
             : 'Your background response is ready.';
-
-    await service.create({
+    const payload = {
         type,
         title,
         body,
@@ -142,12 +185,33 @@ async function emitBackgroundComplete(
             {
                 id: newId(),
                 label: 'Open chat',
-                kind: 'navigate',
+                kind: 'navigate' as const,
                 target: { threadId: tracker.threadId },
                 data: { messageId: tracker.messageId },
             },
         ],
-    });
+    };
+
+    try {
+        // Prefer hook-based creation so the currently active NotificationService
+        // instance owns user scoping (prevents stale tracker user IDs).
+        if (hooks.hasAction('notify:action:push')) {
+            await hooks.doAction('notify:action:push', payload);
+            return;
+        }
+
+        const session = getCachedSessionContext();
+        const userId = resolveNotificationUserId(session) || tracker.userId;
+        const service = new NotificationService(getDb(), hooks, userId);
+        await service.create(payload);
+    } catch (error) {
+        if (import.meta.dev) {
+            console.warn(
+                '[background-jobs] Failed to emit completion notification',
+                error
+            );
+        }
+    }
 }
 
 /**
@@ -185,8 +249,19 @@ async function persistBackgroundJobUpdate(
             : status.status === 'aborted'
                 ? 'Background response aborted'
                 : null;
+    const workflowState =
+        status.workflow_state && typeof status.workflow_state === 'object'
+            ? status.workflow_state
+            : null;
+    const workflowVersion = workflowVersionOf(workflowState);
+    const includeWorkflowState =
+        workflowState !== null && workflowVersion >= tracker.lastWorkflowVersion;
+    if (includeWorkflowState) {
+        tracker.lastWorkflowVersion = workflowVersion;
+    }
     const mergedData = {
         ...baseData,
+        ...(includeWorkflowState ? workflowState : {}),
         content:
             content.length > 0
                 ? content
@@ -195,6 +270,7 @@ async function persistBackgroundJobUpdate(
         background_job_status: status.status,
         ...(status.error ? { background_job_error: status.error } : {}),
         ...(nextError ? { error: nextError } : {}),
+        ...(status.tool_calls ? { tool_calls: status.tool_calls } : {}),
     };
 
     await upsert.message({
@@ -308,6 +384,20 @@ async function handleBackgroundStatus(
         content: safeContent,
         delta,
     };
+    const workflowVersion = workflowVersionOf(nextStatus.workflow_state);
+    if (
+        nextStatus.workflow_state &&
+        typeof nextStatus.workflow_state === 'object' &&
+        workflowVersion >= tracker.lastWorkflowVersion
+    ) {
+        const workflowHooks = resolveWorkflowHooks();
+        if (workflowHooks?.hasAction('workflow.execution:action:state_update')) {
+            await workflowHooks.doAction('workflow.execution:action:state_update', {
+                messageId: tracker.messageId,
+                state: nextStatus.workflow_state,
+            });
+        }
+    }
     for (const subscriber of tracker.subscribers) {
         subscriber.onUpdate?.(update);
     }
@@ -323,6 +413,21 @@ async function handleBackgroundStatus(
             }
         }
         await emitBackgroundComplete(tracker, nextStatus);
+        if (nextStatus.workflow_state && typeof nextStatus.workflow_state === 'object') {
+            const workflowHooks = resolveWorkflowHooks();
+            if (workflowHooks?.hasAction('workflow.execution:action:complete')) {
+                const state = nextStatus.workflow_state;
+                const workflowId = state.workflowId;
+                const finalOutput = state.finalOutput || undefined;
+                if (workflowId) {
+                    await workflowHooks.doAction('workflow.execution:action:complete', {
+                        messageId: tracker.messageId,
+                        workflowId,
+                        finalOutput,
+                    });
+                }
+            }
+        }
         tracker.resolveCompletion(nextStatus);
         tracker.active = false;
         tracker.polling = false;
@@ -614,6 +719,9 @@ export function ensureBackgroundJobTracker(
 ): BackgroundJobTracker {
     const existing = backgroundJobTrackers.get(params.jobId);
     if (existing) {
+        if (typeof existing.lastWorkflowVersion !== 'number') {
+            existing.lastWorkflowVersion = -1;
+        }
         if (params.userId && existing.userId !== params.userId) {
             existing.userId = params.userId;
         }
@@ -644,6 +752,7 @@ export function ensureBackgroundJobTracker(
         threadId: params.threadId,
         messageId: params.messageId,
         status: 'streaming',
+        lastWorkflowVersion: -1,
         lastContent: seedContent,
         lastPersistedLength: seedContent.length,
         lastPersistAt: 0,
@@ -702,5 +811,20 @@ export function subscribeBackgroundJob(
     tracker.subscribers.add(subscriber);
     return () => {
         tracker.subscribers.delete(subscriber);
+        if (tracker.subscribers.size > 0 || !tracker.active) return;
+        // No active UI subscribers: drop SSE viewer so server-side notification
+        // suppression doesn't hide completion notifications.
+        if (tracker.streaming && tracker.streamUnsubscribe) {
+            try {
+                tracker.streamUnsubscribe();
+            } catch {
+                /* intentionally empty */
+            }
+        }
+        // Keep tracking via polling so local persistence and completion callbacks
+        // continue even while detached.
+        if (!tracker.polling && tracker.status === 'streaming') {
+            void pollBackgroundJob(tracker);
+        }
     };
 }

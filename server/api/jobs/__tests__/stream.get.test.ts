@@ -13,6 +13,27 @@ const baseJob: BackgroundJob = {
     content: 'Hello world',
     chunksReceived: 3,
     startedAt: 123,
+    tool_calls: [
+        {
+            id: 'tool-1',
+            name: 'test_tool',
+            status: 'complete',
+            args: '{}',
+            result: 'ok',
+        },
+    ],
+    workflow_state: {
+        type: 'workflow-execution',
+        workflowId: 'wf-1',
+        workflowName: 'Workflow 1',
+        prompt: 'Run workflow',
+        executionState: 'running',
+        nodeStates: {},
+        executionOrder: [],
+        currentNodeId: null,
+        finalOutput: '',
+        version: 0,
+    },
 };
 
 beforeAll(async () => {
@@ -46,5 +67,12 @@ describe('serializeJobStatus', () => {
         expect(status.content).toBeUndefined();
         expect(status.content_delta).toBe('!');
         expect(status.content_length).toBe(baseJob.content.length + 1);
+    });
+
+    it('passes through tool calls and workflow state', () => {
+        const status = serializeJobStatus(baseJob);
+
+        expect(status.tool_calls).toEqual(baseJob.tool_calls);
+        expect(status.workflow_state).toEqual(baseJob.workflow_state);
     });
 });

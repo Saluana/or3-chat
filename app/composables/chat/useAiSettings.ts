@@ -53,7 +53,7 @@
  * Includes migration from legacy localStorage storage.
  */
 import { ref, computed, readonly } from 'vue';
-import { db } from '~/db';
+import { getDb } from '~/db/client';
 import { setKvByName, getKvByName } from '~/db/kv';
 
 // Settings schema
@@ -80,6 +80,7 @@ export const DEFAULT_AI_SETTINGS: AiSettingsV1 = {
 // Module-level singleton state
 const _settings = ref<AiSettingsV1>({ ...DEFAULT_AI_SETTINGS });
 let _loaded = false;
+let _loadedDbName: string | null = null;
 let _loadPromise: Promise<void> | null = null;
 
 function isObj(v: unknown): v is Record<string, unknown> {
@@ -144,8 +145,14 @@ async function migrateFromLocalStorage(): Promise<AiSettingsV1 | null> {
  * Load settings from KV, with localStorage migration fallback
  */
 async function loadSettings(): Promise<void> {
-    if (_loaded) return;
-    if (_loadPromise) return _loadPromise;
+    const dbName = getDb().name;
+    if (_loaded && _loadedDbName === dbName) return;
+    if (_loadPromise && _loadedDbName === dbName) return _loadPromise;
+    if (_loadedDbName !== dbName) {
+        _loaded = false;
+        _loadPromise = null;
+    }
+    _loadedDbName = dbName;
     
     _loadPromise = (async () => {
         try {

@@ -1,62 +1,131 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const sessionState = { value: { session: null as null | { authenticated: boolean; workspace?: { id: string } } } };
-
-const mockSession = {
-    data: sessionState,
+type SessionRecord = {
+    session: null | {
+        authenticated?: boolean;
+        workspace?: { id: string };
+    };
 };
 
-const tokenState = {
-    token: null as string | null,
+type MockProvider = {
+    id: string;
+    mode: 'gateway' | 'direct';
+    auth?: { providerId: string; template?: string };
+    subscribe: ReturnType<typeof vi.fn>;
+    pull: ReturnType<typeof vi.fn>;
+    push: ReturnType<typeof vi.fn>;
+    updateCursor: ReturnType<typeof vi.fn>;
+    dispose: ReturnType<typeof vi.fn>;
 };
 
-const tokenBroker = {
-    getProviderToken: vi.fn(async () => tokenState.token),
+type WatchRecord = {
+    source: unknown;
+    callback: (value: unknown, oldValue?: unknown) => void;
+    lastValue: unknown;
 };
 
-const providerRegistry = {
-    active: {
-        id: 'convex',
-        mode: 'direct' as const,
-        auth: { providerId: 'convex', template: 'convex' },
-        subscribe: vi.fn(async (_scope, _tables, _onChanges, _options) => () => undefined),
+type OutboxInstance = {
+    start: ReturnType<typeof vi.fn>;
+    stop: ReturnType<typeof vi.fn>;
+    flush: ReturnType<typeof vi.fn>;
+    retryFailed: ReturnType<typeof vi.fn>;
+    purgeCorruptOps: ReturnType<typeof vi.fn>;
+};
+
+type SubscriptionInstance = {
+    start: ReturnType<typeof vi.fn>;
+    stop: ReturnType<typeof vi.fn>;
+};
+
+type GcInstance = {
+    start: ReturnType<typeof vi.fn>;
+    stop: ReturnType<typeof vi.fn>;
+};
+
+function createProvider(id = 'convex', mode: 'gateway' | 'direct' = 'gateway'): MockProvider {
+    return {
+        id,
+        mode,
+        auth: mode === 'direct'
+            ? {
+                providerId: id,
+                template: 'convex',
+            }
+            : undefined,
+        subscribe: vi.fn(async () => () => undefined),
         pull: vi.fn(async () => ({ changes: [], nextCursor: 0, hasMore: false })),
         push: vi.fn(async () => ({ results: [], serverVersion: 0 })),
         updateCursor: vi.fn(async () => undefined),
         dispose: vi.fn(async () => undefined),
+    };
+}
+
+function readWatchSource(source: unknown): unknown {
+    if (typeof source === 'function') return (source as () => unknown)();
+    if (source && typeof source === 'object' && 'value' in source) {
+        return (source as { value: unknown }).value;
+    }
+    return source;
+}
+
+const sessionState: { value: SessionRecord } = {
+    value: {
+        session: {
+            authenticated: true,
+            workspace: { id: 'ws-1' },
+        },
     },
-    gateway: {
-        id: 'convex-gateway',
-        mode: 'gateway' as const,
-        subscribe: vi.fn(async (_scope, _tables, _onChanges, _options) => () => undefined),
-        pull: vi.fn(async () => ({ changes: [], nextCursor: 0, hasMore: false })),
-        push: vi.fn(async () => ({ results: [], serverVersion: 0 })),
-        updateCursor: vi.fn(async () => undefined),
-        dispose: vi.fn(async () => undefined),
-    },
+};
+
+const workspaceState: { value: string | null } = {
+    value: 'ws-1',
+};
+
+const routeState: { value: { path: string } } = {
+    value: { path: '/chat' },
+};
+
+const watchRecords: WatchRecord[] = [];
+
+const providerRegistryState: { active: MockProvider | null } = {
+    active: createProvider('convex'),
 };
 
 const providerRegistryMock = {
-    registerSyncProvider: vi.fn(),
-    getActiveSyncProvider: vi.fn(() => providerRegistry.active),
-    getSyncProvider: vi.fn((id: string) => (id === 'convex-gateway' ? providerRegistry.gateway : null)),
+    registerSyncProvider: vi.fn((provider: MockProvider) => {
+        providerRegistryState.active = provider;
+    }),
+    getActiveSyncProvider: vi.fn(() => providerRegistryState.active),
+    setActiveSyncProvider: vi.fn(),
 };
+
+const createGatewaySyncProvider = vi.fn(({ id }: { id: string }) => createProvider(id));
 
 const hookBridgeMock = {
     start: vi.fn(),
     stop: vi.fn(),
 };
 
-const outboxStart = vi.fn();
-const subscriptionStart = vi.fn(async () => undefined);
-const gcStart = vi.fn();
+const outboxInstances: OutboxInstance[] = [];
+const subscriptionInstances: SubscriptionInstance[] = [];
+const gcInstances: GcInstance[] = [];
+
+const setActiveWorkspaceDb = vi.fn();
+const createWorkspaceDb = vi.fn((workspaceId: string) => ({ name: `or3-db-${workspaceId}` }));
+const authTokenBrokerMock = {
+    getProviderToken: vi.fn(async (): Promise<string | null> => 'token'),
+};
 
 vi.mock('~/composables/auth/useSessionContext', () => ({
-    useSessionContext: () => mockSession,
+    useSessionContext: () => ({ data: sessionState }),
 }));
 
 vi.mock('~/composables/auth/useAuthTokenBroker.client', () => ({
-    useAuthTokenBroker: () => tokenBroker,
+    useAuthTokenBroker: () => authTokenBrokerMock,
+}));
+
+vi.mock('~/core/sync/providers/gateway-sync-provider', () => ({
+    createGatewaySyncProvider,
 }));
 
 vi.mock('~/core/sync/sync-provider-registry', () => providerRegistryMock);
@@ -67,16 +136,40 @@ vi.mock('~/core/sync/hook-bridge', () => ({
 }));
 
 vi.mock('~/core/sync/outbox-manager', () => ({
-    OutboxManager: vi.fn(() => ({ start: outboxStart, stop: vi.fn() })),
+    OutboxManager: vi.fn(() => {
+        const instance: OutboxInstance = {
+            start: vi.fn(),
+            stop: vi.fn(),
+            flush: vi.fn(async () => true),
+            retryFailed: vi.fn(async () => undefined),
+            purgeCorruptOps: vi.fn(async () => 0),
+        };
+        outboxInstances.push(instance);
+        return instance;
+    }),
 }));
 
 vi.mock('~/core/sync/subscription-manager', () => ({
-    createSubscriptionManager: vi.fn(() => ({ start: subscriptionStart, stop: vi.fn() })),
+    createSubscriptionManager: vi.fn(() => {
+        const instance: SubscriptionInstance = {
+            start: vi.fn(async () => undefined),
+            stop: vi.fn(async () => undefined),
+        };
+        subscriptionInstances.push(instance);
+        return instance;
+    }),
     cleanupSubscriptionManager: vi.fn(),
 }));
 
 vi.mock('~/core/sync/gc-manager', () => ({
-    GcManager: vi.fn(() => ({ start: gcStart, stop: vi.fn() })),
+    GcManager: vi.fn(() => {
+        const instance: GcInstance = {
+            start: vi.fn(),
+            stop: vi.fn(),
+        };
+        gcInstances.push(instance);
+        return instance;
+    }),
 }));
 
 vi.mock('~/core/sync/cursor-manager', () => ({
@@ -84,146 +177,284 @@ vi.mock('~/core/sync/cursor-manager', () => ({
 }));
 
 vi.mock('~/db/client', () => ({
-    createWorkspaceDb: vi.fn(() => ({ name: 'or3-db-test' })),
-    setActiveWorkspaceDb: vi.fn(),
+    createWorkspaceDb,
+    setActiveWorkspaceDb,
 }));
-
-const workspaceManagerMock = {
-    activeWorkspaceId: { value: 'ws-1' },
-};
 
 vi.mock('~/composables/workspace/useWorkspaceManager', () => ({
-    useWorkspaceManager: () => workspaceManagerMock,
-}));
-
-vi.mock('convex-vue', () => ({
-    useConvexClient: () => ({ setAuth: vi.fn() }),
+    useWorkspaceManager: () => ({ activeWorkspaceId: workspaceState }),
 }));
 
 vi.mock('vue', async () => {
     const actual = await vi.importActual<typeof import('vue')>('vue');
     return {
         ...actual,
-        watch: (source: unknown, cb: (value: unknown, oldValue?: unknown) => void, options?: { immediate?: boolean }) => {
-            // Handle different source types (ref, computed, function, array)
-            let currentValue: unknown;
-            
-            if (typeof source === 'function') {
-                currentValue = (source as () => unknown)();
-            } else if (source && typeof source === 'object' && 'value' in source) {
-                // Ref or computed
-                currentValue = (source as { value: unknown }).value;
-            } else {
-                currentValue = source;
-            }
-            
-            // Call callback immediately if immediate option is set (Vue default behavior)
+        watch: (
+            source: unknown,
+            callback: (value: unknown, oldValue?: unknown) => void,
+            options?: { immediate?: boolean }
+        ) => {
+            const initialValue = readWatchSource(source);
+            watchRecords.push({
+                source,
+                callback,
+                lastValue: initialValue,
+            });
+
             if (options?.immediate !== false) {
-                cb(currentValue, undefined);
+                callback(initialValue, undefined);
             }
-            
-            // Return cleanup function
-            return () => {};
+
+            return () => undefined;
         },
     };
 });
 
 vi.mock('#app', () => ({
-    defineNuxtPlugin: (plugin: () => void) => plugin(),
+    defineNuxtPlugin: (plugin: () => unknown) => plugin(),
     useRuntimeConfig: () => ({
         public: {
             ssrAuthEnabled: true,
             sync: { enabled: true, provider: 'convex' },
+            admin: { basePath: '/admin' },
         },
     }),
     useNuxtApp: () => ({ provide: vi.fn() }),
     useRouter: () => ({
+        currentRoute: routeState,
         afterEach: vi.fn(() => () => undefined),
     }),
 }));
 
-describe('convex-sync auth retry', () => {
+type NuxtTestGlobals = typeof globalThis & {
+    defineNuxtPlugin?: (plugin: () => unknown) => unknown;
+    useRuntimeConfig?: () => {
+        public: {
+            ssrAuthEnabled: boolean;
+            sync: { enabled: boolean; provider: string };
+            admin: { basePath: string };
+        };
+    };
+    useNuxtApp?: () => { provide: ReturnType<typeof vi.fn> };
+    useRouter?: () => {
+        currentRoute: typeof routeState;
+        afterEach: ReturnType<typeof vi.fn>;
+    };
+};
+
+async function triggerWatchers(): Promise<void> {
+    for (const record of watchRecords) {
+        const nextValue = readWatchSource(record.source);
+        record.callback(nextValue, record.lastValue);
+        record.lastValue = nextValue;
+    }
+    await Promise.resolve();
+}
+
+async function flushPluginAsyncWork(): Promise<void> {
+    await Promise.resolve();
+    await vi.runOnlyPendingTimersAsync();
+    await Promise.resolve();
+}
+
+describe('sync engine plugin', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         vi.resetModules();
-        outboxStart.mockClear();
-        subscriptionStart.mockClear();
-        gcStart.mockClear();
-        tokenBroker.getProviderToken.mockClear();
-        providerRegistryMock.getActiveSyncProvider.mockClear();
-        providerRegistryMock.getSyncProvider.mockClear();
-        tokenState.token = null;
-        sessionState.value.session = {
-            authenticated: true,
-            workspace: { id: 'ws-1' },
+
+        watchRecords.length = 0;
+        outboxInstances.length = 0;
+        subscriptionInstances.length = 0;
+        gcInstances.length = 0;
+
+        sessionState.value = {
+            session: {
+                authenticated: true,
+                workspace: { id: 'ws-1' },
+            },
         };
-        (globalThis as typeof globalThis & { defineNuxtPlugin: (plugin: () => unknown) => unknown }).defineNuxtPlugin =
-            (plugin) => plugin();
-        (globalThis as typeof globalThis & {
-            useRuntimeConfig?: () => {
-                public: {
-                    ssrAuthEnabled: boolean;
-                    sync?: { enabled: boolean; provider: string };
-                };
-            };
-        }).useRuntimeConfig = () => ({
+        workspaceState.value = 'ws-1';
+        routeState.value = { path: '/chat' };
+
+        providerRegistryState.active = createProvider('convex');
+
+        providerRegistryMock.registerSyncProvider.mockClear();
+        providerRegistryMock.getActiveSyncProvider.mockClear();
+        providerRegistryMock.setActiveSyncProvider.mockClear();
+        createGatewaySyncProvider.mockClear();
+
+        hookBridgeMock.start.mockClear();
+        hookBridgeMock.stop.mockClear();
+
+        setActiveWorkspaceDb.mockClear();
+        createWorkspaceDb.mockClear();
+        authTokenBrokerMock.getProviderToken.mockClear();
+
+        const globals = globalThis as NuxtTestGlobals;
+        globals.defineNuxtPlugin = (plugin) => plugin();
+        globals.useRuntimeConfig = () => ({
             public: {
                 ssrAuthEnabled: true,
                 sync: { enabled: true, provider: 'convex' },
+                admin: { basePath: '/admin' },
             },
         });
-        (globalThis as typeof globalThis & { useNuxtApp?: () => { provide: (key: string, value: unknown) => void } }).useNuxtApp =
-            () => ({ provide: vi.fn() });
-        (globalThis as typeof globalThis & { useRouter?: () => { afterEach: (cb: (to: { path: string }) => void) => () => void } }).useRouter =
-            () => ({ afterEach: vi.fn(() => () => undefined) });
+        globals.useNuxtApp = () => ({ provide: vi.fn() });
+        globals.useRouter = () => ({
+            currentRoute: routeState,
+            afterEach: vi.fn(() => () => undefined),
+        });
     });
 
-    it('retries start until token is available', async () => {
-        // First: no active provider available - sync should not start
-        providerRegistryMock.getActiveSyncProvider.mockReturnValueOnce(null as unknown as typeof providerRegistry.active);
-        await import('~/plugins/convex-sync.client');
-
-        // No provider, so no token check and no sync
-        expect(tokenBroker.getProviderToken).not.toHaveBeenCalled();
-        expect(outboxStart).not.toHaveBeenCalled();
-
-        // Second: provider becomes available and token is set
-        tokenState.token = 'token-1';
-        providerRegistryMock.getActiveSyncProvider.mockReturnValueOnce(providerRegistry.active);
-
-        await vi.advanceTimersByTimeAsync(500);
-        await vi.runOnlyPendingTimersAsync();
-
-        // Now token broker should be called and sync should start
-        expect(tokenBroker.getProviderToken).toHaveBeenCalled();
-        expect(outboxStart).toHaveBeenCalled();
-        expect(subscriptionStart).toHaveBeenCalled();
-        expect(gcStart).toHaveBeenCalled();
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
-    it('uses gateway fallback when direct token unavailable', async () => {
-        providerRegistryMock.getActiveSyncProvider.mockReturnValueOnce(providerRegistry.active);
-        providerRegistryMock.getSyncProvider.mockReturnValueOnce(providerRegistry.gateway);
+    it('starts sync engine when provider and workspace are available', async () => {
         await import('~/plugins/convex-sync.client');
-        await vi.runOnlyPendingTimersAsync();
+        await flushPluginAsyncWork();
 
-        tokenState.token = null;
-        await vi.advanceTimersByTimeAsync(500);
-        await vi.runOnlyPendingTimersAsync();
-
-        expect(providerRegistryMock.getSyncProvider).toHaveBeenCalledWith('convex-gateway');
+        expect(outboxInstances).toHaveLength(1);
+        expect(outboxInstances[0]?.start).toHaveBeenCalledTimes(1);
+        expect(subscriptionInstances).toHaveLength(1);
+        expect(subscriptionInstances[0]?.start).toHaveBeenCalledTimes(1);
+        expect(gcInstances).toHaveLength(1);
+        expect(gcInstances[0]?.start).toHaveBeenCalledTimes(1);
     });
 
-    it('retries direct auth after gateway fallback', async () => {
-        providerRegistryMock.getActiveSyncProvider.mockReturnValueOnce(providerRegistry.active);
-        providerRegistryMock.getSyncProvider.mockReturnValueOnce(providerRegistry.gateway);
+    it('does not start sync engine when user is unauthenticated', async () => {
+        sessionState.value = {
+            session: {
+                authenticated: false,
+                workspace: { id: 'ws-1' },
+            },
+        };
+
         await import('~/plugins/convex-sync.client');
-        await vi.runOnlyPendingTimersAsync();
+        await flushPluginAsyncWork();
 
-        tokenState.token = 'token-2';
-        await vi.advanceTimersByTimeAsync(500);
-        await vi.runOnlyPendingTimersAsync();
+        expect(outboxInstances).toHaveLength(0);
+        expect(subscriptionInstances).toHaveLength(0);
+        expect(gcInstances).toHaveLength(0);
+    });
 
-        expect(providerRegistryMock.getActiveSyncProvider).toHaveBeenCalled();
+    it('retries start when provider is temporarily unavailable and recovers', async () => {
+        sessionState.value = {
+            session: {
+                authenticated: false,
+                workspace: { id: 'ws-1' },
+            },
+        };
+
+        await import('~/plugins/convex-sync.client');
+
+        providerRegistryState.active = null;
+        sessionState.value = {
+            session: {
+                authenticated: true,
+                workspace: { id: 'ws-1' },
+            },
+        };
+
+        await triggerWatchers();
+
+        expect(outboxInstances).toHaveLength(0);
+
+        await vi.advanceTimersByTimeAsync(499);
+        expect(outboxInstances).toHaveLength(0);
+
+        providerRegistryState.active = createProvider('convex');
+        await vi.advanceTimersByTimeAsync(1);
+        await Promise.resolve();
+
+        expect(outboxInstances).toHaveLength(1);
+        expect(outboxInstances[0]?.start).toHaveBeenCalledTimes(1);
+    });
+
+    it('defers direct-provider startup until auth token is available', async () => {
+        providerRegistryState.active = createProvider('convex', 'direct');
+        authTokenBrokerMock.getProviderToken
+            .mockResolvedValueOnce(null)
+            .mockResolvedValue('token');
+
+        await import('~/plugins/convex-sync.client');
+        await Promise.resolve();
+
+        expect(outboxInstances).toHaveLength(0);
+        expect(authTokenBrokerMock.getProviderToken).toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(499);
+        expect(outboxInstances).toHaveLength(0);
+
+        await vi.advanceTimersByTimeAsync(1);
+        await Promise.resolve();
+
+        expect(outboxInstances).toHaveLength(1);
+        expect(outboxInstances[0]?.start).toHaveBeenCalledTimes(1);
+    });
+
+    it('cancels pending auth retry when session becomes unauthenticated', async () => {
+        sessionState.value = {
+            session: {
+                authenticated: false,
+                workspace: { id: 'ws-1' },
+            },
+        };
+
+        await import('~/plugins/convex-sync.client');
+
+        providerRegistryState.active = null;
+        sessionState.value = {
+            session: {
+                authenticated: true,
+                workspace: { id: 'ws-1' },
+            },
+        };
+        await triggerWatchers();
+
+        sessionState.value = {
+            session: {
+                authenticated: false,
+                workspace: { id: 'ws-1' },
+            },
+        };
+        await triggerWatchers();
+
+        providerRegistryState.active = createProvider('convex');
+        await vi.advanceTimersByTimeAsync(6000);
+
+        expect(outboxInstances).toHaveLength(0);
+    });
+
+    it('stops current engine and starts a new one when workspace changes', async () => {
+        await import('~/plugins/convex-sync.client');
+        await flushPluginAsyncWork();
+
+        const firstProvider = providerRegistryState.active;
+        workspaceState.value = 'ws-2';
+        await triggerWatchers();
+        await flushPluginAsyncWork();
+
+        expect(outboxInstances).toHaveLength(2);
+        expect(outboxInstances[0]?.stop).toHaveBeenCalledTimes(1);
+        expect(subscriptionInstances[0]?.stop).toHaveBeenCalledTimes(1);
+        expect(gcInstances[0]?.stop).toHaveBeenCalledTimes(1);
+        expect(firstProvider?.dispose).toHaveBeenCalledTimes(1);
+        expect(outboxInstances[1]?.start).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops sync without clobbering active workspace DB on admin route transitions', async () => {
+        await import('~/plugins/convex-sync.client');
+        await flushPluginAsyncWork();
+
+        routeState.value = { path: '/admin/extensions' };
+        await triggerWatchers();
+        await flushPluginAsyncWork();
+
+        expect(setActiveWorkspaceDb).not.toHaveBeenCalled();
+        expect(outboxInstances).toHaveLength(1);
+        expect(outboxInstances[0]?.stop).toHaveBeenCalledTimes(1);
+        expect(subscriptionInstances[0]?.stop).toHaveBeenCalledTimes(1);
+        expect(gcInstances[0]?.stop).toHaveBeenCalledTimes(1);
     });
 });

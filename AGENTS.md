@@ -186,3 +186,177 @@ Mock Externalities: Isolate business logic from side effects (databases, APIs) t
 -   ❌ **Don’t** introduce new styling systems, random CSS vars, or duplicate theme classes.
 -   ❌ **Don’t** store secrets in `localStorage`; use `kv` and short-lived memory for session only.
 -   ❌ **Don’t** bypass composables that already implement debouncing/indexing.
+
+---
+
+## Agent Accelerators (learned during `or3-provider-sqlite`)
+
+1. **Provider wiring is registry-first (Nitro plugin), not “Nuxt module magic”**
+    - Providers register implementations via server registries (e.g. `registerAuthWorkspaceStore(...)`, `registerSyncGatewayAdapter(...)`) inside a Nitro server plugin.
+    - The Nuxt module should stay thin and only `addServerPlugin(...)`.
+
+2. **SSR boundaries are non-negotiable**
+    - Provider runtime that touches auth/DB must live under `runtime/server/**`.
+    - Don’t import server SDKs or DB drivers into shared/client paths (static builds will explode in creative ways).
+
+3. **Sync invariants that prevent data loss (don’t “simplify”)**
+    - `op_id` is mandatory idempotency: duplicate pushes must replay, never double-apply.
+    - `server_version` must be allocated contiguously/monotonically per workspace (single transaction).
+    - LWW must compare `clock` then `hlc`; deletes are tombstones; GC must respect the **minimum device cursor** + retention.
+
+4.  For provider packages, copy `or3-provider-clerk`/`or3-provider-convex` structure first (`src/module.ts`, runtime register plugin, `vitest.config.ts`, shims). This avoids most registry/module wiring mistakes.
+
+5.   Core auth UI is still Clerk-tied in `app/components/sidebar/SidebarAuthButton.vue` (it renders `SidebarAuthButtonClerk`). The provider-agnostic auth UI adapter is planned in `planning/default-ssr-providers/*`, not fully in core yet.
+
+6.  Reuse the existing server security pattern for auth endpoints: `isSsrAuthEnabled` gate, `Cache-Control: no-store`, per-operation rate limits, and same-origin checks based on host/origin validation (see admin guard + request identity helpers).
+
+7.  Wizard-generated provider modules are merged with config-derived modules in `nuxt.config.ts`, not used in isolation.
+    - `activeProviderModules` is `or3.providers.generated.ts` **union** provider IDs derived from `or3CloudConfig.*`.
+    - Provider module ids are normalized via `or3-provider-${id}/nuxt`, but local ids (`custom`, `memory`, `redis`, `postgres`) are intentionally excluded.
+
+8.  The safe env editor already exists in `server/admin/config/env-file.ts`, but it is currently hardwired to `process.cwd()` + `.env`.
+    - It preserves comments/unknown lines and updates keys in place, which is exactly what the install wizard needs.
+    - For wizard work, extract/reuse this logic with `(instanceDir, envFile)` arguments instead of duplicating a new parser/writer.
+
+9.  Use `server/admin/config/resolve-config.ts` as the authoritative “wizard validation entrypoint”, not ad-hoc env checks.
+    - `buildOr3ConfigFromEnv(env)` and `buildOr3CloudConfigFromEnv(env)` already encode coercion/default behavior used by runtime/admin paths.
+    - Important gotcha: `buildOr3CloudConfigFromEnv` strictness currently reads `process.env`, so a wizard should either run it in a controlled env context or call `defineOr3CloudConfig(config, { strict })` directly with explicit strict mode.
+
+10. **The wizard engine is already implemented in-core (not just planning docs)**
+    - The “API-first” wizard lives in `shared/cloud/wizard/*` with `Or3CloudWizardApi`, step graph generation, env derivation, apply/deploy, and disk-backed session/preset storage.
+    - Sessions persist to `~/.or3-cloud/` by default; secrets are kept in a transient in-memory map unless explicitly opted in.
+
+11. **Env var naming is intentionally messy (aliases exist; don’t “clean up” casually)**
+    - The wizard currently emits both legacy and canonical keys for forward-compat: e.g. `AUTH_PROVIDER` + `OR3_AUTH_PROVIDER`, `OR3_SYNC_ENABLED` + `OR3_CLOUD_SYNC_ENABLED`, `OR3_STORAGE_ENABLED` + `OR3_CLOUD_STORAGE_ENABLED`.
+    - The whitelist of “wizard-owned keys” is centralized in `shared/cloud/wizard/catalog.ts` (`WIZARD_OWNED_ENV_KEYS`). Touch that list or your env merge/apply behavior will silently drift.
+
+12. **Basic Auth needs bootstrap creds to be usable on first boot**
+    - The basic-auth provider is not just `OR3_BASIC_AUTH_JWT_SECRET`: it also supports/needs bootstrap email/password (`OR3_BASIC_AUTH_BOOTSTRAP_EMAIL`, `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD`) or you’ve built an instance nobody can log into.
+    - Basic-auth also has its own auth DB path (`OR3_BASIC_AUTH_DB_PATH`) that is separate from the sync SQLite DB (`OR3_SQLITE_DB_PATH`).
+
+13. **Provider edits must be rebuilt because `or3-chat` consumes provider `dist/`**
+    - With `file:` provider dependencies, the sandbox can be correctly linked but still show old behavior if provider `dist/` was not rebuilt.
+    - After changing `or3-provider-*` source, run the provider build before testing in `or3-chat`.
+
+14. **Session identity split matters: internal user ID vs provider user ID**
+    - `SessionContext.user.id` must be the internal store user ID (used by workspace/sync/storage APIs).
+    - `SessionContext.providerUserId` must remain the external provider subject for cache keys/admin checks.
+    - Mixing these IDs causes “workspace exists but list is empty” style bugs.
+
+15. **SQLite workspace resolution must respect `users.active_workspace_id`**
+    - When multiple memberships exist, default-workspace resolution must prefer the active pointer.
+    - Falling back to “first membership row” causes post-login drift where old workspace data appears after switch/reload.
+
+16. **Auth UI adapters must trigger global session refresh events**
+    - Provider-owned auth components should dispatch a session-change signal after sign-in/sign-out/password changes.
+    - Core should listen and call `useSessionContext().refresh()` so workspace DB switching happens immediately without manual refresh.
+
+17. **Stale dev servers can look like stale data bugs**
+    - If ports (`3000`, `24678`) are already occupied, you may be hitting an old Nuxt process with stale transforms.
+    - Always confirm/kill old dev processes before concluding a code change did not apply.
+
+18. **OpenRouter in SSR mode must use server route when no client key exists**
+    - If `ssrAuthEnabled=true` and no client/user OpenRouter key is available, do not fall back to direct OpenRouter.
+    - Require `/api/openrouter/stream` and fail loudly if it is missing/unavailable.
+
+19. **FS token upload endpoint is PUT-only**
+    - `/api/storage/fs/upload?token=...` must be called with `PUT`.
+    - If presign metadata is missing `method`, default to `PUT` for the FS upload endpoint to avoid silent `POST` -> `404`.
+
+20. **Server-route availability cache can cause false negatives**
+    - `localStorage` keys like `or3:server-route-available` and `or3:background-streaming-available` can persist stale state across runtime/provider switches.
+    - Clear or invalidate these caches when behavior looks inconsistent after changing setup.
+
+21. **“404 on API route” is often the wrong dev process**
+    - If `3000`/HMR ports are already occupied, requests may hit an old Nuxt instance.
+    - Verify/kill stale processes before treating 404s as code regressions.
+
+22. **Wizard success needs both wiring and installed packages**
+    - `or3.providers.generated.ts` must include selected provider modules.
+    - Selected provider packages must also be installed/resolvable in the target instance, or provider routes/components disappear at runtime.
+
+23. **Background streaming is SSR-only and is body-gated**
+    - Feature flag: `OR3_BACKGROUND_STREAMING_ENABLED=true` (maps to `runtimeConfig.backgroundJobs.enabled` and `runtimeConfig.public.backgroundStreaming.enabled`).
+    - The “start background job” signal is in the request body: `_background: true` plus `_threadId` + `_messageId`.
+    - Ignore the stale docstring mention of `x-or3-background` in `server/api/openrouter/stream.post.ts`—the implementation checks `_background`.
+
+24. **Client capability gating is cached and can lie**
+    - Server-route detection cache: `localStorage['or3:server-route-available']` with a 15-minute TTL in `app/utils/chat/openrouterStream.ts`.
+    - Background streaming cache: `localStorage['or3:background-streaming-available']` is a blunt `"true"|"false"` flag set after first successful/failed background start.
+    - If behavior looks inconsistent after toggling SSR/providers, clear both keys (or use a fresh profile) before debugging “404 means broken”.
+
+25. **What actually happens (end-to-end) and where to look**
+    - Start: `app/composables/chat/useAi.ts` calls `startBackgroundStream(...)` (client helper) when eligible.
+    - Server entry: `server/api/openrouter/stream.post.ts` detects `_background: true`, requires SSR auth session + workspace, then calls `startBackgroundStream(...)` (server) and returns `{ jobId, status: 'streaming' }`.
+    - Streaming loop: `server/utils/background-jobs/stream-handler.ts` fetches OpenRouter SSE, parses via `shared/openrouter/parseOpenRouterSSE`, flushes chunks to the provider, and emits live deltas.
+    - Client tracking: `app/utils/chat/useAi-internal/backgroundJobs.ts` maintains a global `backgroundJobTrackers` map, persists incremental updates to Dexie (throttled), and can attach via SSE (`/api/jobs/:id/stream`) or poll (`/api/jobs/:id/status`).
+    - Observe/attach routes:
+        - SSE: `GET /api/jobs/:id/stream?offset=N`
+        - Poll: `GET /api/jobs/:id/status?offset=N`
+        - Abort: `POST /api/jobs/:id/abort`
+
+26. **Eligibility rules (easy to forget) are intentionally strict**
+    - Background mode is only attempted when:
+        - `backgroundStreamingAllowed` is true
+        - no tool calls are enabled (`enabledToolDefs.length === 0`)
+        - modality is text-only (`modalities === ['text']`)
+    - If you’re testing tools/images and expecting background mode: you won’t get it.
+
+27. **Providers, abort semantics, and multi-instance gotchas**
+    - Memory provider (`server/utils/background-jobs/providers/memory.ts`):
+        - In-process `AbortController` stops the upstream fetch immediately.
+        - Jobs are lost on server restart.
+        - Timeouts are enforced during periodic cleanup (`jobTimeoutMs`).
+    - Convex provider is registered by the Convex package (`or3-provider-convex/src/runtime/server/plugins/register.ts`) and implemented at `or3-provider-convex/src/runtime/server/background-jobs/convex-provider.ts`.
+        - Abort is poll-based (`checkJobAborted`) so the streaming loop periodically checks.
+    - Viewer suppression is process-local:
+        - Server-side “don’t notify while someone is watching” is based on `server/utils/background-jobs/viewers.ts` and only reflects viewers connected to the *same* instance.
+        - In multi-instance setups, cross-instance “viewer presence” isn’t tracked; expect occasional notifications even if a user is watching on a different server.
+
+28. **Notifications: why you sometimes get none (and why that’s correct)**
+    - Client notifications are only created when there are no in-app subscribers (`tracker.subscribers.size === 0`) and the thread isn’t muted (`kv['notification_muted_threads']`).
+    - Server-side notifications only fire when no SSE viewers are connected to that instance (`!hasJobViewers(jobId)` in `server/utils/background-jobs/stream-handler.ts`).
+    - Practical effect: if the tab stays open, the SSE viewer often stays attached, so server notifications are suppressed; you’ll only get the local notification if the app decides you “navigated away” (no subscribers).
+
+29. **Debug checklist (fast path)**
+    - 401 on background start: you don’t have SSR auth session + workspace (background mode is forbidden for guests/unauth’d).
+    - 404/405 on `/api/openrouter/stream`: you’re on a static build or hitting the wrong dev process; clear `or3:server-route-available`.
+    - Background mode never triggers: you’re using tools/images or config flag is off.
+    - 503 “Server busy”: concurrency cap hit (`OR3_BACKGROUND_MAX_JOBS`).
+    - “It worked yesterday” weirdness: stale localStorage availability caches.
+
+30. **Background completion notifications should go through hooks first**
+    - For detached/background jobs, prefer `hooks.doAction('notify:action:push', payload)` over creating `NotificationService` directly with tracker state.
+    - This keeps notification writes aligned with the currently active `NotificationService` instance and avoids stale user scoping.
+
+31. **Non-component utilities need cached session access, not composable flows**
+    - Utility modules like `app/utils/chat/useAi-internal/backgroundJobs.ts` should not depend on setup-lifecycle composable behavior.
+    - Use a safe cached accessor (`getCachedSessionContext()`) and fallback logic for user resolution when emitting cross-cutting events.
+
+32. **If background jobs finish but Notification Center is empty, check scope first**
+    - Confirm notifications are written for the same resolved user ID used by `useNotifications()` (`resolveNotificationUserId(session)`), not an old tracker/session value.
+    - Mismatched user scope can make notifications “exist” in Dexie but be invisible in the panel query (`where('[user_id+created_at]')`).
+
+33. **Sync push rate limiting is request-based, so flush cadence matters more than batch size**
+    - Server limit for push is enforced per request (`sync:push` in `server/utils/sync/rate-limiter.ts`), not per-op payload size.
+    - A hot outbox loop can hit 429s even with tiny batches; don’t assume “small batch” means “safe”.
+
+34. **Transport-level 429s must be treated as deferrals, not failures**
+    - In outbox push handling, 429 should move ops back to `pending` with `nextAttemptAt` from `Retry-After` and should not increment `attempts`.
+    - If 429s go through normal failure/retry accounting, healthy ops are eventually marked failed under sustained pressure.
+
+35. **Gateway sync errors should carry structured retry metadata**
+    - `gateway-sync-provider` should parse and propagate `Retry-After` as milliseconds (`retryAfterMs`) on request errors.
+    - Centralizing retry timing in the error object keeps provider-specific backoff logic out of higher layers and prevents string-parsing drift.
+
+36. **`or3-provider-convex` no longer depends on `~~/convex/_generated/*` at compile-time**
+    - Runtime function references now come from `anyApi` (`convex/server`) and ID typing uses `GenericId` (`convex/values`).
+    - This is the key prerequisite for keeping `or3-chat` buildable when Convex is not selected and `convex/**` is absent.
+
+37. **When testing Convex adapters/providers, mock `convex/server` (not generated api paths)**
+    - Old tests mocking `~~/convex/_generated/api` will silently stop controlling function refs after decoupling.
+    - Use `vi.mock('convex/server', () => ({ anyApi: { ... } }))` so assertions still validate exact routed function names.
+
+38. **Wizard deploy should initialize Convex scaffold before `convex dev`/env commands**
+    - For Convex-selected stacks, include `bunx or3-provider-convex init` in deploy flow before `bunx convex dev --once`.
+    - Without this step, first-run sandboxes fail preflight with missing `convex/` even when dependencies are installed correctly.

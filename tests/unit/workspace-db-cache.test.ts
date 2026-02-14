@@ -93,9 +93,9 @@ describe('Workspace DB Cache LRU', () => {
     it('should evict previous workspace on switch and cleanup sync singletons', () => {
         const cleanupCursorSpy = vi.spyOn(cursorManager, 'cleanupCursorManager');
         const cleanupHookSpy = vi.spyOn(hookBridge, 'cleanupHookBridge');
-        const cleanupSubscriptionSpy = vi.spyOn(
+        const cleanupSubscriptionWorkspaceSpy = vi.spyOn(
             subscriptionManager,
-            'cleanupSubscriptionManager'
+            'cleanupSubscriptionManagersByWorkspace'
         );
 
         setActiveWorkspaceDb('ws-a');
@@ -103,7 +103,7 @@ describe('Workspace DB Cache LRU', () => {
 
         expect(cleanupCursorSpy).toHaveBeenCalledWith('or3-db-ws-a');
         expect(cleanupHookSpy).toHaveBeenCalledWith('or3-db-ws-a');
-        expect(cleanupSubscriptionSpy).toHaveBeenCalledWith('ws-a:default');
+        expect(cleanupSubscriptionWorkspaceSpy).toHaveBeenCalledWith('ws-a');
 
         const { keys } = getWorkspaceDbCacheStats();
         expect(keys.includes('ws-a')).toBe(false);

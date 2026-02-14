@@ -21,6 +21,7 @@
  */
 
 import { LRUCache } from 'lru-cache';
+import { useRuntimeConfig } from '#imports';
 
 import type {
     RateLimitConfig,
@@ -43,6 +44,8 @@ export const SYNC_RATE_LIMITS: Record<string, RateLimitConfig> = {
     'sync:pull': { windowMs: 60_000, maxRequests: 120 },
     // Cursor updates: 60 requests per minute
     'sync:cursor': { windowMs: 60_000, maxRequests: 60 },
+    // GC operations: 10 requests per minute (low limit for admin-only operations)
+    'sync:gc': { windowMs: 60_000, maxRequests: 10 },
 } as const;
 
 /**
@@ -67,16 +70,74 @@ export const AUTH_RATE_LIMITS: Record<string, RateLimitConfig> = {
 
 /**
  * Purpose:
+ * Rate limits for workflow background execution endpoints.
+ */
+export const WORKFLOW_RATE_LIMITS: Record<string, RateLimitConfig> = {
+    // Background workflow starts: 30 per minute per user
+    'workflow:background': { windowMs: 60_000, maxRequests: 30 },
+    // HITL responses: 120 per minute per user
+    'workflow:hitl': { windowMs: 60_000, maxRequests: 120 },
+};
+
+/**
+ * Purpose:
  * Combined lookup table for all known rate limit operations.
  */
 export const ALL_RATE_LIMITS = {
     ...SYNC_RATE_LIMITS,
     ...STORAGE_RATE_LIMITS,
     ...AUTH_RATE_LIMITS,
+    ...WORKFLOW_RATE_LIMITS,
 };
+
+function getRateLimitConfig(operation: string): RateLimitConfig | null {
+    const base =
+        ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS] ?? null;
+    if (!base) {
+        return null;
+    }
+
+    try {
+        const runtimeConfig = useRuntimeConfig();
+        const limits = runtimeConfig.limits as
+            | {
+                  operationRateLimits?: Record<
+                      string,
+                      { windowMs?: number; maxRequests?: number }
+                  >;
+              }
+            | undefined;
+        const override = limits?.operationRateLimits?.[operation];
+        if (!override || typeof override !== 'object') {
+            return base;
+        }
+
+        const windowMs =
+            typeof override.windowMs === 'number' &&
+            Number.isFinite(override.windowMs) &&
+            override.windowMs > 0
+                ? Math.floor(override.windowMs)
+                : base.windowMs;
+        const maxRequests =
+            typeof override.maxRequests === 'number' &&
+            Number.isFinite(override.maxRequests) &&
+            override.maxRequests > 0
+                ? Math.floor(override.maxRequests)
+                : base.maxRequests;
+
+        return { windowMs, maxRequests };
+    } catch {
+        return base;
+    }
+}
 
 /** Maximum age for entries before cleanup (10 minutes). */
 const MAX_ENTRY_AGE_MS = 10 * 60 * 1000;
+
+function isRateLimitingDisabled(): boolean {
+    // Only allow rate limit bypass in development
+    return process.env.NODE_ENV !== 'production' && process.env.DISABLE_RATE_LIMIT === '1';
+}
 
 /**
  * Rate limit store using LRU cache to prevent unbounded growth.
@@ -108,11 +169,11 @@ function getRateLimitKey(subjectKey: string, operation: string): string {
  * - Sliding window is computed in-process only.
  */
 export function checkSyncRateLimit(subjectKey: string, operation: string): RateLimitResult {
-    if (process.env.NODE_ENV !== 'production') {
+    if (isRateLimitingDisabled()) {
         return { allowed: true, remaining: Infinity };
     }
 
-    const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
+    const config = getRateLimitConfig(operation);
     if (!config) {
         // Unknown operation - allow by default
         return { allowed: true, remaining: Infinity };
@@ -159,7 +220,7 @@ export function checkSyncRateLimit(subjectKey: string, operation: string): RateL
  * - Call only after a request is allowed.
  */
 export function recordSyncRequest(subjectKey: string, operation: string): void {
-    const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
+    const config = getRateLimitConfig(operation);
     if (!config) {
         return;
     }
@@ -211,7 +272,7 @@ export function getSyncRateLimitStats(
     subjectKey: string,
     operation: string
 ): { limit: number; remaining: number; resetMs: number } | null {
-    const config = ALL_RATE_LIMITS[operation as keyof typeof ALL_RATE_LIMITS];
+    const config = getRateLimitConfig(operation);
     if (!config) {
         return null;
     }

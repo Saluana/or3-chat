@@ -47,7 +47,8 @@
  */
 
 import { ref, isRef, type Ref } from 'vue';
-import { upsert, db } from '~/db';
+import { upsert } from '~/db';
+import { getDb } from '~/db/client';
 import { nowSec } from '~/db/util';
 import type { Message } from '~/db/schema';
 
@@ -157,6 +158,7 @@ export function useMessageEditing(message: EditableMessageSource) {
         }
         try {
             saving.value = true;
+            const db = getDb();
             const existing: Message | undefined = await db.messages.get(id);
             if (!existing) throw new Error('Message not found');
             const existingData =

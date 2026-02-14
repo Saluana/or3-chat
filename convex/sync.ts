@@ -59,6 +59,16 @@ const MAX_GC_CONTINUATIONS = 10;
 /** Maximum workspaces to schedule for GC per scheduled run */
 const MAX_WORKSPACES_PER_GC_RUN = 50;
 
+function inferProviderFromIssuer(issuer: string | undefined): string {
+    if (!issuer) return 'clerk';
+    if (issuer.includes('clerk')) return 'clerk';
+    const marker = '/auth/';
+    const markerIndex = issuer.lastIndexOf(marker);
+    if (markerIndex === -1) return 'clerk';
+    const provider = issuer.slice(markerIndex + marker.length).trim();
+    return provider || 'clerk';
+}
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -112,7 +122,7 @@ async function allocateServerVersions(
  * @remarks
  * `file_meta` uses `hash` as the primary key rather than `id`.
  */
-const TABLE_INDEX_MAP: Record<string, { table: string; indexName: string }> = {
+const TABLE_INDEX_MAP: Partial<Record<string, { table: string; indexName: string }>> = {
     threads: { table: 'threads', indexName: 'by_workspace_id' },
     messages: { table: 'messages', indexName: 'by_workspace_id' },
     projects: { table: 'projects', indexName: 'by_workspace_id' },
@@ -222,6 +232,7 @@ async function applyOpToTable(
         pk: string;
         payload?: unknown;
         clock: number;
+        hlc: string;
     }
 ): Promise<void> {
     const tableInfo = TABLE_INDEX_MAP[op.table_name];
@@ -257,6 +268,7 @@ async function applyOpToTable(
         _id: Id<TableNames>;
         deleted?: boolean;
         clock?: number;
+        hlc?: string;
     } & Record<string, unknown>;
     type QueryByIndex = {
         withIndex: (
@@ -275,35 +287,51 @@ async function applyOpToTable(
         .first();
 
     if (op.operation === 'delete') {
-        if (existing && !existing.deleted) {
-            console.debug('[sync] apply delete', {
-                table: op.table_name,
-                pk: op.pk,
-                clock: op.clock,
-                existingClock: existing.clock ?? 0,
-            });
-            await ctx.db.patch(existing._id, {
-                deleted: true,
-                deleted_at: payloadDeletedAt ?? nowSec(),
-                updated_at: payloadUpdatedAt ?? nowSec(),
-                clock: op.clock,
-            });
-        }
+        if (!existing) return;
+
+        const existingClock = existing.clock ?? 0;
+        const existingHlc = typeof existing.hlc === 'string' ? existing.hlc : '';
+        const shouldApplyDelete =
+            op.clock > existingClock || (op.clock === existingClock && op.hlc > existingHlc);
+        if (!shouldApplyDelete) return;
+
+        console.debug('[sync] apply delete', {
+            table: op.table_name,
+            pk: op.pk,
+            clock: op.clock,
+            existingClock,
+            existingHlc,
+            incomingHlc: op.hlc,
+        });
+        await ctx.db.patch(existing._id, {
+            deleted: true,
+            deleted_at: payloadDeletedAt ?? nowSec(),
+            updated_at: payloadUpdatedAt ?? nowSec(),
+            clock: op.clock,
+            hlc: op.hlc,
+        });
     } else {
         // Put operation
         if (existing) {
-            // LWW: only update if incoming clock >= existing
-            if (op.clock >= (existing.clock ?? 0)) {
+            const existingClock = existing.clock ?? 0;
+            const existingHlc = typeof existing.hlc === 'string' ? existing.hlc : '';
+            const shouldApply =
+                op.clock > existingClock || (op.clock === existingClock && op.hlc > existingHlc);
+            // LWW with deterministic HLC tie-break on equal clocks.
+            if (shouldApply) {
                 console.debug('[sync] apply put', {
                     table: op.table_name,
                     pk: op.pk,
                     clock: op.clock,
-                    existingClock: existing.clock ?? 0,
+                    existingClock,
+                    existingHlc,
+                    incomingHlc: op.hlc,
                     applied: true,
                 });
                 await ctx.db.patch(existing._id, {
                     ...(payload ?? {}),
                     clock: op.clock,
+                    hlc: op.hlc,
                     updated_at: payloadUpdatedAt ?? nowSec(),
                 });
             } else {
@@ -311,7 +339,9 @@ async function applyOpToTable(
                     table: op.table_name,
                     pk: op.pk,
                     clock: op.clock,
-                    existingClock: existing.clock ?? 0,
+                    existingClock,
+                    existingHlc,
+                    incomingHlc: op.hlc,
                     applied: false,
                 });
             }
@@ -332,6 +362,7 @@ async function applyOpToTable(
                 workspace_id: workspaceId,
                 [pkField]: op.pk,
                 clock: op.clock,
+                hlc: op.hlc,
                 created_at: payloadCreatedAt ?? nowSec(),
                 updated_at: payloadUpdatedAt ?? payloadCreatedAt ?? nowSec(),
             });
@@ -353,12 +384,13 @@ async function verifyWorkspaceMembership(
     if (!identity) {
         throw new Error('Unauthorized: No identity');
     }
+    const provider = inferProviderFromIssuer(identity.issuer);
 
-    // Find user by Clerk subject
+    // Find user by provider subject
     const authAccount = await ctx.db
         .query('auth_accounts')
         .withIndex('by_provider', (q) =>
-            q.eq('provider', 'clerk').eq('provider_user_id', identity.subject)
+            q.eq('provider', provider).eq('provider_user_id', identity.subject)
         )
         .first();
 
@@ -440,7 +472,17 @@ export const push = mutation({
             if (!VALID_TABLES.includes(op.table_name)) {
                 throw new Error(`Invalid table: ${op.table_name}`);
             }
-            if (op.payload && JSON.stringify(op.payload).length > MAX_PAYLOAD_SIZE_BYTES) {
+            let payloadSizeBytes = 0;
+            if (op.payload !== undefined) {
+                try {
+                    payloadSizeBytes = JSON.stringify(op.payload).length;
+                } catch {
+                    throw new Error(
+                        `Invalid payload for ${op.table_name}: payload is not serializable`
+                    );
+                }
+            }
+            if (payloadSizeBytes > MAX_PAYLOAD_SIZE_BYTES) {
                 throw new Error(
                     `Payload too large for ${op.table_name}: exceeds ${MAX_PAYLOAD_SIZE_BYTES} bytes`
                 );
@@ -452,6 +494,16 @@ export const push = mutation({
             success: boolean;
             serverVersion?: number;
             error?: string;
+            errorCode?:
+                | 'VALIDATION_ERROR'
+                | 'UNAUTHORIZED'
+                | 'CONFLICT'
+                | 'NOT_FOUND'
+                | 'RATE_LIMITED'
+                | 'OVERSIZED'
+                | 'NETWORK_ERROR'
+                | 'SERVER_ERROR'
+                | 'UNKNOWN';
         }> = [];
 
         let latestVersion = 0;
@@ -484,6 +536,7 @@ export const push = mutation({
                     opId: op.op_id,
                     success: false,
                     error: `Unknown table: ${op.table_name}`,
+                    errorCode: 'VALIDATION_ERROR',
                 });
                 return;
             }
@@ -513,9 +566,9 @@ export const push = mutation({
             latestVersion = startVersion + newOps.length - 1;
         }
 
-        // Apply ops in parallel (Convex transactions are serializable)
-        const applyResults = await Promise.allSettled(
-            opsToApply.map(async ({ op, serverVersion }) => {
+        // Apply ops sequentially in allocated server-version order.
+        for (const { op, serverVersion } of opsToApply) {
+            try {
                 console.debug('[sync] push apply', {
                     table: op.table_name,
                     pk: op.pk,
@@ -556,21 +609,13 @@ export const push = mutation({
                     await upsertTombstone(ctx, args.workspace_id, op, serverVersion, deletedAt);
                 }
 
-                return { opId: op.op_id, serverVersion };
-            })
-        );
-
-        for (let i = 0; i < applyResults.length; i++) {
-            const result = applyResults[i];
-            if (!result) continue;
-
-            if (result.status === 'fulfilled') {
-                results.push({ ...result.value, success: true });
-            } else {
+                results.push({ opId: op.op_id, serverVersion, success: true });
+            } catch (error) {
                 results.push({
-                    opId: opsToApply[i]!.op.op_id,
+                    opId: op.op_id,
                     success: false,
-                    error: String(result.reason),
+                    error: String(error),
+                    errorCode: 'SERVER_ERROR',
                 });
             }
         }
@@ -671,8 +716,8 @@ export const pull = query({
                 ? window.filter((c) => tableFilter.includes(c.table_name))
                 : window;
 
-        const lastChange = window[window.length - 1];
-        const nextCursor = lastChange ? lastChange.server_version : args.cursor;
+        const nextCursor =
+            window.length > 0 ? window[window.length - 1]!.server_version : args.cursor;
 
         console.debug('[sync] pull', {
             workspace: args.workspace_id,
@@ -743,8 +788,8 @@ export const watchChanges = query({
             .order('asc')
             .take(limit)) as ChangeLogRow[];
 
-        const latestChange = changes[changes.length - 1];
-        const latestVersion = latestChange ? latestChange.server_version : since;
+        const latestVersion =
+            changes.length > 0 ? changes[changes.length - 1]!.server_version : since;
 
         console.debug('[sync] watchChanges', {
             workspace: args.workspace_id,

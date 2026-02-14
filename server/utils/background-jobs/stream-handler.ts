@@ -21,25 +21,70 @@
  * - Uses OpenRouter SSE payload format.
  */
 
+import { useRuntimeConfig } from '#imports';
 import type { BackgroundJobProvider } from '../background-jobs/types';
 import {
     getJobProvider,
     isBackgroundStreamingEnabled,
 } from '../background-jobs/store';
-import { checkJobAborted } from '../background-jobs/providers/convex';
 import {
     parseOpenRouterSSE,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
-import { emitBackgroundJobComplete, emitBackgroundJobError } from '../notifications/emit';
+import { getNotificationEmitter } from '../notifications/registry';
 import {
     emitJobDelta,
     emitJobStatus,
     hasJobViewers,
     initJobLiveState,
 } from './viewers';
-import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
+import type { ToolCall, ToolDefinition } from '~/utils/chat/types';
+import { executeServerTool } from '../chat/tool-registry';
+import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
 
-const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
+function createAbortError(message = 'Job aborted by user'): Error {
+    const err = new Error(message);
+    err.name = 'AbortError';
+    return err;
+}
+
+function resolveOpenRouterChatCompletionsUrl(): string {
+    try {
+        const config = useRuntimeConfig();
+        return getOpenRouterChatCompletionsUrl(config.openrouterBaseUrl);
+    } catch {
+        return getOpenRouterChatCompletionsUrl(undefined);
+    }
+}
+
+function isForcedFunctionToolChoice(
+    value: unknown
+): value is { type: 'function'; function: { name: string } } {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return false;
+    }
+    const candidate = value as Record<string, unknown>;
+    if (candidate.type !== 'function') return false;
+    const fn = candidate.function;
+    if (!fn || typeof fn !== 'object' || Array.isArray(fn)) return false;
+    const name = (fn as Record<string, unknown>).name;
+    return typeof name === 'string' && name.length > 0;
+}
+
+async function assertJobNotAborted(params: {
+    provider: BackgroundJobProvider;
+    jobId: string;
+    abortSignal?: AbortSignal;
+}): Promise<void> {
+    if (params.abortSignal?.aborted) {
+        throw createAbortError();
+    }
+    if (params.provider.checkJobAborted) {
+        const aborted = await params.provider.checkJobAborted(params.jobId);
+        if (aborted) {
+            throw createAbortError();
+        }
+    }
+}
 
 /**
  * Purpose:
@@ -131,6 +176,7 @@ export async function startBackgroundStream(
         threadId: params.threadId,
         messageId: params.messageId,
         model,
+        kind: 'chat',
     });
 
     // Fire-and-forget the streaming
@@ -181,7 +227,7 @@ export async function consumeBackgroundStream(params: {
             : flushEveryChunk
             ? 30
             : 120;
-    const isConvexProvider = params.provider.name === CONVEX_PROVIDER_ID;
+    const notificationEmitter = getNotificationEmitter(params.provider.name);
     const shouldNotify = params.shouldNotify ?? (() => true);
     let pendingChunk = '';
     let lastUpdateAt = 0;
@@ -220,9 +266,8 @@ export async function consumeBackgroundStream(params: {
             });
             lastUpdateAt = Date.now();
 
-            // For Convex provider, poll for abort status
-            if (isConvexProvider) {
-                const aborted = await checkJobAborted(params.jobId);
+            if (params.provider.checkJobAborted) {
+                const aborted = await params.provider.checkJobAborted(params.jobId);
                 if (aborted) {
                     const abortErr = new Error('Job aborted by user');
                     abortErr.name = 'AbortError';
@@ -281,6 +326,22 @@ export async function consumeBackgroundStream(params: {
             throw flushError;
         }
 
+        const latestJob = await params.provider.getJob(
+            params.jobId,
+            params.context.userId
+        );
+        if (!latestJob) {
+            throw new Error('Background job disappeared before completion');
+        }
+        if (latestJob.status !== 'streaming') {
+            if (latestJob.status === 'aborted') {
+                throw createAbortError();
+            }
+            throw new Error(
+                `Background job is no longer streaming (status: ${latestJob.status})`
+            );
+        }
+
         // Complete the job
         await params.provider.completeJob(params.jobId, fullContent);
         emitJobStatus(params.jobId, 'complete', {
@@ -293,7 +354,7 @@ export async function consumeBackgroundStream(params: {
         if (shouldNotify()) {
             // Emit server-side notification for job completion
             try {
-                await emitBackgroundJobComplete(
+                await notificationEmitter?.emitBackgroundJobComplete(
                     params.context.workspaceId,
                     params.context.userId,
                     params.context.threadId,
@@ -332,7 +393,7 @@ export async function consumeBackgroundStream(params: {
         if (shouldNotify()) {
             // Emit error notification
             try {
-                await emitBackgroundJobError(
+                await notificationEmitter?.emitBackgroundJobError(
                     params.context.workspaceId,
                     params.context.userId,
                     params.context.threadId,
@@ -352,6 +413,305 @@ export async function consumeBackgroundStream(params: {
 }
 
 /**
+ * Purpose:
+ * Consume a background stream with tool execution support.
+ *
+ * Behavior:
+ * - Handles tool_call events and executes server-registered tools.
+ * - Updates job metadata with tool call status.
+ * - Continues multi-turn tool loops (max 10 iterations).
+ */
+export async function consumeBackgroundStreamWithTools(params: {
+    jobId: string;
+    body: Record<string, unknown>;
+    apiKey: string;
+    referer: string;
+    provider: BackgroundJobProvider;
+    context: BackgroundStreamParams;
+    toolRuntime?: Record<string, string>;
+    shouldNotify?: () => boolean;
+    abortSignal?: AbortSignal;
+}): Promise<void> {
+    const MAX_TOOL_ITERATIONS = 10;
+    let fullContent = '';
+    let chunks = 0;
+    let loopIteration = 0;
+    const notificationEmitter = getNotificationEmitter(params.provider.name);
+    const shouldNotify = params.shouldNotify ?? (() => true);
+    const tools = Array.isArray(params.body.tools)
+        ? (params.body.tools as ToolDefinition[])
+        : undefined;
+    const requestedToolChoice = params.body.tool_choice;
+    let activeToolChoice: unknown = requestedToolChoice;
+
+    const toolRuntime = params.toolRuntime ?? {};
+    const toolStates = new Map<string, {
+        id?: string;
+        name: string;
+        status: 'loading' | 'complete' | 'error' | 'pending' | 'skipped';
+        args?: string;
+        result?: string;
+        error?: string;
+    }>();
+
+    const emitToolState = async () => {
+        const tool_calls = Array.from(toolStates.values());
+        await params.provider.updateJob(params.jobId, { tool_calls });
+        emitJobStatus(params.jobId, 'streaming', {
+            content: fullContent,
+            contentLength: fullContent.length,
+            chunksReceived: chunks,
+            tool_calls,
+        });
+    };
+
+    initJobLiveState(params.jobId);
+
+    const orMessages = Array.isArray(params.body.messages)
+        ? params.body.messages.slice()
+        : [];
+
+    try {
+        const openRouterUrl = resolveOpenRouterChatCompletionsUrl();
+        while (loopIteration < MAX_TOOL_ITERATIONS) {
+            loopIteration += 1;
+            await assertJobNotAborted({
+                provider: params.provider,
+                jobId: params.jobId,
+                abortSignal: params.abortSignal,
+            });
+
+            const requestBody = {
+                ...params.body,
+                messages: orMessages,
+                tools,
+                tool_choice:
+                    tools &&
+                    activeToolChoice !== undefined
+                        ? activeToolChoice
+                        : tools
+                        ? 'auto'
+                        : undefined,
+                stream: true,
+            } as Record<string, unknown>;
+
+            const upstream = await fetch(openRouterUrl, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${params.apiKey}`,
+                    'Content-Type': 'application/json',
+                    Accept: 'text/event-stream',
+                    'HTTP-Referer': params.referer,
+                    'X-Title': 'or3.chat',
+                },
+                body: JSON.stringify(requestBody),
+                signal: params.abortSignal,
+            });
+
+            if (!upstream.ok || !upstream.body) {
+                const errorText = await upstream.text().catch(() => '<no body>');
+                throw new Error(
+                    `OpenRouter error ${upstream.status}: ${errorText.slice(0, 200)}`
+                );
+            }
+
+            const pendingToolCalls: ToolCall[] = [];
+            let loopContent = '';
+            for await (const evt of parseOpenRouterSSE(upstream.body)) {
+                await assertJobNotAborted({
+                    provider: params.provider,
+                    jobId: params.jobId,
+                    abortSignal: params.abortSignal,
+                });
+                if (evt.type === 'text') {
+                    fullContent += evt.text;
+                    loopContent += evt.text;
+                    chunks += 1;
+                    emitJobDelta(params.jobId, evt.text, {
+                        contentLength: fullContent.length,
+                        chunksReceived: chunks,
+                    });
+                    await params.provider.updateJob(params.jobId, {
+                        contentChunk: evt.text,
+                        chunksReceived: chunks,
+                    });
+                }
+                if (evt.type === 'tool_call') {
+                    const toolCall = evt.tool_call;
+                    pendingToolCalls.push(toolCall);
+                    toolStates.set(toolCall.id, {
+                        id: toolCall.id,
+                        name: toolCall.function.name,
+                        status: 'loading',
+                        args: toolCall.function.arguments,
+                    });
+                    await emitToolState();
+                }
+            }
+
+            if (pendingToolCalls.length === 0) {
+                break;
+            }
+
+            const toolResultsForNextLoop: Array<{
+                call: ToolCall;
+                result: string;
+            }> = [];
+
+            for (const toolCall of pendingToolCalls) {
+                await assertJobNotAborted({
+                    provider: params.provider,
+                    jobId: params.jobId,
+                    abortSignal: params.abortSignal,
+                });
+                const runtimeHint = toolRuntime[toolCall.function.name];
+                let toolResultText = '';
+                let status: 'complete' | 'error' | 'skipped' = 'complete';
+                let errorMessage: string | undefined;
+
+                if (runtimeHint === 'client') {
+                    status = 'skipped';
+                    errorMessage = `Tool \"${toolCall.function.name}\" is client-only.`;
+                    toolResultText = errorMessage;
+                } else {
+                    const execution = await executeServerTool(
+                        toolCall.function.name,
+                        toolCall.function.arguments
+                    );
+                    if (execution.error) {
+                        status = execution.runtime === 'client' ? 'skipped' : 'error';
+                        errorMessage = execution.error;
+                        toolResultText = `Error executing tool \"${toolCall.function.name}\": ${execution.error}`;
+                    } else {
+                        toolResultText = execution.result || '';
+                    }
+                }
+
+                toolStates.set(toolCall.id, {
+                    id: toolCall.id,
+                    name: toolCall.function.name,
+                    status,
+                    args: toolCall.function.arguments,
+                    result: status === 'complete' ? toolResultText : undefined,
+                    error: status !== 'complete' ? errorMessage : undefined,
+                });
+                await emitToolState();
+
+                toolResultsForNextLoop.push({ call: toolCall, result: toolResultText });
+            }
+
+            orMessages.push({
+                role: 'assistant',
+                content: [{ type: 'text', text: loopContent || '' }],
+                tool_calls: pendingToolCalls.map((toolCall) => ({
+                    id: toolCall.id,
+                    type: 'function' as const,
+                    function: {
+                        name: toolCall.function.name,
+                        arguments: toolCall.function.arguments,
+                    },
+                })),
+            });
+
+            for (const payload of toolResultsForNextLoop) {
+                orMessages.push({
+                    role: 'tool',
+                    tool_call_id: payload.call.id,
+                    name: payload.call.function.name,
+                    content: [{ type: 'text', text: payload.result }],
+                });
+            }
+
+            // If the caller forced a specific function, only enforce that on the first
+            // turn; subsequent turns should allow the model to produce the final answer.
+            if (isForcedFunctionToolChoice(activeToolChoice)) {
+                activeToolChoice = 'auto';
+            }
+
+            if (loopIteration >= MAX_TOOL_ITERATIONS) {
+                throw new Error(
+                    `Background tool loop exceeded max iterations (${MAX_TOOL_ITERATIONS})`
+                );
+            }
+        }
+
+        const latestJob = await params.provider.getJob(
+            params.jobId,
+            params.context.userId
+        );
+        if (!latestJob) {
+            throw new Error('Background job disappeared before completion');
+        }
+        if (latestJob.status !== 'streaming') {
+            if (latestJob.status === 'aborted') {
+                throw createAbortError();
+            }
+            throw new Error(
+                `Background job is no longer streaming (status: ${latestJob.status})`
+            );
+        }
+
+        await params.provider.completeJob(params.jobId, fullContent);
+        emitJobStatus(params.jobId, 'complete', {
+            content: fullContent,
+            contentLength: fullContent.length,
+            chunksReceived: chunks,
+            completedAt: Date.now(),
+            tool_calls: Array.from(toolStates.values()),
+        });
+
+        if (shouldNotify()) {
+            try {
+                await notificationEmitter?.emitBackgroundJobComplete(
+                    params.context.workspaceId,
+                    params.context.userId,
+                    params.context.threadId,
+                    params.jobId
+                );
+            } catch (err) {
+                console.error('[background-stream] Failed to emit notification:', err);
+            }
+        }
+    } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+            emitJobStatus(params.jobId, 'aborted', {
+                content: fullContent,
+                contentLength: fullContent.length,
+                chunksReceived: chunks,
+                completedAt: Date.now(),
+                tool_calls: Array.from(toolStates.values()),
+            });
+            return;
+        }
+
+        emitJobStatus(params.jobId, 'error', {
+            content: fullContent,
+            contentLength: fullContent.length,
+            chunksReceived: chunks,
+            completedAt: Date.now(),
+            error: err instanceof Error ? err.message : String(err),
+            tool_calls: Array.from(toolStates.values()),
+        });
+
+        if (shouldNotify()) {
+            try {
+                await notificationEmitter?.emitBackgroundJobError(
+                    params.context.workspaceId,
+                    params.context.userId,
+                    params.context.threadId,
+                    params.jobId,
+                    err instanceof Error ? err.message : String(err)
+                );
+            } catch (notifyErr) {
+                console.error('[background-stream] Failed to emit error notification:', notifyErr);
+            }
+        }
+
+        throw err;
+    }
+}
+
+/**
  * Stream in the background without keeping a client connection open.
  */
 async function streamInBackground(
@@ -363,9 +723,38 @@ async function streamInBackground(
     const ac = provider.getAbortController?.(jobId) ?? new AbortController();
 
     // Strip internal fields from body before sending to OpenRouter
-    const { _background, _threadId, _messageId, _backgroundMode, ...cleanBody } = params.body;
+    const {
+        _background,
+        _threadId,
+        _messageId,
+        _backgroundMode,
+        _toolRuntime,
+        ...cleanBody
+    } = params.body;
+    const toolRuntime =
+        typeof _toolRuntime === 'object' && _toolRuntime !== null
+            ? (_toolRuntime as Record<string, string>)
+            : undefined;
 
-    const upstream = await fetch(OR_URL, {
+    const hasTools =
+        Array.isArray(cleanBody.tools) && cleanBody.tools.length > 0;
+    if (hasTools) {
+        await consumeBackgroundStreamWithTools({
+            jobId,
+            body: cleanBody,
+            apiKey: params.apiKey,
+            referer: params.referer,
+            provider,
+            context: params,
+            toolRuntime,
+            shouldNotify: () => !hasJobViewers(jobId),
+            abortSignal: ac.signal,
+        });
+        return;
+    }
+
+    const openRouterUrl = resolveOpenRouterChatCompletionsUrl();
+    const upstream = await fetch(openRouterUrl, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${params.apiKey}`,

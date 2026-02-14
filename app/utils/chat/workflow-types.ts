@@ -59,6 +59,8 @@ export type HitlAction =
 
 export interface HitlRequestState {
     id: string;
+    jobId?: string;
+    workspaceId?: string;
     nodeId: string;
     nodeLabel: string;
     mode: HitlMode;
@@ -72,6 +74,12 @@ export interface HitlRequestState {
         output?: string;
         workflowName?: string;
         sessionId?: string;
+    };
+    response?: {
+        requestId: string;
+        action: HitlAction;
+        data?: unknown;
+        respondedAt: string;
     };
 }
 

@@ -31,6 +31,8 @@ describe('defineOr3CloudConfig', () => {
         const config = defineOr3CloudConfig(baseConfig, { strict: false });
         expect(config.limits?.requestsPerMinute).toBe(20);
         expect(config.services.llm?.openRouter?.allowUserOverride).toBe(true);
+        expect(config.storage.allowedMimeTypes?.length).toBeGreaterThan(0);
+        expect(config.backgroundStreaming?.maxConcurrentJobsPerUser).toBe(5);
     });
 
     it('throws in strict mode when instance key is required', () => {
@@ -110,17 +112,17 @@ describe('defineOr3CloudConfig', () => {
         ).toThrow(/allowUserOverride must be true when requireUserKey/i);
     });
 
-    it('throws when invalid provider ID is used', () => {
+    it('allows custom provider IDs for extensibility', () => {
         expect(() =>
             defineOr3CloudConfig({
                 ...baseConfig,
                 auth: {
                     enabled: true,
-                    provider: 'fake-provider' as any,
+                    provider: 'fake-provider',
                     clerk: {},
                 },
             })
-        ).toThrow();
+        ).not.toThrow();
     });
 
     it('merges nested objects correctly', () => {

@@ -14,13 +14,19 @@ export interface Or3CloudConfig {
          * Selected authentication provider.
          * @default 'clerk'
          */
-        provider: 'clerk' | 'custom';
+        provider: string;
         /**
          * Allow unauthenticated users to use the app with their own OpenRouter key.
          * Requires allowUserOverride to also be true.
          * @default false
          */
         guestAccessEnabled?: boolean;
+        /**
+         * Automatically provision users/workspaces on first authenticated session.
+         * When false, only pre-provisioned users can sign in.
+         * @default true
+         */
+        autoProvision?: boolean;
         /**
          * Behavior when workspace provisioning fails during session resolution.
          * - 'throw': preserve current behavior and throw (default)
@@ -58,7 +64,7 @@ export interface Or3CloudConfig {
          * Sync provider backend.
          * @default 'convex'
          */
-        provider: 'convex' | 'firebase' | 'custom';
+        provider: string;
         /**
          * Convex specific configuration.
          */
@@ -90,7 +96,31 @@ export interface Or3CloudConfig {
          * Storage provider.
          * @default 'convex'
          */
-        provider: 'convex' | 's3' | 'custom';
+        provider: string;
+        /**
+         * Allowlisted MIME types for upload presign requests.
+         * @env OR3_STORAGE_ALLOWED_MIME_TYPES
+         */
+        allowedMimeTypes?: string[];
+        /**
+         * Optional per-workspace storage quota in bytes.
+         * When unset, quota enforcement is disabled.
+         * @env OR3_STORAGE_WORKSPACE_QUOTA_BYTES
+         */
+        workspaceQuotaBytes?: number;
+        /**
+         * Default GC retention window in seconds.
+         * Used when `/api/storage/gc/run` omits `retention_seconds`.
+         * @default 2592000 (30 days)
+         * @env OR3_STORAGE_GC_RETENTION_SECONDS
+         */
+        gcRetentionSeconds?: number;
+        /**
+         * Cooldown window for manual storage GC runs.
+         * @default 60000
+         * @env OR3_STORAGE_GC_COOLDOWN_MS
+         */
+        gcCooldownMs?: number;
     };
 
     /**
@@ -123,6 +153,13 @@ export interface Or3CloudConfig {
                  * @default false
                  */
                 requireUserKey?: boolean;
+                /**
+                 * Base URL for OpenRouter-compatible API endpoints.
+                 * Useful for proxy setups.
+                 * @default 'https://openrouter.ai/api/v1'
+                 * @env OR3_OPENROUTER_BASE_URL
+                 */
+                baseUrl?: string;
             };
         };
     };
@@ -162,7 +199,19 @@ export interface Or3CloudConfig {
          * - 'convex': Persistent via Convex
          * @default 'memory'
          */
-        storageProvider?: 'memory' | 'convex' | 'redis' | 'postgres';
+        storageProvider?: string;
+        /**
+         * Optional per-operation rate limit overrides.
+         * Keyed by operation name (e.g. 'sync:push', 'storage:upload').
+         * @env OR3_RATE_LIMIT_OVERRIDES_JSON
+         */
+        operationRateLimits?: Record<
+            string,
+            {
+                windowMs?: number;
+                maxRequests?: number;
+            }
+        >;
     };
 
     /**
@@ -179,12 +228,17 @@ export interface Or3CloudConfig {
          * Storage provider for background jobs.
          * @default 'memory'
          */
-        storageProvider?: 'memory' | 'convex' | 'redis';
+        storageProvider?: string;
         /**
          * Maximum concurrent background jobs.
          * @default 20
          */
         maxConcurrentJobs?: number;
+        /**
+         * Maximum concurrent background jobs per user.
+         * @default 5
+         */
+        maxConcurrentJobsPerUser?: number;
         /**
          * Background job timeout in seconds.
          * @default 300

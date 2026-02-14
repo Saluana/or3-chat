@@ -15,7 +15,7 @@
 import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { nowSec, parseOrThrow, nextClock } from './util';
+import { nowSec, parseOrThrow, nextClock, getWriteTxTableNames } from './util';
 import {
     PostSchema,
     PostCreateSchema,
@@ -95,11 +95,14 @@ export async function createPost(input: PostCreate): Promise<Post> {
         entity: toPostEntity(next),
         tableName: 'posts',
     });
-    await dbTry(
-        () => getDb().posts.put(next),
-        { op: 'write', entity: 'posts', action: 'create' },
-        { rethrow: true }
-    );
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
+        await dbTry(
+            () => db.posts.put(next),
+            { op: 'write', entity: 'posts', action: 'create' },
+            { rethrow: true }
+        );
+    });
     await hooks.doAction('db.posts.create:action:after', {
         entity: toPostEntity(next),
         tableName: 'posts',
@@ -133,28 +136,31 @@ export async function upsertPost(value: Post): Promise<void> {
     if (mutable.meta !== undefined) {
         mutable.meta = normalizeMeta(mutable.meta);
     }
-    const validated = parseOrThrow(PostSchema, filtered);
-    const existing = await dbTry(() => getDb().posts.get(validated.id), {
-        op: 'read',
-        entity: 'posts',
-        action: 'get',
-    });
-    const next = {
-        ...validated,
-        clock: nextClock(existing?.clock ?? validated.clock),
-    };
-    await hooks.doAction('db.posts.upsert:action:before', {
-        entity: toPostEntity(next),
-        tableName: 'posts',
-    });
-    await dbTry(
-        () => getDb().posts.put(next),
-        { op: 'write', entity: 'posts', action: 'upsert' },
-        { rethrow: true }
-    );
-    await hooks.doAction('db.posts.upsert:action:after', {
-        entity: toPostEntity(next),
-        tableName: 'posts',
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
+        const validated = parseOrThrow(PostSchema, filtered);
+        const existing = await dbTry(() => db.posts.get(validated.id), {
+            op: 'read',
+            entity: 'posts',
+            action: 'get',
+        });
+        const next = {
+            ...validated,
+            clock: nextClock(existing?.clock ?? validated.clock),
+        };
+        await hooks.doAction('db.posts.upsert:action:before', {
+            entity: toPostEntity(next),
+            tableName: 'posts',
+        });
+        await dbTry(
+            () => db.posts.put(next),
+            { op: 'write', entity: 'posts', action: 'upsert' },
+            { rethrow: true }
+        );
+        await hooks.doAction('db.posts.upsert:action:after', {
+            entity: toPostEntity(next),
+            tableName: 'posts',
+        });
     });
 }
 
@@ -246,8 +252,9 @@ export function searchPosts(term: string) {
  */
 export async function softDeletePost(id: string): Promise<void> {
     const hooks = useHooks();
-    await getDb().transaction('rw', getDb().posts, async () => {
-        const p = await dbTry(() => getDb().posts.get(id), {
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
+        const p = await dbTry(() => db.posts.get(id), {
             op: 'read',
             entity: 'posts',
             action: 'get',
@@ -258,7 +265,7 @@ export async function softDeletePost(id: string): Promise<void> {
             id: p.id,
             tableName: 'posts',
         });
-        await getDb().posts.put({
+        await db.posts.put({
             ...p,
             deleted: true,
             updated_at: nowSec(),
@@ -287,20 +294,29 @@ export async function softDeletePost(id: string): Promise<void> {
  */
 export async function hardDeletePost(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => getDb().posts.get(id), {
-        op: 'read',
-        entity: 'posts',
-        action: 'get',
-    });
-    await hooks.doAction('db.posts.delete:action:hard:before', {
-        entity: toPostEntity(existing!),
-        id,
-        tableName: 'posts',
-    });
-    await getDb().posts.delete(id);
-    await hooks.doAction('db.posts.delete:action:hard:after', {
-        entity: toPostEntity(existing!),
-        id,
-        tableName: 'posts',
-    });
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
+        async () => {
+        const existing = await dbTry(() => db.posts.get(id), {
+            op: 'read',
+            entity: 'posts',
+            action: 'get',
+        });
+        if (!existing) return;
+
+        await hooks.doAction('db.posts.delete:action:hard:before', {
+            entity: toPostEntity(existing),
+            id,
+            tableName: 'posts',
+        });
+        await db.posts.delete(id);
+        await hooks.doAction('db.posts.delete:action:hard:after', {
+            entity: toPostEntity(existing),
+            id,
+            tableName: 'posts',
+        });
+        }
+    );
 }

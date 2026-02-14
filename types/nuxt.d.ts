@@ -34,8 +34,9 @@ declare module '#app' {
             respondHitl: (
                 requestId: string,
                 action: import('~/utils/chat/workflow-types').HitlAction,
-                data?: string | Record<string, unknown>
-            ) => boolean;
+                data?: string | Record<string, unknown>,
+                jobId?: string
+            ) => Promise<boolean>;
         };
     }
 }

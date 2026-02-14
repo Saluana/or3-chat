@@ -1,12 +1,31 @@
 /**
- * OutboxManager - Manages the push loop for syncing local changes
+ * @module app/core/sync/outbox-manager
+ *
+ * Purpose:
+ * Manages the push loop that flushes locally captured writes
+ * (`pending_ops`) to the sync provider. Handles coalescing,
+ * batching, retry with exponential backoff, and circuit-breaker
+ * coordination.
  *
  * Responsibilities:
- * - Periodically flush pending_ops to the server
- * - Coalesce multiple updates to same record
- * - Retry failed operations with exponential backoff
- * - Coordinate retries with circuit breaker
- * - Emit hooks for observability
+ * - Periodically flush pending_ops to the server (default 1s heartbeat)
+ * - Coalesce multiple updates to the same record (keep latest only)
+ * - Retry transient failures with configurable delays
+ * - Detect permanent failures (validation, oversized) and stop retrying
+ * - Emit `sync.push:action:before/after`, `sync.error:action`, and
+ *   `sync.retry:action` hooks for observability
+ * - Emit `sync.queue:action:full` when the queue nears capacity
+ *
+ * Constraints:
+ * - Maximum batch size: 50 ops per push (configurable)
+ * - Capacity warning at 500 pending ops
+ * - Retry delays: [250ms, 1s, 3s, 5s] (4 attempts, then permanent failure)
+ * - Circuit breaker prevents flush attempts when the provider is down
+ * - Payloads are re-sanitized before each push for safety
+ *
+ * @see core/sync/hook-bridge for the write capture side
+ * @see shared/sync/circuit-breaker for circuit breaker implementation
+ * @see shared/sync/sanitize for payload sanitization
  */
 import type { Or3DB } from '~/db/client';
 import type { SyncProvider, SyncScope, PendingOp } from '~~/shared/sync/types';
@@ -28,12 +47,33 @@ const DEFAULT_MAX_BATCH_SIZE = 50;
 /** Max pending ops before emitting capacity warning */
 const MAX_PENDING_OPS = 500;
 
+/**
+ * Purpose:
+ * Configuration for OutboxManager push loop behavior.
+ *
+ * Constraints:
+ * - Defaults are chosen to balance responsiveness with backend load
+ */
 export interface OutboxManagerConfig {
     flushIntervalMs?: number;
     maxBatchSize?: number;
     retryDelays?: number[];
 }
 
+/**
+ * Purpose:
+ * Flush locally captured pending ops to the active SyncProvider.
+ *
+ * Behavior:
+ * - Runs a periodic loop that coalesces and batches `pending_ops`
+ * - Retries transient failures with backoff and respects circuit breaker
+ * - Marks pushed opIds in the recent-op cache to drop echoed changes
+ * - Emits hooks for observability (`sync.push:*`, `sync.retry:*`, `sync.error:*`)
+ *
+ * Constraints:
+ * - Designed to be long-lived per workspace scope
+ * - `start()` is idempotent; caller owns lifecycle
+ */
 export class OutboxManager {
     private db: Or3DB;
     private provider: SyncProvider;
@@ -44,6 +84,8 @@ export class OutboxManager {
     private flushTimeout: ReturnType<typeof setTimeout> | null = null;
     private isFlushing = false;
     private isRunning = false;
+    private needsSyncingRecovery = true;
+    private providerRateLimitedUntil = 0;
 
     constructor(
         db: Or3DB,
@@ -68,6 +110,13 @@ export class OutboxManager {
     start(): void {
         if (this.isRunning) return;
         this.isRunning = true;
+        this.needsSyncingRecovery = true;
+        this.providerRateLimitedUntil = 0;
+        // Purge permanently failed ops on startup — they will never succeed
+        // and only generate noise (error notifications, wasted flush cycles).
+        this.purgeFailedOps().catch((err) =>
+            console.error('[OutboxManager] Failed to purge stale ops:', err)
+        );
         this.scheduleNextFlush(0);
     }
 
@@ -119,17 +168,23 @@ export class OutboxManager {
         if (!circuitBreaker.canRetry()) {
             return false;
         }
+        if (Date.now() < this.providerRateLimitedUntil) {
+            return false;
+        }
 
         this.isFlushing = true;
 
         try {
             const hooks = useHooks();
 
-            // Reset any syncing ops (e.g., after a crash) back to pending
-            await this.db.pending_ops
-                .where('status')
-                .equals('syncing')
-                .modify({ status: 'pending', nextAttemptAt: Date.now() });
+            // Crash recovery: reset stale syncing ops once when the loop starts.
+            if (this.needsSyncingRecovery) {
+                await this.db.pending_ops
+                    .where('status')
+                    .equals('syncing')
+                    .modify({ status: 'pending', nextAttemptAt: Date.now() });
+                this.needsSyncingRecovery = false;
+            }
 
             // Get pending ops (limited to prevent O(N) memory usage)
             // We fetch more than maxBatchSize to allow for some coalescing
@@ -215,7 +270,7 @@ export class OutboxManager {
                 for (const op of batch) {
                     const res = resultsById.get(op.stamp.opId);
                     if (!res) {
-                        await this.handleFailedOp(op, 'Missing push result');
+                        await this.handleFailedOp(op, 'Missing push result', 'UNKNOWN');
                         failCount += 1;
                         continue;
                     }
@@ -229,7 +284,7 @@ export class OutboxManager {
                         successCount += 1;
                     } else {
                         // Failed - handle retry
-                        await this.handleFailedOp(op, res.error);
+                        await this.handleFailedOp(op, res.error, res.errorCode);
                         failCount += 1;
                     }
                 }
@@ -255,6 +310,28 @@ export class OutboxManager {
                     circuitBreaker.recordFailure();
                 }
             } catch (error) {
+                const deferredRetryDelayMs = this.getDeferredRetryDelayMs(error);
+                if (deferredRetryDelayMs !== null) {
+                    await this.releaseBatchForDeferredRetry(batch, deferredRetryDelayMs);
+                    this.providerRateLimitedUntil = Math.max(
+                        this.providerRateLimitedUntil,
+                        Date.now() + deferredRetryDelayMs
+                    );
+                    await hooks.doAction('sync.push:action:after', {
+                        scope: this.scope,
+                        successCount: 0,
+                        failCount: 0,
+                    });
+                    if (import.meta.dev) {
+                        console.warn('[OutboxManager] Push deferred by transient upstream status', {
+                            scope: this.scope,
+                            batchSize: batch.length,
+                            retryAfterMs: deferredRetryDelayMs,
+                        });
+                    }
+                    return false;
+                }
+
                 const message = error instanceof Error ? error.message : String(error);
                 let failCount = 0;
                 for (const op of batch) {
@@ -299,13 +376,35 @@ export class OutboxManager {
     /**
      * Handle a failed operation
      */
-    private async handleFailedOp(op: PendingOp, error?: string): Promise<void> {
+    private async handleFailedOp(
+        op: PendingOp,
+        error?: string,
+        errorCode?: string
+    ): Promise<void> {
         const hooks = useHooks();
+        if (errorCode === 'RATE_LIMITED' || this.isRateLimitMessage(error)) {
+            const rateLimitDelayMs =
+                this.parseRetryAfterFromMessage(error) ??
+                this.config.retryDelays[0] ??
+                DEFAULT_RETRY_DELAYS[0] ??
+                250;
+            const nextAttemptAt = Date.now() + rateLimitDelayMs;
+            this.providerRateLimitedUntil = Math.max(this.providerRateLimitedUntil, nextAttemptAt);
+            const updatedOp = {
+                ...op,
+                status: 'pending' as const,
+                nextAttemptAt,
+            };
+            await this.db.pending_ops.put(updatedOp);
+            await hooks.doAction('sync.retry:action', { op: updatedOp, attempt: op.attempts });
+            return;
+        }
+
         const attempts = op.attempts + 1;
         const maxAttempts = this.config.retryDelays.length;
 
         // Check for permanent failures that should not be retried
-        const isPermanent = this.isPermanentFailure(error);
+        const isPermanent = this.isPermanentFailure(errorCode, error);
 
         if (isPermanent || attempts >= maxAttempts) {
             // Max retries reached or permanent failure - mark as failed
@@ -349,11 +448,32 @@ export class OutboxManager {
     /**
      * Check if an error is permanent and should not be retried
      */
-    private isPermanentFailure(error?: string): boolean {
+    private isPermanentFailure(errorCode?: string, error?: string): boolean {
+        // Use error code if available (preferred)
+        if (errorCode) {
+            switch (errorCode) {
+                case 'VALIDATION_ERROR':
+                case 'OVERSIZED':
+                case 'UNAUTHORIZED':
+                    return true;
+                case 'CONFLICT':
+                case 'NETWORK_ERROR':
+                case 'RATE_LIMITED':
+                case 'SERVER_ERROR':
+                case 'UNKNOWN':
+                    return false;
+                default:
+                    return false;
+            }
+        }
+
+        // Fallback to string matching for legacy/unstructured errors
         if (!error) return false;
 
         // Oversized document - can't be fixed without app changes
         if (error.includes('Value is too large')) return true;
+        if (error.includes('Payload too large for')) return true;
+        if (error.includes('exceeds 65536 bytes')) return true;
 
         // Schema validation errors - data doesn't match expected format
         if (error.includes('does not match the schema')) return true;
@@ -361,7 +481,67 @@ export class OutboxManager {
         if (error.includes('missing the required field')) return true;
         if (error.includes('Value does not match validator')) return true;
 
+        // Server-side Zod validation rejection (push.post.ts returns 400 with this prefix)
+        // These are permanent: the payload shape is wrong and retrying won't fix it
+        if (error.includes('Invalid payload for')) return true;
+
+        // Empty payload errors - payload was captured incorrectly (HookBridge bug)
+        // These can't be fixed by retrying; the data is permanently missing
+        if (error.includes('invalid_type') && error.includes('received undefined')) return true;
+
         return false;
+    }
+
+    private getDeferredRetryDelayMs(error: unknown): number | null {
+        if (!error || typeof error !== 'object') return null;
+        const candidate = error as {
+            status?: unknown;
+            retryAfterMs?: unknown;
+            message?: unknown;
+        };
+
+        const status = typeof candidate.status === 'number' ? candidate.status : null;
+        if (status === null || ![429, 502, 503, 504].includes(status)) return null;
+
+        if (
+            typeof candidate.retryAfterMs === 'number' &&
+            Number.isFinite(candidate.retryAfterMs) &&
+            candidate.retryAfterMs > 0
+        ) {
+            return candidate.retryAfterMs;
+        }
+
+        if (typeof candidate.message === 'string') {
+            const fromMessage = this.parseRetryAfterFromMessage(candidate.message);
+            if (fromMessage !== null) return fromMessage;
+        }
+
+        return this.config.retryDelays[0] ?? DEFAULT_RETRY_DELAYS[0] ?? 250;
+    }
+
+    private parseRetryAfterFromMessage(message?: string): number | null {
+        if (!message) return null;
+        const match = /retry after\s+(\d+(?:\.\d+)?)s/i.exec(message);
+        if (!match) return null;
+        const seconds = Number(match[1]);
+        if (!Number.isFinite(seconds) || seconds <= 0) return null;
+        return Math.ceil(seconds * 1000);
+    }
+
+    private isRateLimitMessage(message?: string): boolean {
+        if (!message) return false;
+        return message.toLowerCase().includes('rate limit');
+    }
+
+    private async releaseBatchForDeferredRetry(batch: PendingOp[], retryAfterMs: number): Promise<void> {
+        const nextAttemptAt = Date.now() + retryAfterMs;
+        await this.db.pending_ops.bulkPut(
+            batch.map((op) => ({
+                ...op,
+                status: 'pending' as const,
+                nextAttemptAt,
+            }))
+        );
     }
 
     private async markTombstoneSynced(op: PendingOp): Promise<void> {
@@ -408,5 +588,57 @@ export class OutboxManager {
             .where('status')
             .equals('failed')
             .modify({ status: 'pending', attempts: 0, nextAttemptAt: undefined });
+    }
+
+    /**
+     * Purge corrupt ops that have empty or invalid payloads.
+     * These ops cannot be synced and will continuously fail with validation errors.
+     * Returns the count of deleted ops.
+     */
+    async purgeCorruptOps(): Promise<number> {
+        const allPending = await this.db.pending_ops.toArray();
+        const corruptIds: string[] = [];
+
+        for (const op of allPending) {
+            // Check for delete ops (which don't need full payload)
+            if (op.operation === 'delete') continue;
+
+            // Check if payload is missing or empty
+            if (!op.payload || typeof op.payload !== 'object') {
+                corruptIds.push(op.id);
+                continue;
+            }
+
+            // For message ops, check required fields
+            if (op.tableName === 'messages') {
+                const requiredFields = ['thread_id', 'role', 'index'];
+                const hasAllRequired = requiredFields.every(
+                    (field) => (op.payload as Record<string, unknown>)[field] !== undefined
+                );
+                if (!hasAllRequired) {
+                    corruptIds.push(op.id);
+                }
+            }
+        }
+
+        if (corruptIds.length > 0) {
+            await this.db.pending_ops.where('id').anyOf(corruptIds).delete();
+            console.log(`[OutboxManager] Purged ${corruptIds.length} corrupt ops`);
+        }
+
+        return corruptIds.length;
+    }
+
+    /**
+     * Remove all permanently-failed ops from the outbox.
+     * These ops have exhausted retries or were classified as permanent failures.
+     * Leaving them pollutes future flush cycles and can re-trigger error notifications.
+     */
+    private async purgeFailedOps(): Promise<void> {
+        const count = await this.db.pending_ops.where('status').equals('failed').count();
+        if (count > 0) {
+            await this.db.pending_ops.where('status').equals('failed').delete();
+            console.log(`[OutboxManager] Purged ${count} permanently-failed ops on startup`);
+        }
     }
 }

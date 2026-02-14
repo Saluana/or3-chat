@@ -460,7 +460,7 @@ async ({ url }) => {
 
 ## Limitations
 
-- Tools execute client-side only (no server API)
+- This registry executes handlers client-side; SSR background execution uses the separate server registry
 - 10 second default timeout (configurable per tool)
 - String return type only (serialize complex data as JSON)
 - No streaming within tool execution
@@ -502,6 +502,8 @@ You're trying to register a tool that already exists. Either:
 - `openRouterStream` — Streaming parser that emits tool_call events
 - `useChat` — Chat composable that executes tools during streaming
 - `ChatInputDropper` — UI component with tool toggle controls
+- `tool-runtime.md` — Runtime semantics across foreground/background paths
+- `server-tool-registry.md` — SSR registry used for background tool execution
 
 ---
 

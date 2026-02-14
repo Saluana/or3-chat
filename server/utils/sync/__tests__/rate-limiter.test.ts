@@ -13,7 +13,8 @@
  * - Distributed rate limit verification.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { testRuntimeConfig } from '../../../../tests/setup';
 import {
     checkSyncRateLimit,
     recordSyncRequest,
@@ -29,9 +30,23 @@ describe('sync rate limiter', () => {
     beforeEach(() => {
         // Reset all rate limits before each test
         resetSyncRateLimits();
+        // Ensure limiter is enabled in tests unless explicitly disabled.
+        vi.stubEnv('DISABLE_RATE_LIMIT', '0');
+        testRuntimeConfig.value.limits.operationRateLimits = {};
+    });
+
+    afterEach(() => {
+        vi.unstubAllEnvs();
     });
 
     describe('checkSyncRateLimit', () => {
+        it('can be explicitly disabled via env flag', () => {
+            vi.stubEnv('DISABLE_RATE_LIMIT', '1');
+            const result = checkSyncRateLimit('user-1', 'sync:push');
+            expect(result.allowed).toBe(true);
+            expect(result.remaining).toBe(Infinity);
+        });
+
         it('should allow first request', () => {
             const result = checkSyncRateLimit('user-1', 'sync:push');
 
@@ -254,6 +269,23 @@ describe('sync rate limiter', () => {
             const result = checkSyncRateLimit('user-1', 'unknown:new-operation');
             expect(result.allowed).toBe(true);
             expect(result.remaining).toBe(Infinity);
+        });
+
+        it('applies runtime operation overrides', () => {
+            testRuntimeConfig.value.limits.operationRateLimits = {
+                'storage:upload': {
+                    maxRequests: 1,
+                    windowMs: 60_000,
+                },
+            };
+
+            expect(checkSyncRateLimit('user-override', 'storage:upload').allowed).toBe(
+                true
+            );
+            recordSyncRequest('user-override', 'storage:upload');
+            expect(checkSyncRateLimit('user-override', 'storage:upload').allowed).toBe(
+                false
+            );
         });
     });
 });

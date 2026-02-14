@@ -2,18 +2,9 @@
  * @module server/admin/stores/registry.ts
  *
  * Purpose:
- * Acts as a service registry or factory that resolves abstract store interfaces
- * to their provider-specific implementations.
- *
- * Responsibilities:
- * - Directing store requests to the appropriate provider (e.g., Convex).
- * - Caching provider capabilities to avoid redundant lookups.
- * - Providing a unified set of factory functions for the Admin API.
- *
- * Architecture:
- * This is a middleware-like layer that reads the global sync configuration
- * (`config.sync.provider`) and returns the corresponding store instances.
- * It ensures that the admin API doesn't need to know which database is in use.
+ * Acts as a registry that resolves admin store interfaces to provider-specific
+ * implementations. Provider packages register their admin store providers
+ * during server boot.
  */
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
@@ -23,130 +14,122 @@ import type {
     AdminUserStore,
     AdminStoreCapabilities,
 } from './types';
-import {
-    createConvexWorkspaceAccessStore,
-    createConvexWorkspaceSettingsStore,
-    createConvexAdminUserStore,
-} from './convex/convex-store';
-import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { useRuntimeConfig } from '#imports';
 
-let cachedCapabilities: AdminStoreCapabilities | null = null;
-let cachedProviderId: string | null = null;
-let cacheTimestamp: number = 0;
-const CACHE_TTL_MS = 60000; // 1 minute
+export interface AdminStoreProvider {
+    id: string;
+    order?: number;
+    createWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore;
+    createWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStore;
+    createAdminUserStore(event: H3Event): AdminUserStore;
+    getCapabilities?: () => AdminStoreCapabilities;
+}
+
+const providers = new Map<string, AdminStoreProvider>();
+
+export function registerAdminStoreProvider(provider: AdminStoreProvider): void {
+    if (import.meta.dev && providers.has(provider.id)) {
+        console.warn(`[admin:stores] Replacing provider: ${provider.id}`);
+    }
+    providers.set(provider.id, provider);
+}
+
+export function getAdminStoreProvider(id: string): AdminStoreProvider | null {
+    return providers.get(id) ?? null;
+}
+
+function resolveProviderId(event?: H3Event): string {
+    const config = useRuntimeConfig(event);
+    return config.sync.provider;
+}
 
 /**
  * Resolves the appropriate WorkspaceAccessStore for the current environment.
- *
- * @param event - The current H3 event used to resolve runtime configuration.
- * @throws 501 Error if no store implementation exists for the active provider.
  */
 export function getWorkspaceAccessStore(event: H3Event): WorkspaceAccessStore {
-    const config = useRuntimeConfig(event);
-    const provider = config.sync.provider;
+    const providerId = resolveProviderId(event);
+    const provider = getAdminStoreProvider(providerId);
 
-    if (provider === CONVEX_PROVIDER_ID) {
-        return createConvexWorkspaceAccessStore(event);
+    if (!provider) {
+        throw createError({
+            statusCode: 501,
+            statusMessage: `Workspace access store not implemented for provider: ${providerId}`,
+        });
     }
 
-    throw createError({
-        statusCode: 501,
-        statusMessage: `Workspace access store not implemented for provider: ${provider}`,
-    });
+    return provider.createWorkspaceAccessStore(event);
 }
 
 /**
  * Resolves the appropriate WorkspaceSettingsStore for the current environment.
- *
- * @param event - The current H3 event used to resolve runtime configuration.
- * @throws 501 Error if no store implementation exists for the active provider.
  */
 export function getWorkspaceSettingsStore(event: H3Event): WorkspaceSettingsStore {
-    const config = useRuntimeConfig(event);
-    const provider = config.sync.provider;
+    const providerId = resolveProviderId(event);
+    const provider = getAdminStoreProvider(providerId);
 
-    if (provider === CONVEX_PROVIDER_ID) {
-        return createConvexWorkspaceSettingsStore(event);
+    if (!provider) {
+        throw createError({
+            statusCode: 501,
+            statusMessage: `Workspace settings store not implemented for provider: ${providerId}`,
+        });
     }
 
-    throw createError({
-        statusCode: 501,
-        statusMessage: `Workspace settings store not implemented for provider: ${provider}`,
-    });
+    return provider.createWorkspaceSettingsStore(event);
 }
 
 /**
  * Resolves the appropriate AdminUserStore for the current environment.
- *
- * @param event - The current H3 event used to resolve runtime configuration.
- * @throws 501 Error if no store implementation exists for the active provider.
  */
 export function getAdminUserStore(event: H3Event): AdminUserStore {
-    const config = useRuntimeConfig(event);
-    const provider = config.sync.provider;
+    const providerId = resolveProviderId(event);
+    const provider = getAdminStoreProvider(providerId);
 
-    if (provider === CONVEX_PROVIDER_ID) {
-        return createConvexAdminUserStore(event);
+    if (!provider) {
+        throw createError({
+            statusCode: 501,
+            statusMessage: `Admin user store not implemented for provider: ${providerId}`,
+        });
     }
 
-    throw createError({
-        statusCode: 501,
-        statusMessage: `Admin user store not implemented for provider: ${provider}`,
-    });
+    return provider.createAdminUserStore(event);
 }
+
+let cachedCapabilities: AdminStoreCapabilities | null = null;
+let cachedProviderId: string | null = null;
+let cacheTimestamp: number = 0;
+const CACHE_TTL_MS = 60000;
 
 /**
  * Retrieves the administrative capabilities of the active store provider.
- *
- * Behavior:
- * Caches the results for 1 minute (CACHE_TTL_MS) to reduce configuration
- * lookup overhead during consecutive requests.
- *
- * @param event - Optional H3 event. If missing, system defaults are used.
  */
 export function getAdminStoreCapabilities(event?: H3Event): AdminStoreCapabilities {
-    const config = useRuntimeConfig(event);
-    const provider = config.sync.provider;
+    const providerId = resolveProviderId(event);
     const now = Date.now();
 
-    // Return cached capabilities if valid and provider hasn't changed
-    if (cachedCapabilities && 
-        cachedProviderId === provider && 
-        now - cacheTimestamp < CACHE_TTL_MS) {
+    if (
+        cachedCapabilities &&
+        cachedProviderId === providerId &&
+        now - cacheTimestamp < CACHE_TTL_MS
+    ) {
         return cachedCapabilities;
     }
 
-    const capabilities = getCapabilitiesForProvider(provider);
+    const provider = getAdminStoreProvider(providerId);
+    const capabilities =
+        provider?.getCapabilities?.() ??
+        {
+            supportsServerSideAdmin: false,
+            supportsUserSearch: false,
+            supportsWorkspaceList: false,
+            supportsWorkspaceManagement: false,
+            supportsDeploymentAdminGrants: false,
+        };
+
     cachedCapabilities = capabilities;
-    cachedProviderId = provider || null;
+    cachedProviderId = providerId;
     cacheTimestamp = now;
 
     return capabilities;
-}
-
-function getCapabilitiesForProvider(
-    provider: string | undefined
-): AdminStoreCapabilities {
-    switch (provider) {
-        case CONVEX_PROVIDER_ID:
-            return {
-                supportsServerSideAdmin: true,
-                supportsUserSearch: true,
-                supportsWorkspaceList: true,
-                supportsWorkspaceManagement: true,
-                supportsDeploymentAdminGrants: true,
-            };
-        default:
-            // Unknown provider - minimal capabilities
-            return {
-                supportsServerSideAdmin: false,
-                supportsUserSearch: false,
-                supportsWorkspaceList: false,
-                supportsWorkspaceManagement: false,
-                supportsDeploymentAdminGrants: false,
-            };
-    }
 }
 
 /**

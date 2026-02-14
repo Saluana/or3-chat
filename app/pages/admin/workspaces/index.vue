@@ -181,6 +181,10 @@ const { data, pending, error, refresh } = await useFetch('/api/admin/workspaces'
         page: page.value.toString(),
         perPage: perPage.value.toString(),
     })),
+    default: () => ({
+        items: [],
+        total: 0,
+    }),
     server: false,
     credentials: 'include',
 });

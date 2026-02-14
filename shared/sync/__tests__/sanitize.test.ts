@@ -5,7 +5,11 @@ describe('sanitizePayloadForSync', () => {
     it('allows payload for delete operations (to carry deleted_at)', () => {
         const payload = { id: '123', deleted_at: (12345 as number) };
         const result = sanitizePayloadForSync('threads', payload, 'delete');
-        expect(result).toEqual({ ...payload, deleted: true, forked: false });
+        expect(result).toMatchObject({ ...payload, deleted: true, forked: false });
+        // Legacy thread backfill also adds status, pinned, created_at, updated_at, clock
+        expect(result).toHaveProperty('status', 'ready');
+        expect(result).toHaveProperty('pinned', false);
+        expect(result).toHaveProperty('clock', 0);
     });
 
     it('returns undefined for null or non-object payloads', () => {
@@ -37,12 +41,16 @@ describe('sanitizePayloadForSync', () => {
             hlc: '1234567890:0001:abc12345',
         };
         const result = sanitizePayloadForSync('threads', payload, 'put');
-        expect(result).toEqual({
+        expect(result).toMatchObject({
             id: '123',
             name: 'test',
-            deleted: false, // Added for legacy data compatibility
-            forked: false, // Added for legacy threads compatibility
+            deleted: false,
+            forked: false,
+            status: 'ready',
+            pinned: false,
+            clock: 0,
         });
+        expect(result).not.toHaveProperty('hlc');
     });
 
     it('removes ref_count for file_meta table', () => {
@@ -67,11 +75,14 @@ describe('sanitizePayloadForSync', () => {
             ref_count: 5,
         };
         const result = sanitizePayloadForSync('threads', payload, 'put');
-        expect(result).toEqual({
+        expect(result).toMatchObject({
             id: '123',
             ref_count: 5,
-            deleted: false, // Added for legacy data compatibility
-            forked: false, // Added for legacy threads compatibility
+            deleted: false,
+            forked: false,
+            status: 'ready',
+            pinned: false,
+            clock: 0,
         });
     });
 
@@ -132,17 +143,30 @@ describe('sanitizePayloadForSync', () => {
             nested: { data: 'kept' },
         };
         const result = sanitizePayloadForSync('threads', payload, 'put');
-        expect(result).toEqual({
+        expect(result).toMatchObject({
             id: '123',
             name: 'test',
             nested: { data: 'kept' },
-            deleted: false, // Added for legacy data compatibility
-            forked: false, // Added for legacy threads compatibility
+            deleted: false,
+            forked: false,
+            status: 'ready',
+            pinned: false,
+            clock: 0,
         });
+        expect(result).not.toHaveProperty('compound.key');
+        expect(result).not.toHaveProperty('hlc');
     });
 
     it('adds deleted: false for synced tables that are missing it', () => {
-        const tablesWithDeleted = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta'];
+        const tablesWithDeleted = [
+            'threads',
+            'messages',
+            'projects',
+            'posts',
+            'kv',
+            'file_meta',
+            'notifications',
+        ];
         for (const table of tablesWithDeleted) {
             const payload = { id: '123' };
             const result = sanitizePayloadForSync(table, payload, 'put');
@@ -203,5 +227,79 @@ describe('sanitizePayloadForSync', () => {
         };
         const result = sanitizePayloadForSync('messages', payload, 'put');
         expect((result?.data as any)?.attachments?.[0]?.url).toBe(smallDataUrl);
+    });
+
+    it('caps recursive sanitization depth for nested payloads', () => {
+        const deep: Record<string, unknown> = {};
+        let cursor: Record<string, unknown> = deep;
+        for (let i = 0; i < 25; i++) {
+            cursor.child = {};
+            cursor = cursor.child as Record<string, unknown>;
+        }
+        cursor.dataUrl = 'data:image/png;base64,' + 'A'.repeat(20000);
+
+        const result = sanitizePayloadForSync(
+            'messages',
+            {
+                id: '123',
+                data: deep,
+            },
+            'put'
+        );
+
+        // Deep branch should be truncated instead of unbounded recursion.
+        expect((result?.data as any)?.child?.child?.child).toBeDefined();
+        const asJson = JSON.stringify(result?.data);
+        expect(asJson.includes('[max-depth-stripped]')).toBe(true);
+    });
+
+    it('compacts oversized workflow message payloads below sync budget', () => {
+        const hugeOutput = 'x'.repeat(90000);
+        const payload = {
+            id: 'msg-workflow',
+            thread_id: 'thread-1',
+            role: 'assistant',
+            index: 12,
+            order_key: '0000000000012:0000:node',
+            deleted: false,
+            created_at: 100,
+            updated_at: 100,
+            clock: 10,
+            data: {
+                type: 'workflow-execution',
+                workflowId: 'wf-1',
+                workflowName: 'Stress Workflow',
+                prompt: 'do the thing',
+                executionState: 'completed',
+                finalOutput: hugeOutput,
+                nodeStates: {
+                    n1: {
+                        status: 'completed',
+                        label: 'Agent',
+                        type: 'agent',
+                        output: hugeOutput,
+                    },
+                },
+                sessionMessages: [
+                    { role: 'assistant', content: hugeOutput },
+                ],
+                resumeState: {
+                    startNodeId: 'n1',
+                    nodeOutputs: { n1: hugeOutput },
+                    executionOrder: ['n1'],
+                    sessionMessages: [{ role: 'assistant', content: hugeOutput }],
+                },
+            },
+        };
+
+        const result = sanitizePayloadForSync('messages', payload, 'put') as Record<string, unknown>;
+        const sizeBytes = new TextEncoder().encode(JSON.stringify(result)).length;
+        const compactedData = result.data as Record<string, unknown>;
+
+        expect(sizeBytes).toBeLessThanOrEqual(60 * 1024);
+        expect(compactedData.type).toBe('workflow-execution');
+        expect(compactedData.workflowId).toBe('wf-1');
+        expect(typeof compactedData.finalOutput).toBe('string');
+        expect(compactedData.sessionMessages).toBeUndefined();
     });
 });

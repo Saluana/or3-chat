@@ -18,6 +18,7 @@ import ImageViewer from './ImageViewer.vue';
 import { reportError } from '../../utils/errors';
 import { useToast, useIcon } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { copyImageBlobToClipboard } from './copy-image-to-clipboard';
 
 const PAGE_SIZE = 50;
 const items = ref<FileMeta[]>([]);
@@ -127,34 +128,21 @@ async function handleCopy(meta: FileMeta) {
             description: `${meta.name || 'Image'} is ready to paste.`,
             color: 'success',
         });
+
     try {
-        // @ts-ignore ClipboardItem may be missing from TS lib
-        const item = new ClipboardItem({ [mime]: blob });
-        await navigator.clipboard.write([item]);
+        await copyImageBlobToClipboard(blob, { preferredMimeType: mime });
         showCopiedToast();
-        return;
-    } catch (primaryError) {
-        const url = URL.createObjectURL(blob);
-        try {
-            const res = await fetch(url);
-            const ab = await res.arrayBuffer();
-            const b64 = btoa(String.fromCharCode(...new Uint8Array(ab)));
-            await navigator.clipboard.writeText(`data:${mime};base64,${b64}`);
-            showCopiedToast();
-        } catch (fallbackError) {
-            reportError(fallbackError || primaryError, {
-                code: 'ERR_INTERNAL',
-                message: `Couldn't copy "${meta.name || 'image'}".`,
-                tags: {
-                    domain: 'images',
-                    action: 'copy',
-                    hash: meta.hash,
-                    stage: 'fallback',
-                },
-            });
-        } finally {
-            URL.revokeObjectURL(url);
-        }
+    } catch (error) {
+        reportError(error, {
+            code: 'ERR_INTERNAL',
+            message: `Couldn't copy "${meta.name || 'image'}".`,
+            tags: {
+                domain: 'images',
+                action: 'copy',
+                hash: meta.hash,
+                stage: 'clipboard-write',
+            },
+        });
     }
 }
 

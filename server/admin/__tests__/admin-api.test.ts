@@ -8,8 +8,8 @@ const resolveSessionContextMock = vi.hoisted(() => vi.fn());
 const baseConfig = {
     auth: { enabled: true, provider: 'clerk' },
     sync: { enabled: true, provider: 'convex', convexUrl: 'https://convex.test' },
-    storage: { enabled: true, provider: 'convex' },
-    backgroundJobs: { enabled: false, storageProvider: 'memory', maxConcurrentJobs: 20, jobTimeoutMs: 300000, completedJobRetentionMs: 300000 },
+    storage: { enabled: true, provider: 'convex', allowedMimeTypes: undefined, workspaceQuotaBytes: undefined, gcRetentionSeconds: 2592000, gcCooldownMs: 60000 },
+    backgroundJobs: { enabled: false, storageProvider: 'memory', maxConcurrentJobs: 20, maxConcurrentJobsPerUser: 5, jobTimeoutMs: 300000, completedJobRetentionMs: 300000 },
     admin: { 
         allowedHosts: [],
         allowRestart: false,
@@ -27,7 +27,7 @@ const baseConfig = {
     branding: { appName: 'Test', logoUrl: '', defaultTheme: 'dark' },
     legal: { termsUrl: '', privacyUrl: '' },
     security: { allowedOrigins: [], forceHttps: false },
-    limits: { enabled: false, requestsPerMinute: 20, maxConversations: 0, maxMessagesPerDay: 0, storageProvider: 'memory' },
+    limits: { enabled: false, requestsPerMinute: 20, maxConversations: 0, maxMessagesPerDay: 0, storageProvider: 'memory', operationRateLimits: {} },
     public: { 
         ssrAuthEnabled: true,
         branding: { appName: 'Test', logoUrl: '', defaultTheme: 'dark' },
@@ -35,6 +35,7 @@ const baseConfig = {
     },
     clerkSecretKey: 'secret',
     openrouterApiKey: '',
+    openrouterBaseUrl: 'https://openrouter.ai/api/v1',
     openrouterAllowUserOverride: true,
     openrouterRequireUserKey: false,
 };

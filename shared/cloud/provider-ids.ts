@@ -58,11 +58,11 @@ export const BACKGROUND_PROVIDER_ID_LIST = [
     BACKGROUND_PROVIDER_IDS.redis,
 ] as const;
 
-export type AuthProviderId = (typeof AUTH_PROVIDER_ID_LIST)[number];
-export type SyncProviderId = (typeof SYNC_PROVIDER_ID_LIST)[number];
-export type StorageProviderId = (typeof STORAGE_PROVIDER_ID_LIST)[number];
-export type LimitsProviderId = (typeof LIMITS_PROVIDER_ID_LIST)[number];
-export type BackgroundProviderId = (typeof BACKGROUND_PROVIDER_ID_LIST)[number];
+export type AuthProviderId = string;
+export type SyncProviderId = string;
+export type StorageProviderId = string;
+export type LimitsProviderId = string;
+export type BackgroundProviderId = string;
 
 export const DEFAULT_AUTH_PROVIDER_ID = AUTH_PROVIDER_IDS.clerk;
 export const DEFAULT_SYNC_PROVIDER_ID = SYNC_PROVIDER_IDS.convex;

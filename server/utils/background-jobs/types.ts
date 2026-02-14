@@ -16,6 +16,8 @@
  * - Defining API routes or authorization.
  */
 
+import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
+
 /**
  * Purpose:
  * Represents a persisted background streaming job.
@@ -47,6 +49,19 @@ export interface BackgroundJob {
     completedAt?: number;
     /** Error message when status is `error` */
     error?: string;
+    /** Background job kind */
+    kind?: 'chat' | 'workflow';
+    /** Tool call state for background tool execution */
+    tool_calls?: Array<{
+        id?: string;
+        name: string;
+        status: 'loading' | 'complete' | 'error' | 'pending' | 'skipped';
+        args?: string;
+        result?: string;
+        error?: string;
+    }>;
+    /** Workflow execution state snapshot */
+    workflow_state?: WorkflowMessageData;
 }
 
 /**
@@ -58,6 +73,9 @@ export interface CreateJobParams {
     threadId: string;
     messageId: string;
     model: string;
+    kind?: BackgroundJob['kind'];
+    tool_calls?: BackgroundJob['tool_calls'];
+    workflow_state?: BackgroundJob['workflow_state'];
 }
 
 /**
@@ -72,6 +90,10 @@ export interface JobUpdate {
     contentChunk?: string;
     /** Updated total chunks received */
     chunksReceived?: number;
+    /** Tool call status updates */
+    tool_calls?: BackgroundJob['tool_calls'];
+    /** Workflow state snapshot updates */
+    workflow_state?: BackgroundJob['workflow_state'];
 }
 
 /**
@@ -140,6 +162,11 @@ export interface BackgroundJobProvider {
     getAbortController?(jobId: string): AbortController | undefined;
 
     /**
+     * Optional poll-based abort detection for external providers.
+     */
+    checkJobAborted?(jobId: string): Promise<boolean>;
+
+    /**
      * Clean up expired or stale jobs.
      *
      * @returns Number of jobs removed or timed out.
@@ -159,6 +186,8 @@ export interface BackgroundJobProvider {
 export interface BackgroundJobConfig {
     /** Maximum concurrent streaming jobs */
     maxConcurrentJobs: number;
+    /** Maximum concurrent streaming jobs per user */
+    maxConcurrentJobsPerUser: number;
     /** Job timeout in milliseconds */
     jobTimeoutMs: number;
     /** Retention window for completed jobs in milliseconds */
@@ -171,6 +200,7 @@ export interface BackgroundJobConfig {
  */
 export const DEFAULT_CONFIG: BackgroundJobConfig = {
     maxConcurrentJobs: 20,
+    maxConcurrentJobsPerUser: 5,
     jobTimeoutMs: 5 * 60 * 1000,
     completedJobRetentionMs: 5 * 60 * 1000,
 };

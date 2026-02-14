@@ -5,7 +5,7 @@
  * enqueues them in the pending_ops table for pushing to the server.
  *
  * Key features:
- * - Atomic: Uses Dexie hooks so outbox write is in same transaction
+ * - Atomic when transaction scope includes sync tables (`pending_ops`, `tombstones`)
  * - Suppression: Can disable capture when applying remote changes
  * - Auto order_key: Generates HLC-based order_key for messages
  */
@@ -77,10 +77,24 @@ function toRecord(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
 }
 
+/**
+ * Purpose:
+ * Bridge between local Dexie writes and the sync outbox (`pending_ops`).
+ *
+ * Behavior:
+ * - Installs Dexie hooks on synced tables to capture puts/deletes
+ * - Writes outbox entries within the same transaction when possible
+ * - Supports suppression to avoid re-enqueueing remote-applied writes
+ * - Derives message `order_key` from HLC when missing
+ *
+ * Constraints:
+ * - Must be started via `start()` to install hooks
+ * - Suppression must be enabled during remote apply transactions
+ */
 export class HookBridge {
     private db: Or3DB;
     private deviceId: string;
-    private syncTransactions = new WeakMap<Transaction, boolean>();
+    private syncTransactionTokens = new WeakSet<object>();
     private captureEnabled = true;
     private hooksInstalled = false;
 
@@ -117,28 +131,30 @@ export class HookBridge {
 
             // Hook: Creating (insert)
             table.hook('creating', (primKey, obj, transaction) => {
-                if (!this.captureEnabled || this.syncTransactions.get(transaction)) return;
+                if (!this.captureEnabled || this.isSyncTransaction(transaction)) return;
                 this.captureWrite(transaction, tableName, 'put', primKey, obj);
             });
 
             // Hook: Updating (modify)
-            const updatingHook = table as unknown as {
-                hook: (
-                    type: 'updating',
-                    fn: (
-                        modifications: unknown,
-                        primKey: unknown,
-                        obj: unknown,
-                        transaction: Transaction
-                    ) => void
-                ) => void;
-            };
-            updatingHook.hook('updating', (modifications, primKey, obj, transaction) => {
-                if (!this.captureEnabled || this.syncTransactions.get(transaction)) return;
+            table.hook('updating', (modifications, primKey, obj, transaction) => {
+                if (!this.captureEnabled || this.isSyncTransaction(transaction)) return;
+
+                // Guard: obj should be the existing record. If undefined, skip capture.
+                // This can happen in rare race conditions or if the record doesn't exist.
+                if (!obj || typeof obj !== 'object') {
+                    if (import.meta.dev) {
+                        console.warn('[HookBridge] Skipping update capture for missing obj:', {
+                            tableName,
+                            primKey,
+                            modifications,
+                        });
+                    }
+                    return;
+                }
 
                 // Dexie passes modifications with dot-notation keys like 'data.content'
                 // We need to properly merge these into the existing object
-                const merged = deepClone(obj);
+                const merged = deepClone(toRecord(obj));
                 const safeModifications = toRecord(modifications);
                 const modificationEntries = Object.entries(safeModifications);
                 for (const [key, value] of modificationEntries) {
@@ -156,7 +172,7 @@ export class HookBridge {
 
             // Hook: Deleting
             table.hook('deleting', (primKey, obj, transaction) => {
-                if (!this.captureEnabled || this.syncTransactions.get(transaction)) return;
+                if (!this.captureEnabled || this.isSyncTransaction(transaction)) return;
                 this.captureWrite(transaction, tableName, 'delete', primKey, obj);
             });
         }
@@ -175,7 +191,30 @@ export class HookBridge {
      * Mark a transaction as initiated by sync (suppresses capture)
      */
     markSyncTransaction(tx: Transaction): void {
-        this.syncTransactions.set(tx, true);
+        this.markSyncToken(tx);
+        this.markSyncToken(this.getNativeTransactionToken(tx));
+    }
+
+    private isSyncTransaction(tx: Transaction | undefined): boolean {
+        if (!tx) return false;
+        if (this.syncTransactionTokens.has(tx as object)) {
+            return true;
+        }
+        const nativeToken = this.getNativeTransactionToken(tx);
+        return nativeToken ? this.syncTransactionTokens.has(nativeToken) : false;
+    }
+
+    private getNativeTransactionToken(tx: Transaction): object | null {
+        const candidate = (tx as unknown as { idbtrans?: unknown }).idbtrans;
+        return candidate && typeof candidate === 'object'
+            ? (candidate as object)
+            : null;
+    }
+
+    private markSyncToken(token: unknown): void {
+        if (token && typeof token === 'object') {
+            this.syncTransactionTokens.add(token as object);
+        }
     }
 
     /**
@@ -224,6 +263,23 @@ export class HookBridge {
         if (tableName === 'messages' && operation === 'put') {
             if (safePayload.pending === true) {
                 return; // Skip intermediate streaming updates, wait for finalization
+            }
+
+            // Validate that required message fields are present
+            // If any are missing, the payload is corrupt and cannot be synced
+            const requiredFields = ['thread_id', 'role', 'index'];
+            const missingFields = requiredFields.filter(
+                (f) => safePayload[f] === undefined || safePayload[f] === null
+            );
+            if (missingFields.length > 0) {
+                if (import.meta.dev) {
+                    console.error('[HookBridge] Skipping corrupt message payload (missing fields):', {
+                        pk,
+                        missingFields,
+                        payload: safePayload,
+                    });
+                }
+                return; // Skip corrupt payloads - they will fail server validation anyway
             }
         }
 
@@ -285,44 +341,18 @@ export class HookBridge {
             return;
         }
 
-        const enqueuePendingOp = () =>
-            this.db.pending_ops.add(pendingOp).catch((error) => {
-                console.error('[HookBridge] Failed to enqueue pending op', error);
-                // Emit hook for observability
-                useHooks()
-                    .doAction('sync.capture:action:failed', {
-                        tableName,
-                        pk,
-                        error: String(error),
-                    })
-                    .catch((hookError) => {
-                        console.error('[HookBridge] Failed to emit capture failure hook', hookError);
-                    });
-                // Rethrow to fail the transaction and prevent silent data loss
-                throw error;
-            });
-
         if (hasPendingOps) {
             transaction.table('pending_ops').add(pendingOp);
         } else {
-            transaction.on('complete', () => {
-                enqueuePendingOp().catch((error) => {
-                    console.error(
-                        '[HookBridge] Deferred pending_ops insert failed. Op may be lost:',
-                        {
-                            tableName,
-                            pk,
-                            error: String(error),
-                        }
-                    );
-                    // Emit hook for observability
-                    void useHooks().doAction('sync.capture:action:deferredFailed', {
-                        tableName,
-                        pk,
-                        error: String(error),
-                    });
-                });
+            const message =
+                '[HookBridge] Non-atomic sync capture: pending_ops missing from transaction scope';
+            console.error(message, { tableName, pk, storeNames: [...tableNames] });
+            void useHooks().doAction('sync.capture:action:nonAtomic', {
+                tableName,
+                pk,
+                storeNames: [...tableNames],
             });
+            throw new Error(message);
         }
 
         if (operation === 'delete') {
@@ -336,26 +366,19 @@ export class HookBridge {
             if (!hasTombstonesTable) {
                 return;
             }
-            const enqueueTombstone = () =>
-                this.db.tombstones.put(tombstone).catch((error) => {
-                    console.error('[HookBridge] Failed to enqueue tombstone', error);
-                });
-
             if (hasTombstones) {
                 transaction.table('tombstones').put(tombstone);
             } else {
-                transaction.on('complete', () => {
-                    enqueueTombstone().catch((error) => {
-                        console.error(
-                            '[HookBridge] Deferred tombstone insert failed. Op may be lost:',
-                            {
-                                tableName,
-                                pk,
-                                error: String(error),
-                            }
-                        );
-                    });
+                const message =
+                    '[HookBridge] Non-atomic tombstone capture: tombstones missing from transaction scope';
+                console.error(message, { tableName, pk, storeNames: [...tableNames] });
+                void useHooks().doAction('sync.capture:action:nonAtomic', {
+                    tableName,
+                    pk,
+                    storeNames: [...tableNames],
+                    kind: 'tombstone',
                 });
+                throw new Error(message);
             }
         }
 
@@ -378,7 +401,11 @@ export class HookBridge {
 const hookBridgeInstances = new Map<string, HookBridge>();
 
 /**
- * Get or create the HookBridge instance
+ * Purpose:
+ * Get or create the HookBridge singleton for a given workspace DB.
+ *
+ * Constraints:
+ * - Singleton is held in module state; use cleanup/reset in tests and HMR
  */
 export function getHookBridge(db: Or3DB): HookBridge {
     const key = db.name;
@@ -390,7 +417,10 @@ export function getHookBridge(db: Or3DB): HookBridge {
 }
 
 /**
- * Reset the HookBridge (for testing)
+ * Internal API.
+ *
+ * Purpose:
+ * Stop and clear all HookBridge instances. Intended for tests.
  */
 export function _resetHookBridge(): void {
     for (const bridge of hookBridgeInstances.values()) {
@@ -400,7 +430,8 @@ export function _resetHookBridge(): void {
 }
 
 /**
- * Cleanup HookBridge instance for a database
+ * Purpose:
+ * Stop and remove the HookBridge instance for a specific DB name.
  */
 export function cleanupHookBridge(dbName: string): void {
     const bridge = hookBridgeInstances.get(dbName);

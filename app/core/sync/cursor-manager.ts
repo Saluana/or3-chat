@@ -1,17 +1,42 @@
 /**
- * CursorManager - Manages sync cursor persistence
+ * @module app/core/sync/cursor-manager
+ *
+ * Purpose:
+ * Manages the per-workspace sync cursor that tracks the highest
+ * `server_version` received from the backend. Used to drive incremental
+ * pull and to detect when a bootstrap or rescan is needed.
  *
  * Responsibilities:
- * - Persist cursor in sync_state table
- * - Drive bootstrap pull on cold start (cursor = 0)
- * - Track last sync timestamp
- * - Detect cursor expiry scenarios
+ * - Persist cursor in the `sync_state` Dexie table
+ * - Detect cold start (cursor = 0) for bootstrap pull
+ * - Track last sync timestamp for expiry detection
+ * - Provide device ID via the HLC generator
+ *
+ * Constraints:
+ * - One cursor per workspace+project scope (singleton per scope)
+ * - Cursor is a single monotonically increasing number (no per-table cursors)
+ * - Expiry detection uses wall-clock age, not server-version gaps
+ *
+ * @see core/sync/subscription-manager for bootstrap/rescan logic
+ * @see core/sync/hlc for device ID generation
  */
 import type { Or3DB } from '~/db/client';
 // ... imports
 import type { SyncScope, SyncState } from '~~/shared/sync/types';
 import { getDeviceId } from './hlc';
 
+/**
+ * Purpose:
+ * Manage the persisted server cursor (`server_version`) for a workspace scope.
+ *
+ * Behavior:
+ * - Reads and writes `sync_state` rows keyed by workspace/project scope
+ * - Tracks `lastSyncAt` for staleness detection
+ * - Stores `deviceId` for backend cursor retention accounting
+ *
+ * Constraints:
+ * - Cursor is global per scope (not per table)
+ */
 export class CursorManager {
     private db: Or3DB;
     private scope: SyncScope;
@@ -133,7 +158,11 @@ function getInstanceKey(dbName: string, scope: SyncScope): string {
 }
 
 /**
- * Get or create CursorManager for a database and scope
+ * Purpose:
+ * Get or create a CursorManager singleton for a specific DB + scope.
+ *
+ * Constraints:
+ * - Singleton is held in module state; use cleanup/reset in tests and HMR
  */
 export function getCursorManager(db: Or3DB, scope: SyncScope): CursorManager {
     const key = getInstanceKey(db.name, scope);
@@ -146,14 +175,22 @@ export function getCursorManager(db: Or3DB, scope: SyncScope): CursorManager {
 }
 
 /**
- * Reset all cursor managers (for testing)
+ * Internal API.
+ *
+ * Purpose:
+ * Clear all CursorManager singletons. Intended for tests.
  */
 export function _resetCursorManagers(): void {
     cursorManagerInstances.clear();
 }
 
 /**
- * Cleanup CursorManager instance for a database and scope
+ * Purpose:
+ * Dispose CursorManager singleton references for a given DB.
+ *
+ * Behavior:
+ * - If `scope` is provided, removes only that scope instance
+ * - Otherwise removes all scope instances for the DB
  */
 export function cleanupCursorManager(dbName: string, scope?: SyncScope): void {
     if (scope) {
