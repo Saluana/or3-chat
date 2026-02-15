@@ -26,7 +26,10 @@
  * @see shared/sync/field-mappings for toClientFormat/toServerFormat
  * @see core/sync/conflict-resolver for the primary consumer
  */
-import { TABLE_PAYLOAD_SCHEMAS } from '~~/shared/sync/schemas';
+import {
+    TABLE_PAYLOAD_SCHEMAS,
+    normalizeWirePayloadForTable,
+} from '~~/shared/sync/schemas';
 import { hlcToOrderKey } from './hlc';
 import { getPkField } from '~~/shared/sync/table-metadata';
 import { toClientFormat, toServerFormat } from '~~/shared/sync/field-mappings';
@@ -69,7 +72,10 @@ export function normalizeSyncPayload(
     rawPayload: unknown,
     stamp: { clock: number; hlc: string }
 ): NormalizedPayload {
-    const rawRecord = (rawPayload ?? {}) as Record<string, unknown>;
+    const rawRecord = normalizeWirePayloadForTable(
+        tableName,
+        (rawPayload ?? {}) as Record<string, unknown>
+    ) as Record<string, unknown>;
     const payload = toClientFormat(tableName, rawRecord);
     const pkField = getPkField(tableName);
 

@@ -9,6 +9,7 @@ import { useRuntimeConfig } from '#imports';
 import type { BackgroundJobProvider } from '../background-jobs/types';
 import { getJobProvider } from '../background-jobs/store';
 import { emitJobDelta, emitJobStatus, hasJobViewers, initJobLiveState } from '../background-jobs/viewers';
+import { logBackgroundEvent } from '../background-jobs/logging';
 import { executeServerTool, listServerTools } from '../chat/tool-registry';
 import { getNotificationEmitter } from '../notifications/registry';
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
@@ -97,14 +98,48 @@ async function updateWorkflowJob(
 
 async function executeWorkflowToolCall(
     name: string,
-    args: unknown
+    args: unknown,
+    context?: { jobId: string; workflowId: string }
 ): Promise<string> {
     const serialized = typeof args === 'string' ? args : JSON.stringify(args ?? {});
-    const execution = await executeServerTool(name, serialized);
-    if (execution.error) {
-        throw new Error(execution.error);
+    logBackgroundEvent('info', 'background.workflow.tool.started', {
+        jobId: context?.jobId,
+        workflowId: context?.workflowId,
+        toolName: name,
+        args,
+    });
+    try {
+        const execution = await executeServerTool(name, serialized);
+        if (execution.error) {
+            logBackgroundEvent('warn', 'background.workflow.tool.failed', {
+                jobId: context?.jobId,
+                workflowId: context?.workflowId,
+                toolName: name,
+                error: execution.error,
+                args,
+            });
+            throw new Error(execution.error);
+        }
+        logBackgroundEvent('info', 'background.workflow.tool.completed', {
+            jobId: context?.jobId,
+            workflowId: context?.workflowId,
+            toolName: name,
+            resultPreview:
+                typeof execution.result === 'string'
+                    ? execution.result.slice(0, 200)
+                    : undefined,
+        });
+        return execution.result ?? '';
+    } catch (error) {
+        logBackgroundEvent('error', 'background.workflow.tool.error', {
+            jobId: context?.jobId,
+            workflowId: context?.workflowId,
+            toolName: name,
+            error: error instanceof Error ? error.message : String(error),
+            args,
+        });
+        throw error;
     }
-    return execution.result ?? '';
 }
 
 export async function startBackgroundWorkflow(
@@ -118,9 +153,27 @@ export async function startBackgroundWorkflow(
         model: 'workflow',
         kind: 'workflow',
     });
+    logBackgroundEvent('info', 'background.workflow.started', {
+        jobId,
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+        threadId: params.threadId,
+        messageId: params.messageId,
+        workflowId: params.workflowId,
+        workflowName: params.workflowName,
+    });
 
     runWorkflowInBackground(jobId, params, provider).catch((err) => {
-        console.error('[background-workflow] Job failed:', jobId, err);
+        logBackgroundEvent('error', 'background.workflow.failed', {
+            jobId,
+            userId: params.userId,
+            workspaceId: params.workspaceId,
+            threadId: params.threadId,
+            messageId: params.messageId,
+            workflowId: params.workflowId,
+            workflowName: params.workflowName,
+            error: err instanceof Error ? err.message : String(err),
+        });
         void provider.failJob(jobId, err instanceof Error ? err.message : String(err));
     });
 
@@ -180,15 +233,30 @@ async function runWorkflowInBackground(
         type: 'function' as const,
         function: tool.definition.function,
         handler: (args: unknown) =>
-            executeWorkflowToolCall(tool.definition.function.name, args),
+            executeWorkflowToolCall(tool.definition.function.name, args, {
+                jobId,
+                workflowId: params.workflowId,
+            }),
     }));
 
     const adapter = new OpenRouterExecutionAdapter(client, {
         defaultModel: 'openai/gpt-4o-mini',
         preflight: true,
         tools: workflowTools,
-        onToolCall: executeWorkflowToolCall,
+        onToolCall: (name, args) =>
+            executeWorkflowToolCall(name, args, {
+                jobId,
+                workflowId: params.workflowId,
+            }),
         onHITLRequest: async (request: HITLRequest): Promise<HITLResponse> => {
+            logBackgroundEvent('info', 'background.workflow.hitl.requested', {
+                jobId,
+                workflowId: params.workflowId,
+                requestId: request.id,
+                nodeId: request.nodeId,
+                mode: request.mode,
+                prompt: request.prompt,
+            });
             const requestState = {
                 id: request.id,
                 jobId,
@@ -264,6 +332,13 @@ async function runWorkflowInBackground(
         };
         const executionCallbacks: ExecutionCallbacks = {
             onNodeStart: (nodeId, info) => {
+                logBackgroundEvent('info', 'background.workflow.node.started', {
+                    jobId,
+                    workflowId: params.workflowId,
+                    nodeId,
+                    nodeType: info?.type || 'unknown',
+                    nodeLabel: info?.label || nodeId,
+                });
                 workflowState.nodeStates[nodeId] = {
                     status: 'active',
                     label: info?.label || nodeId,
@@ -280,6 +355,15 @@ async function runWorkflowInBackground(
                 queueWorkflowWriteBackground();
             },
             onNodeFinish: (nodeId, output) => {
+                logBackgroundEvent('info', 'background.workflow.node.completed', {
+                    jobId,
+                    workflowId: params.workflowId,
+                    nodeId,
+                    outputPreview:
+                        typeof output === 'string'
+                            ? output.slice(0, 220)
+                            : String(output).slice(0, 220),
+                });
                 const nodeState = workflowState.nodeStates[nodeId];
                 if (nodeState) {
                     nodeState.status = 'completed';
@@ -292,6 +376,12 @@ async function runWorkflowInBackground(
                 queueWorkflowWriteBackground();
             },
             onNodeError: (nodeId, error) => {
+                logBackgroundEvent('warn', 'background.workflow.node.error', {
+                    jobId,
+                    workflowId: params.workflowId,
+                    nodeId,
+                    error: error.message,
+                });
                 const nodeState = workflowState.nodeStates[nodeId];
                 if (nodeState) {
                     nodeState.status = 'error';
@@ -367,6 +457,13 @@ async function runWorkflowInBackground(
         }
 
         await provider.completeJob(jobId, workflowState.finalOutput);
+        logBackgroundEvent('info', 'background.workflow.completed', {
+            jobId,
+            workflowId: params.workflowId,
+            chunksReceived: chunks,
+            contentLength: workflowState.finalOutput.length,
+            executionState: workflowState.executionState,
+        });
         emitJobStatus(jobId, 'complete', {
             content: workflowState.finalOutput,
             contentLength: workflowState.finalOutput.length,
@@ -376,15 +473,35 @@ async function runWorkflowInBackground(
         });
 
         if (shouldNotify()) {
-            await notificationEmitter?.emitBackgroundJobComplete(
-                params.workspaceId,
-                params.userId,
-                params.threadId,
-                jobId
-            );
+            try {
+                await notificationEmitter?.emitBackgroundJobComplete(
+                    params.workspaceId,
+                    params.userId,
+                    params.threadId,
+                    jobId
+                );
+            } catch (notifyError) {
+                logBackgroundEvent(
+                    'warn',
+                    'background.workflow.notification.complete_failed',
+                    {
+                        jobId,
+                        workflowId: params.workflowId,
+                        error:
+                            notifyError instanceof Error
+                                ? notifyError.message
+                                : String(notifyError),
+                    }
+                );
+            }
         }
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
+            logBackgroundEvent('warn', 'background.workflow.aborted', {
+                jobId,
+                workflowId: params.workflowId,
+                chunksReceived: chunks,
+            });
             workflowState.executionState = 'stopped';
             workflowState.version = (workflowState.version ?? 0) + 1;
             await queueWorkflowWrite();
@@ -401,6 +518,13 @@ async function runWorkflowInBackground(
         workflowState.executionState = 'error';
         workflowState.version = (workflowState.version ?? 0) + 1;
         await queueWorkflowWrite();
+        logBackgroundEvent('error', 'background.workflow.error', {
+            jobId,
+            workflowId: params.workflowId,
+            chunksReceived: chunks,
+            error: error instanceof Error ? error.message : String(error),
+            executionState: workflowState.executionState,
+        });
         emitJobStatus(jobId, 'error', {
             content: workflowState.finalOutput,
             contentLength: workflowState.finalOutput.length,
@@ -410,13 +534,28 @@ async function runWorkflowInBackground(
             workflow_state: workflowState,
         });
         if (shouldNotify()) {
-            await notificationEmitter?.emitBackgroundJobError(
-                params.workspaceId,
-                params.userId,
-                params.threadId,
-                jobId,
-                error instanceof Error ? error.message : String(error)
-            );
+            try {
+                await notificationEmitter?.emitBackgroundJobError(
+                    params.workspaceId,
+                    params.userId,
+                    params.threadId,
+                    jobId,
+                    error instanceof Error ? error.message : String(error)
+                );
+            } catch (notifyError) {
+                logBackgroundEvent(
+                    'warn',
+                    'background.workflow.notification.error_failed',
+                    {
+                        jobId,
+                        workflowId: params.workflowId,
+                        error:
+                            notifyError instanceof Error
+                                ? notifyError.message
+                                : String(notifyError),
+                    }
+                );
+            }
         }
         throw error;
     } finally {

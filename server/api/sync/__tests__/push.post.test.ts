@@ -243,7 +243,7 @@ describe('POST /api/sync/push', () => {
         expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'sync:push');
     });
 
-    it('enforces snake_case payload for TABLE_PAYLOAD_SCHEMAS (posts)', async () => {
+    it('accepts camelCase payloads and forwards snake_case normalized payloads', async () => {
         const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
 
         readBodyMock.mockResolvedValue({
@@ -258,10 +258,10 @@ describe('POST /api/sync/push', () => {
                         id: 'post-1',
                         title: 'Post',
                         content: 'Body',
-                        post_type: 'markdown',
+                        postType: 'markdown',
                         deleted: false,
-                        created_at: 1,
-                        updated_at: 1,
+                        createdAt: 1,
+                        updatedAt: 1,
                         clock: 1,
                     },
                     stamp: {
@@ -276,6 +276,16 @@ describe('POST /api/sync/push', () => {
         });
 
         await expect(handler(makeEvent())).resolves.toEqual({ results: [], serverVersion: 7 });
+        const firstCall = pushMock.mock.calls[0]?.[1] as
+            | { ops?: Array<{ payload?: Record<string, unknown> }> }
+            | undefined;
+        const payload = firstCall?.ops?.[0]?.payload;
+        expect(payload?.post_type).toBe('markdown');
+        expect(payload?.created_at).toBe(1);
+        expect(payload?.updated_at).toBe(1);
+        expect(payload).not.toHaveProperty('postType');
+        expect(payload).not.toHaveProperty('createdAt');
+        expect(payload).not.toHaveProperty('updatedAt');
 
         readBodyMock.mockResolvedValue({
             scope: { workspaceId: 'ws-1' },
@@ -289,7 +299,7 @@ describe('POST /api/sync/push', () => {
                         id: 'post-2',
                         title: 'Post',
                         content: 'Body',
-                        postType: 'markdown',
+                        post_type: 'markdown',
                         deleted: false,
                         created_at: 1,
                         updated_at: 1,
@@ -306,6 +316,6 @@ describe('POST /api/sync/push', () => {
             ],
         });
 
-        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+        await expect(handler(makeEvent())).resolves.toEqual({ results: [], serverVersion: 7 });
     });
 });

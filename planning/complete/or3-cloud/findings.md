@@ -18,6 +18,9 @@ The three plans are directionally aligned, but there are several conflicts and m
 - Provider identifiers are centralized in shared constants to reduce string drift across adapters.
 - Convex gateway clients are cached by token to avoid per-request client creation.
 - Shared auth-session cache now invalidates immediately when active workspace changes or active workspace is removed.
+- Sync wire payload validation now accepts camelCase and snake_case inputs, then normalizes to snake_case before ingestion.
+- Background tool/workflow execution now emits structured JSON logs with recursive secret redaction for token-like fields/values.
+- Provider and operations documentation for the default stack (basic-auth + sqlite + fs) is now published and indexed in docmap.
 
 ## Critical conflicts and gaps
 

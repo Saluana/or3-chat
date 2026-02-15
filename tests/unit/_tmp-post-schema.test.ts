@@ -16,6 +16,10 @@ describe('tmp post schema check', () => {
     };
     const mapped = toClientFormat('posts', payload);
     const parsed = PostPayloadSchema.safeParse(mapped);
-    expect(parsed.success).toBe(false);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.post_type).toBe('markdown');
+      expect(parsed.data).not.toHaveProperty('postType');
+    }
   });
 });

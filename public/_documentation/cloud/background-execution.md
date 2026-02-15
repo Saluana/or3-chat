@@ -118,6 +118,24 @@ Polling/SSE support delta mode:
 - Workflow state size is bounded (`MAX_WORKFLOW_STATE_BYTES = 64KB`).
 - Responses use `Cache-Control: no-store` where applicable.
 
+## Structured Logging
+
+Background tool/workflow execution emits structured JSON events from server runtime paths, including:
+
+- job lifecycle (`started`, `completed`, `failed`, `aborted`)
+- tool call lifecycle (`received`, `completed`, `failed`)
+- workflow node lifecycle and HITL request points
+- notification emission failure events
+
+Log payloads are redacted before emission for secret-like keys (`token`, `secret`, `password`, `apiKey`, etc.) and token-like strings (Bearer/JWT/key patterns).
+
+## E2E Coverage
+
+Deterministic browser harness + Playwright specs cover:
+
+- reattachment behavior while streaming is still active
+- detached completion notification emission behavior
+
 ## Related
 
 - `public/_documentation/utils/tool-runtime.md`

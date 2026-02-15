@@ -11,7 +11,10 @@
  * - Dispatches to registered SyncGatewayAdapter.
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
-import { PushBatchSchema, TABLE_PAYLOAD_SCHEMAS } from '~~/shared/sync/schemas';
+import {
+    PushBatchSchema,
+    TABLE_PAYLOAD_SCHEMAS,
+} from '~~/shared/sync/schemas';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
@@ -54,11 +57,13 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid push request' });
     }
 
+    const normalizedOps = parsed.data.ops.map((op) => ({ ...op }));
+
     // Validate each op payload.
     // IMPORTANT: Only validate `put` payloads against table schemas.
     // Delete ops intentionally send minimal tombstone-ish payloads (or none at all),
     // and must not be rejected for missing non-delete fields.
-    for (const op of parsed.data.ops) {
+    for (const op of normalizedOps) {
         if (op.operation !== 'put') continue;
         const schema = TABLE_PAYLOAD_SCHEMAS[op.tableName];
         if (!schema) continue;
@@ -69,7 +74,14 @@ export default defineEventHandler(async (event) => {
                 statusMessage: `Invalid payload for ${op.tableName}: ${result.error.message}`,
             });
         }
+        // Normalize wire payload casing on ingestion to canonical snake_case.
+        op.payload = result.data as Record<string, unknown>;
     }
+
+    const normalizedBatch = {
+        ...parsed.data,
+        ops: normalizedOps,
+    };
 
     const session = await resolveSessionContext(event);
     if (!session.authenticated || !session.user || !session.workspace) {
@@ -78,7 +90,7 @@ export default defineEventHandler(async (event) => {
 
     requireCan(session, 'workspace.write', {
         kind: 'workspace',
-        id: parsed.data.scope.workspaceId,
+        id: normalizedBatch.scope.workspaceId,
     });
 
     // Rate limiting (per-user)
@@ -106,7 +118,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Dispatch to adapter
-    const result = await adapter.push(event, parsed.data);
+    const result = await adapter.push(event, normalizedBatch);
 
     // Record successful request for rate limiting
     recordSyncRequest(session.user.id, 'sync:push');

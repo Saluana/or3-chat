@@ -15,8 +15,11 @@ OR3 core is local-first and can run with zero cloud providers installed.
 Example mapping:
 
 - `auth.provider = "clerk"` -> `or3-provider-clerk/nuxt`
+- `auth.provider = "basic-auth"` -> `or3-provider-basic-auth/nuxt`
 - `sync.provider = "convex"` -> `or3-provider-convex/nuxt`
+- `sync.provider = "sqlite"` -> `or3-provider-sqlite/nuxt`
 - `storage.provider = "convex"` -> `or3-provider-convex/nuxt`
+- `storage.provider = "fs"` -> `or3-provider-fs/nuxt`
 
 ## Install Providers
 
@@ -25,6 +28,9 @@ Install from npm:
 ```bash
 bun add or3-provider-clerk
 bun add or3-provider-convex
+bun add or3-provider-basic-auth
+bun add or3-provider-sqlite
+bun add or3-provider-fs
 ```
 
 Or local sibling packages during development:
@@ -32,6 +38,9 @@ Or local sibling packages during development:
 ```bash
 bun add or3-provider-clerk@link:../or3-provider-clerk
 bun add or3-provider-convex@link:../or3-provider-convex
+bun add or3-provider-basic-auth@link:../or3-provider-basic-auth
+bun add or3-provider-sqlite@link:../or3-provider-sqlite
+bun add or3-provider-fs@link:../or3-provider-fs
 ```
 
 ## Configure Providers
@@ -71,6 +80,23 @@ Then run:
 
 ```bash
 bun run type-check
+```
+
+### Default SSR stack (basic-auth + sqlite + fs)
+
+```bash
+SSR_AUTH_ENABLED=true
+AUTH_PROVIDER=basic-auth
+OR3_SYNC_ENABLED=true
+OR3_SYNC_PROVIDER=sqlite
+OR3_STORAGE_ENABLED=true
+NUXT_PUBLIC_STORAGE_PROVIDER=fs
+OR3_BASIC_AUTH_JWT_SECRET=replace-with-random-secret
+OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=admin@example.com
+OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=replace-with-strong-password
+OR3_SQLITE_DB_PATH=.data/or3-sync.sqlite
+OR3_STORAGE_FS_ROOT=.data/storage
+OR3_STORAGE_FS_TOKEN_SECRET=replace-with-random-secret
 ```
 
 ## Clerk to Convex Bridge
@@ -117,6 +143,13 @@ Install the package or change provider IDs in cloud config/env.
 
 - [provider-clerk](./provider-clerk)
 - [provider-convex](./provider-convex)
+- [provider-basic-auth](./provider-basic-auth)
+- [provider-sqlite](./provider-sqlite)
+- [provider-fs](./provider-fs)
+- [provider-compatibility-matrix](./provider-compatibility-matrix)
+- [migration-default-stack](./migration-default-stack)
+- [deployment-operations](./deployment-operations)
+- [release-notes-production-readiness](./release-notes-production-readiness)
 - [or3-cloud-config](./or3-cloud-config)
 - [config-reference](./config-reference)
 - [auth-system](./auth-system)

@@ -668,16 +668,58 @@
                     "summary": "Dedicated setup guide for `or3-provider-clerk`. Covers install, required env vars, runtime registrations, and token broker behavior for Clerk-backed auth."
                 },
                 {
+                    "name": "provider-basic-auth.md",
+                    "path": "/cloud/provider-basic-auth",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-basic-auth`. Covers install, required env vars, bootstrap credentials, token lifecycle tuning, and operational security checks."
+                },
+                {
                     "name": "provider-convex.md",
                     "path": "/cloud/provider-convex",
                     "category": "Guide",
                     "summary": "Dedicated setup guide for `or3-provider-convex`. Covers install, Convex backend init/codegen, required config, and the Clerk to Convex bridge flow."
                 },
                 {
+                    "name": "provider-sqlite.md",
+                    "path": "/cloud/provider-sqlite",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-sqlite`. Covers install, required env vars, durability pragmas, sync invariants, and operational notes for persistent SQLite deployments."
+                },
+                {
                     "name": "provider-s3.md",
                     "path": "/cloud/provider-s3",
                     "category": "Guide",
                     "summary": "Dedicated setup guide for `or3-provider-s3`. Covers server-only S3 credentials, required env vars, endpoint/path-style options for S3-compatible hosts, and required bucket CORS for direct browser uploads/downloads."
+                },
+                {
+                    "name": "provider-fs.md",
+                    "path": "/cloud/provider-fs",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-fs`. Covers install, required env vars, hash/integrity expectations, presign TTL settings, and filesystem storage operational practices."
+                },
+                {
+                    "name": "provider-compatibility-matrix.md",
+                    "path": "/cloud/provider-compatibility-matrix",
+                    "category": "Reference",
+                    "summary": "Compatibility matrix for supported OR3 cloud provider combinations, including default SSR and legacy Clerk+Convex stacks, with package-resolution notes and composition guidance."
+                },
+                {
+                    "name": "migration-default-stack.md",
+                    "path": "/cloud/migration-default-stack",
+                    "category": "Guide",
+                    "summary": "Step-by-step migration guide from Clerk+Convex to the default SSR stack (basic-auth + sqlite + fs), including install, env updates, verification checklist, and rollback plan."
+                },
+                {
+                    "name": "deployment-operations.md",
+                    "path": "/cloud/deployment-operations",
+                    "category": "Operations",
+                    "summary": "Deployment and operations runbook for OR3 Cloud SSR environments. Covers env groups, health checks, logging expectations, scaling guidance, and release readiness checks."
+                },
+                {
+                    "name": "release-notes-production-readiness.md",
+                    "path": "/cloud/release-notes-production-readiness",
+                    "category": "Release Notes",
+                    "summary": "Production-readiness release notes summarizing sync casing normalization, background execution hardening, documentation additions, current limitations, and rollback instructions."
                 },
                 {
                     "name": "sync-layer.md",

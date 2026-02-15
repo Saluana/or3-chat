@@ -67,6 +67,23 @@ Notes
 
 ---
 
+## Notifications
+
+| Key                          | Kind   | Args (tuple)                                                                                     | Returns                           |
+| ---------------------------- | ------ | ------------------------------------------------------------------------------------------------ | --------------------------------- |
+| `notify:action:push`         | action | `[payload: NotificationCreatePayload]`                                                           | —                                 |
+| `notify:action:read`         | action | `[{ id: string; readAt: number }]`                                                               | —                                 |
+| `notify:action:clicked`      | action | `[{ notification: NotificationEntity; action?: NotificationAction }]`                            | —                                 |
+| `notify:action:cleared`      | action | `[{ count: number }]`                                                                            | —                                 |
+| `notify:filter:before_store` | filter | `[payload: NotificationCreatePayload \| false, context: { source: string }]`                    | `NotificationCreatePayload \| false` |
+
+Notes
+
+-   `notify:filter:before_store` can veto by returning `false`.
+-   Hook-based notification pushes are preferred for background completion/error events.
+
+---
+
 ## Branching
 
 | Key                              | Kind   | Args (tuple)                                                                                                       | Returns             |

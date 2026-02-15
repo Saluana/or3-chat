@@ -173,28 +173,28 @@
 ### 15. Wire schema casing normalization
 > Requirements: 14
 
-- [ ] 15.1 Update sync schema validation to accept both camelCase and snake_case
-- [ ] 15.2 Normalize to snake_case on ingestion
-- [ ] 15.3 Write tests for both input shapes
+- [x] 15.1 Update sync schema validation to accept both camelCase and snake_case
+- [x] 15.2 Normalize to snake_case on ingestion
+- [x] 15.3 Write tests for both input shapes
 
 ### 16. Complete background jobs execution plan
 > Requirements: from background-jobs-execution/tasks.md
 
-- [ ] 16.1 Add structured logging for background tool/workflow execution with secret redaction
-- [ ] 16.2 Add E2E tests for reattachment flow and notification emission
+- [x] 16.1 Add structured logging for background tool/workflow execution with secret redaction
+- [x] 16.2 Add E2E tests for reattachment flow and notification emission
 
 ### 17. Documentation
 > Requirements: 16
 
-- [ ] 17.1 Write provider docs: or3-provider-basic-auth
-- [ ] 17.2 Write provider docs: or3-provider-sqlite
-- [ ] 17.3 Write provider docs: or3-provider-fs
-- [ ] 17.4 Create provider compatibility matrix
-- [ ] 17.5 Write migration guide (Clerk+Convex → default stack)
-- [ ] 17.6 Write deployment/operations guide (env vars, scaling, monitoring, health checks)
-- [ ] 17.7 Add notification hooks to hook catalog
-- [ ] 17.8 Update `docmap.json` with new pages
-- [ ] 17.9 Write release notes with limitations and rollback instructions
+- [x] 17.1 Write provider docs: or3-provider-basic-auth
+- [x] 17.2 Write provider docs: or3-provider-sqlite
+- [x] 17.3 Write provider docs: or3-provider-fs
+- [x] 17.4 Create provider compatibility matrix
+- [x] 17.5 Write migration guide (Clerk+Convex → default stack)
+- [x] 17.6 Write deployment/operations guide (env vars, scaling, monitoring, health checks)
+- [x] 17.7 Add notification hooks to hook catalog
+- [x] 17.8 Update `docmap.json` with new pages
+- [x] 17.9 Write release notes with limitations and rollback instructions
 
 ### 18. Notification center verification
 > Requirements: 17

@@ -5,6 +5,49 @@
  * These can be used on both client and server for validation.
  */
 import { z } from 'zod';
+import { toServerFormat } from './field-mappings';
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function toSnakeCaseKey(key: string): string {
+    return key.replace(/[A-Z]/g, (match) => `_${match.toLowerCase()}`);
+}
+
+function normalizeRecordToSnakeCase(
+    input: Record<string, unknown>
+): Record<string, unknown> {
+    const normalized: Record<string, unknown> = { ...input };
+    for (const [key, value] of Object.entries(input)) {
+        const snakeKey = toSnakeCaseKey(key);
+        if (snakeKey === key) continue;
+        if (!(snakeKey in normalized)) {
+            normalized[snakeKey] = value;
+        }
+        delete normalized[key];
+    }
+    return normalized;
+}
+
+export function normalizeWirePayloadForTable(
+    tableName: string,
+    payload: unknown
+): unknown {
+    if (!isPlainRecord(payload)) return payload;
+    const normalized = normalizeRecordToSnakeCase(payload);
+    return toServerFormat(tableName, normalized);
+}
+
+function createTablePayloadSchema<T extends z.ZodRawShape>(
+    tableName: string,
+    shape: T
+): z.ZodType<z.infer<z.ZodObject<T>>> {
+    return z.preprocess(
+        (input) => normalizeWirePayloadForTable(tableName, input),
+        z.object(shape).passthrough()
+    ) as z.ZodType<z.infer<z.ZodObject<T>>>;
+}
 
 // ============================================================
 // CORE SCHEMAS
@@ -53,8 +96,7 @@ export const SyncChangeSchema = z.object({
  * These use passthrough() to allow additional fields while validating required ones
  */
 
-export const ThreadPayloadSchema = z
-    .object({
+export const ThreadPayloadSchema = createTablePayloadSchema('threads', {
         id: z.string(),
         title: z.string().nullable().optional(),
         status: z.string(),
@@ -63,11 +105,9 @@ export const ThreadPayloadSchema = z
         created_at: z.number(),
         updated_at: z.number(),
         clock: z.number(),
-    })
-    .passthrough();
+    });
 
-export const MessagePayloadSchema = z
-    .object({
+export const MessagePayloadSchema = createTablePayloadSchema('messages', {
         id: z.string(),
         thread_id: z.string(),
         role: z.string(),
@@ -78,22 +118,18 @@ export const MessagePayloadSchema = z
         updated_at: z.number(),
         clock: z.number(),
         hlc: z.string().optional(),
-    })
-    .passthrough();
+    });
 
-export const ProjectPayloadSchema = z
-    .object({
+export const ProjectPayloadSchema = createTablePayloadSchema('projects', {
         id: z.string(),
         name: z.string(),
         deleted: z.boolean(),
         created_at: z.number(),
         updated_at: z.number(),
         clock: z.number(),
-    })
-    .passthrough();
+    });
 
-export const PostPayloadSchema = z
-    .object({
+export const PostPayloadSchema = createTablePayloadSchema('posts', {
         id: z.string(),
         title: z.string(),
         content: z.string(),
@@ -102,11 +138,9 @@ export const PostPayloadSchema = z
         created_at: z.number(),
         updated_at: z.number(),
         clock: z.number(),
-    })
-    .passthrough();
+    });
 
-export const FileMetaPayloadSchema = z
-    .object({
+export const FileMetaPayloadSchema = createTablePayloadSchema('file_meta', {
         hash: z.string(),
         kind: z.string().optional(),
         mime_type: z.string().optional(),
@@ -115,22 +149,20 @@ export const FileMetaPayloadSchema = z
         created_at: z.number(),
         updated_at: z.number(),
         clock: z.number(),
-    })
-    .passthrough();
+    });
 
-export const KvPayloadSchema = z
-    .object({
+export const KvPayloadSchema = createTablePayloadSchema('kv', {
         id: z.string(),
         name: z.string(),
         value: z.unknown().optional().nullable(),
         created_at: z.number(),
         updated_at: z.number(),
         clock: z.number(),
-    })
-    .passthrough();
+    });
 
-export const NotificationPayloadSchema = z
-    .object({
+export const NotificationPayloadSchema = createTablePayloadSchema(
+    'notifications',
+    {
         id: z.string(),
         user_id: z.string(),
         thread_id: z.string().optional(),
@@ -145,8 +177,8 @@ export const NotificationPayloadSchema = z
         created_at: z.number(),
         updated_at: z.number(),
         clock: z.number(),
-    })
-    .passthrough();
+    }
+);
 
 /**
  * Map of table names to their payload schemas
