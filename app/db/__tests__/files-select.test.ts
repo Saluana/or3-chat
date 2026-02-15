@@ -71,6 +71,18 @@ const nowSecState = vi.hoisted(() => ({ value: 0 }));
 vi.mock('../util', () => ({
     nowSec: vi.fn(() => nowSecState.value),
     nextClock: vi.fn((clock?: number) => (clock ?? 0) + 1),
+    getWriteTxTableNames: vi.fn(
+        (
+            db: { tables?: Array<{ name: string }> },
+            primary: string | string[]
+        ) => {
+            const names = Array.isArray(primary) ? primary : [primary];
+            const hasPendingOps = (db.tables ?? []).some(
+                (table) => table.name === 'pending_ops'
+            );
+            return hasPendingOps ? [...names, 'pending_ops'] : names;
+        }
+    ),
 }));
 
 import { listImageMetasPaged, updateFileName } from '../files-select';

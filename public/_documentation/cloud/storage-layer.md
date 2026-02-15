@@ -64,129 +64,38 @@ Matches the default architecture.
 
 To implement S3, Cloudflare R2, or others:
 
-#### 1. Implement the Interface
+#### Correct approach (SSR gateway adapter)
 
-```typescript
-// providers/s3-storage-provider.ts
-import { registerStorageProvider } from '~/core/storage/sync-provider-registry';
-import type { ObjectStorageProvider, PresignedUrlResult } from '~/core/storage/types';
+Do **not** put S3 credentials in any client-side plugin or `runtimeConfig.public`.
 
-export class S3StorageProvider implements ObjectStorageProvider {
-    id = 's3';
-    
-    private s3Client: S3Client;
-    private bucket: string;
-    
-    constructor(config: { region: string; bucket: string; credentials: Credentials }) {
-        this.s3Client = new S3Client({
-            region: config.region,
-            credentials: config.credentials,
-        });
-        this.bucket = config.bucket;
-    }
-    
-    async getPresignedUploadUrl(input: {
-        hash: string;
-        mimeType: string;
-        sizeBytes: number;
-        workspaceId: string;
-    }): Promise<PresignedUrlResult> {
-        const command = new PutObjectCommand({
-            Bucket: this.bucket,
-            Key: `${input.workspaceId}/${input.hash}`,
-            ContentType: input.mimeType,
-            ContentLength: input.sizeBytes,
-        });
-        
-        const url = await getSignedUrl(this.s3Client, command, {
-            expiresIn: 3600, // 1 hour
-        });
-        
-        return {
-            url,
-            method: 'PUT',
-            headers: {
-                'Content-Type': input.mimeType,
-            },
-        };
-    }
-    
-    async getPresignedDownloadUrl(input: {
-        hash: string;
-        workspaceId: string;
-    }): Promise<PresignedUrlResult> {
-        const command = new GetObjectCommand({
-            Bucket: this.bucket,
-            Key: `${input.workspaceId}/${input.hash}`,
-        });
-        
-        const url = await getSignedUrl(this.s3Client, command, {
-            expiresIn: 3600,
-        });
-        
-        return {
-            url,
-            method: 'GET',
-        };
-    }
-}
-```
+In OR3, S3-compatible backends are implemented as a **server-side** `StorageGatewayAdapter` registered by a provider package (example: `or3-provider-s3`). The client only talks to OR3’s SSR endpoints:
 
-#### 2. Register the Provider
+- `POST /api/storage/presign-upload`
+- `POST /api/storage/presign-download`
+- `POST /api/storage/commit`
 
-```typescript
-// plugins/s3-storage.client.ts
-import { registerStorageProvider } from '~/core/storage/sync-provider-registry';
-import { S3StorageProvider } from '~/providers/s3-storage-provider';
+Those endpoints enforce `can()` authorization + rate limits and then delegate to the registered adapter to generate short-lived presigned URLs.
 
-export default defineNuxtPlugin(() => {
-    const config = useRuntimeConfig();
-    
-    if (config.public.storageProvider !== 's3') return;
-    
-    const provider = new S3StorageProvider({
-        region: config.s3.region,
-        bucket: config.s3.bucket,
-        credentials: {
-            accessKeyId: config.s3.accessKeyId,
-            secretAccessKey: config.s3.secretAccessKey,
-        },
-    });
-    
-    registerStorageProvider(provider);
-});
-```
-
-#### 3. Configure Environment Variables
+To set up S3 storage:
 
 ```bash
-# .env
+SSR_AUTH_ENABLED=true
 OR3_STORAGE_ENABLED=true
 NUXT_PUBLIC_STORAGE_PROVIDER=s3
-S3_REGION=us-east-1
-S3_BUCKET=my-or3-bucket
-S3_ACCESS_KEY_ID=AKIA...
-S3_SECRET_ACCESS_KEY=...
+
+# server-only S3 config (never exposed to the browser)
+OR3_STORAGE_S3_ENDPOINT=https://s3.us-east-1.amazonaws.com   # optional for AWS
+OR3_STORAGE_S3_REGION=us-east-1
+OR3_STORAGE_S3_BUCKET=my-or3-bucket
+OR3_STORAGE_S3_ACCESS_KEY_ID=...
+OR3_STORAGE_S3_SECRET_ACCESS_KEY=...
+OR3_STORAGE_S3_FORCE_PATH_STYLE=false
+OR3_STORAGE_S3_URL_TTL_SECONDS=900
 ```
 
-#### 4. Update Runtime Config
+See the dedicated setup guide:
 
-```typescript
-// nuxt.config.ts
-export default defineNuxtConfig({
-    runtimeConfig: {
-        s3: {
-            region: process.env.S3_REGION,
-            bucket: process.env.S3_BUCKET,
-            accessKeyId: process.env.S3_ACCESS_KEY_ID,
-            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
-        },
-        public: {
-            storageProvider: process.env.NUXT_PUBLIC_STORAGE_PROVIDER,
-        },
-    },
-});
-```
+- [cloud/provider-s3](./provider-s3)
 
 ### Provider Comparison
 

@@ -1,11 +1,47 @@
+/**
+ * @module app/core/hooks/hooks.ts
+ *
+ * Purpose:
+ * Lightweight, type-safe hook engine for Nuxt/Vue apps. Provides the core
+ * extension mechanism that allows plugins to observe events (actions) or
+ * transform data (filters) without modifying core code.
+ *
+ * Responsibilities:
+ * - Action registration and dispatch (fire-and-forget side effects)
+ * - Filter registration and pipeline execution (value transformation)
+ * - Priority scheduling (lower runs earlier, default 10)
+ * - Sync and async execution APIs
+ * - Wildcard pattern matching via glob-to-regex compilation
+ * - Diagnostics (timing, error counts, callback counts)
+ *
+ * Non-responsibilities:
+ * - Type safety for hook names/payloads (see hook-types.ts)
+ * - Component lifecycle management (see useHookEffect / useHooks)
+ * - SSR/client separation (see nuxt plugin layer)
+ *
+ * Architecture:
+ * - Client: Singleton instance across HMR (stored as `__NUXT_HOOKS__` on globalThis)
+ * - Server (SSR): Fresh instance per request
+ * - Access via `useNuxtApp().$hooks` or `useHooks()` composable
+ *
+ * Invariants:
+ * - Callbacks with equal priority preserve insertion order
+ * - Wildcards are evaluated lazily (compiled on first match)
+ * - Errors in callbacks are caught and reported, never re-thrown
+ * - HMR disposes clear diagnostic counters but preserve the engine instance
+ *
+ * @see docs/hooks.md for usage guide
+ * @see docs/core-hook-map.md for hook reference
+ * @see core/hooks/hook-types.ts for type-safe hook payload map
+ */
 import { reportError, err } from '~/utils/errors';
-// Lightweight, type-safe hook engine for Nuxt/Vue apps
-// - Supports actions (side-effects) and filters (value transform)
-// - Priority scheduling (lower runs earlier)
-// - Sync/async execution APIs
-// - Error and timing wrappers
-// - Optional wildcard matching via simple glob to RegExp
 
+/**
+ * Purpose:
+ * Distinguishes hook registration and dispatch behavior.
+ * - `action`: side effects, fire-and-forget
+ * - `filter`: value transformation pipeline
+ */
 export type HookKind = 'action' | 'filter';
 
 type AnyFn = (...args: unknown[]) => unknown;
@@ -15,6 +51,10 @@ export interface RegisterOptions {
     acceptedArgs?: number; // reserved for compatibility, not used
 }
 
+/**
+ * Purpose:
+ * Options for unified `on()` registration.
+ */
 export interface OnOptions extends RegisterOptions {
     kind?: HookKind;
 }
@@ -104,6 +144,19 @@ export interface HookEngine {
     };
 }
 
+/**
+ * Purpose:
+ * Create a new HookEngine instance.
+ *
+ * Behavior:
+ * - Maintains separate registries for actions and filters
+ * - Supports wildcard keys (`*`) using glob-to-regex compilation
+ * - Captures basic diagnostics (callback count, timings, error counts)
+ *
+ * Constraints:
+ * - Errors inside callbacks are caught and recorded, not thrown
+ * - Wildcard regex compilation is cached per pattern
+ */
 export function createHookEngine(): HookEngine {
     const DEFAULT_PRIORITY = 10;
     let counter = 0; // id tiebreaker

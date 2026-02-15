@@ -114,7 +114,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
-import { db } from '~/db';
+import { getDb } from '~/db/client';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
@@ -227,6 +227,7 @@ const extraActions = computed<readonly ExtraAction[]>(() =>
 
 async function runExtraAction(action: ExtraAction) {
     try {
+        const db = getDb();
         if (props.item.type === 'thread') {
             const thread = await db.threads.get(props.item.id);
             if (!thread) return;

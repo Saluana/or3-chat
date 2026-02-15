@@ -104,8 +104,8 @@ vi.mock('~/composables/useThemeResolver', () => ({
 const defaultTestConfig = {
     auth: { enabled: true, provider: 'clerk', sessionProvisioningFailure: 'throw' },
     sync: { enabled: true, provider: 'convex', convexUrl: 'https://convex.test' },
-    storage: { enabled: true, provider: 'convex' },
-    backgroundJobs: { enabled: false, storageProvider: 'memory', maxConcurrentJobs: 20, jobTimeoutMs: 300000, completedJobRetentionMs: 300000 },
+    storage: { enabled: true, provider: 'convex', allowedMimeTypes: undefined, workspaceQuotaBytes: undefined, gcRetentionSeconds: 2592000, gcCooldownMs: 60000 },
+    backgroundJobs: { enabled: false, storageProvider: 'memory', maxConcurrentJobs: 20, maxConcurrentJobsPerUser: 5, jobTimeoutMs: 300000, completedJobRetentionMs: 300000 },
     admin: { 
         allowedHosts: [],
         allowRestart: false,
@@ -123,14 +123,21 @@ const defaultTestConfig = {
     branding: { appName: 'Test', logoUrl: '', defaultTheme: 'dark' },
     legal: { termsUrl: '', privacyUrl: '' },
     security: { allowedOrigins: [], forceHttps: false },
-    limits: { enabled: false, requestsPerMinute: 20, maxConversations: 0, maxMessagesPerDay: 0, storageProvider: 'memory' },
+    limits: { enabled: false, requestsPerMinute: 20, maxConversations: 0, maxMessagesPerDay: 0, storageProvider: 'memory', operationRateLimits: {} },
     public: { 
         ssrAuthEnabled: true,
+        openRouter: {
+            allowUserOverride: true,
+            hasInstanceKey: false,
+            requireUserKey: false,
+            baseUrl: 'https://openrouter.ai/api/v1',
+        },
         branding: { appName: 'Test', logoUrl: '', defaultTheme: 'dark' },
         legal: { termsUrl: '', privacyUrl: '' },
     },
     clerkSecretKey: 'secret',
     openrouterApiKey: '',
+    openrouterBaseUrl: 'https://openrouter.ai/api/v1',
     openrouterAllowUserOverride: true,
     openrouterRequireUserKey: false,
 } as any;

@@ -16,7 +16,7 @@
  */
 
 import { markRaw, shallowReactive, ref, watch, computed, type Ref } from 'vue';
-import type { ToolDefinition } from './types';
+import type { ToolDefinition, ToolRuntime } from './types';
 
 /**
  * `ToolHandler`
@@ -52,11 +52,13 @@ export interface RegisteredTool {
     handler: ToolHandler;
     enabled: Ref<boolean>;
     lastError: Ref<string | null>;
+    runtime: ToolRuntime;
 }
 
 interface RegisterOptions {
     override?: boolean; // allow replacing an existing tool
     enabled?: boolean; // explicit initial enabled state
+    runtime?: ToolRuntime;
 }
 
 const TOOL_STORAGE_KEY = 'or3.tools.enabled';
@@ -293,11 +295,16 @@ export function useToolRegistry() {
             definition.defaultEnabled ??
             true;
 
+        const runtime = opts.runtime ?? definition.runtime ?? 'hybrid';
         const tool: RegisteredTool = {
-            definition,
+            definition: {
+                ...definition,
+                runtime,
+            },
             handler: markRaw(handler), // Prevent Vue from proxying the handler
             enabled: ref(initialEnabled),
             lastError: ref(null),
+            runtime,
         };
 
         registryState.tools.set(name, tool);

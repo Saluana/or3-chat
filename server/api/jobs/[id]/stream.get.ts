@@ -35,6 +35,8 @@ type StreamEventPayload = {
         content?: string;
         content_delta?: string;
         content_length?: number;
+        tool_calls?: BackgroundJob['tool_calls'];
+        workflow_state?: BackgroundJob['workflow_state'];
     };
 };
 
@@ -49,6 +51,8 @@ export function serializeJobStatus(
         content_delta?: string;
         content_length?: number;
         includeContent?: boolean;
+        tool_calls?: BackgroundJob['tool_calls'];
+        workflow_state?: BackgroundJob['workflow_state'];
     }
 ): StreamEventPayload['status'] {
     const includeContent = overrides?.includeContent !== false;
@@ -63,6 +67,8 @@ export function serializeJobStatus(
         startedAt: job.startedAt,
         completedAt: job.completedAt,
         error: job.error,
+        tool_calls: overrides?.tool_calls ?? job.tool_calls,
+        workflow_state: overrides?.workflow_state ?? job.workflow_state,
         content_delta: overrides?.content_delta,
         content_length:
             typeof overrides?.content_length === 'number'
@@ -209,6 +215,7 @@ export default defineEventHandler(async (event) => {
                     if (liveEvent.type === 'delta') {
                         if (liveEvent.content_length <= lastContentLength)
                             return;
+                        const currentLiveState = getJobLiveState(jobId);
                         lastContentLength = liveEvent.content_length;
                         lastStatus = 'streaming';
                         write({
@@ -218,11 +225,25 @@ export default defineEventHandler(async (event) => {
                                     ...initialJob,
                                     status: 'streaming',
                                     chunksReceived: liveEvent.chunksReceived,
+                                    tool_calls:
+                                        liveEvent.tool_calls ??
+                                        currentLiveState?.tool_calls ??
+                                        initialJob.tool_calls,
+                                    workflow_state:
+                                        liveEvent.workflow_state ??
+                                        currentLiveState?.workflow_state ??
+                                        initialJob.workflow_state,
                                 },
                                 {
                                     includeContent: false,
                                     content_delta: liveEvent.content_delta,
                                     content_length: liveEvent.content_length,
+                                    tool_calls:
+                                        liveEvent.tool_calls ??
+                                        currentLiveState?.tool_calls,
+                                    workflow_state:
+                                        liveEvent.workflow_state ??
+                                        currentLiveState?.workflow_state,
                                 }
                             ),
                         });
@@ -230,6 +251,7 @@ export default defineEventHandler(async (event) => {
                     }
                     lastStatus = liveEvent.status;
                     lastContentLength = liveEvent.content_length;
+                    const currentLiveState = getJobLiveState(jobId);
                     write({
                         event: 'status',
                         status: serializeJobStatus(
@@ -240,11 +262,25 @@ export default defineEventHandler(async (event) => {
                                 completedAt: liveEvent.completedAt,
                                 error: liveEvent.error,
                                 content: liveEvent.content,
+                                tool_calls:
+                                    liveEvent.tool_calls ??
+                                    currentLiveState?.tool_calls ??
+                                    initialJob.tool_calls,
+                                workflow_state:
+                                    liveEvent.workflow_state ??
+                                    currentLiveState?.workflow_state ??
+                                    initialJob.workflow_state,
                             },
                             {
                                 includeContent: true,
                                 content: liveEvent.content,
                                 content_length: liveEvent.content_length,
+                                tool_calls:
+                                    liveEvent.tool_calls ??
+                                    currentLiveState?.tool_calls,
+                                workflow_state:
+                                    liveEvent.workflow_state ??
+                                    currentLiveState?.workflow_state,
                             }
                         ),
                     });

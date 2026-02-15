@@ -506,6 +506,18 @@
                     "summary": "Simplified plugin API for tool registration. Re-exports registry functions and provides a helper for better TypeScript inference when defining tools. Recommended import path for plugins registering tools — keeps plugin code clean and isolated from internal implementation details. Exports useToolRegistry, defineTool helper, and all tool-related type definitions."
                 },
                 {
+                    "name": "tool-runtime.md",
+                    "path": "/utils/tool-runtime",
+                    "category": "Tools",
+                    "summary": "Runtime model for tools across client and server paths. Documents `hybrid|client|server` semantics, default runtime behavior, and how foreground/background execution chooses the correct registry."
+                },
+                {
+                    "name": "server-tool-registry.md",
+                    "path": "/utils/server-tool-registry",
+                    "category": "Tools",
+                    "summary": "Server-side tool registry reference used by SSR background chat/workflow execution. Covers registration API, runtime enforcement, timeout behavior, and Nitro plugin registration patterns."
+                },
+                {
                     "name": "uiMessages.md",
                     "path": "/utils/uiMessages",
                     "category": "Chat",
@@ -638,6 +650,78 @@
                     "summary": "Authoritative reference for every OR3 configuration setting (base + cloud). Documents all config paths and environment variables with defaults, validation rules, and how each setting affects behavior."
                 },
                 {
+                    "name": "or3-cloud-wizard.md",
+                    "path": "/cloud/or3-cloud-wizard",
+                    "category": "Guide",
+                    "summary": "Guide for the OR3 Cloud install wizard CLI. Covers session flow, provider presets, validation, safe env writes, dry-run mode, deploy commands, and Convex backend env setup."
+                },
+                {
+                    "name": "providers.md",
+                    "path": "/cloud/providers",
+                    "category": "Guide",
+                    "summary": "Practical guide for installing cloud provider packages and wiring them through OR3 cloud config. Covers local-only mode, Clerk-only mode, Clerk + Convex setup, and the Clerk to Convex token-broker bridge flow."
+                },
+                {
+                    "name": "provider-clerk.md",
+                    "path": "/cloud/provider-clerk",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-clerk`. Covers install, required env vars, runtime registrations, and token broker behavior for Clerk-backed auth."
+                },
+                {
+                    "name": "provider-basic-auth.md",
+                    "path": "/cloud/provider-basic-auth",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-basic-auth`. Covers install, required env vars, bootstrap credentials, token lifecycle tuning, and operational security checks."
+                },
+                {
+                    "name": "provider-convex.md",
+                    "path": "/cloud/provider-convex",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-convex`. Covers install, Convex backend init/codegen, required config, and the Clerk to Convex bridge flow."
+                },
+                {
+                    "name": "provider-sqlite.md",
+                    "path": "/cloud/provider-sqlite",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-sqlite`. Covers install, required env vars, durability pragmas, sync invariants, and operational notes for persistent SQLite deployments."
+                },
+                {
+                    "name": "provider-s3.md",
+                    "path": "/cloud/provider-s3",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-s3`. Covers server-only S3 credentials, required env vars, endpoint/path-style options for S3-compatible hosts, and required bucket CORS for direct browser uploads/downloads."
+                },
+                {
+                    "name": "provider-fs.md",
+                    "path": "/cloud/provider-fs",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-fs`. Covers install, required env vars, hash/integrity expectations, presign TTL settings, and filesystem storage operational practices."
+                },
+                {
+                    "name": "provider-compatibility-matrix.md",
+                    "path": "/cloud/provider-compatibility-matrix",
+                    "category": "Reference",
+                    "summary": "Compatibility matrix for supported OR3 cloud provider combinations, including default SSR and legacy Clerk+Convex stacks, with package-resolution notes and composition guidance."
+                },
+                {
+                    "name": "migration-default-stack.md",
+                    "path": "/cloud/migration-default-stack",
+                    "category": "Guide",
+                    "summary": "Step-by-step migration guide from Clerk+Convex to the default SSR stack (basic-auth + sqlite + fs), including install, env updates, verification checklist, and rollback plan."
+                },
+                {
+                    "name": "deployment-operations.md",
+                    "path": "/cloud/deployment-operations",
+                    "category": "Operations",
+                    "summary": "Deployment and operations runbook for OR3 Cloud SSR environments. Covers env groups, health checks, logging expectations, scaling guidance, and release readiness checks."
+                },
+                {
+                    "name": "release-notes-production-readiness.md",
+                    "path": "/cloud/release-notes-production-readiness",
+                    "category": "Release Notes",
+                    "summary": "Production-readiness release notes summarizing sync casing normalization, background execution hardening, documentation additions, current limitations, and rollback instructions."
+                },
+                {
                     "name": "sync-layer.md",
                     "path": "/cloud/sync-layer",
                     "category": "Architecture",
@@ -654,6 +738,12 @@
                     "path": "/cloud/storage-layer",
                     "category": "Architecture",
                     "summary": "Overview of the CAS (Content-Addressable Storage) system for large assets. Details the local-first 'Blob' architecture, FileTransferQueue for offline support, and pluggable ObjectStorageProvider interface."
+                },
+                {
+                    "name": "background-execution.md",
+                    "path": "/cloud/background-execution",
+                    "category": "Architecture",
+                    "summary": "Architecture and API reference for SSR background jobs powering chat streaming, tool execution, and workflow execution with HITL. Covers endpoint contracts, auth/rate-limit gates, reattach flows, and job metadata (`tool_calls`, `workflow_state`)."
                 },
                 {
                     "name": "notifications.md",

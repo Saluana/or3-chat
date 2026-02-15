@@ -188,6 +188,7 @@ export default defineSchema({
         anchor_index: v.optional(v.nullable(v.number())),
         branch_mode: v.optional(v.nullable(v.union(v.literal('reference'), v.literal('copy')))),
         forked: v.boolean(),
+        hlc: v.optional(v.string()),
     })
         .index('by_workspace', ['workspace_id', 'updated_at'])
         .index('by_workspace_id', ['workspace_id', 'id']),
@@ -213,6 +214,7 @@ export default defineSchema({
         updated_at: v.number(),
         clock: v.number(),
         stream_id: v.optional(v.nullable(v.string())),
+        hlc: v.optional(v.string()),
     })
         .index('by_thread', ['workspace_id', 'thread_id', 'index', 'order_key'])
         .index('by_workspace_id', ['workspace_id', 'id']),
@@ -231,6 +233,7 @@ export default defineSchema({
         created_at: v.number(),
         updated_at: v.number(),
         clock: v.number(),
+        hlc: v.optional(v.string()),
     })
         .index('by_workspace', ['workspace_id', 'updated_at'])
         .index('by_workspace_id', ['workspace_id', 'id']),
@@ -251,6 +254,7 @@ export default defineSchema({
         created_at: v.number(),
         updated_at: v.number(),
         clock: v.number(),
+        hlc: v.optional(v.string()),
     })
         .index('by_workspace', ['workspace_id', 'updated_at'])
         .index('by_workspace_id', ['workspace_id', 'id']),
@@ -276,6 +280,7 @@ export default defineSchema({
         created_at: v.number(),
         updated_at: v.number(),
         clock: v.number(),
+        hlc: v.optional(v.string()),
     })
         .index('by_workspace_hash', ['workspace_id', 'hash'])
         .index('by_workspace_deleted', ['workspace_id', 'deleted']),
@@ -293,6 +298,7 @@ export default defineSchema({
         created_at: v.number(),
         updated_at: v.number(),
         clock: v.number(),
+        hlc: v.optional(v.string()),
     })
         .index('by_workspace_name', ['workspace_id', 'name'])
         .index('by_workspace_id', ['workspace_id', 'id']),
@@ -316,6 +322,7 @@ export default defineSchema({
         created_at: v.number(),
         updated_at: v.number(),
         clock: v.number(),
+        hlc: v.optional(v.string()),
     })
         .index('by_workspace', ['workspace_id', 'updated_at'])
         .index('by_workspace_id', ['workspace_id', 'id'])
@@ -349,6 +356,9 @@ export default defineSchema({
         thread_id: v.string(), // Thread the message belongs to
         message_id: v.string(), // Message ID being generated
         model: v.string(), // Model being used
+        kind: v.optional(
+            v.union(v.literal('chat'), v.literal('workflow'))
+        ),
         status: v.union(
             v.literal('streaming'),
             v.literal('complete'),
@@ -357,6 +367,8 @@ export default defineSchema({
         ),
         content: v.string(), // Accumulated content
         chunks_received: v.number(), // Progress tracking
+        tool_calls: v.optional(v.any()), // Tool call state snapshots
+        workflow_state: v.optional(v.any()), // Workflow execution state snapshots
         started_at: v.number(), // Unix timestamp
         completed_at: v.optional(v.number()),
         error: v.optional(v.string()),

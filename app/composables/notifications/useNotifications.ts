@@ -16,14 +16,14 @@
  * - Persisting notification preferences outside the local KV table
  */
 
-import { ref, computed, onScopeDispose, watch, type ComputedRef } from 'vue';
+import { ref, computed, onScopeDispose, watch, type ComputedRef, getCurrentScope } from 'vue';
 import Dexie, { liveQuery, type Subscription } from 'dexie';
 import { z } from 'zod';
 import { useRuntimeConfig } from '#imports';
-import { getDb } from '~/db/client';
+import { getActiveWorkspaceId, getDb } from '~/db/client';
 import { NotificationService } from '~/core/notifications/notification-service';
 import { useHooks } from '~/core/hooks/useHooks';
-import { nowSec } from '~/db/util';
+import { nowSec, getWriteTxTableNames } from '~/db/util';
 import type { Notification } from '~/db/schema';
 import type { NotificationCreatePayload } from '~/core/hooks/hook-types';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
@@ -38,6 +38,7 @@ const mutedThreadsSchema = z.array(z.string());
 // Singleton service state to prevent memory leaks from duplicate listeners
 let sharedService: NotificationService | null = null;
 let sharedServiceUserId: string | null = null;
+let sharedServiceWorkspaceId: string | null = null;
 let serviceCleanup: (() => void) | null = null;
 let serviceRefCount = 0;
 
@@ -116,15 +117,28 @@ export function useNotifications(): NotificationsComposable {
         };
     }
 
-    const db = getDb();
+    let db = getDb();
     const hooks = useHooks();
     const runtimeConfig = useRuntimeConfig();
     const ssrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;
     const sessionContext = ssrAuthEnabled ? useSessionContext() : null;
     const userId = ref<string>(FALLBACK_NOTIFICATION_USER_ID);
+    const workspaceId = ref<string | null>(getActiveWorkspaceId());
 
-    function ensureSharedService(nextUserId: string): NotificationService {
-        if (sharedService && sharedServiceUserId === nextUserId) {
+    function isDatabaseClosedError(error: unknown): boolean {
+        if (!error || typeof error !== 'object') return false;
+        const name = (error as { name?: unknown }).name;
+        if (name === 'DatabaseClosedError') return true;
+        const message = (error as { message?: unknown }).message;
+        return typeof message === 'string' && message.includes('Database has been closed');
+    }
+
+    function ensureSharedService(nextUserId: string, nextWorkspaceId: string | null): NotificationService {
+        if (
+            sharedService &&
+            sharedServiceUserId === nextUserId &&
+            sharedServiceWorkspaceId === nextWorkspaceId
+        ) {
             return sharedService;
         }
         if (serviceCleanup) {
@@ -132,13 +146,14 @@ export function useNotifications(): NotificationsComposable {
         }
         sharedService = new NotificationService(db, hooks, nextUserId);
         sharedServiceUserId = nextUserId;
+        sharedServiceWorkspaceId = nextWorkspaceId;
         serviceCleanup = sharedService.startListening();
         return sharedService;
     }
 
     serviceRefCount++;
 
-    let service = ensureSharedService(userId.value);
+    let service = ensureSharedService(userId.value, workspaceId.value);
 
     // Reactive state
     const notifications = ref<Notification[]>([]);
@@ -172,7 +187,9 @@ export function useNotifications(): NotificationsComposable {
                     .and((n) => !n.deleted)
                     .toArray();
             } catch (err) {
-                console.error('[useNotifications] Query error:', err);
+                if (!isDatabaseClosedError(err)) {
+                    console.error('[useNotifications] Query error:', err);
+                }
                 return [];
             }
         });
@@ -183,7 +200,9 @@ export function useNotifications(): NotificationsComposable {
                 loading.value = false;
             },
             error: (err) => {
-                console.error('[useNotifications] Subscription error:', err);
+                if (!isDatabaseClosedError(err)) {
+                    console.error('[useNotifications] Subscription error:', err);
+                }
                 loading.value = false;
             },
         });
@@ -201,7 +220,9 @@ export function useNotifications(): NotificationsComposable {
                     .count();
                 return count;
             } catch (err) {
-                console.error('[useNotifications] Unread count error:', err);
+                if (!isDatabaseClosedError(err)) {
+                    console.error('[useNotifications] Unread count error:', err);
+                }
                 return 0;
             }
         });
@@ -211,46 +232,75 @@ export function useNotifications(): NotificationsComposable {
                 unreadCount.value = count;
             },
             error: (err) => {
-                console.error(
-                    '[useNotifications] Unread count subscription error:',
-                    err
-                );
+                if (!isDatabaseClosedError(err)) {
+                    console.error(
+                        '[useNotifications] Unread count subscription error:',
+                        err
+                    );
+                }
             },
         });
     }
 
-    // Live query for muted threads with Zod validation
-    const mutedThreadsObservable = liveQuery(async () => {
-        try {
-            const kvRecord = await db.kv.get('notification_muted_threads');
-            if (!kvRecord?.value) return [];
-            
-            // Parse and validate with Zod to prevent runtime crashes from malformed data
-            const parseResult = mutedThreadsSchema.safeParse(JSON.parse(kvRecord.value));
-            if (!parseResult.success) {
-                console.warn('[useNotifications] Invalid muted threads data, resetting:', parseResult.error.message);
+    function stopMutedThreadsSubscription(): void {
+        if (mutedThreadsSubscription) mutedThreadsSubscription.unsubscribe();
+        mutedThreadsSubscription = null;
+    }
+
+    function startMutedThreadsSubscription(): void {
+        const mutedThreadsObservable = liveQuery(async () => {
+            try {
+                const kvRecord = await db.kv.get('notification_muted_threads');
+                if (!kvRecord?.value) return [];
+
+                // Parse and validate with Zod to prevent runtime crashes from malformed data
+                const parseResult = mutedThreadsSchema.safeParse(JSON.parse(kvRecord.value));
+                if (!parseResult.success) {
+                    console.warn('[useNotifications] Invalid muted threads data, resetting:', parseResult.error.message);
+                    return [];
+                }
+                return parseResult.data;
+            } catch (err) {
+                if (!isDatabaseClosedError(err)) {
+                    console.error('[useNotifications] Muted threads error:', err);
+                }
                 return [];
             }
-            return parseResult.data;
-        } catch (err) {
-            console.error('[useNotifications] Muted threads error:', err);
-            return [];
-        }
-    });
+        });
+
+        mutedThreadsSubscription = mutedThreadsObservable.subscribe({
+            next: (threads) => {
+                mutedThreadsData.value = threads;
+            },
+            error: (err) => {
+                if (!isDatabaseClosedError(err)) {
+                    console.error('[useNotifications] Muted threads subscription error:', err);
+                }
+            },
+        });
+    }
 
     function syncUserId(): void {
+        db = getDb();
         const nextUserId = resolveNotificationUserId(
             sessionContext?.data.value?.session
         );
+        const nextWorkspaceId = sessionContext?.data.value?.session?.workspace?.id
+            ?? getActiveWorkspaceId();
         const needsResubscribe =
             nextUserId !== userId.value ||
+            nextWorkspaceId !== workspaceId.value ||
             !notificationsSubscription ||
-            !unreadCountSubscription;
+            !unreadCountSubscription ||
+            !mutedThreadsSubscription;
         if (!needsResubscribe) return;
         userId.value = nextUserId;
-        service = ensureSharedService(nextUserId);
+        workspaceId.value = nextWorkspaceId;
+        service = ensureSharedService(nextUserId, nextWorkspaceId);
         stopNotificationSubscriptions();
+        stopMutedThreadsSubscription();
         startNotificationSubscriptions(nextUserId);
+        startMutedThreadsSubscription();
     }
 
     if (sessionContext) {
@@ -265,64 +315,57 @@ export function useNotifications(): NotificationsComposable {
         syncUserId();
     }
 
-    mutedThreadsSubscription = mutedThreadsObservable.subscribe({
-        next: (threads) => {
-            mutedThreadsData.value = threads;
-        },
-        error: (err) => {
-            console.error('[useNotifications] Muted threads subscription error:', err);
-        },
-    });
+    startMutedThreadsSubscription();
 
     // Cleanup subscriptions and service ref count
-    onScopeDispose(() => {
-        stopNotificationSubscriptions();
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- guard handles async race between init and dispose
-        if (mutedThreadsSubscription) mutedThreadsSubscription.unsubscribe();
+    if (getCurrentScope()) {
+        onScopeDispose(() => {
+            stopNotificationSubscriptions();
+            stopMutedThreadsSubscription();
 
-        // Decrement service ref count and cleanup when no more users
-        serviceRefCount--;
-        if (serviceRefCount === 0 && serviceCleanup) {
-            serviceCleanup();
-            sharedService = null;
-            sharedServiceUserId = null;
-            serviceCleanup = null;
-        }
-    });
+            // Decrement service ref count and cleanup when no more users
+            serviceRefCount--;
+            if (serviceRefCount === 0 && serviceCleanup) {
+                serviceCleanup();
+                sharedService = null;
+                sharedServiceUserId = null;
+                sharedServiceWorkspaceId = null;
+                serviceCleanup = null;
+            }
+        });
+    }
 
     const isThreadMuted = (threadId: string): boolean => {
         return mutedThreadsData.value.includes(threadId);
     };
 
-    const muteThread = async (threadId: string): Promise<void> => {
-        const muted = [...mutedThreadsData.value];
-        if (!muted.includes(threadId)) {
-            muted.push(threadId);
+    const persistMutedThreads = async (muted: string[]): Promise<void> => {
+        await db.transaction('rw', getWriteTxTableNames(db, 'kv'), async () => {
+            const existing = await db.kv.get('notification_muted_threads');
             const now = nowSec();
             await db.kv.put({
                 id: 'notification_muted_threads',
                 name: 'notification_muted_threads',
                 value: JSON.stringify(muted),
                 deleted: false,
-                created_at: now,
+                created_at: existing?.created_at ?? now,
                 updated_at: now,
                 clock: now,
             });
+        });
+    };
+
+    const muteThread = async (threadId: string): Promise<void> => {
+        const muted = [...mutedThreadsData.value];
+        if (!muted.includes(threadId)) {
+            muted.push(threadId);
+            await persistMutedThreads(muted);
         }
     };
 
     const unmuteThread = async (threadId: string): Promise<void> => {
         const muted = mutedThreadsData.value.filter((id) => id !== threadId);
-        const now = nowSec();
-        await db.kv.put({
-            id: 'notification_muted_threads',
-            name: 'notification_muted_threads',
-            value: JSON.stringify(muted),
-            deleted: false,
-            created_at: now,
-            updated_at: now,
-            clock: now,
-        });
+        await persistMutedThreads(muted);
     };
 
     const push = async (payload: NotificationCreatePayload): Promise<void> => {

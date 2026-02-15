@@ -1,14 +1,30 @@
 /**
- * ConflictResolver - Applies remote changes with LWW conflict resolution
+ * @module app/core/sync/conflict-resolver
  *
- * Implements Last-Write-Wins (LWW) conflict resolution:
- * - Higher clock value wins
- * - If clocks are equal, HLC breaks the tie
- * - Emits conflict hooks for observability
+ * Purpose:
+ * Applies incoming remote changes to the local Dexie database using
+ * Last-Write-Wins (LWW) conflict resolution with HLC tie-breaking.
+ *
+ * Behavior:
+ * - Higher `clock` value wins unconditionally
+ * - Equal clocks are tie-broken by lexicographic HLC comparison
+ * - Delete and put operations each have dedicated resolution logic
+ * - Tombstones are maintained for deleted records
+ * - Conflict hooks are emitted after the transaction completes
+ *   (avoids Dexie PrematureCommitError from async hooks inside tx)
+ *
+ * Constraints:
+ * - All changes in a batch are applied in a single Dexie transaction for atomicity
+ * - Payloads are normalized via `sync-payload-normalizer` before storage
+ * - Invalid payloads (failing Zod validation) are skipped, not thrown
+ *
+ * @see core/sync/hlc for HLC comparison
+ * @see core/sync/sync-payload-normalizer for payload normalization
+ * @see core/sync/hook-bridge for sync transaction suppression
  */
 import type { Or3DB } from '~/db/client';
 import type { SyncChange, Tombstone } from '~~/shared/sync/types';
-import type { Table } from 'dexie';
+import type { Transaction } from 'dexie';
 import { compareHLC } from './hlc';
 import { getHookBridge } from './hook-bridge';
 import { useHooks } from '~/core/hooks/useHooks';
@@ -23,6 +39,20 @@ interface LocalRecord {
     [key: string]: unknown;
 }
 
+/**
+ * Purpose:
+ * Apply remote SyncChange batches to the local Dexie database using LWW + HLC tie-breaking.
+ *
+ * Behavior:
+ * - Applies changes in a single Dexie transaction for atomicity
+ * - Uses `clock` as the primary ordering, then compares `hlc` on ties
+ * - Maintains tombstones for deletes to prevent resurrection
+ * - Emits conflict hooks after the transaction completes
+ *
+ * Constraints:
+ * - Invalid payloads (schema failures) are skipped, not thrown
+ * - Callers should ensure HookBridge suppression is active for the tx
+ */
 export class ConflictResolver {
     private db: Or3DB;
 
@@ -64,7 +94,7 @@ export class ConflictResolver {
             // Batch-fetch existing records by table
             const existingByTable = new Map<string, Map<string, LocalRecord>>();
             for (const tableName of tableNames) {
-                const table = this.db.table(tableName);
+                const table = tx.table(tableName);
                 const pks = changes.filter(c => c.tableName === tableName).map(c => c.pk);
                 const records = await table.bulkGet(pks);
                 const map = new Map<string, LocalRecord>();
@@ -76,7 +106,7 @@ export class ConflictResolver {
 
             // Batch-fetch tombstones
             const tombstoneIds = changes.map(c => `${c.tableName}:${c.pk}`);
-            const tombstoneRecords = await this.db.tombstones.bulkGet(tombstoneIds);
+            const tombstoneRecords = await tx.table('tombstones').bulkGet(tombstoneIds);
             const tombstonesMap = new Map<string, Tombstone>();
             tombstoneRecords.forEach((rec, idx) => {
                 if (rec) tombstonesMap.set(tombstoneIds[idx]!, rec as Tombstone);
@@ -87,8 +117,8 @@ export class ConflictResolver {
                 const tombstone = tombstonesMap.get(`${change.tableName}:${change.pk}`);
 
                 const changeResult = change.op === 'delete'
-                    ? await this.applyDeleteWithLocal(change, local, tombstone, conflicts)
-                    : await this.applyPutWithLocal(change, local, tombstone, conflicts);
+                    ? await this.applyDeleteWithLocal(tx, change, local, tombstone, conflicts)
+                    : await this.applyPutWithLocal(tx, change, local, tombstone, conflicts);
 
                 result.applied += changeResult.applied ? 1 : 0;
                 result.skipped += changeResult.skipped ? 1 : 0;
@@ -108,22 +138,25 @@ export class ConflictResolver {
      * Apply a delete operation with pre-fetched local state
      */
     private async applyDeleteWithLocal(
+        tx: Transaction,
         change: SyncChange,
         local: LocalRecord | undefined,
         existingTombstone: Tombstone | undefined,
         conflicts: Array<{ tableName: string; pk: string; local: LocalRecord | undefined; remote: unknown; winner: 'local' | 'remote' }>
     ): Promise<ChangeResult> {
         const { tableName, pk, stamp } = change;
-        const table = this.db.table(tableName);
+        const table = tx.table(tableName);
+        const hookBridge = getHookBridge(this.db);
+        hookBridge.markSyncTransaction(tx);
 
         if (!local) {
-            await this.writeTombstone(tableName, pk, stamp.clock, existingTombstone);
+            await this.writeTombstone(tx, tableName, pk, stamp.clock, existingTombstone);
             // Already gone or never existed
             return { applied: false, skipped: true, isConflict: false };
         }
 
         if (local.deleted) {
-            await this.writeTombstone(tableName, pk, stamp.clock, existingTombstone);
+            await this.writeTombstone(tx, tableName, pk, stamp.clock, existingTombstone);
             // Already deleted
             return { applied: false, skipped: true, isConflict: false };
         }
@@ -142,12 +175,13 @@ export class ConflictResolver {
                 clock: stamp.clock,
                 hlc: stamp.hlc,
             });
-            await this.writeTombstone(tableName, pk, stamp.clock, existingTombstone);
+            await this.writeTombstone(tx, tableName, pk, stamp.clock, existingTombstone);
             return { applied: true, skipped: false, isConflict: false };
         } else if (stamp.clock === localClock) {
             // Tie-break with HLC
             const localHlc = local.hlc ?? '';
-            if (compareHLC(stamp.hlc, localHlc) > 0) {
+            const cmp = compareHLC(stamp.hlc, localHlc);
+            if (cmp > 0) {
                 const remotePayload = change.payload as { deleted_at?: number } | undefined;
                 const deletedAt = remotePayload?.deleted_at ?? nowSec();
 
@@ -157,7 +191,7 @@ export class ConflictResolver {
                     clock: stamp.clock,
                     hlc: stamp.hlc,
                 });
-                await this.writeTombstone(tableName, pk, stamp.clock, existingTombstone);
+                await this.writeTombstone(tx, tableName, pk, stamp.clock, existingTombstone);
                 if (import.meta.dev) {
                     console.debug('[sync] conflict delete tie -> remote', {
                         tableName,
@@ -171,6 +205,10 @@ export class ConflictResolver {
                 // Queue conflict for hook emission after transaction
                 conflicts.push({ tableName, pk, local, remote: { deleted: true }, winner: 'remote' });
                 return { applied: true, skipped: false, isConflict: true, winner: 'remote' };
+            }
+            if (cmp === 0) {
+                // Exact duplicate delivery, not a conflict.
+                return { applied: false, skipped: true, isConflict: false };
             }
             // Queue conflict for hook emission after transaction
             if (import.meta.dev) {
@@ -195,14 +233,17 @@ export class ConflictResolver {
      * Apply a put (insert/update) operation with pre-fetched local state
      */
     private async applyPutWithLocal(
+        tx: Transaction,
         change: SyncChange,
         local: LocalRecord | undefined,
         tombstone: Tombstone | undefined,
         conflicts: Array<{ tableName: string; pk: string; local: LocalRecord | undefined; remote: unknown; winner: 'local' | 'remote' }>
     ): Promise<ChangeResult> {
         const { tableName, pk, payload, stamp } = change;
-        const table = this.db.table(tableName);
+        const table = tx.table(tableName);
         const remoteClock = stamp.clock;
+        const hookBridge = getHookBridge(this.db);
+        hookBridge.markSyncTransaction(tx);
 
         // Use shared normalizer for consistent snake_case/camelCase mapping and validation
         const normalized = normalizeSyncPayload(tableName, pk, payload, stamp);
@@ -223,7 +264,7 @@ export class ConflictResolver {
             // New record - just insert
             await table.put(remotePayload);
             if (tombstone && tombstone.clock < remoteClock) {
-                await this.clearTombstone(tableName, pk);
+                await this.clearTombstone(tx, tableName, pk);
             }
             return { applied: true, skipped: false, isConflict: false };
         }
@@ -234,16 +275,17 @@ export class ConflictResolver {
             // Remote wins - update
             await table.put(remotePayload);
             if (tombstone && tombstone.clock < remoteClock) {
-                await this.clearTombstone(tableName, pk);
+                await this.clearTombstone(tx, tableName, pk);
             }
             return { applied: true, skipped: false, isConflict: false };
         } else if (remoteClock === localClock) {
             // Tie-break with HLC
             const localHlc = local.hlc ?? '';
-            if (compareHLC(stamp.hlc, localHlc) > 0) {
+            const cmp = compareHLC(stamp.hlc, localHlc);
+            if (cmp > 0) {
                 await table.put(remotePayload);
                 if (tombstone && tombstone.clock < remoteClock) {
-                    await this.clearTombstone(tableName, pk);
+                    await this.clearTombstone(tx, tableName, pk);
                 }
                 if (import.meta.dev) {
                     console.debug('[sync] conflict put tie -> remote', {
@@ -258,6 +300,10 @@ export class ConflictResolver {
                 // Queue conflict for hook emission after transaction
                 conflicts.push({ tableName, pk, local, remote: payload, winner: 'remote' });
                 return { applied: true, skipped: false, isConflict: true, winner: 'remote' };
+            }
+            if (cmp === 0) {
+                // Exact duplicate delivery, not a conflict.
+                return { applied: false, skipped: true, isConflict: false };
             }
             // Queue conflict for hook emission after transaction
             if (import.meta.dev) {
@@ -279,6 +325,7 @@ export class ConflictResolver {
     }
 
     private async writeTombstone(
+        tx: Transaction,
         tableName: string,
         pk: string,
         clock: number,
@@ -298,21 +345,29 @@ export class ConflictResolver {
             clock,
             syncedAt: nowSec(),
         };
-        await this.db.table('tombstones').put(tombstone);
+        await tx.table('tombstones').put(tombstone);
     }
 
-    private async clearTombstone(tableName: string, pk: string): Promise<void> {
+    private async clearTombstone(tx: Transaction, tableName: string, pk: string): Promise<void> {
         const id = `${tableName}:${pk}`;
-        await this.db.table('tombstones').delete(id);
+        await tx.table('tombstones').delete(id);
     }
 }
 
+/**
+ * Purpose:
+ * Summary of a batch apply operation.
+ */
 export interface ApplyResult {
     applied: number;
     skipped: number;
     conflicts: number;
 }
 
+/**
+ * Purpose:
+ * Per-change apply result used internally and for diagnostics.
+ */
 export interface ChangeResult {
     applied: boolean;
     skipped: boolean;

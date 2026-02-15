@@ -7,9 +7,9 @@ import {
     unregisterThreadHistoryAction,
 } from '~/composables/threads/useThreadHistoryActions';
 import { useToast } from '#imports';
-import { db } from '~/db';
+import { getDb } from '~/db/client';
 import type { Post } from '~/db';
-import { nowSec, nextClock } from '~/db/util';
+import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
 
 /**
  * Example plugin: History Actions
@@ -19,6 +19,7 @@ import { nowSec, nextClock } from '~/db/util';
  */
 export function setupHistoryActionsExample() {
     const toast = useToast();
+    const db = getDb();
 
     registerDocumentHistoryAction({
         id: 'example:export-doc',
@@ -72,11 +73,16 @@ export function setupHistoryActionsExample() {
                     return;
                 }
 
-                await db.threads.put({
-                    ...row,
-                    pinned: !row.pinned,
-                    updated_at: nowSec(),
-                    clock: nextClock(row.clock),
+                await db.transaction(
+                    'rw',
+                    getWriteTxTableNames(db, 'threads'),
+                    async () => {
+                    await db.threads.put({
+                        ...row,
+                        pinned: !row.pinned,
+                        updated_at: nowSec(),
+                        clock: nextClock(row.clock),
+                    });
                 });
 
                 toast.add({

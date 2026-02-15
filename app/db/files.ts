@@ -31,7 +31,7 @@
 import Dexie from 'dexie';
 import { getDb } from './client';
 import { useHooks } from '../core/hooks/useHooks';
-import { parseOrThrow, nowSec, nextClock } from './util';
+import { parseOrThrow, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { FileMetaCreateSchema, FileMetaSchema, type FileMeta } from './schema';
 import { computeFileHash } from '../utils/hash';
 import { reportError, err } from '../utils/errors';
@@ -121,8 +121,9 @@ function createFileDeletePayload(
 
 /** Internal helper to change ref_count and fire hook */
 async function changeRefCount(hash: string, delta: number) {
-    await getDb().transaction('rw', getDb().file_meta, async () => {
-        const meta = await getDb().file_meta.get(hash);
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
+        const meta = await db.file_meta.get(hash);
         if (!meta) return;
         const next = {
             ...meta,
@@ -130,7 +131,7 @@ async function changeRefCount(hash: string, delta: number) {
             updated_at: nowSec(),
             clock: nextClock(meta.clock),
         };
-        await getDb().file_meta.put(next);
+        await db.file_meta.put(next);
         const hooks = useHooks();
         await hooks.doAction('db.files.refchange:action:after', {
             before: toFileEntity(meta),
@@ -231,7 +232,11 @@ export async function createOrRefFile(
     };
 
     let storedMeta: FileMeta | null = null;
-    await getDb().transaction('rw', getDb().file_meta, getDb().file_blobs, async () => {
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs'] }),
+        async () => {
         await hooks.doAction('db.files.create:action:before', actionPayload);
         const mergedMeta = parseOrThrow(
             FileMetaSchema,
@@ -239,8 +244,8 @@ export async function createOrRefFile(
         );
         // Parallel writes for ~20% faster file creation
         await Promise.all([
-            getDb().file_meta.put(mergedMeta),
-            getDb().file_blobs.put({ hash: mergedMeta.hash, blob: file }),
+            db.file_meta.put(mergedMeta),
+            db.file_blobs.put({ hash: mergedMeta.hash, blob: file }),
         ]);
         storedMeta = mergedMeta;
         actionPayload = {
@@ -358,13 +363,14 @@ export async function ensureFileBlob(
  */
 export async function softDeleteFile(hash: string): Promise<void> {
     const hooks = useHooks();
-    await getDb().transaction('rw', getDb().file_meta, async () => {
-        const meta = await getDb().file_meta.get(hash);
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
+        const meta = await db.file_meta.get(hash);
         if (!meta) return;
         const payload = createFileDeletePayload(meta, hash);
         await hooks.doAction('db.files.delete:action:soft:before', payload);
         const now = nowSec();
-        await getDb().file_meta.put({
+        await db.file_meta.put({
             ...meta,
             deleted: true,
             deleted_at: now,
@@ -392,8 +398,9 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return;
     const hooks = useHooks();
-    await getDb().transaction('rw', getDb().file_meta, async () => {
-        const metas = await getDb().file_meta.bulkGet(unique);
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
+        const metas = await db.file_meta.bulkGet(unique);
         const updates: FileMeta[] = [];
         const payloads: DbDeletePayload<FileEntity>[] = [];
 
@@ -416,7 +423,7 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
         }
 
         if (updates.length > 0) {
-            await getDb().file_meta.bulkPut(updates);
+            await db.file_meta.bulkPut(updates);
         }
 
         for (const payload of payloads) {
@@ -442,8 +449,9 @@ export async function restoreMany(hashes: string[]): Promise<void> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return;
     const hooks = useHooks();
-    await getDb().transaction('rw', getDb().file_meta, async () => {
-        const metas = await getDb().file_meta.bulkGet(unique);
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
+        const metas = await db.file_meta.bulkGet(unique);
         const updates: FileMeta[] = [];
 
         for (let i = 0; i < unique.length; i++) {
@@ -461,7 +469,7 @@ export async function restoreMany(hashes: string[]): Promise<void> {
         }
 
         if (updates.length > 0) {
-            await getDb().file_meta.bulkPut(updates);
+            await db.file_meta.bulkPut(updates);
             for (const updatedMeta of updates) {
                 await Dexie.waitFor(
                     hooks.doAction(
@@ -491,15 +499,22 @@ export async function hardDeleteMany(hashes: string[]): Promise<void> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return;
     const hooks = useHooks();
-    await getDb().transaction('rw', getDb().file_meta, getDb().file_blobs, async () => {
-        const metas = await getDb().file_meta.bulkGet(unique);
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'file_meta', {
+            include: ['file_blobs'],
+            includeTombstones: true,
+        }),
+        async () => {
+        const metas = await db.file_meta.bulkGet(unique);
         for (let i = 0; i < unique.length; i++) {
             const hash = unique[i]!;
             const meta = metas[i];
             const payload = createFileDeletePayload(meta ?? undefined, hash);
             await hooks.doAction('db.files.delete:action:hard:before', payload);
-            await getDb().file_meta.delete(hash);
-            await getDb().file_blobs.delete(hash);
+            await db.file_meta.delete(hash);
+            await db.file_blobs.delete(hash);
             await hooks.doAction('db.files.delete:action:hard:after', payload);
         }
     });

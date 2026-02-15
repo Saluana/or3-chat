@@ -22,8 +22,29 @@ import { computed, watch } from 'vue';
 import { setActiveWorkspaceDb } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 
-// Module-level flag shared across all instances (intentional for singleton behavior)
-let workspaceChangeInProgress = false;
+let workspaceChangeToken = 0;
+
+async function shouldClearWorkspaceForNullSession(oldWorkspaceId: string | null): Promise<boolean> {
+    if (!oldWorkspaceId) return true;
+    if (!import.meta.client) return true;
+
+    try {
+        const { resolveClientAuthStatus } = await import(
+            '~/composables/auth/useClientAuthStatus.client'
+        );
+        const status = await resolveClientAuthStatus();
+        if (!status.ready) {
+            return false;
+        }
+        if (status.authenticated === undefined) {
+            return false;
+        }
+        return !status.authenticated;
+    } catch {
+        // If auth status cannot be resolved, avoid destructive fallback to default DB.
+        return false;
+    }
+}
 
 export function useWorkspaceManager() {
     const { data: sessionData } = useSessionContext();
@@ -46,26 +67,41 @@ export function useWorkspaceManager() {
      */
     watch(
         activeWorkspaceId,
-        (newId, oldId) => {
-            // Skip if change already in progress
-            if (workspaceChangeInProgress) return;
-            
+        async (newId, oldId) => {
             // Skip if no actual change
             if (newId === oldId) return;
 
-            workspaceChangeInProgress = true;
-            try {
-                // Set the active workspace DB
+            const token = ++workspaceChangeToken;
+
+            if (newId) {
                 setActiveWorkspaceDb(newId);
-                
-                if (newId) {
-                    console.log('[workspace-manager] Workspace activated:', newId);
-                } else {
-                    console.log('[workspace-manager] Workspace cleared');
-                }
-            } finally {
-                workspaceChangeInProgress = false;
+                console.log('[workspace-manager] Workspace activated:', newId);
+                return;
             }
+
+            const session = sessionData.value?.session;
+            if (session?.authenticated === false) {
+                if (token !== workspaceChangeToken) return;
+                setActiveWorkspaceDb(null);
+                console.log('[workspace-manager] Workspace cleared');
+                return;
+            }
+
+            const shouldClear = await shouldClearWorkspaceForNullSession(oldId ?? null);
+            if (token !== workspaceChangeToken) return;
+
+            if (!shouldClear) {
+                if (import.meta.dev) {
+                    console.debug(
+                        '[workspace-manager] Ignoring transient null workspace while auth status is unsettled',
+                        { oldWorkspaceId: oldId ?? null }
+                    );
+                }
+                return;
+            }
+
+            setActiveWorkspaceDb(null);
+            console.log('[workspace-manager] Workspace cleared');
         },
         { immediate: true }
     );

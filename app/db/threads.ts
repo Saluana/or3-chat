@@ -16,7 +16,13 @@
 import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { newId, nowSec, parseOrThrow, nextClock } from './util';
+import {
+    newId,
+    nowSec,
+    parseOrThrow,
+    nextClock,
+    getWriteTxTableNames,
+} from './util';
 import { generateHLC } from '../core/sync/hlc';
 import {
     ThreadCreateSchema,
@@ -76,11 +82,14 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
         entity: value,
         tableName: 'threads',
     });
-    await dbTry(
-        () => getDb().threads.put(value),
-        { op: 'write', entity: 'threads', action: 'create' },
-        { rethrow: true }
-    );
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
+        await dbTry(
+            () => db.threads.put(value),
+            { op: 'write', entity: 'threads', action: 'create' },
+            { rethrow: true }
+        );
+    });
     await hooks.doAction('db.threads.create:action:after', {
         entity: value,
         tableName: 'threads',
@@ -108,28 +117,31 @@ export async function upsertThread(value: Thread): Promise<void> {
         value
     );
     const validated = parseOrThrow(ThreadSchema, filtered);
-    const existing = await dbTry(() => getDb().threads.get(validated.id), {
-        op: 'read',
-        entity: 'threads',
-        action: 'get',
-    });
-    const next = {
-        ...validated,
-        clock: nextClock(existing?.clock ?? validated.clock),
-        hlc: validated.hlc ?? generateHLC(),
-    };
-    await hooks.doAction('db.threads.upsert:action:before', {
-        entity: next,
-        tableName: 'threads',
-    });
-    await dbTry(
-        () => getDb().threads.put(next),
-        { op: 'write', entity: 'threads', action: 'upsert' },
-        { rethrow: true }
-    );
-    await hooks.doAction('db.threads.upsert:action:after', {
-        entity: next,
-        tableName: 'threads',
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
+        const existing = await dbTry(() => db.threads.get(validated.id), {
+            op: 'read',
+            entity: 'threads',
+            action: 'get',
+        });
+        const next = {
+            ...validated,
+            clock: nextClock(existing?.clock ?? validated.clock),
+            hlc: validated.hlc ?? generateHLC(),
+        };
+        await hooks.doAction('db.threads.upsert:action:before', {
+            entity: next,
+            tableName: 'threads',
+        });
+        await dbTry(
+            () => db.threads.put(next),
+            { op: 'write', entity: 'threads', action: 'upsert' },
+            { rethrow: true }
+        );
+        await hooks.doAction('db.threads.upsert:action:after', {
+            entity: next,
+            tableName: 'threads',
+        });
     });
 }
 
@@ -246,8 +258,9 @@ export function childThreads(parentThreadId: string) {
  */
 export async function softDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
-    await getDb().transaction('rw', getDb().threads, async () => {
-        const t = await dbTry(() => getDb().threads.get(id), {
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
+        const t = await dbTry(() => db.threads.get(id), {
             op: 'read',
             entity: 'threads',
             action: 'get',
@@ -258,7 +271,7 @@ export async function softDeleteThread(id: string): Promise<void> {
             id: t.id,
             tableName: 'threads',
         });
-        await getDb().threads.put({
+        await db.threads.put({
             ...t,
             deleted: true,
             updated_at: nowSec(),
@@ -288,21 +301,29 @@ export async function softDeleteThread(id: string): Promise<void> {
  */
 export async function hardDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => getDb().threads.get(id), {
-        op: 'read',
-        entity: 'threads',
-        action: 'get',
-    });
-    await getDb().transaction('rw', getDb().threads, getDb().messages, async () => {
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'threads', {
+            include: ['messages'],
+            includeTombstones: true,
+        }),
+        async () => {
+        const existing = await dbTry(() => db.threads.get(id), {
+            op: 'read',
+            entity: 'threads',
+            action: 'get',
+        });
+        if (!existing) return;
         await hooks.doAction('db.threads.delete:action:hard:before', {
-            entity: existing!,
+            entity: existing,
             id,
             tableName: 'threads',
         });
-        await getDb().messages.where('thread_id').equals(id).delete();
-        await getDb().threads.delete(id);
+        await db.messages.where('thread_id').equals(id).delete();
+        await db.threads.delete(id);
         await hooks.doAction('db.threads.delete:action:hard:after', {
-            entity: existing!,
+            entity: existing,
             id,
             tableName: 'threads',
         });
@@ -328,9 +349,13 @@ export async function forkThread(
     options: { copyMessages?: boolean } = {}
 ): Promise<Thread> {
     const hooks = useHooks();
-    return getDb().transaction('rw', getDb().threads, getDb().messages, async () => {
+    const db = getDb();
+    return db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'threads', { include: ['messages'] }),
+        async () => {
         const src = await dbTry(
-            () => getDb().threads.get(sourceThreadId),
+            () => db.threads.get(sourceThreadId),
             { op: 'read', entity: 'threads', action: 'get' },
             { rethrow: true }
         );
@@ -353,7 +378,7 @@ export async function forkThread(
             fork,
         });
         await dbTry(
-            () => getDb().threads.put(fork),
+            () => db.threads.put(fork),
             { op: 'write', entity: 'threads', action: 'fork' },
             { rethrow: true }
         );
@@ -362,7 +387,7 @@ export async function forkThread(
             const msgs =
                 (await dbTry(
                     () =>
-                        getDb().messages
+                        db.messages
                             .where('thread_id')
                             .equals(src.id)
                             .sortBy('index'),
@@ -379,7 +404,7 @@ export async function forkThread(
                 clock: nextClock(),
             }));
             await dbTry(
-                () => getDb().messages.bulkPut(newMessages),
+                () => db.messages.bulkPut(newMessages),
                 {
                     op: 'write',
                     entity: 'messages',
@@ -390,7 +415,7 @@ export async function forkThread(
             if (msgs.length > 0) {
                 await dbTry(
                     () =>
-                        getDb().threads.put({
+                        db.threads.put({
                             ...fork,
                             last_message_at: now,
                             updated_at: now,
@@ -428,8 +453,9 @@ export async function updateThreadSystemPrompt(
     promptId: string | null
 ): Promise<void> {
     const hooks = useHooks();
-    await getDb().transaction('rw', getDb().threads, async () => {
-        const thread = await dbTry(() => getDb().threads.get(threadId), {
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
+        const thread = await dbTry(() => db.threads.get(threadId), {
             op: 'read',
             entity: 'threads',
             action: 'get',
@@ -446,7 +472,7 @@ export async function updateThreadSystemPrompt(
             promptId,
         });
         await dbTry(
-            () => getDb().threads.put(updated),
+            () => db.threads.put(updated),
             { op: 'write', entity: 'threads', action: 'updateSystemPrompt' },
             { rethrow: true }
         );

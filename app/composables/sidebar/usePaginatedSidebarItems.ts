@@ -14,7 +14,8 @@
  */
 import { ref, shallowRef, type Ref, onMounted, onUnmounted } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
-import { db, type Thread, type Post } from '~/db';
+import type { Thread, Post } from '~/db';
+import { getDb } from '~/db/client';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 
 /**
@@ -120,6 +121,7 @@ export function usePaginatedSidebarItems(
     async function fetchItems(
         limit: number
     ): Promise<{ items: UnifiedSidebarItem[]; hasMore: boolean }> {
+        const db = getDb();
         const query = searchQuery?.value.toLowerCase() || '';
         const batchLimit = limit + 1;
         

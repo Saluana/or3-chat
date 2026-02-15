@@ -117,10 +117,18 @@ export const memoryJobProvider: BackgroundJobProvider = {
         const activeCount = Array.from(jobs.values()).filter(
             (j) => j.status === 'streaming'
         ).length;
+        const activeCountForUser = Array.from(jobs.values()).filter(
+            (j) => j.status === 'streaming' && j.userId === params.userId
+        ).length;
 
         if (activeCount >= config.maxConcurrentJobs) {
             throw new Error(
                 `Max concurrent background jobs reached (${config.maxConcurrentJobs})`
+            );
+        }
+        if (activeCountForUser >= config.maxConcurrentJobsPerUser) {
+            throw new Error(
+                `Max concurrent background jobs per user reached (${config.maxConcurrentJobsPerUser})`
             );
         }
 
@@ -136,6 +144,9 @@ export const memoryJobProvider: BackgroundJobProvider = {
             chunksReceived: 0,
             startedAt: Date.now(),
             abortController: new AbortController(),
+            kind: params.kind ?? 'chat',
+            tool_calls: params.tool_calls ?? undefined,
+            workflow_state: params.workflow_state ?? undefined,
         };
 
         jobs.set(id, job);
@@ -166,11 +177,17 @@ export const memoryJobProvider: BackgroundJobProvider = {
         if (update.chunksReceived !== undefined) {
             job.chunksReceived = update.chunksReceived;
         }
+        if (update.tool_calls !== undefined) {
+            job.tool_calls = update.tool_calls;
+        }
+        if (update.workflow_state !== undefined) {
+            job.workflow_state = update.workflow_state;
+        }
     },
 
     async completeJob(jobId: string, finalContent: string): Promise<void> {
         const job = jobs.get(jobId);
-        if (!job) return;
+        if (!job || job.status !== 'streaming') return;
 
         job.status = 'complete';
         job.content = finalContent;

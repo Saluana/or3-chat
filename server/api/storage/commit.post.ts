@@ -5,14 +5,14 @@
  * Finalizes a file upload by linking a storage blob to a workspace.
  *
  * Responsibilities:
- * - Proxy the `storage.commitUpload` mutation to the backend provider (Convex).
+ * - Dispatches to registered StorageGatewayAdapter.
  * - Enforce `workspace.write` permissions.
  * - Enforce rate limits (`storage:commit`).
  * - Record analytics metrics.
  *
  * Architecture:
  * - Uses SSR Auth Gateway pattern.
- * - Backend agnostic (delegates via Gateway Client).
+ * - Backend agnostic (delegates via registry).
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import { z } from 'zod';
@@ -20,13 +20,7 @@ import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../utils/storage/is-storage-enabled';
-import { api } from '~~/convex/_generated/api';
-import type { Id } from '~~/convex/_generated/dataModel';
-import {
-    getClerkProviderToken,
-    getConvexGatewayClient,
-} from '../../utils/sync/convex-gateway';
-import { CONVEX_JWT_TEMPLATE } from '~~/shared/cloud/provider-ids';
+import { getActiveStorageGatewayAdapter } from '../../storage/gateway/registry';
 import { recordUploadComplete } from '../../utils/storage/metrics';
 import {
     checkSyncRateLimit,
@@ -56,7 +50,7 @@ const BodySchema = z.object({
  * Behavior:
  * 1. Validates Session & Permission (`workspace.write`).
  * 2. Checks Rate Limit.
- * 3. Calls backend mutation to store metadata.
+ * 3. Dispatches to adapter to store metadata.
  * 4. Records completion metric.
  *
  * Errors:
@@ -96,25 +90,18 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const token = await getClerkProviderToken(event, CONVEX_JWT_TEMPLATE);
-    if (!token) {
-        throw createError({ statusCode: 401, statusMessage: 'Missing provider token' });
+    // Get storage gateway adapter from registry
+    const adapter = getActiveStorageGatewayAdapter();
+    if (!adapter) {
+        throw createError({ statusCode: 500, statusMessage: 'Storage adapter not configured' });
     }
 
-    const client = getConvexGatewayClient(event, token);
-    await client.mutation(api.storage.commitUpload, {
-        workspace_id: body.data.workspace_id as Id<'workspaces'>,
-        hash: body.data.hash,
-        storage_id: body.data.storage_id as Id<'_storage'>,
-        storage_provider_id: body.data.storage_provider_id,
-        mime_type: body.data.mime_type,
-        size_bytes: body.data.size_bytes,
-        name: body.data.name,
-        kind: body.data.kind,
-        width: body.data.width,
-        height: body.data.height,
-        page_count: body.data.page_count,
-    });
+    // Check if adapter supports commit
+    if (adapter.commit) {
+        // Dispatch to adapter
+        await adapter.commit(event, body.data);
+    }
+    // If adapter doesn't support commit, it's a no-op (files are committed on upload)
 
     recordSyncRequest(userId, 'storage:commit');
     recordUploadComplete(body.data.size_bytes);

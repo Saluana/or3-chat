@@ -1,3 +1,35 @@
+/**
+ * @module app/core/theme/useUserThemeOverrides
+ *
+ * Purpose:
+ * Vue composable for reading, writing, and applying user theme overrides.
+ * Manages a per-mode (light/dark) override store backed by localStorage
+ * with reactive application to the DOM.
+ *
+ * Behavior:
+ * - On first use, loads stored overrides from localStorage and applies them
+ * - Watches for HTML class mutations to detect light/dark mode switches
+ * - `set()` deep-merges a patch into the current mode's overrides, validates,
+ *   persists, and re-applies to the DOM
+ * - `reset()` / `resetAll()` reverts overrides to empty defaults
+ * - `switchMode()` changes the active color mode and re-applies
+ * - `reapply()` forces re-application without changing overrides
+ *
+ * Constraints:
+ * - Client-only (guards via `isBrowser()`)
+ * - HMR-safe singleton via `globalThis.__or3UserThemeOverrides`
+ * - Typography font size is validated to 14-24 px range
+ * - Background opacities are clamped to 0-1
+ * - Quota exceeded errors are caught and surfaced via toast
+ *
+ * Non-goals:
+ * - Does not manage the base theme registry (see theme plugin)
+ * - Does not handle theme file compilation (see scripts/theme-compiler)
+ *
+ * @see core/theme/apply-merged-theme for DOM application logic
+ * @see core/theme/user-overrides-types for the persisted shape
+ * @see core/theme/backgrounds for blob URL lifecycle management
+ */
 import { ref, watch, computed } from 'vue';
 import type { UserThemeOverrides } from './user-overrides-types';
 import { EMPTY_USER_OVERRIDES } from './user-overrides-types';
@@ -86,6 +118,19 @@ function saveToStorage(mode: 'light' | 'dark', overrides: UserThemeOverrides) {
     }
 }
 
+/**
+ * Purpose:
+ * Provide a reactive, persisted store of user theme overrides.
+ *
+ * Behavior:
+ * - Loads per-mode overrides from localStorage on first use
+ * - Applies overrides to the DOM via `applyMergedTheme`
+ * - Persists updates and supports reset operations
+ *
+ * Constraints:
+ * - Client-only; returns a usable API but does not read/write storage on SSR
+ * - Uses a global singleton for HMR and multiple component consumers
+ */
 export function useUserThemeOverrides() {
     const current = computed<UserThemeOverrides>(() => {
         const lightValue = store.light.value;

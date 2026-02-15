@@ -1,11 +1,24 @@
 import { watch } from 'vue';
 import { setActiveWorkspaceDb } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { resolveClientAuthStatus } from '~/composables/auth/useClientAuthStatus.client';
 import { useWorkspaceManager } from '~/composables/workspace/useWorkspaceManager';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { cleanupHookBridge } from '~/core/sync/hook-bridge';
 import { cleanupSubscriptionManager } from '~/core/sync/subscription-manager';
 import { logoutCleanup } from '~/utils/logout-cleanup';
+
+async function shouldRunLogoutCleanup(
+    authenticated: boolean | undefined
+): Promise<boolean> {
+    if (authenticated) return false;
+    const status = await resolveClientAuthStatus();
+    if (!status.ready) return false;
+    // Unknown auth state (no resolver or provider still booting) is treated as
+    // transient; do not run destructive logout cleanup in this case.
+    if (status.authenticated === undefined) return false;
+    return !status.authenticated;
+}
 
 export default defineNuxtPlugin(async () => {
     if (import.meta.server) return;
@@ -20,7 +33,7 @@ export default defineNuxtPlugin(async () => {
     const nuxtApp = useNuxtApp();
 
     await refresh();
-    if (!data.value?.session?.authenticated) {
+    if (await shouldRunLogoutCleanup(data.value?.session?.authenticated)) {
         await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
     }
 
@@ -46,7 +59,11 @@ export default defineNuxtPlugin(async () => {
     watch(
         () => data.value?.session,
         async (newSession, oldSession) => {
-            if (oldSession?.authenticated && !newSession?.authenticated) {
+            if (
+                oldSession?.authenticated &&
+                !newSession?.authenticated &&
+                (await shouldRunLogoutCleanup(newSession?.authenticated))
+            ) {
                 await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
             }
         }

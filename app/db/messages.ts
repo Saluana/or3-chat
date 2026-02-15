@@ -17,7 +17,13 @@ import Dexie from 'dexie';
 import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { newId, nowSec, parseOrThrow, nextClock } from './util';
+import {
+    newId,
+    nowSec,
+    parseOrThrow,
+    nextClock,
+    getWriteTxTableNames,
+} from './util';
 import { generateHLC } from '../core/sync/hlc';
 import {
     MessageCreateSchema,
@@ -95,11 +101,14 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
         entity: toMessageEntity(value),
         tableName: 'messages',
     });
-    await dbTry(
-        () => getDb().messages.put(value),
-        { op: 'write', entity: 'messages', action: 'create' },
-        { rethrow: true }
-    );
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
+        await dbTry(
+            () => db.messages.put(value),
+            { op: 'write', entity: 'messages', action: 'create' },
+            { rethrow: true }
+        );
+    });
     await hooks.doAction('db.messages.create:action:after', {
         entity: toMessageEntity(value),
         tableName: 'messages',
@@ -127,28 +136,31 @@ export async function upsertMessage(value: Message): Promise<void> {
         value
     );
     const validated = parseOrThrow(MessageSchema, filtered);
-    const existing = await dbTry(() => getDb().messages.get(validated.id), {
-        op: 'read',
-        entity: 'messages',
-        action: 'get',
-    });
-    const next = {
-        ...validated,
-        clock: nextClock(existing?.clock ?? validated.clock),
-        hlc: validated.hlc ?? generateHLC(),
-    };
-    await hooks.doAction('db.messages.upsert:action:before', {
-        entity: toMessageEntity(next),
-        tableName: 'messages',
-    });
-    await dbTry(
-        () => getDb().messages.put(next),
-        { op: 'write', entity: 'messages', action: 'upsert' },
-        { rethrow: true }
-    );
-    await hooks.doAction('db.messages.upsert:action:after', {
-        entity: toMessageEntity(next),
-        tableName: 'messages',
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
+        const existing = await dbTry(() => db.messages.get(validated.id), {
+            op: 'read',
+            entity: 'messages',
+            action: 'get',
+        });
+        const next = {
+            ...validated,
+            clock: nextClock(existing?.clock ?? validated.clock),
+            hlc: validated.hlc ?? generateHLC(),
+        };
+        await hooks.doAction('db.messages.upsert:action:before', {
+            entity: toMessageEntity(next),
+            tableName: 'messages',
+        });
+        await dbTry(
+            () => db.messages.put(next),
+            { op: 'write', entity: 'messages', action: 'upsert' },
+            { rethrow: true }
+        );
+        await hooks.doAction('db.messages.upsert:action:after', {
+            entity: toMessageEntity(next),
+            tableName: 'messages',
+        });
     });
 }
 
@@ -239,8 +251,9 @@ export function messageByStream(streamId: string) {
  */
 export async function softDeleteMessage(id: string): Promise<void> {
     const hooks = useHooks();
-    await getDb().transaction('rw', getDb().messages, async () => {
-        const m = await dbTry(() => getDb().messages.get(id), {
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
+        const m = await dbTry(() => db.messages.get(id), {
             op: 'read',
             entity: 'messages',
             action: 'get',
@@ -253,7 +266,7 @@ export async function softDeleteMessage(id: string): Promise<void> {
         });
         await dbTry(
             () =>
-                getDb().messages.put({
+                db.messages.put({
                     ...m,
                     deleted: true,
                     updated_at: nowSec(),
@@ -285,25 +298,33 @@ export async function softDeleteMessage(id: string): Promise<void> {
  */
 export async function hardDeleteMessage(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => getDb().messages.get(id), {
-        op: 'read',
-        entity: 'messages',
-        action: 'get',
-    });
-    await hooks.doAction('db.messages.delete:action:hard:before', {
-        entity: toMessageEntity(existing!),
-        id,
-        tableName: 'messages',
-    });
-    await dbTry(() => getDb().messages.delete(id), {
-        op: 'write',
-        entity: 'messages',
-        action: 'hardDelete',
-    });
-    await hooks.doAction('db.messages.delete:action:hard:after', {
-        entity: toMessageEntity(existing!),
-        id,
-        tableName: 'messages',
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages', { includeTombstones: true }),
+        async () => {
+        const existing = await dbTry(() => db.messages.get(id), {
+            op: 'read',
+            entity: 'messages',
+            action: 'get',
+        });
+        if (!existing) return;
+
+        await hooks.doAction('db.messages.delete:action:hard:before', {
+            entity: toMessageEntity(existing),
+            id,
+            tableName: 'messages',
+        });
+        await dbTry(() => db.messages.delete(id), {
+            op: 'write',
+            entity: 'messages',
+            action: 'hardDelete',
+        });
+        await hooks.doAction('db.messages.delete:action:hard:after', {
+            entity: toMessageEntity(existing),
+            id,
+            tableName: 'messages',
+        });
     });
 }
 
@@ -323,7 +344,11 @@ export async function hardDeleteMessage(id: string): Promise<void> {
  */
 export async function appendMessage(input: MessageCreate): Promise<Message> {
     const hooks = useHooks();
-    return getDb().transaction('rw', getDb().messages, getDb().threads, async () => {
+    const db = getDb();
+    return db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages', { include: ['threads'] }),
+        async () => {
         // Handle file_hashes array serialization
         const processedInput = { ...input };
         if (hasFileHashesArray(processedInput)) {
@@ -334,7 +359,7 @@ export async function appendMessage(input: MessageCreate): Promise<Message> {
         await hooks.doAction('db.messages.append:action:before', value);
         // If index not set, compute next sparse index in thread
         if (value.index === undefined) {
-            const last = await getDb().messages
+            const last = await db.messages
                 .where('[thread_id+index]')
                 .between(
                     [value.thread_id, Dexie.minKey],
@@ -347,11 +372,11 @@ export async function appendMessage(input: MessageCreate): Promise<Message> {
             ...value,
             clock: nextClock(value.clock),
         });
-        await getDb().messages.put(finalized);
-        const t = await getDb().threads.get(value.thread_id);
+        await db.messages.put(finalized);
+        const t = await db.threads.get(value.thread_id);
         if (t) {
             const now = nowSec();
-            await getDb().threads.put({
+            await db.threads.put({
                 ...t,
                 last_message_at: now,
                 updated_at: now,
@@ -381,19 +406,23 @@ export async function moveMessage(
     toThreadId: string
 ): Promise<void> {
     const hooks = useHooks();
-    await getDb().transaction('rw', getDb().messages, getDb().threads, async () => {
-        const m = await getDb().messages.get(messageId);
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages', { include: ['threads'] }),
+        async () => {
+        const m = await db.messages.get(messageId);
         if (!m) return;
         await hooks.doAction('db.messages.move:action:before', {
             message: m,
             toThreadId,
         });
-        const last = await getDb().messages
+        const last = await db.messages
             .where('[thread_id+index]')
             .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
             .last();
         const nextIdx = last ? last.index + 1000 : 1000;
-        await getDb().messages.put({
+        await db.messages.put({
             ...m,
             thread_id: toThreadId,
             index: nextIdx,
@@ -402,9 +431,9 @@ export async function moveMessage(
         });
 
         const now = nowSec();
-        const t = await getDb().threads.get(toThreadId);
+        const t = await db.threads.get(toThreadId);
         if (t)
-            await getDb().threads.put({
+            await db.threads.put({
                 ...t,
                 last_message_at: now,
                 updated_at: now,
@@ -436,19 +465,23 @@ export async function copyMessage(
     toThreadId: string
 ): Promise<void> {
     const hooks = useHooks();
-    await getDb().transaction('rw', getDb().messages, getDb().threads, async () => {
-        const m = await getDb().messages.get(messageId);
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages', { include: ['threads'] }),
+        async () => {
+        const m = await db.messages.get(messageId);
         if (!m) return;
         await hooks.doAction('db.messages.copy:action:before', {
             message: m,
             toThreadId,
         });
-        const last = await getDb().messages
+        const last = await db.messages
             .where('[thread_id+index]')
             .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
             .last();
         const nextIdx = last ? last.index + 1000 : 1000;
-        await getDb().messages.put({
+        await db.messages.put({
             ...m,
             id: newId(),
             thread_id: toThreadId,
@@ -459,9 +492,9 @@ export async function copyMessage(
         });
 
         const now = nowSec();
-        const t = await getDb().threads.get(toThreadId);
+        const t = await db.threads.get(toThreadId);
         if (t)
-            await getDb().threads.put({
+            await db.threads.put({
                 ...t,
                 last_message_at: now,
                 updated_at: now,
@@ -493,10 +526,14 @@ export async function insertMessageAfter(
     input: Omit<MessageCreate, 'index'>
 ): Promise<Message> {
     const hooks = useHooks();
-    return getDb().transaction('rw', getDb().messages, getDb().threads, async () => {
-        const after = await getDb().messages.get(afterMessageId);
+    const db = getDb();
+    return db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages', { include: ['threads'] }),
+        async () => {
+        const after = await db.messages.get(afterMessageId);
         if (!after) throw new Error('after message not found');
-        const next = await getDb().messages
+        const next = await db.messages
             .where('[thread_id+index]')
             .above([after.thread_id, after.index])
             .first();
@@ -529,11 +566,11 @@ export async function insertMessageAfter(
             ...value,
             clock: nextClock(value.clock),
         });
-        await getDb().messages.put(finalized);
-        const t = await getDb().threads.get(after.thread_id);
+        await db.messages.put(finalized);
+        const t = await db.threads.get(after.thread_id);
         if (t) {
             const now = nowSec();
-            await getDb().threads.put({
+            await db.threads.put({
                 ...t,
                 last_message_at: now,
                 updated_at: now,
@@ -564,13 +601,14 @@ export async function normalizeThreadIndexes(
     step = 1000
 ): Promise<void> {
     const hooks = useHooks();
-    await getDb().transaction('rw', getDb().messages, async () => {
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
         await hooks.doAction('db.messages.normalize:action:before', {
             threadId,
             start,
             step,
         });
-        const msgs = await getDb().messages
+        const msgs = await db.messages
             .where('[thread_id+index]')
             .between([threadId, Dexie.minKey], [threadId, Dexie.maxKey])
             .toArray();
@@ -589,7 +627,7 @@ export async function normalizeThreadIndexes(
             idx += step;
         }
         if (updates.length > 0) {
-            await getDb().messages.bulkPut(updates);
+            await db.messages.bulkPut(updates);
         }
         await hooks.doAction('db.messages.normalize:action:after', {
             threadId,

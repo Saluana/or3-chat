@@ -1,20 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { WorkflowEditor } from 'or3-workflow-core';
 import { NodePalette, NodeInspector } from 'or3-workflow-vue';
 import type { TabsItem } from '#ui/types';
-import {
-    useSidebarMultiPane,
-    useSidebarPostsApi,
-} from '~/composables/sidebar/useSidebarEnvironment';
+import { useSidebarMultiPane } from '~/composables/sidebar/useSidebarEnvironment';
 
 const emit = defineEmits<{
     (e: 'close-sidebar'): void;
 }>();
 import {
     getEditorForPane,
-    type WorkflowPost,
-    useWorkflowsCrud,
+    useWorkflowList,
 } from '../composables/useWorkflows';
 import { useWorkflowSidebarControls } from '../composables/useWorkflowSidebarControls';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
@@ -31,9 +27,6 @@ interface WorkflowMetaWithDescription {
 const multiPane = useSidebarMultiPane();
 const { activePanel, setPanel } = useWorkflowSidebarControls();
 const toolRegistry = useToolRegistry();
-const panePluginApi = useSidebarPostsApi();
-const postApi = panePluginApi?.posts ?? null;
-const { listWorkflows } = useWorkflowsCrud(postApi);
 const or3Config = useOr3Config();
 const canEdit = computed(
     () =>
@@ -89,24 +82,11 @@ const availableTools = computed(() =>
     }))
 );
 
-const subflowWorkflows = ref<WorkflowPost[]>([]);
-const subflowLoading = ref(false);
-const subflowError = ref<string | null>(null);
-
-const loadSubflowWorkflows = async () => {
-    if (subflowLoading.value) return;
-    subflowLoading.value = true;
-    subflowError.value = null;
-
-    const result = await listWorkflows();
-    if (result.ok) {
-        subflowWorkflows.value = result.workflows;
-    } else {
-        subflowError.value = result.error;
-    }
-
-    subflowLoading.value = false;
-};
+const {
+    workflows: subflowWorkflows,
+    loading: subflowLoading,
+    error: subflowError,
+} = useWorkflowList();
 
 const availableSubflows = computed(() =>
     subflowWorkflows.value.map((workflow) => ({
@@ -118,16 +98,11 @@ const availableSubflows = computed(() =>
     }))
 );
 
-onMounted(() => {
-    void loadSubflowWorkflows();
-});
-
 watch(
     () => activePanel.value,
     (panel) => {
         if (panel === 'inspector') {
             editorRefresh.value += 1;
-            void loadSubflowWorkflows();
         }
     }
 );

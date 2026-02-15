@@ -5,7 +5,7 @@
  */
 
 import { defineNuxtPlugin } from '#app';
-import { onScopeDispose } from 'vue';
+import { onScopeDispose, getCurrentScope } from 'vue';
 import { useToolRegistry, defineTool } from '~/utils/chat/tools-public';
 
 export default defineNuxtPlugin(() => {
@@ -130,8 +130,14 @@ export default defineNuxtPlugin(() => {
         { enabled: false }
     );
 
-    onScopeDispose(() => {
+    const scope = getCurrentScope();
+    const cleanup = () => {
         unregisterTool('add_numbers');
         unregisterTool('coingecko_price');
-    });
+    };
+    if (scope) {
+        onScopeDispose(cleanup);
+    } else if (import.meta.hot) {
+        import.meta.hot.dispose(cleanup);
+    }
 });

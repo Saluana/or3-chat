@@ -1,5 +1,5 @@
 import { reactive } from 'vue';
-import { useHooks } from '../../core/hooks/useHooks';
+import { useHooks } from '~/core/hooks/useHooks';
 
 // In-memory map: paneId -> pending prompt id (applied on first thread creation)
 const pendingByPane: Record<string, string | null> = reactive({});
@@ -56,11 +56,6 @@ export function setupPanePromptCleanup() {
             console.warn('[usePanePrompt] Failed to setup cleanup hook:', error);
         }
     }
-}
-
-// Auto-setup on client
-if (import.meta.client) {
-    setupPanePromptCleanup();
 }
 
 /**

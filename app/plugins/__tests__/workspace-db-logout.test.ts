@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { registerClientAuthStatusResolver } from '~/composables/auth/useClientAuthStatus.client';
 
 const logoutCleanup = vi.fn(async () => undefined);
 
@@ -41,6 +42,9 @@ vi.mock('vue', async () => {
 
 describe('workspace logout cleanup plugin', () => {
     beforeEach(() => {
+        vi.resetModules();
+        logoutCleanup.mockClear();
+        sessionState.value.session = null;
         (globalThis as typeof globalThis & {
             defineNuxtPlugin?: (plugin: () => unknown) => unknown;
             useRuntimeConfig?: () => { public: { ssrAuthEnabled: boolean } };
@@ -56,12 +60,32 @@ describe('workspace logout cleanup plugin', () => {
         }).useNuxtApp = () => ({
             provide: vi.fn(),
         });
+        registerClientAuthStatusResolver(() => ({
+            ready: true,
+            authenticated: undefined,
+        }));
     });
 
-    it('clears workspace DBs when session is unauthenticated on load', async () => {
-        logoutCleanup.mockClear();
-        sessionState.value.session = null;
+    it('does not clear workspace DBs when auth state is unknown on load', async () => {
+        await import('~/plugins/00-workspace-db.client');
+        expect(logoutCleanup).toHaveBeenCalledTimes(0);
+    });
+
+    it('clears workspace DBs when session is unauthenticated and resolver confirms logout', async () => {
+        registerClientAuthStatusResolver(() => ({
+            ready: true,
+            authenticated: false,
+        }));
         await import('~/plugins/00-workspace-db.client');
         expect(logoutCleanup).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not clear workspace DBs when Clerk still has an active session', async () => {
+        registerClientAuthStatusResolver(() => ({
+            ready: true,
+            authenticated: true,
+        }));
+        await import('~/plugins/00-workspace-db.client');
+        expect(logoutCleanup).toHaveBeenCalledTimes(0);
     });
 });

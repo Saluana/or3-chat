@@ -14,6 +14,7 @@ describe('stopBackgroundJobTracking', () => {
             threadId: 'thread-1',
             messageId: 'msg-1',
             status: 'streaming',
+            lastWorkflowVersion: -1,
             lastContent: '',
             lastPersistedLength: 0,
             lastPersistAt: 0,

@@ -11,7 +11,7 @@ export type {
     ExtendedToolDefinition,
     RegisteredTool,
 } from './tool-registry';
-export type { ToolDefinition, ToolCall } from './types';
+export type { ToolDefinition, ToolCall, ToolRuntime } from './types';
 
 /**
  * `defineTool`

@@ -1,4 +1,4 @@
-import { getRequestHeaders, type H3Event } from 'h3';
+import { getRequestIP, type H3Event } from 'h3';
 
 /**
  * Rate limiting for admin login attempts.
@@ -14,6 +14,10 @@ const MAX_ATTEMPTS = 5;
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Clean up every 5 minutes
 const MAX_STORE_SIZE = 10000; // Bound memory usage - evict oldest when full
 
+function isRateLimitDisabled(): boolean {
+    return process.env.DISABLE_RATE_LIMIT === '1';
+}
+
 interface RateLimitEntry {
     count: number;
     windowStart: number;
@@ -23,19 +27,20 @@ interface RateLimitEntry {
 const rateLimitStore = new Map<string, RateLimitEntry>();
 
 // Periodic cleanup to prevent unbounded memory growth
-setInterval(() => {
+// Use unref() to allow process to exit cleanly
+const cleanupInterval = setInterval(() => {
     const now = Date.now();
-    let cleaned = 0;
     for (const [key, entry] of rateLimitStore) {
         if (now - entry.windowStart > WINDOW_MS) {
             rateLimitStore.delete(key);
-            cleaned++;
         }
     }
-    if (cleaned > 0) {
-        console.log(`[rate-limit] Cleaned up ${cleaned} expired rate limit entries`);
-    }
 }, CLEANUP_INTERVAL_MS);
+
+// Allow process to exit even if interval is pending
+if (typeof cleanupInterval.unref === 'function') {
+    cleanupInterval.unref();
+}
 
 /**
  * Generate the rate limit key from IP and username.
@@ -58,7 +63,7 @@ export function checkRateLimit(
     remaining: number;
     resetAt: number;
 } {
-    if (process.env.NODE_ENV !== 'production') {
+    if (isRateLimitDisabled()) {
         return {
             allowed: true,
             remaining: MAX_ATTEMPTS,
@@ -154,13 +159,7 @@ export function clearRateLimit(ip: string, username: string): void {
  * Falls back to 'unknown' if cannot be determined.
  */
 export function getClientIp(event: H3Event): string {
-    const headers = getRequestHeaders(event);
-    const forwarded = headers['x-forwarded-for'];
-    if (forwarded) {
-        const firstIp = forwarded.split(',')[0];
-        return firstIp?.trim() ?? 'unknown';
-    }
-    return headers['x-real-ip'] ?? 'unknown';
+    return getRequestIP(event, { xForwardedFor: true }) ?? 'unknown';
 }
 
 /**
@@ -179,6 +178,14 @@ export function checkGenericRateLimit(
     remaining: number;
     resetAt: number;
 } {
+    if (isRateLimitDisabled()) {
+        return {
+            allowed: true,
+            remaining: 20,
+            resetAt: Date.now() + 60 * 1000,
+        };
+    }
+
     const key = `${category}:${ip}`;
     const now = Date.now();
     const entry = rateLimitStore.get(key);

@@ -11,6 +11,8 @@ describe('Rate Limiter', () => {
 
     beforeEach(() => {
         resetSyncRateLimits();
+        // Rate limiter bypasses checks in non-production; mock to production for tests
+        vi.stubEnv('NODE_ENV', 'production');
     });
 
     it('should allow requests within limit for storage:upload', () => {

@@ -840,7 +840,8 @@ export async function getConversationHistory(
     }
 
     try {
-        const { db } = await import('~/db');
+        const { getDb } = await import('~/db/client');
+        const db = getDb();
         const { isWorkflowMessageData } = await import(
             '~/utils/chat/workflow-types'
         );

@@ -38,10 +38,6 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    // Debug: Check if cookie was received
-    const receivedCookie = getCookie(event, 'or3_admin');
-    console.log('[admin:logout] Received cookie:', receivedCookie ? 'yes' : 'no');
-
     // Clear the cookie
     clearAdminCookie(event);
 

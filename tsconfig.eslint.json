@@ -1,0 +1,50 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "jsx": "preserve",
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["./app/*"],
+      "@/*": ["./app/*"],
+      "~~/*": ["./*"]
+    },
+    "types": ["node"]
+  },
+  "include": [
+    "app/**/*.ts",
+    "server/**/*.ts",
+    "shared/**/*.ts",
+    "convex/**/*.ts",
+    "config.or3.ts",
+    "config.or3cloud.ts",
+    "or3.providers.generated.ts"
+  ],
+  "exclude": [
+    ".nuxt/**",
+    ".output/**",
+    "node_modules/**",
+    "dist/**",
+    "public/**",
+    "tests/**",
+    "types/**",
+    "utils/**",
+    "scripts/**",
+    "app/plugins/**",
+    "plugins/**",
+    "convex/_generated/**",
+    "convex/auth.config.ts",
+    "*.config.ts",
+    "*.config.mjs",
+    "app.config.ts",
+    "nuxt.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts"
+  ]
+}

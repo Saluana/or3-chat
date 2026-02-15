@@ -119,7 +119,11 @@ async function goHome() {
 
 onMounted(async () => {
     log('mounted at', window.location.href, 'referrer:', document.referrer);
-    const code = route.query.code;
+    const code =
+        route.query.code ||
+        sessionStorage.getItem('openrouter_auth_code') ||
+        localStorage.getItem('openrouter_auth_code') ||
+        '';
     const state = route.query.state;
     // Primary in sessionStorage (original), fallback to localStorage if a reload or restore lost it.
     const verifier =
@@ -237,6 +241,7 @@ onMounted(async () => {
         }
         log('clearing session markers (verifier/state/method)');
         const keys = [
+            'openrouter_auth_code',
             'openrouter_code_verifier',
             'openrouter_state',
             'openrouter_code_method',

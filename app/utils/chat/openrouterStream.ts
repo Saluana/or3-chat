@@ -10,16 +10,18 @@
  * - Supports SSR background streaming jobs with polling and SSE helpers
  *
  * Constraints:
- * - Server routes are required when SSR auth background streaming is enabled
+ * - Server routes are required when SSR auth is enabled and no client key is available
  * - Client fallback requires an API key
  */
 
 import { useRuntimeConfig } from '#imports';
-import type { ToolDefinition } from './types';
+import type { ToolDefinition, ToolChoice } from './types';
+import type { WorkflowMessageData } from './workflow-types';
 import {
     parseOpenRouterSSE,
     type ORStreamEvent,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
+import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
 
 // Note: Streaming requires direct body access which the SDK doesn't expose.
 // Per design document, we keep raw fetch for streaming but use SDK for non-streaming calls.
@@ -49,10 +51,11 @@ type OpenRouterRequestBody = {
     stream: true;
     reasoning?: unknown;
     tools?: ToolDefinition[];
-    tool_choice?: 'auto';
+    tool_choice?: ToolChoice;
     _background?: true;
     _threadId?: string;
     _messageId?: string;
+    _toolRuntime?: Record<string, string>;
 };
 
 // Cache key for detecting static build (no server routes)
@@ -117,8 +120,9 @@ function setServerRouteAvailable(available: boolean): void {
 }
 
 function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
-    const { ui: _ui, ...rest } = tool as ToolDefinition & {
+    const { ui: _ui, runtime: _runtime, ...rest } = tool as ToolDefinition & {
         ui?: Record<string, unknown>;
+        runtime?: string;
     };
     return {
         ...rest,
@@ -141,6 +145,7 @@ export async function* openRouterStream(params: {
     orMessages: ORMessage[];
     modalities: string[];
     tools?: ToolDefinition[];
+    toolChoice?: ToolChoice;
     signal?: AbortSignal;
     reasoning?: unknown;
 }): AsyncGenerator<ORStreamEvent, void, unknown> {
@@ -148,17 +153,19 @@ export async function* openRouterStream(params: {
     const hasApiKey = Boolean(apiKey);
     const runtimeConfig = useRuntimeConfig() as {
         public: {
-            ssrAuthEnabled: boolean;
-            backgroundStreaming: { enabled: boolean };
+            ssrAuthEnabled?: boolean;
+            backgroundStreaming?: { enabled?: boolean };
+            openRouter?: { baseUrl?: string };
         };
     };
-    const allowClientFallback = hasApiKey === true;
-    const forceServerRoute = Boolean(
-        runtimeConfig.public.ssrAuthEnabled === true &&
-            runtimeConfig.public.backgroundStreaming.enabled === true &&
-            !allowClientFallback
+    const openRouterChatUrl = getOpenRouterChatCompletionsUrl(
+        runtimeConfig.public.openRouter?.baseUrl
     );
-    const shouldForceServerRoute = () => forceServerRoute;
+    const allowClientFallback = hasApiKey === true;
+    const isSsrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;
+    const forceServerRoute = Boolean(
+        isSsrAuthEnabled && !allowClientFallback
+    );
 
     const body: OpenRouterRequestBody = {
         model,
@@ -173,7 +180,7 @@ export async function* openRouterStream(params: {
 
     if (tools) {
         body.tools = tools.map(stripUiMetadata);
-        body.tool_choice = 'auto';
+        body.tool_choice = params.toolChoice ?? 'auto';
     }
 
     // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available
@@ -205,7 +212,7 @@ export async function* openRouterStream(params: {
                 // Server route not OK
                 if (forceServerRoute) {
                     throw new Error(
-                        'OpenRouter server route unavailable in SSR mode'
+                        'OpenRouter server route unavailable in SSR mode (/api/openrouter/stream)'
                     );
                 }
                 setServerRouteAvailable(false);
@@ -219,24 +226,15 @@ export async function* openRouterStream(params: {
                 );
             }
         } catch (error) {
-            if (
-                error instanceof Error &&
-                error.message.startsWith('OpenRouter proxy error')
-            ) {
-                throw error;
-            }
-            if (shouldForceServerRoute()) {
+            if (forceServerRoute) {
                 throw error instanceof Error
                     ? error
                     : new Error('OpenRouter server route failed in SSR mode');
             }
-            // Server route unavailable (404, network error, etc.); mark as unavailable and fall back
+            // Server route unavailable (404, network error, transient proxy errors, etc.);
+            // mark as unavailable and fall back to direct API when allowed.
             setServerRouteAvailable(false);
         }
-    }
-
-    if (shouldForceServerRoute()) {
-        throw new Error('OpenRouter server route required in SSR mode');
     }
 
     if (!hasApiKey) {
@@ -249,7 +247,7 @@ export async function* openRouterStream(params: {
     delete fallbackBody._threadId;
     delete fallbackBody._messageId;
 
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const resp = await fetch(openRouterChatUrl, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${apiKey}`,
@@ -342,6 +340,15 @@ export interface BackgroundJobStatus {
     content?: string;
     content_delta?: string;
     content_length?: number;
+    tool_calls?: Array<{
+        id?: string;
+        name: string;
+        status: 'loading' | 'complete' | 'error' | 'pending' | 'skipped';
+        args?: string;
+        result?: string;
+        error?: string;
+    }>;
+    workflow_state?: WorkflowMessageData;
 }
 
 /**
@@ -392,6 +399,8 @@ export function isBackgroundStreamingEnabled(): boolean {
     };
     const configEnabled = runtimeConfig.public?.backgroundStreaming?.enabled;
     if (configEnabled === false) return false;
+    // Explicit config should win over stale local cache.
+    if (configEnabled === true) return true;
     
     // Check cached result
     if (typeof localStorage !== 'undefined') {
@@ -399,8 +408,6 @@ export function isBackgroundStreamingEnabled(): boolean {
         if (cached === 'true') return true;
         if (cached === 'false') return false;
     }
-
-    if (configEnabled === true) return true;
 
     // Default: assume not available until first successful background request
     return false;
@@ -429,6 +436,8 @@ export async function startBackgroundStream(params: {
     messageId: string;
     reasoning?: unknown;
     tools?: ToolDefinition[];
+    toolChoice?: ToolChoice;
+    toolRuntime?: Record<string, string>;
 }): Promise<BackgroundStreamResult> {
     const body: OpenRouterRequestBody & {
         _background: true;
@@ -450,7 +459,10 @@ export async function startBackgroundStream(params: {
 
     if (params.tools) {
         body.tools = params.tools.map(stripUiMetadata);
-        body.tool_choice = 'auto';
+        body.tool_choice = params.toolChoice ?? 'auto';
+    }
+    if (params.toolRuntime) {
+        body._toolRuntime = params.toolRuntime;
     }
 
     const headers: Record<string, string> = {

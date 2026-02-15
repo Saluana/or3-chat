@@ -1,0 +1,873 @@
+/**
+ * @module shared/cloud/wizard/catalog
+ *
+ * Purpose:
+ * Defines the provider catalog, built-in presets, secret key lists,
+ * wizard-owned env keys, and default answer factory. This is the
+ * single source of provider metadata for the wizard engine.
+ *
+ * Responsibilities:
+ * - Provider descriptors with fields, dependencies, and implementation status
+ * - Built-in presets (`recommended` = Basic Auth + SQLite + FS;
+ *   `legacy-clerk-convex` = Clerk + Convex + Convex)
+ * - `SECRET_ANSWER_KEYS` list for redaction and preset exclusion
+ * - `WIZARD_OWNED_ENV_KEYS` whitelist for non-destructive env merging
+ * - `createDefaultAnswers()` factory for initializing sessions
+ *
+ * Non-responsibilities:
+ * - Provider runtime registration (handled by provider packages)
+ * - Validation logic (see validation.ts)
+ * - Env derivation (see derive.ts)
+ *
+ * Constraints:
+ * - The catalog is static metadata. Provider discovery is not dynamic in v1.
+ * - Local provider IDs (`custom`, `memory`, `redis`, `postgres`) are excluded
+ *   from module ID generation since they have no publishable package.
+ *
+ * @see types.ts for WizardProviderDescriptor shape
+ * @see planning/or3-cloud-launch-wizard/design.md for catalog design rationale
+ */
+import type {
+    WizardAnswers,
+    WizardMode,
+    WizardPreset,
+    WizardProviderDescriptor,
+} from './types';
+
+/** Available built-in theme identifiers for the theme selection step. */
+export const BUILTIN_THEMES = ['blank', 'retro'] as const;
+/**
+ * Answer keys that contain secrets.
+ * Used by `sanitizeAnswersForSession()` to strip secrets before persistence,
+ * and by `savePreset()` to exclude secrets from stored presets.
+ */
+export const SECRET_ANSWER_KEYS: Array<keyof WizardAnswers> = [
+    'basicAuthJwtSecret',
+    'basicAuthRefreshSecret',
+    'basicAuthBootstrapPassword',
+    'clerkSecretKey',
+    'openrouterInstanceApiKey',
+    'convexAdminJwtSecret',
+    'fsTokenSecret',
+    's3AccessKeyId',
+    's3SecretAccessKey',
+    's3SessionToken',
+    'convexSelfHostedAdminKey',
+];
+
+/**
+ * Provider IDs that are local/built-in and do not have a publishable
+ * `or3-provider-${id}` package. These are excluded from
+ * `or3.providers.generated.ts` module list generation.
+ */
+export const LOCAL_PROVIDER_IDS = new Set([
+    'custom',
+    'memory',
+    'redis',
+    'postgres',
+]);
+
+/**
+ * Complete whitelist of env var keys that the wizard is allowed to write.
+ * During env file merging, only these keys are updated; all other existing
+ * keys and comments in the env file are preserved.
+ *
+ * @see deriveWizardOwnedEnvUpdates for the merge logic
+ */
+export const WIZARD_OWNED_ENV_KEYS = [
+    'SSR_AUTH_ENABLED',
+    'AUTH_PROVIDER',
+    'OR3_AUTH_PROVIDER',
+    'OR3_GUEST_ACCESS_ENABLED',
+    'OR3_SYNC_ENABLED',
+    'OR3_CLOUD_SYNC_ENABLED',
+    'OR3_SYNC_PROVIDER',
+    'VITE_CONVEX_URL',
+    'CONVEX_SELF_HOSTED_URL',
+    'CONVEX_SELF_HOSTED_ADMIN_KEY',
+    'VITE_CONVEX_SITE_URL',
+    'OR3_STORAGE_ENABLED',
+    'OR3_CLOUD_STORAGE_ENABLED',
+    'NUXT_PUBLIC_STORAGE_PROVIDER',
+    'OR3_BASIC_AUTH_JWT_SECRET',
+    'OR3_BASIC_AUTH_REFRESH_SECRET',
+    'OR3_BASIC_AUTH_ACCESS_TTL_SECONDS',
+    'OR3_BASIC_AUTH_REFRESH_TTL_SECONDS',
+    'OR3_BASIC_AUTH_DB_PATH',
+    'OR3_BASIC_AUTH_BOOTSTRAP_EMAIL',
+    'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD',
+    'OR3_SQLITE_DB_PATH',
+    'OR3_SQLITE_PRAGMA_JOURNAL_MODE',
+    'OR3_SQLITE_PRAGMA_SYNCHRONOUS',
+    'OR3_SQLITE_ALLOW_IN_MEMORY',
+    'OR3_SQLITE_STRICT',
+    'OR3_STORAGE_FS_ROOT',
+    'OR3_STORAGE_FS_TOKEN_SECRET',
+    'OR3_STORAGE_FS_URL_TTL_SECONDS',
+    'OR3_STORAGE_S3_ENDPOINT',
+    'OR3_STORAGE_S3_REGION',
+    'OR3_STORAGE_S3_BUCKET',
+    'OR3_STORAGE_S3_ACCESS_KEY_ID',
+    'OR3_STORAGE_S3_SECRET_ACCESS_KEY',
+    'OR3_STORAGE_S3_SESSION_TOKEN',
+    'OR3_STORAGE_S3_FORCE_PATH_STYLE',
+    'OR3_STORAGE_S3_KEY_PREFIX',
+    'OR3_STORAGE_S3_URL_TTL_SECONDS',
+    'OR3_STORAGE_S3_REQUIRE_CHECKSUM',
+    'NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+    'NUXT_CLERK_SECRET_KEY',
+    'OPENROUTER_API_KEY',
+    'OR3_OPENROUTER_ALLOW_USER_OVERRIDE',
+    'OR3_OPENROUTER_REQUIRE_USER_KEY',
+    'OR3_SITE_NAME',
+    'OR3_DEFAULT_THEME',
+    'OR3_LOGO_URL',
+    'OR3_FAVICON_URL',
+    'OR3_WORKFLOWS_ENABLED',
+    'OR3_DOCUMENTS_ENABLED',
+    'OR3_BACKUP_ENABLED',
+    'OR3_MENTIONS_ENABLED',
+    'OR3_DASHBOARD_ENABLED',
+    'OR3_LIMITS_ENABLED',
+    'OR3_REQUESTS_PER_MINUTE',
+    'OR3_MAX_CONVERSATIONS',
+    'OR3_MAX_MESSAGES_PER_DAY',
+    'OR3_LIMITS_STORAGE_PROVIDER',
+    'OR3_ALLOWED_ORIGINS',
+    'OR3_FORCE_HTTPS',
+    'OR3_STRICT_CONFIG',
+    'OR3_TRUST_PROXY',
+    'OR3_FORWARDED_FOR_HEADER',
+] as const;
+
+/**
+ * Static provider catalog. Drives selection lists, provider-scoped
+ * prompt steps, and dependency install plans.
+ *
+ * v1 providers:
+ * - Auth: `basic-auth`, `clerk`
+ * - Sync: `sqlite`, `convex`
+ * - Storage: `fs`, `s3`, `convex`
+ *
+ * Future providers (e.g. `firebase`, `s3`) are added by extending
+ * this array and setting `implemented: true` once the runtime exists.
+ */
+export const providerCatalog: WizardProviderDescriptor[] = [
+    {
+        kind: 'auth',
+        id: 'basic-auth',
+        label: 'Basic Auth (Default)',
+        implemented: true,
+        docsUrl: '/cloud/provider-basic-auth',
+        dependencies: [
+            {
+                packageName: 'or3-provider-basic-auth',
+                reason: 'Password-based auth provider and UI adapter.',
+            },
+            {
+                packageName: 'better-sqlite3',
+                reason: 'Credential/session database used by basic-auth provider.',
+            },
+        ],
+        fields: [
+            {
+                key: 'basicAuthJwtSecret',
+                type: 'password',
+                label: 'Security key for login sessions',
+                help: 'A long random string (32+ characters) used to sign login tokens. Keep this secret!',
+                required: true,
+                secret: true,
+                tier: 'core',
+            },
+            {
+                key: 'basicAuthBootstrapEmail',
+                type: 'text',
+                label: 'Your admin email',
+                help: 'This will be the first admin account. You\'ll use it to log in after setup.',
+                required: true,
+                tier: 'core',
+            },
+            {
+                key: 'basicAuthBootstrapPassword',
+                type: 'password',
+                label: 'Your admin password',
+                help: 'Choose a strong password for your admin account.',
+                required: true,
+                secret: true,
+                tier: 'core',
+                validate: (value) => {
+                    const password = String(value ?? '').trim();
+                    if (password.length < 12) {
+                        return 'Admin password must be at least 12 characters.';
+                    }
+                    if (!/[A-Z]/.test(password)) {
+                        return 'Password must contain at least one uppercase letter.';
+                    }
+                    if (!/[a-z]/.test(password)) {
+                        return 'Password must contain at least one lowercase letter.';
+                    }
+                    if (!/[0-9]/.test(password)) {
+                        return 'Password must contain at least one number.';
+                    }
+                    return null;
+                },
+            },
+            {
+                key: 'basicAuthRefreshSecret',
+                type: 'password',
+                label: 'Refresh key (optional, press Enter to auto-generate)',
+                help: 'Used for long-lived sessions. If left blank, one will be derived from the main key.',
+                secret: true,
+                tier: 'advanced',
+            },
+            {
+                key: 'basicAuthAccessTtlSeconds',
+                type: 'number',
+                label: 'Session length in seconds (default: 900 = 15 minutes)',
+                help: 'How long before a user\'s session expires and they need to re-authenticate.',
+                defaultValue: 900,
+                tier: 'advanced',
+            },
+            {
+                key: 'basicAuthRefreshTtlSeconds',
+                type: 'number',
+                label: 'Remember-me length in seconds (default: 2592000 = 30 days)',
+                help: 'How long a user stays logged in if they have a "remember me" token.',
+                defaultValue: 2592000,
+                tier: 'advanced',
+            },
+            {
+                key: 'basicAuthDbPath',
+                type: 'text',
+                label: 'Where to store user accounts',
+                help: 'File path for the login database. The default location is fine for most setups.',
+                defaultValue: './.data/or3-basic-auth.sqlite',
+                tier: 'advanced',
+            },
+        ],
+    },
+    {
+        kind: 'auth',
+        id: 'clerk',
+        label: 'Clerk',
+        implemented: true,
+        docsUrl: '/cloud/provider-clerk',
+        dependencies: [
+            {
+                packageName: 'or3-provider-clerk',
+                reason: 'Clerk SSR auth provider and broker integration.',
+            },
+        ],
+        fields: [
+            {
+                key: 'clerkPublishableKey',
+                type: 'text',
+                label: 'Clerk Publishable Key',
+                help: 'Find this in your Clerk dashboard at clerk.com → API Keys.',
+                required: true,
+                tier: 'core',
+            },
+            {
+                key: 'clerkSecretKey',
+                type: 'password',
+                label: 'Clerk Secret Key',
+                help: 'The secret key from your Clerk dashboard. Never share this publicly.',
+                required: true,
+                secret: true,
+                tier: 'core',
+            },
+        ],
+    },
+    {
+        kind: 'sync',
+        id: 'sqlite',
+        label: 'SQLite (Default)',
+        implemented: true,
+        docsUrl: '/cloud/provider-sqlite',
+        dependencies: [
+            {
+                packageName: 'or3-provider-sqlite',
+                reason: 'SQLite sync + workspace store provider.',
+            },
+            {
+                packageName: 'better-sqlite3',
+                reason: 'SQLite runtime used by sync provider.',
+            },
+        ],
+        fields: [
+            {
+                key: 'sqliteDbPath',
+                type: 'text',
+                label: 'Where to store synced data',
+                help: 'File path for the sync database. Example: ./.data/or3-sync.sqlite',
+                required: true,
+                tier: 'core',
+            },
+            {
+                key: 'sqlitePragmaJournalMode',
+                type: 'text',
+                label: 'Journal mode (default: WAL)',
+                help: 'WAL is the recommended setting for best performance. Leave as-is unless you know what this does.',
+                defaultValue: 'WAL',
+                tier: 'advanced',
+            },
+            {
+                key: 'sqlitePragmaSynchronous',
+                type: 'text',
+                label: 'Sync mode (default: NORMAL)',
+                help: 'NORMAL is a good balance of speed and safety. Leave as-is unless you know what this does.',
+                defaultValue: 'NORMAL',
+                tier: 'advanced',
+            },
+            {
+                key: 'sqliteAllowInMemory',
+                type: 'boolean',
+                label: 'Allow in-memory database (testing only)',
+                help: 'Only enable this for automated tests. Data is lost when the server restarts.',
+                defaultValue: false,
+                tier: 'advanced',
+            },
+            {
+                key: 'sqliteStrict',
+                type: 'boolean',
+                label: 'Strict mode',
+                help: 'Enforces stricter type checking in the database. Off by default.',
+                defaultValue: false,
+                tier: 'advanced',
+            },
+        ],
+    },
+    {
+        kind: 'sync',
+        id: 'convex',
+        label: 'Convex',
+        implemented: true,
+        docsUrl: '/cloud/provider-convex',
+        dependencies: [
+            {
+                packageName: 'or3-provider-convex',
+                reason: 'Convex sync gateway and workspace store provider.',
+            },
+            {
+                packageName: 'convex',
+                reason: 'Convex CLI/runtime needed for `bunx convex dev --once` and generated types.',
+            },
+        ],
+        fields: [
+            {
+                key: 'convexUrl',
+                type: 'text',
+                label: 'Convex URL',
+                help: 'Your Convex deployment URL. Find it in your Convex dashboard.',
+                required: true,
+                tier: 'core',
+            },
+            {
+                key: 'convexSelfHostedAdminKey',
+                type: 'password',
+                label: 'Admin Key (only for self-hosted Convex)',
+                help: 'Only needed if you\'re running your own Convex server. Skip this for Convex Cloud.',
+                secret: true,
+                tier: 'advanced',
+            },
+            {
+                key: 'convexSelfHostedSiteUrl',
+                type: 'text',
+                label: 'Site URL (optional, self-hosted Convex only)',
+                help: 'Optional HTTP actions URL (example: http://provider.example.com:3211). Leave blank for Convex Cloud.',
+                tier: 'advanced',
+            },
+        ],
+    },
+    {
+        kind: 'storage',
+        id: 'fs',
+        label: 'Filesystem (Default)',
+        implemented: true,
+        docsUrl: '/cloud/provider-fs',
+        dependencies: [
+            {
+                packageName: 'or3-provider-fs',
+                reason: 'Filesystem-backed storage gateway provider.',
+            },
+        ],
+        fields: [
+            {
+                key: 'fsRoot',
+                type: 'text',
+                label: 'Upload folder (absolute path)',
+                help: 'Where uploaded files are saved on disk. Must be an absolute path. Example: /var/data/or3-files',
+                required: true,
+                tier: 'core',
+            },
+            {
+                key: 'fsTokenSecret',
+                type: 'password',
+                label: 'File access key',
+                help: 'A random string used to generate secure download links. Keep this secret!',
+                required: true,
+                secret: true,
+                tier: 'core',
+            },
+            {
+                key: 'fsUrlTtlSeconds',
+                type: 'number',
+                label: 'Download link expiry (default: 900 = 15 minutes)',
+                help: 'How long a download link stays valid before it expires.',
+                defaultValue: 900,
+                tier: 'advanced',
+            },
+        ],
+    },
+    {
+        kind: 'storage',
+        id: 's3',
+        label: 'S3 Compatible (AWS / R2 / MinIO)',
+        implemented: true,
+        docsUrl: '/cloud/provider-s3',
+        dependencies: [
+            {
+                packageName: 'or3-provider-s3',
+                reason: 'S3-compatible storage gateway provider (server-signed presigned URLs).',
+            },
+        ],
+        fields: [
+            {
+                key: 's3Endpoint',
+                type: 'text',
+                label: 'S3 endpoint URL (optional for AWS)',
+                help: 'Required for most S3-compatible hosts (MinIO, R2, B2). Example: https://<account>.r2.cloudflarestorage.com',
+                tier: 'advanced',
+            },
+            {
+                key: 's3Region',
+                type: 'text',
+                label: 'Region (default: us-east-1)',
+                help: 'AWS region, or a dummy region required by your S3 host. Most compat hosts accept "us-east-1".',
+                defaultValue: 'us-east-1',
+                required: true,
+                tier: 'core',
+            },
+            {
+                key: 's3Bucket',
+                type: 'text',
+                label: 'Bucket name',
+                help: 'Bucket where OR3 stores blob objects. Must allow PUT/GET/HEAD with CORS from your OR3 origin.',
+                required: true,
+                tier: 'core',
+            },
+            {
+                key: 's3AccessKeyId',
+                type: 'password',
+                label: 'Access key ID',
+                help: 'Server-only credential used to sign presigned URLs. Never exposed to the browser.',
+                required: true,
+                secret: true,
+                tier: 'core',
+            },
+            {
+                key: 's3SecretAccessKey',
+                type: 'password',
+                label: 'Secret access key',
+                help: 'Server-only credential used to sign presigned URLs. Never exposed to the browser.',
+                required: true,
+                secret: true,
+                tier: 'core',
+            },
+            {
+                key: 's3SessionToken',
+                type: 'password',
+                label: 'Session token (optional)',
+                help: 'Only needed for temporary credentials (STS). Leave blank for long-lived access keys.',
+                secret: true,
+                tier: 'advanced',
+            },
+            {
+                key: 's3ForcePathStyle',
+                type: 'boolean',
+                label: 'Force path-style URLs (MinIO/legacy)',
+                help: 'Enable this for MinIO or hosts that do not support virtual-hosted-style buckets.',
+                defaultValue: false,
+                tier: 'advanced',
+            },
+            {
+                key: 's3KeyPrefix',
+                type: 'text',
+                label: 'Key prefix (optional)',
+                help: 'Optional prefix within the bucket. Example: or3-storage',
+                tier: 'advanced',
+            },
+            {
+                key: 's3UrlTtlSeconds',
+                type: 'number',
+                label: 'Presigned URL TTL seconds (default: 900 = 15 minutes)',
+                help: 'How long presigned URLs stay valid. Keep this short.',
+                defaultValue: 900,
+                tier: 'advanced',
+            },
+            {
+                key: 's3RequireChecksum',
+                type: 'boolean',
+                label: 'Require checksum on upload (optional hardening)',
+                help: 'If enabled, uploads must include x-amz-checksum-sha256. Some S3-compatible hosts may not support this.',
+                defaultValue: false,
+                tier: 'advanced',
+            },
+        ],
+    },
+    {
+        kind: 'storage',
+        id: 'convex',
+        label: 'Convex',
+        implemented: true,
+        docsUrl: '/cloud/provider-convex',
+        dependencies: [
+            {
+                packageName: 'or3-provider-convex',
+                reason: 'Convex storage adapter.',
+            },
+            {
+                packageName: 'convex',
+                reason: 'Convex CLI/runtime needed for `bunx convex dev --once` and generated types.',
+            },
+        ],
+        fields: [],
+    },
+];
+
+/**
+ * Returns provider descriptors filtered to a specific kind that are
+ * marked as implemented. Used by the step engine to populate selection lists.
+ */
+export function listImplementedProviders(kind: WizardProviderDescriptor['kind']) {
+    return providerCatalog.filter((provider) => provider.kind === kind && provider.implemented);
+}
+
+/**
+ * Looks up a single provider descriptor by kind and ID.
+ * Returns `undefined` if no matching provider exists in the catalog.
+ */
+export function getProviderDescriptor(kind: WizardProviderDescriptor['kind'], id: string) {
+    return providerCatalog.find((provider) => provider.kind === kind && provider.id === id);
+}
+
+export function inferWizardModeFromPresetName(
+    presetName?: string
+): WizardMode {
+    if (presetName === 'legacy-clerk-convex' || presetName === 'clerk-convex') {
+        return 'preset-clerk-convex';
+    }
+    if (!presetName || presetName === 'recommended') {
+        return 'preset-local';
+    }
+    return 'custom';
+}
+
+export function isWizardMode(value: unknown): value is WizardMode {
+    return (
+        value === 'preset-local' ||
+        value === 'preset-clerk-convex' ||
+        value === 'custom'
+    );
+}
+
+export function normalizeWizardMode(
+    wizardMode: unknown,
+    presetName?: string
+): WizardMode {
+    if (isWizardMode(wizardMode)) {
+        return wizardMode;
+    }
+    return inferWizardModeFromPresetName(presetName);
+}
+
+export function applyWizardModeDefaults(
+    answers: WizardAnswers,
+    wizardMode: WizardMode
+): WizardAnswers {
+    switch (wizardMode) {
+        case 'preset-local':
+            return {
+                ...answers,
+                wizardMode: 'preset-local',
+                presetName: 'recommended',
+                ssrAuthEnabled: true,
+                authProvider: 'basic-auth',
+                syncEnabled: true,
+                syncProvider: 'sqlite',
+                storageEnabled: true,
+                storageProvider: 'fs',
+            };
+        case 'preset-clerk-convex':
+            return {
+                ...answers,
+                wizardMode: 'preset-clerk-convex',
+                presetName: 'legacy-clerk-convex',
+                ssrAuthEnabled: true,
+                authProvider: 'clerk',
+                syncEnabled: true,
+                syncProvider: 'convex',
+                storageEnabled: true,
+                storageProvider: 'convex',
+            };
+        case 'custom':
+        default:
+            return {
+                ...answers,
+                wizardMode: 'custom',
+            };
+    }
+}
+
+export function normalizeAdvancedToggles(
+    answers: WizardAnswers
+): WizardAnswers {
+    const allAdvancedEnabled = Boolean(answers.allAdvancedEnabled);
+    return {
+        ...answers,
+        allAdvancedEnabled,
+        baseAdvancedEnabled:
+            allAdvancedEnabled || Boolean(answers.baseAdvancedEnabled),
+        authAdvancedEnabled:
+            allAdvancedEnabled || Boolean(answers.authAdvancedEnabled),
+        syncAdvancedEnabled:
+            allAdvancedEnabled || Boolean(answers.syncAdvancedEnabled),
+        storageAdvancedEnabled:
+            allAdvancedEnabled || Boolean(answers.storageAdvancedEnabled),
+        cloudAdvancedEnabled:
+            allAdvancedEnabled || Boolean(answers.cloudAdvancedEnabled),
+    };
+}
+
+const ADVANCED_SECTION_KEYS = {
+    base: [
+        'or3LogoUrl',
+        'or3FaviconUrl',
+        'themeInstallMode',
+        'themesToInstall',
+    ],
+    auth: [
+        'basicAuthRefreshSecret',
+        'basicAuthAccessTtlSeconds',
+        'basicAuthRefreshTtlSeconds',
+        'basicAuthDbPath',
+    ],
+    sync: [
+        'sqlitePragmaJournalMode',
+        'sqlitePragmaSynchronous',
+        'sqliteAllowInMemory',
+        'sqliteStrict',
+        'convexSelfHostedAdminKey',
+        'convexSelfHostedSiteUrl',
+    ],
+    storage: [
+        'fsUrlTtlSeconds',
+        's3Endpoint',
+        's3SessionToken',
+        's3ForcePathStyle',
+        's3KeyPrefix',
+        's3UrlTtlSeconds',
+        's3RequireChecksum',
+    ],
+    cloud: [
+        'openrouterAllowUserOverride',
+        'openrouterRequireUserKey',
+        'requestsPerMinute',
+        'maxConversations',
+        'maxMessagesPerDay',
+        'limitsStorageProvider',
+        'allowedOrigins',
+        'forwardedForHeader',
+        'strictConfig',
+    ],
+} as const satisfies Record<
+    'base' | 'auth' | 'sync' | 'storage' | 'cloud',
+    ReadonlyArray<keyof WizardAnswers>
+>;
+
+function resetAdvancedSectionToDefaults(
+    answers: WizardAnswers,
+    defaults: WizardAnswers,
+    section: keyof typeof ADVANCED_SECTION_KEYS
+): WizardAnswers {
+    const next = { ...answers };
+    for (const key of ADVANCED_SECTION_KEYS[section]) {
+        (next as Record<keyof WizardAnswers, unknown>)[key] = defaults[key];
+    }
+    return next;
+}
+
+export function applySkippedAdvancedDefaults(
+    answers: WizardAnswers
+): WizardAnswers {
+    if (answers.allAdvancedEnabled) {
+        return answers;
+    }
+
+    const defaults = createDefaultAnswers({
+        instanceDir: answers.instanceDir,
+        envFile: answers.envFile,
+        presetName: answers.presetName,
+    });
+
+    let next = { ...answers };
+    if (!next.baseAdvancedEnabled) {
+        next = resetAdvancedSectionToDefaults(next, defaults, 'base');
+    }
+    if (!next.authAdvancedEnabled) {
+        next = resetAdvancedSectionToDefaults(next, defaults, 'auth');
+    }
+    if (!next.syncAdvancedEnabled) {
+        next = resetAdvancedSectionToDefaults(next, defaults, 'sync');
+    }
+    if (!next.storageAdvancedEnabled) {
+        next = resetAdvancedSectionToDefaults(next, defaults, 'storage');
+    }
+    if (!next.cloudAdvancedEnabled) {
+        next = resetAdvancedSectionToDefaults(next, defaults, 'cloud');
+    }
+
+    return next;
+}
+
+/**
+ * Creates a complete `WizardAnswers` object populated with sensible defaults.
+ *
+ * Behavior:
+ * - When `presetName` is `'legacy-clerk-convex'` (or alias `'clerk-convex'`),
+ *   providers default to Clerk + Convex + Convex instead of Basic Auth + SQLite + FS.
+ * - All non-secret fields receive a value; secret fields remain `undefined`.
+ * - `instanceDir` defaults to `process.cwd()` when not provided.
+ *
+ * @example
+ * ```ts
+ * const answers = createDefaultAnswers({ instanceDir: '/opt/or3' });
+ * // answers.authProvider === 'basic-auth'
+ * // answers.syncProvider === 'sqlite'
+ * // answers.storageProvider === 'fs'
+ * ```
+ */
+export function createDefaultAnswers(
+    input: {
+        instanceDir: string;
+        envFile?: '.env' | '.env.local';
+        presetName?: string;
+    } = {
+        instanceDir: process.cwd(),
+    }
+): WizardAnswers {
+    const presetName = input.presetName ?? 'recommended';
+    const wizardMode = inferWizardModeFromPresetName(presetName);
+    const base: WizardAnswers = {
+        instanceDir: input.instanceDir,
+        envFile: input.envFile ?? '.env',
+        deploymentTarget: 'local-dev',
+        dryRun: false,
+        skipWriteBackup: false,
+        presetName,
+        wizardMode,
+        allAdvancedEnabled: false,
+        baseAdvancedEnabled: false,
+        authAdvancedEnabled: false,
+        syncAdvancedEnabled: false,
+        storageAdvancedEnabled: false,
+        cloudAdvancedEnabled: false,
+        or3SiteName: 'OR3',
+        or3DefaultTheme: 'retro',
+        themeInstallMode: 'use-existing',
+        themesToInstall: ['blank', 'retro'],
+        workflowsEnabled: true,
+        documentsEnabled: true,
+        backupEnabled: true,
+        mentionsEnabled: true,
+        dashboardEnabled: true,
+        ssrAuthEnabled: true,
+        authProvider: 'basic-auth',
+        guestAccessEnabled: false,
+        basicAuthAccessTtlSeconds: 900,
+        basicAuthRefreshTtlSeconds: 2592000,
+        basicAuthDbPath: './.data/or3-basic-auth.sqlite',
+        syncEnabled: true,
+        syncProvider: 'sqlite',
+        sqliteDbPath: './.data/or3-sync.sqlite',
+        sqlitePragmaJournalMode: 'WAL',
+        sqlitePragmaSynchronous: 'NORMAL',
+        sqliteAllowInMemory: false,
+        sqliteStrict: false,
+        storageEnabled: true,
+        storageProvider: 'fs',
+        fsRoot: '/tmp/or3-storage',
+        fsUrlTtlSeconds: 900,
+        s3Endpoint: '',
+        s3Region: 'us-east-1',
+        s3Bucket: '',
+        s3ForcePathStyle: false,
+        s3KeyPrefix: '',
+        s3UrlTtlSeconds: 900,
+        s3RequireChecksum: false,
+        openrouterAllowUserOverride: true,
+        openrouterRequireUserKey: false,
+        limitsEnabled: true,
+        requestsPerMinute: 20,
+        maxConversations: 0,
+        maxMessagesPerDay: 0,
+        allowedOrigins: [],
+        strictConfig: false,
+        trustProxy: false,
+        forwardedForHeader: 'x-forwarded-for',
+    };
+
+    return applyWizardModeDefaults(base, wizardMode);
+}
+
+/**
+ * Built-in preset: Basic Auth + SQLite + FS.
+ * This is the recommended self-hosted stack for new deployments.
+ */
+export const recommendedPreset: WizardPreset = {
+    name: 'recommended',
+    createdAt: new Date(0).toISOString(),
+    answers: {
+        presetName: 'recommended',
+        wizardMode: 'preset-local',
+        allAdvancedEnabled: false,
+        baseAdvancedEnabled: false,
+        authAdvancedEnabled: false,
+        syncAdvancedEnabled: false,
+        storageAdvancedEnabled: false,
+        cloudAdvancedEnabled: false,
+        authProvider: 'basic-auth',
+        syncProvider: 'sqlite',
+        storageProvider: 'fs',
+        ssrAuthEnabled: true,
+        syncEnabled: true,
+        storageEnabled: true,
+        deploymentTarget: 'local-dev',
+    },
+};
+
+/**
+ * Built-in preset: Clerk + Convex + Convex.
+ * Retained for backward compatibility with existing Clerk/Convex deployments.
+ */
+export const legacyPreset: WizardPreset = {
+    name: 'legacy-clerk-convex',
+    createdAt: new Date(0).toISOString(),
+    answers: {
+        presetName: 'legacy-clerk-convex',
+        wizardMode: 'preset-clerk-convex',
+        allAdvancedEnabled: false,
+        baseAdvancedEnabled: false,
+        authAdvancedEnabled: false,
+        syncAdvancedEnabled: false,
+        storageAdvancedEnabled: false,
+        cloudAdvancedEnabled: false,
+        authProvider: 'clerk',
+        syncProvider: 'convex',
+        storageProvider: 'convex',
+        ssrAuthEnabled: true,
+        syncEnabled: true,
+        storageEnabled: true,
+        deploymentTarget: 'local-dev',
+    },
+};

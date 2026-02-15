@@ -14,7 +14,7 @@
  */
 import { getDb } from './client';
 import type { FileMeta } from './schema';
-import { nowSec, nextClock } from './util';
+import { nowSec, nextClock, getWriteTxTableNames } from './util';
 
 // List image FileMeta records, newest first, with simple paging.
 // Filters: deleted !== true AND kind === 'image'.
@@ -98,12 +98,24 @@ export async function updateFileName(
     hash: string,
     name: string
 ): Promise<void> {
-    const meta = await getDb().file_meta.get(hash);
+    const db = getDb();
+    const meta = await db.file_meta.get(hash);
     if (!meta) return;
-    await getDb().file_meta.put({
-        ...meta,
-        name,
-        updated_at: nowSec(),
-        clock: nextClock(meta.clock),
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        await db.file_meta.put({
+            ...meta,
+            name,
+            updated_at: nowSec(),
+            clock: nextClock(meta.clock),
+        });
+        return;
+    }
+    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
+        await db.file_meta.put({
+            ...meta,
+            name,
+            updated_at: nowSec(),
+            clock: nextClock(meta.clock),
+        });
     });
 }

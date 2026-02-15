@@ -1,0 +1,21 @@
+name: Check Banned Imports
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'server/**'
+  push:
+    branches: [main, phase3-provider-decoupling]
+    paths:
+      - 'app/**'
+      - 'server/**'
+
+jobs:
+  check-imports:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for banned provider imports
+        run: bash scripts/check-banned-imports.sh

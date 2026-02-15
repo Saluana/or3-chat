@@ -15,7 +15,7 @@
 
 import type { RateLimitProvider } from './types';
 import { memoryRateLimitProvider } from './providers/memory';
-import { convexRateLimitProvider } from './providers/convex';
+import { getRateLimitProviderById } from './registry';
 import { LIMITS_PROVIDER_IDS } from '~~/shared/cloud/provider-ids';
 
 let cachedProvider: RateLimitProvider | null = null;
@@ -38,15 +38,16 @@ export function getRateLimitProvider(): RateLimitProvider {
     const storageProvider = config.limits.storageProvider;
 
     switch (storageProvider) {
-        case LIMITS_PROVIDER_IDS.convex:
-            // Check if Convex is actually available
-            if ((config.sync as { convexUrl?: string } | undefined)?.convexUrl ?? config.public.sync.convexUrl) {
-                cachedProvider = convexRateLimitProvider;
+        case LIMITS_PROVIDER_IDS.convex: {
+            const registered = getRateLimitProviderById(storageProvider);
+            if (registered) {
+                cachedProvider = registered;
             } else {
-                console.warn('[rate-limit] Convex URL not configured, using memory');
+                console.warn('[rate-limit] Provider not registered, using memory:', storageProvider);
                 cachedProvider = memoryRateLimitProvider;
             }
             break;
+        }
 
         case LIMITS_PROVIDER_IDS.redis:
             // Future: Redis provider

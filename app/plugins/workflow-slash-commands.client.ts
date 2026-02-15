@@ -9,8 +9,9 @@
  */
 
 import { defineNuxtPlugin } from '#app';
-import { useAppConfig, useHooks, useToast, useModelStore } from '#imports';
+import { useAppConfig, useHooks, useToast, useModelStore, useRuntimeConfig, useSessionContext } from '#imports';
 import { useOr3Config } from '~/composables/useOr3Config';
+import type { Or3DB } from '~/db/client';
 import type { Extension, Node } from '@tiptap/core';
 import type {
     ToolCallEventWithNode,
@@ -22,8 +23,11 @@ import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type { WorkflowExecutionController } from './WorkflowSlashCommands/executeWorkflow';
 import type { Attachment } from 'or3-workflow-core';
 import { createWorkflowStreamAccumulator } from '~/composables/chat/useWorkflowStreamAccumulator';
-import { nowSec, nextClock } from '~/db/util';
+import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
 import { reportError } from '~/utils/errors';
+import { isBackgroundStreamingEnabled } from '~/utils/chat/openrouterStream';
+import { startBackgroundWorkflow, respondHitlRequest } from '~/utils/chat/backgroundWorkflow';
+import { ensureBackgroundJobTracker } from '~/utils/chat/useAi-internal/backgroundJobs';
 import {
     isWorkflowMessageData,
     deriveStartNodeId,
@@ -629,13 +633,36 @@ export function isWorkflowExecuting(): boolean {
     return activeController !== null && activeController.isRunning();
 }
 
-function respondToHitlRequest(
+async function respondToHitlRequest(
     requestId: string,
     action: HitlAction,
-    data?: string | Record<string, unknown>
-): boolean {
+    data?: string | Record<string, unknown>,
+    jobId?: string
+): Promise<boolean> {
     const pending = pendingHitlRequests.get(requestId);
-    if (!pending) return false;
+    if (!pending) {
+        if (!jobId) {
+            return false;
+        }
+        try {
+            await respondHitlRequest({
+                requestId,
+                jobId,
+                action,
+                data,
+            });
+            return true;
+        } catch (error) {
+            if (import.meta.dev) {
+                console.warn('[workflow-slash] HITL response failed', {
+                    requestId,
+                    jobId,
+                    error,
+                });
+            }
+            return false;
+        }
+    }
 
     if (action === 'reject') {
         stopWorkflowExecution();
@@ -684,6 +711,17 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     const hooks = useHooks();
 
+    const withMessageSyncTransaction = async <T>(
+        db: Or3DB,
+        fn: () => Promise<T>
+    ): Promise<T> => {
+        return await db.transaction(
+            'rw',
+            getWriteTxTableNames(db, 'messages'),
+            fn
+        );
+    };
+
     hooks.on(
         'ui.chat.editor:action:before_send',
         (payload: unknown) => {
@@ -706,42 +744,44 @@ export default defineNuxtPlugin((nuxtApp) => {
 
             if (!stale.length) return;
 
-            await db.messages
-                .where('[data.type+data.executionState]')
-                .equals(['workflow-execution', 'running'])
-                .modify((m: any) => {
-                    const data = m.data || {};
-                    const nodeOutputs = data.nodeOutputs || {};
-                    const startNodeId = deriveStartNodeId({
-                        resumeState: data.resumeState,
-                        failedNodeId: data.failedNodeId,
-                        currentNodeId: data.currentNodeId,
-                        nodeStates: data.nodeStates,
-                        lastActiveNodeId: data.lastActiveNodeId,
-                    });
-
-                    m.data.executionState = 'interrupted';
-                    if (startNodeId) {
-                        m.data.resumeState = {
-                            startNodeId,
-                            nodeOutputs,
-                            executionOrder:
-                                data.executionOrder || Object.keys(nodeOutputs),
+            await withMessageSyncTransaction(db, async () => {
+                await db.messages
+                    .where('[data.type+data.executionState]')
+                    .equals(['workflow-execution', 'running'])
+                    .modify((m: any) => {
+                        const data = m.data || {};
+                        const nodeOutputs = data.nodeOutputs || {};
+                        const startNodeId = deriveStartNodeId({
+                            resumeState: data.resumeState,
+                            failedNodeId: data.failedNodeId,
+                            currentNodeId: data.currentNodeId,
+                            nodeStates: data.nodeStates,
                             lastActiveNodeId: data.lastActiveNodeId,
-                            sessionMessages: data.sessionMessages,
-                            resumeInput: data.lastActiveNodeId
-                                ? nodeOutputs[data.lastActiveNodeId]
-                                : undefined,
+                        });
+
+                        m.data.executionState = 'interrupted';
+                        if (startNodeId) {
+                            m.data.resumeState = {
+                                startNodeId,
+                                nodeOutputs,
+                                executionOrder:
+                                    data.executionOrder || Object.keys(nodeOutputs),
+                                lastActiveNodeId: data.lastActiveNodeId,
+                                sessionMessages: data.sessionMessages,
+                                resumeInput: data.lastActiveNodeId
+                                    ? nodeOutputs[data.lastActiveNodeId]
+                                    : undefined,
+                            };
+                        }
+                        m.data.result = {
+                            success: false,
+                            duration: 0,
+                            error: 'Execution interrupted',
                         };
-                    }
-                    m.data.result = {
-                        success: false,
-                        duration: 0,
-                        error: 'Execution interrupted',
-                    };
-                    m.updated_at = now;
-                    m.pending = false;
-                });
+                        m.updated_at = now;
+                        m.pending = false;
+                    });
+            });
 
             stale.forEach((m) => {
                 if (!isWorkflowMessageData(m.data)) return;
@@ -1085,45 +1125,44 @@ export default defineNuxtPlugin((nuxtApp) => {
                 )
             );
 
-            db.messages
-                .get(assistantContext.id)
-                .then(async (msg) => {
-                    const timestamp = nowSec();
-                    if (msg) {
-                        return db.messages.put({
-                            ...msg,
-                            data,
-                            pending: data.executionState === 'running',
-                            updated_at: timestamp,
-                            clock: nextClock(msg.clock),
-                        });
-                    }
-
-                    // Create placeholder assistant message so UI can render it
-                    const index = Math.floor(Date.now());
-                    return db.messages.put({
-                        id: assistantContext.id,
-                        role: 'assistant',
+            withMessageSyncTransaction(db, async () => {
+                const msg = await db.messages.get(assistantContext.id);
+                const timestamp = nowSec();
+                if (msg) {
+                    await db.messages.put({
+                        ...msg,
                         data,
                         pending: data.executionState === 'running',
-                        created_at: timestamp,
                         updated_at: timestamp,
-                        error: null,
-                        deleted: false,
-                        thread_id: assistantContext.threadId || '',
-                        index,
-                        clock: nextClock(),
-                        stream_id: assistantContext.streamId,
-                        file_hashes: null,
+                        clock: nextClock(msg.clock),
                     });
+                    return;
+                }
+
+                // Create placeholder assistant message so UI can render it
+                const index = Math.floor(Date.now());
+                await db.messages.put({
+                    id: assistantContext.id,
+                    role: 'assistant',
+                    data,
+                    pending: data.executionState === 'running',
+                    created_at: timestamp,
+                    updated_at: timestamp,
+                    error: null,
+                    deleted: false,
+                    thread_id: assistantContext.threadId || '',
+                    index,
+                    clock: nextClock(),
+                    stream_id: assistantContext.streamId,
+                    file_hashes: null,
+                });
+            }).catch((e) =>
+                reportError(e, {
+                    code: 'ERR_DB_WRITE_FAILED',
+                    message: 'Persist failed',
+                    silent: true,
                 })
-                .catch((e) =>
-                    reportError(e, {
-                        code: 'ERR_DB_WRITE_FAILED',
-                        message: 'Persist failed',
-                        silent: true,
-                    })
-                );
+            );
         };
 
         const resolveHitlRequestsForNode = (nodeId: string) => {
@@ -1360,6 +1399,69 @@ export default defineNuxtPlugin((nuxtApp) => {
             messageId: assistantContext.id,
             workflowId: workflowPost.id,
         });
+
+        const runtimeConfig = useRuntimeConfig();
+        const sessionContext =
+            runtimeConfig.public.ssrAuthEnabled === true
+                ? useSessionContext()
+                : null;
+        const session = sessionContext?.data.value?.session ?? null;
+        const backgroundAllowed =
+            runtimeConfig.public.backgroundStreaming?.enabled === true &&
+            isBackgroundStreamingEnabled() &&
+            Boolean(session?.authenticated && session.user?.id);
+
+        if (backgroundAllowed) {
+            try {
+                const result = await startBackgroundWorkflow({
+                    workflowId: workflowPost.id,
+                    workflowName: workflowPost.title || 'Workflow',
+                    workflowUpdatedAt: workflowPost.updated_at,
+                    workflowVersion:
+                        typeof workflowPost.meta?.meta?.version === 'string'
+                            ? workflowPost.meta.meta.version
+                            : undefined,
+                    prompt: executionPrompt,
+                    threadId: assistantContext.threadId || '',
+                    messageId: assistantContext.id,
+                    conversationHistory:
+                        conversationHistory ||
+                        (await execMod.getConversationHistory(
+                            assistantContext.threadId || ''
+                        )),
+                    apiKey,
+                    attachments,
+                });
+
+                const msg = await db.messages.get(assistantContext.id);
+                if (msg) {
+                    await db.messages.put({
+                        ...msg,
+                        data: {
+                            ...(msg.data as Record<string, unknown>),
+                            background_job_id: result.jobId,
+                            background_job_status: 'streaming',
+                        },
+                        pending: true,
+                        updated_at: nowSec(),
+                        clock: nextClock(msg.clock),
+                    });
+                }
+
+                ensureBackgroundJobTracker({
+                    jobId: result.jobId,
+                    userId: session?.user?.id || '',
+                    threadId: assistantContext.threadId || '',
+                    messageId: assistantContext.id,
+                    initialContent: '',
+                    useSse: true,
+                });
+
+                return;
+            } catch (error) {
+                console.warn('[workflow-slash] Background workflow failed, falling back', error);
+            }
+        }
 
         // Create execution controller
         const controller = execMod.executeWorkflow({

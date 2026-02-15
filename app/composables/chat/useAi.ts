@@ -22,9 +22,9 @@
  * - Abort always finalizes stream accumulator state
  */
 
-import { ref, computed, watch, onScopeDispose } from 'vue';
+import { ref, computed, watch, onScopeDispose, getCurrentScope } from 'vue';
 import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
-import { nowSec, newId } from '~/db/util';
+import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
 import { create, tx, upsert, type Message } from '~/db';
 import { getDb } from '~/db/client';
 import { serializeFileHashes } from '~/db/files-util';
@@ -1383,7 +1383,6 @@ export function useChat(
 
             const allowBackgroundStreaming =
                 backgroundStreamingAllowed.value &&
-                enabledToolDefs.length === 0 &&
                 modalities.length === 1 &&
                 modalities[0] === 'text';
 
@@ -1405,6 +1404,19 @@ export function useChat(
                 tailAssistant.value = uiAssistant;
 
                 try {
+                    const toolRuntime =
+                        enabledToolDefs.length > 0
+                            ? enabledToolDefs.reduce<Record<string, string>>(
+                                  (acc, tool) => {
+                                      if (tool.runtime) {
+                                          acc[tool.function.name] = tool.runtime;
+                                      }
+                                      return acc;
+                                  },
+                                  {}
+                              )
+                            : undefined;
+
                     const result = await startBackgroundStream({
                         apiKey: effectiveApiKey.value,
                         model: modelId,
@@ -1418,6 +1430,7 @@ export function useChat(
                             enabledToolDefs.length > 0
                                 ? enabledToolDefs
                                 : undefined,
+                        toolRuntime,
                     });
 
                     backgroundJobId.value = result.jobId;
@@ -1595,7 +1608,15 @@ export function useChat(
                 // Only delete if there's no text; otherwise preserve with 'stopped' status
                 if (tailAssistant.value?.id && !tailAssistant.value.text) {
                     try {
-                        await getDb().messages.delete(tailAssistant.value.id);
+                        const db = getDb();
+                        await db.transaction(
+                            'rw',
+                            getWriteTxTableNames(db, 'messages', {
+                                includeTombstones: true,
+                            }),
+                            async () => {
+                            await db.messages.delete(tailAssistant.value!.id);
+                        });
                         const idx = rawMessages.value.findIndex(
                             (m) => m.id === tailAssistant.value!.id
                         );
@@ -1709,7 +1730,15 @@ export function useChat(
                 });
                 if (!tailAssistant.value?.text && tailAssistant.value?.id) {
                     try {
-                        await getDb().messages.delete(tailAssistant.value.id);
+                        const db = getDb();
+                        await db.transaction(
+                            'rw',
+                            getWriteTxTableNames(db, 'messages', {
+                                includeTombstones: true,
+                            }),
+                            async () => {
+                            await db.messages.delete(tailAssistant.value!.id);
+                        });
                         const idx = rawMessages.value.findIndex(
                             (m) => m.id === tailAssistant.value!.id
                         );
@@ -1876,13 +1905,20 @@ export function useChat(
         const isBackgroundActive =
             backgroundStreamingAllowed.value &&
             (backgroundJobId.value || backgroundJobMode.value !== 'none');
+        const isForegroundStreamActive =
+            loading.value &&
+            !backgroundJobId.value &&
+            backgroundJobMode.value === 'none' &&
+            Boolean(abortController.value);
 
-        if (isBackgroundActive) {
+        if (isBackgroundActive || isForegroundStreamActive) {
             detached.value = true;
             clearBackgroundJobSubscriptions({ keepTracking: true });
             disposeHooks();
             // Do NOT reset backgroundJobId, backgroundJobMode, or backgroundJobInfo
-            // This allows reattachment or background processing to continue
+            // This allows reattachment or background processing to continue.
+            // Foreground streams are also detached here so they can finish when
+            // users switch threads/routes mid-stream.
             return;
         }
         if (abortController.value) {
@@ -1956,9 +1992,11 @@ export function useChat(
 
     void reattachBackgroundJobs();
 
-    onScopeDispose(() => {
-        clear();
-    });
+    if (getCurrentScope()) {
+        onScopeDispose(() => {
+            clear();
+        });
+    }
 
     /**
      * Purpose:

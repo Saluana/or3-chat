@@ -1,9 +1,29 @@
 /**
- * Notification Service
- * 
- * Core service for managing in-app notifications.
- * Handles create, read, mark-read, and clear operations.
- * Integrates with hook system for extensibility.
+ * @module app/core/notifications/notification-service
+ *
+ * Purpose:
+ * Core service for managing in-app notifications. Handles create, read,
+ * mark-read, and clear-all operations against the local Dexie database.
+ * Integrates with the hook system for extensibility.
+ *
+ * Responsibilities:
+ * - Listen for `notify:action:push` hook events and auto-create notifications
+ * - Apply `notify:filter:before_store` filter to allow modification or rejection
+ * - Validate incoming payloads with Zod before storage
+ * - Emit hooks on read and clear operations for observability
+ *
+ * Constraints:
+ * - One active listener per service instance (call `startListening()` once)
+ * - Notifications are soft-deleted (not removed from IndexedDB)
+ * - Timestamps use seconds (via `nowSec()`) for consistency with sync layer
+ * - Service must be explicitly started; constructor does not auto-listen
+ *
+ * Non-goals:
+ * - Does not handle push notification delivery to native OS
+ * - Does not sync notifications to remote (handled by sync layer)
+ *
+ * @see core/hooks/hook-types.ts for NotificationCreatePayload shape
+ * @see db/schema for the Notification Dexie table schema
  */
 
 import type { Or3DB } from '~/db/client';
@@ -11,7 +31,7 @@ import { NotificationActionSchema } from '~/db/schema';
 import type { Notification } from '~/db/schema';
 import type { TypedHookEngine } from '../hooks/typed-hooks';
 import type { NotificationCreatePayload } from '../hooks/hook-types';
-import { nowSec } from '~/db/util';
+import { nowSec, getWriteTxTableNames } from '~/db/util';
 import { z } from 'zod';
 
 // Callback type for the push action handler
@@ -26,6 +46,19 @@ const NotificationCreatePayloadSchema = z.object({
     actions: z.array(NotificationActionSchema).optional(),
 });
 
+/**
+ * Purpose:
+ * Local notification service backed by Dexie.
+ *
+ * Behavior:
+ * - `startListening()` registers a single hook listener for `notify:action:push`
+ * - `create()` validates and stores a notification, applying filter hooks
+ * - Read and clear operations emit corresponding hooks for observability
+ *
+ * Constraints:
+ * - Instances are lightweight, but listeners are not; call `startListening()` once
+ *   per session and use the returned cleanup function
+ */
 export class NotificationService {
     private db: Or3DB;
     private hooks: TypedHookEngine;
@@ -82,6 +115,22 @@ export class NotificationService {
         }
     }
 
+    private getNotificationWriteTxTables(): string[] {
+        return getWriteTxTableNames(this.db, 'notifications');
+    }
+
+    private async runNotificationWriteTx<T>(fn: () => Promise<T>): Promise<T> {
+        const tx = (this.db as { transaction?: unknown }).transaction;
+        if (typeof tx !== 'function') {
+            return await fn();
+        }
+        return await this.db.transaction(
+            'rw',
+            this.getNotificationWriteTxTables(),
+            fn
+        );
+    }
+
     /**
      * Create a new notification
      * Applies filter hooks before storage
@@ -133,7 +182,9 @@ export class NotificationService {
             clock: now,
         };
 
-        await this.db.notifications.add(notification);
+        await this.runNotificationWriteTx(async () => {
+            await this.db.notifications.add(notification);
+        });
         return notification;
     }
 
@@ -142,10 +193,12 @@ export class NotificationService {
      */
     async markRead(id: string): Promise<void> {
         const readAt = nowSec();
-        await this.db.notifications.update(id, {
-            read_at: readAt,
-            updated_at: readAt,
-            clock: readAt,
+        await this.runNotificationWriteTx(async () => {
+            await this.db.notifications.update(id, {
+                read_at: readAt,
+                updated_at: readAt,
+                clock: readAt,
+            });
         });
         await this.hooks.doAction('notify:action:read', { id, readAt });
     }
@@ -155,15 +208,17 @@ export class NotificationService {
      */
     async markAllRead(): Promise<void> {
         const readAt = nowSec();
-        await this.db.notifications
-            .where('user_id')
-            .equals(this.userId)
-            .and((n: Notification) => n.read_at === undefined && !n.deleted)
-            .modify({
-                read_at: readAt,
-                updated_at: readAt,
-                clock: readAt,
-            });
+        await this.runNotificationWriteTx(async () => {
+            await this.db.notifications
+                .where('user_id')
+                .equals(this.userId)
+                .and((n: Notification) => n.read_at === undefined && !n.deleted)
+                .modify({
+                    read_at: readAt,
+                    updated_at: readAt,
+                    clock: readAt,
+                });
+        });
     }
 
     /**
@@ -172,16 +227,18 @@ export class NotificationService {
      */
     async clearAll(): Promise<number> {
         const deletedAt = nowSec();
-        const result = await this.db.notifications
-            .where('user_id')
-            .equals(this.userId)
-            .and((n: Notification) => !n.deleted)
-            .modify({
-                deleted: true,
-                deleted_at: deletedAt,
-                updated_at: deletedAt,
-                clock: deletedAt,
-            });
+        const result = await this.runNotificationWriteTx(async () => {
+            return await this.db.notifications
+                .where('user_id')
+                .equals(this.userId)
+                .and((n: Notification) => !n.deleted)
+                .modify({
+                    deleted: true,
+                    deleted_at: deletedAt,
+                    updated_at: deletedAt,
+                    clock: deletedAt,
+                });
+        });
         // Dexie modify() returns number of modified records
         const count = typeof result === 'number' ? result : 0;
         await this.hooks.doAction('notify:action:cleared', { count });

@@ -1112,7 +1112,7 @@ function getHitlInputLabel(request: HitlRequestState): string {
     }
 }
 
-function handleHitlAction(
+async function handleHitlAction(
     request: HitlRequestState,
     action: HitlAction,
     label: string,
@@ -1136,11 +1136,35 @@ function handleHitlAction(
         const promptLabel = label || request.prompt;
         const response = window.prompt(promptLabel, defaultValue || '');
         if (response === null) return;
-        workflowSlash.respondHitl(request.id, action, response);
+        const ok = await workflowSlash.respondHitl(
+            request.id,
+            action,
+            response,
+            request.jobId
+        );
+        if (!ok) {
+            toast.add({
+                title: 'Failed to submit response',
+                description: 'Please try again.',
+                color: 'error',
+            });
+        }
         return;
     }
 
-    workflowSlash.respondHitl(request.id, action);
+    const ok = await workflowSlash.respondHitl(
+        request.id,
+        action,
+        undefined,
+        request.jobId
+    );
+    if (!ok) {
+        toast.add({
+            title: 'Failed to submit response',
+            description: 'Please try again.',
+            color: 'error',
+        });
+    }
 }
 
 // Theme

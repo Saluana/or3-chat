@@ -1,0 +1,127 @@
+# Deployment and Operations Guide
+
+Operational runbook for OR3 Cloud SSR deployments.
+
+## Baseline Deployment Profile
+
+- SSR auth enabled (`SSR_AUTH_ENABLED=true`).
+- Provider packages installed for selected auth/sync/storage stack.
+- Persistent volumes for provider data paths.
+- Reverse proxy with HTTPS and explicit origin policy.
+
+## Required Environment Groups
+
+## Core SSR
+
+```bash
+SSR_AUTH_ENABLED=true
+OR3_AUTH_AUTO_PROVISION=true
+```
+
+## Auth
+
+For basic-auth:
+
+```bash
+AUTH_PROVIDER=basic-auth
+OR3_BASIC_AUTH_JWT_SECRET=...
+OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=...
+OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=...
+```
+
+For Clerk:
+
+```bash
+AUTH_PROVIDER=clerk
+NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
+NUXT_CLERK_SECRET_KEY=...
+```
+
+## Sync
+
+```bash
+OR3_SYNC_ENABLED=true
+OR3_SYNC_PROVIDER=sqlite|convex
+```
+
+SQLite examples:
+
+```bash
+OR3_SQLITE_DB_PATH=.data/or3-sync.sqlite
+OR3_SQLITE_PRAGMA_JOURNAL_MODE=WAL
+OR3_SQLITE_PRAGMA_SYNCHRONOUS=NORMAL
+```
+
+## Storage
+
+```bash
+OR3_STORAGE_ENABLED=true
+NUXT_PUBLIC_STORAGE_PROVIDER=fs|convex|s3
+```
+
+FS examples:
+
+```bash
+OR3_STORAGE_FS_ROOT=.data/storage
+OR3_STORAGE_FS_TOKEN_SECRET=...
+OR3_STORAGE_FS_URL_TTL_SECONDS=300
+```
+
+## Background Jobs
+
+```bash
+OR3_BACKGROUND_STREAMING_ENABLED=true
+OR3_BACKGROUND_STREAMING_PROVIDER=memory|convex
+OR3_BACKGROUND_MAX_JOBS=20
+OR3_BACKGROUND_MAX_JOBS_PER_USER=5
+OR3_BACKGROUND_JOB_TIMEOUT=300
+```
+
+## Security
+
+```bash
+OR3_ALLOWED_ORIGINS=https://your.app
+OR3_FORCE_HTTPS=true
+OR3_TRUST_PROXY=true
+```
+
+## Monitoring and Health Checks
+
+- Liveness/readiness endpoint: `GET /api/health`
+- Deep checks: `GET /api/health?deep=true`
+- Track HTTP rates for:
+  - `/api/sync/push` and `/api/sync/pull`
+  - `/api/storage/*`
+  - `/api/openrouter/stream`
+  - `/api/jobs/:id/*`
+- Alert on repeated:
+  - 401/403 spikes (auth/authorization)
+  - 429 spikes (rate limits)
+  - 5xx spikes
+
+## Logging
+
+- Use structured logs from core error handling and background execution paths.
+- Background tool/workflow logs redact token/secret/password-like fields.
+- Route logs should not include raw API keys or presigned token contents.
+
+## Scaling Guidance
+
+- Stateful providers (`sqlite`, `fs`, memory background provider) need shared storage or sticky instance design.
+- For multi-instance setups, prefer providers with shared persistence (for example Convex-backed background jobs).
+- Keep viewer suppression behavior in mind: viewer state is process-local.
+
+## Operational Checks Before Release
+
+1. `bun run type-check` passes.
+2. SSR auth session endpoint works and sets `Cache-Control: no-store`.
+3. Sync push/pull and storage presign/upload/download pass smoke tests.
+4. Background job start + status + abort endpoints behave correctly.
+5. Backup and rollback procedures are documented for the active stack.
+
+## Related
+
+- [config-reference](./config-reference)
+- [provider-compatibility-matrix](./provider-compatibility-matrix)
+- [release-notes-production-readiness](./release-notes-production-readiness)
+

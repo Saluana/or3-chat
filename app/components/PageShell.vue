@@ -229,7 +229,7 @@ import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
 import SidenavSideBar from '~/components/sidebar/SideBar.vue';
 import { useMultiPane, type PaneState } from '~/composables/core/useMultiPane';
 import { usePaneApps } from '~/composables/core/usePaneApps';
-import { db } from '~/db';
+import { getDb } from '~/db/client';
 import { useHookEffect } from '~/composables/core/useHookEffect';
 import {
     flush as flushDocument,
@@ -677,6 +677,7 @@ type ValidationStatus = 'found' | 'missing' | 'deleted';
 let validateToken = 0;
 
 async function validateThread(id: string): Promise<ValidationStatus> {
+    const db = getDb();
     try {
         if (!db.isOpen()) await db.open();
     } catch {}
@@ -692,6 +693,7 @@ async function validateThread(id: string): Promise<ValidationStatus> {
 }
 
 async function validateDocument(id: string): Promise<ValidationStatus> {
+    const db = getDb();
     try {
         if (!db.isOpen()) await db.open();
     } catch {}

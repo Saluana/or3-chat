@@ -43,7 +43,11 @@ function readEnvValueSync(key: string): string | null {
 }
 
 const OPENROUTER_API_KEY = readEnvValueSync('OPENROUTER_API_KEY');
-const describeLive = OPENROUTER_API_KEY ? describe : describe.skip;
+// Live network tests must be opt-in; .env keys should not make `bun run test` flaky.
+const RUN_LIVE_TESTS =
+    process.env.RUN_LIVE_TESTS === '1' ||
+    process.env.RUN_LIVE_TESTS === 'true';
+const describeLive = RUN_LIVE_TESTS && OPENROUTER_API_KEY ? describe : describe.skip;
 
 function delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));

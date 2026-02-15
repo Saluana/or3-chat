@@ -19,6 +19,7 @@
 import type { BackgroundJobProvider, BackgroundJobConfig } from './types';
 import { DEFAULT_CONFIG } from './types';
 import { memoryJobProvider } from './providers/memory';
+import { getBackgroundJobProviderById } from './registry';
 import { BACKGROUND_PROVIDER_IDS } from '~~/shared/cloud/provider-ids';
 
 let cachedProvider: BackgroundJobProvider | null = null;
@@ -29,7 +30,7 @@ let cachedProvider: BackgroundJobProvider | null = null;
  *
  * Behavior:
  * - Reads runtime config for provider selection.
- * - Dynamically imports Convex provider when configured.
+ * - Uses provider registry when configured.
  * - Caches the resolved provider for subsequent calls.
  *
  * Constraints:
@@ -46,15 +47,20 @@ export async function getJobProvider(): Promise<BackgroundJobProvider> {
 
     switch (storageProvider) {
         case BACKGROUND_PROVIDER_IDS.convex: {
-            // Dynamically import to avoid loading if not used
-            const convexUrl =
-                (config.sync as { convexUrl?: string } | undefined)?.convexUrl ??
-                config.public.sync.convexUrl;
-            if (convexUrl) {
-                const { convexJobProvider } = await import('./providers/convex');
-                cachedProvider = convexJobProvider;
-            } else {
+            const syncConfig = config.sync as { convexUrl?: string } | undefined;
+            const publicSyncConfig = (config.public as { sync?: { convexUrl?: string } } | undefined)?.sync;
+            const convexUrl = syncConfig?.convexUrl ?? publicSyncConfig?.convexUrl;
+            if (!convexUrl) {
                 console.warn('[background-jobs] Convex URL not configured, using memory');
+                cachedProvider = memoryJobProvider;
+                break;
+            }
+
+            const registered = getBackgroundJobProviderById(storageProvider);
+            if (registered) {
+                cachedProvider = registered;
+            } else {
+                console.warn('[background-jobs] Provider not registered, using memory:', storageProvider);
                 cachedProvider = memoryJobProvider;
             }
             break;
@@ -98,6 +104,9 @@ export function getJobConfig(): BackgroundJobConfig {
 
     return {
         maxConcurrentJobs: bgConfig?.maxConcurrentJobs ?? DEFAULT_CONFIG.maxConcurrentJobs,
+        maxConcurrentJobsPerUser:
+            bgConfig?.maxConcurrentJobsPerUser ??
+            DEFAULT_CONFIG.maxConcurrentJobsPerUser,
         jobTimeoutMs: bgConfig?.jobTimeoutMs ?? DEFAULT_CONFIG.jobTimeoutMs,
         completedJobRetentionMs:
             bgConfig?.completedJobRetentionMs ?? DEFAULT_CONFIG.completedJobRetentionMs,

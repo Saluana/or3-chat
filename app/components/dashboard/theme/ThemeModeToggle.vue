@@ -47,6 +47,7 @@
         <UModal
             v-model:open="showResetModal"
             title="Reset Theme"
+            description="Confirm resetting the current theme mode to defaults."
             :ui="{ content: 'z-[20]' }"
         >
             <template #body>

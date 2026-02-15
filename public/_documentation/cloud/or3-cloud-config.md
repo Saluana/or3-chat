@@ -36,7 +36,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
 | Key | Env Variable | Default | Description |
 |-----|--------------|---------|-------------|
 | `auth.enabled` | `SSR_AUTH_ENABLED` | `false` | Enable SSR authentication |
-| `auth.provider` | `AUTH_PROVIDER` | `"clerk"` | Auth provider (`clerk` / `custom`) |
+| `auth.provider` | `AUTH_PROVIDER` | `"clerk"` | Auth provider (`basic-auth` / `clerk` / `custom`) |
 | `auth.clerk.publishableKey` | `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | — | Clerk publishable key |
 | `auth.clerk.secretKey` | `NUXT_CLERK_SECRET_KEY` | — | Clerk secret key |
 
@@ -45,7 +45,7 @@ export const or3CloudConfig = defineOr3CloudConfig({
 | Key | Env Variable | Default | Description |
 |-----|--------------|---------|-------------|
 | `sync.enabled` | `OR3_SYNC_ENABLED` | `true` (if auth) | Enable cross-device sync |
-| `sync.provider` | `OR3_SYNC_PROVIDER` | `"convex"` | Backend (`convex` / `firebase` / `custom`) |
+| `sync.provider` | `OR3_SYNC_PROVIDER` | `"convex"` | Backend (`sqlite` / `convex` / `firebase` / `custom`) |
 | `sync.convex.url` | `VITE_CONVEX_URL` | — | Convex deployment URL |
 | `sync.convex.adminKey` | `CONVEX_SELF_HOSTED_ADMIN_KEY` | — | Server-side Convex admin key for super admin dashboard access |
 
@@ -89,13 +89,18 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 | Key | Env Variable | Default | Description |
 |-----|--------------|---------|-------------|
 | `storage.enabled` | `OR3_STORAGE_ENABLED` | `true` (if auth) | Enable cloud storage |
-| `storage.provider` | `NUXT_PUBLIC_STORAGE_PROVIDER` | `"convex"` | Backend (`convex` / `s3` / `custom`) |
+| `storage.provider` | `NUXT_PUBLIC_STORAGE_PROVIDER` | `"convex"` | Backend (`fs` / `convex` / `s3` / `custom`) |
+| `storage.allowedMimeTypes` | `OR3_STORAGE_ALLOWED_MIME_TYPES` | image/pdf/text allowlist | Comma-separated upload MIME allowlist |
+| `storage.workspaceQuotaBytes` | `OR3_STORAGE_WORKSPACE_QUOTA_BYTES` | unset | Optional per-workspace storage quota in bytes |
+| `storage.gcRetentionSeconds` | `OR3_STORAGE_GC_RETENTION_SECONDS` | `2592000` | Default retention used by storage GC |
+| `storage.gcCooldownMs` | `OR3_STORAGE_GC_COOLDOWN_MS` | `60000` | Cooldown between manual storage GC runs |
 
 ### LLM Services
 
 | Key | Env Variable | Default | Description |
 |-----|--------------|---------|-------------|
 | `services.llm.openRouter.instanceApiKey` | `OPENROUTER_API_KEY` | — | Managed API key (optional) |
+| `services.llm.openRouter.baseUrl` | `OR3_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible base URL for proxy setups |
 | `services.llm.openRouter.allowUserOverride` | `OR3_OPENROUTER_ALLOW_USER_OVERRIDE` | `true` | Allow user-provided keys |
 | `services.llm.openRouter.requireUserKey` | `OR3_OPENROUTER_REQUIRE_USER_KEY` | `false` | Require user keys and ignore instance key |
 
@@ -108,6 +113,26 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 | `limits.maxMessagesPerDay` | `OR3_MAX_MESSAGES_PER_DAY` | `0` (unlimited) | Daily message cap |
 | `limits.maxConversations` | `OR3_MAX_CONVERSATIONS` | `0` (unlimited) | Max conversations |
 | `limits.storageProvider` | `OR3_LIMITS_STORAGE_PROVIDER` | `"convex"` (if sync) | Rate limit backend |
+| `limits.operationRateLimits` | `OR3_RATE_LIMIT_OVERRIDES_JSON` | `{}` | Per-operation `{ windowMs, maxRequests }` override map |
+
+Example `OR3_RATE_LIMIT_OVERRIDES_JSON`:
+
+```json
+{
+  "storage:upload": { "maxRequests": 20, "windowMs": 60000 },
+  "workflow:background": { "maxRequests": 10, "windowMs": 60000 }
+}
+```
+
+### Background Streaming
+
+| Key | Env Variable | Default | Description |
+|-----|--------------|---------|-------------|
+| `backgroundStreaming.enabled` | `OR3_BACKGROUND_STREAMING_ENABLED` | `false` | Enable server background streaming |
+| `backgroundStreaming.storageProvider` | `OR3_BACKGROUND_STREAMING_PROVIDER` | `"convex"` (if sync) | Background job state backend |
+| `backgroundStreaming.maxConcurrentJobs` | `OR3_BACKGROUND_MAX_JOBS` | `20` | Global concurrent background jobs |
+| `backgroundStreaming.maxConcurrentJobsPerUser` | `OR3_BACKGROUND_MAX_JOBS_PER_USER` | `5` | Per-user concurrent background jobs |
+| `backgroundStreaming.jobTimeoutSeconds` | `OR3_BACKGROUND_JOB_TIMEOUT` | `300` | Background job timeout in seconds |
 
 ### Legal
 
@@ -228,6 +253,9 @@ const syncUrl = or3CloudConfig.sync.convex?.url;
 ## Related
 
 - [or3-config](./or3-config) — Base configuration (branding, features, limits)
+- [providers](./providers) — Install provider packages + Clerk/Convex bridge wiring
+- [provider-clerk](./provider-clerk) — Dedicated Clerk provider install/setup guide
+- [provider-convex](./provider-convex) — Dedicated Convex provider install/setup guide
 - [auth-system](./auth-system) — Authentication architecture
 - [sync-layer](./sync-layer) — Sync system details
 - [storage-layer](./storage-layer) — Storage system details

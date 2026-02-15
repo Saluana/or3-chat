@@ -1,27 +1,48 @@
 /**
- * SubscriptionManager - Manages real-time sync subscriptions
+ * @module app/core/sync/subscription-manager
+ *
+ * Purpose:
+ * Manages the real-time sync subscription lifecycle for a workspace.
+ * Coordinates bootstrap pull, incremental subscription, change application,
+ * and reconnection with exponential backoff.
  *
  * Responsibilities:
- * - Subscribe to provider's real-time changes
- * - Route incoming changes to ConflictResolver
- * - Perform bootstrap pull on cold start
- * - Handle subscription errors with reconnect
- * - Update cursor after each batch
+ * - Perform paginated bootstrap pull on cold start (cursor = 0)
+ * - Perform full rescan when cursor is expired (stale > 24h)
+ * - Subscribe to real-time changes from the sync provider
+ * - Route incoming changes through the ConflictResolver
+ * - Filter echoed changes via the recent-op-cache
+ * - Drain any backlog between subscription cursor and current server version
+ * - Re-apply pending local ops after rescan to preserve unsynced work
+ * - Handle subscription errors with reconnection (exponential backoff)
+ * - Emit hooks for bootstrap, pull, subscription status, and errors
+ *
+ * Constraints:
+ * - Singleton per workspace scope (via `createSubscriptionManager`)
+ * - Maximum 20 reconnect attempts before giving up
+ * - Change application is serialized (queued) to prevent cursor races
+ * - Registers a `beforeunload` listener for clean shutdown
+ * - Circuit breaker prevents bootstrap/rescan during provider outages
+ *
+ * @see core/sync/conflict-resolver for LWW change application
+ * @see core/sync/cursor-manager for cursor persistence
+ * @see core/sync/recent-op-cache for echo filtering
  */
 import type { Or3DB } from '~/db/client';
-import type { SyncProvider, SyncScope, SyncChange } from '~~/shared/sync/types';
+import type { SyncProvider, SyncScope, SyncChange, PullResponse } from '~~/shared/sync/types';
 import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
 import { useHooks } from '~/core/hooks/useHooks';
 import { getHookBridge } from './hook-bridge';
 import { isRecentOpId } from './recent-op-cache';
+import { isAbortLikeError } from './providers/gateway-sync-provider';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 
 /** Default tables to sync */
 const DEFAULT_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta', 'notifications'];
 
 /** Bootstrap pull page size */
-const BOOTSTRAP_PAGE_SIZE = 100;
+const BOOTSTRAP_PAGE_SIZE = 300;
 
 /** Reconnect delays (exponential backoff) */
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
@@ -29,14 +50,36 @@ const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
 /** Max reconnect attempts before giving up (about 10 minutes of trying) */
 const MAX_RECONNECT_ATTEMPTS = 20;
 
+/**
+ * Purpose:
+ * High-level subscription lifecycle state for UI and diagnostics.
+ */
 export type SubscriptionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 
+/**
+ * Purpose:
+ * Configuration for subscription bootstrap, polling, and reconnect behavior.
+ */
 export interface SubscriptionManagerConfig {
     tables?: string[];
     bootstrapPageSize?: number;
     reconnectDelays?: number[];
 }
 
+/**
+ * Purpose:
+ * Drive the pull + subscribe lifecycle for a workspace scope.
+ *
+ * Behavior:
+ * - Performs bootstrap pull and incremental catch-up using a persisted cursor
+ * - Applies remote changes through ConflictResolver in a serialized queue
+ * - Filters echoed ops using recent-op-cache
+ * - Handles reconnect with exponential backoff
+ *
+ * Constraints:
+ * - Caller owns lifecycle; must call `stop()` when a workspace is disposed
+ * - Designed to be singleton per scope via `createSubscriptionManager`
+ */
 export class SubscriptionManager {
     private db: Or3DB;
     private provider: SyncProvider;
@@ -54,6 +97,7 @@ export class SubscriptionManager {
     private isBootstrapping = false;
     private boundBeforeUnload: (() => void) | null = null;
     private lastSubscriptionCursor: number | null = null;
+    private changeQueue: Promise<void> = Promise.resolve();
 
     constructor(
         db: Or3DB,
@@ -117,6 +161,9 @@ export class SubscriptionManager {
             this.reconnectAttempts = 0;
             this.setStatus('connected');
         } catch (error) {
+            if (this.status === 'disconnected' || isAbortLikeError(error)) {
+                return;
+            }
             console.error('[SubscriptionManager] Failed to start:', error);
             this.setStatus('error');
             this.scheduleReconnect();
@@ -160,6 +207,9 @@ export class SubscriptionManager {
 
     /**
      * Perform bootstrap pull (paginated)
+     *
+     * Uses prefetch overlap: while applying page N, the fetch for page N+1
+     * is already in flight. This hides network latency behind IndexedDB writes.
      */
     private async bootstrap(): Promise<void> {
         // Check circuit breaker to prevent retry storm during outages
@@ -170,6 +220,7 @@ export class SubscriptionManager {
         }
 
         this.isBootstrapping = true;
+        const startTime = Date.now();
 
         try {
             let cursor = 0;
@@ -178,6 +229,14 @@ export class SubscriptionManager {
 
             await useHooks().doAction('sync.bootstrap:action:start', {
                 scope: this.scope,
+            });
+
+            // Kick off the first fetch
+            let pendingFetch: Promise<PullResponse> | null = this.provider.pull({
+                scope: this.scope,
+                cursor,
+                limit: this.config.bootstrapPageSize,
+                tables: this.config.tables,
             });
 
             while (hasMore) {
@@ -189,24 +248,10 @@ export class SubscriptionManager {
                     break;
                 }
 
-                const response = await this.provider.pull({
-                    scope: this.scope,
-                    cursor,
-                    limit: this.config.bootstrapPageSize,
-                    tables: this.config.tables,
-                });
+                const response = await pendingFetch!;
 
-                if (response.changes.length > 0) {
-                    const filtered = this.filterRecentOps(response.changes);
-                    if (filtered.length) {
-                        await this.applyChanges(filtered);
-                    }
-                    totalPulled += response.changes.length;
-                }
-
-                // Loop guard: If cursor doesn't advance but hasMore is true, we are stuck
-                // Note: hasMore is guaranteed true by while loop condition
-                if (response.nextCursor <= cursor) {
+                // Loop guard: only error if backend says there is more data but cursor is stuck.
+                if (response.hasMore && response.nextCursor <= cursor) {
                     console.error('[SubscriptionManager] Infinite loop detected during bootstrap: cursor not advancing', {
                         cursor,
                         nextCursor: response.nextCursor,
@@ -216,6 +261,26 @@ export class SubscriptionManager {
                         error: 'Infinite loop detected: cursor not advancing',
                     });
                     break;
+                }
+
+                // Start prefetching the next page while we apply the current one
+                if (response.hasMore && response.nextCursor > cursor) {
+                    pendingFetch = this.provider.pull({
+                        scope: this.scope,
+                        cursor: response.nextCursor,
+                        limit: this.config.bootstrapPageSize,
+                        tables: this.config.tables,
+                    });
+                } else {
+                    pendingFetch = null;
+                }
+
+                if (response.changes.length > 0) {
+                    const filtered = this.filterRecentOps(response.changes);
+                    if (filtered.length) {
+                        await this.applyChanges(filtered);
+                    }
+                    totalPulled += response.changes.length;
                 }
 
                 cursor = response.nextCursor;
@@ -229,20 +294,36 @@ export class SubscriptionManager {
                 });
             }
 
+            if (this.status === 'disconnected') {
+                return;
+            }
+
             // Update cursor after bootstrap
             await this.cursorManager.setCursor(cursor);
             await this.cursorManager.markSyncComplete();
-            await this.provider.updateCursor(
+
+            // Fire-and-forget: remote cursor update is best-effort;
+            // the local cursor is already persisted above.
+            this.provider.updateCursor(
                 this.scope,
                 this.cursorManager.getDeviceId(),
                 cursor
-            );
+            ).catch((err) => {
+                if (this.status === 'disconnected' || isAbortLikeError(err)) {
+                    return;
+                }
+                console.warn('[SubscriptionManager] Failed to update remote cursor after bootstrap:', err);
+            });
 
+            const elapsedMs = Date.now() - startTime;
             await useHooks().doAction('sync.bootstrap:action:complete', {
                 scope: this.scope,
                 cursor,
                 totalPulled,
+                elapsedMs,
             });
+
+            console.log(`[SubscriptionManager] Bootstrap complete: ${totalPulled} changes in ${elapsedMs}ms`);
         } finally {
             this.isBootstrapping = false;
         }
@@ -307,13 +388,24 @@ export class SubscriptionManager {
                 hasMore = response.hasMore;
             }
 
+            if (this.status === 'disconnected') {
+                return;
+            }
+
             await this.cursorManager.setCursor(cursor);
             await this.cursorManager.markSyncComplete();
-            await this.provider.updateCursor(
+
+            // Fire-and-forget: remote cursor update is best-effort
+            this.provider.updateCursor(
                 this.scope,
                 this.cursorManager.getDeviceId(),
                 cursor
-            );
+            ).catch((err) => {
+                if (this.status === 'disconnected' || isAbortLikeError(err)) {
+                    return;
+                }
+                console.warn('[SubscriptionManager] Failed to update remote cursor after rescan:', err);
+            });
 
             await this.reapplyPendingOps();
 
@@ -371,14 +463,25 @@ export class SubscriptionManager {
         this.unsubscribe = await this.provider.subscribe(
             this.scope,
             this.config.tables,
-            (changes) => {
-                this.handleChanges(changes).catch((err) => {
-                    console.error('[SubscriptionManager] handleChanges error:', err);
-                    this.handleError(err);
-                });
-            },
+            (changes) => this.enqueueChanges(changes),
             { cursor, limit: this.config.bootstrapPageSize }
         );
+    }
+
+    private enqueueChanges(changes: SyncChange[]): Promise<void> {
+        // Providers can emit change batches back-to-back (especially gateway polling).
+        // Serialize apply cycles to keep cursor accounting correct and avoid races.
+        this.changeQueue = this.changeQueue
+            .then(() => this.handleChanges(changes))
+            .catch((err) => {
+                if (this.status === 'disconnected' || isAbortLikeError(err)) {
+                    return;
+                }
+                console.error('[SubscriptionManager] handleChanges error:', err);
+                this.handleError(err);
+            });
+
+        return this.changeQueue;
     }
 
     /**
@@ -414,8 +517,13 @@ export class SubscriptionManager {
                 ? await this.applyChanges(filteredChanges)
                 : { applied: 0, skipped: 0, conflicts: 0 };
 
-            // Update cursor to highest server version
-            let maxVersion = Math.max(...newChanges.map((c) => c.serverVersion));
+            // Update cursor to highest server version (loop-based to avoid spread stack overflow)
+            let maxVersion = currentCursor;
+            for (const change of newChanges) {
+                if (change.serverVersion > maxVersion) {
+                    maxVersion = change.serverVersion;
+                }
+            }
 
             if (import.meta.dev) {
                 console.debug('[sync] subscription apply', {
@@ -430,7 +538,8 @@ export class SubscriptionManager {
                 await this.cursorManager.setCursor(maxVersion);
             }
 
-            const drainResult = await this.drainBacklog(currentCursor);
+            const drainStartCursor = this.getBacklogDrainStartCursor(currentCursor, newChanges);
+            const drainResult = await this.drainBacklog(drainStartCursor);
             if (drainResult.cursor > maxVersion) {
                 maxVersion = drainResult.cursor;
                 await this.cursorManager.setCursor(maxVersion);
@@ -452,6 +561,9 @@ export class SubscriptionManager {
                 conflicts: result.conflicts + drainResult.conflicts,
             });
         } catch (error) {
+            if (this.status === 'disconnected' || isAbortLikeError(error)) {
+                return;
+            }
             console.error('[SubscriptionManager] Failed to apply changes:', error);
             await useHooks().doAction('sync.pull:action:error', {
                 scope: this.scope,
@@ -485,6 +597,28 @@ export class SubscriptionManager {
         return filtered;
     }
 
+    private getBacklogDrainStartCursor(currentCursor: number, changes: SyncChange[]): number {
+        const versions = changes
+            .map((change) => change.serverVersion)
+            .sort((a, b) => a - b);
+
+        if (versions.length === 0) {
+            return currentCursor;
+        }
+
+        let expected = currentCursor + 1;
+        for (const version of versions) {
+            if (version !== expected) {
+                // A gap means we need to re-pull from current cursor to avoid missing versions.
+                return currentCursor;
+            }
+            expected += 1;
+        }
+
+        // No observed gaps; continue from highest seen version to avoid duplicate re-pulls.
+        return versions[versions.length - 1] ?? currentCursor;
+    }
+
     private async drainBacklog(startCursor: number) {
         let cursor = startCursor;
         let hasMore = true;
@@ -512,9 +646,17 @@ export class SubscriptionManager {
                 totals.conflicts += result.conflicts;
             }
 
+            const previousCursor = cursor;
             cursor = response.nextCursor;
             totals.cursor = cursor;
             hasMore = response.hasMore;
+            if (hasMore && cursor <= previousCursor) {
+                console.error('[SubscriptionManager] Infinite loop detected during backlog drain', {
+                    cursor: previousCursor,
+                    nextCursor: response.nextCursor,
+                });
+                break;
+            }
         }
 
         return totals;
@@ -524,6 +666,9 @@ export class SubscriptionManager {
      * Handle subscription error
      */
     private handleError(error: unknown): void {
+        if (this.status === 'disconnected' || isAbortLikeError(error)) {
+            return;
+        }
         console.error('[SubscriptionManager] Subscription error:', error);
         if (this.unsubscribe) {
             this.unsubscribe();
@@ -617,7 +762,11 @@ function getScopeKey(scope: SyncScope): string {
 }
 
 /**
- * Create a subscription manager for a scope
+ * Purpose:
+ * Create (or replace) the SubscriptionManager singleton for a scope.
+ *
+ * Behavior:
+ * - Stops any existing instance for the scope (best-effort)
  */
 export function createSubscriptionManager(
     db: Or3DB,
@@ -641,14 +790,18 @@ export function createSubscriptionManager(
 }
 
 /**
- * Get existing subscription manager for a scope
+ * Purpose:
+ * Return the existing SubscriptionManager for a scope, if created.
  */
 export function getSubscriptionManager(scope: SyncScope): SubscriptionManager | null {
     return subscriptionManagerInstances.get(getScopeKey(scope)) ?? null;
 }
 
 /**
- * Reset all subscription managers (for testing)
+ * Internal API.
+ *
+ * Purpose:
+ * Stop and clear all SubscriptionManager instances. Intended for tests.
  */
 export async function _resetSubscriptionManagers(): Promise<void> {
     for (const manager of subscriptionManagerInstances.values()) {
@@ -658,7 +811,8 @@ export async function _resetSubscriptionManagers(): Promise<void> {
 }
 
 /**
- * Cleanup SubscriptionManager instance for a scope
+ * Purpose:
+ * Stop and remove a SubscriptionManager instance by scope key.
  */
 export function cleanupSubscriptionManager(scopeKey: string): void {
     const manager = subscriptionManagerInstances.get(scopeKey);
@@ -668,4 +822,21 @@ export function cleanupSubscriptionManager(scopeKey: string): void {
         });
     }
     subscriptionManagerInstances.delete(scopeKey);
+}
+
+/**
+ * Purpose:
+ * Stop and remove all SubscriptionManager instances for a workspace.
+ */
+export function cleanupSubscriptionManagersByWorkspace(
+    workspaceId: string
+): void {
+    const prefix = `${workspaceId}:`;
+    for (const [scopeKey, manager] of subscriptionManagerInstances.entries()) {
+        if (!scopeKey.startsWith(prefix)) continue;
+        manager.stop().catch((error) => {
+            console.error('[SubscriptionManager] Failed to stop instance:', error);
+        });
+        subscriptionManagerInstances.delete(scopeKey);
+    }
 }

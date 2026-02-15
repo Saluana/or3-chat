@@ -279,6 +279,7 @@ async function load() {
         reportError(error, {
             code: 'ERR_DB_READ_FAILED',
             message: `Couldn't load "${nextMeta.name || 'image'}" preview.`,
+            silent: true,
             tags: {
                 domain: 'images',
                 action: 'viewer-load',

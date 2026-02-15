@@ -111,18 +111,17 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    // Check username match
-    if (credentials.username !== username) {
-        recordFailedAttempt(clientIp, username);
-        throw createError({
-            statusCode: 401,
-            statusMessage: 'Invalid credentials',
-        });
-    }
+    // Always run bcrypt verification to prevent timing attacks
+    // Use a dummy hash if username doesn't match
+    const DUMMY_BCRYPT_HASH = '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIpSrHxnJO';
+    const hashToVerify = credentials.username === username
+        ? credentials.password_hash_bcrypt
+        : DUMMY_BCRYPT_HASH;
 
-    // Verify password
-    const passwordValid = await verifyPassword(password, credentials.password_hash_bcrypt);
-    if (!passwordValid) {
+    const passwordValid = await verifyPassword(password, hashToVerify);
+
+    // Check if credentials are correct
+    if (credentials.username !== username || !passwordValid) {
         recordFailedAttempt(clientIp, username);
         throw createError({
             statusCode: 401,

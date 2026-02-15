@@ -1,17 +1,47 @@
+/**
+ * @module app/core/auth/openrouter-auth
+ *
+ * Purpose:
+ * Handles the OpenRouter OAuth PKCE code exchange. Receives an authorization
+ * code from the callback page and exchanges it for a user API key via the
+ * OpenRouter SDK.
+ *
+ * Responsibilities:
+ * - Exchange an authorization code + PKCE verifier for an API key
+ * - Map SDK error codes to the app-level `ErrorCode` union
+ * - Report structured errors via `reportError()` with toast feedback
+ *
+ * Non-responsibilities:
+ * - Does not initiate the OAuth flow (see useOpenrouter.ts)
+ * - Does not persist the obtained key (caller is responsible)
+ *
+ * Constraints:
+ * - Relies on the shared OpenRouter SDK client (no direct fetch)
+ * - Error mapping is intentionally conservative; unknown codes fall to ERR_NETWORK
+ *
+ * @see core/auth/useOpenrouter for the login flow initiator
+ * @see shared/openrouter/errors for SDK error normalization
+ */
 import { err, reportError, type ErrorCode } from '~/utils/errors';
 import { createOpenRouterClient } from '~~/shared/openrouter/client';
 import { normalizeSDKError } from '~~/shared/openrouter/errors';
+import { useRuntimeConfig } from '#imports';
 
+/** Successful code exchange: contains the user's API key. */
 export interface ExchangeResultSuccess {
     ok: true;
     userKey: string;
     status: number;
 }
+
+/** Failed code exchange with a categorized reason. */
 export interface ExchangeResultFail {
     ok: false;
     status: number;
     reason: 'network' | 'bad-response' | 'no-key';
 }
+
+/** Discriminated union returned by `exchangeOpenRouterCode`. */
 export type ExchangeResult = ExchangeResultSuccess | ExchangeResultFail;
 
 export interface ExchangeParams {
@@ -45,11 +75,33 @@ function mapToErrorCode(sdkCode: string): ErrorCode {
     }
 }
 
+/**
+ * Purpose:
+ * Exchange an OAuth authorization code for an OpenRouter API key.
+ *
+ * Behavior:
+ * Calls the OpenRouter SDK `oAuth.exchangeAuthCodeForAPIKey` endpoint.
+ * On success, returns the API key string. On failure, reports a structured
+ * error and returns a typed failure result.
+ *
+ * Errors:
+ * - `ERR_AUTH`: Exchange returned no key or auth failure
+ * - `ERR_RATE_LIMIT`: OpenRouter rate limit hit
+ * - `ERR_NETWORK`: Network/abort/unknown error
+ *
+ * @throws Never throws; errors are reported via `reportError()` with toast.
+ */
 export async function exchangeOpenRouterCode(
     p: ExchangeParams
 ): Promise<ExchangeResult> {
     // SDK OAuth doesn't require auth for exchange
-    const client = createOpenRouterClient({ apiKey: '' });
+    const runtimeConfig = useRuntimeConfig() as {
+        public?: { openRouter?: { baseUrl?: string } };
+    };
+    const client = createOpenRouterClient({
+        apiKey: '',
+        serverURL: runtimeConfig.public?.openRouter?.baseUrl,
+    });
 
     try {
         const response = await client.oAuth.exchangeAuthCodeForAPIKey({

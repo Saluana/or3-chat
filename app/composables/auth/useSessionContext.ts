@@ -83,3 +83,16 @@ export function useSessionContext() {
         refresh,
     };
 }
+
+/**
+ * Read the current cached session payload without triggering a network request.
+ * Safe to call from non-component utilities (returns null when unavailable).
+ */
+export function getCachedSessionContext(): SessionContext | null {
+    try {
+        const state = useState<SessionPayload | null>('auth-session');
+        return state.value?.session ?? null;
+    } catch {
+        return null;
+    }
+}

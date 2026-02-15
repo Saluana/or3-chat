@@ -192,4 +192,59 @@ describe('ConflictResolver', () => {
             expect.objectContaining({ winner: 'local' })
         );
     });
+
+    it('treats equal HLC put as idempotent duplicate (not conflict)', async () => {
+        const table = createMemoryTable<MessageRow>('id', [
+            { id: 'm1', clock: 2, hlc: '0000000000002:0002:node' },
+        ]);
+        const tombstones = createMemoryTable<any>('id');
+        const db = createMockDb({ messages: table, tombstones });
+        const resolver = new ConflictResolver(db as any);
+
+        const change = buildChange({
+            pk: 'm1',
+            op: 'put',
+            clock: 2,
+            hlc: '0000000000002:0002:node',
+            payload: buildMessagePayload({ id: 'm1', text: 'duplicate', clock: 2 }),
+        });
+
+        const result = await resolver.applyChanges([change]);
+        const stored = await table.get('m1');
+
+        expect(result.applied).toBe(0);
+        expect(result.conflicts).toBe(0);
+        expect(stored?.hlc).toBe('0000000000002:0002:node');
+        expect(hookState.doAction).not.toHaveBeenCalledWith(
+            'sync.conflict:action:detected',
+            expect.anything()
+        );
+    });
+
+    it('treats equal HLC delete as idempotent duplicate (not conflict)', async () => {
+        const table = createMemoryTable<MessageRow>('id', [
+            { id: 'm1', clock: 2, hlc: '0000000000002:0002:node', deleted: false },
+        ]);
+        const tombstones = createMemoryTable<any>('id');
+        const db = createMockDb({ messages: table, tombstones });
+        const resolver = new ConflictResolver(db as any);
+
+        const change = buildChange({
+            pk: 'm1',
+            op: 'delete',
+            clock: 2,
+            hlc: '0000000000002:0002:node',
+        });
+
+        const result = await resolver.applyChanges([change]);
+        const stored = await table.get('m1');
+
+        expect(result.applied).toBe(0);
+        expect(result.conflicts).toBe(0);
+        expect(stored?.deleted).toBe(false);
+        expect(hookState.doAction).not.toHaveBeenCalledWith(
+            'sync.conflict:action:detected',
+            expect.anything()
+        );
+    });
 });

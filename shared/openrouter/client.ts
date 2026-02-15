@@ -3,9 +3,11 @@
 // Provides consistent SDK initialization and common request options
 
 import { OpenRouter } from '@openrouter/sdk';
+import { normalizeOpenRouterBaseUrl } from './url';
 
 export interface OpenRouterClientConfig {
     apiKey?: string;
+    serverURL?: string;
 }
 
 // Default headers for all requests
@@ -25,6 +27,7 @@ export function createOpenRouterClient(
 ): OpenRouter {
     return new OpenRouter({
         apiKey: config.apiKey ?? '',
+        serverURL: normalizeOpenRouterBaseUrl(config.serverURL),
     });
 }
 

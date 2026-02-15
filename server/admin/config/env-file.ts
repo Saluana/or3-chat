@@ -20,7 +20,7 @@
  * - Does not perform masking of sensitive values (handled at manager level).
  */
 import { promises as fs } from 'node:fs';
-import { resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 
 /**
  * Represents a single line in an .env file.
@@ -37,7 +37,28 @@ export type EnvLine =
     /** A key-value pair entry (e.g., KEY=VALUE) */
     | { type: 'entry'; key: string; value: string; raw: string };
 
-const ENV_PATH = resolve(process.cwd(), '.env');
+export type EnvFileLocation = {
+    instanceDir?: string;
+    envFile?: string;
+};
+
+export type EnvWriteOptions = EnvFileLocation & {
+    /**
+     * When true, creates a timestamped backup before writing if target exists.
+     * Backup files use `<envFile>.backup.<timestamp>`.
+     */
+    createBackup?: boolean;
+};
+
+export type EnvWriteResult = {
+    path: string;
+    backupPath: string | null;
+    changed: boolean;
+};
+
+function resolveEnvPath(location: EnvFileLocation = {}): string {
+    return resolve(location.instanceDir ?? process.cwd(), location.envFile ?? '.env');
+}
 
 /**
  * Parses a single line from an .env file into an EnvLine object.
@@ -79,10 +100,13 @@ function formatValue(value: string): string {
  * 3. Splits by line and parses each into an `EnvLine`.
  * 4. Aggregates entries into a key-value map for fast lookup.
  */
-export async function readEnvFile(): Promise<{ lines: EnvLine[]; map: Record<string, string> }> {
+export async function readEnvFile(
+    location: EnvFileLocation = {}
+): Promise<{ lines: EnvLine[]; map: Record<string, string>; path: string }> {
+    const envPath = resolveEnvPath(location);
     let content = '';
     try {
-        content = await fs.readFile(ENV_PATH, 'utf8');
+        content = await fs.readFile(envPath, 'utf8');
     } catch (error) {
         const err = error as NodeJS.ErrnoException;
         if (err.code === 'ENOENT') {
@@ -99,7 +123,7 @@ export async function readEnvFile(): Promise<{ lines: EnvLine[]; map: Record<str
             map[line.key] = line.value;
         }
     }
-    return { lines, map };
+    return { lines, map, path: envPath };
 }
 
 /**
@@ -119,10 +143,40 @@ export async function readEnvFile(): Promise<{ lines: EnvLine[]; map: Record<str
  * });
  * ```
  */
-export async function writeEnvFile(
-    updates: Record<string, string | null>
-): Promise<void> {
-    const { lines, map } = await readEnvFile();
+function formatTimestamp(value: Date): string {
+    const year = String(value.getFullYear());
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    const hour = String(value.getHours()).padStart(2, '0');
+    const minute = String(value.getMinutes()).padStart(2, '0');
+    const second = String(value.getSeconds()).padStart(2, '0');
+    return `${year}${month}${day}-${hour}${minute}${second}`;
+}
+
+async function createBackupIfNeeded(
+    path: string,
+    createBackup: boolean | undefined
+): Promise<string | null> {
+    if (!createBackup) return null;
+    try {
+        await fs.access(path);
+    } catch (error) {
+        const err = error as NodeJS.ErrnoException;
+        if (err.code === 'ENOENT') return null;
+        throw error;
+    }
+
+    const stamp = formatTimestamp(new Date());
+    const backupPath = resolve(dirname(path), `${basename(path)}.backup.${stamp}`);
+    await fs.copyFile(path, backupPath);
+    return backupPath;
+}
+
+export async function writeEnvFileDetailed(
+    updates: Record<string, string | null>,
+    options: EnvWriteOptions = {}
+): Promise<EnvWriteResult> {
+    const { lines, map, path } = await readEnvFile(options);
     const updatedMap = { ...map };
     for (const [key, value] of Object.entries(updates)) {
         if (value === null) {
@@ -148,5 +202,30 @@ export async function writeEnvFile(
         nextLines.push(`${key}=${formatValue(updatedMap[key] ?? '')}`);
     }
 
-    await fs.writeFile(ENV_PATH, nextLines.join('\n'), 'utf8');
+    const nextContent = nextLines.join('\n');
+    const previousContent = lines.map((line) => line.raw).join('\n');
+    const changed = nextContent !== previousContent;
+
+    if (!changed) {
+        return {
+            path,
+            backupPath: null,
+            changed: false,
+        };
+    }
+
+    const backupPath = await createBackupIfNeeded(path, options.createBackup);
+    await fs.writeFile(path, nextContent, 'utf8');
+    return {
+        path,
+        backupPath,
+        changed: true,
+    };
+}
+
+export async function writeEnvFile(
+    updates: Record<string, string | null>,
+    options: EnvFileLocation = {}
+): Promise<void> {
+    await writeEnvFileDetailed(updates, options);
 }

@@ -24,7 +24,8 @@ The client app uses composables to manage this state:
 
 *   **`useSessionContext`**: Fetches the resolved session from the server (SSR-safe).
 *   **`useSession`**: Provides reactive "Is Signed In" state and User ID.
-*   **`convex-clerk.client.ts`**: A plugin that bridges Clerk and Convex. it watches the Clerk session and pushes the JWT to the Convex client (`convex.setAuth`), enabling RLS (Row Level Security) on the backend.
+*   **`or3-provider-clerk/runtime/plugins/auth-token-broker.client.ts`**: Registers a client `AuthTokenBroker` that reads Clerk JWT templates.
+*   **`or3-provider-convex/runtime/plugins/convex-auth.client.ts`**: Uses that broker to set Convex auth (`client.setAuth`) and refreshes tokens on session changes.
 
 ### 3. LLM Authorization (OpenRouter)
 
@@ -285,5 +286,8 @@ const isValid = computed(() => {
 ## Related
 
 - [or3-cloud-config](./or3-cloud-config) - Configuration reference
+- [providers](./providers) - Provider install and Clerk to Convex bridge wiring
+- [provider-clerk](./provider-clerk) - Clerk provider install and token broker details
+- [provider-convex](./provider-convex) - Convex provider install and auth bridge details
 - [Sync Layer](./sync-layer) - Sync depends on auth
 - [Troubleshooting](./troubleshooting) - Common issues

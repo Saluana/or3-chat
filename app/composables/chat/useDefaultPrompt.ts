@@ -48,13 +48,14 @@
  */
 
 import { ref, readonly } from 'vue';
-import { db } from '~/db';
+import { getDb } from '~/db/client';
 import { setKvByName } from '~/db/kv';
 import { useHooks } from '#imports';
 
 // Singleton state (module scope) so all importers share
 const _defaultPromptId = ref<string | null>(null);
 let _loaded = false;
+let _loadedDbName: string | null = null;
 
 /**
  * Lazy-loads default prompt ID from KV store (once per session).
@@ -68,8 +69,10 @@ let _loaded = false;
  * - Load errors are swallowed; state defaults to `null`
  */
 async function loadOnce() {
-    if (_loaded) return;
+    const db = getDb();
+    if (_loaded && _loadedDbName === db.name) return;
     _loaded = true;
+    _loadedDbName = db.name;
     try {
         const rec = await db.kv
             .where('name')
@@ -166,6 +169,7 @@ export function useDefaultPrompt() {
  */
 export async function getDefaultPromptId(): Promise<string | null> {
     try {
+        const db = getDb();
         const rec = await db.kv
             .where('name')
             .equals('default_system_prompt_id')

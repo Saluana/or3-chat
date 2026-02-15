@@ -58,6 +58,53 @@ describe('NotificationService', () => {
         expect(db.notifications.add).not.toHaveBeenCalled();
         stop();
     });
+
+    it('falls back when db.transaction is unavailable', async () => {
+        const modifyReadSpy = vi.fn().mockResolvedValue(0);
+        const modifyClearSpy = vi.fn().mockResolvedValue(2);
+        const whereChainRead = {
+            equals: vi.fn().mockReturnThis(),
+            and: vi.fn().mockReturnThis(),
+            modify: modifyReadSpy,
+        };
+        const whereChainClear = {
+            equals: vi.fn().mockReturnThis(),
+            and: vi.fn().mockReturnThis(),
+            modify: modifyClearSpy,
+        };
+
+        const db = {
+            notifications: {
+                add: vi.fn().mockResolvedValue(undefined),
+                update: vi.fn().mockResolvedValue(1),
+                where: vi
+                    .fn()
+                    .mockReturnValueOnce(whereChainRead)
+                    .mockReturnValueOnce(whereChainClear),
+            },
+            tables: [{ name: 'notifications' }],
+        } as unknown as Or3DB;
+
+        const hooks = createTypedHookEngine(createHookEngine());
+        const service = new NotificationService(db, hooks, 'user-1');
+
+        const created = await service.create({
+            type: 'system.warning',
+            title: 'Alert',
+        });
+        expect(created).not.toBeNull();
+        expect(db.notifications.add).toHaveBeenCalledTimes(1);
+
+        await service.markRead(created!.id);
+        expect(db.notifications.update).toHaveBeenCalledTimes(1);
+
+        await service.markAllRead();
+        expect(modifyReadSpy).toHaveBeenCalledTimes(1);
+
+        const cleared = await service.clearAll();
+        expect(cleared).toBe(2);
+        expect(modifyClearSpy).toHaveBeenCalledTimes(1);
+    });
 });
 
 describe('NotificationService (Dexie)', () => {
