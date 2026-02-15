@@ -22,6 +22,7 @@ export default defineTheme({
 
     borderWidth: '1px',
     borderRadius: '12px',
+        stylesheets: ['~/theme/blank/styles.css'],
     // Material Design 3 color palette for retro theme
     // These will generate CSS variables for both light and dark modes
     colors: {
@@ -182,26 +183,6 @@ export default defineTheme({
         ...chatCssSelectors,
         ...dashboardStyles,
         ...documentsStyles,
-        /*
-        '.theme-btn': {
-            style: {
-                border: 'var(--md-border-width) solid var(--md-border-color)',
-                borderRadius: 'var(--md-border-radius)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-            },
-        },
-        '.theme-btn:hover': {
-            style: {
-                backgroundColor: 'var(--md-surface-hover)',
-            },
-        },
-        '.theme-btn:active': {
-            style: {
-                backgroundColor: 'var(--md-surface-active)',
-            },
-        },*/
         '#top-nav .theme-btn': {
             style: {
                 border: 'none !important',
@@ -214,25 +195,5 @@ export default defineTheme({
                 minWidth: '24px',
             },
         },
-        // Example: Third-party Monaco editor styling
-        // '.monaco-editor': {
-        //     style: {
-        //         border: '2px solid var(--md-outline)',
-        //         borderRadius: '3px',
-        //     },
-        //     class: 'retro-shadow',
-        // },
-        // Example: TipTap editor styling
-        // '.tiptap': {
-        //     style: {
-        //         fontFamily: 'VT323, monospace',
-        //         fontSize: '20px',
-        //     },
-        //     class: 'prose prose-retro',
-        // },
-        // Example: Modal overlays
-        // '.modal-overlay': {
-        //     class: 'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
-        // },
     },
 });

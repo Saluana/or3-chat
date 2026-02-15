@@ -76,10 +76,10 @@ export const sidebarOverrides = {
     },
     'button#sidebar.bottom-nav.connect': {
         variant: 'outline',
-        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] text-[color:var(--md-on-surface)]! transition-colors duration-150',
+        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[color:var(--md-on-surface)]! transition-colors duration-150',
     },
     'button#sidebar.bottom-nav.connect:connected': {
-        class: 'bg-[var(--md-success)]/20 hover:border-[color:var(--md-error)]! hover:bg-[var(--md-error)]/30! active:bg-[var(--md-error)]/40! text-[color:var(--md-on-surface)]',
+        class: 'border-[var(--md-success)]/60! bg-[var(--md-success)]/20 hover:border-[color:var(--md-error)]! hover:bg-[var(--md-error)]/30! active:bg-[var(--md-error)]/40! text-[color:var(--md-on-surface)]',
     },
     'button#sidebar.bottom-nav.connect:disconnected': {
         class: 'hover:bg-[var(--md-success)]/15! active:bg-[var(--md-success)]/25',
@@ -103,13 +103,13 @@ export const sidebarOverrides = {
     /* --- Collapsed sidebar buttons --- */
     'button#sidebar.collapsed-page': {
         ui: {
-            base: 'bg-transparent hover:bg-[var(--md-surface-hover)] hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] text-[var(--md-on-surface)]',
+            base: 'h-[48px] w-[48px] bg-transparent hover:bg-[var(--md-surface-hover)] hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] text-[var(--md-on-surface)]',
             leadingIcon: 'w-6 h-6',
         },
     },
     'button#sidebar.collapsed-page:active': {
         ui: {
-            base: 'bg-[var(--md-surface-active)] ring-1 ring-[var(--md-primary-border)]/20 hover:ring-1 hover:ring-[var(--md-primary-border)]/50 hover:bg-[var(--md-surface-active)]  text-[var(--md-on-surface)]',
+            base: 'h-[48px] w-[48px] bg-[var(--md-surface-active)] ring-1 ring-[var(--md-primary-border)]/20 hover:ring-1 hover:ring-[var(--md-primary-border)]/50 hover:bg-[var(--md-surface-active)]  text-[var(--md-on-surface)]',
             leadingIcon: 'w-6 h-6',
         },
     },
