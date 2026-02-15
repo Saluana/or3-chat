@@ -87,20 +87,20 @@
                     :key="workspace.id"
                     class="rounded-md border border-[var(--md-outline-variant)] p-4 space-y-3"
                 >
-                    <div class="flex flex-wrap items-start justify-between gap-4">
-                        <div class="space-y-1">
-                            <div class="flex items-center gap-2">
-                                <h4 class="text-sm font-semibold">
+                    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div class="min-w-0 flex-1 space-y-1 pr-2">
+                            <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <h4 class="min-w-0 max-w-full line-clamp-2 text-sm font-semibold wrap-anywhere" :title="workspace.name">
                                     {{ workspace.name }}
                                 </h4>
                                 <span
                                     v-if="workspace.isActive"
-                                    class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--md-surface-container-high)]"
+                                    class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--md-surface-container-high)] shrink-0"
                                 >
                                     Active
                                 </span>
                             </div>
-                            <p class="text-xs opacity-70">
+                            <p class="max-w-full line-clamp-2 text-xs opacity-70 wrap-anywhere" :title="workspace.description || ''">
                                 {{ workspace.description || 'No description yet.' }}
                             </p>
                             <p class="text-[11px] opacity-60">
@@ -113,7 +113,7 @@
                                 </span>
                             </p>
                         </div>
-                        <div class="flex flex-wrap gap-2">
+                        <div class="w-full sm:w-auto flex flex-wrap gap-2 justify-end sm:justify-start pt-2 sm:pt-0">
                             <UButton
                                 size="sm"
                                 class="whitespace-nowrap shrink-0"

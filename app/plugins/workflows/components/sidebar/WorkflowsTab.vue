@@ -278,7 +278,7 @@ function formatTime(timestamp: number) {
                     <UButton
                         size="xs"
                         variant="ghost"
-                        class="center-it"
+                        class="center-it theme-btn rename-wf-btn"
                         icon="tabler:pencil"
                         @click="openRenameModal(workflow, $event)"
                         title="Rename workflow"
@@ -287,7 +287,7 @@ function formatTime(timestamp: number) {
                         size="xs"
                         variant="ghost"
                         color="error"
-                        class="center-it"
+                        class="center-it theme-btn delete-wf-btn"
                         icon="tabler:trash"
                         @click="confirmDeleteWorkflow(workflow, $event)"
                         title="Delete workflow"
@@ -300,12 +300,17 @@ function formatTime(timestamp: number) {
         <UModal
             v-if="canEdit"
             v-model:open="showCreateModal"
+            :close="{
+                size:'sm',
+                class: 'theme-btn',
+            }"
             title="New Workflow"
             description="Give your workflow a name before creating it."
         >
             <template #body>
                 <div class="space-y-4">
                     <UInput
+                    class="w-full"
                         v-model="createName"
                         placeholder="Workflow name"
                         autofocus
@@ -314,10 +319,11 @@ function formatTime(timestamp: number) {
                 </div>
             </template>
             <template #footer>
-                <UButton variant="ghost" @click="showCreateModal = false">
+                <div class="w-full flex justify-end gap-2">
+                <UButton variant="ghost" class="theme-btn cancel-wf" @click="showCreateModal = false">
                     Cancel
                 </UButton>
-                <UButton @click="handleCreateWorkflow">Create</UButton>
+                <UButton class="theme-btn create-wf" @click="handleCreateWorkflow">Create</UButton></div>
             </template>
         </UModal>
 

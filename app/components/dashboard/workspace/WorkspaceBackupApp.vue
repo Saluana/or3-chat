@@ -54,9 +54,9 @@
                 <div></div>
             </div>
             <p class="supporting-text">
-                Downloads a timestamped JSONL backup of the entire IndexedDB.
-                Large workspaces stream directly to disk to avoid freezing the
-                UI.
+                Downloads a timestamped JSONL backup of the active workspace
+                database. Large workspaces stream directly to disk to avoid
+                freezing the UI.
             </p>
             <div class="space-y-2">
                 <UProgress

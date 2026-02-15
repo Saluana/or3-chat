@@ -112,6 +112,7 @@ interface DexieBackupMeta {
 
 function validateBackupMeta(meta: unknown): ImportMetadata {
     const backupMeta = meta as DexieBackupMeta;
+    const expectedDatabaseName = getDb().name;
     if (backupMeta.formatName !== 'dexie') {
         throw err(
             'ERR_VALIDATION',
@@ -130,10 +131,14 @@ function validateBackupMeta(meta: unknown): ImportMetadata {
             }
         );
     }
-    if (backupMeta.data.databaseName !== 'or3-db') {
-        throw err('ERR_VALIDATION', 'Backup is for a different database.', {
-            tags: { domain: 'db', action: 'validate' },
-        });
+    if (backupMeta.data.databaseName !== expectedDatabaseName) {
+        throw err(
+            'ERR_VALIDATION',
+            `Backup is for a different database. Expected "${expectedDatabaseName}" but got "${backupMeta.data.databaseName}".`,
+            {
+                tags: { domain: 'db', action: 'validate' },
+            }
+        );
     }
     if (backupMeta.data.databaseVersion > getDb().verno) {
         throw err(
@@ -627,6 +632,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 }
 
 function validateStreamHeader(header: WorkspaceBackupHeaderLine) {
+    const expectedDatabaseName = getDb().name;
     // These comparisons validate external data against known constants
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (header.format !== WORKSPACE_BACKUP_FORMAT) {
@@ -644,10 +650,14 @@ function validateStreamHeader(header: WorkspaceBackupHeaderLine) {
             }
         );
     }
-    if (header.databaseName !== 'or3-db') {
-        throw err('ERR_VALIDATION', 'Backup is for a different database.', {
-            tags: { domain: 'db', action: 'validate' },
-        });
+    if (header.databaseName !== expectedDatabaseName) {
+        throw err(
+            'ERR_VALIDATION',
+            `Backup is for a different database. Expected "${expectedDatabaseName}" but got "${header.databaseName}".`,
+            {
+                tags: { domain: 'db', action: 'validate' },
+            }
+        );
     }
     if (header.databaseVersion > getDb().verno) {
         throw err(

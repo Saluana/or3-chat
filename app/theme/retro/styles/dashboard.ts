@@ -27,7 +27,7 @@ export const dashboardOverrides = {
         },
     },
     'button#dashboard.theme.copy-color': {
-        class: 'flex items-center justify-center',
+        class: 'flex items-center justify-center theme-btn',
     },
     'button#dashboard.workspace.import-mode': {
         variant: 'solid',
