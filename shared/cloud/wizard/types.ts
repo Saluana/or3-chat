@@ -24,6 +24,8 @@ export type WizardEnvFile = '.env' | '.env.local';
  * `'legacy-clerk-convex'`; user-defined presets use arbitrary strings.
  */
 export type WizardPresetName = 'recommended' | 'legacy-clerk-convex' | string;
+/** Controls whether template selection uses preset fast paths or manual provider selection. */
+export type WizardMode = 'preset-local' | 'preset-clerk-convex' | 'custom';
 
 /**
  * Controls theme installation behavior.
@@ -90,6 +92,20 @@ export interface WizardAnswers {
     // ── Preset ──
     /** Active preset name. Determines initial provider selections and defaults. */
     presetName: WizardPresetName;
+    /** Wizard flow mode derived from template selection. */
+    wizardMode: WizardMode;
+    /** Enables advanced fields globally for all sections. */
+    allAdvancedEnabled: boolean;
+    /** Enables advanced OR3 base/branding/theme fields. */
+    baseAdvancedEnabled: boolean;
+    /** Enables advanced auth provider fields. */
+    authAdvancedEnabled: boolean;
+    /** Enables advanced sync provider fields. */
+    syncAdvancedEnabled: boolean;
+    /** Enables advanced storage provider fields. */
+    storageAdvancedEnabled: boolean;
+    /** Enables advanced AI/limits/security fields. */
+    cloudAdvancedEnabled: boolean;
 
     // ── Branding ──
     /** Maps to `OR3_SITE_NAME`. */
@@ -273,6 +289,10 @@ export interface WizardField<TValue = unknown> {
     required?: boolean;
     /** When true, the value is redacted in summaries and excluded from presets. */
     secret?: boolean;
+    /** Controls whether this field is considered core or advanced UX. */
+    tier?: 'core' | 'advanced';
+    /** Optional predicate that controls whether this field is visible for current answers. */
+    visibleWhen?: (answers: WizardAnswers) => boolean;
     /** Per-field validator. Return an error string or null if valid. */
     validate?: (value: TValue, answers: WizardAnswers) => string | null;
 }

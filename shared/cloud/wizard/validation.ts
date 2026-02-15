@@ -33,7 +33,11 @@ import {
     buildOr3CloudConfigFromEnv,
     buildOr3ConfigFromEnv,
 } from '../../../server/admin/config/resolve-config';
-import { SECRET_ANSWER_KEYS } from './catalog';
+import {
+    applySkippedAdvancedDefaults,
+    normalizeAdvancedToggles,
+    SECRET_ANSWER_KEYS,
+} from './catalog';
 import { deriveEnvFromAnswers } from './derive';
 import type { WizardAnswers, WizardValidationResult } from './types';
 
@@ -78,7 +82,12 @@ function redactValue(key: string, value: string): string {
  * ```
  */
 export function buildRedactedSummary(answers: WizardAnswers): string {
-    const { env, convexEnv, providerModules } = deriveEnvFromAnswers(answers);
+    const effectiveAnswers = applySkippedAdvancedDefaults(
+        normalizeAdvancedToggles(answers)
+    );
+    const { env, convexEnv, providerModules } = deriveEnvFromAnswers(
+        effectiveAnswers
+    );
     const envLines = Object.keys(env)
         .sort()
         .map((key) => `${key}=${redactValue(key, env[key] ?? '')}`);
@@ -272,14 +281,16 @@ function validateFieldLevel(answers: WizardAnswers): {
         }
     }
 
-    if (answers.requestsPerMinute < 1) {
-        errors.push('OR3_REQUESTS_PER_MINUTE must be >= 1.');
-    }
-    if (answers.maxConversations < 0) {
-        errors.push('OR3_MAX_CONVERSATIONS must be >= 0.');
-    }
-    if (answers.maxMessagesPerDay < 0) {
-        errors.push('OR3_MAX_MESSAGES_PER_DAY must be >= 0.');
+    if (answers.limitsEnabled) {
+        if (answers.requestsPerMinute < 1) {
+            errors.push('OR3_REQUESTS_PER_MINUTE must be >= 1.');
+        }
+        if (answers.maxConversations < 0) {
+            errors.push('OR3_MAX_CONVERSATIONS must be >= 0.');
+        }
+        if (answers.maxMessagesPerDay < 0) {
+            errors.push('OR3_MAX_MESSAGES_PER_DAY must be >= 0.');
+        }
     }
 
     return { errors, warnings };
@@ -340,12 +351,15 @@ export function validateAnswers(
         strict?: boolean;
     } = {}
 ): WizardValidationResult {
-    const { errors, warnings } = validateFieldLevel(answers);
-    const derived = deriveEnvFromAnswers(answers);
+    const effectiveAnswers = applySkippedAdvancedDefaults(
+        normalizeAdvancedToggles(answers)
+    );
+    const { errors, warnings } = validateFieldLevel(effectiveAnswers);
+    const derived = deriveEnvFromAnswers(effectiveAnswers);
     const strict =
         options.strict ??
-        (answers.strictConfig ||
-            answers.deploymentTarget === 'prod-build' ||
+        (effectiveAnswers.strictConfig ||
+            effectiveAnswers.deploymentTarget === 'prod-build' ||
             process.env.NODE_ENV === 'production');
 
     try {

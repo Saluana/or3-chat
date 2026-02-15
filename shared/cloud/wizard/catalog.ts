@@ -29,6 +29,7 @@
  */
 import type {
     WizardAnswers,
+    WizardMode,
     WizardPreset,
     WizardProviderDescriptor,
 } from './types';
@@ -176,6 +177,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 help: 'A long random string (32+ characters) used to sign login tokens. Keep this secret!',
                 required: true,
                 secret: true,
+                tier: 'core',
             },
             {
                 key: 'basicAuthBootstrapEmail',
@@ -183,6 +185,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Your admin email',
                 help: 'This will be the first admin account. You\'ll use it to log in after setup.',
                 required: true,
+                tier: 'core',
             },
             {
                 key: 'basicAuthBootstrapPassword',
@@ -191,6 +194,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 help: 'Choose a strong password for your admin account.',
                 required: true,
                 secret: true,
+                tier: 'core',
                 validate: (value) => {
                     const password = String(value ?? '').trim();
                     if (password.length < 12) {
@@ -214,6 +218,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Refresh key (optional, press Enter to auto-generate)',
                 help: 'Used for long-lived sessions. If left blank, one will be derived from the main key.',
                 secret: true,
+                tier: 'advanced',
             },
             {
                 key: 'basicAuthAccessTtlSeconds',
@@ -221,6 +226,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Session length in seconds (default: 900 = 15 minutes)',
                 help: 'How long before a user\'s session expires and they need to re-authenticate.',
                 defaultValue: 900,
+                tier: 'advanced',
             },
             {
                 key: 'basicAuthRefreshTtlSeconds',
@@ -228,6 +234,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Remember-me length in seconds (default: 2592000 = 30 days)',
                 help: 'How long a user stays logged in if they have a "remember me" token.',
                 defaultValue: 2592000,
+                tier: 'advanced',
             },
             {
                 key: 'basicAuthDbPath',
@@ -235,6 +242,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Where to store user accounts',
                 help: 'File path for the login database. The default location is fine for most setups.',
                 defaultValue: './.data/or3-basic-auth.sqlite',
+                tier: 'advanced',
             },
         ],
     },
@@ -257,6 +265,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Clerk Publishable Key',
                 help: 'Find this in your Clerk dashboard at clerk.com → API Keys.',
                 required: true,
+                tier: 'core',
             },
             {
                 key: 'clerkSecretKey',
@@ -265,6 +274,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 help: 'The secret key from your Clerk dashboard. Never share this publicly.',
                 required: true,
                 secret: true,
+                tier: 'core',
             },
         ],
     },
@@ -291,6 +301,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Where to store synced data',
                 help: 'File path for the sync database. Example: ./.data/or3-sync.sqlite',
                 required: true,
+                tier: 'core',
             },
             {
                 key: 'sqlitePragmaJournalMode',
@@ -298,6 +309,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Journal mode (default: WAL)',
                 help: 'WAL is the recommended setting for best performance. Leave as-is unless you know what this does.',
                 defaultValue: 'WAL',
+                tier: 'advanced',
             },
             {
                 key: 'sqlitePragmaSynchronous',
@@ -305,6 +317,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Sync mode (default: NORMAL)',
                 help: 'NORMAL is a good balance of speed and safety. Leave as-is unless you know what this does.',
                 defaultValue: 'NORMAL',
+                tier: 'advanced',
             },
             {
                 key: 'sqliteAllowInMemory',
@@ -312,6 +325,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Allow in-memory database (testing only)',
                 help: 'Only enable this for automated tests. Data is lost when the server restarts.',
                 defaultValue: false,
+                tier: 'advanced',
             },
             {
                 key: 'sqliteStrict',
@@ -319,6 +333,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Strict mode',
                 help: 'Enforces stricter type checking in the database. Off by default.',
                 defaultValue: false,
+                tier: 'advanced',
             },
         ],
     },
@@ -345,6 +360,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Convex URL',
                 help: 'Your Convex deployment URL. Find it in your Convex dashboard.',
                 required: true,
+                tier: 'core',
             },
             {
                 key: 'convexSelfHostedAdminKey',
@@ -352,12 +368,14 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Admin Key (only for self-hosted Convex)',
                 help: 'Only needed if you\'re running your own Convex server. Skip this for Convex Cloud.',
                 secret: true,
+                tier: 'advanced',
             },
             {
                 key: 'convexSelfHostedSiteUrl',
                 type: 'text',
                 label: 'Site URL (optional, self-hosted Convex only)',
                 help: 'Optional HTTP actions URL (example: http://provider.example.com:3211). Leave blank for Convex Cloud.',
+                tier: 'advanced',
             },
         ],
     },
@@ -380,6 +398,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Upload folder (absolute path)',
                 help: 'Where uploaded files are saved on disk. Must be an absolute path. Example: /var/data/or3-files',
                 required: true,
+                tier: 'core',
             },
             {
                 key: 'fsTokenSecret',
@@ -388,6 +407,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 help: 'A random string used to generate secure download links. Keep this secret!',
                 required: true,
                 secret: true,
+                tier: 'core',
             },
             {
                 key: 'fsUrlTtlSeconds',
@@ -395,6 +415,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Download link expiry (default: 900 = 15 minutes)',
                 help: 'How long a download link stays valid before it expires.',
                 defaultValue: 900,
+                tier: 'advanced',
             },
         ],
     },
@@ -416,6 +437,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 type: 'text',
                 label: 'S3 endpoint URL (optional for AWS)',
                 help: 'Required for most S3-compatible hosts (MinIO, R2, B2). Example: https://<account>.r2.cloudflarestorage.com',
+                tier: 'advanced',
             },
             {
                 key: 's3Region',
@@ -424,6 +446,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 help: 'AWS region, or a dummy region required by your S3 host. Most compat hosts accept "us-east-1".',
                 defaultValue: 'us-east-1',
                 required: true,
+                tier: 'core',
             },
             {
                 key: 's3Bucket',
@@ -431,6 +454,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Bucket name',
                 help: 'Bucket where OR3 stores blob objects. Must allow PUT/GET/HEAD with CORS from your OR3 origin.',
                 required: true,
+                tier: 'core',
             },
             {
                 key: 's3AccessKeyId',
@@ -439,6 +463,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 help: 'Server-only credential used to sign presigned URLs. Never exposed to the browser.',
                 required: true,
                 secret: true,
+                tier: 'core',
             },
             {
                 key: 's3SecretAccessKey',
@@ -447,6 +472,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 help: 'Server-only credential used to sign presigned URLs. Never exposed to the browser.',
                 required: true,
                 secret: true,
+                tier: 'core',
             },
             {
                 key: 's3SessionToken',
@@ -454,6 +480,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Session token (optional)',
                 help: 'Only needed for temporary credentials (STS). Leave blank for long-lived access keys.',
                 secret: true,
+                tier: 'advanced',
             },
             {
                 key: 's3ForcePathStyle',
@@ -461,12 +488,14 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Force path-style URLs (MinIO/legacy)',
                 help: 'Enable this for MinIO or hosts that do not support virtual-hosted-style buckets.',
                 defaultValue: false,
+                tier: 'advanced',
             },
             {
                 key: 's3KeyPrefix',
                 type: 'text',
                 label: 'Key prefix (optional)',
                 help: 'Optional prefix within the bucket. Example: or3-storage',
+                tier: 'advanced',
             },
             {
                 key: 's3UrlTtlSeconds',
@@ -474,6 +503,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Presigned URL TTL seconds (default: 900 = 15 minutes)',
                 help: 'How long presigned URLs stay valid. Keep this short.',
                 defaultValue: 900,
+                tier: 'advanced',
             },
             {
                 key: 's3RequireChecksum',
@@ -481,6 +511,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 label: 'Require checksum on upload (optional hardening)',
                 help: 'If enabled, uploads must include x-amz-checksum-sha256. Some S3-compatible hosts may not support this.',
                 defaultValue: false,
+                tier: 'advanced',
             },
         ],
     },
@@ -520,6 +551,185 @@ export function getProviderDescriptor(kind: WizardProviderDescriptor['kind'], id
     return providerCatalog.find((provider) => provider.kind === kind && provider.id === id);
 }
 
+export function inferWizardModeFromPresetName(
+    presetName?: string
+): WizardMode {
+    if (presetName === 'legacy-clerk-convex' || presetName === 'clerk-convex') {
+        return 'preset-clerk-convex';
+    }
+    if (!presetName || presetName === 'recommended') {
+        return 'preset-local';
+    }
+    return 'custom';
+}
+
+export function isWizardMode(value: unknown): value is WizardMode {
+    return (
+        value === 'preset-local' ||
+        value === 'preset-clerk-convex' ||
+        value === 'custom'
+    );
+}
+
+export function normalizeWizardMode(
+    wizardMode: unknown,
+    presetName?: string
+): WizardMode {
+    if (isWizardMode(wizardMode)) {
+        return wizardMode;
+    }
+    return inferWizardModeFromPresetName(presetName);
+}
+
+export function applyWizardModeDefaults(
+    answers: WizardAnswers,
+    wizardMode: WizardMode
+): WizardAnswers {
+    switch (wizardMode) {
+        case 'preset-local':
+            return {
+                ...answers,
+                wizardMode: 'preset-local',
+                presetName: 'recommended',
+                ssrAuthEnabled: true,
+                authProvider: 'basic-auth',
+                syncEnabled: true,
+                syncProvider: 'sqlite',
+                storageEnabled: true,
+                storageProvider: 'fs',
+            };
+        case 'preset-clerk-convex':
+            return {
+                ...answers,
+                wizardMode: 'preset-clerk-convex',
+                presetName: 'legacy-clerk-convex',
+                ssrAuthEnabled: true,
+                authProvider: 'clerk',
+                syncEnabled: true,
+                syncProvider: 'convex',
+                storageEnabled: true,
+                storageProvider: 'convex',
+            };
+        case 'custom':
+        default:
+            return {
+                ...answers,
+                wizardMode: 'custom',
+            };
+    }
+}
+
+export function normalizeAdvancedToggles(
+    answers: WizardAnswers
+): WizardAnswers {
+    const allAdvancedEnabled = Boolean(answers.allAdvancedEnabled);
+    return {
+        ...answers,
+        allAdvancedEnabled,
+        baseAdvancedEnabled:
+            allAdvancedEnabled || Boolean(answers.baseAdvancedEnabled),
+        authAdvancedEnabled:
+            allAdvancedEnabled || Boolean(answers.authAdvancedEnabled),
+        syncAdvancedEnabled:
+            allAdvancedEnabled || Boolean(answers.syncAdvancedEnabled),
+        storageAdvancedEnabled:
+            allAdvancedEnabled || Boolean(answers.storageAdvancedEnabled),
+        cloudAdvancedEnabled:
+            allAdvancedEnabled || Boolean(answers.cloudAdvancedEnabled),
+    };
+}
+
+const ADVANCED_SECTION_KEYS = {
+    base: [
+        'or3LogoUrl',
+        'or3FaviconUrl',
+        'themeInstallMode',
+        'themesToInstall',
+    ],
+    auth: [
+        'basicAuthRefreshSecret',
+        'basicAuthAccessTtlSeconds',
+        'basicAuthRefreshTtlSeconds',
+        'basicAuthDbPath',
+    ],
+    sync: [
+        'sqlitePragmaJournalMode',
+        'sqlitePragmaSynchronous',
+        'sqliteAllowInMemory',
+        'sqliteStrict',
+        'convexSelfHostedAdminKey',
+        'convexSelfHostedSiteUrl',
+    ],
+    storage: [
+        'fsUrlTtlSeconds',
+        's3Endpoint',
+        's3SessionToken',
+        's3ForcePathStyle',
+        's3KeyPrefix',
+        's3UrlTtlSeconds',
+        's3RequireChecksum',
+    ],
+    cloud: [
+        'openrouterAllowUserOverride',
+        'openrouterRequireUserKey',
+        'requestsPerMinute',
+        'maxConversations',
+        'maxMessagesPerDay',
+        'limitsStorageProvider',
+        'allowedOrigins',
+        'forwardedForHeader',
+        'strictConfig',
+    ],
+} as const satisfies Record<
+    'base' | 'auth' | 'sync' | 'storage' | 'cloud',
+    ReadonlyArray<keyof WizardAnswers>
+>;
+
+function resetAdvancedSectionToDefaults(
+    answers: WizardAnswers,
+    defaults: WizardAnswers,
+    section: keyof typeof ADVANCED_SECTION_KEYS
+): WizardAnswers {
+    const next = { ...answers };
+    for (const key of ADVANCED_SECTION_KEYS[section]) {
+        (next as Record<keyof WizardAnswers, unknown>)[key] = defaults[key];
+    }
+    return next;
+}
+
+export function applySkippedAdvancedDefaults(
+    answers: WizardAnswers
+): WizardAnswers {
+    if (answers.allAdvancedEnabled) {
+        return answers;
+    }
+
+    const defaults = createDefaultAnswers({
+        instanceDir: answers.instanceDir,
+        envFile: answers.envFile,
+        presetName: answers.presetName,
+    });
+
+    let next = { ...answers };
+    if (!next.baseAdvancedEnabled) {
+        next = resetAdvancedSectionToDefaults(next, defaults, 'base');
+    }
+    if (!next.authAdvancedEnabled) {
+        next = resetAdvancedSectionToDefaults(next, defaults, 'auth');
+    }
+    if (!next.syncAdvancedEnabled) {
+        next = resetAdvancedSectionToDefaults(next, defaults, 'sync');
+    }
+    if (!next.storageAdvancedEnabled) {
+        next = resetAdvancedSectionToDefaults(next, defaults, 'storage');
+    }
+    if (!next.cloudAdvancedEnabled) {
+        next = resetAdvancedSectionToDefaults(next, defaults, 'cloud');
+    }
+
+    return next;
+}
+
 /**
  * Creates a complete `WizardAnswers` object populated with sensible defaults.
  *
@@ -547,6 +757,7 @@ export function createDefaultAnswers(
     }
 ): WizardAnswers {
     const presetName = input.presetName ?? 'recommended';
+    const wizardMode = inferWizardModeFromPresetName(presetName);
     const base: WizardAnswers = {
         instanceDir: input.instanceDir,
         envFile: input.envFile ?? '.env',
@@ -554,6 +765,13 @@ export function createDefaultAnswers(
         dryRun: false,
         skipWriteBackup: false,
         presetName,
+        wizardMode,
+        allAdvancedEnabled: false,
+        baseAdvancedEnabled: false,
+        authAdvancedEnabled: false,
+        syncAdvancedEnabled: false,
+        storageAdvancedEnabled: false,
+        cloudAdvancedEnabled: false,
         or3SiteName: 'OR3',
         or3DefaultTheme: 'retro',
         themeInstallMode: 'use-existing',
@@ -599,16 +817,7 @@ export function createDefaultAnswers(
         forwardedForHeader: 'x-forwarded-for',
     };
 
-    if (presetName === 'legacy-clerk-convex' || presetName === 'clerk-convex') {
-        return {
-            ...base,
-            authProvider: 'clerk',
-            syncProvider: 'convex',
-            storageProvider: 'convex',
-        };
-    }
-
-    return base;
+    return applyWizardModeDefaults(base, wizardMode);
 }
 
 /**
@@ -620,6 +829,13 @@ export const recommendedPreset: WizardPreset = {
     createdAt: new Date(0).toISOString(),
     answers: {
         presetName: 'recommended',
+        wizardMode: 'preset-local',
+        allAdvancedEnabled: false,
+        baseAdvancedEnabled: false,
+        authAdvancedEnabled: false,
+        syncAdvancedEnabled: false,
+        storageAdvancedEnabled: false,
+        cloudAdvancedEnabled: false,
         authProvider: 'basic-auth',
         syncProvider: 'sqlite',
         storageProvider: 'fs',
@@ -639,6 +855,13 @@ export const legacyPreset: WizardPreset = {
     createdAt: new Date(0).toISOString(),
     answers: {
         presetName: 'legacy-clerk-convex',
+        wizardMode: 'preset-clerk-convex',
+        allAdvancedEnabled: false,
+        baseAdvancedEnabled: false,
+        authAdvancedEnabled: false,
+        syncAdvancedEnabled: false,
+        storageAdvancedEnabled: false,
+        cloudAdvancedEnabled: false,
         authProvider: 'clerk',
         syncProvider: 'convex',
         storageProvider: 'convex',

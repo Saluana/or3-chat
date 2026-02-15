@@ -35,7 +35,17 @@
  * @see store.ts for persistence primitives
  */
 import { randomUUID } from 'node:crypto';
-import { createDefaultAnswers, legacyPreset, recommendedPreset, SECRET_ANSWER_KEYS } from './catalog';
+import {
+    applySkippedAdvancedDefaults,
+    applyWizardModeDefaults,
+    createDefaultAnswers,
+    inferWizardModeFromPresetName,
+    legacyPreset,
+    normalizeWizardMode,
+    normalizeAdvancedToggles,
+    recommendedPreset,
+    SECRET_ANSWER_KEYS,
+} from './catalog';
 import { applyAnswers } from './apply';
 import { deployAnswers } from './deploy';
 import { getWizardSteps } from './steps';
@@ -85,18 +95,24 @@ function applyPresetAnswers(
 
 function completeAnswers(partial: Partial<WizardAnswers>): WizardAnswers {
     const instanceDir = partial.instanceDir ?? process.cwd();
+    const wizardMode = normalizeWizardMode(
+        partial.wizardMode,
+        partial.presetName
+    );
     const defaultAnswers = createDefaultAnswers({
         instanceDir,
         envFile: partial.envFile,
         presetName: partial.presetName,
     });
 
-    return {
+    const normalized = normalizeAdvancedToggles({
         ...defaultAnswers,
         ...partial,
+        wizardMode,
         instanceDir,
         envFile: partial.envFile ?? defaultAnswers.envFile,
-    };
+    });
+    return applySkippedAdvancedDefaults(normalized);
 }
 
 function getFullAnswersForSession(session: WizardSession): WizardAnswers {
@@ -195,6 +211,7 @@ export class Or3CloudWizardApi implements WizardApi {
         if (preset) {
             answers = applyPresetAnswers(answers, preset);
         }
+        answers = completeAnswers(answers);
 
         const session: WizardSession = {
             id: randomUUID(),
@@ -255,6 +272,15 @@ export class Or3CloudWizardApi implements WizardApi {
             if (preset) {
                 nextAnswers = applyPresetAnswers(nextAnswers, preset);
             }
+            if (!patch.wizardMode) {
+                nextAnswers = {
+                    ...nextAnswers,
+                    wizardMode: inferWizardModeFromPresetName(patch.presetName),
+                };
+            }
+        }
+        if (patch.wizardMode && patch.wizardMode !== nextAnswers.wizardMode) {
+            nextAnswers = applyWizardModeDefaults(nextAnswers, patch.wizardMode);
         }
         nextAnswers = completeAnswers({
             ...nextAnswers,

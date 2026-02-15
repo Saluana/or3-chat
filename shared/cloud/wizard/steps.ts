@@ -28,13 +28,50 @@
  * @see providerCatalog for provider field definitions
  */
 import { getProviderDescriptor, listImplementedProviders } from './catalog';
-import type { WizardAnswers, WizardStep } from './types';
+import type { WizardAnswers, WizardField, WizardStep } from './types';
 
 function providerOptions(kind: 'auth' | 'sync' | 'storage') {
     return listImplementedProviders(kind).map((provider) => ({
         label: provider.label,
         value: provider.id,
     }));
+}
+
+function isBaseAdvancedEnabled(answers: WizardAnswers): boolean {
+    return answers.allAdvancedEnabled || answers.baseAdvancedEnabled;
+}
+
+function isAuthAdvancedEnabled(answers: WizardAnswers): boolean {
+    return answers.allAdvancedEnabled || answers.authAdvancedEnabled;
+}
+
+function isSyncAdvancedEnabled(answers: WizardAnswers): boolean {
+    return answers.allAdvancedEnabled || answers.syncAdvancedEnabled;
+}
+
+function isStorageAdvancedEnabled(answers: WizardAnswers): boolean {
+    return answers.allAdvancedEnabled || answers.storageAdvancedEnabled;
+}
+
+function isCloudAdvancedEnabled(answers: WizardAnswers): boolean {
+    return answers.allAdvancedEnabled || answers.cloudAdvancedEnabled;
+}
+
+function withVisibleWhen(
+    field: WizardField,
+    visibleWhen: (answers: WizardAnswers) => boolean
+): WizardField {
+    if (!field.visibleWhen) {
+        return {
+            ...field,
+            visibleWhen,
+        };
+    }
+    return {
+        ...field,
+        visibleWhen: (answers) =>
+            Boolean(field.visibleWhen?.(answers) && visibleWhen(answers)),
+    };
 }
 
 function providerFieldsStep(
@@ -55,11 +92,39 @@ function providerFieldsStep(
         return null;
     }
 
+    const advancedEnabled =
+        kind === 'auth'
+            ? isAuthAdvancedEnabled
+            : kind === 'sync'
+              ? isSyncAdvancedEnabled
+              : isStorageAdvancedEnabled;
+
+    const fields = descriptor.fields.map((field) =>
+        withVisibleWhen(field, (current) => {
+            if (!current.ssrAuthEnabled) return false;
+            if (kind === 'sync' && !current.syncEnabled) return false;
+            if (kind === 'storage' && !current.storageEnabled) return false;
+
+            const selectedProviderId =
+                kind === 'auth'
+                    ? current.authProvider
+                    : kind === 'sync'
+                      ? current.syncProvider
+                      : current.storageProvider;
+            if (selectedProviderId !== providerId) return false;
+
+            if (field.tier === 'advanced' && !advancedEnabled(current)) {
+                return false;
+            }
+            return true;
+        })
+    );
+
     return {
         id,
         title,
         description: `Configure your ${descriptor.label.replace(/ \(.*\)$/, '')} settings. Press Enter to accept defaults.`,
-        fields: descriptor.fields,
+        fields,
         canSkip: (current) => {
             if (!current.ssrAuthEnabled) return true;
             if (kind === 'sync') return !current.syncEnabled;
@@ -139,24 +204,75 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
             id: 'preset',
             title: 'Starting Template',
             description:
-                'Pick a starting point.\n' +
-                'This only sets defaults for the next step — you can still choose any providers you want.',
+                'Pick a setup path.\n' +
+                'Preset templates auto-configure providers and skip manual provider selection.\n' +
+                'Custom keeps full manual provider selection.',
             fields: [
                 {
-                    key: 'presetName',
+                    key: 'wizardMode',
                     type: 'select',
                     label: 'Which starting point do you want?',
-                    help: 'This does not lock anything in. You can change auth, sync, and storage providers in the next step.',
+                    help: 'Choose a preset for a fast path, or custom to manually pick providers.',
                     options: [
                         {
-                            label: 'Default local stack — Basic Auth + SQLite + Filesystem',
-                            value: 'recommended',
+                            label: 'Default local stack — auto-uses Basic Auth + SQLite + Filesystem',
+                            value: 'preset-local',
                         },
                         {
-                            label: 'Clerk + Convex stack — Clerk + Convex + Convex',
-                            value: 'legacy-clerk-convex',
+                            label: 'Clerk + Convex stack — auto-uses Clerk + Convex + Convex',
+                            value: 'preset-clerk-convex',
+                        },
+                        {
+                            label: 'Custom — manually choose auth/sync/storage providers',
+                            value: 'custom',
                         },
                     ],
+                },
+            ],
+        },
+        {
+            id: 'advanced-gates',
+            title: 'Advanced Settings',
+            description:
+                'Choose how deep you want to configure each section.\n' +
+                'Expert mode enables all advanced prompts at once.',
+            fields: [
+                {
+                    key: 'allAdvancedEnabled',
+                    type: 'boolean',
+                    label: 'Enable expert mode for all sections',
+                    help: 'When enabled, all advanced settings are shown.',
+                    defaultValue: false,
+                },
+                {
+                    key: 'baseAdvancedEnabled',
+                    type: 'boolean',
+                    label: 'Configure advanced OR3 base settings',
+                    visibleWhen: (current) => !current.allAdvancedEnabled,
+                },
+                {
+                    key: 'authAdvancedEnabled',
+                    type: 'boolean',
+                    label: 'Configure advanced auth provider settings',
+                    visibleWhen: (current) => !current.allAdvancedEnabled,
+                },
+                {
+                    key: 'syncAdvancedEnabled',
+                    type: 'boolean',
+                    label: 'Configure advanced sync provider settings',
+                    visibleWhen: (current) => !current.allAdvancedEnabled,
+                },
+                {
+                    key: 'storageAdvancedEnabled',
+                    type: 'boolean',
+                    label: 'Configure advanced storage provider settings',
+                    visibleWhen: (current) => !current.allAdvancedEnabled,
+                },
+                {
+                    key: 'cloudAdvancedEnabled',
+                    type: 'boolean',
+                    label: 'Configure advanced AI, limits, and security settings',
+                    visibleWhen: (current) => !current.allAdvancedEnabled,
                 },
             ],
         },
@@ -171,18 +287,23 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     label: 'What should your site be called?',
                     help: 'This name appears in the browser tab and UI. Example: "Acme AI Chat"',
                     required: true,
+                    tier: 'core',
                 },
                 {
                     key: 'or3LogoUrl',
                     type: 'text',
                     label: 'Logo URL (optional, press Enter to skip)',
                     help: 'A URL to your logo image. You can add this later.',
+                    tier: 'advanced',
+                    visibleWhen: isBaseAdvancedEnabled,
                 },
                 {
                     key: 'or3FaviconUrl',
                     type: 'text',
                     label: 'Favicon URL (optional, press Enter to skip)',
                     help: 'The small icon shown in the browser tab.',
+                    tier: 'advanced',
+                    visibleWhen: isBaseAdvancedEnabled,
                 },
             ],
         },
@@ -196,6 +317,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     type: 'select',
                     label: 'Visual style',
                     help: '"retro" has a pixel-art CRT look. "blank" is a clean modern starting point.',
+                    tier: 'core',
                     options: [
                         { label: 'retro — pixel-art, CRT vibes', value: 'retro' },
                         { label: 'blank — clean and minimal', value: 'blank' },
@@ -206,6 +328,8 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     type: 'select',
                     label: 'Theme installation',
                     help: 'You can install additional themes later. For now, using what\'s already included is fine.',
+                    tier: 'advanced',
+                    visibleWhen: isBaseAdvancedEnabled,
                     options: [
                         { label: 'Use what\'s already installed', value: 'use-existing' },
                         { label: 'Install specific themes', value: 'install-selected' },
@@ -216,6 +340,10 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     key: 'themesToInstall',
                     type: 'multi-string',
                     label: 'Themes to install (comma-separated)',
+                    tier: 'advanced',
+                    visibleWhen: (current) =>
+                        isBaseAdvancedEnabled(current) &&
+                        current.themeInstallMode === 'install-selected',
                 },
             ],
         },
@@ -250,37 +378,46 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     type: 'select',
                     label: 'How should users log in?',
                     options: providerOptions('auth'),
+                    visibleWhen: (current) => current.ssrAuthEnabled,
                 },
                 {
                     key: 'guestAccessEnabled',
                     type: 'boolean',
                     label: 'Allow guests to use the app without an account',
+                    visibleWhen: (current) => current.ssrAuthEnabled,
                 },
                 {
                     key: 'syncEnabled',
                     type: 'boolean',
                     label: 'Enable data sync (conversations sync across devices)',
                     defaultValue: true,
+                    visibleWhen: (current) => current.ssrAuthEnabled,
                 },
                 {
                     key: 'syncProvider',
                     type: 'select',
                     label: 'Where should synced data be stored?',
                     options: providerOptions('sync'),
+                    visibleWhen: (current) =>
+                        current.ssrAuthEnabled && current.syncEnabled,
                 },
                 {
                     key: 'storageEnabled',
                     type: 'boolean',
                     label: 'Enable file storage (attachments, images)',
                     defaultValue: true,
+                    visibleWhen: (current) => current.ssrAuthEnabled,
                 },
                 {
                     key: 'storageProvider',
                     type: 'select',
                     label: 'Where should uploaded files be stored?',
                     options: providerOptions('storage'),
+                    visibleWhen: (current) =>
+                        current.ssrAuthEnabled && current.storageEnabled,
                 },
             ],
+            canSkip: (current) => current.wizardMode !== 'custom',
         },
     ];
 
@@ -319,69 +456,94 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 label: 'OpenRouter API key (optional, press Enter to skip)',
                 help: 'If provided, your users can chat using your API key. Get one at openrouter.ai.',
                 secret: true,
+                tier: 'core',
             },
             {
                 key: 'openrouterAllowUserOverride',
                 type: 'boolean',
                 label: 'Let users bring their own OpenRouter key',
                 help: 'When on, users can enter their own API key in settings.',
+                tier: 'advanced',
+                visibleWhen: isCloudAdvancedEnabled,
             },
             {
                 key: 'openrouterRequireUserKey',
                 type: 'boolean',
                 label: 'Require users to provide their own key',
                 help: 'When on, users must enter their own key to use the app. Useful if you don\'t want to pay for API usage.',
+                tier: 'advanced',
+                visibleWhen: isCloudAdvancedEnabled,
             },
             {
                 key: 'limitsEnabled',
                 type: 'boolean',
                 label: 'Enable usage limits',
                 help: 'Helps prevent abuse by capping how much users can do.',
+                tier: 'core',
             },
             {
                 key: 'requestsPerMinute',
                 type: 'number',
                 label: 'Max requests per minute per user',
+                tier: 'advanced',
+                visibleWhen: (current) =>
+                    current.limitsEnabled && isCloudAdvancedEnabled(current),
             },
             {
                 key: 'maxConversations',
                 type: 'number',
                 label: 'Max conversations per user (0 = unlimited)',
+                tier: 'advanced',
+                visibleWhen: (current) =>
+                    current.limitsEnabled && isCloudAdvancedEnabled(current),
             },
             {
                 key: 'maxMessagesPerDay',
                 type: 'number',
                 label: 'Max messages per day per user (0 = unlimited)',
+                tier: 'advanced',
+                visibleWhen: (current) =>
+                    current.limitsEnabled && isCloudAdvancedEnabled(current),
             },
             {
                 key: 'limitsStorageProvider',
                 type: 'text',
                 label: 'Limits storage backend (optional, press Enter to skip)',
                 help: 'Where usage counters are stored. Leave blank for automatic.',
+                tier: 'advanced',
+                visibleWhen: (current) =>
+                    current.limitsEnabled && isCloudAdvancedEnabled(current),
             },
             {
                 key: 'allowedOrigins',
                 type: 'multi-string',
                 label: 'Allowed web origins (comma-separated, press Enter to skip)',
                 help: 'Restrict which websites can access your instance. Example: https://my-app.com',
+                tier: 'advanced',
+                visibleWhen: isCloudAdvancedEnabled,
             },
             {
                 key: 'forceHttps',
                 type: 'boolean',
                 label: 'Force HTTPS',
                 help: 'Recommended for production. Ensures all traffic is encrypted.',
+                tier: 'core',
             },
             {
                 key: 'trustProxy',
                 type: 'boolean',
                 label: 'Behind a reverse proxy (nginx, Cloudflare, etc.)?',
                 help: 'Turn this on if your server is behind a load balancer or CDN.',
+                tier: 'core',
             },
             {
                 key: 'forwardedForHeader',
                 type: 'select',
                 label: 'Proxy IP header',
                 help: 'How your proxy passes the real user IP. Most proxies use x-forwarded-for.',
+                tier: 'advanced',
+                visibleWhen: (current) =>
+                    current.trustProxy && isCloudAdvancedEnabled(current),
                 options: [
                     { label: 'x-forwarded-for (most common)', value: 'x-forwarded-for' },
                     { label: 'x-real-ip (nginx default)', value: 'x-real-ip' },
@@ -392,6 +554,8 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 type: 'boolean',
                 label: 'Strict validation (fail on missing settings)',
                 help: 'Automatically enabled in production. In dev mode, missing optional settings just show warnings.',
+                tier: 'advanced',
+                visibleWhen: isCloudAdvancedEnabled,
             },
         ],
     });

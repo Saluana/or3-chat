@@ -6,7 +6,14 @@ import {
     buildRedactedSummary,
     summarizeValidationErrors,
 } from '../../shared/cloud/wizard/validation';
-import { createDefaultAnswers, recommendedPreset } from '../../shared/cloud/wizard/catalog';
+import {
+    applySkippedAdvancedDefaults,
+    createDefaultAnswers,
+    isWizardMode,
+    normalizeWizardMode,
+    normalizeAdvancedToggles,
+    recommendedPreset,
+} from '../../shared/cloud/wizard/catalog';
 import { getWizardSteps } from '../../shared/cloud/wizard/steps';
 import { readEnvFile } from '../../server/admin/config/env-file';
 import {
@@ -20,7 +27,7 @@ import {
     parseInstallPackageManager,
 } from '../../shared/cloud/wizard/install-plan';
 import { readLastSessionId, readSession } from '../../shared/cloud/wizard/store';
-import type { WizardAnswers, WizardField } from '../../shared/cloud/wizard/types';
+import type { WizardAnswers, WizardField, WizardStep } from '../../shared/cloud/wizard/types';
 
 type CliFlags = {
     [key: string]: string | boolean | undefined;
@@ -29,6 +36,7 @@ type CliFlags = {
 type PromptNavigation = 'nav-back' | 'nav-next';
 const NAV_BACK: PromptNavigation = 'nav-back';
 const NAV_NEXT: PromptNavigation = 'nav-next';
+let hasLoggedInvalidWizardModeWarning = false;
 
 function parseFlags(args: string[]): { command: string; rest: string[]; flags: CliFlags } {
     const [command = 'help', ...restArgs] = args;
@@ -74,14 +82,50 @@ function toInt(value: string): number | null {
 }
 
 function normalizeAnswers(sessionAnswers: Partial<WizardAnswers>): WizardAnswers {
-    return {
+    if (
+        sessionAnswers.wizardMode !== undefined &&
+        !isWizardMode(sessionAnswers.wizardMode) &&
+        !hasLoggedInvalidWizardModeWarning
+    ) {
+        console.log(
+            `Unknown wizard mode "${String(sessionAnswers.wizardMode)}". Falling back to custom flow.`
+        );
+        hasLoggedInvalidWizardModeWarning = true;
+    }
+
+    const merged = {
         ...createDefaultAnswers({
             instanceDir: sessionAnswers.instanceDir ?? process.cwd(),
             envFile: sessionAnswers.envFile,
             presetName: sessionAnswers.presetName,
         }),
         ...sessionAnswers,
+        wizardMode: normalizeWizardMode(
+            sessionAnswers.wizardMode,
+            sessionAnswers.presetName
+        ),
     };
+    return applySkippedAdvancedDefaults(normalizeAdvancedToggles(merged));
+}
+
+function getVisibleFields(step: WizardStep, answers: WizardAnswers): WizardField[] {
+    return step.fields.filter((field) =>
+        typeof field.visibleWhen === 'function' ? field.visibleWhen(answers) : true
+    );
+}
+
+function isStepVisible(step: WizardStep, answers: WizardAnswers): boolean {
+    if (step.canSkip?.(answers)) {
+        return false;
+    }
+    if (step.id === 'review') {
+        return true;
+    }
+    return getVisibleFields(step, answers).length > 0;
+}
+
+function getVisibleSteps(steps: WizardStep[], answers: WizardAnswers): WizardStep[] {
+    return steps.filter((step) => isStepVisible(step, answers));
 }
 
 class Prompt {
@@ -458,19 +502,16 @@ async function runInit(flags: CliFlags): Promise<void> {
             });
             const answers = normalizeAnswers(latestSession.answers);
             const steps = getWizardSteps(answers);
-            if (stepIndex >= steps.length) break;
-            const step = steps[stepIndex];
+            const visibleSteps = getVisibleSteps(steps, answers);
+            if (stepIndex >= visibleSteps.length) break;
+            const step = visibleSteps[stepIndex];
             if (!step) break;
-            if (step.canSkip?.(answers)) {
-                stepIndex += 1;
-                continue;
-            }
 
             if (step.id === 'review') {
                 if (focusedPrompts) {
                     console.clear();
                 }
-                printStepHeader(stepIndex, steps.length, step.title, step.description);
+                printStepHeader(stepIndex, visibleSteps.length, step.title, step.description);
                 const review = await api.review(session.id);
                 console.log('\n' + review.summary + '\n');
                 const confirm = await promptBooleanNoNav(
@@ -481,7 +522,9 @@ async function runInit(flags: CliFlags): Promise<void> {
                 if (confirm) break;
 
                 console.log('\n  Which step would you like to change?\n');
-                const editable = steps.filter((candidate) => candidate.id !== 'review');
+                const editable = visibleSteps.filter(
+                    (candidate) => candidate.id !== 'review'
+                );
                 editable.forEach((candidate, index) => {
                     console.log(`  ${index + 1}. ${candidate.title}`);
                 });
@@ -497,7 +540,7 @@ async function runInit(flags: CliFlags): Promise<void> {
                     selectedIndex <= editable.length
                 ) {
                     const targetStepId = editable[selectedIndex - 1]?.id;
-                    const nextIndex = steps.findIndex(
+                    const nextIndex = visibleSteps.findIndex(
                         (candidate) => candidate.id === targetStepId
                     );
                     stepIndex = nextIndex >= 0 ? nextIndex : 0;
@@ -507,8 +550,19 @@ async function runInit(flags: CliFlags): Promise<void> {
                 continue;
             }
 
+            const initialVisibleFields = getVisibleFields(step, answers);
+            if (initialVisibleFields.length === 0) {
+                stepIndex += 1;
+                continue;
+            }
+
             if (!focusedPrompts) {
-                printStepHeader(stepIndex, steps.length, step.title, step.description);
+                printStepHeader(
+                    stepIndex,
+                    visibleSteps.length,
+                    step.title,
+                    step.description
+                );
                 console.log('  Commands: /back = previous question, /next = skip this question');
                 console.log('');
             }
@@ -516,8 +570,14 @@ async function runInit(flags: CliFlags): Promise<void> {
             const patch: Partial<WizardAnswers> = {};
             let fieldIndex = 0;
             let moveToPreviousStep = false;
-            while (fieldIndex < step.fields.length) {
-                const field = step.fields[fieldIndex];
+            const draftAnswers: WizardAnswers = { ...answers };
+            while (true) {
+                const visibleFields = getVisibleFields(step, draftAnswers);
+                if (fieldIndex >= visibleFields.length) {
+                    break;
+                }
+
+                const field = visibleFields[fieldIndex];
                 if (!field) {
                     fieldIndex += 1;
                     continue;
@@ -526,11 +586,11 @@ async function runInit(flags: CliFlags): Promise<void> {
                 if (focusedPrompts) {
                     printFocusedFieldScreen(
                         stepIndex,
-                        steps.length,
+                        visibleSteps.length,
                         step.title,
                         step.description,
                         fieldIndex,
-                        step.fields.length
+                        visibleFields.length
                     );
                 } else {
                     console.log('');
@@ -541,9 +601,13 @@ async function runInit(flags: CliFlags): Promise<void> {
                 }
 
                 while (true) {
-                    const value = await promptField(prompt, field, answers);
+                    const value = await promptField(prompt, field, draftAnswers);
                     if (value === NAV_BACK) {
                         if (fieldIndex === 0) {
+                            if (stepIndex === 0) {
+                                console.log('Already at the first visible question.');
+                                break;
+                            }
                             moveToPreviousStep = true;
                             break;
                         }
@@ -557,7 +621,7 @@ async function runInit(flags: CliFlags): Promise<void> {
 
                     const validationError =
                         typeof field.validate === 'function'
-                            ? field.validate(value as never, answers)
+                            ? field.validate(value as never, draftAnswers)
                             : null;
                     if (validationError) {
                         console.log(validationError);
@@ -565,6 +629,8 @@ async function runInit(flags: CliFlags): Promise<void> {
                     }
 
                     patch[field.key] = value as never;
+                    (draftAnswers as Record<keyof WizardAnswers, unknown>)[field.key] =
+                        value;
                     fieldIndex += 1;
                     break;
                 }

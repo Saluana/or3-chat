@@ -19,17 +19,26 @@ When published, the same CLI is packaged with a bin entry (`or3-cloud`) so it ca
 ## What the Wizard Does
 
 1. Creates a wizard session with defaults (recommended stack: `basic-auth + sqlite + fs`).
-2. Collects provider-specific answers only for selected providers.
-3. Validates using:
+2. Uses template mode to decide provider flow depth:
+   - `preset-local`: auto-applies Basic Auth + SQLite + Filesystem and skips manual provider selection.
+   - `preset-clerk-convex`: auto-applies Clerk + Convex + Convex and skips manual provider selection.
+   - `custom`: keeps manual provider selection.
+3. Collects provider-specific answers only for selected providers.
+4. Supports per-section advanced toggles with a global expert mode switch.
+5. Prompts only visible fields (conditional prompts respect prior answers).
+   - `themesToInstall` only when `themeInstallMode=install-selected`
+   - limits detail fields only when `limitsEnabled=true`
+   - `forwardedForHeader` only when `trustProxy=true`
+6. Validates using:
    - field-level checks (paths, secrets, URLs, cross-field rules)
    - authoritative config builders (`buildOr3ConfigFromEnv`, `buildOr3CloudConfigFromEnv`)
-4. Shows a redacted review screen.
-5. Applies config by:
+6. Shows a redacted review screen with effective defaults for hidden advanced fields.
+7. Applies config by:
    - updating target env file (`.env` by default) with non-destructive merge
    - creating timestamped backup files before write (unless disabled)
    - generating `or3.providers.generated.ts` from selected providers only
-6. Optionally sets Convex backend env vars for Clerk + Convex stacks.
-7. Optionally runs deploy commands (`bun install`, `bun run dev:ssr` or `bun run build`).
+8. Optionally sets Convex backend env vars for Clerk + Convex stacks.
+9. Optionally runs deploy commands (`bun install`, `bun run dev:ssr` or `bun run build`).
 
 ## Commands
 
@@ -46,6 +55,16 @@ Common flags:
 - `--manual`
 - `--enable-install` (feature-flagged package install execution)
 - `--package-manager bun|npm`
+
+Navigation inside setup questions:
+
+- `/back` moves to the previous visible question (or previous visible step at question boundaries)
+- `/next` skips to the next visible question/step
+
+Progress counters are dynamic:
+
+- `Step X of Y` counts only currently visible steps
+- `Question A of B` counts only currently visible fields in that step
 
 ### `or3-cloud validate`
 
@@ -107,6 +126,16 @@ Legacy selectable preset:
 - Auth: `clerk`
 - Sync: `convex`
 - Storage: `convex`
+
+## Advanced Field Defaults (when skipped)
+
+When advanced prompts are skipped for a section, the wizard applies these defaults:
+
+- OR3 base: `themeInstallMode=use-existing`, `themesToInstall=blank,retro`, logo/favicon unset
+- Auth: `basicAuthAccessTtlSeconds=900`, `basicAuthRefreshTtlSeconds=2592000`, `basicAuthDbPath=./.data/or3-basic-auth.sqlite`
+- Sync: `sqlitePragmaJournalMode=WAL`, `sqlitePragmaSynchronous=NORMAL`, `sqliteAllowInMemory=false`, `sqliteStrict=false`, Convex self-hosted extras unset
+- Storage: `fsUrlTtlSeconds=900`, `s3ForcePathStyle=false`, `s3UrlTtlSeconds=900`, `s3RequireChecksum=false`, optional S3 extras unset
+- AI/Limits/Security: `openrouterAllowUserOverride=true`, `openrouterRequireUserKey=false`, `requestsPerMinute=20`, `maxConversations=0`, `maxMessagesPerDay=0`, `forwardedForHeader=x-forwarded-for`, `strictConfig=false`
 
 ## Convex Backend Env Separation
 
