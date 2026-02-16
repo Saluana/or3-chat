@@ -283,6 +283,7 @@ export default defineNuxtConfig({
             completedJobRetentionMs: 5 * 60 * 1000, // 5 minutes
         },
         public: {
+            appVersion: process.env.npm_package_version || '0.1.0',
             // Single source of truth for client gating.
             // Avoid inferring enablement from presence of publishable keys.
             ssrAuthEnabled: effectiveSsrAuthEnabled,
@@ -342,6 +343,34 @@ export default defineNuxtConfig({
                 },
                 dashboard: {
                     enabled: or3Config.features.dashboard.enabled,
+                },
+            },
+            // Base OR3 config for client/runtime access (avoid importing config.or3 in app runtime)
+            or3: {
+                site: {
+                    name: or3Config.site.name,
+                    description: or3Config.site.description,
+                    logoUrl: or3Config.site.logoUrl,
+                    faviconUrl: or3Config.site.faviconUrl,
+                    defaultTheme: or3Config.site.defaultTheme,
+                },
+                limits: {
+                    maxFileSizeBytes: or3Config.limits.maxFileSizeBytes,
+                    maxCloudFileSizeBytes: or3Config.limits.maxCloudFileSizeBytes,
+                    maxFilesPerMessage: or3Config.limits.maxFilesPerMessage,
+                    localStorageQuotaMB:
+                        or3Config.limits.localStorageQuotaMB !== null
+                            ? String(or3Config.limits.localStorageQuotaMB)
+                            : undefined,
+                },
+                ui: {
+                    defaultPaneCount: or3Config.ui.defaultPaneCount,
+                    maxPanes: or3Config.ui.maxPanes,
+                    sidebarCollapsedByDefault: or3Config.ui.sidebarCollapsedByDefault,
+                },
+                legal: {
+                    termsUrl: or3Config.legal.termsUrl,
+                    privacyUrl: or3Config.legal.privacyUrl,
                 },
             },
             // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
@@ -432,7 +461,8 @@ export default defineNuxtConfig({
             },
         },
         prerender: {
-            routes: ['/openrouter-callback', '/documentation'],
+            crawlLinks: false,
+            routes: ['/', '/openrouter-callback', '/documentation'],
         },
         routeRules: {
             // Hashed Nuxt chunks - immutable forever
@@ -520,12 +550,13 @@ export default defineNuxtConfig({
             cleanupOutdatedCaches: true,
             // Ensure the prerendered callback HTML can be matched regardless of auth params
             ignoreURLParametersMatching: [/^code$/, /^state$/],
-            // Never serve the generic SPA fallback for the auth callback (with or without params)
+            // Never serve the generic SPA fallback for these routes.
+            // /openrouter-callback uses a dedicated runtime rule below with
+            // a precache fallback to the prerendered callback HTML.
             navigateFallbackDenylist: [
-                /\/openrouter-callback$/,
-                /\/openrouter-callback\?.*$/,
+                /\/openrouter-callback(?:[?/].*)?$/,
                 /\/streamsaver(?:\/.*)?$/,
-                /\/documentation(?:\/.*)?$/, // Don't fallback for documentation routes
+                /\/documentation(?:\/.*)?$/,
             ],
             navigateFallback: '/index.html',
             manifestTransforms: [
@@ -551,6 +582,22 @@ export default defineNuxtConfig({
             globIgnores: ['streamsaver/**'],
             importScripts: ['/sw-bypass-streamsaver.js'],
             runtimeCaching: [
+                // OpenRouter callback: prefer network, but fall back to the
+                // prerendered callback page from precache if localhost drops.
+                {
+                    urlPattern: ({ request, url }) =>
+                        request.mode === 'navigate' &&
+                        /^\/openrouter-callback\/?$/.test(url.pathname),
+                    handler: 'NetworkFirst',
+                    options: {
+                        cacheName: 'openrouter-callback-pages',
+                        matchOptions: { ignoreSearch: true },
+                        networkTimeoutSeconds: 2,
+                        precacheFallback: {
+                            fallbackURL: '/openrouter-callback/index.html',
+                        },
+                    },
+                },
                 // HTML navigation - always try network first for fresh content
                 {
                     urlPattern: ({ request }) => request.mode === 'navigate',
@@ -563,11 +610,6 @@ export default defineNuxtConfig({
                         },
                         networkTimeoutSeconds: 3, // Fast timeout, then fallback to cache
                     },
-                },
-                // Auth callback: prefer fresh network, but fall back to cached prerender if offline
-                {
-                    urlPattern: /\/openrouter-callback(\?.*)?$/,
-                    handler: 'NetworkOnly',
                 },
                 // Nuxt chunks
                 {

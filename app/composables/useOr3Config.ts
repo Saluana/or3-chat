@@ -1,6 +1,59 @@
 import { useRuntimeConfig } from '#imports';
-import { or3Config } from '../../config.or3';
 import type { ResolvedOr3Config } from '../../types/or3-config';
+
+const FALLBACK_OR3_CONFIG: ResolvedOr3Config = {
+    site: {
+        name: 'OR3',
+        description: '',
+        logoUrl: '',
+        faviconUrl: '',
+        defaultTheme: 'blank',
+    },
+    features: {
+        workflows: {
+            enabled: true,
+            editor: true,
+            slashCommands: true,
+            execution: true,
+        },
+        documents: {
+            enabled: true,
+        },
+        backup: {
+            enabled: true,
+        },
+        mentions: {
+            enabled: true,
+            documents: true,
+            conversations: true,
+        },
+        dashboard: {
+            enabled: true,
+        },
+    },
+    limits: {
+        maxFileSizeBytes: 20 * 1024 * 1024,
+        maxCloudFileSizeBytes: 100 * 1024 * 1024,
+        maxFilesPerMessage: 10,
+        localStorageQuotaMB: null,
+    },
+    ui: {
+        defaultPaneCount: 1,
+        maxPanes: 4,
+        sidebarCollapsedByDefault: false,
+    },
+    extensions: {},
+    legal: {
+        termsUrl: '',
+        privacyUrl: '',
+    },
+};
+
+function parsePositiveNumber(value: unknown): number | undefined {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+    return Math.floor(parsed);
+}
 
 /**
  * Access the validated OR3 base configuration.
@@ -16,52 +69,81 @@ import type { ResolvedOr3Config } from '../../types/or3-config';
  * ```
  */
 export function useOr3Config(): Readonly<ResolvedOr3Config> {
-    // On client-side, merge with runtime config to get admin dashboard changes
-    if (process.client) {
-        const runtimeConfig = useRuntimeConfig();
-        const publicFeatures = runtimeConfig.public.features;
-
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (publicFeatures) {
-            return {
-                ...or3Config,
-                features: {
-                    workflows: {
-                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                        enabled: publicFeatures.workflows?.enabled ?? or3Config.features.workflows.enabled,
-                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                        editor: publicFeatures.workflows?.editor ?? or3Config.features.workflows.editor,
-                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                        slashCommands: publicFeatures.workflows?.slashCommands ?? or3Config.features.workflows.slashCommands,
-                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                        execution: publicFeatures.workflows?.execution ?? or3Config.features.workflows.execution,
-                    },
-                    documents: {
-                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                        enabled: publicFeatures.documents?.enabled ?? or3Config.features.documents.enabled,
-                    },
-                    backup: {
-                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                        enabled: publicFeatures.backup?.enabled ?? or3Config.features.backup.enabled,
-                    },
-                    mentions: {
-                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                        enabled: publicFeatures.mentions?.enabled ?? or3Config.features.mentions.enabled,
-                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                        documents: publicFeatures.mentions?.documents ?? or3Config.features.mentions.documents,
-                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                        conversations: publicFeatures.mentions?.conversations ?? or3Config.features.mentions.conversations,
-                    },
-                    dashboard: {
-                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                        enabled: publicFeatures.dashboard?.enabled ?? or3Config.features.dashboard.enabled,
-                    },
-                },
+    const runtimeConfig = useRuntimeConfig();
+    const publicConfig = runtimeConfig.public as unknown as {
+        features?: Partial<ResolvedOr3Config['features']>;
+        or3?: {
+            site?: Partial<ResolvedOr3Config['site']>;
+            limits?: {
+                maxFileSizeBytes?: number | string;
+                maxCloudFileSizeBytes?: number | string;
+                maxFilesPerMessage?: number | string;
+                localStorageQuotaMB?: number | string | null;
             };
-        }
-    }
-    
-    return or3Config;
+            ui?: Partial<ResolvedOr3Config['ui']>;
+            legal?: Partial<ResolvedOr3Config['legal']>;
+        };
+    };
+
+    const rawLimits = publicConfig.or3?.limits;
+    const maxFileSizeBytes =
+        parsePositiveNumber(rawLimits?.maxFileSizeBytes) ??
+        FALLBACK_OR3_CONFIG.limits.maxFileSizeBytes;
+    const maxCloudFileSizeBytes =
+        parsePositiveNumber(rawLimits?.maxCloudFileSizeBytes) ??
+        FALLBACK_OR3_CONFIG.limits.maxCloudFileSizeBytes;
+    const maxFilesPerMessage =
+        parsePositiveNumber(rawLimits?.maxFilesPerMessage) ??
+        FALLBACK_OR3_CONFIG.limits.maxFilesPerMessage;
+    const localStorageQuotaMB: number | null =
+        rawLimits?.localStorageQuotaMB == null
+            ? null
+            : parsePositiveNumber(rawLimits.localStorageQuotaMB) ??
+              FALLBACK_OR3_CONFIG.limits.localStorageQuotaMB;
+
+    return {
+        ...FALLBACK_OR3_CONFIG,
+        site: {
+            ...FALLBACK_OR3_CONFIG.site,
+            ...(publicConfig.or3?.site ?? {}),
+        },
+        limits: {
+            maxFileSizeBytes,
+            maxCloudFileSizeBytes,
+            maxFilesPerMessage,
+            localStorageQuotaMB,
+        },
+        ui: {
+            ...FALLBACK_OR3_CONFIG.ui,
+            ...(publicConfig.or3?.ui ?? {}),
+        },
+        legal: {
+            ...FALLBACK_OR3_CONFIG.legal,
+            ...(publicConfig.or3?.legal ?? {}),
+        },
+        features: {
+            workflows: {
+                ...FALLBACK_OR3_CONFIG.features.workflows,
+                ...(publicConfig.features?.workflows ?? {}),
+            },
+            documents: {
+                ...FALLBACK_OR3_CONFIG.features.documents,
+                ...(publicConfig.features?.documents ?? {}),
+            },
+            backup: {
+                ...FALLBACK_OR3_CONFIG.features.backup,
+                ...(publicConfig.features?.backup ?? {}),
+            },
+            mentions: {
+                ...FALLBACK_OR3_CONFIG.features.mentions,
+                ...(publicConfig.features?.mentions ?? {}),
+            },
+            dashboard: {
+                ...FALLBACK_OR3_CONFIG.features.dashboard,
+                ...(publicConfig.features?.dashboard ?? {}),
+            },
+        },
+    };
 }
 
 /**
@@ -81,12 +163,7 @@ export function useOr3Config(): Readonly<ResolvedOr3Config> {
 export function isFeatureEnabled(
     feature: 'workflows' | 'documents' | 'backup' | 'mentions' | 'dashboard'
 ): boolean {
-    if (process.client) {
-        const runtimeConfig = useRuntimeConfig();
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        return runtimeConfig.public.features?.[feature]?.enabled ?? or3Config.features[feature].enabled;
-    }
-    return or3Config.features[feature].enabled;
+    return useOr3Config().features[feature].enabled;
 }
 
 /**
@@ -99,17 +176,7 @@ export function isFeatureEnabled(
 export function isWorkflowFeatureEnabled(
     subFeature: 'editor' | 'slashCommands' | 'execution'
 ): boolean {
-    if (process.client) {
-        const runtimeConfig = useRuntimeConfig();
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        const workflows = runtimeConfig.public.features?.workflows;
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (workflows) {
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-            return workflows.enabled && (workflows[subFeature] ?? true);
-        }
-    }
-    const { workflows } = or3Config.features;
+    const { workflows } = useOr3Config().features;
     return workflows.enabled && workflows[subFeature];
 }
 
@@ -121,16 +188,6 @@ export function isWorkflowFeatureEnabled(
  * @returns Whether the source is enabled (also checks master toggle)
  */
 export function isMentionSourceEnabled(source: 'documents' | 'conversations'): boolean {
-    if (process.client) {
-        const runtimeConfig = useRuntimeConfig();
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        const mentions = runtimeConfig.public.features?.mentions;
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (mentions) {
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-            return mentions.enabled && (mentions[source] ?? true);
-        }
-    }
-    const { mentions } = or3Config.features;
+    const { mentions } = useOr3Config().features;
     return mentions.enabled && mentions[source];
 }

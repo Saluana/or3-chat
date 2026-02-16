@@ -5,6 +5,9 @@ const AUTH_SESSION_STORAGE_KEY = 'or3:auth-session-changed';
 export default defineNuxtPlugin(() => {
     if (import.meta.server) return;
 
+    const runtimeConfig = useRuntimeConfig();
+    if (!runtimeConfig.public.ssrAuthEnabled) return;
+
     const sessionContext = useSessionContext();
 
     const handleAuthSessionChanged = async (): Promise<void> => {

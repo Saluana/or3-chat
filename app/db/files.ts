@@ -40,6 +40,7 @@ import type {
     DbDeletePayload,
     FileEntity,
 } from '../core/hooks/hook-types';
+import { useRuntimeConfig } from '#imports';
 
 // Default max file size (20MB) - can be overridden by config
 const DEFAULT_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
@@ -47,29 +48,29 @@ const DEFAULT_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 // Cached config value to avoid repeated dynamic imports
 let cachedMaxFileSize: number | null = null;
 
-// Get max file size from OR3 config
-function getMaxFileSizeBytes(): number {
-    // Return cached value if available
-    if (cachedMaxFileSize !== null) {
-        return cachedMaxFileSize;
+function resolveConfiguredMaxFileSize(): number {
+    try {
+        const runtimeConfig = useRuntimeConfig();
+        const candidate = Number(
+            (runtimeConfig.public as { or3?: { limits?: { maxFileSizeBytes?: number } } }).or3
+                ?.limits?.maxFileSizeBytes
+        );
+        if (Number.isFinite(candidate) && candidate > 0) {
+            return Math.floor(candidate);
+        }
+    } catch {
+        // Runtime config unavailable; keep fallback.
     }
-    // Default fallback - actual config is loaded via initMaxFileSize
     return DEFAULT_MAX_FILE_SIZE_BYTES;
 }
 
-// Initialize max file size from config (called once at module load on client)
-async function initMaxFileSize(): Promise<void> {
-    try {
-        const { or3Config } = await import('~~/config.or3');
-        cachedMaxFileSize = or3Config.limits.maxFileSizeBytes;
-    } catch {
-        cachedMaxFileSize = DEFAULT_MAX_FILE_SIZE_BYTES;
+// Get max file size from OR3 config
+function getMaxFileSizeBytes(): number {
+    if (cachedMaxFileSize !== null) {
+        return cachedMaxFileSize;
     }
-}
-
-// Eagerly initialize on client side
-if (import.meta.client) {
-    void initMaxFileSize();
+    cachedMaxFileSize = resolveConfiguredMaxFileSize();
+    return cachedMaxFileSize;
 }
 
 const FILE_TABLE = 'files';

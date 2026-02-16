@@ -28,6 +28,10 @@ import { useRuntimeConfig } from '#imports';
  */
 
 export default defineEventHandler((event) => {
+    // During `nuxt generate`, prerender requests run over plain HTTP on localhost.
+    // Redirecting them to HTTPS would bake meta-refresh redirect pages into static output.
+    if (import.meta.prerender) return;
+
     const config = useRuntimeConfig();
     const forceHttps = config.security.forceHttps === true;
     if (!forceHttps) return;

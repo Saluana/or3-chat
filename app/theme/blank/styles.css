@@ -14,7 +14,7 @@
 }
 
 	#nav-header {
-        @apply mb-0 ml-3 mr-6 pb-5 pl-0 pr-3 border-b-[length:var(--md-border-width)] border-b-[rgba(8,109,184,0.3)];
+        @apply mb-0 ml-3 mr-6 pb-5 pl-0  border-b-[length:var(--md-border-width)] border-b-[rgba(8,109,184,0.3)];
 	}
 
 }

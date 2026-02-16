@@ -94,6 +94,7 @@
                         />
                     </UTooltip>
                     <NotificationsNotificationBell
+                        v-if="showNotificationBell"
                         :button-props="notificationButtonProps"
                         button-class="pointer-events-auto backdrop-blur"
                         popover-side="bottom"
@@ -291,11 +292,15 @@ const props = withDefaults(
 const router = useRouter();
 const toast = useToast();
 const route = useRoute();
+const runtimeConfig = useRuntimeConfig();
 const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
 const sideNavExpandedRef = ref<any | null>(null);
 const showDashboardModal = ref(false);
 const hasSyncedInitial = ref(false);
 const or3Config = useOr3Config();
+const showNotificationBell = computed(
+    () => runtimeConfig.public.ssrAuthEnabled === true
+);
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
 

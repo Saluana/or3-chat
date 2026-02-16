@@ -23,7 +23,7 @@
 import { newId } from '~/db/util';
 import { getThreadSystemPrompt } from '~/db/threads';
 import { getPrompt } from '~/db/prompts';
-import { MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
+import { getMaxMessageFileHashes } from '~/db/files-util';
 import { promptJsonToString, composeSystemPrompt } from '~/utils/chat/prompt-utils';
 import { trimOrMessagesImages } from '~/utils/chat/messages';
 import type { ChatMessage, ContentPart } from '~/utils/chat/types';
@@ -161,8 +161,9 @@ export async function buildOpenRouterMessagesForSend(
         if (target) target.file_hashes = null;
     }
 
+    const maxMessageFileHashes = getMaxMessageFileHashes();
     const contextHashesList = Array.isArray(params.contextHashes)
-        ? params.contextHashes.slice(0, MAX_MESSAGE_FILE_HASHES)
+        ? params.contextHashes.slice(0, maxMessageFileHashes)
         : [];
     if (contextHashesList.length) {
         const seenContext = new Set<string>(
@@ -171,7 +172,7 @@ export async function buildOpenRouterMessagesForSend(
         const contextParts: ContentPart[] = [];
         for (const h of contextHashesList) {
             if (!h || seenContext.has(h)) continue;
-            if (contextParts.length >= MAX_MESSAGE_FILE_HASHES) break;
+            if (contextParts.length >= maxMessageFileHashes) break;
             const part = await hashToContentPart(h);
             if (part) {
                 contextParts.push(part);

@@ -1,11 +1,25 @@
 import { reportError, err } from '~/utils/errors';
 import { createOrRefFile } from '~/db/files';
 import { useHooks } from '~/core/hooks/useHooks';
-import { or3Config } from '~~/config.or3';
+import { useRuntimeConfig } from '#imports';
 import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
 
+const DEFAULT_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+
 export function getMaxFileBytes(): number {
-    return or3Config.limits.maxFileSizeBytes;
+    try {
+        const runtimeConfig = useRuntimeConfig();
+        const candidate = Number(
+            (runtimeConfig.public as { or3?: { limits?: { maxFileSizeBytes?: number } } }).or3
+                ?.limits?.maxFileSizeBytes
+        );
+        if (Number.isFinite(candidate) && candidate > 0) {
+            return Math.floor(candidate);
+        }
+    } catch {
+        // Fall through to default when runtime config is not available.
+    }
+    return DEFAULT_MAX_FILE_SIZE_BYTES;
 }
 
 export function classifyKind(mime: string): 'image' | 'pdf' | null {

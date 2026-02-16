@@ -4,17 +4,30 @@
  */
 import { computed, ref, watchEffect } from 'vue';
 import { $fetch } from 'ofetch';
-import { useFetch, useState } from '#imports';
+import { useFetch, useRuntimeConfig, useState } from '#imports';
 import type { SessionContext } from '~/core/hooks/hook-types';
 
 type SessionPayload = { session: SessionContext | null };
 
 let inFlight: Promise<SessionPayload> | null = null;
 
+/** True when SSR auth is disabled — blocks all network requests. */
+function isAuthDisabled(): boolean {
+    try {
+        return useRuntimeConfig().public.ssrAuthEnabled !== true;
+    } catch {
+        // runtimeConfig unavailable (e.g. outside Nuxt lifecycle) — assume disabled
+        return true;
+    }
+}
+
 /**
  * Fetch workspace-specific session context from the server.
  * - SSR: uses useFetch to hydrate state
  * - Client: uses $fetch to avoid "already mounted" warning
+ *
+ * Safety: when `ssrAuthEnabled` is false the composable returns static
+ * unauthenticated state and never hits the network.
  */
 export function useSessionContext() {
     const state = useState<SessionPayload | null>('auth-session', () => null);
@@ -24,6 +37,12 @@ export function useSessionContext() {
     const data = computed<SessionPayload | null>(() => state.value);
 
     const refresh = async () => {
+        // Never fetch when auth is disabled (static builds, no server)
+        if (isAuthDisabled()) {
+            state.value = { session: null };
+            return state.value;
+        }
+
         // Check-and-assign atomically to prevent race conditions
         if (inFlight) return inFlight;
         
@@ -53,6 +72,11 @@ export function useSessionContext() {
     };
 
     if (import.meta.server) {
+        // Skip server-side fetch when auth is disabled (static prerender)
+        if (isAuthDisabled()) {
+            return { data, pending, error, refresh };
+        }
+
         const asyncData = useFetch<SessionPayload>('/api/auth/session', {
             key: 'auth-session',
             dedupe: 'defer',

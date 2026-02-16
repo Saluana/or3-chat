@@ -130,7 +130,7 @@ import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useToast, useHooks } from '#imports';
-import { MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
+import { getMaxMessageFileHashes } from '~/db/files-util';
 import type {
     ChatInstance,
     ImageAttachment,
@@ -568,7 +568,7 @@ function onScroll(payload: {
 // Chat send abstraction (Req 3.5)
 const toast = useToast();
 
-function collectRecentHashes(limit = MAX_MESSAGE_FILE_HASHES): string[] {
+function collectRecentHashes(limit = getMaxMessageFileHashes()): string[] {
     const msgs = chat.value?.messages?.value || [];
     const out: string[] = [];
     const seen = new Set<string>();

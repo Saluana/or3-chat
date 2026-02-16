@@ -317,9 +317,10 @@ import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
 import WorkspaceIndicator from '~/components/admin/WorkspaceIndicator.vue';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
 import { useAdminWorkspaceContext } from '~/composables/admin/useAdminWorkspaceContext';
-import { APP_VERSION } from '~~/config.or3';
 
-const appVersion = APP_VERSION;
+const runtimeConfig = useRuntimeConfig();
+const appVersion =
+    (runtimeConfig.public as { appVersion?: string }).appVersion || '0.1.0';
 
 const route = useRoute();
 const adminPages = useAdminPages();
