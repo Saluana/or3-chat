@@ -65,6 +65,12 @@ export const or3CloudConfig = defineOr3CloudConfig({
         provider: (process.env.AUTH_PROVIDER ?? AUTH_PROVIDER_IDS.clerk) as AuthProviderId,
         guestAccessEnabled: process.env.OR3_GUEST_ACCESS_ENABLED === 'true',
         autoProvision: process.env.OR3_AUTH_AUTO_PROVISION !== 'false',
+        registrationMode:
+            process.env.OR3_AUTH_REGISTRATION_MODE === 'open' ||
+            process.env.OR3_AUTH_REGISTRATION_MODE === 'invite_only' ||
+            process.env.OR3_AUTH_REGISTRATION_MODE === 'disabled'
+                ? process.env.OR3_AUTH_REGISTRATION_MODE
+                : undefined,
         sessionProvisioningFailure: process.env.OR3_SESSION_PROVISIONING_FAILURE as
             | 'throw'
             | 'unauthenticated'

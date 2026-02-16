@@ -51,6 +51,30 @@ function inferProviderFromIssuer(issuer: string | undefined): string {
     return provider || 'clerk';
 }
 
+function normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+}
+
+async function markExpiredInvites(ctx: MutationCtx | QueryCtx, workspaceId: Id<'workspaces'>, now: number) {
+    const pending = await ctx.db
+        .query('auth_invites')
+        .withIndex('by_workspace_status', (q) =>
+            q.eq('workspace_id', workspaceId).eq('status', 'pending')
+        )
+        .collect();
+
+    await Promise.all(
+        pending
+            .filter((invite) => invite.expires_at <= now)
+            .map((invite) =>
+                ctx.db.patch(invite._id, {
+                    status: 'expired',
+                    updated_at: now,
+                })
+            )
+    );
+}
+
 /**
  * Internal helper.
  *
@@ -612,5 +636,164 @@ export const resolveSession = query({
             description: workspace.description ?? null,
             role: membership.role,
         };
+    },
+});
+
+export const createInvite = mutation({
+    args: {
+        workspace_id: v.id('workspaces'),
+        email: v.string(),
+        role: v.union(v.literal('owner'), v.literal('editor'), v.literal('viewer')),
+        invited_by_user_id: v.id('users'),
+        token_hash: v.string(),
+        expires_at: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        const inviteId = await ctx.db.insert('auth_invites', {
+            workspace_id: args.workspace_id,
+            email: normalizeEmail(args.email),
+            role: args.role,
+            status: 'pending',
+            invited_by_user_id: args.invited_by_user_id,
+            token_hash: args.token_hash,
+            expires_at: args.expires_at,
+            created_at: now,
+            updated_at: now,
+        });
+        return { invite_id: inviteId };
+    },
+});
+
+export const listInvites = query({
+    args: {
+        workspace_id: v.id('workspaces'),
+        status: v.optional(
+            v.union(v.literal('pending'), v.literal('accepted'), v.literal('revoked'), v.literal('expired'))
+        ),
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        await markExpiredInvites(ctx, args.workspace_id, now);
+
+        const limit = Math.max(1, Math.min(args.limit ?? 100, 500));
+        let rows = await ctx.db
+            .query('auth_invites')
+            .withIndex('by_workspace_status', (q) => q.eq('workspace_id', args.workspace_id))
+            .collect();
+
+        if (args.status) {
+            rows = rows.filter((row) => row.status === args.status);
+        }
+
+        return rows
+            .sort((a, b) => b.created_at - a.created_at)
+            .slice(0, limit)
+            .map((row) => ({
+                id: row._id,
+                workspace_id: row.workspace_id,
+                email: row.email,
+                role: row.role,
+                status: row.status,
+                invited_by_user_id: row.invited_by_user_id,
+                token_hash: row.token_hash,
+                expires_at: row.expires_at,
+                accepted_at: row.accepted_at ?? null,
+                accepted_user_id: row.accepted_user_id ?? null,
+                revoked_at: row.revoked_at ?? null,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            }));
+    },
+});
+
+export const revokeInvite = mutation({
+    args: {
+        workspace_id: v.id('workspaces'),
+        invite_id: v.id('auth_invites'),
+    },
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        const invite = await ctx.db.get(args.invite_id);
+        if (!invite || invite.workspace_id !== args.workspace_id) {
+            throw new Error('Invite not found');
+        }
+        if (invite.status !== 'pending') {
+            return { ok: true };
+        }
+        await ctx.db.patch(args.invite_id, {
+            status: 'revoked',
+            revoked_at: now,
+            updated_at: now,
+        });
+        return { ok: true };
+    },
+});
+
+export const consumeInvite = mutation({
+    args: {
+        workspace_id: v.id('workspaces'),
+        email: v.string(),
+        token_hash: v.string(),
+        accepted_user_id: v.id('users'),
+    },
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        await markExpiredInvites(ctx, args.workspace_id, now);
+        const email = normalizeEmail(args.email);
+
+        const candidates = await ctx.db
+            .query('auth_invites')
+            .withIndex('by_workspace_email_status', (q) =>
+                q.eq('workspace_id', args.workspace_id).eq('email', email)
+            )
+            .collect();
+
+        const invite = candidates
+            .filter((row) => row.status === 'pending')
+            .sort((a, b) => a.created_at - b.created_at)[0];
+
+        if (!invite) {
+            return { ok: false as const, reason: 'not_found' as const };
+        }
+        if (invite.expires_at <= now) {
+            await ctx.db.patch(invite._id, { status: 'expired', updated_at: now });
+            return { ok: false as const, reason: 'expired' as const };
+        }
+        if (invite.token_hash !== args.token_hash) {
+            return { ok: false as const, reason: 'token_mismatch' as const };
+        }
+
+        await ctx.db.patch(invite._id, {
+            status: 'accepted',
+            accepted_at: now,
+            accepted_user_id: args.accepted_user_id,
+            updated_at: now,
+        });
+
+        const existingMembership = await ctx.db
+            .query('workspace_members')
+            .withIndex('by_workspace_user', (q) =>
+                q.eq('workspace_id', args.workspace_id).eq('user_id', args.accepted_user_id)
+            )
+            .first();
+
+        if (existingMembership) {
+            await ctx.db.patch(existingMembership._id, { role: invite.role });
+        } else {
+            await ctx.db.insert('workspace_members', {
+                workspace_id: args.workspace_id,
+                user_id: args.accepted_user_id,
+                role: invite.role,
+                created_at: now,
+            });
+        }
+
+        await ctx.db.patch(args.accepted_user_id, {
+            active_workspace_id: args.workspace_id,
+        });
+
+        return { ok: true as const, role: invite.role };
     },
 });

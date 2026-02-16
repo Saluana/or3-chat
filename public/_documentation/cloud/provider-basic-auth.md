@@ -5,6 +5,7 @@ Setup and operating guide for the default-stack auth provider.
 ## What It Provides
 
 - SSR auth endpoints for sign-in/sign-out/session/refresh.
+- Self-service registration endpoint (`POST /api/basic-auth/register`) when registration mode allows it.
 - Local account storage (provider-managed DB).
 - Session tokens for server-gated routes (`can()` enforcement remains in core routes).
 - Provider auth UI adapter registration (when the provider package is installed).
@@ -45,6 +46,17 @@ OR3_BASIC_AUTH_REFRESH_TTL_SECONDS=2592000
 OR3_BASIC_AUTH_DB_PATH=.data/basic-auth.sqlite
 ```
 
+Registration controls (core auth policy):
+
+```bash
+# open | invite_only | disabled
+OR3_AUTH_REGISTRATION_MODE=open
+
+# required for invite_only mode
+OR3_AUTH_INVITE_TOKEN_SECRET=replace-with-long-random-secret
+OR3_AUTH_INVITE_TOKEN_TTL_SECONDS=604800
+```
+
 ## Security Notes
 
 - Use long random secrets for `OR3_BASIC_AUTH_JWT_SECRET` and `OR3_BASIC_AUTH_REFRESH_SECRET`.
@@ -55,6 +67,7 @@ OR3_BASIC_AUTH_DB_PATH=.data/basic-auth.sqlite
 ## Verification Checklist
 
 - `GET /api/auth/session` returns an authenticated user after login.
+- `POST /api/basic-auth/register` creates an account when registration mode allows it.
 - Access token expiry triggers refresh and does not silently break background/sync routes.
 - Logout invalidates local session state.
 - Workspace-scoped routes still require `can()` authorization.

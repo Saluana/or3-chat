@@ -22,6 +22,7 @@
  */
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
+import { deleteCookie } from 'h3';
 import { LRUCache } from 'lru-cache';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import type { ProviderSession } from './types';
@@ -31,6 +32,10 @@ import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
 import { recordSessionResolution, recordProviderError } from './metrics';
 import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { getDeploymentAdminChecker } from './deployment-admin';
+import {
+    evaluateUnknownUserRegistration,
+    resolveRegistrationMode,
+} from './registration';
 
 const SESSION_CONTEXT_KEY_PREFIX = '__or3_session_context_';
 const REQUEST_ID_KEY = '__or3_request_id';
@@ -217,43 +222,105 @@ export async function resolveSessionContext(
             );
         }
 
-        // Check if auto-provisioning is enabled
-        const autoProvision = (config.auth as { autoProvision?: boolean } | undefined)?.autoProvision ?? true;
-        
-        if (!autoProvision) {
-            if (!store.getUser) {
+        const registrationMode = resolveRegistrationMode(config);
+
+        let userId: string;
+        const existingUser = store.getUser
+            ? await store.getUser({
+                  provider: providerSession.provider,
+                  providerUserId: providerSession.user.id,
+              })
+            : null;
+
+        if (existingUser) {
+            userId = existingUser.userId;
+        } else {
+            const registrationDecision = evaluateUnknownUserRegistration({
+                event,
+                store,
+                mode: registrationMode,
+            });
+
+            if (!registrationDecision.allowed) {
+                if (registrationDecision.reason === 'invite_unsupported') {
+                    throw createError({
+                        statusCode: 503,
+                        statusMessage:
+                            'Invite-only registration is enabled but the selected auth store does not support invites.',
+                    });
+                }
+
+                if (registrationDecision.reason === 'invite_secret_missing') {
+                    throw createError({
+                        statusCode: 503,
+                        statusMessage:
+                            'Invite-only registration is enabled but invite token secret is not configured.',
+                    });
+                }
+
+                if (registrationDecision.reason === 'disabled') {
+                    throw createError({
+                        statusCode: 403,
+                        statusMessage:
+                            'Registration is currently disabled. Please contact an administrator.',
+                    });
+                }
+
                 throw createError({
-                    statusCode: 500,
+                    statusCode: 403,
                     statusMessage:
-                        'Auth store must implement getUser when OR3_AUTH_AUTO_PROVISION=false',
+                        registrationDecision.reason === 'invite_required'
+                            ? 'A valid invite is required to register.'
+                            : 'Invite token is invalid or expired.',
                 });
             }
 
-            // Try to get existing user without creating
-            const existingUser = await store.getUser({
+            const created = await store.getOrCreateUser({
                 provider: providerSession.provider,
                 providerUserId: providerSession.user.id,
+                email: providerSession.user.email,
+                displayName: providerSession.user.displayName,
             });
-            
-            if (!existingUser) {
-                console.warn('[auth:session] Auto-provisioning disabled, rejecting unknown user', {
-                    provider: providerSession.provider,
-                    userId: providerSession.user.id,
+            userId = created.userId;
+
+            if (registrationDecision.invite) {
+                if (typeof store.consumeInvite !== 'function') {
+                    throw createError({
+                        statusCode: 503,
+                        statusMessage: 'Auth store missing invite consume capability.',
+                    });
+                }
+
+                if (
+                    providerSession.user.email &&
+                    providerSession.user.email.trim().toLowerCase() !==
+                        registrationDecision.invite.payload.email.trim().toLowerCase()
+                ) {
+                    throw createError({
+                        statusCode: 403,
+                        statusMessage: 'Invite token is invalid or expired.',
+                    });
+                }
+
+                const consumeResult = await store.consumeInvite({
+                    workspaceId: registrationDecision.invite.payload.workspaceId,
+                    email: registrationDecision.invite.payload.email,
+                    tokenHash: registrationDecision.invite.tokenHash,
+                    acceptedUserId: userId,
                 });
-                throw createError({
-                    statusCode: 403,
-                    statusMessage: 'Registration is currently disabled. Please contact an administrator.',
+
+                if (!consumeResult.ok) {
+                    throw createError({
+                        statusCode: 403,
+                        statusMessage: 'Invite token is invalid or expired.',
+                    });
+                }
+
+                deleteCookie(event, 'or3_invite_token', {
+                    path: '/',
                 });
             }
         }
-
-        // Get or create user
-        const { userId } = await store.getOrCreateUser({
-            provider: providerSession.provider,
-            providerUserId: providerSession.user.id,
-            email: providerSession.user.email,
-            displayName: providerSession.user.displayName,
-        });
 
         // Get or create default workspace
         const { workspaceId, workspaceName } =

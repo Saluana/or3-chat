@@ -37,6 +37,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         provider: DEFAULT_AUTH_PROVIDER_ID,
         guestAccessEnabled: false,
         autoProvision: true,
+        registrationMode: undefined,
         sessionProvisioningFailure: 'throw',
         clerk: {
             publishableKey: undefined,
@@ -146,6 +147,9 @@ const cloudConfigSchema = z
             provider: z.string().min(1),
             guestAccessEnabled: z.boolean().optional(),
             autoProvision: z.boolean().optional(),
+            registrationMode: z
+                .enum(['open', 'invite_only', 'disabled'])
+                .optional(),
             sessionProvisioningFailure: z
                 .enum(['throw', 'unauthenticated', 'service-unavailable'])
                 .optional(),
@@ -350,6 +354,15 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
         if (!config.auth.clerk?.secretKey) {
             errors.push('auth.clerk.secretKey is required when auth is enabled.');
         }
+    }
+
+    if (
+        config.auth.registrationMode &&
+        !['open', 'invite_only', 'disabled'].includes(config.auth.registrationMode)
+    ) {
+        errors.push(
+            'auth.registrationMode must be one of: open, invite_only, disabled.'
+        );
     }
 
     if (config.sync.enabled && config.sync.provider === CONVEX_PROVIDER_ID) {

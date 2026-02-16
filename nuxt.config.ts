@@ -75,6 +75,10 @@ const storageProviderAvailable = isProviderAvailable(or3CloudConfig.storage.prov
 
 const effectiveSsrAuthEnabled =
     isSsrAuthEnabled && authProviderAvailable;
+
+const resolvedRegistrationMode =
+    or3CloudConfig.auth.registrationMode ??
+    ((or3CloudConfig.auth.autoProvision ?? true) ? 'open' : 'disabled');
 const effectiveSyncEnabled =
     effectiveSsrAuthEnabled &&
     or3CloudConfig.sync.enabled &&
@@ -219,8 +223,15 @@ export default defineNuxtConfig({
             enabled: effectiveSsrAuthEnabled,
             provider: or3CloudConfig.auth.provider,
             autoProvision: or3CloudConfig.auth.autoProvision ?? true,
+            registrationMode: resolvedRegistrationMode,
             sessionProvisioningFailure:
                 or3CloudConfig.auth.sessionProvisioningFailure ?? 'throw',
+            invite: {
+                tokenSecret: process.env.OR3_AUTH_INVITE_TOKEN_SECRET,
+                tokenTtlSeconds: process.env.OR3_AUTH_INVITE_TOKEN_TTL_SECONDS
+                    ? Number(process.env.OR3_AUTH_INVITE_TOKEN_TTL_SECONDS)
+                    : 7 * 24 * 60 * 60,
+            },
         },
         sync: {
             enabled: effectiveSyncEnabled,
@@ -277,6 +288,7 @@ export default defineNuxtConfig({
             ssrAuthEnabled: effectiveSsrAuthEnabled,
             authProvider: or3CloudConfig.auth.provider,
             guestAccessEnabled: or3CloudConfig.auth.guestAccessEnabled ?? false,
+            registrationMode: resolvedRegistrationMode,
             openRouter: {
                 allowUserOverride:
                     or3CloudConfig.services.llm?.openRouter?.allowUserOverride ??

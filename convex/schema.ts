@@ -76,6 +76,32 @@ export default defineSchema({
         .index('by_workspace_user', ['workspace_id', 'user_id']),
 
     /**
+     * Workspace invites - invite-only onboarding records.
+     */
+    auth_invites: defineTable({
+        workspace_id: v.id('workspaces'),
+        email: v.string(),
+        role: v.union(v.literal('owner'), v.literal('editor'), v.literal('viewer')),
+        status: v.union(
+            v.literal('pending'),
+            v.literal('accepted'),
+            v.literal('revoked'),
+            v.literal('expired')
+        ),
+        invited_by_user_id: v.id('users'),
+        token_hash: v.string(),
+        expires_at: v.number(),
+        accepted_at: v.optional(v.number()),
+        accepted_user_id: v.optional(v.id('users')),
+        revoked_at: v.optional(v.number()),
+        created_at: v.number(),
+        updated_at: v.number(),
+    })
+        .index('by_workspace_status', ['workspace_id', 'status'])
+        .index('by_workspace_email_status', ['workspace_id', 'email', 'status'])
+        .index('by_workspace_token_hash', ['workspace_id', 'token_hash']),
+
+    /**
      * Admin users - deployment-scoped admin grants
      * Users in this table have admin access to the admin dashboard
      */

@@ -147,7 +147,7 @@ describe('resolveSessionContext provisioning and caching', () => {
         await expect(resolveSessionContext(makeEvent())).rejects.toThrow('boom');
     });
 
-    it('fails fast when autoProvision is disabled and store lacks getUser', async () => {
+    it('denies unknown users when registration is disabled', async () => {
         testRuntimeConfig.value = {
             ...testRuntimeConfig.value,
             auth: {
@@ -157,9 +157,8 @@ describe('resolveSessionContext provisioning and caching', () => {
         };
 
         await expect(resolveSessionContext(makeEvent())).rejects.toMatchObject({
-            statusCode: 500,
-            statusMessage:
-                'Auth store must implement getUser when OR3_AUTH_AUTO_PROVISION=false',
+            statusCode: 403,
+            statusMessage: 'Registration is currently disabled. Please contact an administrator.',
         });
         expect(authWorkspaceStoreMock.getOrCreateUser).not.toHaveBeenCalled();
     });

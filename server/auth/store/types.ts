@@ -12,6 +12,28 @@
  */
 import type { WorkspaceRole } from '~/core/hooks/hook-types';
 
+export type WorkspaceInviteStatus =
+    | 'pending'
+    | 'accepted'
+    | 'revoked'
+    | 'expired';
+
+export interface WorkspaceInviteRecord {
+    id: string;
+    workspaceId: string;
+    email: string;
+    role: WorkspaceRole;
+    status: WorkspaceInviteStatus;
+    invitedByUserId: string;
+    expiresAt: number;
+    tokenHash: string;
+    acceptedAt?: number | null;
+    acceptedUserId?: string | null;
+    revokedAt?: number | null;
+    createdAt: number;
+    updatedAt: number;
+}
+
 /**
  * Purpose:
  * Interface for auth-related workspace and user persistence.
@@ -127,6 +149,53 @@ export interface AuthWorkspaceStore {
         userId: string;
         workspaceId: string;
     }): Promise<void>;
+
+    /**
+     * Purpose:
+     * Creates a workspace invite for controlled onboarding.
+     */
+    createInvite?(input: {
+        workspaceId: string;
+        email: string;
+        role: WorkspaceRole;
+        invitedByUserId: string;
+        expiresAt: number;
+        tokenHash: string;
+    }): Promise<{ inviteId: string }>;
+
+    /**
+     * Purpose:
+     * Lists workspace invites for admin tooling.
+     */
+    listInvites?(input: {
+        workspaceId: string;
+        status?: WorkspaceInviteStatus;
+        limit?: number;
+    }): Promise<WorkspaceInviteRecord[]>;
+
+    /**
+     * Purpose:
+     * Revokes a pending invite.
+     */
+    revokeInvite?(input: {
+        workspaceId: string;
+        inviteId: string;
+        revokedByUserId: string;
+    }): Promise<void>;
+
+    /**
+     * Purpose:
+     * Consumes a matching invite when a new user registers.
+     */
+    consumeInvite?(input: {
+        workspaceId: string;
+        email: string;
+        tokenHash: string;
+        acceptedUserId: string;
+    }): Promise<
+        | { ok: true; role: WorkspaceRole }
+        | { ok: false; reason: 'not_found' | 'expired' | 'revoked' | 'already_used' | 'token_mismatch' }
+    >;
 }
 
 /**

@@ -28,6 +28,15 @@ export interface Or3CloudConfig {
          */
         autoProvision?: boolean;
         /**
+         * Registration mode for first-time authenticated users.
+         * - 'open': unknown users can be provisioned automatically
+         * - 'invite_only': unknown users require a valid invite
+         * - 'disabled': unknown users are always denied
+         *
+         * When omitted, legacy `autoProvision` behavior is used.
+         */
+        registrationMode?: 'open' | 'invite_only' | 'disabled';
+        /**
          * Behavior when workspace provisioning fails during session resolution.
          * - 'throw': preserve current behavior and throw (default)
          * - 'unauthenticated': return unauthenticated session

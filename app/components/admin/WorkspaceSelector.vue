@@ -2,6 +2,10 @@
     <UModal
         v-model:open="isOpen"
         prevent-close
+        :close="{
+            size: 'sm',
+            class: 'theme-btn'
+        }"
         title="Select a Workspace"
         description="Choose a workspace to manage plugins and themes"
     >

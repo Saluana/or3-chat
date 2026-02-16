@@ -39,8 +39,9 @@ export function getAdminStoreProvider(id: string): AdminStoreProvider | null {
 }
 
 function resolveProviderId(event?: H3Event): string {
-    const config = useRuntimeConfig(event);
-    return config.sync.provider;
+    void event;
+    const config = useRuntimeConfig();
+    return config.sync?.provider ?? 'convex';
 }
 
 /**

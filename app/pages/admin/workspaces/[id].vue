@@ -108,6 +108,60 @@
             </div>
 
             <!-- Actions -->
+            <div class="p-6 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-medium">Invites</h2>
+                    <UButton size="sm" variant="soft" color="neutral" :loading="isLoadingInvites" @click="loadInvites">
+                        Refresh
+                    </UButton>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4">
+                    <UInput v-model="inviteEmail" placeholder="invitee@example.com" type="email" />
+                    <USelect v-model="inviteRole" :items="inviteRoleItems" />
+                    <UInput v-model.number="inviteTtlHours" type="number" min="1" max="720" placeholder="TTL hours" />
+                    <UButton :loading="isCreatingInvite" @click="createInvite">Create invite</UButton>
+                </div>
+
+                <div v-if="invites.length === 0" class="text-sm opacity-60 py-4">No invites yet.</div>
+
+                <div v-else class="space-y-2">
+                    <div
+                        v-for="invite in invites"
+                        :key="invite.id"
+                        class="p-3 rounded-lg bg-[var(--md-surface-container-low)] flex items-center justify-between gap-3"
+                    >
+                        <div class="min-w-0">
+                            <div class="font-medium truncate">{{ invite.email }}</div>
+                            <div class="text-xs opacity-70">
+                                {{ invite.role }} · {{ invite.status }} · expires {{ formatDate(invite.expiresAt * 1000, true) }}
+                            </div>
+                            <div v-if="invite.inviteUrl" class="text-xs opacity-70 truncate">{{ invite.inviteUrl }}</div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <UButton
+                                v-if="invite.inviteUrl"
+                                size="xs"
+                                variant="soft"
+                                color="neutral"
+                                @click="copyInviteUrl(invite.inviteUrl)"
+                            >
+                                Copy URL
+                            </UButton>
+                            <UButton
+                                v-if="invite.status === 'pending'"
+                                size="xs"
+                                color="error"
+                                variant="soft"
+                                @click="revokeInvite(invite.id)"
+                            >
+                                Revoke
+                            </UButton>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="flex gap-2">
                 <UButton to="/admin/workspaces" variant="soft" color="neutral" icon="i-heroicons-arrow-left">
                     Back to Workspaces
@@ -143,6 +197,17 @@ const workspaceId = route.params.id as string;
 
 const isDeleting = ref(false);
 const isRestoring = ref(false);
+const isLoadingInvites = ref(false);
+const isCreatingInvite = ref(false);
+const inviteEmail = ref('');
+const inviteRole = ref<'owner' | 'editor' | 'viewer'>('viewer');
+const inviteTtlHours = ref(72);
+const inviteRoleItems = [
+    { label: 'Viewer', value: 'viewer' },
+    { label: 'Editor', value: 'editor' },
+    { label: 'Owner', value: 'owner' },
+];
+const invites = ref<Array<{ id: string; email: string; role: 'owner' | 'editor' | 'viewer'; status: 'pending' | 'accepted' | 'revoked' | 'expired'; expiresAt: number; inviteUrl?: string }>>([]);
 
 const { data: workspace, pending, error, refresh } = await useFetch<Workspace>(
     () => `/api/admin/workspaces/${workspaceId}`,
@@ -207,4 +272,102 @@ async function handleRestore() {
         isRestoring.value = false;
     }
 }
+
+async function loadInvites() {
+    isLoadingInvites.value = true;
+    try {
+        const response = await $fetch<{ invites: Array<{ id: string; email: string; role: 'owner' | 'editor' | 'viewer'; status: 'pending' | 'accepted' | 'revoked' | 'expired'; expiresAt: number }> }>(
+            '/api/admin/workspace/invites/list',
+            {
+                credentials: 'include',
+            }
+        );
+        invites.value = response.invites ?? [];
+    } catch (err: any) {
+        toast.add({
+            title: 'Failed to load invites',
+            description: getMessage(err, 'Unable to load invites'),
+            color: 'error',
+        });
+    } finally {
+        isLoadingInvites.value = false;
+    }
+}
+
+async function createInvite() {
+    if (!inviteEmail.value.trim()) return;
+    isCreatingInvite.value = true;
+    try {
+        const response = await $fetch<{ invite: { id: string; email: string; role: 'owner' | 'editor' | 'viewer'; expiresAt: number; inviteUrl: string; }; }>(
+            '/api/admin/workspace/invites/create',
+            {
+                method: 'POST',
+                credentials: 'include',
+                body: {
+                    email: inviteEmail.value,
+                    role: inviteRole.value,
+                    expiresInSeconds: Math.max(1, inviteTtlHours.value) * 60 * 60,
+                },
+            }
+        );
+
+        invites.value.unshift({
+            id: response.invite.id,
+            email: response.invite.email,
+            role: response.invite.role,
+            status: 'pending',
+            expiresAt: response.invite.expiresAt,
+            inviteUrl: response.invite.inviteUrl,
+        });
+        inviteEmail.value = '';
+
+        toast.add({
+            title: 'Invite created',
+            description: 'Invite link copied to clipboard.',
+            color: 'success',
+        });
+        await copyInviteUrl(response.invite.inviteUrl);
+    } catch (err: any) {
+        toast.add({
+            title: 'Failed to create invite',
+            description: getMessage(err, 'Unable to create invite'),
+            color: 'error',
+        });
+    } finally {
+        isCreatingInvite.value = false;
+    }
+}
+
+async function revokeInvite(inviteId: string) {
+    try {
+        await $fetch('/api/admin/workspace/invites/revoke', {
+            method: 'POST',
+            credentials: 'include',
+            body: { inviteId },
+        });
+        invites.value = invites.value.map((invite) =>
+            invite.id === inviteId
+                ? { ...invite, status: 'revoked' }
+                : invite
+        );
+    } catch (err: any) {
+        toast.add({
+            title: 'Failed to revoke invite',
+            description: getMessage(err, 'Unable to revoke invite'),
+            color: 'error',
+        });
+    }
+}
+
+async function copyInviteUrl(url: string) {
+    try {
+        await navigator.clipboard.writeText(url);
+    } catch {
+        // ignore clipboard errors
+    }
+}
+
+onMounted(() => {
+    void loadInvites();
+});
 </script>

@@ -280,6 +280,30 @@ Important default behavior when using env:
 - Env: `AUTH_PROVIDER`
 - Purpose: Selects the SSR auth provider.
 
+#### `auth.registrationMode`
+
+- Type: `'open' | 'invite_only' | 'disabled'`
+- Default: derived from legacy `auth.autoProvision` (`open` when true, `disabled` when false)
+- Env: `OR3_AUTH_REGISTRATION_MODE`
+- Purpose: Controls first-time registration for unknown authenticated identities.
+  - `open`: allow first-time provisioning
+  - `invite_only`: require valid invite token
+  - `disabled`: deny first-time provisioning
+
+#### `auth.invite.tokenSecret`
+
+- Type: `string | undefined`
+- Default: `undefined`
+- Env: `OR3_AUTH_INVITE_TOKEN_SECRET`
+- Purpose: HMAC secret for invite tokens. Required for `auth.registrationMode='invite_only'`.
+
+#### `auth.invite.tokenTtlSeconds`
+
+- Type: `number`
+- Default: `604800` (7 days)
+- Env: `OR3_AUTH_INVITE_TOKEN_TTL_SECONDS`
+- Purpose: Default TTL for generated workspace invite tokens.
+
 #### `auth.clerk.publishableKey`
 
 - Type: `string | undefined`
