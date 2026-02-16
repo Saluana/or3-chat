@@ -48,7 +48,9 @@ export default defineSchema({
         provider: v.string(), // 'clerk', 'firebase', etc.
         provider_user_id: v.string(), // ID from the auth provider
         created_at: v.number(),
-    }).index('by_provider', ['provider', 'provider_user_id']),
+    })
+        .index('by_provider', ['provider', 'provider_user_id'])
+        .index('by_user_provider', ['user_id', 'provider']),
 
     /**
      * Workspaces - team/organization containers for data isolation

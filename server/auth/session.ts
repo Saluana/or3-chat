@@ -51,16 +51,34 @@ const sharedSessionCache = new LRUCache<string, SharedSessionCacheEntry>({
     max: MAX_SHARED_SESSION_CACHE_ENTRIES,
 });
 
-function getSharedSessionCacheKey(providerId: string, providerUserId: string): string {
-    return `${providerId}:${providerUserId}`;
+function getSharedSessionCacheKey(
+    providerId: string,
+    providerUserId: string,
+    storeId: string
+): string {
+    return `${providerId}:${providerUserId}:${storeId}`;
 }
 
 function clearSharedSessionCacheEntry(
     providerId: string | undefined,
-    providerUserId: string | undefined
+    providerUserId: string | undefined,
+    storeId?: string
 ): void {
     if (!providerId || !providerUserId) return;
-    sharedSessionCache.delete(getSharedSessionCacheKey(providerId, providerUserId));
+
+    if (storeId) {
+        sharedSessionCache.delete(
+            getSharedSessionCacheKey(providerId, providerUserId, storeId)
+        );
+        return;
+    }
+
+    const prefix = `${providerId}:${providerUserId}:`;
+    for (const key of sharedSessionCache.keys()) {
+        if (key.startsWith(prefix)) {
+            sharedSessionCache.delete(key);
+        }
+    }
 }
 
 function getConfiguredSessionCacheTtlMs(config: ReturnType<typeof useRuntimeConfig>): number {
@@ -194,9 +212,11 @@ export async function resolveSessionContext(
         return nullSession;
     }
 
+    const storeId = config.public.sync?.provider || 'convex';
     const sharedCacheKey = getSharedSessionCacheKey(
         providerSession.provider,
-        providerSession.user.id
+        providerSession.user.id,
+        storeId
     );
     const sharedCached = sharedSessionCache.get(sharedCacheKey);
     if (sharedCached) {
@@ -212,8 +232,6 @@ export async function resolveSessionContext(
     try {
         // Get the configured workspace store based on sync provider
         const { getAuthWorkspaceStore } = await import('./store/registry');
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- sync may be undefined in test/static-build configs
-        const storeId = config.public.sync?.provider || 'convex';
         const store = getAuthWorkspaceStore(storeId);
 
         if (!store) {
@@ -427,6 +445,7 @@ export function _resetSharedSessionCache(): void {
 export function invalidateSharedSessionCacheForIdentity(input: {
     provider?: string;
     providerUserId?: string;
+    storeId?: string;
 }): void {
-    clearSharedSessionCacheEntry(input.provider, input.providerUserId);
+    clearSharedSessionCacheEntry(input.provider, input.providerUserId, input.storeId);
 }

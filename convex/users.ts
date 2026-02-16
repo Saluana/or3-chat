@@ -61,6 +61,39 @@ export const getAuthAccountByProvider = query({
 });
 
 /**
+ * `users.getAuthAccountByUserId` (query)
+ *
+ * Purpose:
+ * Looks up the provider mapping for an internal user id.
+ *
+ * Authorization:
+ * Internal/testing surface. Do not expose to untrusted clients.
+ */
+export const getAuthAccountByUserId = query({
+    args: {
+        provider: v.string(),
+        user_id: v.id('users'),
+    },
+    handler: async (ctx, args) => {
+        const authAccount = await ctx.db
+            .query('auth_accounts')
+            .withIndex('by_user_provider', (q) =>
+                q.eq('user_id', args.user_id).eq('provider', args.provider)
+            )
+            .first();
+        if (!authAccount) {
+            return null;
+        }
+
+        return {
+            user_id: authAccount.user_id as Id<'users'>,
+            provider: authAccount.provider,
+            provider_user_id: authAccount.provider_user_id,
+        };
+    },
+});
+
+/**
  * `users.me` (query)
  *
  * Purpose:
