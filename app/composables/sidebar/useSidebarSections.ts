@@ -16,6 +16,8 @@ import { computed } from 'vue';
 import type { Component, ComputedRef } from 'vue';
 import { createRegistry } from '../_registry';
 import type { RegistryItem } from '../_registry';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 
 /**
  * Placement options for sidebar sections relative to built-in sections.
@@ -46,6 +48,10 @@ export interface SidebarSection extends RegistryItem {
     order?: number;
     /** Where the section should render relative to built-ins. Defaults to `main`. */
     placement?: SidebarSectionPlacement;
+    /** Optional plugin id used for workspace policy lookup. */
+    pluginId?: string;
+    /** Optional access policy for this section. */
+    access?: PluginGatePolicy;
 }
 
 /**
@@ -152,12 +158,23 @@ export interface SidebarFooterAction extends RegistryItem {
     visible?: (ctx: SidebarFooterActionContext) => boolean;
     /** Optionally disable the action for a given context. */
     disabled?: (ctx: SidebarFooterActionContext) => boolean;
+    /** Optional plugin id used for workspace policy lookup. */
+    pluginId?: string;
+    /** Optional access policy for this action. */
+    access?: PluginGatePolicy;
 }
 
 /**
  * Default order value for sections and actions that don't specify an order.
  */
 const DEFAULT_ORDER = 200;
+
+function isEntryAllowed(
+    pluginId?: string,
+    access?: PluginGatePolicy
+): boolean {
+    return getPluginGateDecision(pluginId, access).allowed;
+}
 
 /**
  * Global registry for sidebar sections using the factory pattern.
@@ -288,20 +305,23 @@ export function unregisterSidebarFooterAction(id: string) {
  */
 export function useSidebarSections() {
     const items = sectionRegistry.useItems();
+    const allowed = computed(() =>
+        items.value.filter((entry) => isEntryAllowed(entry.pluginId, entry.access))
+    );
     return computed<SidebarSectionGroups>(() => ({
-        top: items.value
+        top: allowed.value
             .filter((entry) => (entry.placement ?? 'main') === 'top')
             .sort(
                 (a, b) =>
                     (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
             ),
-        main: items.value
+        main: allowed.value
             .filter((entry) => (entry.placement ?? 'main') === 'main')
             .sort(
                 (a, b) =>
                     (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
             ),
-        bottom: items.value
+        bottom: allowed.value
             .filter((entry) => (entry.placement ?? 'main') === 'bottom')
             .sort(
                 (a, b) =>
@@ -332,6 +352,7 @@ export function useSidebarFooterActions(
     return computed(() => {
         const ctx = context();
         return items.value
+            .filter((action) => isEntryAllowed(action.pluginId, action.access))
             .filter((action) => !action.visible || action.visible(ctx))
             .sort(
                 (a, b) =>

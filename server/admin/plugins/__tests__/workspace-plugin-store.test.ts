@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import type { WorkspaceSettingsStore } from '../../stores/types';
 import {
     getEnabledPlugins,
+    getPluginAccessPolicy,
     getPluginSettings,
+    setPluginAccessPolicy,
     setPluginEnabled,
     setPluginSettings,
 } from '../workspace-plugin-store';
@@ -47,6 +49,51 @@ describe('workspace plugin store', () => {
 
         const settings = await getPluginSettings(store, 'ws-1', 'plugin.a');
         expect(settings).toEqual({ enabled: true, count: 2 });
+    });
+
+    it('merges settings updates without dropping unknown keys', async () => {
+        const { store } = createStore();
+        await setPluginSettings(store, 'ws-1', 'plugin.a', {
+            enabled: true,
+            nested: { keep: 1 },
+        });
+        await setPluginSettings(store, 'ws-1', 'plugin.a', {
+            access: { authRequired: true },
+        });
+
+        const settings = await getPluginSettings(store, 'ws-1', 'plugin.a');
+        expect(settings).toEqual({
+            enabled: true,
+            nested: { keep: 1 },
+            access: { authRequired: true },
+        });
+    });
+
+    it('stores and resolves access policy', async () => {
+        const { store } = createStore();
+        await setPluginAccessPolicy(store, 'ws-1', 'plugin.a', {
+            authRequired: true,
+            requiredEntitlements: ['paid'],
+        });
+
+        await expect(getPluginAccessPolicy(store, 'ws-1', 'plugin.a')).resolves.toEqual({
+            authRequired: true,
+            requiredEntitlements: ['paid'],
+            requiredWorkspaceRoles: [],
+            mode: 'all',
+        });
+    });
+
+    it('rejects invalid access policy payloads', async () => {
+        const { store } = createStore();
+        await expect(
+            setPluginAccessPolicy(store, 'ws-1', 'plugin.a', {
+                authRequired: true,
+                requiredWorkspaceRoles: ['owner', 'invalid'] as unknown as Array<
+                    'owner' | 'editor' | 'viewer'
+                >,
+            })
+        ).rejects.toThrow('Invalid access policy');
     });
 
     it('rejects invalid plugin settings payloads', async () => {

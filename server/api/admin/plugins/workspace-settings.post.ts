@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { requireAdminApi } from '../../../admin/api';
 import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import { setPluginSettings } from '../../../admin/plugins/workspace-plugin-store';
+import { StrictPluginGatePolicySchema } from '~~/shared/plugins/access-policy';
 
 const BodySchema = z.object({
     pluginId: z.string().min(1),
@@ -42,6 +43,14 @@ export default defineEventHandler(async (event) => {
     }
 
     const store = getWorkspaceSettingsStore(event);
+    const maybeAccess = body.data.settings.access;
+    if (maybeAccess !== undefined) {
+        const parsedAccess = StrictPluginGatePolicySchema.safeParse(maybeAccess);
+        if (!parsedAccess.success) {
+            throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
+        }
+    }
+
     try {
         await setPluginSettings(
             store,

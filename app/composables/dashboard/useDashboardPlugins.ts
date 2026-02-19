@@ -9,6 +9,11 @@ import {
     type Component,
     type ShallowRef,
 } from 'vue';
+import {
+    mergePluginGatePolicy,
+    type PluginGatePolicy,
+} from '~~/shared/plugins/access-policy';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 
 export interface DashboardPlugin {
     /** Unique id across all dashboard plugins */
@@ -37,6 +42,8 @@ export interface DashboardPlugin {
      * - 'canAccessSettings': Read or modify app settings
      */
     capabilities?: string[];
+    /** Optional access gate policy for this plugin. */
+    access?: PluginGatePolicy;
 }
 
 export interface DashboardPluginPage {
@@ -52,6 +59,8 @@ export interface DashboardPluginPage {
     description?: string;
     /** Component or async factory returning component (lazy loaded). */
     component: Component | (() => Promise<{ default?: Component } | Component>);
+    /** Optional access gate policy for this page. */
+    access?: PluginGatePolicy;
 }
 
 type DashboardGlobals = typeof globalThis & {
@@ -157,6 +166,16 @@ function sync() {
     reactiveList.items = Array.from(registry.values());
 }
 
+function isDashboardPluginAllowed(plugin: DashboardPlugin): boolean {
+    return getPluginGateDecision(plugin.id, plugin.access).allowed;
+}
+
+function isDashboardPageAllowed(pluginId: string, page: DashboardPluginPage): boolean {
+    const pluginPolicy = registry.get(pluginId)?.access;
+    const policy = mergePluginGatePolicy(pluginPolicy ?? {}, page.access ?? {});
+    return getPluginGateDecision(pluginId, policy).allowed;
+}
+
 /**
  * Purpose:
  * Register a dashboard plugin for discovery and navigation.
@@ -258,9 +277,11 @@ export function unregisterDashboardPlugin(id: string) {
  */
 export function useDashboardPlugins() {
     return computed(() =>
-        [...reactiveList.items].sort(
+        reactiveList.items
+            .filter((plugin) => isDashboardPluginAllowed(plugin))
+            .sort(
             (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
-        )
+            )
     );
 }
 
@@ -400,9 +421,9 @@ export function useDashboardPluginPages(pluginId: () => string | undefined) {
         const id = pluginId();
         if (!id) return [] as DashboardPluginPage[];
         const list = reactivePages[id] || [];
-        return [...list].sort(
-            (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
-        );
+        return list
+            .filter((page) => isDashboardPageAllowed(id, page))
+            .sort((a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER));
     });
 }
 
@@ -428,9 +449,9 @@ export function listDashboardPluginPages(
     pluginId: string
 ): DashboardPluginPage[] {
     const list = reactivePages[pluginId] || [];
-    return [...list].sort(
-        (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
-    );
+    return list
+        .filter((page) => isDashboardPageAllowed(pluginId, page))
+        .sort((a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER));
 }
 
 /**
@@ -455,7 +476,9 @@ export function getDashboardPluginPage(
     pluginId: string,
     pageId: string
 ): DashboardPluginPage | undefined {
-    return pageRegistry.get(pluginId)?.get(pageId);
+    const page = pageRegistry.get(pluginId)?.get(pageId);
+    if (!page) return undefined;
+    return isDashboardPageAllowed(pluginId, page) ? page : undefined;
 }
 
 type AsyncComponentLoader = () => Promise<{ default?: Component } | Component>;

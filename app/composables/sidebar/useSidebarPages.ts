@@ -24,6 +24,8 @@ import {
 import { z } from 'zod';
 import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 
 /**
  * `SidebarPageDef`
@@ -63,6 +65,10 @@ export interface SidebarPageDef {
     onActivate?: (ctx: SidebarActivateContext) => void | Promise<void>;
     /** Optional deactivation hook called when page becomes inactive */
     onDeactivate?: (ctx: SidebarActivateContext) => void | Promise<void>;
+    /** Optional plugin id used for workspace policy lookup. */
+    pluginId?: string;
+    /** Optional access policy for this page. */
+    access?: PluginGatePolicy;
 }
 
 /**
@@ -202,6 +208,11 @@ const state = reactive({ version: 0 });
  * Default order value for pages that don't specify an order.
  */
 const DEFAULT_ORDER = 200;
+
+function isSidebarPageAllowed(page: SidebarPageDef): boolean {
+    const pluginId = page.pluginId;
+    return getPluginGateDecision(pluginId, page.access).allowed;
+}
 
 /**
  * Type guard to check if a component is an async component loader function.
@@ -395,10 +406,12 @@ export function useSidebarPages() {
             void state.version;
             const registry = getRegistry();
             const pages = Array.from(registry.values());
-            return pages.sort(
+            return pages
+                .filter((page) => isSidebarPageAllowed(page))
+                .sort(
                 (a, b) =>
                     (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
-            );
+                );
         }
     );
 

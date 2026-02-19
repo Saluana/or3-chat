@@ -48,6 +48,24 @@ await openPlugin('notes');
 await openPage('notes', 'compose');
 ```
 
+### Access policy example
+
+```ts
+registerDashboardPlugin({
+    id: 'billing-insights',
+    icon: 'i-ph-chart-bar',
+    label: 'Billing',
+    access: {
+        authRequired: true,
+        requiredEntitlements: ['paid'],
+        requiredWorkspaceRoles: ['owner', 'editor'],
+        mode: 'all',
+    },
+});
+```
+
+`access` is optional. If omitted, behavior remains unchanged.
+
 ---
 
 ## How to use it

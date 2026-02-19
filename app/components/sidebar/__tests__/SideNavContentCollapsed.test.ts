@@ -38,11 +38,26 @@ vi.mock('~/composables/sidebar/useActiveSidebarPage', () => ({
     }),
 }));
 
-vi.mock('#imports', () => ({
-    useToast: () => ({
-        add: mockToastAdd,
-    }),
-}));
+vi.mock('#imports', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('#imports')>();
+    return {
+        ...actual,
+        useRuntimeConfig: () => ({
+            public: {
+                features: {},
+                or3: {
+                    site: {},
+                    limits: {},
+                    ui: {},
+                    legal: {},
+                },
+            },
+        }),
+        useToast: () => ({
+            add: mockToastAdd,
+        }),
+    };
+});
 
 vi.mock('~/composables/sidebar/useSidebarSections', () => ({
     useSidebarFooterActions: () => ref([]),

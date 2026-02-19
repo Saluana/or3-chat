@@ -56,6 +56,23 @@ flowchart LR
      - optional client snapshot endpoint for non-sensitive UI gating hints.
    - Default resolver returns empty entitlements (maintains backward compatibility).
 
+### Provider integration pattern (entitlements)
+
+Providers should register entitlement resolvers in server plugins:
+
+```ts
+registerEntitlementResolver('convex', async ({ session, workspaceId }) => {
+  // map provider billing/customer state -> OR3 entitlement IDs
+  // e.g. ['paid'] or ['enterprise', 'feature:priority-support']
+  return ['paid'];
+});
+```
+
+Guidance:
+- keep IDs stable and provider-agnostic (`paid`, `enterprise`, `feature:*`),
+- return `[]` on unknown user/workspace,
+- avoid throwing for transient backend issues where possible (return empty + log).
+
 4. **Plugin Gate Evaluator**
    - Pure function evaluating `(policy, session, entitlements, pluginEnabled)`.
    - Returns structured decision:
@@ -165,6 +182,12 @@ Notes:
 - Performance:
   - memoize effective policy per `(workspaceId, pluginId, policyVersion)` in request-local cache.
   - batch entitlement resolution per request to avoid repeated provider calls.
+
+# Migration notes
+
+- Existing plugins continue working without reinstall/rebuild if they do not declare `access`.
+- Existing `plugins.settings.{pluginId}` payloads remain valid; `settings.access` is additive.
+- Access-gated UI can temporarily disagree with server during stale session windows; SSR denial remains authoritative.
 
 # Testing strategy
 

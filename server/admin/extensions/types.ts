@@ -15,6 +15,7 @@
  * - All extensions must specify a `kind` to determine their storage and loading path.
  */
 import { z } from 'zod';
+import { PluginGatePolicySchema } from '~~/shared/plugins/access-policy';
 
 /**
  * Purpose:
@@ -57,6 +58,7 @@ export const Or3ExtensionManifestSchema = z.object({
     version: z.string().min(1),
     description: z.string().optional(),
     capabilities: z.array(z.string()).default([]),
+    access: PluginGatePolicySchema.optional(),
 });
 
 export type Or3ExtensionManifest = z.infer<typeof Or3ExtensionManifestSchema>;

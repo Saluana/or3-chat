@@ -8,7 +8,10 @@ import { defineEventHandler, getQuery, createError } from 'h3';
 import { z } from 'zod';
 import { requireAdminApi } from '../../../admin/api';
 import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
-import { getPluginSettings } from '../../../admin/plugins/workspace-plugin-store';
+import {
+    getPluginAccessPolicy,
+    getPluginSettings,
+} from '../../../admin/plugins/workspace-plugin-store';
 
 const QuerySchema = z.object({
     pluginId: z.string().min(1),
@@ -44,5 +47,11 @@ export default defineEventHandler(async (event) => {
         query.data.pluginId
     );
 
-    return { settings };
+    const effectiveAccessPolicy = await getPluginAccessPolicy(
+        store,
+        workspaceId,
+        query.data.pluginId
+    );
+
+    return { settings, effectiveAccessPolicy };
 });

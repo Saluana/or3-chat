@@ -48,6 +48,8 @@
 import { computed } from 'vue';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { createRegistry } from '../_registry';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 
 /** Definition for an extendable chat message action button. */
 export interface ChatMessageAction {
@@ -66,6 +68,10 @@ export interface ChatMessageAction {
         message: UiChatMessage;
         threadId?: string;
     }) => void | Promise<void>;
+    /** Optional plugin id used for workspace policy lookup. */
+    pluginId?: string;
+    /** Optional access policy for this action. */
+    access?: PluginGatePolicy;
 }
 
 const registry = createRegistry<ChatMessageAction>(
@@ -133,7 +139,9 @@ export function useMessageActions(message: { role: 'user' | 'assistant' }) {
     const allActions = registry.useItems();
     return computed(() =>
         allActions.value.filter(
-            (a) => a.showOn === 'both' || a.showOn === message.role
+            (a) =>
+                (a.showOn === 'both' || a.showOn === message.role) &&
+                getPluginGateDecision(a.pluginId, a.access).allowed
         )
     );
 }

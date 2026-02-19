@@ -89,6 +89,49 @@
                             <UButton color="neutral" variant="ghost" size="xs" label="Settings" trailing-icon="i-heroicons-chevron-down-20-solid" />
                             <template #panel>
                                 <div class="p-4 w-96 space-y-3">
+                                    <div class="text-xs font-semibold uppercase opacity-60">Access policy</div>
+                                    <div class="space-y-2 p-2 rounded border border-[var(--md-outline-variant)]/50">
+                                        <label class="flex items-center gap-2 text-xs">
+                                            <input
+                                                v-model="getAccessEditor(plugin.id).authRequired"
+                                                type="checkbox"
+                                                :disabled="!isOwner"
+                                            />
+                                            Require authentication
+                                        </label>
+
+                                        <label class="flex flex-col gap-1 text-xs">
+                                            <span>Required tier</span>
+                                            <select
+                                                v-model="getAccessEditor(plugin.id).tier"
+                                                class="border rounded px-2 py-1 bg-[var(--md-surface)]"
+                                                :disabled="!isOwner"
+                                            >
+                                                <option value="">None</option>
+                                                <option value="paid">paid</option>
+                                                <option value="enterprise">enterprise</option>
+                                            </select>
+                                        </label>
+
+                                        <label class="flex flex-col gap-1 text-xs">
+                                            <span>Required role</span>
+                                            <select
+                                                v-model="getAccessEditor(plugin.id).role"
+                                                class="border rounded px-2 py-1 bg-[var(--md-surface)]"
+                                                :disabled="!isOwner"
+                                            >
+                                                <option value="">Any</option>
+                                                <option value="owner">owner</option>
+                                                <option value="editor">editor</option>
+                                                <option value="viewer">viewer</option>
+                                            </select>
+                                        </label>
+
+                                        <p class="text-[11px] opacity-70">
+                                            Server enforces access policy. Admin overrides win over plugin defaults.
+                                        </p>
+                                    </div>
+
                                     <div class="text-xs font-semibold uppercase opacity-60">Configuration (JSON)</div>
                                     <UTextarea
                                         v-model="settingsByPlugin[plugin.id]"
@@ -123,6 +166,12 @@ import { useAdminExtensions, useAdminWorkspace } from '~/composables/admin/useAd
 import { useAdminAuth } from '~/composables/admin/useAdminAuth';
 import { useExtensionManagement } from '~/composables/admin/useExtensionManagement';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
+import {
+    createDefaultAccessEditor,
+    deserializeAccessEditor,
+    withSerializedAccessPolicy,
+    type AccessEditorState,
+} from '~/utils/admin/plugin-access-policy';
 import { useAdminWorkspaceContext } from '~/composables/admin/useAdminWorkspaceContext';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
 
@@ -171,8 +220,21 @@ const plugins = computed(
 
 const enabledSet = ref<Set<string>>(new Set());
 const settingsByPlugin = reactive<Record<string, string>>({});
+const accessByPlugin = reactive<
+    Record<
+        string,
+        AccessEditorState
+    >
+>({});
 const toggleLoading = reactive<Record<string, boolean>>({});
 const toast = useToast();
+
+function getAccessEditor(pluginId: string) {
+    if (!accessByPlugin[pluginId]) {
+        accessByPlugin[pluginId] = createDefaultAccessEditor();
+    }
+    return accessByPlugin[pluginId]!;
+}
 
 // Watcher
 watch(() => workspaceData.value, (val) => {
@@ -214,11 +276,21 @@ async function uninstallPlugin(pluginId: string) {
 
 async function loadSettings(pluginId: string) {
     if (settingsByPlugin[pluginId]) return;
-    const res = await $fetch<{ settings: Record<string, unknown> }>(
+    const res = await $fetch<{
+        settings: Record<string, unknown>;
+        effectiveAccessPolicy?: {
+            authRequired?: boolean;
+            requiredEntitlements?: string[];
+            requiredWorkspaceRoles?: string[];
+        };
+    }>(
         '/api/admin/plugins/workspace-settings',
         { query: { pluginId } }
     );
     settingsByPlugin[pluginId] = JSON.stringify(res.settings ?? {}, null, 2);
+    accessByPlugin[pluginId] = deserializeAccessEditor(
+        res.effectiveAccessPolicy
+    );
 }
 
 async function saveSettings(pluginId: string) {
@@ -237,9 +309,13 @@ async function saveSettings(pluginId: string) {
     }
     
     try {
+        const accessEditor = getAccessEditor(pluginId);
         await $fetch('/api/admin/plugins/workspace-settings', {
             method: 'POST',
-            body: { pluginId, settings: parsed },
+            body: {
+                pluginId,
+                settings: withSerializedAccessPolicy(parsed, accessEditor),
+            },
             headers: ADMIN_HEADERS,
         });
         toast.add({

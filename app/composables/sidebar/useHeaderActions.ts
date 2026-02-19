@@ -18,6 +18,8 @@ import type { RouteLocationNormalizedLoaded } from 'vue-router';
 import type { ChromeActionColor } from './useSidebarSections';
 import { createRegistry } from '../_registry';
 import type { RegistryItem } from '../_registry';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 
 /**
  * `HeaderActionContext`
@@ -78,6 +80,10 @@ export interface HeaderAction extends RegistryItem {
     visible?: (ctx: HeaderActionContext) => boolean;
     /** Optional function to determine if action should be disabled */
     disabled?: (ctx: HeaderActionContext) => boolean;
+    /** Optional plugin id used for workspace policy lookup. */
+    pluginId?: string;
+    /** Optional access policy for this action. */
+    access?: PluginGatePolicy;
 }
 
 /**
@@ -174,6 +180,9 @@ export function useHeaderActions(
     return computed(() => {
         const ctx = context();
         return items.value
+            .filter((action) =>
+                getPluginGateDecision(action.pluginId, action.access).allowed
+            )
             .filter((action) => !action.visible || action.visible(ctx))
             .sort(
                 (a, b) =>

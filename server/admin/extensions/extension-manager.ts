@@ -91,6 +91,7 @@ async function listExtensionsInDir(
                 kind: manifest.kind,
                 description: manifest.description,
                 capabilities: manifest.capabilities,
+                access: manifest.access,
                 path: join(root, entry),
             });
         } catch {

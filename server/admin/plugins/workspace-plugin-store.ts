@@ -22,6 +22,12 @@
  */
 import { z } from 'zod';
 import type { WorkspaceSettingsStore } from '../stores/types';
+import {
+    StrictPluginGatePolicySchema,
+    normalizePluginGatePolicy,
+    type PluginGatePolicy,
+    type PluginGatePolicyNormalized,
+} from '~~/shared/plugins/access-policy';
 
 const PluginsEnabledSchema = z.array(z.string()).default([]);
 
@@ -96,6 +102,10 @@ export async function setPluginEnabled(
 
 const SettingsSchema = z.record(z.string(), z.unknown()).default({});
 
+const SettingsAccessSchema = z.object({
+    access: StrictPluginGatePolicySchema.optional(),
+});
+
 /**
  * Retrieves the settings for a specific plugin in a workspace.
  *
@@ -136,9 +146,48 @@ export async function setPluginSettings(
     if (!parsed.success) {
         throw new Error('Invalid settings');
     }
+    const current = await getPluginSettings(store, workspaceId, pluginId);
+    const merged = {
+        ...current,
+        ...parsed.data,
+    };
     await store.set(
         workspaceId,
         `plugins.settings.${pluginId}`,
-        JSON.stringify(parsed.data)
+        JSON.stringify(merged)
     );
+}
+
+export function readPluginAccessPolicy(
+    settings: Record<string, unknown>
+): PluginGatePolicy | null {
+    const parsed = SettingsAccessSchema.safeParse(settings);
+    if (!parsed.success) return null;
+    return parsed.data.access ?? null;
+}
+
+export async function getPluginAccessPolicy(
+    store: WorkspaceSettingsStore,
+    workspaceId: string,
+    pluginId: string,
+    defaults?: PluginGatePolicy | null
+): Promise<PluginGatePolicyNormalized> {
+    const settings = await getPluginSettings(store, workspaceId, pluginId);
+    const policy = readPluginAccessPolicy(settings);
+    return normalizePluginGatePolicy(policy ?? defaults ?? {});
+}
+
+export async function setPluginAccessPolicy(
+    store: WorkspaceSettingsStore,
+    workspaceId: string,
+    pluginId: string,
+    access: PluginGatePolicy
+): Promise<void> {
+    const parsed = StrictPluginGatePolicySchema.safeParse(access);
+    if (!parsed.success) {
+        throw new Error('Invalid access policy');
+    }
+    await setPluginSettings(store, workspaceId, pluginId, {
+        access: parsed.data,
+    });
 }

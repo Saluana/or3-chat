@@ -16,6 +16,8 @@ import { computed, reactive } from 'vue';
 import type { ComputedRef } from 'vue';
 import type { Editor } from '@tiptap/vue-3';
 import type { ChromeActionColor } from './useSidebarSections';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 
 /**
  * `ComposerActionContext`
@@ -81,6 +83,10 @@ export interface ComposerAction {
     visible?: (ctx: ComposerActionContext) => boolean;
     /** Optional function to determine if action should be disabled */
     disabled?: (ctx: ComposerActionContext) => boolean;
+    /** Optional plugin id used for workspace policy lookup. */
+    pluginId?: string;
+    /** Optional access policy for this action. */
+    access?: PluginGatePolicy;
 }
 
 /**
@@ -206,6 +212,9 @@ export function useComposerActions(
     return computed(() => {
         const ctx = context();
         return reactiveList.items
+            .filter((action) =>
+                getPluginGateDecision(action.pluginId, action.access).allowed
+            )
             .filter((action) => !action.visible || action.visible(ctx))
             .sort(
                 (a, b) =>

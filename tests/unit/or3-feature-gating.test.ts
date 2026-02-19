@@ -1,30 +1,47 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { isFeatureEnabled, isWorkflowFeatureEnabled, isMentionSourceEnabled } from '../../app/composables/useOr3Config';
-import { or3Config } from '../../config.or3';
 
-// Mock the config module
-vi.mock('../../config.or3', () => ({
-    or3Config: {
-        features: {
-            workflows: {
-                enabled: true,
-                editor: true,
-                slashCommands: true,
-                execution: true,
+const { runtimeConfigMock } = vi.hoisted(() => ({
+    runtimeConfigMock: {
+        public: {
+            features: {
+                workflows: {
+                    enabled: true,
+                    editor: true,
+                    slashCommands: true,
+                    execution: true,
+                },
+                documents: { enabled: true },
+                backup: { enabled: true },
+                mentions: {
+                    enabled: true,
+                    documents: true,
+                    conversations: true,
+                },
+                dashboard: { enabled: true },
             },
-            documents: { enabled: true },
-            backup: { enabled: true },
-            mentions: {
-                enabled: true,
-                documents: true,
-                conversations: true,
-            },
-            dashboard: { enabled: true },
         },
     },
 }));
 
+vi.mock('#imports', () => ({
+    useRuntimeConfig: () => runtimeConfigMock,
+}));
+
 describe('Feature Gating Helpers', () => {
+    beforeEach(() => {
+        runtimeConfigMock.public.features.workflows.enabled = true;
+        runtimeConfigMock.public.features.workflows.editor = true;
+        runtimeConfigMock.public.features.workflows.slashCommands = true;
+        runtimeConfigMock.public.features.workflows.execution = true;
+        runtimeConfigMock.public.features.documents.enabled = true;
+        runtimeConfigMock.public.features.backup.enabled = true;
+        runtimeConfigMock.public.features.mentions.enabled = true;
+        runtimeConfigMock.public.features.mentions.documents = true;
+        runtimeConfigMock.public.features.mentions.conversations = true;
+        runtimeConfigMock.public.features.dashboard.enabled = true;
+    });
+
     afterEach(() => {
         vi.clearAllMocks();
     });
@@ -36,11 +53,8 @@ describe('Feature Gating Helpers', () => {
         });
 
         it('returns false when feature is disabled', () => {
-            // Temporarily modify the mock for this test
-            or3Config.features.workflows.enabled = false;
+            runtimeConfigMock.public.features.workflows.enabled = false;
             expect(isFeatureEnabled('workflows')).toBe(false);
-            // Reset
-            or3Config.features.workflows.enabled = true;
         });
     });
 
@@ -50,15 +64,13 @@ describe('Feature Gating Helpers', () => {
         });
 
         it('returns false when master is disabled', () => {
-            or3Config.features.workflows.enabled = false;
+            runtimeConfigMock.public.features.workflows.enabled = false;
             expect(isWorkflowFeatureEnabled('editor')).toBe(false);
-            or3Config.features.workflows.enabled = true;
         });
 
         it('returns false when sub-feature is disabled', () => {
-            or3Config.features.workflows.editor = false;
+            runtimeConfigMock.public.features.workflows.editor = false;
             expect(isWorkflowFeatureEnabled('editor')).toBe(false);
-            or3Config.features.workflows.editor = true;
         });
     });
 
@@ -68,15 +80,13 @@ describe('Feature Gating Helpers', () => {
         });
 
         it('returns false when master is disabled', () => {
-            or3Config.features.mentions.enabled = false;
+            runtimeConfigMock.public.features.mentions.enabled = false;
             expect(isMentionSourceEnabled('documents')).toBe(false);
-            or3Config.features.mentions.enabled = true;
         });
 
         it('returns false when source is disabled', () => {
-            or3Config.features.mentions.documents = false;
+            runtimeConfigMock.public.features.mentions.documents = false;
             expect(isMentionSourceEnabled('documents')).toBe(false);
-            or3Config.features.mentions.documents = true;
         });
     });
 });
