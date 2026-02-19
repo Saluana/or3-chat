@@ -2253,3 +2253,8 @@ This pattern can be extended to build any type of mini app in OR3, from project 
 ---
 
 Document generated from the Task Manager mini app implementation.
+
+
+## Task Pane plugin reference
+
+The repository now includes a full tasks pane plugin at `app/plugins/tasks-pane.client.ts` with modules under `app/plugins/tasks/**`. Use it as a complete reference for pane registration, sidebar registration, post-backed list data, and tool wiring.

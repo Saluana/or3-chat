@@ -1,0 +1,68 @@
+import { describe, it, expect } from 'vitest';
+import { useTaskListService } from '../composables/useTaskListService';
+
+function createApi() {
+  const store = new Map<string, any>();
+  return {
+    store,
+    posts: {
+      async create({ postType, title, meta }: any) {
+        const id = `post_${store.size + 1}`;
+        store.set(id, { id, postType, title, meta });
+        return { ok: true, id };
+      },
+      async get({ id }: any) {
+        const post = store.get(id);
+        return post ? { ok: true, post } : { ok: false, message: 'not found' };
+      },
+      async update({ id, patch }: any) {
+        const post = store.get(id);
+        if (!post) return { ok: false, message: 'not found' };
+        store.set(id, { ...post, ...patch });
+        return { ok: true };
+      },
+      async listByType({ postType }: any) {
+        const posts = [...store.values()].filter((post) => post.postType === postType);
+        return { ok: true, posts };
+      },
+    },
+  };
+}
+
+describe('useTaskListService', () => {
+  it('supports task and subtask CRUD invariants', async () => {
+    const api = createApi();
+    const service = useTaskListService(api as any);
+    const listId = await service.createList('Tasks');
+    const task = await service.addTask(listId, { title: 'Refactor project' });
+    expect(task.order).toBe(1);
+
+    const subtask = await service.addSubtask(listId, task.id, 'Write tests');
+    expect(subtask.order).toBe(1);
+
+    await service.removeSubtask(listId, task.id, subtask.id);
+    const loaded = await api.posts.get({ id: listId });
+    expect(service.readMeta(loaded.post.meta).tasks[0]?.subtasks.length).toBe(0);
+
+    await service.removeTask(listId, task.id);
+    const afterDelete = await api.posts.get({ id: listId });
+    expect(service.readMeta(afterDelete.post.meta).tasks.length).toBe(0);
+  });
+
+  it('reorders and normalizes due date values', async () => {
+    const api = createApi();
+    const service = useTaskListService(api as any);
+    const listId = await service.createList('Tasks');
+    const a = await service.addTask(listId, { title: 'A' });
+    const b = await service.addTask(listId, { title: 'B' });
+
+    await service.reorderTasks(listId, [b.id, a.id]);
+    await service.rescheduleTask(listId, a.id, Number.NaN);
+
+    const loaded = await api.posts.get({ id: listId });
+    const meta = service.readMeta(loaded.post.meta);
+    expect(meta.tasks[0]?.id).toBe(b.id);
+    const updatedA = meta.tasks.find((task: any) => task.id === a.id);
+    expect(updatedA?.due_at).toBeNull();
+  });
+});

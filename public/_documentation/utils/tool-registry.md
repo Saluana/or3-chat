@@ -538,3 +538,8 @@ function useToolRegistry(): {
 ---
 
 Document generated from `app/utils/chat/tool-registry.ts` implementation.
+
+
+### Task tools example
+
+The built-in tasks pane plugin registers conversational tools from `app/plugins/tasks/tooling/taskToolDefs.ts` using `registerTaskTools.ts`. Example names: `or3_tasks_add_item`, `or3_tasks_update_item`, and `or3_tasks_sort_by_difficulty`.
