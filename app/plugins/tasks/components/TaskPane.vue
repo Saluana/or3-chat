@@ -1,62 +1,105 @@
 <template>
-  <div class="flex flex-col h-full">
-    <!-- Header: title + sort controls. pl-16/pr-32 clear the absolute shell nav buttons (new-pane left ~64px, theme+notifications right ~128px). -->
-    <div class="flex flex-nowrap items-center gap-2 pl-16 pr-32 pt-3 pb-2 border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]">
-      <h3 class="min-w-0 flex-1 font-semibold text-sm text-[var(--md-on-surface)] tracking-wider truncate whitespace-nowrap">{{ headerTitle }}</h3>
-      <div class="ml-2 shrink-0 flex gap-1">
-        <UButton size="sm" :variant="sortMode === 'manual' ? 'solid' : 'ghost'" @click="setSortMode('manual')">Manual</UButton>
-        <UButton size="sm" :variant="sortMode === 'hardest' ? 'solid' : 'ghost'" @click="runDifficultySort('hardest')">Hardest</UButton>
-        <UButton size="sm" :variant="sortMode === 'easiest' ? 'solid' : 'ghost'" @click="runDifficultySort('easiest')">Easiest</UButton>
+  <div :class="paneFrameClass" class="flex flex-col h-full">
+    <!-- Header: pl-14/pr-28 clear the absolute shell overlay buttons (new-pane left, theme+notifications right) -->
+    <div :class="headerClass" class="border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)] shrink-0">
+      <h3 class="min-w-0 flex-1 font-semibold text-sm text-[var(--md-on-surface)] tracking-wider truncate">{{ headerTitle }}</h3>
+      <!-- Sort mode picker -->
+      <UPopover :content="{ side: 'bottom', align: 'end', sideOffset: 4 }">
+        <UButton size="sm" variant="outline" :icon="sortIcon" trailing-icon="i-lucide-chevron-down" class="shrink-0 theme-btn whitespace-nowrap">
+          {{ sortLabel }}
+        </UButton>
+        <template #content>
+          <div class="p-1 w-36 space-y-1">
+            <UButton color="neutral" variant="popover" size="sm" icon="i-lucide-grip-vertical" class="w-full justify-start" :class="sortMode === 'manual' ? 'font-semibold' : ''" @click="setSortMode('manual')">Manual</UButton>
+            <UButton color="neutral" variant="popover" size="sm" icon="i-lucide-flame" class="w-full justify-start" :class="sortMode === 'hardest' ? 'font-semibold' : ''" @click="runDifficultySort('hardest')">Hardest first</UButton>
+            <UButton color="neutral" variant="popover" size="sm" icon="i-lucide-leaf" class="w-full justify-start" :class="sortMode === 'easiest' ? 'font-semibold' : ''" @click="runDifficultySort('easiest')">Easiest first</UButton>
+          </div>
+        </template>
+      </UPopover>
+    </div>
+
+    <!-- Scrollable content — max-w-2xl centers on wide single-pane layouts -->
+    <div class="flex-1 overflow-y-auto">
+      <div class="w-full max-w-2xl mx-auto flex flex-col gap-0">
+        <!-- Add task -->
+        <div class="px-3 pt-3 pb-2">
+          <div class="flex gap-2">
+            <UInput v-model="draftTitle" size="sm" placeholder="Add a task…" class="flex-1" @keyup.enter="addNewTask" />
+            <UButton size="sm" class="theme-btn" :loading="loading" @click="addNewTask">Add</UButton>
+          </div>
+          <p v-if="error" class="mt-1 text-xs text-[var(--md-error)]">{{ error }}</p>
+        </div>
+
+        <!-- AI fallback notice -->
+        <div v-if="fallbackNotice" class="px-3 py-1 text-xs text-[var(--md-on-surface)] opacity-60 bg-[var(--md-surface-container-high)] border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]">
+          {{ fallbackNotice }}
+        </div>
+
+        <!-- Task list -->
+        <div class="p-3 space-y-2">
+          <p v-if="tasks.length === 0" class="text-center text-sm text-[var(--md-on-surface)] opacity-40 py-8">
+            No tasks yet.
+          </p>
+          <TaskItemCard
+            v-for="task in tasks"
+            :key="task.id"
+            :task="task"
+            @update-title="onUpdateTitle"
+            @toggle-done="onToggleDone"
+            @remove="onRemove"
+            @move-up="moveTask($event, -1)"
+            @move-down="moveTask($event, 1)"
+            @reschedule="onReschedule"
+            @breakdown="onBreakdown"
+            @create-subtask="onCreateSubtask"
+            @remove-subtask="onRemoveSubtask"
+          />
+        </div>
       </div>
-    </div>
-
-    <!-- Add task -->
-    <div class="px-3 py-2 border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]">
-      <div class="flex gap-2">
-        <UInput v-model="draftTitle" size="sm" placeholder="Add a task…" class="flex-1" @keyup.enter="addNewTask" />
-        <UButton size="sm" :loading="loading" @click="addNewTask">Add</UButton>
-      </div>
-      <p v-if="error" class="mt-1 text-xs text-[var(--md-error)]">{{ error }}</p>
-    </div>
-
-    <!-- AI fallback notice -->
-    <div v-if="fallbackNotice" class="px-3 py-1 text-xs text-[var(--md-on-surface)] opacity-60 bg-[var(--md-surface-container-high)] border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]">
-      {{ fallbackNotice }}
-    </div>
-
-    <!-- Task list -->
-    <div class="flex-1 overflow-y-auto p-3 space-y-2">
-      <p v-if="tasks.length === 0" class="text-center text-sm text-[var(--md-on-surface)] opacity-40 py-8">
-        No tasks yet.
-      </p>
-      <TaskItemCard
-        v-for="task in tasks"
-        :key="task.id"
-        :task="task"
-        @update-title="onUpdateTitle"
-        @toggle-done="onToggleDone"
-        @remove="onRemove"
-        @move-up="moveTask($event, -1)"
-        @move-down="moveTask($event, 1)"
-        @reschedule="onReschedule"
-        @breakdown="onBreakdown"
-        @create-subtask="onCreateSubtask"
-        @remove-subtask="onRemoveSubtask"
-      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import TaskItemCard from './TaskItemCard.vue';
 import { useTaskListService } from '../composables/useTaskListService';
 import { useTaskAiActions } from '../composables/useTaskAiActions';
 import type { SortMode } from '../types';
 
 const props = defineProps<{
+  paneId?: string;
   recordId?: string | null;
 }>();
+
+const multiPaneApi = getGlobalMultiPaneApi();
+const isSinglePane = computed(() => {
+  if (!multiPaneApi) return true;
+  return multiPaneApi.panes.value.length <= 1;
+});
+const isLastPane = computed(() => {
+  if (!multiPaneApi || !props.paneId) return true;
+  const panes = multiPaneApi.panes.value;
+  const paneIndex = panes.findIndex((pane) => pane.id === props.paneId);
+  if (paneIndex < 0) return true;
+  return paneIndex === panes.length - 1;
+});
+const paneFrameClass = computed(() => {
+  if (isSinglePane.value || isLastPane.value) return '';
+  return [
+    'border-t-[length:var(--md-border-width)]',
+    'border-r-[length:var(--md-border-width)]',
+    'border-t-[color:var(--md-border-color)]',
+    'border-r-[color:var(--md-border-color)]',
+  ];
+});
+const headerClass = computed(() => {
+  if (isSinglePane.value) {
+    return 'h-12 flex flex-nowrap items-center gap-3 pl-14 pr-28';
+  }
+  return 'h-12 flex flex-nowrap items-center gap-2 pl-3 pr-10';
+});
 
 const service = useTaskListService();
 const ai = useTaskAiActions();
@@ -72,6 +115,16 @@ const tasks = computed(() => [...meta.value.tasks].sort((a, b) => a.order - b.or
 const sortMode = computed(() => meta.value.sort_mode);
 const fallbackNotice = computed(() => meta.value.ai_fallback_notice ?? null);
 const headerTitle = computed(() => listTitle.value || 'Tasks');
+const sortLabel = computed(() => {
+  if (sortMode.value === 'hardest') return 'Hardest';
+  if (sortMode.value === 'easiest') return 'Easiest';
+  return 'Manual';
+});
+const sortIcon = computed(() => {
+  if (sortMode.value === 'hardest') return 'i-lucide-flame';
+  if (sortMode.value === 'easiest') return 'i-lucide-leaf';
+  return 'i-lucide-grip-vertical';
+});
 
 async function refresh() {
   if (!listId.value) {
@@ -85,7 +138,12 @@ async function refresh() {
   if (post?.ok) {
     listTitle.value = post.post.title || 'Tasks';
     meta.value = service.readMeta(post.post.meta);
+    return;
   }
+  const fallback = await service.loadOrCreateDefaultList();
+  listId.value = fallback.id;
+  listTitle.value = fallback.title || 'Tasks';
+  meta.value = fallback.meta;
 }
 
 async function addNewTask() {

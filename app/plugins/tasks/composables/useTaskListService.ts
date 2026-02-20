@@ -113,6 +113,27 @@ export function useTaskListService(api?: PanePluginApi | null) {
         return created.id;
     }
 
+    async function renameList(listId: string, title: string) {
+        if (!paneApi?.posts) throw new Error('Posts API unavailable');
+        const nextTitle = title.trim();
+        if (!nextTitle) throw new Error('Title is required');
+        const result = await paneApi.posts.update({
+            id: listId,
+            patch: { title: nextTitle },
+            source: 'tasks-pane:rename-list',
+        });
+        if (!result.ok) throw new Error(result.message);
+    }
+
+    async function deleteList(listId: string) {
+        if (!paneApi?.posts) throw new Error('Posts API unavailable');
+        const result = await paneApi.posts.delete({
+            id: listId,
+            source: 'tasks-pane:delete-list',
+        });
+        if (!result.ok) throw new Error(result.message);
+    }
+
     async function addTask(listId: string, input: { title: string; notes?: string; due_at?: number | null }) {
         const timestamp = now();
         let created!: TaskItem;
@@ -245,6 +266,8 @@ export function useTaskListService(api?: PanePluginApi | null) {
         readMeta,
         updateMetaAtomic,
         createList,
+        renameList,
+        deleteList,
         loadOrCreateDefaultList,
         addTask,
         updateTask,
