@@ -19,6 +19,7 @@ export interface TaskItem {
     status: TaskStatus;
     order: number;
     due_at: number | null;
+    due_notified_at?: number | null;
     label: TaskLabel;
     label_source: LabelSource;
     difficulty_score: number | null;

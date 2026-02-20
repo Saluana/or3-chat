@@ -1,19 +1,28 @@
 <template>
   <div class="flex flex-col gap-2 p-3">
     <!-- Create form -->
-    <div class="flex gap-2">
-      <UInput v-model="newListTitle" size="sm" placeholder="New list…" class="flex-1" @keyup.enter="createList" />
-      <UButton size="sm" class="theme-btn" @click="createList">Create</UButton>
+    <div class="flex flex-col gap-2">
+      <div class="flex gap-2">
+        <UInput v-model="newListTitle" size="sm" placeholder="New list…" class="flex-1" @keyup.enter="createList" />
+        <UButton size="sm" class="theme-btn" @click="createList">Create</UButton>
+      </div>
+      <UInput
+        v-model="searchQuery"
+        size="sm"
+        icon="i-lucide-search"
+        placeholder="Search lists and tasks..."
+        class="w-full"
+      />
     </div>
 
     <!-- Empty state -->
-    <p v-if="items.length === 0" class="text-center text-xs text-[var(--md-on-surface)] opacity-40 py-6">
-      No task lists yet.
+    <p v-if="visibleItems.length === 0" class="text-center text-xs text-[var(--md-on-surface)] opacity-40 py-6">
+      {{ hasSearchQuery ? 'No matching task lists.' : 'No task lists yet.' }}
     </p>
 
     <!-- List items -->
     <div
-      v-for="post in items"
+      v-for="post in visibleItems"
       :key="post.id"
       class="group relative w-full flex items-center gap-2 px-3 py-2.5 transition-colors rounded-[var(--md-border-radius)] cursor-pointer text-[color:var(--md-on-surface)] hover:bg-[var(--md-surface-hover)]"
       role="button"
@@ -65,7 +74,7 @@
                   size="sm"
                   :icon="iconEdit"
                   class="w-full justify-start"
-                  @click="startRename(post.id, post.title)"
+                  @click="startRename(post.id, post.title || 'Untitled Tasks')"
                 >
                   Rename
                 </UButton>
@@ -108,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useSidebarMultiPane } from '~/composables/sidebar/useSidebarEnvironment';
 import { usePostsList } from '~/composables/posts/usePostsList';
 import { useIcon } from '~/composables/useIcon';
@@ -117,14 +126,21 @@ import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { TASK_LIST_POST_TYPE } from '../types';
 import { useTaskListService } from '../composables/useTaskListService';
+import { useTaskListSearch } from '../composables/useTaskListSearch';
 
 const multiPane = useSidebarMultiPane();
 const service = useTaskListService();
 const { items, refresh } = usePostsList(TASK_LIST_POST_TYPE, { sort: 'updated_at', sortDir: 'desc' });
+const { query: searchQuery, results: searchResults } = useTaskListSearch(
+  items,
+  service.readMeta
+);
 const newListTitle = ref('');
 const editingListId = ref<string | null>(null);
 const editingTitle = ref('');
 const error = ref<string | null>(null);
+const hasSearchQuery = computed(() => searchQuery.value.trim().length > 0);
+const visibleItems = computed(() => searchResults.value);
 
 const iconMore = useIcon('ui.more');
 const iconEdit = useIcon('ui.edit');

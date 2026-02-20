@@ -89,6 +89,7 @@ export function useTaskListService(api?: PanePluginApi | null) {
         const result = await paneApi.posts.listByType({ postType: TASK_LIST_POST_TYPE, limit: 1 });
         if (result.ok && result.posts.length > 0) {
             const post = result.posts[0];
+            if (!post) throw new Error('Task list not found');
             return { id: post.id, title: post.title || 'My Tasks', meta: readMeta(post.meta) };
         }
         const created = await paneApi.posts.create({
@@ -134,7 +135,10 @@ export function useTaskListService(api?: PanePluginApi | null) {
         if (!result.ok) throw new Error(result.message);
     }
 
-    async function addTask(listId: string, input: { title: string; notes?: string; due_at?: number | null }) {
+    async function addTask(
+        listId: string,
+        input: { title: string; notes?: string; due_at?: number | null }
+    ): Promise<TaskItem> {
         const timestamp = now();
         let created!: TaskItem;
         await updateMetaAtomic(listId, (meta) => {
@@ -146,6 +150,7 @@ export function useTaskListService(api?: PanePluginApi | null) {
                 status: 'todo',
                 order: nextOrder,
                 due_at: normalizeDueAt(input.due_at),
+                due_notified_at: null,
                 label: inferLocalLabel(input.title),
                 label_source: 'ai',
                 difficulty_score: null,
@@ -160,20 +165,30 @@ export function useTaskListService(api?: PanePluginApi | null) {
         return created;
     }
 
-    async function updateTask(listId: string, taskId: string, patch: Partial<TaskItem>) {
+    async function updateTask(
+        listId: string,
+        taskId: string,
+        patch: Partial<TaskItem>
+    ): Promise<TaskItem> {
         const timestamp = now();
         let updated: TaskItem | null = null;
         await updateMetaAtomic(listId, (meta) => {
             meta.tasks = meta.tasks.map((task) => {
                 if (task.id !== taskId) return task;
+                const dueAt = normalizeDueAt(patch.due_at ?? task.due_at);
+                const status = patch.status ?? task.status;
                 const label =
                     patch.title && task.label_source !== 'manual'
                         ? inferLocalLabel(patch.title)
                         : task.label;
+                const dueNotifiedAt = patch.due_notified_at ?? task.due_notified_at ?? null;
+
                 updated = {
                     ...task,
                     ...patch,
-                    due_at: normalizeDueAt(patch.due_at ?? task.due_at),
+                    status,
+                    due_at: dueAt,
+                    due_notified_at: dueNotifiedAt,
                     label,
                     updated_at: timestamp,
                 };
@@ -192,7 +207,7 @@ export function useTaskListService(api?: PanePluginApi | null) {
         });
     }
 
-    async function addSubtask(listId: string, taskId: string, title: string) {
+    async function addSubtask(listId: string, taskId: string, title: string): Promise<TaskSubtask> {
         const timestamp = now();
         let created: TaskSubtask | null = null;
         await updateMetaAtomic(listId, (meta) => {
@@ -225,6 +240,72 @@ export function useTaskListService(api?: PanePluginApi | null) {
             });
             return meta;
         });
+    }
+
+    async function toggleSubtask(listId: string, taskId: string, subtaskId: string) {
+        const timestamp = now();
+        let foundTask = false;
+        let foundSubtask = false;
+
+        await updateMetaAtomic(listId, (meta) => {
+            meta.tasks = meta.tasks.map((task) => {
+                if (task.id !== taskId) return task;
+                foundTask = true;
+
+                const subtasks = task.subtasks.map((subtask) => {
+                    if (subtask.id !== subtaskId) return subtask;
+                    foundSubtask = true;
+                    return {
+                        ...subtask,
+                        done: !subtask.done,
+                        updated_at: timestamp,
+                    };
+                });
+
+                return { ...task, subtasks, updated_at: timestamp };
+            });
+
+            return meta;
+        });
+
+        if (!foundTask) throw new Error('Task not found');
+        if (!foundSubtask) throw new Error('Subtask not found');
+    }
+
+    async function setSubtaskDone(
+        listId: string,
+        taskId: string,
+        subtaskId: string,
+        done: boolean
+    ) {
+        const timestamp = now();
+        let foundTask = false;
+        let foundSubtask = false;
+
+        await updateMetaAtomic(listId, (meta) => {
+            meta.tasks = meta.tasks.map((task) => {
+                if (task.id !== taskId) return task;
+                foundTask = true;
+
+                const subtasks = task.subtasks.map((subtask) => {
+                    if (subtask.id !== subtaskId) return subtask;
+                    foundSubtask = true;
+                    if (subtask.done === done) return subtask;
+                    return {
+                        ...subtask,
+                        done,
+                        updated_at: timestamp,
+                    };
+                });
+
+                return { ...task, subtasks, updated_at: timestamp };
+            });
+
+            return meta;
+        });
+
+        if (!foundTask) throw new Error('Task not found');
+        if (!foundSubtask) throw new Error('Subtask not found');
     }
 
     async function reorderTasks(listId: string, orderedTaskIds: string[]) {
@@ -273,6 +354,8 @@ export function useTaskListService(api?: PanePluginApi | null) {
         updateTask,
         removeTask,
         addSubtask,
+        toggleSubtask,
+        setSubtaskDone,
         removeSubtask,
         reorderTasks,
         rescheduleTask,

@@ -85,3 +85,9 @@ date: 2026-02-19
   - [x] `public/_documentation/start/mini-app-tutorial.md` (task pane reference link)
   - [x] `public/_documentation/utils/tool-registry.md` (task tools example snippet)
   - [x] `public/_documentation/docmap.json` (new docs entries if added)
+
+## 12. Sidebar + AI task search
+- [x] Add Orama-powered task list search in `TaskSidebarPage.vue` with substring fallback. (Requirements: 10.1, 11.1)
+- [x] Reuse shared task search logic for AI tool calls. (Requirements: 9.1, 11.1)
+- [x] Add `or3_tasks_search_lists` tool definition and handler with structured JSON output. (Requirements: 9.1)
+- [x] Add test coverage for task search tool behavior. (Requirements: 12.1)

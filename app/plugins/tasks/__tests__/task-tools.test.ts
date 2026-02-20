@@ -75,8 +75,45 @@ describe('task tools', () => {
     const addResult = await registry.executeTool('or3_tasks_add_item', JSON.stringify({ listId, title: 'Write docs' }));
     expect(addResult.error).toBeUndefined();
 
+    const addPayload = JSON.parse(addResult.result || '{}');
+    const taskId = addPayload.data.taskId as string;
+
+    const createSubtaskResult = await registry.executeTool(
+      'or3_tasks_create_subtask',
+      JSON.stringify({ listId, taskId, title: 'Draft outline' })
+    );
+    expect(createSubtaskResult.error).toBeUndefined();
+
+    const createSubtaskPayload = JSON.parse(createSubtaskResult.result || '{}');
+    const subtaskId = createSubtaskPayload.data.subtaskId as string;
+
+    const completeSubtaskResult = await registry.executeTool(
+      'or3_tasks_complete_subtask',
+      JSON.stringify({ listId, taskId, subtaskId, done: true })
+    );
+    expect(completeSubtaskResult.error).toBeUndefined();
+
+    const invalidUpdateResult = await registry.executeTool(
+      'or3_tasks_update_item',
+      JSON.stringify({ listId, taskId })
+    );
+    const invalidUpdatePayload = JSON.parse(invalidUpdateResult.result || '{}');
+    expect(invalidUpdatePayload.ok).toBe(false);
+    expect(invalidUpdatePayload.error.code).toBe('invalid_args');
+
     const post = await api.posts.get({ id: listId });
     expect(post.post.meta.tasks.length).toBe(1);
+    expect(post.post.meta.tasks[0]?.subtasks[0]?.done).toBe(true);
+
+    const searchResult = await registry.executeTool(
+      'or3_tasks_search_lists',
+      JSON.stringify({ query: 'docs', limit: 5 })
+    );
+    expect(searchResult.error).toBeUndefined();
+    const searchPayload = JSON.parse(searchResult.result || '{}');
+    expect(searchPayload.ok).toBe(true);
+    expect(searchPayload.data.total).toBeGreaterThanOrEqual(1);
+    expect(searchPayload.data.lists[0]?.listId).toBe(listId);
 
     const deleteResult = await registry.executeTool(
       'or3_tasks_delete_list',

@@ -52,6 +52,7 @@
             @reschedule="onReschedule"
             @breakdown="onBreakdown"
             @create-subtask="onCreateSubtask"
+            @toggle-subtask="onToggleSubtask"
             @remove-subtask="onRemoveSubtask"
           />
         </div>
@@ -61,12 +62,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import TaskItemCard from './TaskItemCard.vue';
 import { useTaskListService } from '../composables/useTaskListService';
 import { useTaskAiActions } from '../composables/useTaskAiActions';
 import type { SortMode } from '../types';
+
+const TASKS_UPDATED_EVENT = 'or3:tasks:list-updated';
 
 const props = defineProps<{
   paneId?: string;
@@ -185,6 +188,7 @@ async function moveTask(taskId: string, delta: number) {
   const nextIndex = index + delta;
   if (index < 0 || nextIndex < 0 || nextIndex >= ordered.length) return;
   const [id] = ordered.splice(index, 1);
+  if (!id) return;
   ordered.splice(nextIndex, 0, id);
   await service.reorderTasks(listId.value, ordered);
   await refresh();
@@ -215,6 +219,12 @@ async function onBreakdown(taskId: string) {
 async function onCreateSubtask(taskId: string, title: string) {
   if (!listId.value) return;
   await service.addSubtask(listId.value, taskId, title);
+  await refresh();
+}
+
+async function onToggleSubtask(taskId: string, subtaskId: string) {
+  if (!listId.value) return;
+  await service.toggleSubtask(listId.value, taskId, subtaskId);
   await refresh();
 }
 
@@ -253,4 +263,19 @@ watch(
   },
   { immediate: true }
 );
+
+const onTasksUpdated = async (event: Event) => {
+  const custom = event as CustomEvent<{ listId?: string }>;
+  if (!listId.value) return;
+  if (custom.detail?.listId && custom.detail.listId !== listId.value) return;
+  await refresh();
+};
+
+onMounted(() => {
+  window.addEventListener(TASKS_UPDATED_EVENT, onTasksUpdated);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener(TASKS_UPDATED_EVENT, onTasksUpdated);
+});
 </script>

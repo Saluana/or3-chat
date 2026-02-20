@@ -1,11 +1,11 @@
 <template>
   <div
-    class="bg-[var(--md-surface)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)]"
+    class="bg-[var(--md-surface)]/25 backdrop-blur-lg border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)]"
     :class="task.status === 'done' ? 'opacity-60' : ''"
   >
     <!-- Title row -->
     <div class="flex items-center gap-2 px-3 py-2.5">
-      <UCheckbox :model-value="task.status === 'done'" class="shrink-0 self-center" @update:model-value="$emit('toggle-done', task.id, $event)" />
+      <UCheckbox :model-value="task.status === 'done'" size="sm" class="shrink-0 self-center" @update:model-value="$emit('toggle-done', task.id, $event === true)" />
       <UInput
         :model-value="task.title"
         size="sm"
@@ -51,12 +51,23 @@
       <div
         v-for="subtask in task.subtasks"
         :key="subtask.id"
-        class="group flex items-start gap-2 py-1 px-2 rounded-[var(--md-border-radius)] hover:bg-[var(--md-surface-hover)] transition-colors"
+        class="group flex items-center gap-2 py-1 px-2 rounded-[var(--md-border-radius)] hover:bg-[var(--md-surface-hover)] transition-colors"
       >
-        <span class="text-[var(--md-primary)] text-xs mt-0.5 shrink-0">›</span>
-        <span class="flex-1 text-xs leading-5 text-[var(--md-on-surface)]">{{ subtask.title }}</span>
         <button
-          class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-4 h-4 flex items-center justify-center rounded text-[var(--md-on-surface)] hover:text-[var(--md-error)] hover:bg-[var(--md-error)]/10 text-xs"
+          type="button"
+          class="shrink-0 w-4 h-4 flex items-center justify-center text-[var(--md-primary)] text-xs leading-none"
+          aria-label="Toggle subtask done"
+          @click="$emit('toggle-subtask', task.id, subtask.id)"
+        >›</button>
+        <button
+          type="button"
+          class="flex-1 text-left text-xs leading-5 text-[var(--md-on-surface)] transition-opacity"
+          :class="subtask.done ? 'line-through opacity-50' : ''"
+          @click="$emit('toggle-subtask', task.id, subtask.id)"
+        >{{ subtask.title }}</button>
+        <button
+          type="button"
+          class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-4 h-4 flex items-center justify-center rounded text-[var(--md-on-surface)] hover:text-[var(--md-error)] hover:bg-[var(--md-error)]/10 text-xs leading-none"
           aria-label="Remove subtask"
           @click="$emit('remove-subtask', task.id, subtask.id)"
         >✕</button>
@@ -77,23 +88,32 @@ import type { TaskItem } from '../types';
 
 const props = defineProps<{ task: TaskItem }>();
 const emit = defineEmits<{
-  'update-title': [taskId: string, title: string];
-  'remove': [taskId: string];
-  'toggle-done': [taskId: string, done: boolean];
-  'move-up': [taskId: string];
-  'move-down': [taskId: string];
-  'reschedule': [taskId: string, value: string];
-  'breakdown': [taskId: string];
-  'create-subtask': [taskId: string, title: string];
-  'remove-subtask': [taskId: string, subtaskId: string];
+  (e: 'update-title', taskId: string, title: string): void;
+  (e: 'remove', taskId: string): void;
+  (e: 'toggle-done', taskId: string, done: boolean): void;
+  (e: 'move-up', taskId: string): void;
+  (e: 'move-down', taskId: string): void;
+  (e: 'reschedule', taskId: string, value: string): void;
+  (e: 'breakdown', taskId: string): void;
+  (e: 'create-subtask', taskId: string, title: string): void;
+  (e: 'toggle-subtask', taskId: string, subtaskId: string): void;
+  (e: 'remove-subtask', taskId: string, subtaskId: string): void;
 }>();
 
 const subtaskDraft = ref('');
 const dateInputRef = ref<HTMLInputElement | null>(null);
 
+function formatDateForInput(ts: number): string {
+  const date = new Date(ts);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 const dueDateValue = computed(() => {
   if (!props.task.due_at) return '';
-  return new Date(props.task.due_at).toISOString().slice(0, 10);
+  return formatDateForInput(props.task.due_at);
 });
 
 const formattedDueDate = computed(() => {
