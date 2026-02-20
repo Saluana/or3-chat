@@ -1,7 +1,7 @@
 <template>
-  <div class="flex flex-col gap-2 p-3">
+  <div class="flex flex-col gap-4 p-4">
     <!-- Create form -->
-    <div class="flex flex-col gap-2">
+    <div class="flex flex-col gap-3">
       <div class="flex gap-2">
         <UInput v-model="newListTitle" size="sm" placeholder="New list…" class="flex-1" @keyup.enter="createList" />
         <UButton size="sm" class="theme-btn" @click="createList">Create</UButton>
@@ -16,83 +16,85 @@
     </div>
 
     <!-- Empty state -->
-    <p v-if="visibleItems.length === 0" class="text-center text-xs text-[var(--md-on-surface)] opacity-40 py-6">
+    <p v-if="visibleItems.length === 0" class="text-center text-sm text-[var(--md-on-surface)] opacity-40 py-8">
       {{ hasSearchQuery ? 'No matching task lists.' : 'No task lists yet.' }}
     </p>
 
     <!-- List items -->
-    <div
-      v-for="post in visibleItems"
-      :key="post.id"
-      class="group relative w-full flex items-center gap-2 px-3 py-2.5 transition-colors rounded-[var(--md-border-radius)] cursor-pointer text-[color:var(--md-on-surface)] hover:bg-[var(--md-surface-hover)]"
-      role="button"
-      tabindex="0"
-      @click="editingListId !== post.id && openList(post.id)"
-      @keydown.enter="editingListId !== post.id && openList(post.id)"
-    >
-      <!-- Inline rename mode -->
-      <template v-if="editingListId === post.id">
-        <UInput
-          v-model="editingTitle"
-          size="sm"
-          class="min-w-0 flex-1"
-          autofocus
-          @click.stop
-          @keyup.enter="saveRename(post.id)"
-          @keyup.esc="cancelRename"
-        />
-        <UButton size="xs" variant="solid" color="primary" icon="i-lucide-check" aria-label="Save" :square="true" class="theme-btn" @click.stop="saveRename(post.id)" />
-        <UButton size="xs" variant="outline" color="neutral" icon="i-lucide-x" aria-label="Cancel" :square="true" class="theme-btn" @click.stop="cancelRename" />
-      </template>
+    <div class="flex flex-col gap-1">
+      <div
+        v-for="post in visibleItems"
+        :key="post.id"
+        class="group relative w-full flex items-center gap-3 px-3 py-2.5 transition-colors rounded-[var(--md-border-radius)] cursor-pointer text-[color:var(--md-on-surface)] bg-[var(--md-surface)]/40 backdrop-blur-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]/30 hover:bg-[var(--md-surface-hover)]/60 hover:border-[color:var(--md-border-color)]/50"
+        role="button"
+        tabindex="0"
+        @click="editingListId !== post.id && openList(post.id)"
+        @keydown.enter="editingListId !== post.id && openList(post.id)"
+      >
+        <!-- Inline rename mode -->
+        <template v-if="editingListId === post.id">
+          <UInput
+            v-model="editingTitle"
+            size="sm"
+            class="min-w-0 flex-1"
+            autofocus
+            @click.stop
+            @keyup.enter="saveRename(post.id)"
+            @keyup.esc="cancelRename"
+          />
+          <UButton size="xs" variant="solid" color="primary" icon="i-lucide-check" aria-label="Save" :square="true" class="theme-btn" @click.stop="saveRename(post.id)" />
+          <UButton size="xs" variant="outline" color="neutral" icon="i-lucide-x" aria-label="Cancel" :square="true" class="theme-btn" @click.stop="cancelRename" />
+        </template>
 
-      <!-- Normal mode -->
-      <template v-else>
-        <UIcon name="i-lucide-list-checks" class="w-[18px] h-[18px] shrink-0 text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-on-surface)]/80" />
-        <span class="flex-1 min-w-0 truncate text-sm font-normal leading-tight text-[color:var(--md-on-surface)]">{{ post.title }}</span>
-        <span class="shrink-0 text-[10px] tabular-nums opacity-40 font-medium transition-opacity group-hover:opacity-0 text-[color:var(--md-on-surface-variant)]">{{ taskCount(post.meta) }} tasks</span>
+        <!-- Normal mode -->
+        <template v-else>
+          <UIcon name="i-lucide-list-checks" class="w-5 h-5 shrink-0 text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-primary)] transition-colors" />
+          <span class="flex-1 min-w-0 truncate text-sm font-medium leading-tight text-[color:var(--md-on-surface)]">{{ post.title }}</span>
+          <span class="shrink-0 text-xs tabular-nums opacity-50 font-medium transition-opacity group-hover:opacity-0 text-[color:var(--md-on-surface-variant)]">{{ taskCount(post.meta) }} tasks</span>
 
-        <!-- Three-dot hover action -->
-        <div class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
-            <UButton
-              variant="ghost"
-              color="primary"
-              size="xs"
-              :square="true"
-              :icon="iconMore"
-              aria-label="List actions"
-              class="flex items-center justify-center shadow-none"
-              v-bind="triggerOverrides"
-              @click.stop
-              @keydown="handlePopoverTriggerKey"
-            />
-            <template #content>
-              <div class="p-1 w-36 space-y-1">
-                <UButton
-                  color="neutral"
-                  variant="popover"
-                  size="sm"
-                  :icon="iconEdit"
-                  class="w-full justify-start"
-                  @click="startRename(post.id, post.title || 'Untitled Tasks')"
-                >
-                  Rename
-                </UButton>
-                <UButton
-                  color="neutral"
-                  variant="popover"
-                  size="sm"
-                  :icon="iconTrash"
-                  class="w-full justify-start text-[var(--md-error)] hover:bg-[var(--md-error)]/10"
-                  @click="removeList(post.id)"
-                >
-                  Delete
-                </UButton>
-              </div>
-            </template>
-          </UPopover>
-        </div>
-      </template>
+          <!-- Three-dot hover action -->
+          <div class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
+              <UButton
+                variant="ghost"
+                color="primary"
+                size="xs"
+                :square="true"
+                :icon="iconMore"
+                aria-label="List actions"
+                class="flex items-center justify-center shadow-none"
+                v-bind="triggerOverrides"
+                @click.stop
+                @keydown="handlePopoverTriggerKey"
+              />
+              <template #content>
+                <div class="p-1 w-36 space-y-1">
+                  <UButton
+                    color="neutral"
+                    variant="popover"
+                    size="sm"
+                    :icon="iconEdit"
+                    class="w-full justify-start"
+                    @click="startRename(post.id, post.title || 'Untitled Tasks')"
+                  >
+                    Rename
+                  </UButton>
+                  <UButton
+                    color="neutral"
+                    variant="popover"
+                    size="sm"
+                    :icon="iconTrash"
+                    class="w-full justify-start text-[var(--md-error)] hover:bg-[var(--md-error)]/10"
+                    @click="removeList(post.id)"
+                  >
+                    Delete
+                  </UButton>
+                </div>
+              </template>
+            </UPopover>
+          </div>
+        </template>
+      </div>
     </div>
 
     <p v-if="error" class="px-1 text-xs text-[var(--md-error)]">{{ error }}</p>
