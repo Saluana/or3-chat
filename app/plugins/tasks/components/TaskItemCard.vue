@@ -1,50 +1,74 @@
 <template>
   <div
-    class="bg-[var(--md-surface)]/25 backdrop-blur-lg border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)]"
-    :class="task.status === 'done' ? 'opacity-60' : ''"
+    class="group/card transition-all duration-200"
+    :class="task.status === 'done' ? 'opacity-50 grayscale-[50%] bg-transparent border-dashed border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)]' : 'bg-[var(--md-surface)]/40 backdrop-blur-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] shadow-sm'"
   >
     <!-- Title row -->
     <div class="flex items-center gap-3 px-4 pt-4 pb-2">
-      <UCheckbox :model-value="task.status === 'done'" size="xs" class="shrink-0 self-center" @update:model-value="$emit('toggle-done', task.id, $event === true)" />
-      <UInput
-        :model-value="task.title"
-        size="sm"
-        variant="none"
-        :ui="{ base: 'ring-0 shadow-none border-0' }"
-        class="flex-1 min-w-0 bg-transparent"
-        :class="task.status === 'done' ? 'line-through opacity-60' : ''"
-        @update:model-value="$emit('update-title', task.id, String($event))"
-      />
+      <UCheckbox :model-value="task.status === 'done'" :ui="{ base: 'w-4 h-4 transition-colors' }" class="shrink-0 self-center" @update:model-value="$emit('toggle-done', task.id, $event === true)" />
+      <div class="flex-1 min-w-0 flex flex-col">
+        <UInput
+          :model-value="task.title"
+          size="sm"
+          variant="none"
+          :ui="{ base: 'ring-0 shadow-none border-0 font-medium text-[color:var(--md-on-surface)] transition-colors p-0' }"
+          class="w-full bg-transparent"
+          :class="task.status === 'done' ? 'line-through text-[color:var(--md-on-surface-variant)]' : ''"
+          @update:model-value="$emit('update-title', task.id, String($event))"
+        />
+        <!-- Inline metadata (Due Date) -->
+        <div v-if="dueDateValue" class="flex items-center gap-1.5 mt-0.5 text-[10px] text-[var(--md-primary)] opacity-80">
+          <UIcon name="i-lucide-calendar" class="w-3 h-3 shrink-0" />
+          <span>{{ formattedDueDate }}</span>
+        </div>
+      </div>
       <UBadge v-if="task.label && task.label !== 'uncategorized'" color="neutral" variant="soft" size="sm" class="shrink-0 hidden sm:inline-flex self-center">{{ task.label }}</UBadge>
       <!-- Actions -->
-      <div class="flex items-center gap-0.5 shrink-0 self-center">
-        <UButton size="xs" :square="true" variant="ghost" icon="i-lucide-chevron-up" aria-label="Move up" @click="$emit('move-up', task.id)" />
-        <UButton size="xs" :square="true" variant="ghost" icon="i-lucide-chevron-down" aria-label="Move down" @click="$emit('move-down', task.id)" />
-        <UButton size="xs" :square="true" variant="ghost" color="error" icon="i-lucide-trash-2" aria-label="Remove task" @click="$emit('remove', task.id)" />
+      <div class="flex items-center gap-0.5 shrink-0 self-center opacity-0 group-hover/card:opacity-100 focus-within:opacity-100 transition-opacity">
+        <!-- Due date picker -->
+        <UTooltip :delay-duration="0" text="Set due date">
+          <UButton
+            size="xs"
+            :square="true"
+            variant="ghost"
+            icon="i-lucide-calendar"
+            aria-label="Set due date"
+            class="relative overflow-hidden"
+            @click="dateInputRef?.showPicker ? dateInputRef.showPicker() : dateInputRef?.click()"
+          >
+            <input
+              ref="dateInputRef"
+              type="date"
+              :value="dueDateValue"
+              class="sr-only"
+              tabindex="-1"
+              @change="$emit('reschedule', task.id, ($event.target as HTMLInputElement).value)"
+            />
+          </UButton>
+        </UTooltip>
+        <!-- Breakdown action -->
+        <UTooltip :delay-duration="0" text="Break down with AI">
+          <UButton
+            size="xs"
+            :square="true"
+            variant="ghost"
+            color="primary"
+            icon="i-lucide-sparkles"
+            aria-label="Break down task"
+            @click="$emit('breakdown', task.id)"
+          />
+        </UTooltip>
+        <div class="w-px h-4 bg-[var(--md-border-color)]/30 mx-1"></div>
+        <UTooltip :delay-duration="0" text="Move up">
+          <UButton size="xs" :square="true" variant="ghost" icon="i-lucide-chevron-up" aria-label="Move up" @click="$emit('move-up', task.id)" />
+        </UTooltip>
+        <UTooltip :delay-duration="0" text="Move down">
+          <UButton size="xs" :square="true" variant="ghost" icon="i-lucide-chevron-down" aria-label="Move down" @click="$emit('move-down', task.id)" />
+        </UTooltip>
+        <UTooltip :delay-duration="0" text="Delete task">
+          <UButton size="xs" :square="true" variant="ghost" color="error" icon="i-lucide-trash-2" aria-label="Remove task" class="hover:bg-[var(--md-error)]/10" @click="$emit('remove', task.id)" />
+        </UTooltip>
       </div>
-    </div>
-
-    <!-- Secondary controls row -->
-    <div class="flex flex-wrap items-center gap-2 px-4 pb-3 pt-1 ml-7">
-      <!-- Due date: button triggers hidden native input -->
-      <button
-        class="flex items-center gap-1.5 h-7 px-2 text-xs rounded-[var(--md-border-radius)] hover:bg-[var(--md-surface-hover)] transition-colors text-[var(--md-primary)] cursor-pointer relative overflow-hidden"
-        @click="dateInputRef?.showPicker ? dateInputRef.showPicker() : dateInputRef?.click()"
-      >
-        <UIcon name="i-lucide-calendar" class="w-3.5 h-3.5 shrink-0" />
-        <span>{{ dueDateValue ? formattedDueDate : 'Due date' }}</span>
-        <input
-          ref="dateInputRef"
-          type="date"
-          :value="dueDateValue"
-          class="sr-only"
-          tabindex="-1"
-          @change="$emit('reschedule', task.id, ($event.target as HTMLInputElement).value)"
-        />
-      </button>
-      <UButton size="sm" variant="ghost" color="primary" leading-icon="i-lucide-sparkles" @click="$emit('breakdown', task.id)">
-        Break down
-      </UButton>
     </div>
 
     <!-- Subtasks & Add Subtask -->

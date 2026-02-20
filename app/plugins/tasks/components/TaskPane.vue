@@ -1,7 +1,7 @@
 <template>
   <div :class="paneFrameClass" class="flex flex-col h-full">
     <!-- Header: pl-14/pr-28 clear the absolute shell overlay buttons (new-pane left, theme+notifications right) -->
-    <div :class="headerClass" class="border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)] shrink-0">
+    <div :class="headerClass" class="border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)] shrink-0 bg-[var(--md-surface)]/25 backdrop-blur-md z-10">
       <h3 class="min-w-0 flex-1 font-semibold text-sm text-[var(--md-on-surface)] tracking-wider truncate">{{ headerTitle }}</h3>
       <!-- Sort mode picker -->
       <UPopover :content="{ side: 'bottom', align: 'end', sideOffset: 4 }">
@@ -21,15 +21,6 @@
     <!-- Scrollable content — max-w-2xl centers on wide single-pane layouts -->
     <div class="flex-1 overflow-y-auto">
       <div class="w-full max-w-2xl mx-auto flex flex-col gap-0">
-        <!-- Add task -->
-        <div class="px-4 pt-4 pb-2">
-          <div class="flex gap-2">
-            <UInput v-model="draftTitle" size="sm" placeholder="Add a task…" class="flex-1" @keyup.enter="addNewTask" />
-            <UButton size="sm" class="theme-btn" :loading="loading" @click="addNewTask">Add</UButton>
-          </div>
-          <p v-if="error" class="mt-1 text-xs text-[var(--md-error)]">{{ error }}</p>
-        </div>
-
         <!-- AI fallback notice -->
         <div v-if="fallbackNotice" class="px-3 py-1 text-xs text-[var(--md-on-surface)] opacity-60 bg-[var(--md-surface-container-high)] border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]">
           {{ fallbackNotice }}
@@ -37,9 +28,11 @@
 
         <!-- Task list -->
         <div class="p-4 space-y-4">
-          <p v-if="tasks.length === 0" class="text-center text-sm text-[var(--md-on-surface)] opacity-40 py-8">
-            No tasks yet.
-          </p>
+          <div v-if="tasks.length === 0" class="flex flex-col items-center justify-center py-16 opacity-40 text-[var(--md-on-surface)]">
+            <UIcon name="i-lucide-list-todo" class="w-12 h-12 mb-3 opacity-50" />
+            <p class="text-sm font-medium">No tasks yet</p>
+            <p class="text-xs mt-1 opacity-70">Add a task below to get started.</p>
+          </div>
           <TaskItemCard
             v-for="task in tasks"
             :key="task.id"
@@ -56,6 +49,17 @@
             @remove-subtask="onRemoveSubtask"
           />
         </div>
+      </div>
+    </div>
+
+    <!-- Add task footer -->
+    <div class="shrink-0 border-t-[length:var(--md-border-width)] border-t-[color:var(--md-border-color)] bg-[var(--md-surface)]/25 backdrop-blur-md">
+      <div class="w-full max-w-2xl mx-auto px-4 py-3">
+        <div class="flex gap-2">
+          <UInput v-model="draftTitle" size="sm" placeholder="Add a task…" class="flex-1" @keyup.enter="addNewTask" />
+          <UButton size="sm" class="theme-btn" :loading="loading" @click="addNewTask">Add</UButton>
+        </div>
+        <p v-if="error" class="mt-1 text-xs text-[var(--md-error)]">{{ error }}</p>
       </div>
     </div>
   </div>
