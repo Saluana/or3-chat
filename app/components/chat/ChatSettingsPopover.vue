@@ -41,52 +41,104 @@
             v-if="registeredTools.length > 0"
             class="chat-settings-popover-tools border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
         >
-            <div
-                v-for="tool in registeredTools"
-                :key="tool.name"
-                class="chat-settings-popover-tool flex flex-col py-1 px-3"
-            >
+            <div class="max-h-[min(60vh,420px)] overflow-y-auto">
                 <div
-                    class="chat-settings-popover-tool-switch chat-settings-switch flex justify-between w-full items-center"
+                    v-for="group in groupedToolCategories"
+                    :key="group.category"
+                    class="border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] last:border-b-0"
                 >
-                    <USwitch
-                        v-bind="getToolSwitchProps(tool.name)"
-                        :label="
-                            tool.definition.ui?.label ||
-                            tool.definition.function.name
-                        "
-                        class="w-full"
-                        :model-value="tool.enabledValue"
-                        @update:model-value="(val: boolean) => {
-                            toolRegistry.setEnabled(tool.name, val);
-                        }"
-                        :disabled="loading || streaming"
-                        :aria-describedby="`tool-desc-${tool.name}`"
-                    ></USwitch>
-                    <UIcon
-                        v-if="tool.definition.ui?.icon"
-                        :name="tool.definition.ui.icon"
-                        class="w-5 h-5"
-                    />
-                    <UIcon
-                        v-else
-                        :name="useIcon('chat.tool.wrench').value"
-                        class="w-5 h-5"
-                    />
+                    <button
+                        type="button"
+                        class="w-full flex items-center justify-between px-3 py-1.5 text-left hover:bg-[var(--md-surface-hover)] transition-colors"
+                        :aria-expanded="!isCategoryCollapsed(group.category)"
+                        :aria-controls="`tool-category-${group.category}`"
+                        @click="toggleCategory(group.category)"
+                    >
+                        <div class="min-w-0 pr-2">
+                            <div class="min-w-0">
+                                <div class="text-sm font-medium truncate">
+                                    {{ getCategoryLabel(group.category) }}
+                                </div>
+                                <p
+                                    v-if="getCategorySubtitle(group.category)"
+                                    class="text-[10px] opacity-65 truncate"
+                                >
+                                    {{ getCategorySubtitle(group.category) }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0 self-center">
+                            <span
+                                class="text-[10px] leading-none opacity-60 min-w-[1.25rem] text-right"
+                                >{{ group.tools.length }}</span
+                            >
+                            <UIcon
+                                :name="
+                                    isCategoryCollapsed(group.category)
+                                        ? iconChevronRight
+                                        : iconChevronDown
+                                "
+                                class="w-4 h-4 shrink-0"
+                            />
+                        </div>
+                    </button>
+
+                    <div
+                        v-show="!isCategoryCollapsed(group.category)"
+                        :id="`tool-category-${group.category}`"
+                    >
+                        <div
+                            v-for="tool in group.tools"
+                            :key="tool.name"
+                            class="chat-settings-popover-tool flex flex-col py-1 px-3"
+                        >
+                            <div
+                                class="chat-settings-popover-tool-switch chat-settings-switch flex justify-between w-full items-center"
+                            >
+                                <USwitch
+                                    v-bind="getToolSwitchProps(tool.name)"
+                                    :label="
+                                        tool.definition.ui?.label ||
+                                        tool.definition.function.name
+                                    "
+                                    class="w-full"
+                                    :model-value="tool.enabledValue"
+                                    @update:model-value="(val: boolean) => {
+                                        toolRegistry.setEnabled(
+                                            tool.name,
+                                            val
+                                        );
+                                    }"
+                                    :disabled="loading || streaming"
+                                    :aria-describedby="`tool-desc-${tool.name}`"
+                                ></USwitch>
+                                <UIcon
+                                    v-if="tool.definition.ui?.icon"
+                                    :name="tool.definition.ui.icon"
+                                    class="w-5 h-5"
+                                />
+                                <UIcon
+                                    v-else
+                                    :name="useIcon('chat.tool.wrench').value"
+                                    class="w-5 h-5"
+                                />
+                            </div>
+                            <p
+                                v-if="
+                                    tool.definition.ui?.descriptionHint ||
+                                    tool.definition.function.description
+                                "
+                                :id="`tool-desc-${tool.name}`"
+                                class="chat-settings-popover-tool-description text-xs opacity-70 mt-0.5 px-1"
+                            >
+                                {{
+                                    tool.definition.ui?.descriptionHint ||
+                                    tool.definition.function.description
+                                }}
+                            </p>
+                        </div>
+                    </div>
                 </div>
-                <p
-                    v-if="
-                        tool.definition.ui?.descriptionHint ||
-                        tool.definition.function.description
-                    "
-                    :id="`tool-desc-${tool.name}`"
-                    class="chat-settings-popover-tool-description text-xs opacity-70 mt-0.5 px-1"
-                >
-                    {{
-                        tool.definition.ui?.descriptionHint ||
-                        tool.definition.function.description
-                    }}
-                </p>
             </div>
         </div>
 
@@ -108,7 +160,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useToolRegistry } from '~/utils/chat/tools-public';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
@@ -133,9 +185,94 @@ const registeredTools = computed(() =>
     }))
 );
 
+const groupedToolCategories = computed(() => {
+    const groups = new Map<
+        string,
+        Array<
+            (typeof registeredTools.value)[number]
+        >
+    >();
+
+    for (const tool of registeredTools.value) {
+        const category = tool.definition.ui?.category || 'Other';
+        const list = groups.get(category);
+        if (list) list.push(tool);
+        else groups.set(category, [tool]);
+    }
+
+    return Array.from(groups.entries()).map(([category, tools]) => ({
+        category,
+        tools,
+    }));
+});
+
+const collapsedCategories = ref(new Set<string>());
+const categoryInitDone = ref(false);
+const previousCategories = ref(new Set<string>());
+
+watch(
+    groupedToolCategories,
+    (groups) => {
+        const valid = new Set(groups.map((group) => group.category));
+
+        // First render: collapse all categories by default.
+        if (!categoryInitDone.value) {
+            collapsedCategories.value = new Set(valid);
+            previousCategories.value = new Set(valid);
+            categoryInitDone.value = true;
+            return;
+        }
+
+        // Keep previous collapse state for existing categories.
+        const next = new Set<string>();
+        for (const category of collapsedCategories.value) {
+            if (valid.has(category)) {
+                next.add(category);
+            }
+        }
+
+        // New categories appear collapsed by default.
+        for (const category of valid) {
+            if (!previousCategories.value.has(category)) {
+                next.add(category);
+            }
+        }
+
+        collapsedCategories.value = next;
+        previousCategories.value = new Set(valid);
+    },
+    { immediate: true }
+);
+
+function isCategoryCollapsed(category: string) {
+    return collapsedCategories.value.has(category);
+}
+
+function toggleCategory(category: string) {
+    const next = new Set(collapsedCategories.value);
+    if (next.has(category)) next.delete(category);
+    else next.add(category);
+    collapsedCategories.value = next;
+}
+
+function getCategoryLabel(category: string) {
+    if (category === 'Tasks') return 'Task list tools';
+    return `${category} tools`;
+}
+
+function getCategorySubtitle(category: string) {
+    if (category === 'Tasks') {
+        return 'Create, update, delete, and organize task lists/items';
+    }
+    return '';
+}
+
 // These will be provided by the parent component via v-model
 const selectedModel = defineModel<string>('model');
 const webSearchEnabled = defineModel<boolean>('webSearchEnabled');
+
+const iconChevronRight = useIcon('ui.chevron.right');
+const iconChevronDown = useIcon('ui.chevron.down');
 
 // Theme overrides - Container
 const containerProps = computed(() => {

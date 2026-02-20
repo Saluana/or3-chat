@@ -89,6 +89,18 @@ interface AccumulatedToolCall {
     _yielded: boolean;
 }
 
+function mergeStreamedField(previous: string, nextChunk: string): string {
+    if (!nextChunk) return previous;
+    if (!previous) return nextChunk;
+    // Some providers stream deltas, others send cumulative snapshots.
+    // If the new chunk already contains previous text as a prefix, treat it as replacement.
+    if (nextChunk.startsWith(previous)) return nextChunk;
+    // Duplicate chunk replay
+    if (nextChunk === previous) return previous;
+    // Standard delta behavior
+    return previous + nextChunk;
+}
+
 /**
  * Parse upstream OpenRouter SSE stream and yield normalized ORStreamEvent.
  * Handles reasoning, text, images, and tool calls across streaming chunks.
@@ -165,29 +177,22 @@ export async function* parseOpenRouterSSE(
                         // Handle model reasoning
                         let reasoningYielded = false;
 
-                        const reasoningDetails =
-                            choice.delta?.reasoning_details;
-                        const firstReasoningDetail = reasoningDetails?.[0];
-                        if (firstReasoningDetail) {
-                            if (
-                                firstReasoningDetail.type === 'reasoning.text'
-                            ) {
-                                if (firstReasoningDetail.text) {
+                        const reasoningDetails = choice.delta?.reasoning_details;
+                        if (Array.isArray(reasoningDetails)) {
+                            for (const detail of reasoningDetails) {
+                                if (detail?.type === 'reasoning.text' && detail.text) {
                                     yield {
                                         type: 'reasoning',
-                                        text: firstReasoningDetail.text,
+                                        text: detail.text,
                                     };
                                     reasoningYielded = true;
-                                }
-                            } else if (
-                                firstReasoningDetail.type ===
-                                'reasoning.summary'
-                            ) {
-                                const summary = firstReasoningDetail.summary;
-                                if (summary) {
+                                } else if (
+                                    detail?.type === 'reasoning.summary' &&
+                                    detail.summary
+                                ) {
                                     yield {
                                         type: 'reasoning',
-                                        text: summary,
+                                        text: detail.summary,
                                     };
                                     reasoningYielded = true;
                                 }
@@ -253,21 +258,26 @@ export async function* parseOpenRouterSSE(
 
                                 // Accumulate function name
                                 if (toolCallDelta.function?.name) {
-                                    accumulated.function.name +=
-                                        toolCallDelta.function.name;
+                                    accumulated.function.name = mergeStreamedField(
+                                        accumulated.function.name,
+                                        toolCallDelta.function.name
+                                    );
                                 }
 
                                 // Accumulate function arguments (streamed incrementally)
                                 if (toolCallDelta.function?.arguments) {
-                                    accumulated.function.arguments +=
-                                        toolCallDelta.function.arguments;
+                                    accumulated.function.arguments =
+                                        mergeStreamedField(
+                                            accumulated.function.arguments,
+                                            toolCallDelta.function.arguments
+                                        );
                                 }
                             }
                         }
 
-                        // Yield tool calls as soon as we receive finish_reason
+                        // Yield tool calls as soon as we receive any finish_reason
                         if (
-                            choice.finish_reason === 'tool_calls' &&
+                            typeof choice.finish_reason === 'string' &&
                             toolCallMap.size > 0
                         ) {
                             for (const toolCall of toolCallMap.values()) {

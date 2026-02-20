@@ -21,6 +21,12 @@ function mockApi() {
         store.set(id, { ...post, ...patch });
         return { ok: true };
       },
+      async delete({ id }: any) {
+        const exists = store.has(id);
+        if (!exists) return { ok: false, message: 'missing' };
+        store.delete(id);
+        return { ok: true };
+      },
       async listByType({ postType }: any) {
         return { ok: true, posts: [...store.values()].filter((post) => post.postType === postType) };
       },
@@ -41,11 +47,45 @@ describe('task tools', () => {
 
     const cleanup = registerTaskTools();
     const registry = useToolRegistry();
+    const createTool = registry
+      .listTools
+      .value
+      .find((tool) => tool.definition.function.name === 'or3_tasks_create_list');
+    expect(createTool?.runtime).toBe('client');
+
+    const createResult = await registry.executeTool(
+      'or3_tasks_create_list',
+      JSON.stringify({ title: 'Feb 19th' })
+    );
+    expect(createResult.error).toBeUndefined();
+
+    const createPayload = JSON.parse(createResult.result || '{}');
+    expect(createPayload.ok).toBe(true);
+    const createdListId = createPayload.data.listId as string;
+
+    const renameResult = await registry.executeTool(
+      'or3_tasks_update_list',
+      JSON.stringify({ listId: createdListId, title: 'Feb 19th Updated' })
+    );
+    expect(renameResult.error).toBeUndefined();
+
+    const createdListPost = await api.posts.get({ id: createdListId });
+    expect(createdListPost.post.title).toBe('Feb 19th Updated');
+
     const addResult = await registry.executeTool('or3_tasks_add_item', JSON.stringify({ listId, title: 'Write docs' }));
     expect(addResult.error).toBeUndefined();
 
     const post = await api.posts.get({ id: listId });
     expect(post.post.meta.tasks.length).toBe(1);
+
+    const deleteResult = await registry.executeTool(
+      'or3_tasks_delete_list',
+      JSON.stringify({ listId: createdListId })
+    );
+    expect(deleteResult.error).toBeUndefined();
+
+    const deletedPost = await api.posts.get({ id: createdListId });
+    expect(deletedPost.ok).toBe(false);
     cleanup();
   });
 });

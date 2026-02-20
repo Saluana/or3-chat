@@ -18,6 +18,26 @@ export function registerTaskTools() {
     const ai = useTaskAiActions();
 
     const handlers: Record<string, (args: any) => Promise<string>> = {
+        async or3_tasks_create_list(args) {
+            const title = typeof args?.title === 'string' ? args.title.trim() : '';
+            if (!title) return fail('invalid_args', 'title is required');
+            const listId = await service.createList(title);
+            return ok({ listId, title });
+        },
+        async or3_tasks_update_list(args) {
+            const listId = typeof args?.listId === 'string' ? args.listId : '';
+            const title = typeof args?.title === 'string' ? args.title.trim() : '';
+            if (!listId) return fail('invalid_args', 'listId is required');
+            if (!title) return fail('invalid_args', 'title is required');
+            await service.renameList(listId, title);
+            return ok({ listId, title });
+        },
+        async or3_tasks_delete_list(args) {
+            const listId = typeof args?.listId === 'string' ? args.listId : '';
+            if (!listId) return fail('invalid_args', 'listId is required');
+            await service.deleteList(listId);
+            return ok({ deleted: true, listId });
+        },
         async or3_tasks_add_item(args) {
             if (!args?.title) return fail('invalid_args', 'title is required');
             const task = await service.addTask(args.listId, { title: args.title, notes: args.notes });
@@ -60,15 +80,29 @@ export function registerTaskTools() {
     };
 
     taskToolDefs.forEach((def) => {
-        registry.registerTool(def as any, async (args) => {
-            try {
-                const fn = handlers[def.function.name];
-                if (!fn) return fail('unknown_tool', `No handler for ${def.function.name}`);
-                return await fn(args);
-            } catch (error) {
-                return fail('tool_error', error instanceof Error ? error.message : 'Tool execution failed');
-            }
-        });
+        registry.registerTool(
+            def as any,
+            async (args) => {
+                try {
+                    const fn = handlers[def.function.name];
+                    if (!fn) {
+                        return fail(
+                            'unknown_tool',
+                            `No handler for ${def.function.name}`
+                        );
+                    }
+                    return await fn(args);
+                } catch (error) {
+                    return fail(
+                        'tool_error',
+                        error instanceof Error
+                            ? error.message
+                            : 'Tool execution failed'
+                    );
+                }
+            },
+            { runtime: 'client' }
+        );
     });
 
     const cleanup = () => taskToolDefs.forEach((def) => registry.unregisterTool(def.function.name));

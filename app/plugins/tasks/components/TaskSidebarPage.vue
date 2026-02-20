@@ -15,7 +15,7 @@
     <div
       v-for="post in items"
       :key="post.id"
-      class="group relative w-full flex items-center gap-2 px-3 py-2.5 transition-colors rounded-[var(--md-border-radius)] cursor-pointer text-[color:var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] theme-btn retro-press"
+      class="group relative w-full flex items-center gap-2 px-3 py-2.5 transition-colors rounded-[var(--md-border-radius)] cursor-pointer text-[color:var(--md-on-surface)] hover:bg-[var(--md-surface-hover)]"
       role="button"
       tabindex="0"
       @click="editingListId !== post.id && openList(post.id)"
@@ -39,8 +39,8 @@
       <!-- Normal mode -->
       <template v-else>
         <UIcon name="i-lucide-list-checks" class="w-[18px] h-[18px] shrink-0 text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-on-surface)]/80" />
-        <span class="flex-1 truncate text-sm font-normal leading-tight text-[color:var(--md-on-surface)]">{{ post.title }}</span>
-        <span class="shrink-0 text-[10px] opacity-40 font-medium transition-opacity group-hover:opacity-0">{{ taskCount(post.meta) }} tasks</span>
+        <span class="flex-1 min-w-0 truncate text-sm font-normal leading-tight text-[color:var(--md-on-surface)]">{{ post.title }}</span>
+        <span class="shrink-0 text-[10px] tabular-nums opacity-40 font-medium transition-opacity group-hover:opacity-0 text-[color:var(--md-on-surface-variant)]">{{ taskCount(post.meta) }} tasks</span>
 
         <!-- Three-dot hover action -->
         <div class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">

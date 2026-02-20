@@ -6,6 +6,60 @@ export const taskToolDefs = [
     defineTool({
         type: 'function' as const,
         function: {
+            name: 'or3_tasks_create_list',
+            description: 'Create a new task list',
+            parameters: {
+                type: 'object' as const,
+                properties: { title: { type: 'string' } },
+                required: ['title'],
+            },
+        },
+        ui: {
+            label: 'Tasks: list create',
+            icon: 'pixelarticons:plus',
+            defaultEnabled: true,
+            category: 'Tasks',
+        },
+    }),
+    defineTool({
+        type: 'function' as const,
+        function: {
+            name: 'or3_tasks_update_list',
+            description: 'Rename/update a task list',
+            parameters: {
+                type: 'object' as const,
+                properties: { listId: listIdArg, title: { type: 'string' } },
+                required: ['listId', 'title'],
+            },
+        },
+        ui: {
+            label: 'Tasks: list update',
+            icon: 'pixelarticons:edit',
+            defaultEnabled: true,
+            category: 'Tasks',
+        },
+    }),
+    defineTool({
+        type: 'function' as const,
+        function: {
+            name: 'or3_tasks_delete_list',
+            description: 'Delete a task list',
+            parameters: {
+                type: 'object' as const,
+                properties: { listId: listIdArg },
+                required: ['listId'],
+            },
+        },
+        ui: {
+            label: 'Tasks: list delete',
+            icon: 'pixelarticons:trash',
+            defaultEnabled: true,
+            category: 'Tasks',
+        },
+    }),
+    defineTool({
+        type: 'function' as const,
+        function: {
             name: 'or3_tasks_add_item',
             description: 'Add an item to a task list',
             parameters: {

@@ -1,32 +1,33 @@
 <template>
   <div
-    class="bg-[var(--md-surface)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] theme-shadow"
+    class="bg-[var(--md-surface)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)]"
     :class="task.status === 'done' ? 'opacity-60' : ''"
   >
     <!-- Title row -->
-    <div class="flex items-center gap-2 px-3 pt-3 pb-2">
-      <UCheckbox :model-value="task.status === 'done'" class="shrink-0" @update:model-value="$emit('toggle-done', task.id, $event)" />
+    <div class="flex items-center gap-2 px-3 py-2.5">
+      <UCheckbox :model-value="task.status === 'done'" class="shrink-0 self-center" @update:model-value="$emit('toggle-done', task.id, $event)" />
       <UInput
         :model-value="task.title"
         size="sm"
-        class="flex-1 min-w-0"
-        :class="task.status === 'done' ? 'line-through' : ''"
+        variant="none"
+        class="flex-1 min-w-0 bg-transparent"
+        :class="task.status === 'done' ? 'line-through opacity-60' : ''"
         @update:model-value="$emit('update-title', task.id, String($event))"
       />
-      <UBadge v-if="task.label && task.label !== 'uncategorized'" color="neutral" variant="soft" size="sm" class="shrink-0 hidden sm:inline-flex">{{ task.label }}</UBadge>
+      <UBadge v-if="task.label && task.label !== 'uncategorized'" color="neutral" variant="soft" size="sm" class="shrink-0 hidden sm:inline-flex self-center">{{ task.label }}</UBadge>
       <!-- Actions -->
-      <div class="flex items-center gap-0.5 shrink-0">
-        <UButton size="xs" :square="true" variant="ghost" icon="i-lucide-chevron-up" class="theme-btn" aria-label="Move up" @click="$emit('move-up', task.id)" />
-        <UButton size="xs" :square="true" variant="ghost" icon="i-lucide-chevron-down" class="theme-btn" aria-label="Move down" @click="$emit('move-down', task.id)" />
-        <UButton size="xs" :square="true" variant="ghost" color="error" icon="i-lucide-trash-2" class="theme-btn" aria-label="Remove task" @click="$emit('remove', task.id)" />
+      <div class="flex items-center gap-0.5 shrink-0 self-center">
+        <UButton size="xs" :square="true" variant="ghost" icon="i-lucide-chevron-up" aria-label="Move up" @click="$emit('move-up', task.id)" />
+        <UButton size="xs" :square="true" variant="ghost" icon="i-lucide-chevron-down" aria-label="Move down" @click="$emit('move-down', task.id)" />
+        <UButton size="xs" :square="true" variant="ghost" color="error" icon="i-lucide-trash-2" aria-label="Remove task" @click="$emit('remove', task.id)" />
       </div>
     </div>
 
-    <!-- Secondary controls row: flex-wrap handles narrow panes gracefully -->
-    <div class="flex flex-wrap items-center gap-2 px-3 pb-3 border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]">
+    <!-- Secondary controls row -->
+    <div class="flex flex-wrap items-center gap-1 px-3 pb-2">
       <!-- Due date: button triggers hidden native input -->
       <button
-        class="flex items-center gap-1.5 h-[32px] px-2 text-xs border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)] hover:bg-[var(--md-surface-hover)] transition-colors text-[var(--md-on-surface)] opacity-70 hover:opacity-100 theme-shadow relative overflow-hidden"
+        class="flex items-center gap-1.5 h-7 px-2 text-xs rounded-[var(--md-border-radius)] hover:bg-[var(--md-surface-hover)] transition-colors text-[var(--md-primary)] cursor-pointer relative overflow-hidden"
         @click="dateInputRef?.showPicker ? dateInputRef.showPicker() : dateInputRef?.click()"
       >
         <UIcon name="i-lucide-calendar" class="w-3.5 h-3.5 shrink-0" />
@@ -40,7 +41,7 @@
           @change="$emit('reschedule', task.id, ($event.target as HTMLInputElement).value)"
         />
       </button>
-      <UButton size="sm" variant="outline" class="theme-btn" leading-icon="i-lucide-sparkles" @click="$emit('breakdown', task.id)">
+      <UButton size="sm" variant="ghost" color="primary" leading-icon="i-lucide-sparkles" @click="$emit('breakdown', task.id)">
         Break down
       </UButton>
     </div>
@@ -63,9 +64,9 @@
     </div>
 
     <!-- Add subtask row -->
-    <div class="flex gap-1.5 px-3 py-2" :class="task.subtasks.length ? 'border-t-[length:var(--md-border-width)] border-t-[color:var(--md-border-color)]' : ''">
-      <UInput v-model="subtaskDraft" size="sm" placeholder="Add subtask…" class="flex-1" @keyup.enter="emitCreateSubtask" />
-      <UButton size="sm" variant="outline" class="theme-btn" @click="emitCreateSubtask">Add</UButton>
+    <div class="flex gap-1.5 px-3 py-2">
+      <UInput v-model="subtaskDraft" size="sm" variant="none" placeholder="Add subtask…" class="flex-1 bg-transparent" @keyup.enter="emitCreateSubtask" />
+      <UButton size="sm" variant="ghost" color="primary" @click="emitCreateSubtask">Add</UButton>
     </div>
   </div>
 </template>
