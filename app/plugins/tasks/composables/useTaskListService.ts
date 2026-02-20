@@ -84,12 +84,12 @@ export function useTaskListService(api?: PanePluginApi | null) {
         return next;
     }
 
-    async function loadOrCreateDefaultList(): Promise<{ id: string; meta: TaskListMetaV1 }> {
+    async function loadOrCreateDefaultList(): Promise<{ id: string; title: string; meta: TaskListMetaV1 }> {
         if (!paneApi?.posts) throw new Error('Posts API unavailable');
         const result = await paneApi.posts.listByType({ postType: TASK_LIST_POST_TYPE, limit: 1 });
         if (result.ok && result.posts.length > 0) {
             const post = result.posts[0];
-            return { id: post.id, meta: readMeta(post.meta) };
+            return { id: post.id, title: post.title || 'My Tasks', meta: readMeta(post.meta) };
         }
         const created = await paneApi.posts.create({
             postType: TASK_LIST_POST_TYPE,
@@ -98,7 +98,7 @@ export function useTaskListService(api?: PanePluginApi | null) {
             source: 'tasks-pane:create-default-list',
         });
         if (!created.ok) throw new Error(created.message);
-        return { id: created.id, meta: defaultMeta() };
+        return { id: created.id, title: 'My Tasks', meta: defaultMeta() };
     }
 
     async function createList(title: string) {

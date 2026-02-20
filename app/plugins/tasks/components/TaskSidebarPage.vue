@@ -1,16 +1,28 @@
 <template>
-  <div class="p-3 space-y-3">
-    <div class="flex items-center gap-2">
-      <UInput v-model="newListTitle" placeholder="New list name" class="flex-1" />
+  <div class="flex flex-col gap-2 p-3">
+    <!-- Create form -->
+    <div class="flex gap-2">
+      <UInput v-model="newListTitle" size="sm" placeholder="New list…" class="flex-1" @keyup.enter="createList" />
       <UButton size="sm" @click="createList">Create</UButton>
     </div>
 
-    <UCard v-for="post in items" :key="post.id" class="cursor-pointer" @click="openList(post.id)">
-      <div class="flex items-center justify-between gap-2">
-        <span class="text-sm font-medium">{{ post.title }}</span>
-        <span class="text-xs opacity-70">{{ taskCount(post.meta) }} tasks</span>
+    <!-- Empty state -->
+    <p v-if="items.length === 0" class="text-center text-xs text-[var(--md-on-surface)] opacity-40 py-6">
+      No task lists yet.
+    </p>
+
+    <!-- List items -->
+    <button
+      v-for="post in items"
+      :key="post.id"
+      class="w-full text-left bg-[var(--md-surface)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] theme-shadow hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] transition-colors p-3"
+      @click="openList(post.id)"
+    >
+      <div class="flex items-center justify-between gap-2 min-w-0">
+        <span class="min-w-0 flex-1 text-sm font-medium text-[var(--md-on-surface)] truncate whitespace-nowrap">{{ post.title }}</span>
+        <span class="shrink-0 text-xs text-[var(--md-on-surface)] opacity-60">{{ taskCount(post.meta) }} tasks</span>
       </div>
-    </UCard>
+    </button>
   </div>
 </template>
 
@@ -27,7 +39,7 @@ const { items, refresh } = usePostsList(TASK_LIST_POST_TYPE, { sort: 'updated_at
 const newListTitle = ref('');
 
 async function openList(recordId: string) {
-  await multiPane.openApp('or3-tasks', { recordId });
+  await multiPane.switchToApp('or3-tasks', { recordId });
 }
 
 function taskCount(meta: unknown): number {

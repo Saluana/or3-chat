@@ -1,6 +1,6 @@
 import { createError, defineEventHandler, getQuery } from 'h3';
 import { z } from 'zod';
-import { checkPluginAccess } from '../../plugins/access/require-plugin-access';
+import { checkPluginAccess } from '../../utils/plugins/access/require-plugin-access';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 
 const QuerySchema = z.object({

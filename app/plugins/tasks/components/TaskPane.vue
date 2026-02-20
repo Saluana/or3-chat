@@ -1,23 +1,34 @@
 <template>
-  <div class="p-3 space-y-3">
-    <div class="flex flex-wrap items-center gap-2">
-      <h3 class="font-semibold">Tasks</h3>
-      <UButton size="xs" :variant="sortMode==='manual'?'solid':'soft'" @click="setSortMode('manual')">Manual</UButton>
-      <UButton size="xs" :variant="sortMode==='hardest'?'solid':'soft'" @click="runDifficultySort('hardest')">Hardest</UButton>
-      <UButton size="xs" :variant="sortMode==='easiest'?'solid':'soft'" @click="runDifficultySort('easiest')">Easiest</UButton>
-      <span v-if="fallbackNotice" class="text-xs opacity-80">{{ fallbackNotice }}</span>
+  <div class="flex flex-col h-full">
+    <!-- Header: title + sort controls. pl-16/pr-32 clear the absolute shell nav buttons (new-pane left ~64px, theme+notifications right ~128px). -->
+    <div class="flex flex-nowrap items-center gap-2 pl-16 pr-32 pt-3 pb-2 border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]">
+      <h3 class="min-w-0 flex-1 font-semibold text-sm text-[var(--md-on-surface)] tracking-wider truncate whitespace-nowrap">{{ headerTitle }}</h3>
+      <div class="ml-2 shrink-0 flex gap-1">
+        <UButton size="sm" :variant="sortMode === 'manual' ? 'solid' : 'ghost'" @click="setSortMode('manual')">Manual</UButton>
+        <UButton size="sm" :variant="sortMode === 'hardest' ? 'solid' : 'ghost'" @click="runDifficultySort('hardest')">Hardest</UButton>
+        <UButton size="sm" :variant="sortMode === 'easiest' ? 'solid' : 'ghost'" @click="runDifficultySort('easiest')">Easiest</UButton>
+      </div>
     </div>
 
-    <UForm :state="{}" @submit.prevent="addNewTask">
+    <!-- Add task -->
+    <div class="px-3 py-2 border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]">
       <div class="flex gap-2">
-        <UInput v-model="draftTitle" placeholder="Add a task" class="flex-1" />
-        <UButton type="submit">Add</UButton>
+        <UInput v-model="draftTitle" size="sm" placeholder="Add a task…" class="flex-1" @keyup.enter="addNewTask" />
+        <UButton size="sm" :loading="loading" @click="addNewTask">Add</UButton>
       </div>
-    </UForm>
+      <p v-if="error" class="mt-1 text-xs text-[var(--md-error)]">{{ error }}</p>
+    </div>
 
-    <div v-if="error" class="text-sm text-red-500">{{ error }}</div>
+    <!-- AI fallback notice -->
+    <div v-if="fallbackNotice" class="px-3 py-1 text-xs text-[var(--md-on-surface)] opacity-60 bg-[var(--md-surface-container-high)] border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]">
+      {{ fallbackNotice }}
+    </div>
 
-    <div class="space-y-2">
+    <!-- Task list -->
+    <div class="flex-1 overflow-y-auto p-3 space-y-2">
+      <p v-if="tasks.length === 0" class="text-center text-sm text-[var(--md-on-surface)] opacity-40 py-8">
+        No tasks yet.
+      </p>
       <TaskItemCard
         v-for="task in tasks"
         :key="task.id"
@@ -37,7 +48,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import TaskItemCard from './TaskItemCard.vue';
 import { useTaskListService } from '../composables/useTaskListService';
 import { useTaskAiActions } from '../composables/useTaskAiActions';
@@ -51,6 +62,7 @@ const service = useTaskListService();
 const ai = useTaskAiActions();
 
 const listId = ref<string | null>(props.recordId ?? null);
+const listTitle = ref('Tasks');
 const meta = ref(service.defaultMeta());
 const draftTitle = ref('');
 const error = ref<string | null>(null);
@@ -59,16 +71,21 @@ const loading = ref(false);
 const tasks = computed(() => [...meta.value.tasks].sort((a, b) => a.order - b.order));
 const sortMode = computed(() => meta.value.sort_mode);
 const fallbackNotice = computed(() => meta.value.ai_fallback_notice ?? null);
+const headerTitle = computed(() => listTitle.value || 'Tasks');
 
 async function refresh() {
   if (!listId.value) {
     const created = await service.loadOrCreateDefaultList();
     listId.value = created.id;
+    listTitle.value = created.title || 'Tasks';
     meta.value = created.meta;
     return;
   }
   const post = await (globalThis as any).__or3PanePluginApi?.posts?.get({ id: listId.value });
-  if (post?.ok) meta.value = service.readMeta(post.post.meta);
+  if (post?.ok) {
+    listTitle.value = post.post.title || 'Tasks';
+    meta.value = service.readMeta(post.post.meta);
+  }
 }
 
 async function addNewTask() {
@@ -169,7 +186,13 @@ async function setSortMode(mode: SortMode) {
   await refresh();
 }
 
-onMounted(async () => {
-  await refresh();
-});
+watch(
+  () => props.recordId,
+  async (next) => {
+    listId.value = next ?? null;
+    error.value = null;
+    await refresh();
+  },
+  { immediate: true }
+);
 </script>
