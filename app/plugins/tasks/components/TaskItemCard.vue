@@ -10,6 +10,7 @@
         :model-value="task.title"
         size="sm"
         variant="none"
+        :ui="{ base: 'ring-0 shadow-none border-0' }"
         class="flex-1 min-w-0 bg-transparent"
         :class="task.status === 'done' ? 'line-through opacity-60' : ''"
         @update:model-value="$emit('update-title', task.id, String($event))"
@@ -76,7 +77,7 @@
 
     <!-- Add subtask row -->
     <div class="flex gap-1.5 px-3 py-2">
-      <UInput v-model="subtaskDraft" size="sm" variant="none" placeholder="Add subtask…" class="flex-1 bg-transparent" @keyup.enter="emitCreateSubtask" />
+      <UInput v-model="subtaskDraft" size="sm" variant="none" :ui="{ base: 'ring-0 shadow-none border-0' }" placeholder="Add subtask…" class="flex-1 bg-transparent" @keyup.enter="emitCreateSubtask" />
       <UButton size="sm" variant="ghost" color="primary" @click="emitCreateSubtask">Add</UButton>
     </div>
   </div>
