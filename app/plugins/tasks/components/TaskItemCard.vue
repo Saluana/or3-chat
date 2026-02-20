@@ -4,8 +4,8 @@
     :class="task.status === 'done' ? 'opacity-60' : ''"
   >
     <!-- Title row -->
-    <div class="flex items-center gap-2 px-3 py-2.5">
-      <UCheckbox :model-value="task.status === 'done'" size="sm" class="shrink-0 self-center" @update:model-value="$emit('toggle-done', task.id, $event === true)" />
+    <div class="flex items-center gap-3 px-4 pt-4 pb-2">
+      <UCheckbox :model-value="task.status === 'done'" size="xs" class="shrink-0 self-center" @update:model-value="$emit('toggle-done', task.id, $event === true)" />
       <UInput
         :model-value="task.title"
         size="sm"
@@ -25,7 +25,7 @@
     </div>
 
     <!-- Secondary controls row -->
-    <div class="flex flex-wrap items-center gap-1 px-3 pb-2">
+    <div class="flex flex-wrap items-center gap-2 px-4 pb-3 pt-1 ml-7">
       <!-- Due date: button triggers hidden native input -->
       <button
         class="flex items-center gap-1.5 h-7 px-2 text-xs rounded-[var(--md-border-radius)] hover:bg-[var(--md-surface-hover)] transition-colors text-[var(--md-primary)] cursor-pointer relative overflow-hidden"
@@ -47,38 +47,41 @@
       </UButton>
     </div>
 
-    <!-- Subtasks -->
-    <div v-if="task.subtasks.length" class="px-3 pt-2 pb-1 space-y-0.5">
-      <div
-        v-for="subtask in task.subtasks"
-        :key="subtask.id"
-        class="group flex items-center gap-2 py-1 px-2 rounded-[var(--md-border-radius)] hover:bg-[var(--md-surface-hover)] transition-colors"
-      >
-        <button
-          type="button"
-          class="shrink-0 w-4 h-4 flex items-center justify-center text-[var(--md-primary)] text-xs leading-none"
-          aria-label="Toggle subtask done"
-          @click="$emit('toggle-subtask', task.id, subtask.id)"
-        >›</button>
-        <button
-          type="button"
-          class="flex-1 text-left text-xs leading-5 text-[var(--md-on-surface)] transition-opacity"
-          :class="subtask.done ? 'line-through opacity-50' : ''"
-          @click="$emit('toggle-subtask', task.id, subtask.id)"
-        >{{ subtask.title }}</button>
-        <button
-          type="button"
-          class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-4 h-4 flex items-center justify-center rounded text-[var(--md-on-surface)] hover:text-[var(--md-error)] hover:bg-[var(--md-error)]/10 text-xs leading-none"
-          aria-label="Remove subtask"
-          @click="$emit('remove-subtask', task.id, subtask.id)"
-        >✕</button>
-      </div>
-    </div>
+    <!-- Subtasks & Add Subtask -->
+    <div class="px-4 pb-3">
+      <div class="ml-7" :class="task.subtasks.length ? 'pl-3 border-l border-[var(--md-border-color)]/20 space-y-1' : 'pl-1'">
+        <div
+          v-for="subtask in task.subtasks"
+          :key="subtask.id"
+          class="group flex items-center gap-2 py-1.5 px-2 rounded-[var(--md-border-radius)] hover:bg-[var(--md-primary)]/10 transition-colors"
+        >
+          <button
+            type="button"
+            class="shrink-0 w-4 h-4 flex items-center justify-center text-[var(--md-primary)] text-xs leading-none"
+            aria-label="Toggle subtask done"
+            @click="$emit('toggle-subtask', task.id, subtask.id)"
+          >›</button>
+          <button
+            type="button"
+            class="flex-1 text-left text-xs leading-5 text-[var(--md-on-surface)] transition-opacity"
+            :class="subtask.done ? 'line-through opacity-50' : ''"
+            @click="$emit('toggle-subtask', task.id, subtask.id)"
+          >{{ subtask.title }}</button>
+          <button
+            type="button"
+            class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-4 h-4 flex items-center justify-center rounded text-[var(--md-on-surface)] hover:text-[var(--md-error)] hover:bg-[var(--md-error)]/10 text-xs leading-none"
+            aria-label="Remove subtask"
+            @click="$emit('remove-subtask', task.id, subtask.id)"
+          >✕</button>
+        </div>
 
-    <!-- Add subtask row -->
-    <div class="flex gap-1.5 px-3 py-2">
-      <UInput v-model="subtaskDraft" size="sm" variant="none" :ui="{ base: 'ring-0 shadow-none border-0' }" placeholder="Add subtask…" class="flex-1 bg-transparent" @keyup.enter="emitCreateSubtask" />
-      <UButton size="sm" variant="ghost" color="primary" @click="emitCreateSubtask">Add</UButton>
+        <!-- Add subtask inline -->
+        <div class="flex items-center gap-2 py-1 px-2 mt-1 opacity-60 focus-within:opacity-100 transition-opacity" :class="!task.subtasks.length ? '-ml-2' : ''">
+          <UIcon name="i-lucide-plus" class="w-3.5 h-3.5 shrink-0 text-[var(--md-primary)]" />
+          <UInput v-model="subtaskDraft" size="sm" variant="none" :ui="{ base: 'ring-0 shadow-none border-0 p-0 text-sm' }" placeholder="Add subtask…" class="flex-1 bg-transparent" @keyup.enter="emitCreateSubtask" />
+          <UButton :class="subtaskDraft.trim() ? 'opacity-100' : 'opacity-0 pointer-events-none'" size="sm" variant="ghost" color="primary" class="transition-opacity" @click="emitCreateSubtask">Add</UButton>
+        </div>
+      </div>
     </div>
   </div>
 </template>

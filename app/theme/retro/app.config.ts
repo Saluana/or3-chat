@@ -130,8 +130,8 @@ export default {
             variants: {
                 size: {
                     xs: {
-                        base: 'size-[22px]',
-                        container: 'h-[24px]',
+                        base: 'size-[24px]',
+                        container: 'h-[26px]',
                     },
                     sm: {
                         base: 'size-[30px]',

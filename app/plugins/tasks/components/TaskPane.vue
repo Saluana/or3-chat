@@ -22,7 +22,7 @@
     <div class="flex-1 overflow-y-auto">
       <div class="w-full max-w-2xl mx-auto flex flex-col gap-0">
         <!-- Add task -->
-        <div class="px-3 pt-3 pb-2">
+        <div class="px-4 pt-4 pb-2">
           <div class="flex gap-2">
             <UInput v-model="draftTitle" size="sm" placeholder="Add a task…" class="flex-1" @keyup.enter="addNewTask" />
             <UButton size="sm" class="theme-btn" :loading="loading" @click="addNewTask">Add</UButton>
@@ -36,7 +36,7 @@
         </div>
 
         <!-- Task list -->
-        <div class="p-3 space-y-2">
+        <div class="p-4 space-y-4">
           <p v-if="tasks.length === 0" class="text-center text-sm text-[var(--md-on-surface)] opacity-40 py-8">
             No tasks yet.
           </p>
