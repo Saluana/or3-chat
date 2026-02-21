@@ -180,7 +180,7 @@
                 >
                     <div
                         v-if="panes.length > 1"
-                        class="absolute top-1 right-1 z-10"
+                        class="absolute top-1 right-1 z-30"
                     >
                         <UTooltip :delay-duration="0" text="Close window">
                             <UButton

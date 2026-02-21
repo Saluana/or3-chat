@@ -18,7 +18,7 @@
         />
         <!-- Inline metadata (Due Date) -->
         <div v-if="dueDateValue" class="flex items-center gap-1.5 mt-0.5 text-[10px] text-[var(--md-primary)] opacity-80">
-          <UIcon name="i-lucide-calendar" class="w-3 h-3 shrink-0" />
+          <UIcon :name="iconCalendar" class="w-3 h-3 shrink-0" />
           <span>{{ formattedDueDate }}</span>
         </div>
       </div>
@@ -31,7 +31,7 @@
             size="xs"
             :square="true"
             variant="ghost"
-            icon="i-lucide-calendar"
+            :icon="iconCalendar"
             aria-label="Set due date"
             class="relative overflow-hidden"
             @click="dateInputRef?.showPicker ? dateInputRef.showPicker() : dateInputRef?.click()"
@@ -53,20 +53,20 @@
             :square="true"
             variant="ghost"
             color="primary"
-            icon="i-lucide-sparkles"
+            :icon="iconSparkles"
             aria-label="Break down task"
             @click="$emit('breakdown', task.id)"
           />
         </UTooltip>
         <div class="w-px h-4 bg-[var(--md-border-color)]/30 mx-1"></div>
         <UTooltip :delay-duration="0" text="Move up">
-          <UButton size="xs" :square="true" variant="ghost" icon="i-lucide-chevron-up" aria-label="Move up" @click="$emit('move-up', task.id)" />
+          <UButton size="xs" :square="true" variant="ghost" :icon="iconChevronUp" aria-label="Move up" @click="$emit('move-up', task.id)" />
         </UTooltip>
         <UTooltip :delay-duration="0" text="Move down">
-          <UButton size="xs" :square="true" variant="ghost" icon="i-lucide-chevron-down" aria-label="Move down" @click="$emit('move-down', task.id)" />
+          <UButton size="xs" :square="true" variant="ghost" :icon="iconChevronDown" aria-label="Move down" @click="$emit('move-down', task.id)" />
         </UTooltip>
         <UTooltip :delay-duration="0" text="Delete task">
-          <UButton size="xs" :square="true" variant="ghost" color="error" icon="i-lucide-trash-2" aria-label="Remove task" class="hover:bg-[var(--md-error)]/10" @click="$emit('remove', task.id)" />
+          <UButton size="xs" :square="true" variant="ghost" color="error" :icon="iconTrash" aria-label="Remove task" class="hover:bg-[var(--md-error)]/10" @click="$emit('remove', task.id)" />
         </UTooltip>
       </div>
     </div>
@@ -84,7 +84,9 @@
             class="shrink-0 w-4 h-4 flex items-center justify-center text-[var(--md-primary)] text-xs leading-none"
             aria-label="Toggle subtask done"
             @click="$emit('toggle-subtask', task.id, subtask.id)"
-          >›</button>
+          >
+            <UIcon :name="iconChevronRight" class="w-3 h-3" />
+          </button>
           <button
             type="button"
             class="flex-1 text-left text-xs leading-5 text-[var(--md-on-surface)] transition-opacity"
@@ -96,12 +98,14 @@
             class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-4 h-4 flex items-center justify-center rounded text-[var(--md-on-surface)] hover:text-[var(--md-error)] hover:bg-[var(--md-error)]/10 text-xs leading-none"
             aria-label="Remove subtask"
             @click="$emit('remove-subtask', task.id, subtask.id)"
-          >✕</button>
+          >
+            <UIcon :name="iconClose" class="w-3 h-3" />
+          </button>
         </div>
 
         <!-- Add subtask inline -->
         <div class="flex items-center gap-2 py-1 px-2 mt-1 opacity-60 focus-within:opacity-100 transition-opacity" :class="!task.subtasks.length ? '-ml-2' : ''">
-          <UIcon name="i-lucide-plus" class="w-3.5 h-3.5 shrink-0 text-[var(--md-primary)]" />
+          <UIcon :name="iconPlus" class="w-3.5 h-3.5 shrink-0 text-[var(--md-primary)]" />
           <UInput v-model="subtaskDraft" size="sm" variant="none" :ui="{ base: 'ring-0 shadow-none border-0 p-0 text-sm' }" placeholder="Add subtask…" class="flex-1 bg-transparent" @keyup.enter="emitCreateSubtask" />
           <UButton :class="subtaskDraft.trim() ? 'opacity-100' : 'opacity-0 pointer-events-none'" size="sm" variant="ghost" color="primary" class="transition-opacity" @click="emitCreateSubtask">Add</UButton>
         </div>
@@ -112,6 +116,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useIcon } from '~/composables/useIcon';
 import type { TaskItem } from '../types';
 
 const props = defineProps<{ task: TaskItem }>();
@@ -130,6 +135,14 @@ const emit = defineEmits<{
 
 const subtaskDraft = ref('');
 const dateInputRef = ref<HTMLInputElement | null>(null);
+const iconCalendar = useIcon('ui.calendar');
+const iconSparkles = useIcon('ui.sparkles');
+const iconChevronUp = useIcon('ui.chevron.up');
+const iconChevronDown = useIcon('ui.chevron.down');
+const iconChevronRight = useIcon('ui.chevron.right');
+const iconPlus = useIcon('ui.plus');
+const iconTrash = useIcon('ui.trash');
+const iconClose = useIcon('ui.close');
 
 function formatDateForInput(ts: number): string {
   const date = new Date(ts);

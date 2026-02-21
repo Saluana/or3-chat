@@ -9,7 +9,7 @@
       <UInput
         v-model="searchQuery"
         size="sm"
-        icon="i-lucide-search"
+        :icon="iconSearch"
         placeholder="Search lists and tasks..."
         class="w-full"
       />
@@ -42,13 +42,13 @@
             @keyup.enter="saveRename(post.id)"
             @keyup.esc="cancelRename"
           />
-          <UButton size="xs" variant="solid" color="primary" icon="i-lucide-check" aria-label="Save" :square="true" class="theme-btn" @click.stop="saveRename(post.id)" />
-          <UButton size="xs" variant="outline" color="neutral" icon="i-lucide-x" aria-label="Cancel" :square="true" class="theme-btn" @click.stop="cancelRename" />
+          <UButton size="xs" variant="solid" color="primary" :icon="iconCheck" aria-label="Save" :square="true" class="theme-btn" @click.stop="saveRename(post.id)" />
+          <UButton size="xs" variant="outline" color="neutral" :icon="iconClose" aria-label="Cancel" :square="true" class="theme-btn" @click.stop="cancelRename" />
         </template>
 
         <!-- Normal mode -->
         <template v-else>
-          <UIcon name="i-lucide-list-checks" class="w-5 h-5 shrink-0 text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-primary)] transition-colors" />
+          <UIcon :name="iconListChecks" class="w-5 h-5 shrink-0 text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-primary)] transition-colors" />
           <span class="flex-1 min-w-0 truncate text-sm font-medium leading-tight text-[color:var(--md-on-surface)]">{{ post.title }}</span>
           <span class="shrink-0 text-xs tabular-nums opacity-50 font-medium transition-opacity group-hover:opacity-0 text-[color:var(--md-on-surface-variant)]">{{ taskCount(post.meta) }} tasks</span>
 
@@ -144,6 +144,10 @@ const error = ref<string | null>(null);
 const hasSearchQuery = computed(() => searchQuery.value.trim().length > 0);
 const visibleItems = computed(() => searchResults.value);
 
+const iconSearch = useIcon('ui.search');
+const iconCheck = useIcon('ui.check');
+const iconClose = useIcon('ui.close');
+const iconListChecks = useIcon('ui.list.checks');
 const iconMore = useIcon('ui.more');
 const iconEdit = useIcon('ui.edit');
 const iconTrash = useIcon('ui.trash');

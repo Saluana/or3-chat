@@ -5,14 +5,14 @@
       <h3 class="min-w-0 flex-1 font-semibold text-sm text-[var(--md-on-surface)] tracking-wider truncate">{{ headerTitle }}</h3>
       <!-- Sort mode picker -->
       <UPopover :content="{ side: 'bottom', align: 'end', sideOffset: 4 }">
-        <UButton size="sm" variant="outline" :icon="sortIcon" trailing-icon="i-lucide-chevron-down" class="shrink-0 theme-btn whitespace-nowrap">
+        <UButton size="sm" variant="outline" :icon="sortIcon" :trailing-icon="iconChevronDown" class="shrink-0 theme-btn whitespace-nowrap">
           {{ sortLabel }}
         </UButton>
         <template #content>
           <div class="p-1 w-36 space-y-1">
-            <UButton color="neutral" variant="popover" size="sm" icon="i-lucide-grip-vertical" class="w-full justify-start" :class="sortMode === 'manual' ? 'font-semibold' : ''" @click="setSortMode('manual')">Manual</UButton>
-            <UButton color="neutral" variant="popover" size="sm" icon="i-lucide-flame" class="w-full justify-start" :class="sortMode === 'hardest' ? 'font-semibold' : ''" @click="runDifficultySort('hardest')">Hardest first</UButton>
-            <UButton color="neutral" variant="popover" size="sm" icon="i-lucide-leaf" class="w-full justify-start" :class="sortMode === 'easiest' ? 'font-semibold' : ''" @click="runDifficultySort('easiest')">Easiest first</UButton>
+            <UButton color="neutral" variant="popover" size="sm" :icon="iconSortManual" class="w-full justify-start" :class="sortMode === 'manual' ? 'font-semibold' : ''" @click="setSortMode('manual')">Manual</UButton>
+            <UButton color="neutral" variant="popover" size="sm" :icon="iconSortHardest" class="w-full justify-start" :class="sortMode === 'hardest' ? 'font-semibold' : ''" @click="runDifficultySort('hardest')">Hardest first</UButton>
+            <UButton color="neutral" variant="popover" size="sm" :icon="iconSortEasiest" class="w-full justify-start" :class="sortMode === 'easiest' ? 'font-semibold' : ''" @click="runDifficultySort('easiest')">Easiest first</UButton>
           </div>
         </template>
       </UPopover>
@@ -29,7 +29,7 @@
         <!-- Task list -->
         <div class="p-4 space-y-4">
           <div v-if="tasks.length === 0" class="flex flex-col items-center justify-center py-16 opacity-40 text-[var(--md-on-surface)]">
-            <UIcon name="i-lucide-list-todo" class="w-12 h-12 mb-3 opacity-50" />
+            <UIcon :name="iconListTodo" class="w-12 h-12 mb-3 opacity-50" />
             <p class="text-sm font-medium">No tasks yet</p>
             <p class="text-xs mt-1 opacity-70">Add a task below to get started.</p>
           </div>
@@ -67,6 +67,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useIcon } from '~/composables/useIcon';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import TaskItemCard from './TaskItemCard.vue';
 import { useTaskListService } from '../composables/useTaskListService';
@@ -105,7 +106,7 @@ const headerClass = computed(() => {
   if (isSinglePane.value) {
     return 'h-12 flex flex-nowrap items-center gap-3 pl-14 pr-28';
   }
-  return 'h-12 flex flex-nowrap items-center gap-2 pl-3 pr-10';
+  return 'h-12 flex flex-nowrap items-center gap-2 pl-3 pr-14';
 });
 
 const service = useTaskListService();
@@ -122,15 +123,20 @@ const tasks = computed(() => [...meta.value.tasks].sort((a, b) => a.order - b.or
 const sortMode = computed(() => meta.value.sort_mode);
 const fallbackNotice = computed(() => meta.value.ai_fallback_notice ?? null);
 const headerTitle = computed(() => listTitle.value || 'Tasks');
+const iconChevronDown = useIcon('ui.chevron.down');
+const iconSortManual = useIcon('ui.drag');
+const iconSortHardest = useIcon('ui.flame');
+const iconSortEasiest = useIcon('ui.leaf');
+const iconListTodo = useIcon('ui.list.todo');
 const sortLabel = computed(() => {
   if (sortMode.value === 'hardest') return 'Hardest';
   if (sortMode.value === 'easiest') return 'Easiest';
   return 'Manual';
 });
 const sortIcon = computed(() => {
-  if (sortMode.value === 'hardest') return 'i-lucide-flame';
-  if (sortMode.value === 'easiest') return 'i-lucide-leaf';
-  return 'i-lucide-grip-vertical';
+  if (sortMode.value === 'hardest') return iconSortHardest.value;
+  if (sortMode.value === 'easiest') return iconSortEasiest.value;
+  return iconSortManual.value;
 });
 
 async function refresh() {
