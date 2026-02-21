@@ -47,7 +47,7 @@
           </UButton>
         </UTooltip>
         <!-- Breakdown action -->
-        <UTooltip :delay-duration="0" text="Break down with AI">
+        <UTooltip :delay-duration="0" :text="breakdownLoading ? 'Breaking down…' : 'Break down with AI'">
           <UButton
             size="xs"
             :square="true"
@@ -55,6 +55,8 @@
             color="primary"
             :icon="iconSparkles"
             aria-label="Break down task"
+            :loading="breakdownLoading"
+            :disabled="aiDisabled || breakdownLoading"
             @click="$emit('breakdown', task.id)"
           />
         </UTooltip>
@@ -119,7 +121,14 @@ import { computed, ref } from 'vue';
 import { useIcon } from '~/composables/useIcon';
 import type { TaskItem } from '../types';
 
-const props = defineProps<{ task: TaskItem }>();
+const props = withDefaults(defineProps<{
+  task: TaskItem;
+  breakdownLoading?: boolean;
+  aiDisabled?: boolean;
+}>(), {
+  breakdownLoading: false,
+  aiDisabled: false,
+});
 const emit = defineEmits<{
   (e: 'update-title', taskId: string, title: string): void;
   (e: 'remove', taskId: string): void;

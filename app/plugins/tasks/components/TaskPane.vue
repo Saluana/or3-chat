@@ -5,14 +5,14 @@
       <h3 class="min-w-0 flex-1 font-semibold text-sm text-[var(--md-on-surface)] tracking-wider truncate">{{ headerTitle }}</h3>
       <!-- Sort mode picker -->
       <UPopover :content="{ side: 'bottom', align: 'end', sideOffset: 4 }">
-        <UButton size="sm" variant="outline" :icon="sortIcon" :trailing-icon="iconChevronDown" class="shrink-0 theme-btn whitespace-nowrap">
+        <UButton size="sm" variant="outline" :icon="sortIcon" :trailing-icon="iconChevronDown" :loading="isAiBusy" :disabled="isAiBusy" class="shrink-0 theme-btn whitespace-nowrap">
           {{ sortLabel }}
         </UButton>
         <template #content>
           <div class="p-1 w-36 space-y-1">
-            <UButton color="neutral" variant="popover" size="sm" :icon="iconSortManual" class="w-full justify-start" :class="sortMode === 'manual' ? 'font-semibold' : ''" @click="setSortMode('manual')">Manual</UButton>
-            <UButton color="neutral" variant="popover" size="sm" :icon="iconSortHardest" class="w-full justify-start" :class="sortMode === 'hardest' ? 'font-semibold' : ''" @click="runDifficultySort('hardest')">Hardest first</UButton>
-            <UButton color="neutral" variant="popover" size="sm" :icon="iconSortEasiest" class="w-full justify-start" :class="sortMode === 'easiest' ? 'font-semibold' : ''" @click="runDifficultySort('easiest')">Easiest first</UButton>
+            <UButton color="neutral" variant="popover" size="sm" :icon="iconSortManual" class="w-full justify-start" :class="sortMode === 'manual' ? 'font-semibold' : ''" :disabled="isAiBusy" @click="setSortMode('manual')">Manual</UButton>
+            <UButton color="neutral" variant="popover" size="sm" :icon="iconSortHardest" class="w-full justify-start" :class="sortMode === 'hardest' ? 'font-semibold' : ''" :loading="isSortLoading && sortLoadingMode === 'hardest'" :disabled="isAiBusy" @click="runDifficultySort('hardest')">Hardest first</UButton>
+            <UButton color="neutral" variant="popover" size="sm" :icon="iconSortEasiest" class="w-full justify-start" :class="sortMode === 'easiest' ? 'font-semibold' : ''" :loading="isSortLoading && sortLoadingMode === 'easiest'" :disabled="isAiBusy" @click="runDifficultySort('easiest')">Easiest first</UButton>
           </div>
         </template>
       </UPopover>
@@ -21,6 +21,11 @@
     <!-- Scrollable content — max-w-2xl centers on wide single-pane layouts -->
     <div class="flex-1 overflow-y-auto">
       <div class="w-full max-w-2xl mx-auto flex flex-col gap-0">
+        <div v-if="isAiBusy" class="mx-4 mt-3 px-3 py-2 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface-container-high)]/70 backdrop-blur-sm flex items-center gap-2 text-xs text-[var(--md-on-surface)]">
+          <UIcon :name="iconLoading" class="w-3.5 h-3.5 animate-spin text-[var(--md-primary)]" />
+          <span>{{ aiStatusText }}</span>
+        </div>
+
         <!-- AI fallback notice -->
         <div v-if="fallbackNotice" class="px-3 py-1 text-xs text-[var(--md-on-surface)] opacity-60 bg-[var(--md-surface-container-high)] border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]">
           {{ fallbackNotice }}
@@ -44,6 +49,8 @@
             @move-down="moveTask($event, 1)"
             @reschedule="onReschedule"
             @breakdown="onBreakdown"
+            :breakdown-loading="breakdownLoadingTaskId === task.id"
+            :ai-disabled="isAiBusy"
             @create-subtask="onCreateSubtask"
             @toggle-subtask="onToggleSubtask"
             @remove-subtask="onRemoveSubtask"
@@ -118,6 +125,9 @@ const meta = ref(service.defaultMeta());
 const draftTitle = ref('');
 const error = ref<string | null>(null);
 const loading = ref(false);
+const breakdownLoadingTaskId = ref<string | null>(null);
+const isSortLoading = ref(false);
+const sortLoadingMode = ref<'hardest' | 'easiest' | null>(null);
 
 const tasks = computed(() => [...meta.value.tasks].sort((a, b) => a.order - b.order));
 const sortMode = computed(() => meta.value.sort_mode);
@@ -128,6 +138,15 @@ const iconSortManual = useIcon('ui.drag');
 const iconSortHardest = useIcon('ui.flame');
 const iconSortEasiest = useIcon('ui.leaf');
 const iconListTodo = useIcon('ui.list.todo');
+const iconLoading = useIcon('ui.loading');
+const isAiBusy = computed(() => Boolean(breakdownLoadingTaskId.value) || isSortLoading.value);
+const aiStatusText = computed(() => {
+  if (breakdownLoadingTaskId.value) return 'Breaking task into steps…';
+  if (isSortLoading.value) return sortLoadingMode.value === 'hardest'
+    ? 'Analyzing difficulty for hardest-first sort…'
+    : 'Analyzing difficulty for easiest-first sort…';
+  return '';
+});
 const sortLabel = computed(() => {
   if (sortMode.value === 'hardest') return 'Hardest';
   if (sortMode.value === 'easiest') return 'Easiest';
@@ -212,18 +231,24 @@ async function onReschedule(taskId: string, value: string) {
 }
 
 async function onBreakdown(taskId: string) {
-  if (!listId.value) return;
+  if (!listId.value || isAiBusy.value) return;
+  error.value = null;
   const task = tasks.value.find((entry) => entry.id === taskId);
   if (!task) return;
-  const result = await ai.breakTaskDown({ title: task.title, notes: task.notes, count: 5 });
-  if (!result.ok) {
-    error.value = result.error;
-    return;
+  breakdownLoadingTaskId.value = taskId;
+  try {
+    const result = await ai.breakTaskDown({ title: task.title, notes: task.notes, count: 5 });
+    if (!result.ok) {
+      error.value = result.error;
+      return;
+    }
+    for (const step of result.steps) {
+      await service.addSubtask(listId.value, taskId, step);
+    }
+    await refresh();
+  } finally {
+    breakdownLoadingTaskId.value = null;
   }
-  for (const step of result.steps) {
-    await service.addSubtask(listId.value, taskId, step);
-  }
-  await refresh();
 }
 
 async function onCreateSubtask(taskId: string, title: string) {
@@ -245,17 +270,27 @@ async function onRemoveSubtask(taskId: string, subtaskId: string) {
 }
 
 async function runDifficultySort(mode: 'hardest' | 'easiest') {
-  if (!listId.value) return;
-  const analysis = await ai.analyzeDifficulty(tasks.value);
-  for (const rating of analysis.ratings) {
-    await service.updateTask(listId.value, rating.task_id, {
-      difficulty_score: rating.score,
-      difficulty_reason: rating.reason,
-    });
+  if (!listId.value || isAiBusy.value) return;
+  error.value = null;
+  isSortLoading.value = true;
+  sortLoadingMode.value = mode;
+  try {
+    const analysis = await ai.analyzeDifficulty(tasks.value);
+    for (const rating of analysis.ratings) {
+      await service.updateTask(listId.value, rating.task_id, {
+        difficulty_score: rating.score,
+        difficulty_reason: rating.reason,
+      });
+    }
+    await service.updateMetaAtomic(listId.value, (current) => ({ ...current, ai_fallback_notice: analysis.fallbackNotice }));
+    await service.sortByDifficulty(listId.value, mode);
+    await refresh();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to run AI difficulty sort';
+  } finally {
+    isSortLoading.value = false;
+    sortLoadingMode.value = null;
   }
-  await service.updateMetaAtomic(listId.value, (current) => ({ ...current, ai_fallback_notice: analysis.fallbackNotice }));
-  await service.sortByDifficulty(listId.value, mode);
-  await refresh();
 }
 
 async function setSortMode(mode: SortMode) {
