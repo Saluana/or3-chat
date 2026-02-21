@@ -23,7 +23,7 @@ vi.mock('../../../utils/auth/is-ssr-auth-enabled', () => ({
 }));
 
 const requirePluginAccessMock = vi.fn();
-vi.mock('../../../plugins/access/require-plugin-access', () => ({
+vi.mock('../../../utils/plugins/access/require-plugin-access', () => ({
     requirePluginAccess: requirePluginAccessMock as any,
 }));
 

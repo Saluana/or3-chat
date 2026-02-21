@@ -389,14 +389,30 @@ const items = await queryPostsByType('my-plugin:item');
 
 ## 11. Documentation Resources
 
+Use the local reference bundle in this skill folder.
+
+Workflow:
+1. Start with `references/docmap.json` to discover relevant docs.
+2. Open only the relevant docs listed in `references/INDEX.md`.
+3. Prefer curated references below before going to upstream paths.
+
+### Curated Reference Set
+
 | Topic | Path |
 |-------|------|
-| Plugin Quickstart | `public/_documentation/start/plugin-quickstart.md` |
-| Snake Game Tutorial | `public/_documentation/start/snake-game-tutorial.md` |
-| Mini App Tutorial | `public/_documentation/start/mini-app-tutorial.md` |
-| Dashboard Plugins | `public/_documentation/composables/useDashboardPlugins.md` |
-| Sidebar Pages | `public/_documentation/composables/useSidebarPages.md` |
-| Tool Registry | `public/_documentation/utils/tool-registry.md` |
+| Discovery Index | `references/INDEX.md` |
+| Doc Map | `references/docmap.json` |
+| Plugin/Pane Quickstart | `references/start/plugin-quickstart.md` |
+| Mini App Tutorial | `references/start/mini-app-tutorial.md` |
+| Dashboard + Sidebar Registries | `references/composables/useDashboardPlugins.md` |
+| Sidebar Page Registration | `references/composables/registerSidebarPage.md` |
+| Multi Pane API | `references/composables/useMultiPane.md` |
+| Hook System | `references/hooks/hook-catalog.md` |
+| Tool Registry | `references/utils/tool-registry.md` |
+| Tool Runtime + Server Registry | `references/utils/tool-runtime.md` |
+| Persistence for plugins | `references/database/posts.md` |
+| Theme Quick Start | `references/themes/quick-start.md` |
+| Theme API + Selectors | `references/themes/api-reference.md` |
 
 ---
 
@@ -413,3 +429,372 @@ console.log(useHooks()._engine._diagnostics);
 // Check pane state
 console.log(useMultiPaneApi().panes.value);
 ```
+
+---
+
+## 13. Known Roadblocks
+
+### 1. Vue `defineEmits` — use call-signature style, not tuple style
+
+When a component has many events, the tuple-style `defineEmits` overload breaks type inference and produces confusing errors.
+
+**Wrong:**
+```typescript
+const emit = defineEmits(['toggle-subtask', 'remove-subtask', 'update-title']);
+// All args are `any`, no IDE help
+```
+
+**Right:**
+```typescript
+const emit = defineEmits<{
+  (e: 'toggle-subtask', subtaskId: string): void;
+  (e: 'remove-subtask', subtaskId: string): void;
+  (e: 'update-title', title: string): void;
+}>();
+```
+
+Call-signature style gives full type inference for every argument and surfaces mismatches at compile time.
+
+---
+
+### 2. `toISOString()` breaks `<input type="date">` values near timezone boundaries
+
+`toISOString()` always returns UTC. If the user is west of UTC, a timestamp like midnight local time becomes the previous day in UTC — the date input shows the wrong date.
+
+**Wrong:**
+```typescript
+const value = new Date(ts).toISOString().slice(0, 10); // UTC — wrong for local dates
+```
+
+**Right:**
+```typescript
+function formatDateForInput(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+```
+
+Always use local getters (`getFullYear`, `getMonth`, `getDate`) when formatting dates for form inputs.
+
+---
+
+### 3. Querying the notifications table for dedupe is fragile — use a marker on the source record
+
+Checking whether a notification already exists by querying the notifications table (e.g. Dexie `notifications.where(...)`) is unreliable in cloud/sync contexts: the table may not be replicated, may be pruned, or may reflect a different device's state.
+
+**Wrong pattern:**
+```typescript
+const existing = await db.notifications.where('meta.taskId').equals(taskId).first();
+if (existing) return; // Fragile — table state varies per device/session
+```
+
+**Right pattern:**
+Store a sticky marker directly on the source record (`due_notified_at: number | null`). Gate the notification on that marker and never auto-clear it on updates.
+
+```typescript
+// In scanner:
+if (task.due_notified_at !== null) continue; // Already notified — skip
+
+// In updateTask service:
+// Preserve due_notified_at — never auto-clear it during updates
+due_notified_at: existing.due_notified_at ?? null,
+```
+
+The marker travels with the data, is LWW-safe, and works identically offline or online.
+
+---
+
+### 4. Tool runtime boundaries must match execution path (`client` / `server` / `hybrid`)
+
+Tool definitions can execute in different paths (foreground client stream, SSR background stream, server workflows). If runtime is not explicit and aligned with where handlers exist, tools will silently fail as “not registered” in one path.
+
+**Best practice:**
+- Set runtime explicitly during registration.
+- If a tool is `client` only, ensure background/server execution paths do not attempt to run it.
+- If a tool must run in background/SSR, provide a server handler and mark runtime accordingly.
+
+```typescript
+registry.registerTool(def, handler, { runtime: 'client' }); // explicit intent
+```
+
+Treat runtime as part of API contract, not optional metadata.
+
+---
+
+### 5. Persisting stream metadata is not enough — update in-memory UI state in real time
+
+A common failure mode is writing streamed metadata (tool calls, status, reasoning) to storage but not applying it to active in-memory message state. Users then only see updates after reload.
+
+**Best practice:**
+- Apply every stream update to live message refs first.
+- Persist in parallel for recovery.
+- Ensure `onUpdate`, `onComplete`, `onError`, and `onAbort` all update the same UI fields.
+
+```typescript
+subscriber.onUpdate = ({ status }) => {
+  message.toolCalls = normalizeToolCalls(status.tool_calls);
+  // persist asynchronously as needed
+};
+```
+
+Real-time UX must be driven by live state, not reload-time hydration.
+
+---
+
+### 6. Orama search integration needs strict guardrails (fallback + caps + rebuild strategy)
+
+Orama result shapes can vary, indexing can fail in edge runtimes, and rebuilding too often causes unnecessary cost.
+
+**Best practice:**
+- Use dynamic client-side import only.
+- Debounce query execution (~120ms).
+- Cap search limits (100–200 typical).
+- Rebuild index only when data signature changes (count + latest updated timestamp).
+- Always provide substring fallback when Orama throws or returns no hits.
+- Normalize hit id extraction defensively (`hit.document.id` and `hit.id`).
+
+```typescript
+if (oramaFailsOrNoHits) {
+  return substringFallback(query);
+}
+```
+
+Search should degrade gracefully, never to “no results because index failed.”
+
+
+---
+
+### 7. Tools registered in `.client.ts` plugins are invisible to server-side background streaming
+
+Background streaming jobs execute entirely server-side. A Nuxt plugin with `.client.ts` suffix (or `if (!process.client) return`) never runs during SSR — so any `useToolRegistry().register()` call inside it is never executed on the server. When the background stream handler tries `executeTool(name)`, the registry is empty and the tool is reported as "not registered on server."
+
+**Symptoms:**
+- `Tool "or3_tasks_*" is not registered on server.` error after page refresh
+- Tool calls work fine in foreground mode, fail silently or error in background mode
+
+**Best practice:**
+- If a tool only has a client-side handler (reads/writes Dexie, manipulates local state), mark it `runtime: 'client'` during registration.
+- Ensure the background job scheduler checks tool runtime flags and forces foreground streaming for any request containing `client`-only tools.
+- Never assume a foreground-working tool works in background/SSR mode — they have completely separate registries.
+
+```typescript
+// BAD: registerTaskTools() inside tasks-pane.client.ts — invisible to SSR
+export default defineNuxtPlugin(() => {
+    if (!process.client) return; // background jobs never reach this
+    registerTaskTools();
+});
+
+// GOOD: flag tools so the scheduler knows they require client execution
+registry.registerTool(def, handler, { runtime: 'client' });
+// scheduler then forces foreground mode for requests containing client-only tools
+```
+
+---
+
+### 8. OpenRouter SSE tool-call arguments can be cumulative snapshots, not incremental deltas
+
+Different providers stream tool-call `arguments` differently:
+- **Delta mode** (most providers): each chunk is an incremental fragment, must be concatenated.
+- **Cumulative snapshot mode** (e.g. MiniMax M2.5): each chunk is the full accumulated JSON string so far.
+
+Naively concatenating all chunks in cumulative mode produces doubled/corrupted JSON, breaking `JSON.parse()` and causing tool execution to fail silently.
+
+**Detection heuristic:** if `nextChunk.startsWith(previous)`, the provider is sending cumulative snapshots — replace rather than append.
+
+```typescript
+function mergeStreamedField(previous: string, nextChunk: string): string {
+    if (!nextChunk) return previous;
+    if (!previous) return nextChunk;
+    if (nextChunk.startsWith(previous)) return nextChunk; // cumulative snapshot
+    if (nextChunk === previous) return previous;          // exact duplicate
+    return previous + nextChunk;                          // standard delta
+}
+```
+
+Apply this to both `name` and `arguments` fields on every tool-call chunk. Without it, any cumulative provider produces silently corrupt tool call payloads that fail at execution time.
+
+---
+
+### 9. `reasoning_details` is an array — parsers that only read `[0]` silently drop reasoning
+
+OpenRouter's streaming format for chain-of-thought reasoning uses `choices[].delta.reasoning_details: Array<{ type, text?, summary? }>`. Some models (Kimi-k2.5, MiniMax M2.5) emit **multiple entries in a single chunk** — e.g. one `reasoning.text` entry and one `reasoning.summary` entry in the same delta.
+
+A parser that only processes `reasoning_details[0]` silently discards all subsequent entries, producing:
+- Missing or truncated thinking blocks in the UI
+- `[stream] empty delta append ignored` console warnings from downstream consumers receiving empty strings
+
+**Best practice:** always iterate the full array:
+
+```typescript
+const reasoningDetails = choice.delta.reasoning_details;
+if (Array.isArray(reasoningDetails)) {
+    for (const entry of reasoningDetails) {
+        const text = entry.text ?? entry.summary ?? '';
+        if (text) emit({ type: 'reasoning', content: text });
+    }
+}
+```
+
+This is in addition to `choice.delta.reasoning` (used by older/other providers). Both paths must be handled independently — they are not redundant.
+
+
+---
+
+### 7. Tools registered in `.client.ts` plugins are invisible to server-side background streaming
+
+Background streaming jobs execute entirely server-side. A Nuxt plugin with `.client.ts` suffix (or `if (!process.client) return`) never runs during SSR — so any `useToolRegistry().register()` call inside it is never executed on the server. When the background stream handler tries `executeTool(name)`, the registry is empty and the tool is reported as "not registered on server."
+
+**Symptoms:**
+- `Tool "or3_tasks_*" is not registered on server.` error after page refresh
+- Tool calls work fine in foreground mode, fail silently or error in background mode
+
+**Best practice:**
+- If a tool only has a client-side handler (reads/writes Dexie, manipulates local state), mark it `runtime: 'client'` during registration.
+- Ensure the background job scheduler checks tool runtime flags and forces foreground streaming for any request containing `client`-only tools.
+- Never assume a foreground-working tool works in background/SSR mode — they have completely separate registries.
+
+```typescript
+// BAD: registerTaskTools() inside tasks-pane.client.ts — invisible to SSR
+export default defineNuxtPlugin(() => {
+    if (!process.client) return; // background jobs never reach this
+    registerTaskTools();
+});
+
+// GOOD: flag tools so the scheduler knows they require client execution
+registry.registerTool(def, handler, { runtime: 'client' });
+// scheduler then forces foreground mode for requests containing client-only tools
+```
+
+---
+
+### 8. OpenRouter SSE tool-call arguments can be cumulative snapshots, not incremental deltas
+
+Different providers stream tool-call `arguments` differently:
+- **Delta mode** (most providers): each chunk is an incremental fragment, must be concatenated.
+- **Cumulative snapshot mode** (e.g. MiniMax M2.5): each chunk is the full accumulated JSON string so far.
+
+Naively concatenating all chunks in cumulative mode produces doubled/corrupted JSON, breaking `JSON.parse()` and causing tool execution to fail silently.
+
+**Detection heuristic:** if `nextChunk.startsWith(previous)`, the provider is sending cumulative snapshots — replace rather than append.
+
+```typescript
+function mergeStreamedField(previous: string, nextChunk: string): string {
+    if (!nextChunk) return previous;
+    if (!previous) return nextChunk;
+    if (nextChunk.startsWith(previous)) return nextChunk; // cumulative snapshot
+    if (nextChunk === previous) return previous;          // exact duplicate
+    return previous + nextChunk;                          // standard delta
+}
+```
+
+Apply this to both `name` and `arguments` fields on every tool-call chunk. Without it, any cumulative provider produces silently corrupt tool call payloads that fail at execution time.
+
+---
+
+### 9. `reasoning_details` is an array — parsers that only read `[0]` silently drop reasoning
+
+OpenRouter's streaming format for chain-of-thought reasoning uses `choices[].delta.reasoning_details: Array<{ type, text?, summary? }>`. Some models (Kimi-k2.5, MiniMax M2.5) emit **multiple entries in a single chunk** — e.g. one `reasoning.text` entry and one `reasoning.summary` entry in the same delta.
+
+A parser that only processes `reasoning_details[0]` silently discards all subsequent entries, producing:
+- Missing or truncated thinking blocks in the UI
+- `[stream] empty delta append ignored` console warnings from downstream consumers receiving empty strings
+
+**Best practice:** always iterate the full array:
+
+```typescript
+const reasoningDetails = choice.delta.reasoning_details;
+if (Array.isArray(reasoningDetails)) {
+    for (const entry of reasoningDetails) {
+        const text = entry.text ?? entry.summary ?? '';
+        if (text) emit({ type: 'reasoning', content: text });
+    }
+}
+```
+
+This is in addition to `choice.delta.reasoning` (used by older/other providers). Both paths must be handled independently — they are not redundant.
+
+
+---
+
+### 10. Custom pane apps must implement pane-aware border logic themselves
+
+When a custom pane app (registered via `multiPaneApi.registerAppType()`) is rendered in split/multi-pane mode, the host layout does NOT automatically apply frame borders. Each pane component is responsible for adding its own top/right border based on its position in the pane layout.
+
+Without this, panes in split mode look frameless/floating — no visible separation from adjacent panes.
+
+**Root cause pattern:**
+- Single pane: no borders needed.
+- Last pane in a multi-pane layout: no right border (nothing to the right).
+- Non-last pane in a multi-pane layout: needs `border-t` + `border-r` to form the frame.
+
+**Fix — use `getGlobalMultiPaneApi()` to detect position:**
+
+```typescript
+// In your pane component
+const props = defineProps<{ paneId?: string }>();
+
+const multiPaneApi = getGlobalMultiPaneApi();
+const isSinglePane = computed(() => multiPaneApi.panes.value.length <= 1);
+const isLastPane = computed(() => {
+    const panes = multiPaneApi.panes.value;
+    return panes[panes.length - 1]?.id === props.paneId;
+});
+
+const paneFrameClass = computed(() => {
+    if (isSinglePane.value || isLastPane.value) return '';
+    return 'border-t border-r border-[var(--md-outline-variant)]';
+});
+```
+
+```html
+<template>
+    <div :class="['flex flex-col h-full', paneFrameClass]">
+        <!-- pane content -->
+    </div>
+</template>
+```
+
+Always accept `paneId` as a prop in custom pane components — the multi-pane host passes it down and it is needed for position detection.
+
+
+---
+
+### 10. Custom pane apps must implement pane-aware border logic themselves
+
+When a custom pane app (registered via `multiPaneApi.registerAppType()`) is rendered in split/multi-pane mode, the host layout does NOT automatically apply frame borders. Each pane component is responsible for adding its own top/right border based on its position in the pane layout.
+
+Without this, panes in split mode look frameless/floating — no visible separation from adjacent panes.
+
+**Root cause pattern:**
+- Single pane: no borders needed.
+- Last pane in a multi-pane layout: no right border (nothing to the right).
+- Non-last pane in a multi-pane layout: needs `border-t` + `border-r` to form the frame.
+
+**Fix — use `getGlobalMultiPaneApi()` to detect position:**
+
+```typescript
+// In your pane component
+const props = defineProps<{ paneId?: string }>();
+
+const multiPaneApi = getGlobalMultiPaneApi();
+const isSinglePane = computed(() => multiPaneApi.panes.value.length <= 1);
+const isLastPane = computed(() => {
+    const panes = multiPaneApi.panes.value;
+    return panes[panes.length - 1]?.id === props.paneId;
+});
+
+const paneFrameClass = computed(() => {
+    if (isSinglePane.value || isLastPane.value) return '';
+    return 'border-t border-r border-[var(--md-outline-variant)]';
+});
+```
+
+```html
+<template>
+    <div :class="['flex flex-col h-full', paneFrameClass]">
+        <!-- pane content -->
+    </div>
+</template>
+```
+
+Always accept `paneId` as a prop in custom pane components — the multi-pane host passes it down and it is needed for position detection.

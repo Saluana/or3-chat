@@ -1,7 +1,7 @@
 import { createError, defineEventHandler, getQuery } from 'h3';
 import { z } from 'zod';
 import { requireCan } from '../../auth/can';
-import { requirePluginAccess } from '../../plugins/access/require-plugin-access';
+import { requirePluginAccess } from '../../utils/plugins/access/require-plugin-access';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 
 const QuerySchema = z.object({

@@ -48,7 +48,7 @@ export default {
                     basic: 'border-[var(--md-border-width)] shadow-none! drop-shadow-none!  hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-[color:var(--md-border-color)] text-[var(--md-on-surface)]',
                     popover:
                         'flex items-center! hover:bg-[var(--md-primary)]/5 active:bg-[var(--md-primary)]/10 justify-start!',
-                    ghost: 'font-base border-none shadow-none',
+                    ghost: 'font-base border-none shadow-none! [--tw-shadow:none] items-center justify-center',
                     outline:
                         'border-[color:var(--md-border-color)] border-[length:var(--md-border-width)] ring-0! hover:shadow hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
                 },
@@ -120,6 +120,35 @@ export default {
                     sm: { base: 'h-[32px] text-[12px]!' },
                     md: { base: 'h-[40px] text-[14px]!' },
                     lg: { base: 'h-[48px] text-[16px]!' },
+                },
+            },
+        },
+        checkbox: {
+            slots: {
+                base: 'rounded-[var(--md-border-radius)] ring-0! border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
+            },
+            variants: {
+                size: {
+                    xs: {
+                        base: 'size-[24px]',
+                        container: 'h-[26px]',
+                    },
+                    sm: {
+                        base: 'size-[30px]',
+                        container: 'h-[32px]',
+                    },
+                    md: {
+                        base: 'size-[38px]',
+                        container: 'h-[40px]',
+                    },
+                    lg: {
+                        base: 'size-[46px]',
+                        container: 'h-[48px]',
+                    },
+                    xl: {
+                        base: 'size-[54px]',
+                        container: 'h-[56px]',
+                    },
                 },
             },
         },

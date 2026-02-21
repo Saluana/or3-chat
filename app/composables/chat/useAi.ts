@@ -708,6 +708,36 @@ export function useChat(
 
     /**
      * Purpose:
+     * Normalizes background tool call payloads into UI-safe tool call state.
+     *
+     * Behavior:
+     * - Converts server `skipped` status into UI `error` for existing indicator states
+     * - Preserves args/result/error fields for inline tool details
+     */
+    function normalizeBackgroundToolCalls(
+        calls: BackgroundJobStatus['tool_calls']
+    ): ToolCallInfo[] | undefined {
+        if (!Array.isArray(calls)) return undefined;
+        return calls.map((call) => {
+            const mappedStatus =
+                call.status === 'skipped' ? 'error' : call.status;
+            return {
+                id: call.id,
+                name: call.name,
+                status: mappedStatus,
+                args: call.args,
+                result: call.result,
+                error:
+                    mappedStatus === 'error'
+                        ? call.error ||
+                          `Tool "${call.name}" is not available in background mode.`
+                        : call.error,
+            };
+        });
+    }
+
+    /**
+     * Purpose:
      * Clears background job subscriptions and optionally stops tracking.
      *
      * Behavior:
@@ -785,40 +815,67 @@ export function useChat(
         if (params.isReattach && tailAssistant.value?.id === params.messageId) {
             // Seed stream accumulator with current content
             streamAcc.reset();
-            if (params.initialContent) {
+            if (
+                typeof params.initialContent === 'string' &&
+                params.initialContent.length > 0
+            ) {
                 streamAcc.append(params.initialContent, { kind: 'text' });
             }
         }
         if (!attachedBackgroundJobs.has(params.jobId)) {
             const subscriber: BackgroundJobSubscriber = {
-                onUpdate: ({ content, delta }) => {
+                onUpdate: ({ content, delta, status }) => {
                     if (detached.value) {
                         return;
                     }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
-                    const currentLen = target.text.length;
-                    // Only update if server has MORE content than current UI
-                    if (content.length < currentLen) {
-                        return;
+
+                    const nextToolCalls = normalizeBackgroundToolCalls(
+                        status.tool_calls
+                    );
+                    const hasToolUpdate = nextToolCalls !== undefined;
+                    if (hasToolUpdate) {
+                        target.toolCalls = nextToolCalls;
                     }
-                    if (target.pending && delta) target.pending = false;
-                    target.text = content;
+
+                    const currentLen = target.text.length;
+                    const contentChanged =
+                        content.length >= currentLen && content !== target.text;
+
+                    if (contentChanged) {
+                        target.text = content;
+                    }
+
+                    if (target.pending && (delta || hasToolUpdate || contentChanged)) {
+                        target.pending = false;
+                    }
+
                     if (tailAssistant.value?.id === params.messageId) {
-                        // Replace accumulator with full content
-                        streamAcc.reset();
-                        streamAcc.append(content, { kind: 'text' });
-                    } else if (delta) {
+                        if (contentChanged) {
+                            // Replace accumulator with full content
+                            streamAcc.reset();
+                            if (content.length > 0) {
+                                streamAcc.append(content, { kind: 'text' });
+                            }
+                        }
+                    } else if (delta || hasToolUpdate || contentChanged) {
                         messages.value = [...messages.value];
                     }
                 },
-                onComplete: ({ content }) => {
+                onComplete: ({ content, status }) => {
                     if (detached.value) {
                         return;
                     }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
                     target.text = content;
+                    const nextToolCalls = normalizeBackgroundToolCalls(
+                        status.tool_calls
+                    );
+                    if (nextToolCalls) {
+                        target.toolCalls = nextToolCalls;
+                    }
                     target.pending = false;
                     if (tailAssistant.value?.id === params.messageId) {
                         // Ensure stream accumulator has full content before finalizing
@@ -843,6 +900,12 @@ export function useChat(
                     }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
+                    const nextToolCalls = normalizeBackgroundToolCalls(
+                        status.tool_calls
+                    );
+                    if (nextToolCalls) {
+                        target.toolCalls = nextToolCalls;
+                    }
                     target.pending = false;
                     target.error = status.error || 'Background response failed';
                     if (tailAssistant.value?.id !== params.messageId) {
@@ -858,12 +921,18 @@ export function useChat(
                         backgroundJobInfo.value = null;
                     }
                 },
-                onAbort: () => {
+                onAbort: ({ status }) => {
                     if (detached.value) {
                         return;
                     }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
+                    const nextToolCalls = normalizeBackgroundToolCalls(
+                        status.tool_calls
+                    );
+                    if (nextToolCalls) {
+                        target.toolCalls = nextToolCalls;
+                    }
                     target.pending = false;
                     target.error = 'stopped';
                     if (tailAssistant.value?.id !== params.messageId) {
@@ -1383,6 +1452,7 @@ export function useChat(
 
             const allowBackgroundStreaming =
                 backgroundStreamingAllowed.value &&
+                enabledToolDefs.length === 0 &&
                 modalities.length === 1 &&
                 modalities[0] === 'text';
 
