@@ -27,8 +27,9 @@
         </div>
 
         <!-- AI fallback notice -->
-        <div v-if="fallbackNotice" class="px-3 py-1 text-xs text-[var(--md-on-surface)] opacity-60 bg-[var(--md-surface-container-high)] border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]">
-          {{ fallbackNotice }}
+        <div v-if="fallbackNotice" class="mx-4 mt-3 px-3 py-2 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface-container-high)]/70 backdrop-blur-sm flex items-center gap-2 text-xs text-[var(--md-on-surface)] opacity-80">
+          <UIcon :name="iconSparkles" class="w-3.5 h-3.5 shrink-0 text-[var(--md-primary)]" />
+          <span>{{ fallbackNotice }}</span>
         </div>
 
         <!-- Task list -->
@@ -139,6 +140,7 @@ const iconSortHardest = useIcon('ui.flame');
 const iconSortEasiest = useIcon('ui.leaf');
 const iconListTodo = useIcon('ui.list.todo');
 const iconLoading = useIcon('ui.loading');
+const iconSparkles = useIcon('ui.sparkles');
 const isAiBusy = computed(() => Boolean(breakdownLoadingTaskId.value) || isSortLoading.value);
 const aiStatusText = computed(() => {
   if (breakdownLoadingTaskId.value) return 'Breaking task into steps…';

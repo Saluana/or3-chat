@@ -8,13 +8,14 @@
       <UCheckbox :model-value="task.status === 'done'" :ui="{ base: 'w-4 h-4 transition-colors' }" class="shrink-0 self-center" @update:model-value="$emit('toggle-done', task.id, $event === true)" />
       <div class="flex-1 min-w-0 flex flex-col">
         <UInput
-          :model-value="task.title"
+          v-model="titleDraft"
           size="sm"
           variant="none"
           :ui="{ base: 'ring-0 shadow-none border-0 font-medium text-[color:var(--md-on-surface)] transition-colors p-0' }"
           class="w-full bg-transparent"
           :class="task.status === 'done' ? 'line-through text-[color:var(--md-on-surface-variant)]' : ''"
-          @update:model-value="$emit('update-title', task.id, String($event))"
+          @blur="commitTitle"
+          @keyup.enter="$event.target.blur()"
         />
         <!-- Inline metadata (Due Date) -->
         <div v-if="dueDateValue" class="flex items-center gap-1.5 mt-0.5 text-[10px] text-[var(--md-primary)] opacity-80">
@@ -24,7 +25,7 @@
       </div>
       <UBadge v-if="task.label && task.label !== 'uncategorized'" color="neutral" variant="soft" size="sm" class="shrink-0 hidden sm:inline-flex self-center">{{ task.label }}</UBadge>
       <!-- Actions -->
-      <div class="flex items-center gap-0.5 shrink-0 self-center opacity-0 group-hover/card:opacity-100 focus-within:opacity-100 transition-opacity">
+      <div class="flex items-center gap-0.5 shrink-0 self-center opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 focus-within:opacity-100 transition-opacity">
         <!-- Due date picker -->
         <UTooltip :delay-duration="0" text="Set due date">
           <UButton
@@ -34,13 +35,12 @@
             :icon="iconCalendar"
             aria-label="Set due date"
             class="relative overflow-hidden"
-            @click="dateInputRef?.showPicker ? dateInputRef.showPicker() : dateInputRef?.click()"
           >
             <input
               ref="dateInputRef"
               type="date"
               :value="dueDateValue"
-              class="sr-only"
+              class="absolute inset-0 opacity-0 cursor-pointer"
               tabindex="-1"
               @change="$emit('reschedule', task.id, ($event.target as HTMLInputElement).value)"
             />
@@ -87,7 +87,7 @@
             aria-label="Toggle subtask done"
             @click="$emit('toggle-subtask', task.id, subtask.id)"
           >
-            <UIcon :name="iconChevronRight" class="w-3 h-3" />
+            <UIcon :name="subtask.done ? iconCheckboxOff : iconCheckboxOn" class="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
@@ -117,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useIcon } from '~/composables/useIcon';
 import type { TaskItem } from '../types';
 
@@ -142,13 +142,30 @@ const emit = defineEmits<{
   (e: 'remove-subtask', taskId: string, subtaskId: string): void;
 }>();
 
+const titleDraft = ref(props.task.title);
+watch(() => props.task.title, (newVal) => {
+  if (titleDraft.value !== newVal) {
+    titleDraft.value = newVal;
+  }
+});
+
+function commitTitle() {
+  const val = titleDraft.value.trim();
+  if (val && val !== props.task.title) {
+    emit('update-title', props.task.id, val);
+  } else {
+    titleDraft.value = props.task.title;
+  }
+}
+
 const subtaskDraft = ref('');
 const dateInputRef = ref<HTMLInputElement | null>(null);
 const iconCalendar = useIcon('ui.calendar');
 const iconSparkles = useIcon('ui.sparkles');
 const iconChevronUp = useIcon('ui.chevron.up');
 const iconChevronDown = useIcon('ui.chevron.down');
-const iconChevronRight = useIcon('ui.chevron.right');
+const iconCheckboxOn = useIcon('ui.checkbox.on');
+const iconCheckboxOff = useIcon('ui.checkbox.off');
 const iconPlus = useIcon('ui.plus');
 const iconTrash = useIcon('ui.trash');
 const iconClose = useIcon('ui.close');
