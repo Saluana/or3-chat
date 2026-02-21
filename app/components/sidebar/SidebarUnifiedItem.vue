@@ -17,7 +17,7 @@
     >
         <!-- Icon -->
         <UIcon
-            :name="item.type === 'thread' ? iconChat : iconNote"
+            :name="item.icon ?? (item.type === 'thread' ? iconChat : iconNote)"
             class="w-[18px] h-[18px] shrink-0 transition-colors sb-btn-icon"
             :class="{
                 'text-[color:var(--md-primary)] sb-btn-icon-active': active,

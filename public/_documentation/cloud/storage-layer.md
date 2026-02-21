@@ -97,6 +97,42 @@ See the dedicated setup guide:
 
 - [cloud/provider-s3](./provider-s3)
 
+### Provider registry API (client/runtime wiring)
+
+Storage providers are selected through the storage provider registry:
+
+- `registerStorageProvider({ id, order?, create })`
+- `unregisterStorageProvider(id)`
+- `useStorageProviders()` (reactive sorted list)
+- `listStorageProviderIds()` (snapshot IDs)
+- `getActiveStorageProvider()` (returns active provider instance or `null`)
+
+`getActiveStorageProvider()` resolves the provider ID from `runtimeConfig.public.storage.provider` (fallback: Convex), then memoizes the instance per provider ID.
+
+Typical gateway wiring pattern (used by `app/plugins/storage-transfer.client.ts`):
+
+```ts
+import { registerStorageProvider, useStorageProviders } from '~/core/storage/provider-registry';
+import { createGatewayStorageProvider } from '~/core/storage/providers/gateway-storage-provider';
+
+export default defineNuxtPlugin(() => {
+    const providerId = useRuntimeConfig().public.storage?.provider;
+    if (!providerId) return;
+
+    const exists = useStorageProviders().value.some((item) => item.id === providerId);
+    if (exists) return;
+
+    registerStorageProvider({
+        id: providerId,
+        create: () =>
+            createGatewayStorageProvider({
+                id: providerId,
+                displayName: `Gateway (${providerId})`,
+            }),
+    });
+});
+```
+
 ### Provider Comparison
 
 | Provider | Best For | Setup Complexity | Cost |

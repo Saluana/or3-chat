@@ -170,6 +170,26 @@ The directive walks DOM ancestry and matches these containers:
 - `#app-header` or `[data-context="header"]`
 - fallback: `global`
 
+For manual bindings (`v-theme="{ context: '...' }"`), the known context set is:
+
+- `chat`
+- `sidebar`
+- `dashboard`
+- `header`
+- `global`
+- `settings`
+- `shell`
+- `message`
+- `modal`
+- `document`
+- `image-viewer`
+- `images`
+- `prompt`
+- `docs`
+- `ui`
+
+These values come from the shared context list used by the theme runtime (`app/theme/_shared/contexts.ts`).
+
 ### Attributes added
 
 The directive sets `data-v-theme` and may add `data-id`,

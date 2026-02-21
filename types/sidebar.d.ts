@@ -72,6 +72,7 @@ export interface UnifiedSidebarItem {
     type: 'thread' | 'document';
     title: string;
     updatedAt: number; // timestamp in seconds
+    icon?: string;         // optional icon override (e.g. for plugin items)
     forked?: boolean;      // thread only
     postType?: string;     // document only
 }

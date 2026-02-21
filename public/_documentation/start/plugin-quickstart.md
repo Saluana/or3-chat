@@ -367,20 +367,23 @@ export default defineNuxtPlugin(() => {
         a: number;
         b: number;
     }>({
-        name: 'calculate',
-        description: 'Perform basic math operations',
-        parameters: {
-            type: 'object',
-            properties: {
-                operation: {
-                    type: 'string',
-                    enum: ['add', 'subtract', 'multiply', 'divide'],
-                    description: 'The math operation to perform',
+        type: 'function',
+        function: {
+            name: 'calculate',
+            description: 'Perform basic math operations',
+            parameters: {
+                type: 'object',
+                properties: {
+                    operation: {
+                        type: 'string',
+                        enum: ['add', 'subtract', 'multiply', 'divide'],
+                        description: 'The math operation to perform',
+                    },
+                    a: { type: 'number', description: 'First number' },
+                    b: { type: 'number', description: 'Second number' },
                 },
-                a: { type: 'number', description: 'First number' },
-                b: { type: 'number', description: 'Second number' },
+                required: ['operation', 'a', 'b'],
             },
-            required: ['operation', 'a', 'b'],
         },
         ui: {
             label: 'Calculator',
@@ -389,7 +392,7 @@ export default defineNuxtPlugin(() => {
         },
     });
 
-    const unregister = registry.register(
+    registry.registerTool(
         calculatorTool,
         async ({ operation, a, b }) => {
             switch (operation) {
@@ -412,7 +415,7 @@ export default defineNuxtPlugin(() => {
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
             console.log('[Calculator] Cleaning up tool');
-            unregister();
+            registry.unregisterTool(calculatorTool.function.name);
         });
     }
 });
@@ -421,9 +424,9 @@ export default defineNuxtPlugin(() => {
 **Key concepts**:
 
 -   `defineTool<T>()`: Helper for TypeScript type inference on handler arguments
--   `name`: Unique tool identifier (sent to AI)
--   `description`: Tells the AI when to use this tool
--   `parameters`: JSON Schema defining the tool's arguments
+-   `function.name`: Unique tool identifier (sent to AI)
+-   `function.description`: Tells the AI when to use this tool
+-   `function.parameters`: JSON Schema defining the tool's arguments
 -   `ui`: Optional display metadata (label, icon, etc.)
 -   `handler`: Async function that executes the tool
 
@@ -440,22 +443,25 @@ export default defineNuxtPlugin(() => {
         city: string;
         units?: 'celsius' | 'fahrenheit';
     }>({
-        name: 'get_weather',
-        description: 'Get current weather conditions for a city',
-        parameters: {
-            type: 'object',
-            properties: {
-                city: {
-                    type: 'string',
-                    description: 'City name (e.g., "San Francisco")',
+        type: 'function',
+        function: {
+            name: 'get_weather',
+            description: 'Get current weather conditions for a city',
+            parameters: {
+                type: 'object',
+                properties: {
+                    city: {
+                        type: 'string',
+                        description: 'City name (e.g., "San Francisco")',
+                    },
+                    units: {
+                        type: 'string',
+                        enum: ['celsius', 'fahrenheit'],
+                        description: 'Temperature units',
+                    },
                 },
-                units: {
-                    type: 'string',
-                    enum: ['celsius', 'fahrenheit'],
-                    description: 'Temperature units',
-                },
+                required: ['city'],
             },
-            required: ['city'],
         },
         ui: {
             label: 'Weather Lookup',
@@ -464,7 +470,7 @@ export default defineNuxtPlugin(() => {
         },
     });
 
-    const unregister = registry.register(
+    registry.registerTool(
         weatherTool,
         async ({ city, units = 'celsius' }) => {
             try {
@@ -492,7 +498,9 @@ export default defineNuxtPlugin(() => {
     );
 
     if (import.meta.hot) {
-        import.meta.hot.dispose(unregister);
+        import.meta.hot.dispose(() => {
+            registry.unregisterTool(weatherTool.function.name);
+        });
     }
 });
 ```
@@ -520,32 +528,30 @@ import { useToolRegistry, defineTool } from '~/utils/chat/tools-public';
 
 export default defineNuxtPlugin(() => {
     const registry = useToolRegistry();
-    const cleanups: Array<() => void> = [];
+    const toolNames: string[] = [];
 
     // Tool 1: Search documents
     const searchTool = defineTool({
         /* ... */
     });
-    cleanups.push(
-        registry.register(searchTool, async (args) => {
-            // Search implementation
-        })
-    );
+    registry.registerTool(searchTool, async (args) => {
+        // Search implementation
+    });
+    toolNames.push(searchTool.function.name);
 
     // Tool 2: Create document
     const createTool = defineTool({
         /* ... */
     });
-    cleanups.push(
-        registry.register(createTool, async (args) => {
-            // Create implementation
-        })
-    );
+    registry.registerTool(createTool, async (args) => {
+        // Create implementation
+    });
+    toolNames.push(createTool.function.name);
 
     // Cleanup all
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
-            cleanups.forEach((fn) => fn());
+            toolNames.forEach((name) => registry.unregisterTool(name));
         });
     }
 });
@@ -557,10 +563,14 @@ export default defineNuxtPlugin(() => {
 
 ```typescript
 // Good - AI understands when to use it
-description: 'Get current weather conditions for any city worldwide';
+function: {
+    description: 'Get current weather conditions for any city worldwide';
+}
 
 // Bad - vague, AI won't know when to use
-description: 'Weather function';
+function: {
+    description: 'Weather function';
+}
 ```
 
 **2. Validate arguments**
@@ -623,7 +633,7 @@ ui: {
 **Console debugging**:
 
 ```typescript
-registry.register(tool, async (args) => {
+registry.registerTool(tool, async (args) => {
     console.log('[My Tool] Called with:', args);
     const result = await doWork(args);
     console.log('[My Tool] Returning:', result);
@@ -722,14 +732,17 @@ export default defineNuxtPlugin(() => {
     // 5. AI Tool
     const registry = useToolRegistry();
     const myTool = defineTool<{ query: string }>({
-        name: 'search_plugin_data',
-        description: 'Search within plugin data',
-        parameters: {
-            type: 'object',
-            properties: {
-                query: { type: 'string', description: 'Search query' },
+        type: 'function',
+        function: {
+            name: 'search_plugin_data',
+            description: 'Search within plugin data',
+            parameters: {
+                type: 'object',
+                properties: {
+                    query: { type: 'string', description: 'Search query' },
+                },
+                required: ['query'],
             },
-            required: ['query'],
         },
         ui: {
             label: 'Plugin Search',
@@ -737,12 +750,11 @@ export default defineNuxtPlugin(() => {
         },
     });
 
-    cleanups.push(
-        registry.register(myTool, async ({ query }) => {
-            // Search implementation
-            return { results: [], query };
-        })
-    );
+    registry.registerTool(myTool, async ({ query }) => {
+        // Search implementation
+        return { results: [], query };
+    });
+    cleanups.push(() => registry.unregisterTool(myTool.function.name));
 
     // HMR cleanup
     if (import.meta.hot) {

@@ -1,103 +1,65 @@
 <template>
-  <div class="flex flex-col gap-4 p-4">
+  <div class="flex flex-col h-full min-h-0 px-2">
     <!-- Create form -->
-    <div class="flex flex-col gap-3">
-      <div class="flex gap-2">
-        <UInput v-model="newListTitle" size="sm" placeholder="New list…" class="flex-1" @keyup.enter="createList" />
-        <UButton size="sm" class="theme-btn" @click="createList">Create</UButton>
-      </div>
-      <UInput
+    <div class="flex flex-col gap-3 mt-2 mb-2 px-1 mr-2.5">
+            <UInput
         v-model="searchQuery"
-        size="sm"
+        size="md"
         :icon="iconSearch"
         placeholder="Search lists and tasks..."
         class="w-full"
       />
-    </div>
-
-    <!-- Empty state -->
-    <p v-if="visibleItems.length === 0" class="text-center text-sm text-[var(--md-on-surface)] opacity-40 py-8">
-      {{ hasSearchQuery ? 'No matching task lists.' : 'No task lists yet.' }}
-    </p>
-
-    <!-- List items -->
-    <div class="flex flex-col gap-1">
-      <div
-        v-for="post in visibleItems"
-        :key="post.id"
-        class="group relative w-full flex items-center gap-3 px-3 py-2.5 transition-colors rounded-[var(--md-border-radius)] cursor-pointer text-[color:var(--md-on-surface)] bg-[var(--md-surface)]/40 backdrop-blur-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]/30 hover:bg-[var(--md-surface-hover)]/60 hover:border-[color:var(--md-border-color)]/50"
-        role="button"
-        tabindex="0"
-        @click="editingListId !== post.id && openList(post.id)"
-        @keydown.enter="editingListId !== post.id && openList(post.id)"
-      >
-        <!-- Inline rename mode -->
-        <template v-if="editingListId === post.id">
-          <UInput
-            v-model="editingTitle"
-            size="sm"
-            class="min-w-0 flex-1"
-            autofocus
-            @click.stop
-            @keyup.enter="saveRename(post.id)"
-            @keyup.esc="cancelRename"
-          />
-          <UButton size="xs" variant="solid" color="primary" :icon="iconCheck" aria-label="Save" :square="true" class="theme-btn" @click.stop="saveRename(post.id)" />
-          <UButton size="xs" variant="outline" color="neutral" :icon="iconClose" aria-label="Cancel" :square="true" class="theme-btn" @click.stop="cancelRename" />
-        </template>
-
-        <!-- Normal mode -->
-        <template v-else>
-          <UIcon :name="iconListChecks" class="w-5 h-5 shrink-0 text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-primary)] transition-colors" />
-          <span class="flex-1 min-w-0 truncate text-sm font-medium leading-tight text-[color:var(--md-on-surface)]">{{ post.title }}</span>
-          <span class="shrink-0 text-xs tabular-nums opacity-50 font-medium transition-opacity group-hover:opacity-0 text-[color:var(--md-on-surface-variant)]">{{ taskCount(post.meta) }} tasks</span>
-
-          <!-- Three-dot hover action -->
-          <div class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
-              <UButton
-                variant="ghost"
-                color="primary"
-                size="xs"
-                :square="true"
-                :icon="iconMore"
-                aria-label="List actions"
-                class="flex items-center justify-center shadow-none"
-                v-bind="triggerOverrides"
-                @click.stop
-                @keydown="handlePopoverTriggerKey"
-              />
-              <template #content>
-                <div class="p-1 w-36 space-y-1">
-                  <UButton
-                    color="neutral"
-                    variant="popover"
-                    size="sm"
-                    :icon="iconEdit"
-                    class="w-full justify-start"
-                    @click="startRename(post.id, post.title || 'Untitled Tasks')"
-                  >
-                    Rename
-                  </UButton>
-                  <UButton
-                    color="neutral"
-                    variant="popover"
-                    size="sm"
-                    :icon="iconTrash"
-                    class="w-full justify-start text-[var(--md-error)] hover:bg-[var(--md-error)]/10"
-                    @click="removeList(post.id)"
-                  >
-                    Delete
-                  </UButton>
-                </div>
-              </template>
-            </UPopover>
-          </div>
-        </template>
+      <div class="flex gap-2">
+        <UInput v-model="newListTitle" size="md" placeholder="New list…" class="flex-1" @keyup.enter="createList" />
+        <UButton size="md" class="theme-btn" @click="createList">Create</UButton>
       </div>
     </div>
 
-    <p v-if="error" class="px-1 text-xs text-[var(--md-error)]">{{ error }}</p>
+    <!-- Single scroll container for all content -->
+    <ClientOnly>
+      <Or3Scroll
+        ref="scrollAreaRef"
+        :items="combinedItems"
+        :item-key="(item) => item.key"
+        :estimate-height="40"
+        :overscan="240"
+        :maintain-bottom="false"
+        class="flex-1 min-h-0 sidebar-scroll"
+      >
+        <template #default="{ item }">
+          <!-- Empty State -->
+          <p v-if="item.type === 'empty-state'" class="text-center text-sm text-(--md-on-surface) opacity-40 py-8">
+            {{ hasSearchQuery ? 'No matching task lists.' : 'No task lists yet.' }}
+          </p>
+
+          <!-- Time Group Header -->
+          <SidebarGroupHeader
+            v-else-if="item.type === 'time-group-header'"
+            class="mt-3 time-group-header"
+            :label="item.label"
+            :collapsed="collapsedGroups.has(item.groupKey)"
+            @toggle="toggleGroup(item.groupKey)"
+          />
+
+          <!-- Unified Item -->
+          <SidebarUnifiedItem
+            v-else-if="item.type === 'time-group-item'"
+            :item="item.item"
+            :active="activeListId === item.item.id"
+            :time-display="formatTimeDisplay(item.item.updatedAt, item.groupKey)"
+            :class="[
+              'mb-0.5',
+              collapsingGroups.has(item.groupKey) && 'is-exiting',
+            ]"
+            @select="() => openList(item.item.id)"
+            @rename="() => startRename(item.item.id, item.item.title || 'Untitled Tasks')"
+            @delete="() => removeList(item.item.id)"
+          />
+        </template>
+      </Or3Scroll>
+    </ClientOnly>
+
+    <p v-if="error" class="px-1 text-xs text-(--md-error)">{{ error }}</p>
 
     <!-- Delete confirm modal -->
     <UModal
@@ -115,20 +77,49 @@
         <UButton color="error" class="theme-btn" @click="confirmDeleteList">Delete</UButton>
       </template>
     </UModal>
+
+    <!-- Rename Modal -->
+    <UModal
+      v-model:open="showRenameModal"
+      title="Rename task list"
+      :ui="{ footer: 'justify-end' }"
+      class="border-(--md-border-width)"
+    >
+      <template #body>
+        <UInput
+          v-model="editingTitle"
+          autofocus
+          placeholder="List name"
+          @keyup.enter="saveRename"
+        />
+      </template>
+      <template #footer>
+        <UButton variant="ghost" class="theme-btn" @click="cancelRename">Cancel</UButton>
+        <UButton color="primary" class="theme-btn" @click="saveRename">Save</UButton>
+      </template>
+    </UModal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, reactive, onUnmounted } from 'vue';
 import { useSidebarMultiPane } from '~/composables/sidebar/useSidebarEnvironment';
 import { usePostsList } from '~/composables/posts/usePostsList';
 import { useIcon } from '~/composables/useIcon';
-import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { TASK_LIST_POST_TYPE } from '../types';
 import { useTaskListService } from '../composables/useTaskListService';
 import { useTaskListSearch } from '../composables/useTaskListSearch';
+import { Or3Scroll, type Or3ScrollRef } from 'or3-scroll';
+import SidebarGroupHeader from '~/components/sidebar/SidebarGroupHeader.vue';
+import SidebarUnifiedItem from '~/components/sidebar/SidebarUnifiedItem.vue';
+import {
+  computeTimeGroup,
+  getTimeGroupLabel,
+  formatTimeDisplay,
+  type TimeGroup,
+} from '~/utils/sidebar/sidebarTimeUtils';
+import type { UnifiedSidebarItem } from '~/types/sidebar';
 
 const multiPane = useSidebarMultiPane();
 const service = useTaskListService();
@@ -145,36 +136,112 @@ const hasSearchQuery = computed(() => searchQuery.value.trim().length > 0);
 const visibleItems = computed(() => searchResults.value);
 
 const iconSearch = useIcon('ui.search');
-const iconCheck = useIcon('ui.check');
-const iconClose = useIcon('ui.close');
-const iconListChecks = useIcon('ui.list.checks');
-const iconMore = useIcon('ui.more');
-const iconEdit = useIcon('ui.edit');
-const iconTrash = useIcon('ui.trash');
-const { handlePopoverTriggerKey } = usePopoverKeyboard();
+const iconTaskList = useIcon('ui.tasklist');
 
 const showDeleteModal = ref(false);
 const listToDelete = ref<string | null>(null);
+const showRenameModal = ref(false);
 
 const deleteListModalProps = createSidebarModalProps('sidebar.delete-task-list', {
   ui: { footer: 'justify-end' },
   class: 'border-[var(--md-border-width)]',
 });
 
-const triggerOverrides = useThemeOverrides({
-  component: 'button',
-  context: 'sidebar',
-  identifier: 'sidebar.unified-item.trigger',
-  isNuxtUI: true,
+const scrollAreaRef = ref<Or3ScrollRef | null>(null);
+
+// Time grouping state
+const collapsedGroups = reactive(new Set<string>());
+const collapsingGroups = reactive(new Set<string>());
+const pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
+const COLLAPSE_ANIMATION_DURATION = 200;
+
+function toggleGroup(groupKey: string) {
+  if (collapsedGroups.has(groupKey)) {
+    collapsedGroups.delete(groupKey);
+  } else {
+    collapsingGroups.add(groupKey);
+    const timeoutId = setTimeout(() => {
+      collapsingGroups.delete(groupKey);
+      collapsedGroups.add(groupKey);
+      pendingTimeouts.delete(timeoutId);
+    }, COLLAPSE_ANIMATION_DURATION);
+    pendingTimeouts.add(timeoutId);
+  }
+}
+
+// Group items by time
+const groupedItems = computed(() => {
+  const groups = new Map<TimeGroup, UnifiedSidebarItem[]>();
+
+  for (const item of visibleItems.value) {
+    const unifiedItem: UnifiedSidebarItem = {
+      id: item.id,
+      type: 'document', // Use document type for unified item styling
+      title: item.title ?? 'Untitled',
+      updatedAt: item.updated_at ?? 0,
+      icon: iconTaskList.value,
+    };
+    const groupKey = computeTimeGroup(unifiedItem.updatedAt);
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, []);
+    }
+    groups.get(groupKey)!.push(unifiedItem);
+  }
+
+  return groups;
+});
+
+type SidebarCombinedItem =
+  | { key: string; type: 'empty-state' }
+  | { key: string; type: 'time-group-header'; label: string; groupKey: TimeGroup }
+  | { key: string; type: 'time-group-item'; item: UnifiedSidebarItem; groupKey: TimeGroup };
+
+// Build combined items list for Or3Scroll
+const combinedItems = computed(() => {
+  const result: SidebarCombinedItem[] = [];
+
+  if (visibleItems.value.length === 0) {
+    result.push({
+      key: 'home-empty-state',
+      type: 'empty-state',
+    });
+    return result;
+  }
+
+  for (const [groupKey, groupItems] of groupedItems.value) {
+    result.push({
+      key: `time-group-header-${groupKey}`,
+      type: 'time-group-header',
+      label: getTimeGroupLabel(groupKey),
+      groupKey,
+    });
+
+    if (!collapsedGroups.has(groupKey)) {
+      for (const item of groupItems) {
+        result.push({
+          key: `time-group-item-${item.id}`,
+          type: 'time-group-item',
+          item,
+          groupKey,
+        });
+      }
+    }
+  }
+
+  return result;
+});
+
+const activeListId = computed(() => {
+  const activeId = multiPane.activePaneId.value;
+  const activePane = multiPane.panes.value.find((p) => p.id === activeId);
+  if (activePane?.mode === 'or3-tasks') {
+    return activePane.documentId;
+  }
+  return null;
 });
 
 async function openList(recordId: string) {
   await multiPane.switchToApp('or3-tasks', { recordId });
-}
-
-function taskCount(meta: unknown): number {
-  const parsed = service.readMeta(meta);
-  return parsed.tasks.length;
 }
 
 async function createList() {
@@ -193,17 +260,20 @@ function startRename(listId: string, title: string) {
   error.value = null;
   editingListId.value = listId;
   editingTitle.value = title;
+  showRenameModal.value = true;
 }
 
 function cancelRename() {
   editingListId.value = null;
   editingTitle.value = '';
+  showRenameModal.value = false;
 }
 
-async function saveRename(listId: string) {
+async function saveRename() {
+  if (!editingListId.value) return;
   try {
     error.value = null;
-    await service.renameList(listId, editingTitle.value);
+    await service.renameList(editingListId.value, editingTitle.value);
     cancelRename();
     await refresh();
   } catch (err) {
@@ -229,4 +299,9 @@ async function confirmDeleteList() {
     error.value = err instanceof Error ? err.message : 'Failed to delete list';
   }
 }
+
+onUnmounted(() => {
+  pendingTimeouts.forEach(clearTimeout);
+  pendingTimeouts.clear();
+});
 </script>

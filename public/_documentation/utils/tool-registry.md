@@ -95,7 +95,7 @@ registry.registerTool(definition, handler, options?);
 - `options` — Optional configuration:
   - `override?: boolean` — Allow replacing existing tools (default: false)
   - `enabled?: boolean` — Initial enabled state (default: from UI metadata or true)
-  - `timeout?: number` — Execution timeout in ms (default: 10000)
+  - `runtime?: 'client' | 'server' | 'hybrid'` — Runtime hint merged with `definition.runtime` (default: `'hybrid'`)
 
 ### 3. Use in a plugin
 
@@ -145,7 +145,7 @@ function registerTool(
     definition: ExtendedToolDefinition,
     handler: ToolHandler,
     options?: RegisterOptions
-): void
+): RegisteredTool
 ```
 
 **Throws:** Error if tool name already exists and `options.override` is false.
@@ -196,7 +196,12 @@ Execute a tool by name with JSON-stringified arguments.
 function executeTool(
     name: string,
     argsJson: string
-): Promise<{ result?: string; error?: string; timedOut?: boolean }>
+): Promise<{
+    result: string | null;
+    toolName: string;
+    error?: string;
+    timedOut: boolean;
+}>
 ```
 
 Handles parsing, validation, timeout, and error tracking automatically.
@@ -210,16 +215,6 @@ function setEnabled(name: string, enabled: boolean): void
 ```
 
 Changes are automatically persisted to localStorage.
-
-### `clearStorage()`
-
-Remove all persisted tool preferences.
-
-```ts
-function clearStorage(): void
-```
-
----
 
 ## Type Definitions
 
@@ -263,6 +258,7 @@ interface RegisteredTool {
     handler: ToolHandler;           // The actual function
     enabled: Ref<boolean>;          // Reactive toggle state
     lastError: Ref<string | null>;  // Most recent error
+    runtime: 'client' | 'server' | 'hybrid';
 }
 ```
 
@@ -329,12 +325,12 @@ registry.registerTool(
 );
 ```
 
-### Tool with category grouping
+### Tool with runtime control
 
 ```ts
 registry.registerTool(definition, handler, {
-    category: 'Web Search',
-    defaultEnabled: false
+    runtime: 'client',
+    enabled: false
 });
 ```
 
@@ -365,9 +361,10 @@ const enabled = registry.listTools().value
 All handlers are automatically wrapped with a timeout (default 10 seconds):
 
 ```ts
-registry.registerTool(definition, handler, {
-    timeout: 5000  // 5 second timeout
-});
+const result = await registry.executeTool('my_tool', JSON.stringify({ input: 'hello' }));
+if (result.timedOut) {
+    console.warn(`Tool ${result.toolName} timed out`);
+}
 ```
 
 If timeout occurs:
@@ -461,7 +458,7 @@ async ({ url }) => {
 ## Limitations
 
 - This registry executes handlers client-side; SSR background execution uses the separate server registry
-- 10 second default timeout (configurable per tool)
+- 10 second execution timeout is fixed in the current client registry
 - String return type only (serialize complex data as JSON)
 - No streaming within tool execution
 - Single handler per tool name
@@ -491,9 +488,9 @@ You're trying to register a tool that already exists. Either:
 
 ### Timeout errors
 
-- Increase timeout: `registerTool(def, handler, { timeout: 20000 })`
 - Make handler faster (cache, optimize queries)
-- Split into multiple smaller tools
+- Split work into multiple smaller tools
+- Move long-running work to server-side/background execution
 
 ---
 
@@ -517,21 +514,22 @@ function useToolRegistry(): {
         definition: ExtendedToolDefinition,
         handler: ToolHandler,
         options?: RegisterOptions
-    ) => void;
+    ) => RegisteredTool;
     unregisterTool: (name: string) => void;
     getTool: (name: string) => RegisteredTool | undefined;
     listTools: () => ComputedRef<RegisteredTool[]>;
+    hydrate: () => Promise<void>;
     getEnabledDefinitions: () => ToolDefinition[];
     executeTool: (
         name: string,
         argsJson: string
     ) => Promise<{
-        result?: string;
+        result: string | null;
+        toolName: string;
         error?: string;
-        timedOut?: boolean;
+        timedOut: boolean;
     }>;
     setEnabled: (name: string, enabled: boolean) => void;
-    clearStorage: () => void;
 };
 ```
 

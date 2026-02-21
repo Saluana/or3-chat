@@ -94,7 +94,7 @@ Tailwind v4 is configured via `app/assets/css/main.css`:
 ```
 
 -   Utility scanning relies on the `@source` directive that already targets `app.config.ts` and the `app/` directory.
--   To add custom utilities, extend `app/assets/css/retro.css` or create a new stylesheet imported from `main.css`.
+-   To add custom utilities, extend `app/assets/css/theme.css` (or another stylesheet imported from `main.css`).
 -   Tailwind tokens pull fonts from Nuxt Fonts (`Press Start 2P`, `VT323`). `@nuxt/ui` is layered above Tailwind, then mapped to the retro theme in `nuxt-ui-map.css`.
 
 When you add new components, Tailwind picks up classes instantly through Vite HMR—no config reloads necessary.

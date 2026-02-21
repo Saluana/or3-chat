@@ -95,6 +95,7 @@ export const DEFAULT_ICONS = {
     'ui.leaf': 'pixel:seedlings-solid',
     'ui.list.todo': 'pixelarticons:checklist',
     'ui.list.checks': 'pixelarticons:list',
+    'ui.tasklist': 'pixel:check-list-solid',
     'ui.wait': 'pixelarticons:hourglass',
     'ui.minus': 'pixelarticons:minus',
     'ui.plus': 'pixelarticons:plus',

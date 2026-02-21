@@ -102,6 +102,42 @@ Notes
 
 ---
 
+## Workflow execution
+
+| Key                                       | Kind   | Args (tuple)                                                                        | Returns |
+| ----------------------------------------- | ------ | ----------------------------------------------------------------------------------- | ------- |
+| `workflow.execution:action:state_update`  | action | `[{ messageId: string; state: WorkflowStreamingState \| WorkflowMessageData }]`    | —       |
+| `workflow.execution:action:complete`      | action | `[{ messageId: string; workflowId: string; finalOutput?: string }]`                | —       |
+
+---
+
+## Sync lifecycle
+
+| Key                                      | Kind   | Args (tuple)                                                                                                  | Returns |
+| ---------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------- | ------- |
+| `sync.op:action:captured`                | action | `[{ op: SyncPendingOpPayload }]`                                                                              | —       |
+| `sync.push:action:before`                | action | `[{ scope: SyncScopePayload; count: number }]`                                                                | —       |
+| `sync.push:action:after`                 | action | `[{ scope: SyncScopePayload; successCount: number; failCount: number }]`                                     | —       |
+| `sync.bootstrap:action:start`            | action | `[{ scope: SyncScopePayload }]`                                                                               | —       |
+| `sync.bootstrap:action:progress`         | action | `[{ scope: SyncScopePayload; cursor: number; pulledCount: number; hasMore: boolean }]`                      | —       |
+| `sync.bootstrap:action:complete`         | action | `[{ scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }]`                    | —       |
+| `sync.pull:action:received`              | action | `[{ scope: SyncScopePayload; changeCount: number }]`                                                          | —       |
+| `sync.pull:action:applied`               | action | `[{ scope: SyncScopePayload; applied: number; skipped: number; conflicts: number }]`                         | —       |
+| `sync.pull:action:error`                 | action | `[{ scope: SyncScopePayload; error: string }]`                                                                | —       |
+| `sync.pull:action:after`                 | action | `[{ scope: SyncScopePayload; count: number; cursor: number }]`                                                | —       |
+| `sync.subscription:action:statusChange`  | action | `[{ scope: SyncScopePayload; previousStatus: string; status: string }]`                                      | —       |
+| `sync.conflict:action:detected`          | action | `[{ tableName: string; pk: string; local: unknown; remote: unknown; winner: 'local' \| 'remote' }]`        | —       |
+| `sync.error:action`                      | action | `[{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }]`                                        | —       |
+| `sync.retry:action`                      | action | `[{ op: SyncPendingOpPayload; attempt: number }]`                                                             | —       |
+| `sync.queue:action:full`                 | action | `[{ pendingCount: number; maxSize: number }]`                                                                 | —       |
+| `sync.rescan:action:starting`            | action | `[{ scope: SyncScopePayload }]`                                                                               | —       |
+| `sync.rescan:action:progress`            | action | `[{ scope: SyncScopePayload; progress: number }]`                                                             | —       |
+| `sync.rescan:action:completed`           | action | `[{ scope: SyncScopePayload }]`                                                                               | —       |
+| `sync.stats:action`                      | action | `[{ pendingCount: number; cursor: number; lastSyncAt: number }]`                                             | —       |
+| `sync:action:error`                      | action | `[{ message?: string } & Record<string, unknown>]`                                                            | —       |
+
+---
+
 ## Database families (patterns)
 
 Families: `messages | documents | files | threads | projects | posts | prompts | attachments | kv`
@@ -136,19 +172,19 @@ Returns quick-reference
 
 ## App and errors (observed in code)
 
-| Key                                       | Kind   | Args (tuple)                              | Returns               |
-| ----------------------------------------- | ------ | ----------------------------------------- | --------------------- | --- |
-| `app.init:action:after`                   | action | `[nuxtApp: any]`                          | —                     |
-| `error:raised`                            | action | `[error: unknown]`                        | —                     |
-| `error:<domain>`                          | action | `[error: unknown]`                        | —                     |
-| `ai.chat.error:action`                    | action | `[payload: { error: unknown }]`           | —                     |
-| `chat.systemPrompt.select:action:after`   | action | `[payload: { id: string; content: any }]` | —                     |
-| `chat.systemPrompt.default:action:update` | action | `[id: string]`                            | —                     |
-| `ui.sidebar.select:action:before`         | action | `[payload: { kind: 'chat'                 | 'doc'; id: string }]` | —   |
-| `ui.sidebar.select:action:after`          | action | `[payload: { kind: 'chat'                 | 'doc'; id: string }]` | —   |
-| `ui.chat.new:action:after`                | action | `[payload: {}]`                           | —                     |
-| `editor.created:action:after`             | action | `[payload: { editor: any }]`              | —                     |
-| `editor.updated:action:after`             | action | `[payload: { editor: any }]`              | —                     |
+| Key                                       | Kind   | Args (tuple)                                            | Returns |
+| ----------------------------------------- | ------ | ------------------------------------------------------- | ------- |
+| `app.init:action:after`                   | action | `[nuxtApp: any]`                                        | —       |
+| `error:raised`                            | action | `[error: unknown]`                                      | —       |
+| `error:<domain>`                          | action | `[error: unknown]`                                      | —       |
+| `ai.chat.error:action`                    | action | `[payload: { error: unknown }]`                         | —       |
+| `chat.systemPrompt.select:action:after`   | action | `[payload: { id: string; content: any }]`               | —       |
+| `chat.systemPrompt.default:action:update` | action | `[id: string]`                                          | —       |
+| `ui.sidebar.select:action:before`         | action | `[payload: { kind: 'chat' \| 'doc'; id: string }]`      | —       |
+| `ui.sidebar.select:action:after`          | action | `[payload: { kind: 'chat' \| 'doc'; id: string }]`      | —       |
+| `ui.chat.new:action:after`                | action | `[payload: {}]`                                         | —       |
+| `editor.created:action:after`             | action | `[payload: { editor: any }]`                            | —       |
+| `editor.updated:action:after`             | action | `[payload: { editor: any }]`                            | —       |
 
 Notes
 

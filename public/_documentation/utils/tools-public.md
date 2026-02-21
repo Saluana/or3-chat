@@ -27,14 +27,17 @@ export default defineNuxtPlugin(() => {
     const registry = useToolRegistry();
 
     const weatherTool = defineTool({
-        name: 'get_weather',
-        description: 'Get current weather for a city',
-        parameters: {
-            type: 'object',
-            properties: {
-                city: { type: 'string', description: 'City name' }
-            },
-            required: ['city']
+        type: 'function',
+        function: {
+            name: 'get_weather',
+            description: 'Get current weather for a city',
+            parameters: {
+                type: 'object',
+                properties: {
+                    city: { type: 'string', description: 'City name' }
+                },
+                required: ['city']
+            }
         },
         ui: {
             label: 'Weather Lookup',
@@ -42,13 +45,14 @@ export default defineNuxtPlugin(() => {
         }
     });
 
-    const unregister = registry.register(weatherTool, async ({ city }) => {
+    registry.registerTool(weatherTool, async ({ city }) => {
         const data = await fetch(`/api/weather?city=${city}`);
         return data.json();
     });
 
-    // Cleanup on plugin unmount
-    return { provide: { unregisterWeatherTool: unregister } };
+    onScopeDispose(() => {
+        registry.unregisterTool(weatherTool.function.name);
+    });
 });
 ```
 
@@ -64,7 +68,7 @@ Access the global tool registry composable. See [`tool-registry.md`](../utils/to
 import { useToolRegistry } from '~/utils/chat/tools-public';
 
 const registry = useToolRegistry();
-registry.register(definition, handler);
+registry.registerTool(definition, handler);
 ```
 
 ### `defineTool<T>()`
@@ -75,19 +79,22 @@ Helper function for defining tools with proper TypeScript inference for argument
 import { defineTool } from '~/utils/chat/tools-public';
 
 const tool = defineTool<{ city: string }>({
-    name: 'get_weather',
-    description: 'Get weather data',
-    parameters: {
-        type: 'object',
-        properties: {
-            city: { type: 'string' }
-        },
-        required: ['city']
-    }
+    type: 'function',
+    function: {
+        name: 'get_weather',
+        description: 'Get weather data',
+        parameters: {
+            type: 'object',
+            properties: {
+                city: { type: 'string' }
+            },
+            required: ['city']
+        }
+    },
 });
 
 // Now TypeScript knows handler args are { city: string }
-registry.register(tool, async (args) => {
+registry.registerTool(tool, async (args) => {
     args.city; // ✅ TypeScript knows this is a string
 });
 ```
@@ -152,19 +159,22 @@ export default defineNuxtPlugin(() => {
         a: number;
         b: number;
     }>({
-        name: 'calculate',
-        description: 'Perform basic math operations',
-        parameters: {
-            type: 'object',
-            properties: {
-                operation: {
-                    type: 'string',
-                    enum: ['add', 'subtract']
+        type: 'function',
+        function: {
+            name: 'calculate',
+            description: 'Perform basic math operations',
+            parameters: {
+                type: 'object',
+                properties: {
+                    operation: {
+                        type: 'string',
+                        enum: ['add', 'subtract']
+                    },
+                    a: { type: 'number' },
+                    b: { type: 'number' }
                 },
-                a: { type: 'number' },
-                b: { type: 'number' }
-            },
-            required: ['operation', 'a', 'b']
+                required: ['operation', 'a', 'b']
+            }
         },
         ui: {
             label: 'Calculator',
@@ -172,7 +182,7 @@ export default defineNuxtPlugin(() => {
         }
     });
 
-    const unregister = registry.register(calcTool, async ({ operation, a, b }) => {
+    registry.registerTool(calcTool, async ({ operation, a, b }) => {
         switch (operation) {
             case 'add': return a + b;
             case 'subtract': return a - b;
@@ -183,7 +193,7 @@ export default defineNuxtPlugin(() => {
     // Auto-cleanup on HMR or unmount
     onScopeDispose(() => {
         console.log('[Calculator] Cleaning up tool registration');
-        unregister();
+        registry.unregisterTool(calcTool.function.name);
     });
 });
 ```
@@ -195,19 +205,21 @@ import { useToolRegistry, defineTool } from '~/utils/chat/tools-public';
 
 export default defineNuxtPlugin(() => {
     const registry = useToolRegistry();
-    const unregisterFns: Array<() => void> = [];
+    const registeredToolNames: string[] = [];
 
     // Tool 1
     const searchTool = defineTool({ /* ... */ });
-    unregisterFns.push(registry.register(searchTool, searchHandler));
+    registry.registerTool(searchTool, searchHandler);
+    registeredToolNames.push(searchTool.function.name);
 
     // Tool 2
     const summaryTool = defineTool({ /* ... */ });
-    unregisterFns.push(registry.register(summaryTool, summaryHandler));
+    registry.registerTool(summaryTool, summaryHandler);
+    registeredToolNames.push(summaryTool.function.name);
 
     // Cleanup all
     onScopeDispose(() => {
-        unregisterFns.forEach(fn => fn());
+        registeredToolNames.forEach((name) => registry.unregisterTool(name));
     });
 });
 ```
@@ -222,9 +234,12 @@ import type {
 
 function createToolDefinition(name: string): ToolDefinition {
     return {
-        name,
-        description: `Dynamic tool: ${name}`,
-        parameters: { type: 'object', properties: {} }
+        type: 'function',
+        function: {
+            name,
+            description: `Dynamic tool: ${name}`,
+            parameters: { type: 'object', properties: {} }
+        },
     };
 }
 
@@ -242,26 +257,28 @@ function handleToolCall(call: ToolCall): void {
 ```ts
 // Good - TypeScript knows arg types
 const tool = defineTool<{ city: string }>({ /* ... */ });
-registry.register(tool, async (args) => {
+registry.registerTool(tool, async (args) => {
     args.city.toUpperCase(); // ✅ Type-safe
 });
 
 // Bad - no type checking
 const tool = { /* ... */ };
-registry.register(tool, async (args) => {
+registry.registerTool(tool, async (args) => {
     args.city.toUpperCase(); // ⚠️ TypeScript can't verify
 });
 ```
 
-### Store unregister functions
+### Store tool names for cleanup
 
 ```ts
 // Good - can cleanup later
-const unregister = registry.register(tool, handler);
-onScopeDispose(unregister);
+registry.registerTool(tool, handler);
+onScopeDispose(() => {
+    registry.unregisterTool(tool.function.name);
+});
 
 // Bad - no way to cleanup
-registry.register(tool, handler);
+registry.registerTool(tool, handler);
 ```
 
 ### Import only what you need
