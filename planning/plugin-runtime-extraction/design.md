@@ -17,6 +17,7 @@ The design keeps OR3 constraints intact:
 - workspace enablement is read from canonical workspace settings,
 - extension model stays registry/composable driven,
 - static builds remain safe.
+- technical operators can optionally enable plugins via config after installing npm packages.
 
 ## Current-state findings
 
@@ -24,11 +25,15 @@ The design keeps OR3 constraints intact:
 2. Admin plugin runtime loading exists via `import.meta.glob`.
 3. Main app runtime loading for installed workspace plugins is not yet wired.
 4. Tasks is currently a built-in client plugin under `app/plugins/tasks-pane.client.ts`.
+5. `or3Config` has an open `extensions` namespace but no typed plugin module registration contract.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
+    A0[Operator installs npm plugin package] --> A1[config.or3.ts extensions.plugins.modules]
+    A1 --> A2[Nuxt includes plugin module at build time]
+
     A[Admin installs plugin zip] --> B[extensions/plugins/<id>]
     C[Admin enables plugin for workspace] --> D[WorkspaceSettingsStore plugins.enabled]
 
@@ -43,6 +48,7 @@ flowchart TD
 
     L[Built-in Tasks wrapper] --> M[Compatibility guard]
     N[Extracted Tasks plugin] --> M
+    A2 --> M
     M --> K
 ```
 
@@ -111,7 +117,35 @@ Principles:
 - additive evolution,
 - no direct mutation of internal globals by plugin authors.
 
-### 4) Plugin instance registry + dedupe guard
+### 4) Config-driven npm plugin registration
+
+Add a typed plugin registration surface under `or3Config` for technical deployments that prefer package management over zip install.
+
+Proposed shape:
+
+```ts
+defineOr3Config({
+  extensions: {
+    plugins: {
+      modules: ['or3-plugin-tasks/nuxt'],
+      defaultEnabled: ['or3-tasks'],
+    },
+  },
+});
+```
+
+Guidelines:
+- `modules` is build-time and requires installed package + rebuild/restart.
+- `defaultEnabled` seeds workspace plugin activation for first-time workspaces only.
+- missing packages/modules produce warnings, not fatal startup crashes.
+
+`or3CloudConfig` remains focused on SSR/admin operational policy:
+- runtime loader feature flag (enable/disable workspace plugin loader),
+- admin install policy (zip install allowed/blocked).
+
+This keeps base runtime registration in `or3Config` and SSR operation controls in `or3CloudConfig`.
+
+### 5) Plugin instance registry + dedupe guard
 
 Add a runtime registry keyed by plugin id with source metadata (`builtin`, `extension`) and cleanup handlers.
 
@@ -120,7 +154,7 @@ Rules:
 - `extension` source takes precedence when enabled,
 - duplicate register attempts are ignored with structured warning.
 
-### 5) Tasks extraction strategy
+### 6) Tasks extraction strategy
 
 #### Phase A (compatibility refactor in-core)
 - Move Tasks registration logic into reusable module (e.g. `app/plugins/tasks/runtime/register.ts`).
@@ -142,7 +176,7 @@ Invariants that must not change:
 - post type: `or3-task-list`,
 - tool names: `or3_tasks_*`.
 
-### 6) Admin panel improvements
+### 7) Admin panel improvements
 
 Leverage existing install/enable/settings UI and add runtime status hints:
 - `Installed` (filesystem present),
@@ -164,6 +198,22 @@ Continue using `or3.manifest.json` schema with `kind/id/name/version/description
 
 No key format changes required.
 
+### Config contracts (new)
+
+```ts
+interface Or3ConfigExtensionsPlugins {
+  modules?: string[];       // Build-time Nuxt module ids, e.g. 'or3-plugin-tasks/nuxt'
+  defaultEnabled?: string[]; // Plugin ids to enable by default per new workspace
+}
+```
+
+```ts
+interface Or3CloudAdminPluginOps {
+  runtimeLoaderEnabled?: boolean; // Enables workspace plugin runtime loader paths
+  zipInstallEnabled?: boolean;    // Enables/disables admin zip install endpoint
+}
+```
+
 ## Error handling
 
 1. Missing runtime manifest endpoint or auth-disabled mode:
@@ -183,6 +233,9 @@ No key format changes required.
 5. Duplicate plugin id:
 - Apply precedence policy; never double-register.
 
+6. Config module points to missing package:
+- Warn with module id and continue startup without that module.
+
 ## Security and boundaries
 
 - No server-only imports in client loader.
@@ -196,6 +249,7 @@ No key format changes required.
 - Cache runtime manifest by revision/TTL.
 - Avoid re-registering plugins when enabled set is unchanged.
 - Keep cleanup deterministic to avoid leaked timers/hooks/listeners.
+- Keep config-driven module resolution outside hot runtime loops (build-time only).
 
 ## Testing strategy
 
@@ -209,11 +263,13 @@ No key format changes required.
 - Enable plugin for workspace -> runtime manifest returns plugin id.
 - Loader imports plugin and registers pane/sidebar/actions.
 - Disable plugin -> cleanup paths execute.
+- Config-registered npm plugin module is discovered after install + rebuild/restart.
 
 ### Regression (Tasks)
 - Built-in tasks still works with no installed tasks plugin.
 - Installed tasks plugin preserves existing list data and tool behavior.
 - No duplicate tasks entries in sidebar/dashboard.
+- Config-driven tasks module and extension-installed tasks plugin do not double-register.
 
 ### E2E
 - Multi-workspace behavior: plugin enabled in workspace A, disabled in B.
