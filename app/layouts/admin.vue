@@ -305,12 +305,6 @@
 
 <script setup lang="ts">
 import { useAdminPages } from '~/composables/admin/useAdminPlugins';
-import {
-    useAdminExtensions,
-    useAdminSystemConfigEnriched,
-    useAdminSystemStatus,
-    useAdminWorkspace,
-} from '~/composables/admin/useAdminData';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
 import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
 import WorkspaceIndicator from '~/components/admin/WorkspaceIndicator.vue';
@@ -323,6 +317,7 @@ const appVersion =
 
 const route = useRoute();
 const adminPages = useAdminPages();
+const { getMessage } = useApiError();
 const { isOpen: isConfirmOpen, options: confirmOptions, onConfirm, onCancel } = useConfirmDialog();
 
 // Mobile menu state
@@ -370,17 +365,23 @@ const pluginsIcon = useIcon('dashboard.plugins');
 const settingsIcon = useIcon('dashboard.settings');
 const systemIcon = useIcon('ui.settings');
 
-const router = useRouter();
 const toast = useToast();
 
 const { hasWorkspace, selectedWorkspace, selectWorkspace, clearWorkspace } = useAdminWorkspaceContext();
 const showWorkspaceSelector = ref(false);
 
+interface AdminWorkspaceSelection {
+    id: string;
+    name: string;
+    memberCount: number;
+    ownerEmail?: string;
+}
+
 function openWorkspaceSelector() {
     showWorkspaceSelector.value = !showWorkspaceSelector.value;
 }
 
-function onWorkspaceSelected(workspace: any) {
+function onWorkspaceSelected(workspace: AdminWorkspaceSelection) {
     selectWorkspace(workspace);
 }
 
@@ -414,10 +415,10 @@ async function handleLogout() {
         
         // Full page reload to clear all state
         window.location.href = '/admin/login';
-    } catch (err: any) {
+    } catch (err: unknown) {
         toast.add({
             title: 'Logout failed',
-            description: err?.data?.statusMessage || 'An error occurred',
+            description: getMessage(err, 'An error occurred'),
             color: 'error',
         });
     }

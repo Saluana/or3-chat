@@ -1,18 +1,4 @@
 <template>
-    <ClientOnly>
-        <template #fallback>
-            <div class="space-y-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h1 class="text-2xl font-semibold">Workspaces</h1>
-                        <p class="text-sm opacity-70">Manage all workspaces in the deployment</p>
-                    </div>
-                </div>
-                <div class="space-y-4">
-                    <div v-for="i in 3" :key="i" class="h-20 bg-[var(--md-surface-container-highest)] rounded-lg animate-pulse" />
-                </div>
-            </div>
-        </template>
     <div class="space-y-6">
             <div class="flex items-center justify-between">
                 <div>
@@ -59,7 +45,7 @@
             </div>
 
             <!-- Loading State -->
-            <div v-if="pending" class="space-y-4">
+            <div v-if="showSkeleton" class="space-y-4">
                 <div v-for="i in perPage" :key="i" class="h-20 bg-[var(--md-surface-container-highest)] rounded-lg animate-pulse" />
             </div>
 
@@ -142,7 +128,6 @@
                 <p class="text-sm opacity-50">Try adjusting your search or filters</p>
             </div>
         </div>
-    </ClientOnly>
 </template>
 
 <script setup lang="ts">
@@ -160,6 +145,17 @@ const showDeleted = ref(false);
 const page = ref(1);
 const perPage = ref(20);
 const navigatingTo = ref<string | null>(null);
+const workspaces = ref<WorkspaceSummary[]>([]);
+const total = ref(0);
+const pending = ref(true);
+const error = ref<Error | null>(null);
+const hasLoaded = ref(false);
+
+const { getMessage } = useApiError();
+
+const showSkeleton = computed(() =>
+    pending.value || (!hasLoaded.value && !error.value)
+);
 
 // Debounce search
 const debouncedSearch = refDebounced(search, 300);
@@ -174,26 +170,49 @@ async function navigateToWorkspace(id: string) {
     }
 }
 
-const { data, pending, error, refresh } = await useFetch('/api/admin/workspaces', {
-    query: computed(() => ({
-        search: debouncedSearch.value || undefined,
-        includeDeleted: showDeleted.value.toString(),
-        page: page.value.toString(),
-        perPage: perPage.value.toString(),
-    })),
-    default: () => ({
-        items: [],
-        total: 0,
-    }),
-    server: false,
-    credentials: 'include',
-});
+async function refreshWorkspaces() {
+    pending.value = true;
+    error.value = null;
+    try {
+        const response = await $fetch<{ items: WorkspaceSummary[]; total: number }>(
+            '/api/admin/workspaces',
+            {
+                credentials: 'include',
+                query: {
+                    search: debouncedSearch.value || undefined,
+                    includeDeleted: showDeleted.value.toString(),
+                    page: page.value.toString(),
+                    perPage: perPage.value.toString(),
+                },
+            }
+        );
 
-const workspaces = computed<WorkspaceSummary[]>(() => data.value?.items ?? []);
-const total = computed(() => data.value?.total ?? 0);
+        workspaces.value = response.items ?? [];
+        total.value = response.total ?? 0;
+    } catch (err: unknown) {
+        workspaces.value = [];
+        total.value = 0;
+        error.value =
+            err instanceof Error
+                ? err
+                : new Error(getMessage(err, 'Unable to load workspaces'));
+    } finally {
+        hasLoaded.value = true;
+        pending.value = false;
+    }
+}
+
+onMounted(() => {
+    void refreshWorkspaces();
+});
 
 // Reset page when filters change
 watch([debouncedSearch, showDeleted], () => {
     page.value = 1;
+});
+
+watch([debouncedSearch, showDeleted, page, perPage], () => {
+    if (!import.meta.client) return;
+    void refreshWorkspaces();
 });
 </script>

@@ -95,16 +95,43 @@ const emit = defineEmits<{
     select: [workspace: Workspace];
 }>();
 
-const isOpen = defineModel<boolean>({ default: true });
+const isOpen = defineModel<boolean>({ default: false });
+const { getMessage } = useApiError();
 
-const { data, pending, error } = await useFetch<{
-    items: Workspace[];
-}>("/api/admin/workspaces", {
-    credentials: "include",
-    server: false,
-});
+const workspaces = ref<Workspace[]>([]);
+const pending = ref(false);
+const error = ref<Error | null>(null);
+const hasLoaded = ref(false);
 
-const workspaces = computed(() => data.value?.items ?? []);
+async function refreshWorkspaces() {
+    pending.value = true;
+    error.value = null;
+    try {
+        const response = await $fetch<{ items: Workspace[] }>('/api/admin/workspaces', {
+            credentials: 'include',
+            query: { perPage: '100' },
+        });
+        workspaces.value = response.items ?? [];
+    } catch (err: unknown) {
+        workspaces.value = [];
+        error.value =
+            err instanceof Error
+                ? err
+                : new Error(getMessage(err, 'Unable to load workspaces'));
+    } finally {
+        hasLoaded.value = true;
+        pending.value = false;
+    }
+}
+
+watch(
+    isOpen,
+    (open) => {
+        if (!open || pending.value || hasLoaded.value) return;
+        void refreshWorkspaces();
+    },
+    { immediate: true }
+);
 
 function selectAndClose(workspace: Workspace) {
     emit("select", workspace);

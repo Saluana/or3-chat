@@ -50,13 +50,16 @@ export default defineEventHandler(async (event) => {
     // Require super admin context
     await requireAdminApiContext(event, { superAdminOnly: true });
 
-    const body = await readBody<GrantAdminBody>(event);
-    const { userId } = body;
+    const body = await readBody<GrantAdminBody | Record<string, unknown> | null>(event);
+    const userId =
+        body && typeof body === 'object' && typeof body.userId === 'string'
+            ? body.userId.trim()
+            : '';
 
     if (!userId) {
         throw createError({
             statusCode: 400,
-            statusMessage: 'User ID is required',
+            statusMessage: 'Valid user ID is required',
         });
     }
 

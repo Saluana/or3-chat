@@ -79,7 +79,7 @@
                     </UButton>
                 </div>
 
-                <div v-if="pending" class="space-y-2">
+                <div v-if="showSkeleton" class="space-y-2">
                     <div v-for="i in 3" :key="i" class="h-12 bg-[var(--md-surface-container-highest)] rounded animate-pulse" />
                 </div>
 
@@ -166,15 +166,39 @@ const {
 const grantingUserId = ref<string | null>(null);
 const revokingUserId = ref<string | null>(null);
 
-const { data: adminsData, pending, error, refresh: refreshAdmins } = await useFetch<{ admins: Admin[] }>(
-    '/api/admin/admin-users',
-    {
-        server: false,
-        credentials: 'include',
-    }
+const admins = ref<Admin[]>([]);
+const pending = ref(true);
+const error = ref<Error | null>(null);
+const hasLoadedAdmins = ref(false);
+
+const showSkeleton = computed(() =>
+    pending.value || (!hasLoadedAdmins.value && !error.value)
 );
 
-const admins = computed(() => adminsData.value?.admins ?? []);
+async function refreshAdmins() {
+    pending.value = true;
+    error.value = null;
+    try {
+        const response = await $fetch<{ admins: Admin[] }>('/api/admin/admin-users', {
+            credentials: 'include',
+        });
+        admins.value = response.admins ?? [];
+    } catch (err: unknown) {
+        admins.value = [];
+        error.value =
+            err instanceof Error
+                ? err
+                : new Error(getMessage(err, 'Unable to load admins'));
+    } finally {
+        hasLoadedAdmins.value = true;
+        pending.value = false;
+    }
+}
+
+onMounted(() => {
+    void refreshAdmins();
+});
+
 const searchResults = computed<User[]>(() => lookupResults.value as User[]);
 
 // Issue 30: Debounce search query
@@ -221,11 +245,11 @@ async function grantAdmin(userId: string, email?: string) {
             title: 'Admin access granted',
             color: 'success',
         });
-        refreshAdmins();
+        await refreshAdmins();
         clearResults();
         searchQuery.value = '';
         hasSearched.value = false;
-    } catch (err: any) {
+    } catch (err: unknown) {
         toast.add({
             title: 'Failed to grant access',
             description: getMessage(err, 'Unable to grant admin access'),
@@ -258,8 +282,8 @@ async function revokeAdmin(userId: string) {
             title: 'Admin access revoked',
             color: 'success',
         });
-        refreshAdmins();
-    } catch (err: any) {
+        await refreshAdmins();
+    } catch (err: unknown) {
         toast.add({
             title: 'Failed to revoke access',
             description: getMessage(err, 'Unable to revoke admin access'),
