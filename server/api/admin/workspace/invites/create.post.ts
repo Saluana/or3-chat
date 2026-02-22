@@ -11,6 +11,11 @@ const BodySchema = z.object({
     expiresInSeconds: z.number().int().min(60).max(60 * 60 * 24 * 30).optional(),
 });
 
+function isMissingConvexFunctionError(error: unknown, functionName: string): boolean {
+    if (!(error instanceof Error)) return false;
+    return error.message.includes(`Could not find public function for '${functionName}'`);
+}
+
 export default defineEventHandler(async (event) => {
     if (!isAdminEnabled(event)) {
         throw createError({
@@ -72,14 +77,26 @@ export default defineEventHandler(async (event) => {
         secret
     );
 
-    const created = await store.createInvite({
-        workspaceId,
-        email,
-        role: body.data.role,
-        invitedByUserId,
-        expiresAt,
-        tokenHash: hashInviteToken(token),
-    });
+    let created;
+    try {
+        created = await store.createInvite({
+            workspaceId,
+            email,
+            role: body.data.role,
+            invitedByUserId,
+            expiresAt,
+            tokenHash: hashInviteToken(token),
+        });
+    } catch (error) {
+        if (isMissingConvexFunctionError(error, 'workspaces:createInvite')) {
+            throw createError({
+                statusCode: 503,
+                statusMessage:
+                    'Invites are unavailable because Convex invite functions are not deployed.',
+            });
+        }
+        throw error;
+    }
 
     return {
         ok: true,

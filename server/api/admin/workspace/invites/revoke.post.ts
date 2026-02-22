@@ -8,6 +8,11 @@ const BodySchema = z.object({
     inviteId: z.string().min(1),
 });
 
+function isMissingConvexFunctionError(error: unknown, functionName: string): boolean {
+    if (!(error instanceof Error)) return false;
+    return error.message.includes(`Could not find public function for '${functionName}'`);
+}
+
 export default defineEventHandler(async (event) => {
     if (!isAdminEnabled(event)) {
         throw createError({
@@ -45,11 +50,22 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    await store.revokeInvite({
-        workspaceId,
-        inviteId: body.data.inviteId,
-        revokedByUserId: userId,
-    });
+    try {
+        await store.revokeInvite({
+            workspaceId,
+            inviteId: body.data.inviteId,
+            revokedByUserId: userId,
+        });
+    } catch (error) {
+        if (isMissingConvexFunctionError(error, 'workspaces:revokeInvite')) {
+            throw createError({
+                statusCode: 503,
+                statusMessage:
+                    'Invites are unavailable because Convex invite functions are not deployed.',
+            });
+        }
+        throw error;
+    }
 
     return { ok: true };
 });

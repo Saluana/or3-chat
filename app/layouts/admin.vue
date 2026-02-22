@@ -304,7 +304,6 @@
 </template>
 
 <script setup lang="ts">
-import { useLocalStorage } from '@vueuse/core';
 import { useAdminPages } from '~/composables/admin/useAdminPlugins';
 import {
     useAdminExtensions,
@@ -329,8 +328,32 @@ const { isOpen: isConfirmOpen, options: confirmOptions, onConfirm, onCancel } = 
 // Mobile menu state
 const isMobileMenuOpen = ref(false);
 
-// Desktop collapse state (persisted in localStorage)
-const isDesktopCollapsed = useLocalStorage('admin-sidebar-collapsed', false);
+// Desktop collapse state.
+// Keep SSR and initial client render deterministic, then hydrate from localStorage.
+const isDesktopCollapsed = useState<boolean>('admin-sidebar-collapsed', () => false);
+const isDesktopCollapseHydrated = ref(false);
+
+onMounted(() => {
+    try {
+        const raw = localStorage.getItem('admin-sidebar-collapsed');
+        if (raw === 'true' || raw === 'false') {
+            isDesktopCollapsed.value = raw === 'true';
+        }
+    } catch {
+        // ignore storage errors
+    } finally {
+        isDesktopCollapseHydrated.value = true;
+    }
+});
+
+watch(isDesktopCollapsed, (collapsed) => {
+    if (!isDesktopCollapseHydrated.value) return;
+    try {
+        localStorage.setItem('admin-sidebar-collapsed', String(collapsed));
+    } catch {
+        // ignore storage errors
+    }
+});
 
 // Icons
 const menuIcon = useIcon('ui.menu');

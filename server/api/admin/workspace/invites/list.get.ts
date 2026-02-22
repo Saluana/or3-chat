@@ -9,6 +9,11 @@ const QuerySchema = z.object({
     limit: z.coerce.number().int().min(1).max(500).optional(),
 });
 
+function isMissingConvexFunctionError(error: unknown, functionName: string): boolean {
+    if (!(error instanceof Error)) return false;
+    return error.message.includes(`Could not find public function for '${functionName}'`);
+}
+
 export default defineEventHandler(async (event) => {
     if (!isAdminEnabled(event)) {
         throw createError({
@@ -45,11 +50,23 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const invites = await store.listInvites({
-        workspaceId,
-        status: query.data.status,
-        limit: query.data.limit,
-    });
+    let invites;
+    try {
+        invites = await store.listInvites({
+            workspaceId,
+            status: query.data.status,
+            limit: query.data.limit,
+        });
+    } catch (error) {
+        if (isMissingConvexFunctionError(error, 'workspaces:listInvites')) {
+            return {
+                invites: [],
+                unavailable: true,
+                message: 'Invites are unavailable because Convex invite functions are not deployed.',
+            };
+        }
+        throw error;
+    }
 
     return { invites };
 });

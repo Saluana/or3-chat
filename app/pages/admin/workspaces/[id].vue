@@ -1,5 +1,5 @@
 <template>
-    <div v-if="pending" class="space-y-4">
+    <div v-if="showSkeleton" class="space-y-4">
             <div class="h-32 bg-[var(--md-surface-container-highest)] rounded-lg animate-pulse" />
             <div class="h-64 bg-[var(--md-surface-container-highest)] rounded-lg animate-pulse" />
         </div>
@@ -209,12 +209,33 @@ const inviteRoleItems = [
 ];
 const invites = ref<Array<{ id: string; email: string; role: 'owner' | 'editor' | 'viewer'; status: 'pending' | 'accepted' | 'revoked' | 'expired'; expiresAt: number; inviteUrl?: string }>>([]);
 
-const { data: workspace, pending, error, refresh } = await useFetch<Workspace>(
-    () => `/api/admin/workspaces/${workspaceId}`,
-    {
-        server: false,
-        credentials: 'include',
+const workspace = ref<Workspace | null>(null);
+const pending = ref(true);
+const error = ref<Error | null>(null);
+
+async function refreshWorkspace() {
+    pending.value = true;
+    error.value = null;
+    try {
+        workspace.value = await $fetch<Workspace>(
+            `/api/admin/workspaces/${workspaceId}`,
+            {
+                credentials: 'include',
+            }
+        );
+    } catch (err: any) {
+        workspace.value = null;
+        error.value =
+            err instanceof Error
+                ? err
+                : new Error(getMessage(err, 'Unable to load workspace'));
+    } finally {
+        pending.value = false;
     }
+}
+
+const showSkeleton = computed(() =>
+    pending.value || (!workspace.value && !error.value)
 );
 
 async function handleSoftDelete() {
@@ -238,7 +259,7 @@ async function handleSoftDelete() {
             title: 'Workspace deleted',
             color: 'success',
         });
-        refresh();
+        await refreshWorkspace();
     } catch (err: any) {
         toast.add({
             title: 'Failed to delete workspace',
@@ -261,7 +282,7 @@ async function handleRestore() {
             title: 'Workspace restored',
             color: 'success',
         });
-        refresh();
+        await refreshWorkspace();
     } catch (err: any) {
         toast.add({
             title: 'Failed to restore workspace',
@@ -276,13 +297,27 @@ async function handleRestore() {
 async function loadInvites() {
     isLoadingInvites.value = true;
     try {
-        const response = await $fetch<{ invites: Array<{ id: string; email: string; role: 'owner' | 'editor' | 'viewer'; status: 'pending' | 'accepted' | 'revoked' | 'expired'; expiresAt: number }> }>(
+        const response = await $fetch<{
+            invites: Array<{ id: string; email: string; role: 'owner' | 'editor' | 'viewer'; status: 'pending' | 'accepted' | 'revoked' | 'expired'; expiresAt: number }>;
+            unavailable?: boolean;
+            message?: string;
+        }>(
             '/api/admin/workspace/invites/list',
             {
                 credentials: 'include',
             }
         );
         invites.value = response.invites ?? [];
+
+        if (response.unavailable) {
+            toast.add({
+                title: 'Invites unavailable',
+                description:
+                    response.message ||
+                    'Convex invite functions are not deployed for this backend.',
+                color: 'warning',
+            });
+        }
     } catch (err: any) {
         toast.add({
             title: 'Failed to load invites',
@@ -368,6 +403,7 @@ async function copyInviteUrl(url: string) {
 }
 
 onMounted(() => {
+    void refreshWorkspace();
     void loadInvites();
 });
 </script>
