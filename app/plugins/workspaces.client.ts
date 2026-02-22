@@ -40,6 +40,7 @@ export default defineNuxtPlugin(() => {
         label: 'Workspaces',
         description: 'Manage and backup your workspaces',
         order: 140,
+        access: { authRequired: true },
         pages,
     });
 });

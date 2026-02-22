@@ -1,4 +1,4 @@
-import { createError, defineEventHandler, getQuery } from 'h3';
+import { createError, defineEventHandler, getQuery, setResponseHeader } from 'h3';
 import { z } from 'zod';
 import { checkPluginAccess } from '../../utils/plugins/access/require-plugin-access';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
@@ -11,6 +11,7 @@ export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event)) {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
+    setResponseHeader(event, 'Cache-Control', 'no-store');
 
     const parsed = QuerySchema.safeParse(getQuery(event));
     if (!parsed.success) {

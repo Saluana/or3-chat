@@ -15,7 +15,14 @@
                 id="dashboard-grid-view"
                 class="p-4 flex justify-start w-full"
             >
-                <div id="dashboard-plugin-grid" class="dashboard-plugin-grid">
+                <div
+                    v-if="shouldDeferDashboardGrid"
+                    id="dashboard-grid-loading"
+                    class="text-sm opacity-70 px-1"
+                >
+                    Loading dashboard...
+                </div>
+                <div v-else id="dashboard-plugin-grid" class="dashboard-plugin-grid">
                     <plugin-icons
                         v-for="item in dashboardItems"
                         :key="item.id"
@@ -145,6 +152,7 @@ import {
     registerDashboardPluginPage,
     type DashboardPlugin,
 } from '~/composables';
+import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { isMobile } from '~/state/global';
 
@@ -160,6 +168,18 @@ const open = computed({
     set: (value: boolean) => emit('update:showModal', value),
 });
 
+const runtimeConfig = useRuntimeConfig();
+const ssrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;
+const sessionContext = ssrAuthEnabled ? useSessionContext() : null;
+const shouldDeferDashboardGrid = computed(
+    () =>
+        ssrAuthEnabled &&
+        sessionContext?.pending.value === true &&
+        sessionContext?.data.value === null
+);
+
+const coreAccess = ssrAuthEnabled ? { authRequired: true } : undefined;
+
 // Core (built-in) items; can be overridden by external plugin with same id
 const coreItems: DashboardPlugin[] = [
     {
@@ -167,6 +187,7 @@ const coreItems: DashboardPlugin[] = [
         icon: useIcon('dashboard.settings').value,
         label: 'Settings',
         order: 1,
+        access: coreAccess,
         pages: [
             {
                 id: 'theme-settings',
@@ -189,6 +210,7 @@ const coreItems: DashboardPlugin[] = [
         icon: useIcon('dashboard.images').value,
         label: 'Images',
         order: 10,
+        access: coreAccess,
         pages: [
             {
                 id: 'images-library',

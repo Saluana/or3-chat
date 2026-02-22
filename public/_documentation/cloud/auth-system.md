@@ -285,6 +285,7 @@ const isValid = computed(() => {
 
 ## Related
 
+- [identity-access-concepts](./identity-access-concepts) - Shared vocabulary for users/workspaces/roles/entitlements/permissions
 - [or3-cloud-config](./or3-cloud-config) - Configuration reference
 - [providers](./providers) - Provider install and Clerk to Convex bridge wiring
 - [provider-clerk](./provider-clerk) - Clerk provider install and token broker details

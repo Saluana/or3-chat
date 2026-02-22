@@ -27,17 +27,27 @@ export interface PluginAccessCheckResult {
     decision: PluginGateDecision;
 }
 
-async function getPluginDefaults(
+interface PluginManifestAccess {
+    exists: boolean;
+    defaults: PluginGatePolicy | null;
+}
+
+async function getPluginManifestAccess(
     event: H3Event,
     pluginId: string
-): Promise<PluginGatePolicy | null> {
+): Promise<PluginManifestAccess> {
     const cacheKey = '__or3_plugin_defaults_manifest';
-    const cached = event.context[cacheKey] as Map<string, PluginGatePolicy | null> | undefined;
+    const cached = event.context[cacheKey] as Map<string, PluginManifestAccess> | undefined;
     if (cached?.has(pluginId)) {
-        return cached.get(pluginId) ?? null;
+        return (
+            cached.get(pluginId) ?? {
+                exists: false,
+                defaults: null,
+            }
+        );
     }
 
-    const map = cached ?? new Map<string, PluginGatePolicy | null>();
+    const map = cached ?? new Map<string, PluginManifestAccess>();
     if (!cached) {
         event.context[cacheKey] = map;
     }
@@ -46,9 +56,12 @@ async function getPluginDefaults(
     const plugin = installed.find(
         (entry) => entry.kind === 'plugin' && entry.id === pluginId
     );
-    const defaults = (plugin?.access ?? null) as PluginGatePolicy | null;
-    map.set(pluginId, defaults);
-    return defaults;
+    const entry: PluginManifestAccess = {
+        exists: Boolean(plugin),
+        defaults: (plugin?.access ?? null) as PluginGatePolicy | null,
+    };
+    map.set(pluginId, entry);
+    return entry;
 }
 
 export async function checkPluginAccess(
@@ -57,22 +70,36 @@ export async function checkPluginAccess(
 ): Promise<PluginAccessCheckResult> {
     const session = await resolveSessionContext(event);
     const workspaceId = session.workspace?.id;
+    const manifestAccess = await getPluginManifestAccess(event, context.pluginId);
 
     let pluginEnabled = true;
     let adminPolicy: PluginGatePolicy | null = null;
 
     if (workspaceId) {
         const settingsStore = getWorkspaceSettingsStore(event);
-        const [enabled, settings] = await Promise.all([
-            getEnabledPlugins(settingsStore, workspaceId),
-            getPluginSettings(settingsStore, workspaceId, context.pluginId),
-        ]);
-        pluginEnabled = enabled.includes(context.pluginId);
-        adminPolicy = readPluginAccessPolicy(settings);
+        if (manifestAccess.exists) {
+            const [enabled, settings] = await Promise.all([
+                getEnabledPlugins(settingsStore, workspaceId),
+                getPluginSettings(settingsStore, workspaceId, context.pluginId),
+            ]);
+            pluginEnabled = enabled.includes(context.pluginId);
+            adminPolicy = readPluginAccessPolicy(settings);
+        } else {
+            // Built-in/non-extension plugin ids are not controlled by the
+            // workspace enabled-plugins list.
+            const settings = await getPluginSettings(
+                settingsStore,
+                workspaceId,
+                context.pluginId
+            );
+            adminPolicy = readPluginAccessPolicy(settings);
+        }
     }
 
-    const pluginDefaults = await getPluginDefaults(event, context.pluginId);
-    const effectivePolicy = mergePluginGatePolicy(pluginDefaults, adminPolicy);
+    const effectivePolicy = mergePluginGatePolicy(
+        manifestAccess.defaults,
+        adminPolicy
+    );
     const entitlements = await resolveEntitlements(event, session);
 
     const decision = evaluatePluginGate({

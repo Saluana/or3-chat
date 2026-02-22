@@ -734,6 +734,18 @@
                     "summary": "Architecture of the Hybrid Authentication System. Explains how Clerk is used for Identity/Sync and OpenRouter for LLM access, including the Server-Side Provisioning flow (Convex Workspaces)."
                 },
                 {
+                    "name": "identity-access-concepts.md",
+                    "path": "/cloud/identity-access-concepts",
+                    "category": "Architecture",
+                    "summary": "Conceptual guide to OR3 access control vocabulary and flow. Explains provider vs internal user IDs, workspaces, active workspace selection, workspace roles, entitlements, `can()` permissions, and how plugin policy decisions are layered."
+                },
+                {
+                    "name": "plugin-access-gating.md",
+                    "path": "/cloud/plugin-access-gating",
+                    "category": "Architecture",
+                    "summary": "End-to-end reference for plugin access gating across client and server. Covers policy fields (`authRequired`, role/entitlement requirements), workspace overrides, `plugins.enabled` semantics, `/api/plugins/access`, and UX hardening to prevent dashboard auth flicker."
+                },
+                {
                     "name": "storage-layer.md",
                     "path": "/cloud/storage-layer",
                     "category": "Architecture",

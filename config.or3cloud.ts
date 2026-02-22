@@ -14,6 +14,14 @@ import {
 } from './shared/cloud/provider-ids';
 import { DEFAULT_OPENROUTER_BASE_URL } from './shared/config/constants';
 
+function envFirst(...keys: string[]): string | undefined {
+    for (const key of keys) {
+        const value = process.env[key];
+        if (value !== undefined) return value;
+    }
+    return undefined;
+}
+
 function parseRateLimitOverrides(
     input: string | undefined
 ): Record<string, { windowMs?: number; maxRequests?: number }> | undefined {
@@ -55,14 +63,21 @@ function parseRateLimitOverrides(
 }
 
 const authEnabled = process.env.SSR_AUTH_ENABLED === 'true';
-// Auth is the gate - sync/storage require auth but can be individually disabled
-const syncEnabled = authEnabled && process.env.OR3_SYNC_ENABLED !== 'false';
-const storageEnabled = authEnabled && process.env.OR3_STORAGE_ENABLED !== 'false';
+// Auth is the gate - sync/storage require auth but can be individually disabled.
+// Note: the wizard emits both legacy and OR3_CLOUD_* aliases; accept both here.
+const syncEnabledFlag = envFirst('OR3_CLOUD_SYNC_ENABLED', 'OR3_SYNC_ENABLED');
+const storageEnabledFlag = envFirst(
+    'OR3_CLOUD_STORAGE_ENABLED',
+    'OR3_STORAGE_ENABLED'
+);
+const syncEnabled = authEnabled && syncEnabledFlag !== 'false';
+const storageEnabled = authEnabled && storageEnabledFlag !== 'false';
 
 export const or3CloudConfig = defineOr3CloudConfig({
     auth: {
         enabled: authEnabled,
-        provider: (process.env.AUTH_PROVIDER ?? AUTH_PROVIDER_IDS.clerk) as AuthProviderId,
+        provider: (envFirst('OR3_AUTH_PROVIDER', 'AUTH_PROVIDER') ??
+            AUTH_PROVIDER_IDS.clerk) as AuthProviderId,
         guestAccessEnabled: process.env.OR3_GUEST_ACCESS_ENABLED === 'true',
         autoProvision: process.env.OR3_AUTH_AUTO_PROVISION !== 'false',
         registrationMode:

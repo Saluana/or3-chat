@@ -81,6 +81,15 @@ All features are **enabled by default**. Set env to `'false'` to disable.
 | `ui.maxPanes` | `OR3_MAX_PANES` | `4` | Maximum allowed panes |
 | `ui.sidebarCollapsedByDefault` | `OR3_SIDEBAR_COLLAPSED` | `false` | Start with collapsed sidebar |
 
+### Legal
+
+Legal URLs are used for footer links in the sidebar. If unset/empty, the link is hidden.
+
+| Key | Env Variable | Default | Description |
+|-----|--------------|---------|-------------|
+| `legal.termsUrl` | `OR3_TERMS_URL` | `""` | Terms of Service URL |
+| `legal.privacyUrl` | `OR3_PRIVACY_URL` | `""` | Privacy Policy URL |
+
 ### Extensions
 
 The `extensions` namespace lets third-party plugins register their own configuration:

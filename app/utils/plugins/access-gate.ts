@@ -12,6 +12,7 @@ import {
 interface GateState {
     decisions: Record<string, PluginGateDecision>;
     pending: Record<string, boolean>;
+    scopeKey: string;
 }
 
 type GateGlobals = typeof globalThis & {
@@ -24,7 +25,30 @@ const state: GateState =
     (g.__or3PluginGateState = reactive<GateState>({
         decisions: {},
         pending: {},
+        scopeKey: '__init__',
     }));
+
+function buildScopeKey(): string {
+    const session = getCachedSessionContext();
+    return [
+        session?.authenticated === true ? '1' : '0',
+        session?.user?.id ?? '',
+        session?.workspace?.id ?? '',
+        session?.role ?? '',
+    ].join('|');
+}
+
+function resetDecisionCache(): void {
+    state.decisions = {};
+    state.pending = {};
+}
+
+function syncScopeCache(): void {
+    const scopeKey = buildScopeKey();
+    if (state.scopeKey === scopeKey) return;
+    state.scopeKey = scopeKey;
+    resetDecisionCache();
+}
 
 function shouldUseServerDecision(): boolean {
     if (!process.client) return false;
@@ -54,6 +78,7 @@ function getLocalDecision(policy?: PluginGatePolicy | null): PluginGateDecision 
 async function hydrateServerDecision(pluginId: string): Promise<void> {
     if (!shouldUseServerDecision()) return;
     if (state.pending[pluginId]) return;
+    const requestScopeKey = state.scopeKey;
 
     state.pending[pluginId] = true;
     try {
@@ -61,20 +86,42 @@ async function hydrateServerDecision(pluginId: string): Promise<void> {
             query: { pluginId },
             cache: 'no-store',
         });
+        if (state.scopeKey !== requestScopeKey) {
+            return;
+        }
         state.decisions[pluginId] = result;
     } catch {
         // Keep local fallback decision when server endpoint is unavailable.
     } finally {
+        if (state.scopeKey !== requestScopeKey) {
+            return;
+        }
         state.pending[pluginId] = false;
     }
+}
+
+function combineGateDecisions(
+    local: PluginGateDecision,
+    server: PluginGateDecision
+): PluginGateDecision {
+    return {
+        allowed: local.allowed && server.allowed,
+        reasons: Array.from(new Set([...server.reasons, ...local.reasons])),
+        effectivePolicy: server.effectivePolicy,
+    };
 }
 
 export function getPluginGateDecision(
     pluginId?: string,
     policy?: PluginGatePolicy | null
 ): PluginGateDecision {
+    syncScopeCache();
     const local = getLocalDecision(policy);
     if (!pluginId) {
+        return local;
+    }
+
+    if (!shouldUseServerDecision()) {
         return local;
     }
 
@@ -83,5 +130,5 @@ export function getPluginGateDecision(
         return local;
     }
 
-    return state.decisions[pluginId];
+    return combineGateDecisions(local, state.decisions[pluginId]);
 }

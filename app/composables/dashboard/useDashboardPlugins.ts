@@ -166,12 +166,21 @@ function sync() {
     reactiveList.items = Array.from(registry.values());
 }
 
+function getDashboardPluginAccessPolicy(
+    pluginId: string
+): PluginGatePolicy | undefined {
+    const fromRegistry = registry.get(pluginId)?.access;
+    if (fromRegistry) return fromRegistry;
+    return navigationRuntime.baseItems.value.find((item) => item.id === pluginId)
+        ?.access;
+}
+
 function isDashboardPluginAllowed(plugin: DashboardPlugin): boolean {
     return getPluginGateDecision(plugin.id, plugin.access).allowed;
 }
 
 function isDashboardPageAllowed(pluginId: string, page: DashboardPluginPage): boolean {
-    const pluginPolicy = registry.get(pluginId)?.access;
+    const pluginPolicy = getDashboardPluginAccessPolicy(pluginId);
     const policy = mergePluginGatePolicy(pluginPolicy ?? {}, page.access ?? {});
     return getPluginGateDecision(pluginId, policy).allowed;
 }
@@ -593,6 +602,7 @@ export function useDashboardNavigation(
     const dashboardItems = computed(() => {
         const map = new Map<string, DashboardPlugin>();
         for (const item of navigationRuntime.baseItems.value) {
+            if (!isDashboardPluginAllowed(item)) continue;
             map.set(item.id, item);
         }
         for (const plugin of registered.value) {

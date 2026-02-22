@@ -35,16 +35,29 @@ export const or3CloudConfig = defineOr3CloudConfig({
 
 | Key | Env Variable | Default | Description |
 |-----|--------------|---------|-------------|
-| `auth.enabled` | `SSR_AUTH_ENABLED` | `false` | Enable SSR authentication |
-| `auth.provider` | `AUTH_PROVIDER` | `"clerk"` | Auth provider (`basic-auth` / `clerk` / `custom`) |
+| `auth.enabled` | `SSR_AUTH_ENABLED` | `false` | Enable SSR authentication (gates all cloud features) |
+| `auth.provider` | `AUTH_PROVIDER` (or `OR3_AUTH_PROVIDER`) | `"clerk"` | Auth provider (`basic-auth` / `clerk` / `custom`) |
+| `auth.guestAccessEnabled` | `OR3_GUEST_ACCESS_ENABLED` | `false` | Allow unauthenticated (guest) access when users provide their own OpenRouter key |
+| `auth.autoProvision` | `OR3_AUTH_AUTO_PROVISION` | `true` | Auto-provision users/workspaces on first authenticated session |
+| `auth.registrationMode` | `OR3_AUTH_REGISTRATION_MODE` | derived (from `autoProvision`) | First-time registration policy (`open` / `invite_only` / `disabled`) |
+| `auth.sessionProvisioningFailure` | `OR3_SESSION_PROVISIONING_FAILURE` | `"throw"` | What to do when provisioning fails (`throw` / `unauthenticated` / `service-unavailable`) |
 | `auth.clerk.publishableKey` | `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | — | Clerk publishable key |
 | `auth.clerk.secretKey` | `NUXT_CLERK_SECRET_KEY` | — | Clerk secret key |
+
+#### Invite Tokens (Optional)
+
+If `auth.registrationMode` is set to `invite_only`, invite token signing must be configured via env:
+
+| Env Variable | Default | Description |
+|--------------|---------|-------------|
+| `OR3_AUTH_INVITE_TOKEN_SECRET` | — | HMAC secret used to sign/verify invite tokens |
+| `OR3_AUTH_INVITE_TOKEN_TTL_SECONDS` | `604800` | Default TTL for generated invite tokens (seconds) |
 
 ### Sync (Multi-Device)
 
 | Key | Env Variable | Default | Description |
 |-----|--------------|---------|-------------|
-| `sync.enabled` | `OR3_SYNC_ENABLED` | `true` (if auth) | Enable cross-device sync |
+| `sync.enabled` | `OR3_SYNC_ENABLED` (or `OR3_CLOUD_SYNC_ENABLED`) | `true` (if auth) | Enable cross-device sync |
 | `sync.provider` | `OR3_SYNC_PROVIDER` | `"convex"` | Backend (`sqlite` / `convex` / `firebase` / `custom`) |
 | `sync.convex.url` | `VITE_CONVEX_URL` | — | Convex deployment URL |
 | `sync.convex.adminKey` | `CONVEX_SELF_HOSTED_ADMIN_KEY` | — | Server-side Convex admin key for super admin dashboard access |
@@ -88,7 +101,7 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 
 | Key | Env Variable | Default | Description |
 |-----|--------------|---------|-------------|
-| `storage.enabled` | `OR3_STORAGE_ENABLED` | `true` (if auth) | Enable cloud storage |
+| `storage.enabled` | `OR3_STORAGE_ENABLED` (or `OR3_CLOUD_STORAGE_ENABLED`) | `true` (if auth) | Enable cloud storage |
 | `storage.provider` | `NUXT_PUBLIC_STORAGE_PROVIDER` | `"convex"` | Backend (`fs` / `convex` / `s3` / `custom`) |
 | `storage.allowedMimeTypes` | `OR3_STORAGE_ALLOWED_MIME_TYPES` | image/pdf/text allowlist | Comma-separated upload MIME allowlist |
 | `storage.workspaceQuotaBytes` | `OR3_STORAGE_WORKSPACE_QUOTA_BYTES` | unset | Optional per-workspace storage quota in bytes |
@@ -112,7 +125,7 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 | `limits.requestsPerMinute` | `OR3_REQUESTS_PER_MINUTE` | `20` | Per-user requests/minute |
 | `limits.maxMessagesPerDay` | `OR3_MAX_MESSAGES_PER_DAY` | `0` (unlimited) | Daily message cap |
 | `limits.maxConversations` | `OR3_MAX_CONVERSATIONS` | `0` (unlimited) | Max conversations |
-| `limits.storageProvider` | `OR3_LIMITS_STORAGE_PROVIDER` | `"convex"` (if sync) | Rate limit backend |
+| `limits.storageProvider` | `OR3_LIMITS_STORAGE_PROVIDER` | `sync.provider` (if sync), otherwise `"memory"` | Rate limit backend |
 | `limits.operationRateLimits` | `OR3_RATE_LIMIT_OVERRIDES_JSON` | `{}` | Per-operation `{ windowMs, maxRequests }` override map |
 
 Example `OR3_RATE_LIMIT_OVERRIDES_JSON`:
@@ -129,17 +142,13 @@ Example `OR3_RATE_LIMIT_OVERRIDES_JSON`:
 | Key | Env Variable | Default | Description |
 |-----|--------------|---------|-------------|
 | `backgroundStreaming.enabled` | `OR3_BACKGROUND_STREAMING_ENABLED` | `false` | Enable server background streaming |
-| `backgroundStreaming.storageProvider` | `OR3_BACKGROUND_STREAMING_PROVIDER` | `"convex"` (if sync) | Background job state backend |
+| `backgroundStreaming.storageProvider` | `OR3_BACKGROUND_STREAMING_PROVIDER` | `sync.provider` (if sync), otherwise `"memory"` | Background job state backend |
 | `backgroundStreaming.maxConcurrentJobs` | `OR3_BACKGROUND_MAX_JOBS` | `20` | Global concurrent background jobs |
 | `backgroundStreaming.maxConcurrentJobsPerUser` | `OR3_BACKGROUND_MAX_JOBS_PER_USER` | `5` | Per-user concurrent background jobs |
 | `backgroundStreaming.jobTimeoutSeconds` | `OR3_BACKGROUND_JOB_TIMEOUT` | `300` | Background job timeout in seconds |
 
-### Legal
-
-| Key | Env Variable | Description |
-|-----|--------------|-------------|
-| `legal.termsUrl` | `OR3_TERMS_URL` | Terms of Service URL (footer link) |
-| `legal.privacyUrl` | `OR3_PRIVACY_URL` | Privacy Policy URL (footer link) |
+> [!NOTE]
+> Legal links (`OR3_TERMS_URL`, `OR3_PRIVACY_URL`) are configured in [or3-config](./or3-config) (base config), not `or3-cloud-config`.
 
 ### Security
 
@@ -149,8 +158,37 @@ Example `OR3_RATE_LIMIT_OVERRIDES_JSON`:
 | `security.forceHttps` | `OR3_FORCE_HTTPS` | `true` (prod) | Force HTTPS redirects |
 | `security.proxy.trustProxy` | `OR3_TRUST_PROXY` | `false` | Trust reverse-proxy headers (`X-Forwarded-*`) |
 | `security.proxy.forwardedForHeader` | `OR3_FORWARDED_FOR_HEADER` | `"x-forwarded-for"` | Which header to treat as the client IP (`x-forwarded-for` or `x-real-ip`) |
+| `security.proxy.forwardedHostHeader` | — | `"x-forwarded-host"` | Header used for forwarded host resolution (fixed) |
 
-### Admin Plugin Operations
+### Admin
+
+Admin routes are **disabled by default**. They become available only when `OR3_ADMIN_USERNAME` and `OR3_ADMIN_PASSWORD` are set.
+
+#### Dashboard & Operations
+
+| Key | Env Variable | Default | Description |
+|-----|--------------|---------|-------------|
+| `admin.basePath` | `OR3_ADMIN_BASE_PATH` | `"/admin"` | Base path for admin UI/routes |
+| `admin.allowedHosts` | `OR3_ADMIN_ALLOWED_HOSTS` | `[]` | Optional host allowlist (comma-separated). If set, admin returns 404 on other hosts |
+| `admin.allowRestart` | `OR3_ADMIN_ALLOW_RESTART` | `false` | Allow admin-initiated restarts |
+| `admin.allowRebuild` | `OR3_ADMIN_ALLOW_REBUILD` | `false` | Allow admin-initiated rebuild + restart |
+| `admin.rebuildCommand` | `OR3_ADMIN_REBUILD_COMMAND` | `"bun run build"` | Rebuild command used when `allowRebuild` is enabled |
+| `admin.extensionMaxZipBytes` | `OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES` | `25MB` | Max ZIP size for extension installs (bytes) |
+| `admin.extensionMaxFiles` | `OR3_ADMIN_EXTENSION_MAX_FILES` | `2000` | Max number of files in an extension install |
+| `admin.extensionMaxTotalBytes` | `OR3_ADMIN_EXTENSION_MAX_TOTAL_BYTES` | `200MB` | Max total unpacked bytes for an extension install (bytes) |
+| `admin.extensionAllowedExtensions` | `OR3_ADMIN_EXTENSION_ALLOWED_EXTENSIONS` | built-in allowlist | Comma-separated allowed file extensions for extension installs |
+
+#### Admin Auth (Super Admin)
+
+| Key | Env Variable | Default | Description |
+|-----|--------------|---------|-------------|
+| `admin.auth.username` | `OR3_ADMIN_USERNAME` | — | Super admin username (required to enable admin) |
+| `admin.auth.password` | `OR3_ADMIN_PASSWORD` | — | Super admin password (required to enable admin) |
+| `admin.auth.jwtSecret` | `OR3_ADMIN_JWT_SECRET` | auto-generated in dev | JWT signing secret (required in production) |
+| `admin.auth.jwtExpiry` | `OR3_ADMIN_JWT_EXPIRY` | `"24h"` | JWT/cookie expiry (`24h`, `7d`, etc.) |
+| `admin.auth.deletedWorkspaceRetentionDays` | `OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS` | unset | Days to retain soft-deleted workspaces |
+
+#### Plugin Operations
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -161,14 +199,18 @@ Example `OR3_RATE_LIMIT_OVERRIDES_JSON`:
 ## Dependency Chain
 
 ```
-auth → sync → storage
-      └─────→ rate-limit-provider
+auth ─┬→ sync
+      └→ storage
+
+sync (optional) ─→ limits.storageProvider default
+sync (optional) ─→ backgroundStreaming.storageProvider default
 ```
 
 - **Auth** is the gate—sync and storage require it
 - **Sync** defaults to enabled when auth is enabled
 - **Storage** defaults to enabled when auth is enabled
-- **Rate limit storage** uses Convex when sync is enabled, otherwise memory
+- **Rate limit storage** defaults to `sync.provider` when sync is enabled, otherwise memory
+- **Background job storage** defaults to `sync.provider` when sync is enabled, otherwise memory
 
 ## Static vs SSR Builds
 
@@ -219,6 +261,7 @@ Strict mode (production default) requires:
 - `auth.clerk.publishableKey` + `auth.clerk.secretKey` when auth enabled
 - `sync.convex.url` when sync enabled with Convex
 - `services.llm.openRouter.instanceApiKey` when `allowUserOverride: false`
+- `services.llm.openRouter.allowUserOverride` must be `true` when `requireUserKey: true`
 
 ```
 [or3-cloud-config] Configuration validation failed:

@@ -112,6 +112,15 @@ function parseSessionProvisioningFailureMode(
     return undefined;
 }
 
+function parseAuthRegistrationMode(
+    value: string | undefined
+): 'open' | 'invite_only' | 'disabled' | undefined {
+    if (value === 'open' || value === 'invite_only' || value === 'disabled') {
+        return value;
+    }
+    return undefined;
+}
+
 function parseRateLimitOverrides(
     input: string | undefined
 ): Record<string, { windowMs?: number; maxRequests?: number }> | undefined {
@@ -250,6 +259,9 @@ export function buildOr3CloudConfigFromEnv(
             provider: authProvider as AuthProviderId,
             guestAccessEnabled: env.OR3_GUEST_ACCESS_ENABLED === 'true',
             autoProvision: env.OR3_AUTH_AUTO_PROVISION !== 'false',
+            registrationMode: parseAuthRegistrationMode(
+                env.OR3_AUTH_REGISTRATION_MODE
+            ),
             sessionProvisioningFailure: parseSessionProvisioningFailureMode(
                 env.OR3_SESSION_PROVISIONING_FAILURE
             ),
@@ -340,6 +352,15 @@ export function buildOr3CloudConfigFromEnv(
                       .map((ext) => ext.trim())
                       .filter(Boolean)
                 : undefined,
+            auth: {
+                username: env.OR3_ADMIN_USERNAME || undefined,
+                password: env.OR3_ADMIN_PASSWORD || undefined,
+                jwtSecret: env.OR3_ADMIN_JWT_SECRET || undefined,
+                jwtExpiry: env.OR3_ADMIN_JWT_EXPIRY || undefined,
+                deletedWorkspaceRetentionDays: envNum(
+                    env.OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS
+                ),
+            },
         },
         backgroundStreaming: {
             enabled: env.OR3_BACKGROUND_STREAMING_ENABLED === 'true',
