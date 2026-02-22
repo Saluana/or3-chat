@@ -116,15 +116,8 @@
                     >
                         <UButton
                             v-bind="composerActionButtonProps"
-                            :color="entry.action.color || 'neutral'"
-                            :square="!entry.action.label"
                             :disabled="entry.disabled"
-                            :aria-label="
-                                entry.action.tooltip ||
-                                entry.action.label ||
-                                entry.action.id
-                            "
-                            @click="() => handleComposerAction(entry)"
+                            @click="handleComposerAction(entry)"
                         >
                             <UIcon :name="entry.action.icon" class="w-4 h-4" />
                             <span
@@ -331,9 +324,7 @@ import {
     getCurrentInstance,
 } from 'vue';
 import { useOr3Config } from '~/composables/useOr3Config';
-import { reportError, err } from '~/utils/errors';
-import { validateFile, persistAttachment } from './file-upload-utils';
-import type { FileMeta } from '~/db/schema';
+import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
 import { Editor, EditorContent } from '@tiptap/vue-3';
 import { Extension, Node } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -356,7 +347,13 @@ import {
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useButtonOverrides } from '~/composables/useTypedThemeOverrides';
 import { useIcon } from '~/composables/useIcon';
-import { useFileDialog, useDropZone, useLocalStorage } from '@vueuse/core';
+import { useLocalStorage } from '@vueuse/core';
+import type {
+    ImageSettings,
+    LargeTextBlock,
+    UploadedImage,
+} from '~/components/chat/chat-input/types';
+import { useChatInputAttachments } from '~/components/chat/chat-input/useChatInputAttachments';
 
 const props = defineProps<{
     loading?: boolean;
@@ -498,7 +495,7 @@ onMounted(async () => {
                 autoResize();
             },
             onPaste: (event) => {
-                handlePaste(event);
+                handlePaste(event, editor.value);
             },
             content: '',
         });
@@ -513,8 +510,7 @@ onBeforeUnmount(() => {
     } catch (err) {
         // Silently handle TipTap destroy error
     }
-    // Cleanup hidden file input logic removed (useFileDialog handles it)
-    attachments.value.forEach(releaseAttachment);
+    releaseAll();
 });
 
 // When starting a brand-new chat (threadId becomes falsy), honor fixed default from settings
@@ -531,24 +527,6 @@ watch(
         } catch {}
     }
 );
-
-interface UploadedImage {
-    file: File;
-    url: string; // data URL preview
-    name: string;
-    hash?: string; // content hash after persistence
-    status: 'pending' | 'ready' | 'error';
-    error?: string;
-    meta?: FileMeta;
-    mime: string;
-    kind: 'image' | 'pdf';
-}
-
-interface ImageSettings {
-    quality: 'low' | 'medium' | 'high';
-    numResults: number;
-    size: '1024x1024' | '1024x1536' | '1536x1024';
-}
 
 const showModelCatalog = ref(false);
 const showSystemPrompts = ref(false);
@@ -750,23 +728,27 @@ const dragOverlayProps = computed(() => {
     return overrides.value;
 });
 
-const attachments = ref<UploadedImage[]>([]);
-// Backward compatibility: expose as uploadedImages for template
-const uploadedImages = computed(() => attachments.value);
-// Large pasted text blocks (> threshold)
-interface LargeTextBlock {
-    id: string;
-    text: string;
-    wordCount: number;
-    preview: string;
-    previewFull: string;
-}
-const largeTextBlocks = ref<LargeTextBlock[]>([]);
-const LARGE_TEXT_WORD_THRESHOLD = 600;
-function makeId() {
-    return Math.random().toString(36).slice(2, 9);
-}
-const isDragging = ref(false);
+const or3Config = useOr3Config();
+const MAX_IMAGES = or3Config.limits.maxFilesPerMessage;
+
+const {
+    attachments,
+    uploadedImages,
+    largeTextBlocks,
+    dropZoneRef,
+    isDragging,
+    removeImage,
+    removeTextBlock,
+    clearAll,
+    releaseAll,
+    handlePaste,
+    openFileDialog,
+} = useChatInputAttachments({
+    maxFiles: MAX_IMAGES,
+    onImageAdd: (attachment) => emit('image-add', attachment),
+    onImageRemove: (index) => emit('image-remove', index),
+});
+
 const selectedModel = ref<string>('openai/gpt-oss-120b');
 // hiddenFileInput removed
 // hiddenFileInputListener removed
@@ -804,205 +786,9 @@ const handlePromptInput = () => {
     autoResize();
 };
 
-const handlePaste = async (event: ClipboardEvent) => {
-    const cd = event.clipboardData;
-    if (!cd) return;
-    // 1. Handle images and PDFs first (extended behavior)
-    const items = cd.items;
-    let handled = false;
-    for (let i = 0; i < items.length; i++) {
-        const it = items[i];
-        if (!it) continue;
-        const mime = it.type || '';
-        if (mime.startsWith('image/') || mime === 'application/pdf') {
-            event.preventDefault();
-            handled = true;
-            const file = it.getAsFile();
-            if (!file) continue;
-            await processAttachment(
-                file,
-                file.name ||
-                    `pasted-${
-                        mime.startsWith('image/') ? 'image' : 'pdf'
-                    }-${Date.now()}.${
-                        mime === 'application/pdf' ? 'pdf' : 'png'
-                    }`
-            );
-        }
-    }
-    if (handled) return; // skip text path if attachment already captured
-
-    // 2. Large text detection
-    const text = cd.getData('text/plain');
-    if (!text) return; // allow normal behavior
-    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
-    if (wordCount >= LARGE_TEXT_WORD_THRESHOLD) {
-        // Prevent the heavy text from entering the rich-text editor (lag source)
-        event.preventDefault();
-        event.stopPropagation();
-        const prev = editor.value ? editor.value.getText() : '';
-        const previewFull = text.slice(0, 800).trim();
-        const preview =
-            previewFull.split(/\s+/).slice(0, 12).join(' ') +
-            (wordCount > 12 ? '…' : '');
-        largeTextBlocks.value.push({
-            id: makeId(),
-            text,
-            wordCount,
-            preview,
-            previewFull,
-        });
-        // TipTap may still stage an insertion despite preventDefault in some edge cases;
-        // restore previous content on next tick to be safe.
-        nextTick(() => {
-            try {
-                if (editor.value)
-                    editor.value.commands.setContent(prev, {
-                        emitUpdate: false,
-                    });
-            } catch {}
-        });
-    }
-};
-
-const {
-    files: selectedFiles,
-    open,
-    reset: resetFileDialog,
-} = useFileDialog({
-    accept: 'image/*,application/pdf',
-    multiple: true,
-});
-
-watch(selectedFiles, (files) => {
-    if (files) {
-        processFiles(files);
-        resetFileDialog();
-    }
-});
-
 const triggerFileInput = () => {
     emit('trigger-file-input');
-    open();
-};
-
-const or3Config = useOr3Config();
-const MAX_IMAGES = or3Config.limits.maxFilesPerMessage;
-
-function makePreviewUrl(file: File): string {
-    try {
-        return URL.createObjectURL(file);
-    } catch {
-        return '';
-    }
-}
-function releaseAttachment(attachment: UploadedImage) {
-    try {
-        if (attachment.url && attachment.url.startsWith('blob:')) {
-            URL.revokeObjectURL(attachment.url);
-        }
-    } catch {
-        /* noop */
-    }
-}
-
-async function processAttachment(file: File, name?: string) {
-    const mime = file.type || '';
-    const validation = validateFile(file);
-    if (!validation.ok) {
-        reportError(err(validation.code, validation.message), {
-            toast: true,
-            tags: { domain: 'files', stage: 'select', mime, size: file.size },
-        });
-        return;
-    }
-    const kind = validation.kind;
-    if (attachments.value.length >= MAX_IMAGES) {
-        useToast().add({
-            title: 'Attachment limit reached',
-            description: `Maximum ${MAX_IMAGES} files per message.`,
-            color: 'warning',
-        });
-        return;
-    }
-    const previewUrl = makePreviewUrl(file);
-    const attachment: UploadedImage = {
-        file,
-        url: previewUrl,
-        name: name || file.name,
-        status: 'pending',
-        mime,
-        kind,
-    };
-    attachments.value.push(attachment);
-    emit('image-add', attachment);
-    await persistAttachment(attachment);
-}
-
-const processFiles = async (files: FileList | null) => {
-    if (!files) return;
-    for (let i = 0; i < files.length; i++) {
-        if (attachments.value.length >= MAX_IMAGES) {
-            useToast().add({
-                title: 'Attachment limit reached',
-                description: `Maximum ${MAX_IMAGES} files per message.`,
-                color: 'warning',
-            });
-            break;
-        }
-        const file = files[i];
-        if (!file) continue;
-        await processAttachment(file);
-    }
-};
-
-// handleFileChange removed (replaced by useFileDialog watcher)
-
-const dropZoneRef = ref<HTMLElement | null>(null);
-
-function onDropZoneDrop(files: File[] | null) {
-    if (files && files.length > 0) {
-        // Process each file directly
-        for (const file of files) {
-            processAttachment(file);
-        }
-    }
-}
-
-const { isOverDropZone } = useDropZone(dropZoneRef, {
-    onDrop: onDropZoneDrop,
-    dataTypes: (types) => {
-        // Accept images and PDFs
-        return types.some(
-            (t) =>
-                t.startsWith('image/') ||
-                t === 'application/pdf' ||
-                t === 'Files'
-        );
-    },
-});
-
-// Use isOverDropZone directly for UI state instead of isDragging for drop zone
-// Keep isDragging for backward compatibility with other parts
-watch(
-    isOverDropZone,
-    (v) => {
-        isDragging.value = v;
-    },
-    { immediate: true }
-);
-
-// Legacy handlers kept as no-ops since useDropZone handles everything
-const handleDrop = (event: DragEvent) => {
-    // useDropZone handles this
-};
-
-const onDragOver = (event: DragEvent) => {
-    // useDropZone handles this
-};
-
-const onDragLeave = (event: DragEvent) => {
-    // useDropZone handles this
+    openFileDialog();
 };
 
 /**
@@ -1060,30 +846,14 @@ const handleContainerClick = (event: MouseEvent) => {
     }
 };
 
-const removeImage = (index: number) => {
-    const [removed] = attachments.value.splice(index, 1);
-    if (removed) releaseAttachment(removed);
-    emit('image-remove', index);
-};
-
-const removeTextBlock = (index: number) => {
-    largeTextBlocks.value.splice(index, 1);
-};
-
 const handleSend = async () => {
     if (props.loading) return;
-    // Block send while attachments are still hashing to avoid silent loss.
-    const pendingAttachments = attachments.value.some(
-        (att) => att.status === 'pending'
-    );
-    if (pendingAttachments) {
-        useToast().add({
-            title: 'Files are still uploading',
-            description:
-                'Please wait for attachments to finish before sending.',
-            color: 'primary',
+    if (
+        !guardPendingAttachmentSend(attachments.value, useToast(), {
+            description: 'Please wait for attachments to finish before sending.',
             duration: 2600,
-        });
+        })
+    ) {
         return;
     }
     // Require OpenRouter connection (api key) before sending
@@ -1167,9 +937,7 @@ const handleSend = async () => {
             // noop
         }
         // Release any blob URLs to avoid leaking when clearing attachments
-        attachments.value.forEach(releaseAttachment);
-        attachments.value = [];
-        largeTextBlocks.value = [];
+        clearAll();
         autoResize();
     }
 };

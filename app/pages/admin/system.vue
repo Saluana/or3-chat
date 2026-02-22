@@ -16,124 +16,22 @@
 
             <template v-else>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Status Card -->
-             <div class="p-5 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
-                <h3 class="text-lg font-medium mb-4">Status</h3>
-                <div class="space-y-3 text-sm">
-                    <div class="flex justify-between items-center py-2 border-b border-[var(--md-outline-variant)]/50">
-                        <span class="opacity-70">Auth Provider</span>
-                        <div class="flex items-center gap-2">
-                            <span class="font-medium">{{ status.auth.provider }}</span>
-                            <div class="w-2 h-2 rounded-full" :class="status.auth.enabled ? 'bg-[var(--md-sys-color-success,#10b981)]' : 'bg-[var(--md-outline-variant)]'"></div>
-                        </div>
-                    </div>
-                     <div class="flex justify-between items-center py-2 border-b border-[var(--md-outline-variant)]/50">
-                        <span class="opacity-70">Sync Engine</span>
-                        <div class="flex items-center gap-2">
-                            <span class="font-medium">{{ status.sync.provider }}</span>
-                            <div class="w-2 h-2 rounded-full" :class="status.sync.enabled ? 'bg-[var(--md-sys-color-success,#10b981)]' : 'bg-[var(--md-outline-variant)]'"></div>
-                        </div>
-                    </div>
-                     <div class="flex justify-between items-center py-2 border-b border-[var(--md-outline-variant)]/50">
-                        <span class="opacity-70">Storage</span>
-                        <div class="flex items-center gap-2">
-                            <span class="font-medium">{{ status.storage.provider }}</span>
-                            <div class="w-2 h-2 rounded-full" :class="status.storage.enabled ? 'bg-[var(--md-sys-color-success,#10b981)]' : 'bg-[var(--md-outline-variant)]'"></div>
-                        </div>
-                    </div>
-                     <div class="flex justify-between items-center py-2">
-                        <span class="opacity-70">Background Streaming</span>
-                        <div class="flex items-center gap-2">
-                            <span class="font-medium">{{ status.backgroundStreaming.enabled ? 'Active' : 'Inactive' }}</span>
-                             <div class="w-2 h-2 rounded-full" :class="status.backgroundStreaming.enabled ? 'bg-[var(--md-sys-color-success,#10b981)]' : 'bg-[var(--md-outline-variant)]'"></div>
-                        </div>
-                    </div>
-                </div>
+                    <AdminSystemStatusCard :status="status" :warnings="warnings" />
 
-                 <div v-if="warnings.length > 0" class="mt-6 p-3 rounded bg-[var(--md-sys-color-warning-container,#fef3c7)] border border-[var(--md-sys-color-warning,#f59e0b)]/20">
-                    <div class="text-xs font-bold text-[var(--md-sys-color-on-warning-container,#92400e)] uppercase mb-2">Warnings</div>
-                    <div class="space-y-1">
-                        <div
-                            v-for="(w, idx) in warnings"
-                            :key="idx"
-                            class="text-sm text-[var(--md-sys-color-on-warning-container,#92400e)]"
-                        >
-                            • {{ w.message }}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Operations Card -->
-            <div class="p-5 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
-                 <h3 class="text-lg font-medium mb-4">Operations</h3>
-                 <div class="space-y-4">
-                    <p class="text-sm opacity-70">
-                        Manage server lifecycle. These actions may cause temporary downtime.
-                    </p>
-                    
-                    <!-- Info about disabled buttons -->
-                    <div v-if="!status?.admin?.allowRestart && !status?.admin?.allowRebuild" class="p-3 rounded bg-[var(--md-sys-color-info-container,#dbeafe)] border border-[var(--md-sys-color-info,#3b82f6)]/20">
-                        <div class="text-xs font-bold text-[var(--md-sys-color-on-info-container,#1e3a8a)] uppercase mb-1">Info</div>
-                        <div class="text-sm text-[var(--md-sys-color-on-info-container,#1e40af)]">
-                            Server operations are disabled. To enable, set <code class="text-xs bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded">OR3_ADMIN_ALLOW_RESTART=true</code> or <code class="text-xs bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded">OR3_ADMIN_ALLOW_REBUILD=true</code> in your environment.
-                        </div>
-                    </div>
-
-                    <div class="flex flex-col gap-3">
-                         <UButton
-                            color="neutral"
-                            variant="soft"
-                            icon="i-heroicons-arrow-path"
-                            :disabled="!isOwner || !status?.admin?.allowRestart"
-                            @click="restart"
-                        >
-                            Restart Server
-                        </UButton>
-                        <UButton
-                            color="neutral"
-                            variant="soft"
-                            icon="i-heroicons-wrench-screwdriver"
-                            :disabled="!isOwner || !status?.admin?.allowRebuild"
-                            @click="rebuildRestart"
-                        >
-                            Rebuild & Restart
-                        </UButton>
-                    </div>
-                 </div>
-            </div>
+                    <AdminSystemOperationsCard
+                        :is-owner="isOwner"
+                        :allow-restart="Boolean(status?.admin?.allowRestart)"
+                        :allow-rebuild="Boolean(status?.admin?.allowRebuild)"
+                        @restart="restart"
+                        @rebuild-restart="rebuildRestart"
+                    />
         </div>
 
-                <div v-if="providerActions.length > 0">
-                    <h3 class="text-lg font-semibold mb-3">Provider Actions</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div
-                    v-for="action in providerActions"
-                    :key="action.kind + ':' + action.id"
-                    class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)]"
-                >
-                    <div class="flex justify-between items-start mb-2">
-                         <div class="text-xs font-bold uppercase opacity-50 tracking-wider">{{ action.kind }}</div>
-                         <div class="text-xs opacity-50">{{ action.provider }}</div>
-                    </div>
-                   
-                    <div class="font-medium text-base mb-1">{{ action.label }}</div>
-                     <div v-if="action.description" class="text-sm opacity-70 mb-4 h-10 line-clamp-2">
-                        {{ action.description }}
-                    </div>
-                    <UButton
-                        size="xs"
-                        block
-                        :color="action.danger ? 'warning' : 'primary'"
-                        :variant="action.danger ? 'soft' : 'solid'"
-                        :disabled="!isOwner"
-                        @click="runProviderAction(action)"
-                    >
-                        Run Action
-                    </UButton>
-                </div>
-            </div>
-        </div>
+                <AdminSystemProviderActions
+                    :actions="providerActions"
+                    :is-owner="isOwner"
+                    @run="runProviderAction"
+                />
 
                 <!-- Restart Required Banner -->
                 <div v-if="restartRequired" class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)] flex items-center justify-between gap-4">
@@ -245,6 +143,9 @@ import { useServerRestart } from '~/composables/admin/useServerRestart';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
 import type { ConfigGroup, EnrichedConfigEntry, ProviderAction } from '~/composables/admin/useAdminTypes';
+import AdminSystemStatusCard from '~/components/admin/system/AdminSystemStatusCard.vue';
+import AdminSystemOperationsCard from '~/components/admin/system/AdminSystemOperationsCard.vue';
+import AdminSystemProviderActions from '~/components/admin/system/AdminSystemProviderActions.vue';
 
 definePageMeta({
     layout: 'admin',

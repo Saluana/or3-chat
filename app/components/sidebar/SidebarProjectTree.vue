@@ -153,9 +153,9 @@ import {
     type ProjectEntry,
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
+import { useSidebarProjectActionButtonProps } from '~/composables/sidebar/useSidebarProjectActionButtonProps';
 
 const { handlePopoverTriggerKey } = usePopoverKeyboard();
 
@@ -217,89 +217,35 @@ watch(
 );
 watch(internalExpanded, (val) => emit('update:expanded', val));
 
-// Theme overrides for project action buttons
-const renameProjectButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.project-rename',
-        isNuxtUI: true,
-    });
-    return {
-        color: 'neutral' as const,
-        variant: 'popover' as const,
-        size: 'sm' as const,
-        icon: useIcon('ui.edit').value,
-        class: 'w-full justify-start cursor-pointer',
-        ...(overrides.value as any),
-    };
+const renameProjectButtonProps = useSidebarProjectActionButtonProps({
+    identifier: 'sidebar.project-rename',
+    icon: useIcon('ui.edit').value,
+    className: 'w-full justify-start cursor-pointer',
 });
 
-const deleteProjectButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.project-delete',
-        isNuxtUI: true,
-    });
-    return {
-        color: 'neutral' as const,
-        variant: 'popover' as const,
-        size: 'sm' as const,
-        icon: useIcon('ui.trash').value,
-        class: 'w-full justify-start cursor-pointer text-[var(--md-error)] hover:bg-[var(--md-error)]/10 active:bg-[var(--md-error)]/15',
-        ...(overrides.value as any),
-    };
+const deleteProjectButtonProps = useSidebarProjectActionButtonProps({
+    identifier: 'sidebar.project-delete',
+    icon: useIcon('ui.trash').value,
+    className:
+        'w-full justify-start cursor-pointer text-[var(--md-error)] hover:bg-[var(--md-error)]/10 active:bg-[var(--md-error)]/15',
 });
 
-const renameEntryButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.project-entry-rename',
-        isNuxtUI: true,
-    });
-    return {
-        color: 'neutral' as const,
-        variant: 'popover' as const,
-        size: 'sm' as const,
-        icon: useIcon('ui.edit').value,
-        class: 'w-full justify-start',
-        ...(overrides.value as any),
-    };
+const renameEntryButtonProps = useSidebarProjectActionButtonProps({
+    identifier: 'sidebar.project-entry-rename',
+    icon: useIcon('ui.edit').value,
+    className: 'w-full justify-start',
 });
 
-const removeEntryButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.project-entry-remove',
-        isNuxtUI: true,
-    });
-    return {
-        color: 'neutral' as const,
-        variant: 'popover' as const,
-        size: 'sm' as const,
-        icon: useIcon('ui.trash').value,
-        class: 'w-full justify-start text-[var(--md-error)] hover:bg-[var(--md-error)]/10 active:bg-[var(--md-error)]/15',
-        ...(overrides.value as any),
-    };
+const removeEntryButtonProps = useSidebarProjectActionButtonProps({
+    identifier: 'sidebar.project-entry-remove',
+    icon: useIcon('ui.trash').value,
+    className:
+        'w-full justify-start text-[var(--md-error)] hover:bg-[var(--md-error)]/10 active:bg-[var(--md-error)]/15',
 });
 
-const extraActionButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.project-extra-action',
-        isNuxtUI: true,
-    });
-    return {
-        color: 'neutral' as const,
-        variant: 'popover' as const,
-        size: 'sm' as const,
-        class: 'w-full justify-start',
-        ...(overrides.value as any),
-    };
+const extraActionButtonProps = useSidebarProjectActionButtonProps({
+    identifier: 'sidebar.project-extra-action',
+    className: 'w-full justify-start',
 });
 
 const treeItems = computed<TreeItem[]>(() =>

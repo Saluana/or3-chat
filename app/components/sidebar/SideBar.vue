@@ -59,144 +59,35 @@
         />
     </div>
 
-    <!-- Rename modal -->
-    <UModal
-        v-bind="renameModalProps"
-        v-model:open="showRenameModal"
-        :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
-    >
-        <template #body>
-            <div class="space-y-4">
-                <UInput
-                    v-model="renameTitle"
-                    class="w-full"
-                    :placeholder="
-                        isRenamingDoc ? 'Document title' : 'Thread title'
-                    "
-                    :icon="iconEdit"
-                    @keyup.enter="saveRename"
-                />
-            </div>
-        </template>
-        <template #footer>
-            <UButton
-                variant="ghost"
-                class="theme-btn"
-                @click="showRenameModal = false"
-                >Cancel</UButton
-            >
-            <UButton color="primary" class="theme-btn" @click="saveRename"
-                >Save</UButton
-            >
-        </template>
-    </UModal>
-
-    <!-- Rename Project Modal -->
-    <UModal
-        v-bind="renameProjectModalProps"
-        v-model:open="showRenameProjectModal"
-        title="Rename project"
-    >
-        <template #header><h3>Rename project?</h3></template>
-        <template #body>
-            <div class="space-y-4">
-                <UInput
-                    v-model="renameProjectName"
-                    placeholder="Project name"
-                    :icon="iconFolder"
-                    @keyup.enter="saveRenameProject"
-                />
-            </div>
-        </template>
-        <template #footer>
-            <UButton
-                variant="ghost"
-                class="theme-btn"
-                @click="showRenameProjectModal = false"
-                >Cancel</UButton
-            >
-            <UButton
-                color="primary"
-                class="theme-btn"
-                :disabled="!renameProjectName.trim()"
-                @click="saveRenameProject"
-                >Save</UButton
-            >
-        </template>
-    </UModal>
-
-    <!-- Delete confirm modal -->
-    <UModal
-        v-bind="deleteThreadModalProps"
-        v-model:open="showDeleteModal"
-        title="Delete thread"
-    >
-        <template #body>
-            <p class="text-sm opacity-70">
-                This will permanently remove the thread and its messages.
-            </p>
-        </template>
-        <template #footer>
-            <UButton
-                variant="ghost"
-                class="theme-btn"
-                @click="showDeleteModal = false"
-                >Cancel</UButton
-            >
-            <UButton color="error" class="theme-btn" @click="deleteThread"
-                >Delete</UButton
-            >
-        </template>
-    </UModal>
-
-    <!-- Delete document confirm modal -->
-    <UModal
-        v-bind="deleteDocumentModalProps"
-        v-model:open="showDeleteDocumentModal"
-        title="Delete document"
-    >
-        <template #body>
-            <p class="text-sm opacity-70">
-                This will permanently remove the document.
-            </p>
-        </template>
-        <template #footer>
-            <UButton
-                variant="ghost"
-                class="theme-btn"
-                @click="showDeleteDocumentModal = false"
-                >Cancel</UButton
-            >
-            <UButton color="error" class="theme-btn" @click="deleteDocument"
-                >Delete</UButton
-            >
-        </template>
-    </UModal>
-
-    <!-- Delete project confirm modal -->
-    <UModal
-        v-bind="deleteProjectModalProps"
-        v-model:open="showDeleteProjectModal"
-        title="Delete project"
-    >
-        <template #body>
-            <p class="text-sm opacity-70">
-                This will remove the project from the sidebar. Project data will
-                be soft-deleted and can be recovered.
-            </p>
-        </template>
-        <template #footer>
-            <UButton
-                variant="ghost"
-                class="theme-btn"
-                @click="showDeleteProjectModal = false"
-                >Cancel</UButton
-            >
-            <UButton color="error" class="theme-btn" @click="deleteProject"
-                >Delete</UButton
-            >
-        </template>
-    </UModal>
+    <SidebarEntityModals
+        :rename-modal-props="renameModalProps"
+        :show-rename-modal="showRenameModal"
+        :rename-title="renameTitle"
+        :is-renaming-doc="isRenamingDoc"
+        :icon-edit="iconEdit"
+        :rename-project-modal-props="renameProjectModalProps"
+        :show-rename-project-modal="showRenameProjectModal"
+        :rename-project-name="renameProjectName"
+        :icon-folder="iconFolder"
+        :delete-thread-modal-props="deleteThreadModalProps"
+        :show-delete-modal="showDeleteModal"
+        :delete-document-modal-props="deleteDocumentModalProps"
+        :show-delete-document-modal="showDeleteDocumentModal"
+        :delete-project-modal-props="deleteProjectModalProps"
+        :show-delete-project-modal="showDeleteProjectModal"
+        @update:show-rename-modal="showRenameModal = $event"
+        @update:rename-title="renameTitle = $event"
+        @save-rename="saveRename"
+        @update:show-rename-project-modal="showRenameProjectModal = $event"
+        @update:rename-project-name="renameProjectName = $event"
+        @save-rename-project="saveRenameProject"
+        @update:show-delete-modal="showDeleteModal = $event"
+        @delete-thread="deleteThread"
+        @update:show-delete-document-modal="showDeleteDocumentModal = $event"
+        @delete-document="deleteDocument"
+        @update:show-delete-project-modal="showDeleteProjectModal = $event"
+        @delete-project="deleteProject"
+    />
 
     <!-- Create Project Modal -->
     <UModal
@@ -526,6 +417,7 @@ const projects = ref<SidebarProject[]>([]);
 const expandedProjects = ref<string[]>([]);
 const listHeight = ref(400);
 import { useSidebarSearch } from '~/composables/sidebar/useSidebarSearch';
+import { useSidebarProjectDisplay } from '~/composables/sidebar/useSidebarProjectDisplay';
 import {
     useSidebarSections,
     useSidebarFooterActions,
@@ -688,54 +580,17 @@ const {
     documentResults,
 } = useSidebarSearch(items, projects, docs);
 
-const displayThreads = computed(() =>
-    sidebarQuery.value.trim() ? threadResults.value : items.value
-);
-// Filter projects + entries when query active
-const projectsFilteredByExistence = computed<SidebarProject[]>(() => {
-    const threadSet = new Set(items.value.map((t) => t.id));
-    const docSet = new Set(docs.value.map((d) => d.id));
-
-    return projects.value.map((p) => {
-        const filteredEntries = p.data.filter((entry) => {
-            const id = entry?.id;
-            if (!id) return false;
-            const kind = entry.kind ?? 'chat';
-            return (
-                (kind === 'chat' && threadSet.has(id)) ||
-                (kind === 'doc' && docSet.has(id)) ||
-                (kind !== 'chat' && kind !== 'doc')
-            );
-        });
-        return filteredEntries.length === p.data.length
-            ? p
-            : { ...p, data: filteredEntries };
+const { displayThreads, displayProjects, displayDocuments } =
+    useSidebarProjectDisplay({
+        sidebarQuery,
+        items,
+        projects,
+        docs,
+        threadResults,
+        projectResults,
+        documentResults: documentResults as Ref<Post[]>,
+        documentsEnabled,
     });
-});
-
-const displayProjects = computed<SidebarProject[]>(() => {
-    if (!sidebarQuery.value.trim()) return projectsFilteredByExistence.value;
-    const threadSet = new Set(threadResults.value.map((t: any) => t.id));
-    const docSet = new Set(documentResults.value.map((d: any) => d.id));
-    const directProjectSet = new Set(
-        projectResults.value.map((p: any) => p.id)
-    );
-    const results: SidebarProject[] = [];
-    for (const project of projectsFilteredByExistence.value) {
-        const filteredEntries = project.data.filter(
-            (entry) => threadSet.has(entry.id) || docSet.has(entry.id)
-        );
-        if (directProjectSet.has(project.id) || filteredEntries.length > 0) {
-            results.push({ ...project, data: filteredEntries });
-        }
-    }
-    return results;
-});
-const displayDocuments = computed(() =>
-    documentsEnabled.value && sidebarQuery.value.trim()
-        ? (documentResults.value as Post[])
-        : undefined
-);
 function onEscapeClear() {
     if (sidebarQuery.value) sidebarQuery.value = '';
 }

@@ -65,6 +65,7 @@ import { Placeholder } from '@tiptap/extensions';
 import { useDebounceFn } from '@vueuse/core';
 import { getPrompt, updatePrompt, type PromptRecord } from '~/db/prompts';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
 
 const props = defineProps<{ promptId: string }>();
 const emit = defineEmits<{ (e: 'back'): void }>();
@@ -237,18 +238,13 @@ const backButtonProps = computed(() => {
         identifier: 'prompt.back',
         isNuxtUI: true,
     });
-    const overridesValue = (overrides.value as Record<string, any>) || {};
-    const { class: overrideClass = '', ...restOverrides } = overridesValue;
     return {
         variant: 'outline' as const,
         size: 'sm' as const,
-        class: [
-            'prompt-editor-back-btn flex items-center justify-center h-[40px] w-[40px] mr-3',
-            overrideClass,
-        ]
-            .filter(Boolean)
-            .join(' '),
-        ...restOverrides,
+        ...buildThemeOverrideProps(overrides.value, {
+            baseClass:
+                'prompt-editor-back-btn flex items-center justify-center h-[40px] w-[40px] mr-3',
+        }),
     };
 });
 

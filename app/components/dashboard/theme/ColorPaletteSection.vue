@@ -167,115 +167,48 @@ const colorGroups = [
     },
 ];
 
+const allColorKeys = colorGroups.flatMap((group) =>
+    group.colors.map((color) => color.key as ColorKey)
+);
+
+const colorCssVarMap: Record<ColorKey, string> = {
+    primary: '--md-primary',
+    onPrimary: '--md-on-primary',
+    primaryContainer: '--md-primary-container',
+    onPrimaryContainer: '--md-on-primary-container',
+    secondary: '--md-secondary',
+    onSecondary: '--md-on-secondary',
+    secondaryContainer: '--md-secondary-container',
+    onSecondaryContainer: '--md-on-secondary-container',
+    tertiary: '--md-tertiary',
+    onTertiary: '--md-on-tertiary',
+    tertiaryContainer: '--md-tertiary-container',
+    onTertiaryContainer: '--md-on-tertiary-container',
+    error: '--md-error',
+    onError: '--md-on-error',
+    errorContainer: '--md-error-container',
+    onErrorContainer: '--md-on-error-container',
+    surface: '--md-surface',
+    onSurface: '--md-on-surface',
+    surfaceVariant: '--md-surface-variant',
+    onSurfaceVariant: '--md-on-surface-variant',
+    inverseSurface: '--md-inverse-surface',
+    inverseOnSurface: '--md-inverse-on-surface',
+    outline: '--md-outline',
+    outlineVariant: '--md-outline-variant',
+    success: '--md-extended-color-success-color',
+    warning: '--md-extended-color-warning-color',
+};
+
 // Local hex inputs
-const localHex: Record<ColorKey, string> = reactive({
-    primary: String(overrides.value.colors?.primary || '').startsWith('#')
-        ? String(overrides.value.colors?.primary)
-        : '',
-    onPrimary: String(overrides.value.colors?.onPrimary || '').startsWith('#')
-        ? String(overrides.value.colors?.onPrimary)
-        : '',
-    primaryContainer: String(
-        overrides.value.colors?.primaryContainer || ''
-    ).startsWith('#')
-        ? String(overrides.value.colors?.primaryContainer)
-        : '',
-    onPrimaryContainer: String(
-        overrides.value.colors?.onPrimaryContainer || ''
-    ).startsWith('#')
-        ? String(overrides.value.colors?.onPrimaryContainer)
-        : '',
-    secondary: String(overrides.value.colors?.secondary || '').startsWith('#')
-        ? String(overrides.value.colors?.secondary)
-        : '',
-    onSecondary: String(overrides.value.colors?.onSecondary || '').startsWith(
-        '#'
-    )
-        ? String(overrides.value.colors?.onSecondary)
-        : '',
-    secondaryContainer: String(
-        overrides.value.colors?.secondaryContainer || ''
-    ).startsWith('#')
-        ? String(overrides.value.colors?.secondaryContainer)
-        : '',
-    onSecondaryContainer: String(
-        overrides.value.colors?.onSecondaryContainer || ''
-    ).startsWith('#')
-        ? String(overrides.value.colors?.onSecondaryContainer)
-        : '',
-    tertiary: String(overrides.value.colors?.tertiary || '').startsWith('#')
-        ? String(overrides.value.colors?.tertiary)
-        : '',
-    onTertiary: String(overrides.value.colors?.onTertiary || '').startsWith('#')
-        ? String(overrides.value.colors?.onTertiary)
-        : '',
-    tertiaryContainer: String(
-        overrides.value.colors?.tertiaryContainer || ''
-    ).startsWith('#')
-        ? String(overrides.value.colors?.tertiaryContainer)
-        : '',
-    onTertiaryContainer: String(
-        overrides.value.colors?.onTertiaryContainer || ''
-    ).startsWith('#')
-        ? String(overrides.value.colors?.onTertiaryContainer)
-        : '',
-    error: String(overrides.value.colors?.error || '').startsWith('#')
-        ? String(overrides.value.colors?.error)
-        : '',
-    onError: String(overrides.value.colors?.onError || '').startsWith('#')
-        ? String(overrides.value.colors?.onError)
-        : '',
-    errorContainer: String(
-        overrides.value.colors?.errorContainer || ''
-    ).startsWith('#')
-        ? String(overrides.value.colors?.errorContainer)
-        : '',
-    onErrorContainer: String(
-        overrides.value.colors?.onErrorContainer || ''
-    ).startsWith('#')
-        ? String(overrides.value.colors?.onErrorContainer)
-        : '',
-    surface: String(overrides.value.colors?.surface || '').startsWith('#')
-        ? String(overrides.value.colors?.surface)
-        : '',
-    onSurface: String(overrides.value.colors?.onSurface || '').startsWith('#')
-        ? String(overrides.value.colors?.onSurface)
-        : '',
-    surfaceVariant: String(
-        overrides.value.colors?.surfaceVariant || ''
-    ).startsWith('#')
-        ? String(overrides.value.colors?.surfaceVariant)
-        : '',
-    onSurfaceVariant: String(
-        overrides.value.colors?.onSurfaceVariant || ''
-    ).startsWith('#')
-        ? String(overrides.value.colors?.onSurfaceVariant)
-        : '',
-    inverseSurface: String(
-        overrides.value.colors?.inverseSurface || ''
-    ).startsWith('#')
-        ? String(overrides.value.colors?.inverseSurface)
-        : '',
-    inverseOnSurface: String(
-        overrides.value.colors?.inverseOnSurface || ''
-    ).startsWith('#')
-        ? String(overrides.value.colors?.inverseOnSurface)
-        : '',
-    outline: String(overrides.value.colors?.outline || '').startsWith('#')
-        ? String(overrides.value.colors?.outline)
-        : '',
-    outlineVariant: String(
-        overrides.value.colors?.outlineVariant || ''
-    ).startsWith('#')
-        ? String(overrides.value.colors?.outlineVariant)
-        : '',
-    success: String(overrides.value.colors?.success || '').startsWith('#')
-        ? String(overrides.value.colors?.success)
-        : '',
-    warning: String(overrides.value.colors?.warning || '').startsWith('#')
-        ? String(overrides.value.colors?.warning)
-        : '',
-});
+const localHex: Record<ColorKey, string> = reactive(
+    Object.fromEntries(
+        allColorKeys.map((key) => {
+            const value = String(overrides.value.colors?.[key] || '');
+            return [key, value.startsWith('#') ? value : ''];
+        })
+    ) as Record<ColorKey, string>
+);
 
 // Theme overrides for UI components
 const paletteColorPickerProps = computed(() => {
@@ -344,42 +277,15 @@ function togglePaletteOverrides() {
 
     if (!currentlyEnabled) {
         // Enabling: Initialize with current theme colors
-        const colorMap: Array<[string, string]> = [
-            ['primary', '--md-primary'],
-            ['onPrimary', '--md-on-primary'],
-            ['primaryContainer', '--md-primary-container'],
-            ['onPrimaryContainer', '--md-on-primary-container'],
-            ['secondary', '--md-secondary'],
-            ['onSecondary', '--md-on-secondary'],
-            ['secondaryContainer', '--md-secondary-container'],
-            ['onSecondaryContainer', '--md-on-secondary-container'],
-            ['tertiary', '--md-tertiary'],
-            ['onTertiary', '--md-on-tertiary'],
-            ['tertiaryContainer', '--md-tertiary-container'],
-            ['onTertiaryContainer', '--md-on-tertiary-container'],
-            ['error', '--md-error'],
-            ['onError', '--md-on-error'],
-            ['errorContainer', '--md-error-container'],
-            ['onErrorContainer', '--md-on-error-container'],
-            ['surface', '--md-surface'],
-            ['onSurface', '--md-on-surface'],
-            ['surfaceVariant', '--md-surface-variant'],
-            ['onSurfaceVariant', '--md-on-surface-variant'],
-            ['inverseSurface', '--md-inverse-surface'],
-            ['inverseOnSurface', '--md-inverse-on-surface'],
-            ['outline', '--md-outline'],
-            ['outlineVariant', '--md-outline-variant'],
-            ['success', '--md-extended-color-success-color'],
-            ['warning', '--md-extended-color-warning-color'],
-        ];
-
         const initialColors: Partial<Record<ColorKey, string>> & {
             enabled: boolean;
         } = { enabled: true };
-        for (const [key, cssVar] of colorMap) {
+        for (const key of allColorKeys) {
+            const cssVar = colorCssVarMap[key];
+            if (!cssVar) continue;
             const color = getCurrentThemeColor(cssVar);
             if (color) {
-                initialColors[key as ColorKey] = color;
+                initialColors[key] = color;
             }
         }
 

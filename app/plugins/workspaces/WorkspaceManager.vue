@@ -202,17 +202,18 @@ import type { WorkspaceSummary } from '~/core/workspace/types';
 import {
     getActiveWorkspaceId,
     getDefaultDb,
-    getWorkspaceDb,
 } from '~/db/client';
 import { getKvByName, setKvByName } from '~/db/kv';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useWorkspaceManagerSession } from '~/composables/workspace/useWorkspaceManagerSession';
+import { useWorkspaceManagerCache } from '~/composables/workspace/useWorkspaceManagerCache';
+import { useWorkspaceLegacyImport } from '~/composables/workspace/useWorkspaceLegacyImport';
 
 const toast = useToast();
 const baseDb = getDefaultDb();
 const cacheKey = 'workspace.manager.cache';
 const logoutPolicyPrefix = 'workspace.logout.policy.';
-const authSessionStorageKey = 'or3:auth-session-changed';
 
 const workspaceApi = useWorkspaceApi();
 const workspaces = ref<WorkspaceSummary[]>([]);
@@ -250,109 +251,26 @@ const logoutPolicySelectProps = computed(() => {
     };
 });
 
-const cachedWorkspaces = ref<WorkspaceSummary[]>([]);
-const cachedActiveId = ref<string | null>(null);
-const legacyStats = ref({ threads: 0, messages: 0, projects: 0 });
 const importing = ref(false);
 
 const sessionContext = useSessionContext();
+const {
+    refreshSessionUntilWorkspace,
+    refreshSessionAfterWorkspaceRemoval,
+    notifyOtherTabsAuthSessionChanged,
+} = useWorkspaceManagerSession(sessionContext);
 
-async function refreshSessionUntilWorkspace(workspaceId: string): Promise<boolean> {
-    // Keep this tight: we just need to beat eventual consistency + any client caches.
-    // The server endpoint is now `no-store`, but retries handle backend propagation.
-    const delaysMs = [0, 100, 200, 400, 800];
-    for (const delay of delaysMs) {
-        if (delay) {
-            await new Promise((resolve) => setTimeout(resolve, delay));
-        }
-        await sessionContext.refresh();
-        const current = sessionContext.data.value?.session?.workspace?.id ?? null;
-        if (current === workspaceId) return true;
-    }
-    return false;
-}
+const { cachedWorkspaces, cachedActiveId, loadCache, saveCache } =
+    useWorkspaceManagerCache(baseDb, cacheKey);
 
-async function refreshSessionAfterWorkspaceRemoval(
-    removedWorkspaceId: string
-): Promise<string | null> {
-    const delaysMs = [0, 100, 200, 400, 800];
-    let latestWorkspaceId: string | null = null;
-
-    for (const delay of delaysMs) {
-        if (delay) {
-            await new Promise((resolve) => setTimeout(resolve, delay));
-        }
-        await sessionContext.refresh();
-        latestWorkspaceId = sessionContext.data.value?.session?.workspace?.id ?? null;
-        if (latestWorkspaceId !== removedWorkspaceId) {
-            return latestWorkspaceId;
-        }
-    }
-
-    return latestWorkspaceId;
-}
-
-function notifyOtherTabsAuthSessionChanged(): void {
-    try {
-        localStorage.setItem(authSessionStorageKey, String(Date.now()));
-    } catch {
-        // Best effort only; ignore storage failures (private mode/quota/etc.)
-    }
-}
-
-const legacyHasData = computed(
-    () =>
-        legacyStats.value.threads > 0 ||
-        legacyStats.value.messages > 0 ||
-        legacyStats.value.projects > 0
-);
+const { legacyStats, legacyHasData, loadLegacyStats, importLocalData: runLegacyImport } =
+    useWorkspaceLegacyImport(baseDb);
 
 const displayWorkspaces = computed(() =>
     workspaces.value && workspaces.value.length > 0
         ? workspaces.value
         : cachedWorkspaces.value
 );
-
-async function loadCache() {
-    const cached = await getKvByName(cacheKey, baseDb);
-    if (!cached?.value) return;
-    try {
-        const parsed = JSON.parse(cached.value) as {
-            workspaces?: WorkspaceSummary[];
-            activeId?: string | null;
-        };
-        cachedActiveId.value = parsed.activeId ?? null;
-        cachedWorkspaces.value = (parsed.workspaces ?? []).map((workspace) => ({
-            ...workspace,
-            isActive: workspace.id === cachedActiveId.value,
-        }));
-    } catch {
-        cachedWorkspaces.value = [];
-        cachedActiveId.value = null;
-    }
-}
-
-async function saveCache(list: WorkspaceSummary[]) {
-    const activeId = list.find((ws) => ws.isActive)?.id ?? cachedActiveId.value;
-    cachedActiveId.value = activeId ?? null;
-    await setKvByName(
-        cacheKey,
-        JSON.stringify({ workspaces: list, activeId: cachedActiveId.value }),
-        baseDb
-    );
-}
-
-async function loadLegacyStats() {
-    try {
-        legacyStats.value = {
-            threads: await baseDb.threads.count(),
-            messages: await baseDb.messages.count(),
-            projects: await baseDb.projects.count(),
-        };
-    } catch {
-        legacyStats.value = { threads: 0, messages: 0, projects: 0 };
-    }
-}
 
 async function importLocalData() {
     const activeWorkspaceId = getActiveWorkspaceId() ?? cachedActiveId.value;
@@ -372,49 +290,7 @@ async function importLocalData() {
 
     importing.value = true;
     try {
-        const targetDb = getWorkspaceDb(activeWorkspaceId);
-        
-        // Define tables with their types
-        const tableDefinitions = {
-            projects: targetDb.projects,
-            threads: targetDb.threads,
-            messages: targetDb.messages,
-            kv: targetDb.kv,
-            attachments: targetDb.attachments,
-            file_meta: targetDb.file_meta,
-            file_blobs: targetDb.file_blobs,
-            posts: targetDb.posts,
-        } as const;
-
-        // Wrap entire import in a single transaction for atomicity
-        await targetDb.transaction(
-            'rw',
-            Object.values(tableDefinitions),
-            async () => {
-                
-                async function copyTable<T>(
-                    tableName: string,
-                    sourceTable: { toArray: () => Promise<T[]> },
-                    targetTable: { bulkPut: (items: readonly T[]) => Promise<any> }
-                ) {
-                    const sourceRows = await sourceTable.toArray();
-                    if (sourceRows.length === 0) return;
-                    await targetTable.bulkPut(sourceRows);
-                    console.log(`[import] Copied ${sourceRows.length} rows from ${tableName}`);
-                }
-
-                await copyTable('projects', baseDb.projects, targetDb.projects);
-                await copyTable('threads', baseDb.threads, targetDb.threads);
-                await copyTable('messages', baseDb.messages, targetDb.messages);
-                await copyTable('kv', baseDb.kv, targetDb.kv);
-                await copyTable('attachments', baseDb.attachments, targetDb.attachments);
-                await copyTable('file_meta', baseDb.file_meta, targetDb.file_meta);
-                await copyTable('file_blobs', baseDb.file_blobs, targetDb.file_blobs);
-                await copyTable('posts', baseDb.posts, targetDb.posts);
-            }
-        );
-
-        await loadLegacyStats();
+        await runLegacyImport(activeWorkspaceId);
         toast.add({
             title: 'Import complete',
             description: 'Local data copied into the active workspace.',

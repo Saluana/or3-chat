@@ -172,7 +172,7 @@ import {
     withSerializedAccessPolicy,
     type AccessEditorState,
 } from '~/utils/admin/plugin-access-policy';
-import { useAdminWorkspaceContext } from '~/composables/admin/useAdminWorkspaceContext';
+import { useAdminWorkspaceGate } from '~/composables/admin/useAdminWorkspaceGate';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
 
 definePageMeta({
@@ -180,31 +180,18 @@ definePageMeta({
     middleware: ['admin-auth'],
 });
 
-const { hasWorkspace, selectWorkspace, selectedWorkspaceId } = useAdminWorkspaceContext();
-const showWorkspaceSelector = ref(false);
-
-// Show workspace selector if no workspace selected
-if (!hasWorkspace.value) {
-    showWorkspaceSelector.value = true;
-}
-
-// Handle workspace selection
-function onWorkspaceSelected(workspace: any) {
-    selectWorkspace(workspace);
-}
+const { selectedWorkspaceId, showWorkspaceSelector, onWorkspaceSelected } =
+    useAdminWorkspaceGate(async (workspaceId) => {
+        if (workspaceId.value) {
+            await refreshWorkspace();
+        }
+    });
 
 // 1. Fetch Extensions
 const { data, status, refresh: refreshNuxtData } = useAdminExtensions();
 
 // 2. Fetch Workspace (for role and enabled plugins)
 const { data: workspaceData, refresh: refreshWorkspace } = useAdminWorkspace(selectedWorkspaceId);
-
-// Watch for workspace changes and refresh
-watch(selectedWorkspaceId, (newId) => {
-    if (newId) {
-        refreshWorkspace();
-    }
-});
 
 // 3. Auth & Permissions
 const { isOwner } = useAdminAuth(workspaceData);

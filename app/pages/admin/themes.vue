@@ -113,7 +113,7 @@ import { useExtensionManagement } from '~/composables/admin/useExtensionManageme
 import { useServerRestart } from '~/composables/admin/useServerRestart';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
-import { useAdminWorkspaceContext } from '~/composables/admin/useAdminWorkspaceContext';
+import { useAdminWorkspaceGate } from '~/composables/admin/useAdminWorkspaceGate';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
 
 definePageMeta({
@@ -121,27 +121,15 @@ definePageMeta({
     middleware: ['admin-auth'],
 });
 
-const { hasWorkspace, selectWorkspace, selectedWorkspaceId } = useAdminWorkspaceContext();
-const showWorkspaceSelector = ref(false);
-
-// Show workspace selector if no workspace selected
-if (!hasWorkspace.value) {
-    showWorkspaceSelector.value = true;
-}
-
-// Handle workspace selection
-function onWorkspaceSelected(workspace: any) {
-    selectWorkspace(workspace);
-}
+const { selectedWorkspaceId, showWorkspaceSelector, onWorkspaceSelected } =
+    useAdminWorkspaceGate(async (workspaceId) => {
+        if (workspaceId.value) {
+            await refreshWorkspace();
+        }
+    });
 
 const { data, status: extStatus, refresh: refreshExtensions } = useAdminExtensions();
 const { data: workspaceData, status: workspaceStatus, refresh: refreshWorkspace } = useAdminWorkspace(selectedWorkspaceId);
-
-watch(selectedWorkspaceId, (newId) => {
-    if (newId) {
-        refreshWorkspace();
-    }
-});
 const { data: configData, status: configStatus, refresh: refreshConfig } = useAdminSystemConfig();
 const { data: statusData } = useAdminSystemStatus();
 

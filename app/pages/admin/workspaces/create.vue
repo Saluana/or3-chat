@@ -109,11 +109,12 @@
 </template>
 
 <script setup lang="ts">
-interface User {
-    userId: string;
-    email?: string;
-    displayName?: string;
-}
+import {
+    useAdminUserLookup,
+    type AdminLookupUser,
+} from '~/composables/admin/useAdminUserLookup';
+
+type User = AdminLookupUser;
 
 interface FormState {
     name: string;
@@ -137,9 +138,13 @@ const form = reactive<FormState>({
 });
 
 const ownerSearch = ref('');
-const ownerResults = ref<User[]>([]);
+const {
+    results: ownerResults,
+    isSearching,
+    searchUsers,
+    clearResults,
+} = useAdminUserLookup();
 const selectedOwner = ref<User | null>(null);
-const isSearching = ref(false);
 const isSubmitting = ref(false);
 
 const isValid = computed(() => {
@@ -148,29 +153,21 @@ const isValid = computed(() => {
 
 async function searchOwner() {
     if (!ownerSearch.value.trim()) return;
-
-    isSearching.value = true;
-    try {
-        const results = await $fetch<User[]>('/api/admin/search-users', {
-            query: { q: ownerSearch.value },
-            credentials: 'include',
-        });
-        ownerResults.value = results;
-    } catch (err: any) {
-        toast.add({
-            title: 'Search failed',
-            description: getMessage(err, 'Unable to search users'),
-            color: 'error',
-        });
-    } finally {
-        isSearching.value = false;
-    }
+    await searchUsers(ownerSearch.value, {
+        onError: (err) => {
+            toast.add({
+                title: 'Search failed',
+                description: getMessage(err, 'Unable to search users'),
+                color: 'error',
+            });
+        },
+    });
 }
 
 function selectOwner(user: User) {
     form.ownerUserId = user.userId;
     selectedOwner.value = user;
-    ownerResults.value = [];
+    clearResults();
 }
 
 async function handleSubmit() {

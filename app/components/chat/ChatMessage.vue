@@ -346,34 +346,25 @@
 <script setup lang="ts">
 import {
     computed,
-    reactive,
     ref,
     watch,
-    onBeforeUnmount,
     nextTick,
     onMounted,
     watchEffect,
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
 import WorkflowChatMessage from './WorkflowChatMessage.vue';
-import { parseHashes } from '~/utils/files/attachments';
-import { getFileMeta } from '~/db/files';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { shallowRef } from 'vue';
 import { useToast } from '#imports';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
-import type { ThemePlugin } from '~/plugins/90.theme.client';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
-import { useNuxtApp } from '#app';
 import { useRafFn, useClipboard } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
-import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
-import {
-    useThumbnailUrlCache,
-    type ThumbState,
-} from '~/composables/core/useThumbnailUrlCache';
+import { useMessageThumbnails } from '~/composables/chat/useMessageThumbnails';
+import { useMessageMarkdown } from '~/composables/chat/useMessageMarkdown';
 
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };
@@ -582,38 +573,20 @@ const innerClass = computed(() => ({
 // Detect if assistant message currently has any textual content yet
 const hasContent = computed(() => (props.message.text || '').trim().length > 0);
 
-// Extract hash list (serialized JSON string or array already?)
-const hashList = computed<string[]>(() =>
-    parseHashes(props.message.file_hashes)
-);
+const messageThumbRef = computed(() => props.message);
+const {
+    hashList,
+    thumbnails,
+    pdfMeta,
+    maxDisplayedThumbs,
+    displayedHashes,
+    getAttachmentName,
+    expanded,
+    toggleExpanded,
+} = useMessageThumbnails(messageThumbRef);
 
-// Unified markdown already provided via UiChatMessage.text -> transform file-hash placeholders to inert spans
-const assistantMarkdown = computed(() =>
-    props.message.role === 'assistant' ? props.message.text || '' : ''
-);
-// Regex to match legacy file-hash image markdown syntax
-const FILE_HASH_IMG_RE = /!\[[^\]]*]\(file-hash:([a-f0-9-]{6,})\)/gi;
-const processedAssistantMarkdown = computed(() => {
-    if (props.message.role !== 'assistant') return '';
-    // Transform file-hash: URLs to use a placeholder image with hash in alt attribute
-    // This avoids browser console errors from trying to load invalid file-hash: URLs
-    // The hydrateInlineImages function will replace these with actual blob URLs
-    return assistantMarkdown.value.replace(
-        FILE_HASH_IMG_RE,
-        (_, hash) => `![file-hash:${hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`
-    );
-});
-
-// Dynamic Shiki theme: map current theme (light/dark*/light*) to github-light / github-dark
-const nuxtApp = useNuxtApp();
-const themePlugin = computed<ThemePlugin>(() => nuxtApp.$theme);
-const currentShikiTheme = computed(() => {
-    const themeObj = themePlugin.value;
-    const themeName = themeObj.current?.value ?? themeObj.get();
-    return String(themeName).startsWith('dark')
-        ? 'github-dark'
-        : 'github-light';
-});
+const { assistantMarkdown, processedAssistantMarkdown, currentShikiTheme } =
+    useMessageMarkdown(computed(() => props.message));
 // Debug watchers removed (can reintroduce with import.meta.dev guards if needed)
 // Patch ensureThumb with logs if not already
 // NOTE: ensureThumb already defined above; add debug via wrapper pattern not reassignment.
@@ -701,181 +674,6 @@ async function saveEdit() {
 
 // (hashList defined earlier)
 
-// Compact thumb preview support (attachments gallery handles full grid).
-type LocalThumbState = ThumbState | { status: 'loading' };
-const thumbnails = reactive<Record<string, LocalThumbState>>({});
-// PDF meta (name/kind) for hashes that are PDFs so we show placeholder instead of broken image
-const pdfMeta = reactive<Record<string, { name?: string; kind: string }>>({});
-const safePdfName = computed(() => {
-    const h = firstThumb.value;
-    if (!h) return 'document.pdf';
-    const m = pdfMeta[h];
-    return (m && m.name) || 'document.pdf';
-});
-// Short display (keep extension, truncate middle if long)
-const pdfDisplayName = computed(() => {
-    const name = safePdfName.value;
-    const max = 18;
-    if (name.length <= max) return name;
-    const dot = name.lastIndexOf('.');
-    const ext = dot > 0 ? name.slice(dot) : '';
-    const base = dot > 0 ? name.slice(0, dot) : name;
-    const keep = max - ext.length - 3; // 3 for ellipsis
-    if (keep <= 4) return base.slice(0, max - 3) + '...';
-    const head = Math.ceil(keep / 2);
-    const tail = Math.floor(keep / 2);
-    return base.slice(0, head) + '…' + base.slice(base.length - tail) + ext;
-});
-
-// Maximum number of attachment thumbnails to show in collapsed view
-const maxDisplayedThumbs = 4;
-const displayedHashes = computed(() =>
-    hashList.value.slice(0, maxDisplayedThumbs)
-);
-
-// Get display name for an attachment
-function getAttachmentName(hash: string): string {
-    const meta = pdfMeta[hash];
-    if (meta?.name) {
-        const name = meta.name;
-        const max = 20;
-        if (name.length <= max) return name;
-        const dot = name.lastIndexOf('.');
-        const ext = dot > 0 ? name.slice(dot) : '';
-        const base = dot > 0 ? name.slice(0, dot) : name;
-        const keep = max - ext.length - 2;
-        return base.slice(0, keep) + '…' + ext;
-    }
-    return 'Document';
-}
-
-// Shared thumbnail object URL cache (global singleton with ref-count + grace cleanup)
-const thumbUrlCache = useThumbnailUrlCache({ graceMs: 30000 });
-const retainThumb = thumbUrlCache.retain;
-const releaseThumb = thumbUrlCache.release;
-
-// Per-message persistent UI state stored directly on the message object to
-// survive virtualization recycling without external maps.
-const expanded = ref<boolean>(props.message._expanded === true);
-watch(expanded, (v) => {
-    props.message._expanded = v;
-});
-const firstThumb = computed(() => hashList.value[0]);
-function toggleExpanded() {
-    if (!hashList.value.length) return;
-    expanded.value = !expanded.value;
-}
-
-async function ensureThumb(h: string) {
-    // If we already know it's a PDF just ensure meta exists.
-    if (pdfMeta[h]) {
-        return;
-    }
-    if (thumbnails[h] && thumbnails[h].status === 'ready') return;
-    const cached = thumbUrlCache.get(h);
-    if (cached) {
-        thumbnails[h] = cached;
-        return;
-    }
-    thumbnails[h] = { status: 'loading' };
-
-    try {
-        const state = await thumbUrlCache.ensure(h, async () => {
-            const [blob, meta] = await Promise.all([
-                (await import('~/db/files')).getFileBlob(h),
-                getFileMeta(h).catch(() => undefined),
-            ]);
-
-            if (meta && meta.kind === 'pdf') {
-                pdfMeta[h] = { name: meta.name, kind: meta.kind };
-                return null;
-            }
-            if (!blob) return null;
-            if (blob.type === 'application/pdf') {
-                pdfMeta[h] = { name: meta?.name, kind: 'pdf' };
-                return null;
-            }
-            return blob;
-        });
-
-        if (state) {
-            thumbnails[h] = state;
-        } else {
-            // PDF or intentionally skipped
-            delete thumbnails[h];
-        }
-    } catch {
-        const errState: ThumbState = { status: 'error' };
-        thumbnails[h] = errState;
-    }
-}
-
-// Track current hashes used by this message for ref counting.
-const currentHashes = new Set<string>();
-let isComponentActive = true;
-
-// Load new hashes when list changes with diffing for retain/release.
-watch(
-    hashList,
-    async (list) => {
-        const nextSet = new Set(list);
-        // Additions - identify new hashes to load
-        const newHashes: string[] = [];
-        for (const h of nextSet) {
-            if (!currentHashes.has(h)) {
-                // Pre-warm local reactive state from global cache immediately to prevent flash
-                if (!thumbnails[h]) {
-                    const cached = thumbUrlCache.get(h);
-                    if (cached) {
-                        thumbnails[h] = cached;
-                    } else {
-                        thumbnails[h] = { status: 'loading' };
-                        newHashes.push(h);
-                    }
-                } else if (thumbnails[h].status === 'loading') {
-                    newHashes.push(h);
-                }
-            }
-        }
-
-        // Load all new thumbnails in parallel for faster loading
-        if (newHashes.length > 0) {
-            await Promise.all(newHashes.map((h) => ensureThumb(h)));
-        }
-
-        // Register successfully loaded thumbnails
-        for (const h of nextSet) {
-            if (!currentHashes.has(h)) {
-                const state = thumbUrlCache.get(h);
-                if (state?.status === 'ready') {
-                    if (!isComponentActive) {
-                        retainThumb(h);
-                        releaseThumb(h);
-                        return;
-                    }
-                    retainThumb(h);
-                    currentHashes.add(h);
-                }
-            }
-        }
-
-        // Removals
-        for (const h of Array.from(currentHashes)) {
-            if (!nextSet.has(h)) {
-                currentHashes.delete(h);
-                releaseThumb(h);
-            }
-        }
-    },
-    { immediate: true }
-);
-
-// Cleanup: release all thumbs used by this message.
-onBeforeUnmount(() => {
-    isComponentActive = false;
-    for (const h of currentHashes) releaseThumb(h);
-    currentHashes.clear();
-});
 // Inline image hydration: replace placeholder <img> src once ready
 const contentEl = ref<HTMLElement | null>(null);
 async function hydrateInlineImages() {

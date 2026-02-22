@@ -131,6 +131,7 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useToast, useHooks } from '#imports';
 import { getMaxMessageFileHashes } from '~/db/files-util';
+import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
 import type {
     ChatInstance,
     ImageAttachment,
@@ -627,14 +628,13 @@ function onSend(payload: ChatInputSendPayload) {
                 Boolean(img) && img.status === 'pending'
         ).length ?? 0;
 
-    if (pendingCount > 0) {
-        // Defer sending until attachments finish hashing to avoid losing them
-        toast?.add?.({
-            title: 'Files are still uploading',
+    if (
+        pendingCount > 0 &&
+        !guardPendingAttachmentSend(attachments, toast, {
             description: 'Please wait for attachments to finish.',
-            color: 'primary',
             duration: 2400,
-        });
+        })
+    ) {
         return;
     }
     const carryHashes = readyImages.length === 0 ? collectRecentHashes() : [];

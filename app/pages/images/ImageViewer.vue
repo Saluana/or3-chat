@@ -6,6 +6,7 @@ import { onKeyStroke } from '@vueuse/core';
 import { reportError } from '~/utils/errors';
 import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
 import { useIcon } from '#imports';
 
 const iconDownload = useIcon('image.download');
@@ -42,44 +43,15 @@ const imageViewerModalOverrides = useThemeOverrides({
 });
 
 const imageViewerModalProps = computed(() => {
-    const baseUi = {
-        footer: 'justify-end border-t-[var(--md-border-width)]',
-        body: 'overflow-hidden flex-1 p-0! h-[100dvh] w-[100dvw]',
-    } as Record<string, unknown>;
-
-    const overrideValue =
-        (imageViewerModalOverrides.value as Record<string, unknown>) || {};
-    const overrideClass =
-        typeof overrideValue.class === 'string'
-            ? (overrideValue.class as string)
-            : '';
-    const overrideUi =
-        (overrideValue.ui as Record<string, unknown> | undefined) || {};
-    const overrideContent =
-        (overrideValue.content as Record<string, unknown> | undefined) || {};
-
-    const mergedUi = { ...baseUi, ...overrideUi };
-    const rest = Object.fromEntries(
-        Object.entries(overrideValue).filter(
-            ([key]) => key !== 'class' && key !== 'ui'
-        )
-    ) as Record<string, unknown>;
-
-    const result: Record<string, unknown> = {
-        ...rest,
-        ui: mergedUi,
-        content: {
-            'aria-describedby': undefined,
-            ...overrideContent,
+    return buildThemeOverrideProps(imageViewerModalOverrides.value, {
+        baseUi: {
+            footer: 'justify-end border-t-[var(--md-border-width)]',
+            body: 'overflow-hidden flex-1 p-0! h-[100dvh] w-[100dvw]',
         },
-    };
-
-    const mergedClass = [overrideClass].filter(Boolean).join(' ');
-    if (mergedClass) {
-        result.class = mergedClass;
-    }
-
-    return result;
+        baseContent: {
+            'aria-describedby': undefined,
+        },
+    });
 });
 
 const downloadButtonProps = computed(() => {

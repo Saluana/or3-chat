@@ -214,7 +214,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { getDb, getActiveWorkspaceId } from '~/db/client';
 import { useUserApiKey } from '~/core/auth/useUserApiKey';
 import { create, tx, upsert, queries, del } from '~/db';
@@ -223,27 +223,19 @@ import { newId, nowSec } from '~/db/util';
 import { useChat } from '~/composables/chat/useAi';
 import { useHooks } from '~/core/hooks/useHooks';
 import TestItem from './TestItem.vue';
+import {
+    createSyncHarnessLogger,
+    runSyncHarnessTest,
+    type SyncHarnessLogEntry,
+    type SyncHarnessTestCase,
+} from '~/composables/tests/syncHarnessRunner';
 
 // ============================================================
 // Types
 // ============================================================
 
-interface TestCase {
-    id: string;
-    name: string;
-    description: string;
-    category: string;
-    status: 'pending' | 'running' | 'passed' | 'failed' | 'skipped';
-    duration?: number;
-    error?: string;
-    fn: () => Promise<void>;
-}
-
-interface LogEntry {
-    time: string;
-    level: 'info' | 'success' | 'error' | 'warn' | 'debug';
-    message: string;
-}
+type TestCase = SyncHarnessTestCase;
+type LogEntry = SyncHarnessLogEntry;
 
 // ============================================================
 // State
@@ -320,26 +312,7 @@ const statusDetail = computed(() => {
 // Logging
 // ============================================================
 
-function log(level: LogEntry['level'], message: string) {
-    const now = new Date();
-    const time = now.toLocaleTimeString('en-US', { hour12: false }) + '.' + String(now.getMilliseconds()).padStart(3, '0');
-    logs.value.push({ time, level, message });
-    
-    // Auto-scroll to bottom
-    nextTick(() => {
-        if (logContainer.value) {
-            logContainer.value.scrollTop = logContainer.value.scrollHeight;
-        }
-    });
-    
-    // Console output
-    const consoleFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
-    consoleFn(`[SyncHarness] [${level.toUpperCase()}] ${message}`);
-}
-
-function clearLogs() {
-    logs.value = [];
-}
+const { log, clearLogs } = createSyncHarnessLogger(logs, logContainer);
 
 // ============================================================
 // Test Infrastructure
@@ -419,26 +392,7 @@ async function refreshSyncHealth() {
 // ============================================================
 
 async function runTest(test: TestCase) {
-    test.status = 'running';
-    test.error = undefined;
-    test.duration = undefined;
-    
-    log('info', `Running test: ${test.name}`);
-    const start = Date.now();
-    
-    try {
-        await test.fn();
-        test.status = 'passed';
-        test.duration = Date.now() - start;
-        log('success', `✓ ${test.name} (${test.duration}ms)`);
-    } catch (e) {
-        test.status = 'failed';
-        test.duration = Date.now() - start;
-        test.error = e instanceof Error ? e.message : String(e);
-        log('error', `✗ ${test.name}: ${test.error}`);
-    }
-    
-    await refreshSyncHealth();
+    await runSyncHarnessTest(test, log, refreshSyncHealth);
 }
 
 async function runAllTests() {

@@ -88,10 +88,13 @@ import {
     listEditorMarks,
     listEditorExtensions,
     useHooks,
-    type EditorToolbarButton,
 } from '~/composables';
 import { loadEditorExtensions } from '~/composables/editor/useEditorExtensionLoader';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import {
+    useDocumentEditorCommands,
+    useDocumentEditorToolbar,
+} from '~/composables/documents/useDocumentEditorToolbar';
 
 const props = defineProps<{ documentId: string }>();
 
@@ -123,87 +126,6 @@ let didUnmount = false;
 
 // Get plugin-registered toolbar buttons
 const pluginButtons = useEditorToolbarButtons(editor as Ref<Editor | null>);
-
-// Define core toolbar buttons
-const toolbarButtons = computed(() => [
-    {
-        id: 'bold',
-        icon: 'carbon:text-bold',
-        label: 'Bold (⌘B)',
-        getActive: () => isActive('bold'),
-        onActivate: () => cmd('toggleBold'),
-    },
-    {
-        id: 'italic',
-        icon: 'carbon:text-italic',
-        label: 'Italic (⌘I)',
-        getActive: () => isActive('italic'),
-        onActivate: () => cmd('toggleItalic'),
-    },
-    {
-        id: 'code',
-        icon: useIcon('editor.code').value,
-        label: 'Code',
-        getActive: () => isActive('code'),
-        onActivate: () => cmd('toggleCode'),
-    },
-    {
-        id: 'h1',
-        text: 'H1',
-        label: 'H1',
-        getActive: () => isActiveHeading(1),
-        onActivate: () => toggleHeading(1),
-    },
-    {
-        id: 'h2',
-        text: 'H2',
-        label: 'H2',
-        getActive: () => isActiveHeading(2),
-        onActivate: () => toggleHeading(2),
-    },
-    {
-        id: 'h3',
-        text: 'H3',
-        label: 'H3',
-        getActive: () => isActiveHeading(3),
-        onActivate: () => toggleHeading(3),
-    },
-    {
-        id: 'bulletList',
-        icon: useIcon('editor.list').value,
-        label: 'Bullet list',
-        getActive: () => isActive('bulletList'),
-        onActivate: () => cmd('toggleBulletList'),
-    },
-    {
-        id: 'orderedList',
-        icon: 'carbon:list-numbered',
-        label: 'Ordered list',
-        getActive: () => isActive('orderedList'),
-        onActivate: () => cmd('toggleOrderedList'),
-    },
-    {
-        id: 'horizontalRule',
-        icon: useIcon('ui.minus').value,
-        label: 'Horizontal Rule',
-        getActive: () => false,
-        onActivate: () => cmd('setHorizontalRule'),
-    },
-    {
-        id: 'undo',
-        icon: useIcon('editor.undo').value,
-        label: 'Undo',
-        getActive: () => false,
-        onActivate: () => cmd('undo'),
-    },
-    {
-        id: 'redo',
-        icon: useIcon('editor.redo').value,
-        label: 'Redo',
-        getActive: () => false,
-        onActivate: () => cmd('redo'),
-    },
-]);
 
 // Theme integration for title input
 const titleInputProps = computed(() => {
@@ -248,6 +170,31 @@ function emitContent() {
     // Emit hook for plugins to observe updates
     hooks.doActionSync('editor.updated:action:after', { editor: editor.value });
 }
+
+const {
+    cmd,
+    isActive,
+    isActiveHeading,
+    toggleHeading,
+    getButtonActive,
+    handleButtonClick,
+} = useDocumentEditorCommands(editor, emitContent);
+
+const { toolbarButtons } = useDocumentEditorToolbar(
+    {
+        cmd,
+        isActive,
+        isActiveHeading,
+        toggleHeading,
+    },
+    {
+        code: useIcon('editor.code').value,
+        list: useIcon('editor.list').value,
+        minus: useIcon('ui.minus').value,
+        undo: useIcon('editor.undo').value,
+        redo: useIcon('editor.redo').value,
+    }
+);
 
 async function makeEditor() {
     // Load all editor extensions (both eager and lazy)
@@ -331,72 +278,6 @@ onBeforeUnmount(() => {
     didUnmount = true;
     editor.value?.destroy();
 });
-
-function isActive(name: string) {
-    return editor.value?.isActive(name) || false;
-}
-function isActiveHeading(level: number) {
-    return editor.value?.isActive('heading', { level }) || false;
-}
-
-function getButtonActive(btn: EditorToolbarButton): boolean {
-    const ed = editor.value;
-    if (!ed || !btn.isActive) return false;
-    try {
-        return btn.isActive(ed as Editor);
-    } catch (e) {
-        if (import.meta.dev) {
-            console.error(
-                `[DocumentEditor] isActive() threw for button ${btn.id}:`,
-                e
-            );
-        }
-        return false;
-    }
-}
-
-function handleButtonClick(btn: EditorToolbarButton): void {
-    const ed = editor.value;
-    if (!ed) return;
-    try {
-        btn.onClick(ed as Editor);
-    } catch (e) {
-        if (import.meta.dev) {
-            console.error(
-                `[DocumentEditor] onClick() threw for button ${btn.id}:`,
-                e
-            );
-        }
-    }
-}
-
-function toggleHeading(level: number) {
-    // TipTap Heading levels type expects specific union; cast to any to keep minimal.
-    editor.value
-        ?.chain()
-        .focus()
-        .toggleHeading({ level: level as any })
-        .run();
-    emitContent();
-}
-
-const commands: Record<string, () => void> = {
-    toggleBold: () => editor.value?.chain().focus().toggleBold().run(),
-    toggleItalic: () => editor.value?.chain().focus().toggleItalic().run(),
-    toggleCode: () => editor.value?.chain().focus().toggleCode().run(),
-    toggleBulletList: () =>
-        editor.value?.chain().focus().toggleBulletList().run(),
-    toggleOrderedList: () =>
-        editor.value?.chain().focus().toggleOrderedList().run(),
-    setHorizontalRule: () =>
-        editor.value?.chain().focus().setHorizontalRule().run(),
-    undo: () => editor.value?.commands.undo(),
-    redo: () => editor.value?.commands.redo(),
-};
-function cmd(name: string) {
-    commands[name]?.();
-    emitContent();
-}
 
 function handleContainerClick(event: MouseEvent) {
     // Only focus editor if clicking on the container itself, not on the editor content

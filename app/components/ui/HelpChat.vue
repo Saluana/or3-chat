@@ -10,7 +10,7 @@
         >
             <div v-if="isExpanded" :class="panelClass">
                 <div
-                    class="flex h-10 items-center justify-between border-b-[var(--md-border-width)] border-[color:var(--md-border-color)] px-3"
+                    class="flex h-10 items-center justify-between border-b-2 border-[color:var(--md-outline)] px-3"
                 >
                     <span class="text-sm font-medium uppercase tracking-wide"
                         >Help Chat</span
@@ -54,15 +54,16 @@
                     <div
                         v-for="msg in messages.filter(
                             (m) =>
-                                m.role !== 'tool' ||
-                                !m.content ||
-                                m.content === ''
+                                m.hidden !== true &&
+                                (m.role !== 'tool' ||
+                                    !m.content ||
+                                    m.content === '')
                         )"
                         :key="msg.id"
                         :class="[
                             'rounded-[var(--md-border-radius)] flex flex-col px-3 py-2 leading-relaxed text-sm break-words',
                             msg.role === 'user'
-                                ? 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] theme-shadow ml-auto text-left bg-[var(--md-primary)]/15 text-[var(--md-on-primary-container)] w-fit max-w-[85%]'
+                                ? 'border border-[color:var(--md-outline)] theme-shadow ml-auto text-left bg-[var(--md-primary)]/15 text-[var(--md-on-primary-container)] w-fit max-w-[85%]'
                                 : 'w-full max-w-full px-2',
                             msg.kind === 'error'
                                 ? 'bg-[var(--md-error-container)] text-[var(--md-on-error-container)]'
@@ -214,8 +215,14 @@ interface HelpChatMessage {
     role: HelpChatRole;
     content: string;
     reasoning_details?: any;
+    tool_calls?: Array<{
+        id: string;
+        type: 'function';
+        function: { name: string; arguments: string };
+    }>;
     tool_call_id?: string;
     pending?: boolean;
+    hidden?: boolean;
     kind?: HelpChatKind;
     tool_call_info?: {
         name: string;
@@ -277,7 +284,7 @@ const panelClass = computed(() => {
         base.push('fixed inset-0 z-50 h-full w-full border-0 rounded-none');
     } else {
         base.push(
-            'absolute bottom-0 right-0 border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)]'
+            'absolute bottom-0 right-0 border-2 border-[color:var(--md-outline)] rounded-[var(--md-border-radius)]'
         );
         base.push(
             isFullscreen.value
@@ -295,7 +302,7 @@ const chatBodyClass = computed(() => [
 ]);
 
 const formClass = computed(() => [
-    'border-t-[var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)]',
+    'border-t-2 border-[color:var(--md-outline)] bg-[var(--md-surface)]',
     isMobile.value ? 'px-4 pt-3' : 'px-3 py-3',
 ]);
 
@@ -601,6 +608,10 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                     content: m.content,
                 };
 
+                if (m.tool_calls) {
+                    body.tool_calls = m.tool_calls;
+                }
+
                 // Preserve reasoning_details for extended thinking models
                 if (m.reasoning_details) {
                     body.reasoning_details = m.reasoning_details;
@@ -631,14 +642,12 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
             const controller = new AbortController();
             const stream = openRouterStream({
                 apiKey: effectiveApiKey.value,
-                model: 'z-ai/glm-4.6',
+                model: 'google/gemini-3-flash-preview',
                 orMessages,
                 modalities: ['text'],
                 tools: toolDefs,
                 signal: controller.signal,
             });
-
-            let foundToolCall = false;
 
             try {
                 // Batch text updates to reduce reactivity overhead
@@ -676,7 +685,6 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                             lastUpdate = now;
                         }
                     } else if (ev.type === 'tool_call') {
-                        foundToolCall = true;
 
                         // Flush any pending text buffer before processing tool call
                         if (textBuffer) {
@@ -686,16 +694,38 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                         currentAssistantMessage.pending = false;
 
                         if (ev.tool_call.function.name === 'search_docs') {
-                            const query = JSON.parse(
-                                ev.tool_call.function.arguments
-                            );
+                            let queryPath = '';
+                            try {
+                                const query = JSON.parse(
+                                    ev.tool_call.function.arguments
+                                ) as { query?: string };
+                                queryPath = String(query.query ?? '').trim();
+                            } catch {
+                                const fallbackMatch =
+                                    ev.tool_call.function.arguments.match(
+                                        /"query"\s*:\s*"([^"]+)"/
+                                    );
+                                queryPath = fallbackMatch?.[1]?.trim() ?? '';
+                            }
 
-                            if (!query.query) {
+                            if (!queryPath) {
                                 console.warn(
                                     '[HelpChat] search_docs called without a query'
                                 );
                                 continue;
                             }
+
+                            // Persist a protocol-correct assistant tool-call message for the next model turn
+                            await pushMessage(
+                                {
+                                    id: createMessageId(),
+                                    role: 'assistant',
+                                    content: '',
+                                    hidden: true,
+                                    tool_calls: [ev.tool_call],
+                                },
+                                'auto'
+                            );
 
                             // Create a tool call message showing "Searching..."
                             const toolCallMessage: HelpChatMessage = {
@@ -704,13 +734,13 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                                 content: '',
                                 tool_call_info: {
                                     name: 'search_docs',
-                                    query: query.query,
+                                    query: queryPath,
                                     completed: false,
                                 },
                             };
                             await pushMessage(toolCallMessage, 'auto');
 
-                            const docs = await getDocumentation(query.query);
+                            const docs = await getDocumentation(queryPath);
 
                             // Update the tool call message to show "Searched"
                             const toolMsg = messages.value.find(
@@ -727,7 +757,7 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
 
                                 // Add a lightweight summary message instead of full content
                                 const summary = `Documentation loaded for \`${
-                                    query.query
+                                    queryPath
                                 }\` (${Math.round(docs.length / 1024)}KB)`;
 
                                 await pushMessage(

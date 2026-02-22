@@ -247,17 +247,24 @@ function removeHashesFromState(hashes: string[]) {
     return { removedHashes: Array.from(removedSet), remaining };
 }
 
-async function executeDelete(
+async function executeDeleteByMode(
     hashes: string[],
-    confirmMessage: string,
-    successMessage: (count: number) => string
+    options: {
+        mode: 'soft-delete' | 'hard-delete';
+        confirmMessage: string;
+        successMessage: (count: number) => string;
+        successTitle: string;
+        successColor: 'success' | 'error';
+        failedErrorMessage: string;
+        failedToastTitle: string;
+    }
 ): Promise<DeleteOutcome> {
     const attempted = Array.from(new Set(hashes.filter(Boolean)));
     if (!attempted.length) {
         return { attempted, removed: [], remaining: [], aborted: true };
     }
     if (typeof window !== 'undefined') {
-        const ok = window.confirm(confirmMessage);
+        const ok = window.confirm(options.confirmMessage);
         if (!ok) {
             return {
                 attempted,
@@ -267,79 +274,19 @@ async function executeDelete(
             };
         }
     }
-    mutationState.value = 'soft-delete';
+    mutationState.value = options.mode;
     try {
-        await softDeleteMany(attempted);
+        if (options.mode === 'hard-delete') {
+            await hardDeleteMany(attempted);
+        } else {
+            await softDeleteMany(attempted);
+        }
         const { removedHashes, remaining } = removeHashesFromState(attempted);
         if (removedHashes.length > 0) {
             toast.add({
-                title: 'Images deleted',
-                description: successMessage(removedHashes.length),
-                color: 'success',
-            });
-        }
-        if (remaining.length > 0) {
-            toast.add({
-                title: 'Some images were not removed',
-                description:
-                    'A few selected items are still present. Please retry.',
-                color: 'warning',
-            });
-        }
-        return {
-            attempted,
-            removed: removedHashes,
-            remaining,
-            aborted: false,
-        };
-    } catch (error) {
-        const wrapped = fileDeleteError('Failed to delete images', error);
-        reportError(wrapped);
-        toast.add({
-            title: 'Delete failed',
-            description: 'We could not remove the selected images.',
-            color: 'error',
-        });
-        return {
-            attempted,
-            removed: [],
-            remaining: attempted,
-            aborted: false,
-        };
-    } finally {
-        mutationState.value = 'idle';
-    }
-}
-
-async function executeHardDelete(
-    hashes: string[],
-    confirmMessage: string,
-    successMessage: (count: number) => string
-): Promise<DeleteOutcome> {
-    const attempted = Array.from(new Set(hashes.filter(Boolean)));
-    if (!attempted.length) {
-        return { attempted, removed: [], remaining: [], aborted: true };
-    }
-    if (typeof window !== 'undefined') {
-        const ok = window.confirm(confirmMessage);
-        if (!ok) {
-            return {
-                attempted,
-                removed: [],
-                remaining: attempted,
-                aborted: true,
-            };
-        }
-    }
-    mutationState.value = 'hard-delete';
-    try {
-        await hardDeleteMany(attempted);
-        const { removedHashes, remaining } = removeHashesFromState(attempted);
-        if (removedHashes.length > 0) {
-            toast.add({
-                title: 'Images permanently deleted',
-                description: successMessage(removedHashes.length),
-                color: 'error',
+                title: options.successTitle,
+                description: options.successMessage(removedHashes.length),
+                color: options.successColor,
             });
         }
         if (remaining.length > 0) {
@@ -357,13 +304,10 @@ async function executeHardDelete(
             aborted: false,
         };
     } catch (error) {
-        const wrapped = fileDeleteError(
-            'Failed to permanently delete images',
-            error
-        );
+        const wrapped = fileDeleteError(options.failedErrorMessage, error);
         reportError(wrapped);
         toast.add({
-            title: 'Permanent delete failed',
+            title: options.failedToastTitle,
             description: 'We could not remove the selected images.',
             color: 'error',
         });
@@ -376,6 +320,38 @@ async function executeHardDelete(
     } finally {
         mutationState.value = 'idle';
     }
+}
+
+async function executeDelete(
+    hashes: string[],
+    confirmMessage: string,
+    successMessage: (count: number) => string
+): Promise<DeleteOutcome> {
+    return executeDeleteByMode(hashes, {
+        mode: 'soft-delete',
+        confirmMessage,
+        successMessage,
+        successTitle: 'Images deleted',
+        successColor: 'success',
+        failedErrorMessage: 'Failed to delete images',
+        failedToastTitle: 'Delete failed',
+    });
+}
+
+async function executeHardDelete(
+    hashes: string[],
+    confirmMessage: string,
+    successMessage: (count: number) => string
+): Promise<DeleteOutcome> {
+    return executeDeleteByMode(hashes, {
+        mode: 'hard-delete',
+        confirmMessage,
+        successMessage,
+        successTitle: 'Images permanently deleted',
+        successColor: 'error',
+        failedErrorMessage: 'Failed to permanently delete images',
+        failedToastTitle: 'Permanent delete failed',
+    });
 }
 
 async function executeRestore(

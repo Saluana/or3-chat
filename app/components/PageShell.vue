@@ -258,6 +258,10 @@ import PaneUnknown from '~/components/PaneUnknown.vue';
 import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
+import {
+    validateDbRecordWithRetry,
+    type ValidationStatus,
+} from '~/composables/core/recordValidation';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { useIcon } from '~/composables/useIcon';
 import { useOr3Config } from '~/composables/useOr3Config';
@@ -677,41 +681,25 @@ const activeChatThreadId = computed(() => {
 });
 
 // --------------- Initializers ---------------
-type ValidationStatus = 'found' | 'missing' | 'deleted';
 
 let validateToken = 0;
 
 async function validateThread(id: string): Promise<ValidationStatus> {
-    const db = getDb();
-    try {
-        if (!db.isOpen()) await db.open();
-    } catch {}
-    const ATTEMPTS = 5;
-    for (let a = 0; a < ATTEMPTS; a++) {
-        try {
-            const t = await db.threads.get(id);
-            if (t) return t.deleted ? 'deleted' : 'found';
-        } catch {}
-        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
-    }
-    return 'missing';
+    return validateDbRecordWithRetry({
+        id,
+        getRecord: (db, recordId) => db.threads.get(recordId),
+        isValid: () => true,
+        isDeleted: (record) => Boolean(record.deleted),
+    });
 }
 
 async function validateDocument(id: string): Promise<ValidationStatus> {
-    const db = getDb();
-    try {
-        if (!db.isOpen()) await db.open();
-    } catch {}
-    const ATTEMPTS = 5;
-    for (let a = 0; a < ATTEMPTS; a++) {
-        try {
-            const row = await db.posts.get(id);
-            if (row && (row as any).postType === 'doc')
-                return (row as any).deleted ? 'deleted' : 'found';
-        } catch {}
-        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
-    }
-    return 'missing';
+    return validateDbRecordWithRetry({
+        id,
+        getRecord: (db, recordId) => db.posts.get(recordId),
+        isValid: (record) => (record as any)?.postType === 'doc',
+        isDeleted: (record) => Boolean((record as any)?.deleted),
+    });
 }
 
 async function initInitial() {

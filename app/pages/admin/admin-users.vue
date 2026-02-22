@@ -130,11 +130,12 @@
 <script setup lang="ts">
 import { formatDate } from '~/utils/date';
 import { refDebounced } from '@vueuse/core';
+import {
+    useAdminUserLookup,
+    type AdminLookupUser,
+} from '~/composables/admin/useAdminUserLookup';
 
-interface User {
-    userId: string;
-    email?: string;
-    displayName?: string;
+interface User extends AdminLookupUser {
     isAdmin?: boolean;
 }
 
@@ -155,9 +156,13 @@ const { getMessage } = useApiError();
 const { confirm } = useConfirmDialog();
 
 const searchQuery = ref('');
-const searchResults = ref<User[]>([]);
-const isSearching = ref(false);
-const hasSearched = ref(false);
+const {
+    results: lookupResults,
+    isSearching,
+    hasSearched,
+    searchUsers,
+    clearResults,
+} = useAdminUserLookup();
 const grantingUserId = ref<string | null>(null);
 const revokingUserId = ref<string | null>(null);
 
@@ -170,6 +175,7 @@ const { data: adminsData, pending, error, refresh: refreshAdmins } = await useFe
 );
 
 const admins = computed(() => adminsData.value?.admins ?? []);
+const searchResults = computed<User[]>(() => lookupResults.value as User[]);
 
 // Issue 30: Debounce search query
 const debouncedQuery = refDebounced(searchQuery, 300);
@@ -177,36 +183,23 @@ const debouncedQuery = refDebounced(searchQuery, 300);
 // Watch debounced query and trigger search
 watch(debouncedQuery, (query) => {
     if (query.trim()) {
-        searchUsers(query);
+        void searchUsers(query, {
+            mapResult: (user) => ({
+                ...user,
+                isAdmin: admins.value.some((a) => a.userId === user.userId),
+            }),
+            onError: (err) => {
+                toast.add({
+                    title: 'Search failed',
+                    description: getMessage(err, 'Unable to search users'),
+                    color: 'error',
+                });
+            },
+        });
     } else {
-        searchResults.value = [];
+        clearResults();
     }
 });
-
-async function searchUsers(query: string) {
-    isSearching.value = true;
-    hasSearched.value = true;
-    try {
-        const results = await $fetch<User[]>('/api/admin/search-users', {
-            query: { q: query },
-            credentials: 'include',
-        });
-        
-        // Mark admins in results
-        searchResults.value = results.map((user) => ({
-            ...user,
-            isAdmin: admins.value.some((a) => a.userId === user.userId),
-        }));
-    } catch (err: any) {
-        toast.add({
-            title: 'Search failed',
-            description: getMessage(err, 'Unable to search users'),
-            color: 'error',
-        });
-    } finally {
-        isSearching.value = false;
-    }
-}
 
 async function grantAdmin(userId: string, email?: string) {
     const confirmed = await confirm({
@@ -229,7 +222,7 @@ async function grantAdmin(userId: string, email?: string) {
             color: 'success',
         });
         refreshAdmins();
-        searchResults.value = [];
+        clearResults();
         searchQuery.value = '';
         hasSearched.value = false;
     } catch (err: any) {

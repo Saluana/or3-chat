@@ -290,8 +290,30 @@ async function confirmDeleteList() {
   if (!listToDelete.value) return;
   try {
     error.value = null;
-    await service.deleteList(listToDelete.value);
-    if (editingListId.value === listToDelete.value) cancelRename();
+    const deletedId = listToDelete.value;
+    await service.deleteList(deletedId);
+    if (editingListId.value === deletedId) cancelRename();
+
+    const panes = multiPane.panes.value;
+    for (let i = panes.length - 1; i >= 0; i -= 1) {
+      const pane = panes[i];
+      if (!pane) continue;
+      if (pane.mode !== 'or3-tasks') continue;
+      if (pane.documentId !== deletedId) continue;
+
+      if (panes.length > 1) {
+        await multiPane.closePane(i);
+      } else {
+        multiPane.updatePane(i, {
+          mode: 'chat',
+          threadId: '',
+          documentId: undefined,
+          messages: [],
+        });
+        multiPane.setActive(i);
+      }
+    }
+
     await refresh();
     showDeleteModal.value = false;
     listToDelete.value = null;

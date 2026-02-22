@@ -187,6 +187,7 @@ import { useModelSearch } from '~/core/search/useModelSearch';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
 
 const props = defineProps<{
     showModal: boolean;
@@ -207,39 +208,14 @@ const modelCatalogModalOverrides = useThemeOverrides({
 });
 
 const modelCatalogModalProps = computed(() => {
-    const baseClass =
-        'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden';
-    const baseUi = {
-        footer: 'justify-end border-t-[var(--md-border-width)] border-[color:var(--md-border-color)]',
-        body: 'p-0!',
-    } as Record<string, unknown>;
-
-    const overrideValue =
-        (modelCatalogModalOverrides.value as Record<string, unknown>) || {};
-    const overrideClass =
-        typeof overrideValue.class === 'string'
-            ? (overrideValue.class as string)
-            : '';
-    const overrideUi =
-        (overrideValue.ui as Record<string, unknown> | undefined) || {};
-    const mergedUi = { ...baseUi, ...overrideUi };
-    const rest = Object.fromEntries(
-        Object.entries(overrideValue).filter(
-            ([key]) => key !== 'class' && key !== 'ui'
-        )
-    ) as Record<string, unknown>;
-
-    const result: Record<string, unknown> = {
-        ...rest,
-        ui: mergedUi,
-    };
-
-    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
-    if (mergedClass) {
-        result.class = mergedClass;
-    }
-
-    return result;
+    return buildThemeOverrideProps(modelCatalogModalOverrides.value, {
+        baseClass:
+            'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden',
+        baseUi: {
+            footer: 'justify-end border-t-[var(--md-border-width)] border-[color:var(--md-border-color)]',
+            body: 'p-0!',
+        },
+    });
 });
 
 const modelCatalog = ref<OpenRouterModel[]>([]);
