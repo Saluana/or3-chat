@@ -164,7 +164,11 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
 
     if (answers.authProvider === 'basic-auth') {
         setEnv(env, 'OR3_BASIC_AUTH_JWT_SECRET', answers.basicAuthJwtSecret);
-        setEnv(env, 'OR3_BASIC_AUTH_REFRESH_SECRET', answers.basicAuthRefreshSecret);
+        setEnv(
+            env, 
+            'OR3_BASIC_AUTH_REFRESH_SECRET', 
+            answers.basicAuthRefreshSecret || answers.basicAuthJwtSecret
+        );
         setEnv(
             env,
             'OR3_BASIC_AUTH_ACCESS_TTL_SECONDS',

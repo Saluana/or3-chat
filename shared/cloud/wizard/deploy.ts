@@ -325,6 +325,13 @@ export async function deployAnswers(
             commands: printableCommands,
             instructions:
                 'Build complete. Start the production preview with: bun run preview',
+            accessUrl: 'http://localhost:3000',
+            nextSteps: [
+                'Run `bun run preview` to start the production preview server.',
+                'Open http://localhost:3000 in your browser.',
+                'Sign in with your bootstrap/admin account.',
+                'Open the admin panel and verify providers are healthy.',
+            ],
         };
     }
 
@@ -336,5 +343,12 @@ export async function deployAnswers(
             : usesConvexProvider(answers) && !isSelfHostedConvex(answers)
                 ? 'Local dev is running. Re-run `bunx convex dev --once` after editing Convex functions.'
                 : 'Local dev is running.',
+        accessUrl: 'http://localhost:3000',
+        nextSteps: [
+            'Open http://localhost:3000 in your browser.',
+            'Sign in with your bootstrap/admin account.',
+            'Open the admin panel and verify auth/sync/storage status.',
+            'If using Convex, keep an eye on `bunx convex dev --once` output.',
+        ],
     };
 }

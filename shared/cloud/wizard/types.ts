@@ -260,6 +260,15 @@ export type WizardFieldType =
     | 'number'
     | 'multi-string';
 
+export interface WizardFieldOption {
+    /** Human-readable option label. */
+    label: string;
+    /** Stored value for the option. */
+    value: unknown;
+    /** Optional details shown alongside provider or complex selections. */
+    description?: string;
+}
+
 /**
  * Declarative field descriptor used by both step definitions and provider catalogs.
  *
@@ -284,7 +293,7 @@ export interface WizardField<TValue = unknown> {
     /** Pre-filled default. Used when the user presses Enter without input. */
     defaultValue?: TValue;
     /** Selection options for `'select'` type fields. */
-    options?: Array<{ label: string; value: unknown }>;
+    options?: WizardFieldOption[];
     /** When true, validation requires a non-empty value. */
     required?: boolean;
     /** When true, the value is redacted in summaries and excluded from presets. */
@@ -359,6 +368,12 @@ export interface WizardProviderDescriptor {
     id: string;
     /** Human-readable label shown in selection prompts. */
     label: string;
+    /** Short advantages used by the CLI/web comparison UI. */
+    pros: string[];
+    /** Short tradeoffs used by the CLI/web comparison UI. */
+    cons: string[];
+    /** Recommended use case summary for quick decision-making. */
+    idealUseCase: string;
     /** When false, the provider is not shown as a selectable option. */
     implemented: boolean;
     /** Documentation URL for this provider. */
@@ -478,6 +493,22 @@ export interface WizardDeployResult {
     instructions?: string;
     /** Shell commands that were (or would be) executed, in order. */
     commands: string[];
+    /** Primary URL to open after deploy (when applicable). */
+    accessUrl?: string;
+    /** Structured next-steps checklist for CLI/web rendering. */
+    nextSteps?: string[];
+}
+
+/**
+ * Result of testing an external provider connection from the wizard.
+ */
+export interface WizardConnectionTestResult {
+    /** Whether the provider check succeeded. */
+    success: boolean;
+    /** Human-readable status message for CLI/Web UI feedback. */
+    message: string;
+    /** Optional implementation-specific diagnostics (non-secret). */
+    details?: Record<string, unknown>;
 }
 
 /**
@@ -512,6 +543,10 @@ export interface WizardApi {
         instanceDir?: string;
         envFile?: WizardEnvFile;
         includeSecrets?: boolean;
+        /** When true, read existing env and pre-fill matching wizard answers. */
+        prefillFromEnv?: boolean;
+        /** Optional env map override used by CLI when it already parsed the env file. */
+        existingEnvMap?: Record<string, string>;
     }): Promise<WizardSession>;
     /** Retrieve an existing session by ID. */
     getSession(
@@ -539,6 +574,15 @@ export interface WizardApi {
     ): Promise<WizardApplyResult>;
     /** Run deploy commands (install + dev/build). */
     deploy(id: string): Promise<WizardDeployResult>;
+    /** Provider preflight check used by CLI/web wizard immediate validation. */
+    testProviderConnection(
+        providerId: string,
+        credentials: Record<string, string>
+    ): Promise<WizardConnectionTestResult>;
+    /** Generate a cryptographically secure random secret string. */
+    generateSecureSecret(length?: number): string;
+    /** Validate a filesystem path and optionally create missing directories. */
+    validatePath(path: string, autoCreate?: boolean): Promise<boolean>;
     /** Delete a session and its transient secrets. */
     discardSession(id: string): Promise<void>;
     /** Save current session answers as a named preset (secrets excluded). */

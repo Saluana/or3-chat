@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
+import { isAbsolute, resolve } from 'node:path';
 import { Or3CloudWizardApi } from '../../shared/cloud/wizard/api';
 import {
     buildRedactedSummary,
@@ -13,6 +14,7 @@ import {
     normalizeWizardMode,
     normalizeAdvancedToggles,
     recommendedPreset,
+    WIZARD_OWNED_ENV_KEYS,
 } from '../../shared/cloud/wizard/catalog';
 import { getWizardSteps } from '../../shared/cloud/wizard/steps';
 import { readEnvFile } from '../../server/admin/config/env-file';
@@ -27,7 +29,12 @@ import {
     parseInstallPackageManager,
 } from '../../shared/cloud/wizard/install-plan';
 import { readLastSessionId, readSession } from '../../shared/cloud/wizard/store';
-import type { WizardAnswers, WizardField, WizardStep } from '../../shared/cloud/wizard/types';
+import type {
+    WizardAnswers,
+    WizardDeployResult,
+    WizardField,
+    WizardStep,
+} from '../../shared/cloud/wizard/types';
 
 type CliFlags = {
     [key: string]: string | boolean | undefined;
@@ -36,6 +43,7 @@ type CliFlags = {
 type PromptNavigation = 'nav-back' | 'nav-next';
 const NAV_BACK: PromptNavigation = 'nav-back';
 const NAV_NEXT: PromptNavigation = 'nav-next';
+const WIZARD_OWNED_ENV_KEY_SET = new Set<string>(WIZARD_OWNED_ENV_KEYS);
 let hasLoggedInvalidWizardModeWarning = false;
 
 function parseFlags(args: string[]): { command: string; rest: string[]; flags: CliFlags } {
@@ -173,7 +181,7 @@ class Prompt {
 
     async select(
         label: string,
-        options: Array<{ label: string; value: unknown }>,
+        options: Array<{ label: string; value: unknown; description?: string }>,
         defaultValue?: unknown
     ): Promise<unknown | PromptNavigation> {
         console.log(label);
@@ -183,6 +191,11 @@ class Prompt {
                 defaultIndex = index;
             }
             console.log(`  ${index + 1}. ${option.label}`);
+            if (option.description) {
+                option.description
+                    .split('\n')
+                    .forEach((line) => console.log(`     ${line}`));
+            }
         });
         const answer = await this.text('Choose number', String(defaultIndex + 1), true);
         if (answer === NAV_BACK || answer === NAV_NEXT) {
@@ -432,8 +445,13 @@ async function promptField(
         case 'password': {
             const hasCurrentValue =
                 typeof currentValue === 'string' && currentValue.length > 0;
+            const canAutoGenerate =
+                Boolean(field.secret) && Boolean(field.required);
             const value = await prompt.password(field.label, {
-                required: field.required && !hasCurrentValue,
+                required:
+                    field.required &&
+                    !hasCurrentValue &&
+                    !canAutoGenerate,
                 hasCurrent: hasCurrentValue,
             });
             if (!value && hasCurrentValue) {
@@ -453,10 +471,274 @@ async function promptField(
     }
 }
 
+function hasExistingWizardConfiguration(envMap: Record<string, string>): boolean {
+    return Object.keys(envMap).some((key) => WIZARD_OWNED_ENV_KEY_SET.has(key));
+}
+
+function resolvePathForValidation(
+    fieldKey: keyof WizardAnswers,
+    value: unknown,
+    answers: WizardAnswers
+): string | null {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    if (fieldKey === 'instanceDir') {
+        return isAbsolute(trimmed) ? trimmed : resolve(trimmed);
+    }
+
+    if (fieldKey === 'sqliteDbPath') {
+        return isAbsolute(trimmed)
+            ? trimmed
+            : resolve(answers.instanceDir, trimmed);
+    }
+
+    return null;
+}
+
+async function validatePathFieldIfNeeded(
+    api: Or3CloudWizardApi,
+    prompt: Prompt,
+    fieldKey: keyof WizardAnswers,
+    value: unknown,
+    answers: WizardAnswers
+): Promise<boolean> {
+    const pathToCheck = resolvePathForValidation(fieldKey, value, answers);
+    if (!pathToCheck) {
+        return true;
+    }
+
+    const exists = await api.validatePath(pathToCheck, false);
+    if (exists) {
+        return true;
+    }
+
+    const shouldCreate = await promptBooleanNoNav(
+        prompt,
+        `Path "${pathToCheck}" does not exist. Create it now?`,
+        true
+    );
+    if (!shouldCreate) {
+        console.log('Please provide a valid path to continue.');
+        return false;
+    }
+
+    const created = await api.validatePath(pathToCheck, true);
+    if (!created) {
+        console.log(`Unable to create "${pathToCheck}".`);
+        return false;
+    }
+
+    console.log(`Created "${pathToCheck}".`);
+    return true;
+}
+
+type ConnectionTestTarget = {
+    providerId: 'clerk' | 'convex' | 's3';
+    label: string;
+    credentials: Record<string, string>;
+};
+
+function getConnectionTestTarget(
+    step: WizardStep,
+    answers: WizardAnswers
+): ConnectionTestTarget | null {
+    if (step.id === 'provider-auth' && answers.authProvider === 'clerk') {
+        const clerkSecretKey = answers.clerkSecretKey?.trim() ?? '';
+        if (!clerkSecretKey) return null;
+        return {
+            providerId: 'clerk',
+            label: 'Clerk',
+            credentials: {
+                clerkSecretKey,
+                clerkPublishableKey: answers.clerkPublishableKey?.trim() ?? '',
+            },
+        };
+    }
+
+    if (step.id === 'provider-sync' && answers.syncProvider === 'convex') {
+        const convexUrl = answers.convexUrl?.trim() ?? '';
+        if (!convexUrl) return null;
+        return {
+            providerId: 'convex',
+            label: 'Convex',
+            credentials: {
+                convexUrl,
+                convexSelfHostedAdminKey:
+                    answers.convexSelfHostedAdminKey?.trim() ?? '',
+            },
+        };
+    }
+
+    if (step.id === 'provider-storage' && answers.storageProvider === 's3') {
+        const s3Bucket = answers.s3Bucket?.trim() ?? '';
+        const s3AccessKeyId = answers.s3AccessKeyId?.trim() ?? '';
+        const s3SecretAccessKey = answers.s3SecretAccessKey?.trim() ?? '';
+        if (!s3Bucket || !s3AccessKeyId || !s3SecretAccessKey) {
+            return null;
+        }
+        return {
+            providerId: 's3',
+            label: 'S3',
+            credentials: {
+                s3Endpoint: answers.s3Endpoint?.trim() ?? '',
+                s3Region: answers.s3Region?.trim() ?? 'us-east-1',
+                s3Bucket,
+                s3AccessKeyId,
+                s3SecretAccessKey,
+                s3SessionToken: answers.s3SessionToken?.trim() ?? '',
+            },
+        };
+    }
+
+    return null;
+}
+
+function findValidationFailureStepId(
+    errors: string[],
+    answers: WizardAnswers
+): string | null {
+    const visibleSteps = getVisibleSteps(getWizardSteps(answers), answers).filter(
+        (step) => step.id !== 'review'
+    );
+    const visibleStepIds = new Set(visibleSteps.map((step) => step.id));
+    const rules: Array<{ stepId: string; patterns: string[] }> = [
+        {
+            stepId: 'target',
+            patterns: ['INSTANCEDIR', 'INSTANCE DIR'],
+        },
+        {
+            stepId: 'branding',
+            patterns: ['OR3 SITE NAME', 'OR3_SITE_NAME'],
+        },
+        {
+            stepId: 'provider-auth',
+            patterns: ['OR3_BASIC_AUTH_', 'NUXT_PUBLIC_CLERK_', 'NUXT_CLERK_SECRET_KEY'],
+        },
+        {
+            stepId: 'provider-sync',
+            patterns: ['OR3_SQLITE_', 'VITE_CONVEX_URL', 'CONVEX_SELF_HOSTED_'],
+        },
+        {
+            stepId: 'provider-storage',
+            patterns: ['OR3_STORAGE_FS_', 'OR3_STORAGE_S3_'],
+        },
+        {
+            stepId: 'convex-env',
+            patterns: ['CLERK_ISSUER_URL', 'OR3_ADMIN_JWT_SECRET'],
+        },
+        {
+            stepId: 'openrouter-limits-security',
+            patterns: [
+                'OPENROUTER_',
+                'OR3_OPENROUTER_',
+                'OR3_REQUESTS_PER_MINUTE',
+                'OR3_MAX_CONVERSATIONS',
+                'OR3_MAX_MESSAGES_PER_DAY',
+                'OR3_ALLOWED_ORIGINS',
+                'OR3_FORWARDED_FOR_HEADER',
+                'OR3_TRUST_PROXY',
+                'OR3_STRICT_CONFIG',
+            ],
+        },
+    ];
+
+    for (const rawError of errors) {
+        const error = rawError.toUpperCase();
+        for (const rule of rules) {
+            if (!visibleStepIds.has(rule.stepId)) continue;
+            if (rule.patterns.some((pattern) => error.includes(pattern))) {
+                return rule.stepId;
+            }
+        }
+    }
+
+    return visibleSteps[0]?.id ?? null;
+}
+
+function printDeployResult(result: WizardDeployResult): void {
+    if (result.accessUrl) {
+        console.log(`\n  URL: ${result.accessUrl}`);
+    }
+
+    if (result.nextSteps && result.nextSteps.length > 0) {
+        console.log('\n  Next steps:');
+        result.nextSteps.forEach((step, index) => {
+            console.log(`    ${index + 1}. ${step}`);
+        });
+    }
+
+    if (result.instructions) {
+        console.log(`\n  ${result.instructions}`);
+    }
+}
+
+async function runFastInit(flags: CliFlags): Promise<void> {
+    const api = new Or3CloudWizardApi();
+    const dryRun = toBooleanFlag(flags, 'dry-run');
+    const strict = hasFlag(flags, 'strict') ? toBooleanFlag(flags, 'strict') : undefined;
+    const instanceDir = toStringFlag(flags, 'instance-dir') ?? process.cwd();
+    const envFile =
+        (toStringFlag(flags, 'env-file') as '.env' | '.env.local') ?? '.env';
+
+    const bootstrapEmail = 'admin@example.com';
+    const bootstrapPassword = api.generateSecureSecret(24);
+    const fsRoot = resolve(instanceDir, '.data', 'or3-storage');
+    await api.validatePath(fsRoot, true);
+
+    const session = await api.createSession({
+        presetName: recommendedPreset.name,
+        instanceDir,
+        envFile,
+        includeSecrets: false,
+        prefillFromEnv: false,
+    });
+
+    await api.submitAnswers(session.id, {
+        wizardMode: 'preset-local',
+        presetName: 'recommended',
+        dryRun,
+        basicAuthJwtSecret: api.generateSecureSecret(48),
+        basicAuthRefreshSecret: api.generateSecureSecret(48),
+        basicAuthBootstrapEmail: bootstrapEmail,
+        basicAuthBootstrapPassword: bootstrapPassword,
+        fsTokenSecret: api.generateSecureSecret(48),
+        fsRoot,
+    });
+
+    const validation = await api.validate(
+        session.id,
+        strict === undefined ? {} : { strict }
+    );
+    if (!validation.ok) {
+        throw new Error(
+            `Fast setup validation failed:\n${summarizeValidationErrors(validation)}`
+        );
+    }
+
+    const applyResult = await api.apply(session.id, {
+        dryRun,
+        createBackup: !toBooleanFlag(flags, 'no-backup'),
+    });
+
+    console.log('\n  ✅ Fast setup complete.\n');
+    if (applyResult.dryRun) {
+        console.log('  Dry run mode enabled: no files were written.');
+        return;
+    }
+
+    console.log(`  Bootstrap email: ${bootstrapEmail}`);
+    console.log(`  Bootstrap password: ${bootstrapPassword}`);
+
+    const deployResult = await api.deploy(session.id);
+    printDeployResult(deployResult);
+}
+
 function printHelp(): void {
     console.log(`or3-cloud commands
 
-  or3-cloud init [--preset recommended|clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--manual] [--enable-install] [--package-manager bun|npm] [--no-focused-prompts]
+  or3-cloud init [--preset recommended|clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--manual] [--fast] [--enable-install] [--package-manager bun|npm] [--no-focused-prompts]
   or3-cloud validate [--env-file .env|.env.local] [--strict]
   or3-cloud presets list
   or3-cloud presets save <name> [--session <id>]
@@ -468,6 +750,10 @@ function printHelp(): void {
 
 async function runInit(flags: CliFlags): Promise<void> {
     printBanner();
+    if (toBooleanFlag(flags, 'fast')) {
+        await runFastInit(flags);
+        return;
+    }
     const api = new Or3CloudWizardApi();
     const prompt = new Prompt();
     const manualMode = toBooleanFlag(flags, 'manual');
@@ -487,187 +773,311 @@ async function runInit(flags: CliFlags): Promise<void> {
         presetFlag === 'clerk-convex' ? 'legacy-clerk-convex' : presetFlag;
 
     try {
+        const instanceDir = toStringFlag(flags, 'instance-dir') ?? process.cwd();
+        const envFile =
+            (toStringFlag(flags, 'env-file') as '.env' | '.env.local') ?? '.env';
+        const existingEnv = await readEnvFile({
+            instanceDir,
+            envFile,
+        });
+        const hasExistingConfig = hasExistingWizardConfiguration(existingEnv.map);
+        let prefillFromEnv = true;
+        if (hasExistingConfig) {
+            console.log(`\nDetected existing wizard-managed settings in ${existingEnv.path}.`);
+            prefillFromEnv = await promptBooleanNoNav(
+                prompt,
+                'Update this existing setup (recommended) instead of starting fresh?',
+                true
+            );
+        }
+
         const session = await api.createSession({
-            presetName:
-                normalizedPresetName ?? recommendedPreset.name,
-            instanceDir: toStringFlag(flags, 'instance-dir') ?? process.cwd(),
-            envFile: (toStringFlag(flags, 'env-file') as '.env' | '.env.local') ?? '.env',
+            presetName: normalizedPresetName ?? recommendedPreset.name,
+            instanceDir,
+            envFile,
             includeSecrets: false,
+            prefillFromEnv,
+            existingEnvMap: prefillFromEnv ? existingEnv.map : undefined,
         });
 
         let stepIndex = 0;
+        let finalAnswers: WizardAnswers | null = null;
+        let validationWarnings: string[] = [];
         while (true) {
-            const latestSession = await api.getSession(session.id, {
-                includeSecrets: true,
-            });
-            const answers = normalizeAnswers(latestSession.answers);
-            const steps = getWizardSteps(answers);
-            const visibleSteps = getVisibleSteps(steps, answers);
-            if (stepIndex >= visibleSteps.length) break;
-            const step = visibleSteps[stepIndex];
-            if (!step) break;
-
-            if (step.id === 'review') {
-                if (focusedPrompts) {
-                    console.clear();
-                }
-                printStepHeader(stepIndex, visibleSteps.length, step.title, step.description);
-                const review = await api.review(session.id);
-                console.log('\n' + review.summary + '\n');
-                const confirm = await promptBooleanNoNav(
-                    prompt,
-                    'Does this look right? Apply it?',
-                    true
-                );
-                if (confirm) break;
-
-                console.log('\n  Which step would you like to change?\n');
-                const editable = visibleSteps.filter(
-                    (candidate) => candidate.id !== 'review'
-                );
-                editable.forEach((candidate, index) => {
-                    console.log(`  ${index + 1}. ${candidate.title}`);
-                });
-                const selected = await promptTextNoNav(
-                    prompt,
-                    'Enter step number to edit',
-                    String(Math.max(1, editable.length))
-                );
-                const selectedIndex = toInt(selected);
-                if (
-                    selectedIndex !== null &&
-                    selectedIndex > 0 &&
-                    selectedIndex <= editable.length
-                ) {
-                    const targetStepId = editable[selectedIndex - 1]?.id;
-                    const nextIndex = visibleSteps.findIndex(
-                        (candidate) => candidate.id === targetStepId
-                    );
-                    stepIndex = nextIndex >= 0 ? nextIndex : 0;
-                    continue;
-                }
-                stepIndex = 0;
-                continue;
-            }
-
-            const initialVisibleFields = getVisibleFields(step, answers);
-            if (initialVisibleFields.length === 0) {
-                stepIndex += 1;
-                continue;
-            }
-
-            if (!focusedPrompts) {
-                printStepHeader(
-                    stepIndex,
-                    visibleSteps.length,
-                    step.title,
-                    step.description
-                );
-                console.log('  Commands: /back = previous question, /next = skip this question');
-                console.log('');
-            }
-
-            const patch: Partial<WizardAnswers> = {};
-            let fieldIndex = 0;
-            let moveToPreviousStep = false;
-            const draftAnswers: WizardAnswers = { ...answers };
             while (true) {
-                const visibleFields = getVisibleFields(step, draftAnswers);
-                if (fieldIndex >= visibleFields.length) {
-                    break;
-                }
+                const latestSession = await api.getSession(session.id, {
+                    includeSecrets: true,
+                });
+                const answers = normalizeAnswers(latestSession.answers);
+                const steps = getWizardSteps(answers);
+                const visibleSteps = getVisibleSteps(steps, answers);
+                if (stepIndex >= visibleSteps.length) break;
+                const step = visibleSteps[stepIndex];
+                if (!step) break;
 
-                const field = visibleFields[fieldIndex];
-                if (!field) {
-                    fieldIndex += 1;
-                    continue;
-                }
-
-                if (focusedPrompts) {
-                    printFocusedFieldScreen(
+                if (step.id === 'review') {
+                    if (focusedPrompts) {
+                        console.clear();
+                    }
+                    printStepHeader(
                         stepIndex,
                         visibleSteps.length,
                         step.title,
-                        step.description,
-                        fieldIndex,
-                        visibleFields.length
+                        step.description
                     );
-                } else {
+                    const review = await api.review(session.id);
+                    console.log('\n' + review.summary + '\n');
+                    const confirm = await promptBooleanNoNav(
+                        prompt,
+                        'Does this look right? Apply it?',
+                        true
+                    );
+                    if (confirm) break;
+
+                    console.log('\n  Which step would you like to change?\n');
+                    const editable = visibleSteps.filter(
+                        (candidate) => candidate.id !== 'review'
+                    );
+                    editable.forEach((candidate, index) => {
+                        console.log(`  ${index + 1}. ${candidate.title}`);
+                    });
+                    const selected = await promptTextNoNav(
+                        prompt,
+                        'Enter step number to edit',
+                        String(Math.max(1, editable.length))
+                    );
+                    const selectedIndex = toInt(selected);
+                    if (
+                        selectedIndex !== null &&
+                        selectedIndex > 0 &&
+                        selectedIndex <= editable.length
+                    ) {
+                        const targetStepId = editable[selectedIndex - 1]?.id;
+                        const nextIndex = visibleSteps.findIndex(
+                            (candidate) => candidate.id === targetStepId
+                        );
+                        stepIndex = nextIndex >= 0 ? nextIndex : 0;
+                        continue;
+                    }
+                    stepIndex = 0;
+                    continue;
+                }
+
+                const initialVisibleFields = getVisibleFields(step, answers);
+                if (initialVisibleFields.length === 0) {
+                    stepIndex += 1;
+                    continue;
+                }
+
+                if (!focusedPrompts) {
+                    printStepHeader(
+                        stepIndex,
+                        visibleSteps.length,
+                        step.title,
+                        step.description
+                    );
+                    console.log(
+                        '  Commands: /back = previous question, /next = skip this question'
+                    );
                     console.log('');
                 }
 
-                if (field.help) {
-                    printFieldHelp(field.help);
-                }
-
+                const patch: Partial<WizardAnswers> = {};
+                let fieldIndex = 0;
+                let moveToPreviousStep = false;
+                const draftAnswers: WizardAnswers = { ...answers };
                 while (true) {
-                    const value = await promptField(prompt, field, draftAnswers);
-                    if (value === NAV_BACK) {
-                        if (fieldIndex === 0) {
-                            if (stepIndex === 0) {
-                                console.log('Already at the first visible question.');
-                                break;
-                            }
-                            moveToPreviousStep = true;
-                            break;
-                        }
-                        fieldIndex -= 1;
+                    const visibleFields = getVisibleFields(step, draftAnswers);
+                    if (fieldIndex >= visibleFields.length) {
                         break;
                     }
-                    if (value === NAV_NEXT) {
+
+                    const field = visibleFields[fieldIndex];
+                    if (!field) {
+                        fieldIndex += 1;
+                        continue;
+                    }
+
+                    if (focusedPrompts) {
+                        printFocusedFieldScreen(
+                            stepIndex,
+                            visibleSteps.length,
+                            step.title,
+                            step.description,
+                            fieldIndex,
+                            visibleFields.length
+                        );
+                    } else {
+                        console.log('');
+                    }
+
+                    if (field.help) {
+                        printFieldHelp(field.help);
+                    }
+
+                    while (true) {
+                        const value = await promptField(prompt, field, draftAnswers);
+                        if (value === NAV_BACK) {
+                            if (fieldIndex === 0) {
+                                if (stepIndex === 0) {
+                                    console.log('Already at the first visible question.');
+                                    break;
+                                }
+                                moveToPreviousStep = true;
+                                break;
+                            }
+                            fieldIndex -= 1;
+                            break;
+                        }
+                        if (value === NAV_NEXT) {
+                            fieldIndex += 1;
+                            break;
+                        }
+
+                        const validationError =
+                            typeof field.validate === 'function'
+                                ? field.validate(value as never, draftAnswers)
+                                : null;
+                        if (validationError) {
+                            console.log(validationError);
+                            continue;
+                        }
+
+                        let nextValue: unknown = value;
+                        if (
+                            typeof nextValue === 'string' &&
+                            field.secret &&
+                            field.required &&
+                            nextValue.trim().length === 0
+                        ) {
+                            nextValue = api.generateSecureSecret();
+                            console.log(
+                                `Generated secure value for "${field.label}".`
+                            );
+                        }
+
+                        const pathIsValid = await validatePathFieldIfNeeded(
+                            api,
+                            prompt,
+                            field.key,
+                            nextValue,
+                            draftAnswers
+                        );
+                        if (!pathIsValid) {
+                            continue;
+                        }
+
+                        patch[field.key] = nextValue as never;
+                        (
+                            draftAnswers as Record<keyof WizardAnswers, unknown>
+                        )[field.key] = nextValue;
                         fieldIndex += 1;
                         break;
                     }
 
-                    const validationError =
-                        typeof field.validate === 'function'
-                            ? field.validate(value as never, draftAnswers)
-                            : null;
-                    if (validationError) {
-                        console.log(validationError);
-                        continue;
+                    if (moveToPreviousStep) {
+                        break;
                     }
-
-                    patch[field.key] = value as never;
-                    (draftAnswers as Record<keyof WizardAnswers, unknown>)[field.key] =
-                        value;
-                    fieldIndex += 1;
-                    break;
                 }
 
                 if (moveToPreviousStep) {
-                    break;
+                    stepIndex = Math.max(0, stepIndex - 1);
+                    continue;
                 }
+
+                if (step.id === 'target') {
+                    patch.dryRun = dryRun || Boolean(patch.dryRun);
+                }
+
+                const connectionTestTarget = getConnectionTestTarget(
+                    step,
+                    draftAnswers
+                );
+                if (connectionTestTarget) {
+                    console.log(
+                        `\nTesting ${connectionTestTarget.label} connection...`
+                    );
+                    const connectionResult = await api.testProviderConnection(
+                        connectionTestTarget.providerId,
+                        connectionTestTarget.credentials
+                    );
+                    if (!connectionResult.success) {
+                        console.log(`  ❌ ${connectionResult.message}`);
+                        const bypassFailure = await promptBooleanNoNav(
+                            prompt,
+                            'Connection test failed. Continue anyway?',
+                            false
+                        );
+                        if (!bypassFailure) {
+                            continue;
+                        }
+                    } else {
+                        console.log(`  ✅ ${connectionResult.message}`);
+                    }
+                }
+
+                await api.submitAnswers(session.id, patch);
+                stepIndex += 1;
             }
 
-            if (moveToPreviousStep) {
-                stepIndex = Math.max(0, stepIndex - 1);
+            const latestSession = await api.getSession(session.id, {
+                includeSecrets: true,
+            });
+            const candidateAnswers = normalizeAnswers(latestSession.answers);
+            const validation = await api.validate(
+                session.id,
+                strict === undefined ? {} : { strict }
+            );
+            if (!validation.ok) {
+                console.log('\n  ❌ Some settings need fixing:\n');
+                console.log(summarizeValidationErrors(validation));
+
+                const failedStepId = findValidationFailureStepId(
+                    validation.errors,
+                    candidateAnswers
+                );
+                if (!failedStepId) {
+                    return;
+                }
+
+                const visibleSteps = getVisibleSteps(
+                    getWizardSteps(candidateAnswers),
+                    candidateAnswers
+                );
+                const failedStep = visibleSteps.find(
+                    (step) => step.id === failedStepId
+                );
+                const shouldRecover = await promptBooleanNoNav(
+                    prompt,
+                    failedStep
+                        ? `Jump to "${failedStep.title}" to fix this now?`
+                        : 'Jump back to fix validation issues now?',
+                    true
+                );
+                if (!shouldRecover) {
+                    return;
+                }
+
+                const nextIndex = visibleSteps.findIndex(
+                    (step) => step.id === failedStepId
+                );
+                stepIndex = nextIndex >= 0 ? nextIndex : 0;
                 continue;
             }
 
-            if (step.id === 'target') {
-                patch.dryRun = dryRun || Boolean(patch.dryRun);
-            }
-
-            await api.submitAnswers(session.id, patch);
-            stepIndex += 1;
+            finalAnswers = candidateAnswers;
+            validationWarnings = validation.warnings;
+            break;
         }
 
-        const latestSession = await api.getSession(session.id, { includeSecrets: true });
-        const answers = normalizeAnswers(latestSession.answers);
-        const validation = await api.validate(
-            session.id,
-            strict === undefined ? {} : { strict }
-        );
-        if (!validation.ok) {
-            console.log('\n  ❌ Some settings need fixing:\n');
-            console.log(summarizeValidationErrors(validation));
+        if (!finalAnswers) {
             return;
         }
+        const answers = finalAnswers;
 
-        if (validation.warnings.length > 0) {
+        if (validationWarnings.length > 0) {
             console.log('\n  ⚠️  Heads up:');
-            for (const warning of validation.warnings) {
+            for (const warning of validationWarnings) {
                 console.log(`    - ${warning}`);
             }
         }
@@ -723,9 +1133,7 @@ async function runInit(flags: CliFlags): Promise<void> {
             );
             if (deployNow) {
                 const result = await api.deploy(session.id);
-                if (result.instructions) {
-                    console.log(result.instructions);
-                }
+                printDeployResult(result);
             }
             return;
         }
@@ -829,9 +1237,7 @@ async function runInit(flags: CliFlags): Promise<void> {
                 });
             }
             const deployResult = await api.deploy(session.id);
-            if (deployResult.instructions) {
-                console.log(deployResult.instructions);
-            }
+            printDeployResult(deployResult);
         }
     } finally {
         await prompt.close();
@@ -915,9 +1321,7 @@ async function runDeploy(flags: CliFlags): Promise<void> {
     // Verify session exists early for clearer error
     await readSession(sessionId);
     const result = await api.deploy(sessionId);
-    if (result.instructions) {
-        console.log(result.instructions);
-    }
+    printDeployResult(result);
 }
 
 async function main(): Promise<void> {

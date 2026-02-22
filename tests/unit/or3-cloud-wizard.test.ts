@@ -137,6 +137,9 @@ describe('or3 cloud wizard validation', () => {
             'Basic Auth (Default)',
             'Clerk',
         ]);
+        expect(authOptions?.[0]?.description).toContain('Pros:');
+        expect(authOptions?.[0]?.description).toContain('Cons:');
+        expect(authOptions?.[0]?.description).toContain('Best for:');
     });
 
     it('skips manual providers step for preset-local mode', () => {
@@ -283,26 +286,26 @@ describe('or3 cloud wizard validation', () => {
         );
     });
 
-    it('applies section advanced gating and global expert mode visibility', () => {
+    it('uses per-section advanced toggles inside provider steps', () => {
         const answers = {
             ...validRecommendedAnswers(),
-            allAdvancedEnabled: false,
-            baseAdvancedEnabled: false,
             authAdvancedEnabled: false,
-            syncAdvancedEnabled: false,
-            storageAdvancedEnabled: false,
-            cloudAdvancedEnabled: false,
         };
-        const advancedStep = getStepById(getWizardSteps(answers), 'advanced-gates');
-        expect(visibleFieldKeys(advancedStep, answers)).toContain('baseAdvancedEnabled');
+        const providerAuthStep = getStepById(getWizardSteps(answers), 'provider-auth');
+        const hiddenAdvanced = visibleFieldKeys(providerAuthStep, answers);
+        expect(hiddenAdvanced).toContain('authAdvancedEnabled');
+        expect(hiddenAdvanced).not.toContain('basicAuthAccessTtlSeconds');
 
-        const expertAnswers = {
+        const enabledAdvanced = {
             ...answers,
-            allAdvancedEnabled: true,
+            authAdvancedEnabled: true,
         };
-        expect(visibleFieldKeys(advancedStep, expertAnswers)).toEqual([
-            'allAdvancedEnabled',
-        ]);
+        expect(visibleFieldKeys(providerAuthStep, enabledAdvanced)).toContain(
+            'basicAuthAccessTtlSeconds'
+        );
+
+        const stepIds = getWizardSteps(enabledAdvanced).map((step) => step.id);
+        expect(stepIds).not.toContain('advanced-gates');
     });
 
     it('shows effective defaults in review output when advanced fields are skipped', () => {

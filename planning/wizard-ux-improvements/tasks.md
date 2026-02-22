@@ -6,52 +6,52 @@ artifact_id: c3d4e5f6-a7b8-6c7d-0e1f-2a3b4c5d6e7f
 
 ## Phase 1: Core API Enhancements
 
-- [ ] **1.1 Auto-detect existing `.env` configuration**
+- [x] **1.1 Auto-detect existing `.env` configuration**
   - Update `createDefaultAnswers` in `shared/cloud/wizard/catalog.ts` to read the target `.env` file using `readEnvFile`.
   - Map existing env vars to `WizardAnswers` keys.
   - Add a prompt in the CLI to confirm overwriting or updating existing settings.
   - *Requirements: 2*
 
-- [ ] **1.2 Auto-generate secure secrets**
+- [x] **1.2 Auto-generate secure secrets**
   - Add a `generateSecureSecret(length = 32)` utility function to `shared/cloud/wizard/api.ts` using `crypto.randomBytes`.
   - Update the CLI prompt logic in `scripts/cli/or3-cloud.ts` to offer auto-generation when a secret field is left blank.
   - *Requirements: 3*
 
-- [ ] **1.3 Immediate connection testing**
+- [x] **1.3 Immediate connection testing**
   - Add `testProviderConnection` to `WizardApi` interface and `Or3CloudWizardApi` class.
   - Implement connection tests for Clerk (verify secret key), Convex (verify URL and admin key), and S3 (verify endpoint and credentials).
   - Update the CLI to call this method after a provider's credentials are provided.
   - *Requirements: 4*
 
-- [ ] **1.4 Contextual help for file paths**
+- [x] **1.4 Contextual help for file paths**
   - Add `validatePath(path, autoCreate)` to `WizardApi`.
   - Update the CLI prompt logic for `instanceDir` and `sqliteDbPath` to check existence and offer creation.
   - *Requirements: 10*
 
 ## Phase 2: CLI Enhancements
 
-- [ ] **2.1 Simplify the "Advanced Settings" gate**
+- [x] **2.1 Simplify the "Advanced Settings" gate**
   - Remove the global `allAdvancedEnabled` and section-specific toggles from the initial "Advanced Settings" step in `shared/cloud/wizard/steps.ts`.
   - Add a single "Show advanced options?" prompt at the end of each relevant section (Auth, Sync, Storage).
   - *Requirements: 5*
 
-- [ ] **2.2 One-command quickstart (`--fast` flag)**
+- [x] **2.2 One-command quickstart (`--fast` flag)**
   - Add a `--fast` flag to `scripts/cli/or3-cloud.ts`.
   - When `--fast` is present, bypass all prompts, select the `preset-local` preset, auto-generate secrets, and immediately call `api.deploy()`.
   - *Requirements: 6*
 
-- [ ] **2.3 Better validation recovery**
+- [x] **2.3 Better validation recovery**
   - Update the `runInit` loop in `scripts/cli/or3-cloud.ts`.
   - When `api.validate()` fails, map the error keys to their respective `WizardStep` IDs.
   - Prompt the user to jump directly to the failed step instead of exiting.
   - *Requirements: 7*
 
-- [ ] **2.4 Interactive provider comparison**
+- [x] **2.4 Interactive provider comparison**
   - Update `WizardProviderDescriptor` in `shared/cloud/wizard/catalog.ts` to include `pros`, `cons`, and `idealUseCase`.
   - Update the CLI prompt for provider selection to display this metadata.
   - *Requirements: 8*
 
-- [ ] **2.5 Clearer post-install next steps**
+- [x] **2.5 Clearer post-install next steps**
   - Update `deployAnswers` in `shared/cloud/wizard/deploy.ts` to return a structured checklist of next steps.
   - Print a clickable URL (e.g., `http://localhost:3000`) and instructions for accessing the admin panel.
   - *Requirements: 9*
