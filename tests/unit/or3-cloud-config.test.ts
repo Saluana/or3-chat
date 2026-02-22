@@ -158,6 +158,24 @@ describe('defineOr3CloudConfig', () => {
         });
         expect(config.admin?.basePath).toBe('/custom-admin');
         expect(config.admin?.allowRestart).toBe(false); // default preserved
+        expect(config.admin?.pluginRuntimeLoaderEnabled).toBe(true);
+        expect(config.admin?.pluginZipInstallEnabled).toBe(true);
+        expect(config.admin?.pluginRouteDispatcherEnabled).toBe(true);
+    });
+
+    it('allows overriding plugin operation toggles', () => {
+        const config = defineOr3CloudConfig({
+            ...baseConfig,
+            admin: {
+                pluginRuntimeLoaderEnabled: false,
+                pluginZipInstallEnabled: false,
+                pluginRouteDispatcherEnabled: false,
+            },
+        });
+
+        expect(config.admin?.pluginRuntimeLoaderEnabled).toBe(false);
+        expect(config.admin?.pluginZipInstallEnabled).toBe(false);
+        expect(config.admin?.pluginRouteDispatcherEnabled).toBe(false);
     });
 
     it('merges security config with defaults', () => {

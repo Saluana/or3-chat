@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { WorkspaceSettingsStore } from '../../stores/types';
 import {
+    bootstrapDefaultEnabledPlugins,
     getEnabledPlugins,
     getPluginAccessPolicy,
     getPluginSettings,
@@ -110,5 +111,19 @@ describe('workspace plugin store', () => {
 
         await expect(getEnabledPlugins(store, 'ws-1')).resolves.toEqual([]);
         await expect(getPluginSettings(store, 'ws-1', 'plugin.a')).resolves.toEqual({});
+    });
+
+    it('bootstraps default enabled plugins only when key is unset', async () => {
+        const { store } = createStore();
+        const seeded = await bootstrapDefaultEnabledPlugins(store, 'ws-1', [
+            'plugin.a',
+            'plugin.a',
+            '',
+            'plugin.b',
+        ]);
+        expect(seeded).toEqual(['plugin.a', 'plugin.b']);
+
+        const unchanged = await bootstrapDefaultEnabledPlugins(store, 'ws-1', ['plugin.c']);
+        expect(unchanged).toEqual(['plugin.a', 'plugin.b']);
     });
 });

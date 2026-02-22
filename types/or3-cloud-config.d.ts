@@ -355,6 +355,24 @@ export interface Or3CloudConfig {
         extensionAllowedExtensions?: string[];
 
         /**
+         * Enables client workspace plugin runtime loader paths.
+         * @default true
+         */
+        pluginRuntimeLoaderEnabled?: boolean;
+
+        /**
+         * Enables admin ZIP-based extension install endpoint.
+         * @default true
+         */
+        pluginZipInstallEnabled?: boolean;
+
+        /**
+         * Enables server dispatcher for manifest-declared plugin routes.
+         * @default true
+         */
+        pluginRouteDispatcherEnabled?: boolean;
+
+        /**
          * Admin authentication configuration.
          * Enables dedicated super-admin authentication for the admin dashboard.
          */

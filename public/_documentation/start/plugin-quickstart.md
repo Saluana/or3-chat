@@ -17,6 +17,34 @@ export default defineNuxtPlugin(() => {
 });
 ```
 
+## Installable Workspace Plugin Package Contract
+
+When shipping a plugin as an installable package/zip for `extensions/plugins/<id>`, include `or3.manifest.json` at package root.
+
+Example:
+
+```json
+{
+    "kind": "plugin",
+    "id": "or3-example",
+    "name": "OR3 Example Plugin",
+    "version": "1.0.0",
+    "runtime": {
+        "client": { "entry": "plugin.client.ts" },
+        "server": {
+            "routes": [
+                { "method": "GET", "path": "health", "handler": "server/health.get.mjs" }
+            ]
+        }
+    }
+}
+```
+
+Notes:
+- `runtime.client.entry` is optional; legacy `plugin.client.ts` fallback is supported.
+- `runtime.server.routes` are optional and only valid under the host dispatcher namespace.
+- Keep manifest JSON as the canonical runtime contract (non-executable, deterministic).
+
 ## 1. Dashboard Plugins
 
 Dashboard plugins add custom tiles to the dashboard grid and optionally provide full-page experiences with navigation.

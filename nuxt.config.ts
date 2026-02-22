@@ -65,8 +65,28 @@ for (const providerId of providerIdsFromConfig) {
     }
 }
 
+const configuredPluginModules =
+    or3Config.extensions?.plugins?.modules?.filter((entry) =>
+        typeof entry === 'string' ? entry.trim().length > 0 : false
+    ) ?? [];
+const pluginModulesFromConfig: string[] = [];
+for (const moduleId of configuredPluginModules) {
+    const pkgName = moduleId.split('/')[0];
+    if (!pkgName) {
+        console.warn(`[or3-plugin] Ignoring invalid plugin module id "${moduleId}".`);
+        continue;
+    }
+    if (!isPackageInstalled(pkgName)) {
+        console.warn(
+            `[or3-plugin] Configured plugin module "${moduleId}" expects package "${pkgName}", but it is not installed.`
+        );
+        continue;
+    }
+    pluginModulesFromConfig.push(moduleId);
+}
+
 const activeProviderModules = Array.from(
-    new Set([...or3ProviderModules, ...providerModulesFromConfig])
+    new Set([...or3ProviderModules, ...providerModulesFromConfig, ...pluginModulesFromConfig])
 );
 
 const authProviderAvailable = isProviderAvailable(or3CloudConfig.auth.provider);
@@ -137,6 +157,12 @@ const adminConfig = {
     allowedHosts: or3CloudConfig.admin?.allowedHosts || [],
     allowRestart: Boolean(or3CloudConfig.admin?.allowRestart),
     allowRebuild: Boolean(or3CloudConfig.admin?.allowRebuild),
+    pluginRuntimeLoaderEnabled:
+        or3CloudConfig.admin?.pluginRuntimeLoaderEnabled !== false,
+    pluginZipInstallEnabled:
+        or3CloudConfig.admin?.pluginZipInstallEnabled !== false,
+    pluginRouteDispatcherEnabled:
+        or3CloudConfig.admin?.pluginRouteDispatcherEnabled !== false,
     rebuildCommand: or3CloudConfig.admin?.rebuildCommand || 'bun run build',
     extensionMaxZipBytes: or3CloudConfig.admin?.extensionMaxZipBytes
         ? String(or3CloudConfig.admin.extensionMaxZipBytes)
@@ -261,6 +287,12 @@ export default defineNuxtConfig({
         limits: limitsConfig,
         branding: brandingConfig,
         legal: legalConfig,
+        plugins: {
+            defaultEnabled:
+                or3Config.extensions?.plugins?.defaultEnabled?.filter(Boolean) ?? [],
+            modules:
+                or3Config.extensions?.plugins?.modules?.filter(Boolean) ?? [],
+        },
         security: {
             allowedOrigins: or3CloudConfig.security!.allowedOrigins!,
             forceHttps: or3CloudConfig.security!.forceHttps!,
@@ -321,6 +353,8 @@ export default defineNuxtConfig({
             },
             admin: {
                 basePath: adminConfig.basePath,
+                pluginRuntimeLoaderEnabled: adminConfig.pluginRuntimeLoaderEnabled,
+                pluginRouteDispatcherEnabled: adminConfig.pluginRouteDispatcherEnabled,
             },
             // Feature toggles from OR3 config - exposed for client-side gating
             features: {
@@ -371,6 +405,12 @@ export default defineNuxtConfig({
                 legal: {
                     termsUrl: or3Config.legal.termsUrl,
                     privacyUrl: or3Config.legal.privacyUrl,
+                },
+                plugins: {
+                    defaultEnabled:
+                        or3Config.extensions?.plugins?.defaultEnabled?.filter(Boolean) ?? [],
+                    modules:
+                        or3Config.extensions?.plugins?.modules?.filter(Boolean) ?? [],
                 },
             },
             // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY

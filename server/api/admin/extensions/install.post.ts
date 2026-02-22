@@ -78,6 +78,17 @@ async function readZipPayload(event: H3Event) {
 export default defineEventHandler(async (event) => {
     await requireAdminApi(event, { ownerOnly: true, mutation: true });
 
+    const runtimeConfig = useRuntimeConfig();
+    const zipInstallEnabled =
+        (runtimeConfig.admin as { pluginZipInstallEnabled?: boolean } | undefined)
+            ?.pluginZipInstallEnabled !== false;
+    if (!zipInstallEnabled) {
+        throw createError({
+            statusCode: 403,
+            statusMessage: 'Plugin zip install is disabled by configuration',
+        });
+    }
+
     // Rate limit: 5 extension installs per hour per user
     const clientId = getRequestHeader(event, 'x-forwarded-for') 
         || event.node.req.socket.remoteAddress 
@@ -98,8 +109,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
     }
 
-    const config = useRuntimeConfig();
-    const admin = config.admin as {
+    const admin = runtimeConfig.admin as {
         extensionMaxZipBytes?: string;
         extensionMaxFiles?: string;
         extensionMaxTotalBytes?: string;

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { defineOr3Config, DEFAULT_OR3_CONFIG } from '../../utils/or3-config';
+import {
+    defineOr3Config,
+    DEFAULT_OR3_CONFIG,
+    withOr3Plugins,
+} from '../../utils/or3-config';
 
 describe('defineOr3Config', () => {
     describe('default values', () => {
@@ -71,6 +75,40 @@ describe('defineOr3Config', () => {
             });
             expect(config.limits.maxFileSizeBytes).toBe(50 * 1024 * 1024);
             expect(config.limits.maxFilesPerMessage).toBe(10); // default preserved
+        });
+
+        it('supports extensions.plugins modules/defaultEnabled config', () => {
+            const config = defineOr3Config({
+                extensions: {
+                    plugins: {
+                        modules: ['or3-plugin-tasks/nuxt'],
+                        defaultEnabled: ['or3-tasks'],
+                    },
+                    customPlugin: { enabled: true },
+                },
+            });
+
+            expect(config.extensions.plugins.modules).toEqual(['or3-plugin-tasks/nuxt']);
+            expect(config.extensions.plugins.defaultEnabled).toEqual(['or3-tasks']);
+            expect(config.extensions.customPlugin).toEqual({ enabled: true });
+        });
+
+        it('supports withOr3Plugins helper', () => {
+            const config = defineOr3Config(
+                withOr3Plugins(
+                    {
+                        site: { name: 'Plugin Config App' },
+                    },
+                    {
+                        modules: ['or3-plugin-tasks/nuxt'],
+                        defaultEnabled: ['or3-tasks'],
+                    }
+                )
+            );
+
+            expect(config.extensions.plugins.modules).toEqual(['or3-plugin-tasks/nuxt']);
+            expect(config.extensions.plugins.defaultEnabled).toEqual(['or3-tasks']);
+            expect(config.site.name).toBe('Plugin Config App');
         });
     });
 

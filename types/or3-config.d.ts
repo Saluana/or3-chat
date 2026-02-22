@@ -1,5 +1,31 @@
 export interface Or3Config {
     /**
+     * Built-in plugin extension settings.
+     */
+    extensions?: {
+        /**
+         * Workspace/runtime plugin configuration.
+         */
+        plugins?: {
+            /**
+             * Build-time Nuxt module IDs for plugin packages.
+             * Example: ['or3-plugin-tasks/nuxt']
+             */
+            modules?: string[];
+
+            /**
+             * Plugin IDs automatically enabled for newly provisioned workspaces.
+             */
+            defaultEnabled?: string[];
+        };
+
+        /**
+         * Third-party extension namespace.
+         */
+        [key: string]: unknown;
+    };
+
+    /**
      * Site branding and identity settings.
      */
     site: {
@@ -139,12 +165,6 @@ export interface Or3Config {
     };
 
     /**
-     * Plugin/extension configuration namespace.
-     * Allows third-party plugins to register their own config.
-     */
-    extensions?: Record<string, unknown>;
-
-    /**
      * Legal URLs for compliance and footer links.
      */
     legal?: {
@@ -213,7 +233,13 @@ export interface ResolvedOr3Config {
         maxPanes: number;
         sidebarCollapsedByDefault: boolean;
     };
-    extensions: Record<string, unknown>;
+    extensions: {
+        plugins: {
+            modules: string[];
+            defaultEnabled: string[];
+        };
+        [key: string]: unknown;
+    };
     legal: {
         termsUrl: string;
         privacyUrl: string;

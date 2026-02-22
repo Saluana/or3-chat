@@ -150,6 +150,14 @@ Example `OR3_RATE_LIMIT_OVERRIDES_JSON`:
 | `security.proxy.trustProxy` | `OR3_TRUST_PROXY` | `false` | Trust reverse-proxy headers (`X-Forwarded-*`) |
 | `security.proxy.forwardedForHeader` | `OR3_FORWARDED_FOR_HEADER` | `"x-forwarded-for"` | Which header to treat as the client IP (`x-forwarded-for` or `x-real-ip`) |
 
+### Admin Plugin Operations
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `admin.pluginRuntimeLoaderEnabled` | `true` | Enables workspace plugin runtime manifest + client loader paths |
+| `admin.pluginZipInstallEnabled` | `true` | Enables/disables ZIP-based extension install endpoint |
+| `admin.pluginRouteDispatcherEnabled` | `true` | Enables/disables manifest-declared plugin server route dispatcher |
+
 ## Dependency Chain
 
 ```

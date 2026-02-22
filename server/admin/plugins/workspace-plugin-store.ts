@@ -100,6 +100,26 @@ export async function setPluginEnabled(
     return list;
 }
 
+/**
+ * Seeds default enabled plugin IDs for a workspace only when the key is unset.
+ * If `plugins.enabled` already exists, this is a no-op and current values are returned.
+ */
+export async function bootstrapDefaultEnabledPlugins(
+    store: WorkspaceSettingsStore,
+    workspaceId: string,
+    defaultPluginIds: string[]
+): Promise<string[]> {
+    const raw = await store.get(workspaceId, 'plugins.enabled');
+    if (raw !== null && raw !== undefined) {
+        return getEnabledPlugins(store, workspaceId);
+    }
+    const normalized = Array.from(
+        new Set(defaultPluginIds.filter((id) => typeof id === 'string' && id.trim().length > 0))
+    );
+    await store.set(workspaceId, 'plugins.enabled', JSON.stringify(normalized));
+    return normalized;
+}
+
 const SettingsSchema = z.record(z.string(), z.unknown()).default({});
 
 const SettingsAccessSchema = z.object({

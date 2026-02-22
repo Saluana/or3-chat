@@ -59,7 +59,12 @@ export const DEFAULT_OR3_CONFIG: ResolvedOr3Config = {
         maxPanes: DEFAULT_MAX_PANES,
         sidebarCollapsedByDefault: false,
     },
-    extensions: {},
+    extensions: {
+        plugins: {
+            modules: [],
+            defaultEnabled: [],
+        },
+    },
     legal: {
         termsUrl: '',
         privacyUrl: '',
@@ -175,7 +180,30 @@ const or3ConfigSchema = z
                 maxPanes: val?.maxPanes ?? DEFAULT_OR3_CONFIG.ui.maxPanes,
                 sidebarCollapsedByDefault: val?.sidebarCollapsedByDefault ?? DEFAULT_OR3_CONFIG.ui.sidebarCollapsedByDefault,
             })),
-        extensions: z.record(z.string(), z.unknown()).optional().default(() => ({})),
+        extensions: z
+            .object({
+                plugins: z
+                    .object({
+                        modules: z.array(z.string().min(1)).optional(),
+                        defaultEnabled: z.array(z.string().min(1)).optional(),
+                    })
+                    .optional(),
+            })
+            .catchall(z.unknown())
+            .optional()
+            .transform((val) => ({
+                ...(val ?? {}),
+                plugins: {
+                    modules:
+                        val?.plugins?.modules ??
+                        ((DEFAULT_OR3_CONFIG.extensions as { plugins?: { modules?: string[] } }).plugins
+                            ?.modules ?? []),
+                    defaultEnabled:
+                        val?.plugins?.defaultEnabled ??
+                        ((DEFAULT_OR3_CONFIG.extensions as { plugins?: { defaultEnabled?: string[] } }).plugins
+                            ?.defaultEnabled ?? []),
+                },
+            })),
         legal: z
             .object({
                 termsUrl: z.string().url().or(z.literal('')).optional(),
@@ -233,4 +261,24 @@ export function defineOr3Config(
     _options: Or3ConfigOptions = {}
 ): ResolvedOr3Config {
     return validateConfig(config);
+}
+
+export function withOr3Plugins(
+    config: Partial<Or3Config>,
+    plugins: {
+        modules?: string[];
+        defaultEnabled?: string[];
+    }
+): Partial<Or3Config> {
+    return {
+        ...config,
+        extensions: {
+            ...(config.extensions ?? {}),
+            plugins: {
+                modules: plugins.modules ?? config.extensions?.plugins?.modules,
+                defaultEnabled:
+                    plugins.defaultEnabled ?? config.extensions?.plugins?.defaultEnabled,
+            },
+        },
+    };
 }

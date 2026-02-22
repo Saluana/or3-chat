@@ -104,6 +104,29 @@ const config = useOr3Config();
 const mySettings = config.extensions.myPlugin as MyPluginConfig;
 ```
 
+### Config-first plugin modules
+
+You can register plugin Nuxt modules at build time and seed default workspace-enabled plugin IDs:
+
+```typescript
+import { defineOr3Config, withOr3Plugins } from './utils/or3-config';
+
+export const or3Config = defineOr3Config(
+    withOr3Plugins(
+        {
+            site: { name: 'My OR3' },
+        },
+        {
+            modules: ['or3-plugin-tasks/nuxt'],
+            defaultEnabled: ['or3-tasks'],
+        }
+    )
+);
+```
+
+- `modules`: build-time Nuxt module IDs (package must be installed).
+- `defaultEnabled`: seeded once for new workspaces when `plugins.enabled` is unset.
+
 ## Usage
 
 ### In Vue Components

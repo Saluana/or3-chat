@@ -42,7 +42,12 @@ const FALLBACK_OR3_CONFIG: ResolvedOr3Config = {
         maxPanes: 4,
         sidebarCollapsedByDefault: false,
     },
-    extensions: {},
+    extensions: {
+        plugins: {
+            modules: [],
+            defaultEnabled: [],
+        },
+    },
     legal: {
         termsUrl: '',
         privacyUrl: '',
@@ -82,6 +87,9 @@ export function useOr3Config(): Readonly<ResolvedOr3Config> {
             };
             ui?: Partial<ResolvedOr3Config['ui']>;
             legal?: Partial<ResolvedOr3Config['legal']>;
+            plugins?: {
+                defaultEnabled?: string[];
+            };
         };
     };
 
@@ -120,6 +128,15 @@ export function useOr3Config(): Readonly<ResolvedOr3Config> {
         legal: {
             ...FALLBACK_OR3_CONFIG.legal,
             ...(publicConfig.or3?.legal ?? {}),
+        },
+        extensions: {
+            ...FALLBACK_OR3_CONFIG.extensions,
+            plugins: {
+                ...FALLBACK_OR3_CONFIG.extensions.plugins,
+                defaultEnabled:
+                    publicConfig.or3?.plugins?.defaultEnabled ??
+                    FALLBACK_OR3_CONFIG.extensions.plugins.defaultEnabled,
+            },
         },
         features: {
             workflows: {

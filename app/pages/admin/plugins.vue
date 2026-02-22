@@ -31,6 +31,14 @@
                 </div>
             </div>
 
+            <div
+                v-if="configuredPluginModules.length > 0"
+                class="mb-4 p-3 text-xs rounded border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]"
+            >
+                Some plugins are configured via package modules in config and require install + rebuild/restart:
+                <span class="font-mono">{{ configuredPluginModules.join(', ') }}</span>
+            </div>
+
             <div v-if="pending" class="space-y-4 animate-pulse">
                 <div class="h-10 bg-[var(--md-surface-container-highest)] rounded w-full"></div>
                 <div class="h-24 bg-[var(--md-surface-container-highest)] rounded w-full"></div>
@@ -56,11 +64,25 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
-                             <UBadge :color="enabledSet.has(plugin.id) ? 'success' : 'neutral'" variant="subtle">
-                                {{ enabledSet.has(plugin.id) ? 'Active' : 'Inactive' }}
+                            <UBadge color="primary" variant="subtle">Installed</UBadge>
+                            <UBadge :color="enabledSet.has(plugin.id) ? 'success' : 'neutral'" variant="subtle">
+                                {{ enabledSet.has(plugin.id) ? 'Enabled' : 'Disabled' }}
+                            </UBadge>
+                            <UBadge
+                                :color="loadedSet.has(plugin.id) ? 'success' : 'neutral'"
+                                variant="subtle"
+                            >
+                                {{ loadedSet.has(plugin.id) ? 'Runtime Enabled' : 'Not Runtime Enabled' }}
                             </UBadge>
                         </div>
                     </div>
+
+                    <p
+                        v-if="enabledSet.has(plugin.id) && !loadedSet.has(plugin.id)"
+                        class="mt-2 text-xs opacity-75"
+                    >
+                        Enabled in workspace settings, but runtime manifest does not currently include it. Check plugin manifest/runtime config and logs.
+                    </p>
 
                     <div class="mt-4 pt-4 border-t border-[var(--md-outline-variant)]/50 flex flex-wrap items-center gap-2">
                         <UButton
@@ -174,6 +196,7 @@ import {
 } from '~/utils/admin/plugin-access-policy';
 import { useAdminWorkspaceGate } from '~/composables/admin/useAdminWorkspaceGate';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
+import { useRuntimeConfig } from '#imports';
 
 definePageMeta({
     layout: 'admin',
@@ -198,6 +221,11 @@ const { isOwner } = useAdminAuth(workspaceData);
 
 // 4. Extension Management
 const { fileInput, triggerFileInput, install, uninstall } = useExtensionManagement(isOwner);
+const runtimeConfig = useRuntimeConfig();
+const configuredPluginModules =
+    (runtimeConfig.public as {
+        or3?: { plugins?: { modules?: string[] } };
+    }).or3?.plugins?.modules ?? [];
 
 // Computed & State
 const pending = computed(() => status.value === 'pending');
@@ -214,7 +242,29 @@ const accessByPlugin = reactive<
     >
 >({});
 const toggleLoading = reactive<Record<string, boolean>>({});
+const loadedSet = ref<Set<string>>(new Set());
 const toast = useToast();
+
+async function refreshLoadedState() {
+    try {
+        const runtimeLoaderEnabled =
+            (runtimeConfig.public as { admin?: { pluginRuntimeLoaderEnabled?: boolean } })
+                .admin?.pluginRuntimeLoaderEnabled !== false;
+        if (!runtimeLoaderEnabled) {
+            loadedSet.value = new Set();
+            return;
+        }
+
+        const manifest = await $fetch<{
+            enabledPluginIds: string[];
+        }>('/api/plugins/runtime-manifest', {
+            cache: 'no-store',
+        });
+        loadedSet.value = new Set(manifest.enabledPluginIds ?? []);
+    } catch {
+        loadedSet.value = new Set();
+    }
+}
 
 function getAccessEditor(pluginId: string) {
     if (!accessByPlugin[pluginId]) {
@@ -318,5 +368,10 @@ async function saveSettings(pluginId: string) {
 
 async function refresh() {
     await Promise.all([refreshNuxtData(), refreshWorkspace()]);
+    await refreshLoadedState();
 }
+
+onMounted(() => {
+    void refreshLoadedState();
+});
 </script>

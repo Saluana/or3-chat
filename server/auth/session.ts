@@ -32,6 +32,8 @@ import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
 import { recordSessionResolution, recordProviderError } from './metrics';
 import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { getDeploymentAdminChecker } from './deployment-admin';
+import { getWorkspaceSettingsStore } from '../admin/stores/registry';
+import { bootstrapDefaultEnabledPlugins } from '../admin/plugins/workspace-plugin-store';
 import {
     evaluateUnknownUserRegistration,
     resolveRegistrationMode,
@@ -365,6 +367,29 @@ export async function resolveSessionContext(
             name: workspaceName,
             role,
         };
+
+        const defaultEnabledPlugins = (
+            (config.plugins as { defaultEnabled?: unknown } | undefined)
+                ?.defaultEnabled
+        );
+        if (Array.isArray(defaultEnabledPlugins) && defaultEnabledPlugins.length > 0) {
+            try {
+                const settingsStore = getWorkspaceSettingsStore(event);
+                await bootstrapDefaultEnabledPlugins(
+                    settingsStore,
+                    workspaceId,
+                    defaultEnabledPlugins.filter(
+                        (value): value is string =>
+                            typeof value === 'string' && value.trim().length > 0
+                    )
+                );
+            } catch (error) {
+                console.warn('[auth:session] Failed to bootstrap default plugins', {
+                    workspaceId,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
 
         const sessionContext: SessionContext = {
             authenticated: true,
