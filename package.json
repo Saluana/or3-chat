@@ -7,7 +7,7 @@
     "scripts": {
         "build": "NODE_OPTIONS='--max-old-space-size=8192' nuxt build",
         "dev": "nuxt dev",
-        "dev:ssr": "SSR_AUTH_ENABLED=true bun run dev",
+        "dev:ssr": "SSR_AUTH_ENABLED=true HOST=127.0.0.1 bun run dev -- --host 127.0.0.1 --port 3000",
         "convex-dev": "bunx convex dev",
         "generate": "nuxt generate",
         "generate:static": "SSR_AUTH_ENABLED=false nuxt generate",

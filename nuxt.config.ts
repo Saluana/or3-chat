@@ -127,6 +127,11 @@ if (or3CloudConfig.storage.enabled && !storageProviderAvailable) {
 // Branding defaults (sourced from or3Config)
 const appName = or3Config.site.name;
 const appShortName = appName.length > 12 ? appName.slice(0, 12) : appName;
+const isStaticGenerateBuild = process.argv.includes('generate');
+const pwaNavigateFallback = isStaticGenerateBuild ? '/index.html' : null;
+const pwaOpenRouterCallbackFallback = isStaticGenerateBuild
+    ? '/openrouter-callback/index.html'
+    : undefined;
 
 // Shared config objects (DRY: used in both server and public runtimeConfig)
 const limitsConfig = {
@@ -598,7 +603,8 @@ export default defineNuxtConfig({
                 /\/streamsaver(?:\/.*)?$/,
                 /\/documentation(?:\/.*)?$/,
             ],
-            navigateFallback: '/index.html',
+            // Explicitly set null for SSR builds to disable vite-plugin-pwa's default fallback.
+            navigateFallback: pwaNavigateFallback,
             manifestTransforms: [
                 (entries) => ({
                     manifest: entries.filter((entry) => {
@@ -633,9 +639,14 @@ export default defineNuxtConfig({
                         cacheName: 'openrouter-callback-pages',
                         matchOptions: { ignoreSearch: true },
                         networkTimeoutSeconds: 2,
-                        precacheFallback: {
-                            fallbackURL: '/openrouter-callback/index.html',
-                        },
+                        ...(pwaOpenRouterCallbackFallback
+                            ? {
+                                  precacheFallback: {
+                                      fallbackURL:
+                                          pwaOpenRouterCallbackFallback,
+                                  },
+                              }
+                            : {}),
                     },
                 },
                 // HTML navigation - always try network first for fresh content

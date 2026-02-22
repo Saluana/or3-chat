@@ -31,6 +31,7 @@ import {
     checkAndRecordLlmRequest,
 } from '../../utils/llm/rate-limiter';
 import { getRateLimitProvider } from '../../utils/rate-limit/store';
+import { getClientIp, normalizeProxyTrustConfig } from '../../utils/net/request-identity';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
 import {
     isBackgroundModeRequest,
@@ -38,6 +39,26 @@ import {
     startBackgroundStream,
     isBackgroundStreamingAvailable,
 } from '../../utils/background-jobs/stream-handler';
+
+function parseForwardedProto(raw: string | undefined): 'http' | 'https' | null {
+    if (!raw) return null;
+    const first = raw.split(',')[0]?.trim().toLowerCase();
+    if (first === 'http' || first === 'https') return first;
+    return null;
+}
+
+function resolveRequestProto(host: string, forwardedProto: string | undefined): 'http' | 'https' {
+    const trustedProto = parseForwardedProto(forwardedProto);
+    if (trustedProto) return trustedProto;
+
+    const normalizedHost = host.toLowerCase();
+    const isLocal =
+        /^localhost(?::\d+)?$/.test(normalizedHost) ||
+        /^127\.0\.0\.1(?::\d+)?$/.test(normalizedHost) ||
+        /^\[::1\](?::\d+)?$/.test(normalizedHost);
+
+    return isLocal ? 'http' : 'https';
+}
 
 export default defineEventHandler(async (event) => {
     // Read request body
@@ -97,10 +118,8 @@ export default defineEventHandler(async (event) => {
         }
     }
     if (rateKey === 'anonymous') {
-        const ip =
-            getRequestIP(event, { xForwardedFor: true }) ||
-            event.node.req.socket.remoteAddress ||
-            'unknown';
+        const proxyConfig = normalizeProxyTrustConfig(config.security.proxy);
+        const ip = getClientIp(event, proxyConfig) || getRequestIP(event) || 'unknown';
         rateKey = `ip:${ip}`;
     }
 
@@ -211,9 +230,7 @@ export default defineEventHandler(async (event) => {
         }
 
         const host = getHeader(event, 'host') || 'localhost';
-        const xfProto = getHeader(event, 'x-forwarded-proto');
-        const isLocal = /^localhost(?:\d+)?$|^127\.0\.0\.1(?::\d+)?$/.test(host);
-        const proto = xfProto || (isLocal ? 'http' : 'https');
+        const proto = resolveRequestProto(host, getHeader(event, 'x-forwarded-proto'));
 
         try {
             const result = await startBackgroundStream({
@@ -253,11 +270,7 @@ export default defineEventHandler(async (event) => {
     let upstream: Response;
     try {
         const host = getHeader(event, 'host') || 'localhost';
-        const xfProto = getHeader(event, 'x-forwarded-proto');
-        const isLocal = /^localhost(?::\d+)?$|^127\.0\.0\.1(?::\d+)?$/.test(
-            host
-        );
-        const proto = xfProto || (isLocal ? 'http' : 'https');
+        const proto = resolveRequestProto(host, getHeader(event, 'x-forwarded-proto'));
 
         upstream = await fetch(openRouterUrl, {
             method: 'POST',
