@@ -67,4 +67,64 @@ describe('installExtensionFromZip', () => {
 
         await expect(installExtensionFromZip(zip, false)).rejects.toThrow('Invalid archive path');
     });
+
+    it('accepts runtime descriptor metadata', async () => {
+        const zip = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Test',
+                version: '0.0.1',
+                capabilities: [],
+                runtime: {
+                    client: { entry: 'plugin.client.ts' },
+                    server: {
+                        routes: [
+                            {
+                                method: 'GET',
+                                path: 'hello',
+                                handler: 'server/hello.get.ts',
+                            },
+                        ],
+                    },
+                },
+            }),
+            'plugin.client.ts': 'export default {}',
+            'server/hello.get.ts': 'export default () => ({ ok: true })',
+        });
+
+        const manifest = await installExtensionFromZip(zip, true);
+        expect(manifest.runtime?.client?.entry).toBe('plugin.client.ts');
+        expect(manifest.runtime?.server?.routes?.length).toBe(1);
+    });
+
+    it('rejects duplicate runtime routes', async () => {
+        const zip = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Test',
+                version: '0.0.1',
+                capabilities: [],
+                runtime: {
+                    server: {
+                        routes: [
+                            {
+                                method: 'GET',
+                                path: 'hello',
+                                handler: 'server/a.get.ts',
+                            },
+                            {
+                                method: 'GET',
+                                path: 'hello',
+                                handler: 'server/b.get.ts',
+                            },
+                        ],
+                    },
+                },
+            }),
+        });
+
+        await expect(installExtensionFromZip(zip, false)).rejects.toThrow('Invalid manifest');
+    });
 });

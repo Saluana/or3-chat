@@ -28,6 +28,49 @@ import { PluginGatePolicySchema } from '~~/shared/plugins/access-policy';
 export const ExtensionKindSchema = z.enum(['plugin', 'theme', 'admin_plugin']);
 export type ExtensionKind = z.infer<typeof ExtensionKindSchema>;
 
+const RuntimeClientSchema = z.object({
+    entry: z.string().min(1),
+});
+
+const RuntimeServerRouteSchema = z.object({
+    method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
+    path: z
+        .string()
+        .min(1)
+        .refine((value) => !value.startsWith('/'), 'Route path must be plugin-local')
+        .refine((value) => !value.includes('..'), 'Invalid route path'),
+    handler: z
+        .string()
+        .min(1)
+        .refine((value) => !value.startsWith('/'), 'Handler must be relative')
+        .refine((value) => !value.includes('..'), 'Invalid handler path'),
+});
+
+const RuntimeServerSchema = z
+    .object({
+        routes: z.array(RuntimeServerRouteSchema).optional(),
+    })
+    .superRefine((value, ctx) => {
+        const routes = value.routes ?? [];
+        const seen = new Set<string>();
+        for (const route of routes) {
+            const key = `${route.method}:${route.path}`;
+            if (seen.has(key)) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: `Duplicate runtime route declaration: ${key}`,
+                });
+                continue;
+            }
+            seen.add(key);
+        }
+    });
+
+const RuntimeSchema = z.object({
+    client: RuntimeClientSchema.optional(),
+    server: RuntimeServerSchema.optional(),
+});
+
 /**
  * Purpose:
  * Schema for extension identifiers.
@@ -59,6 +102,7 @@ export const Or3ExtensionManifestSchema = z.object({
     description: z.string().optional(),
     capabilities: z.array(z.string()).default([]),
     access: PluginGatePolicySchema.optional(),
+    runtime: RuntimeSchema.optional(),
 });
 
 export type Or3ExtensionManifest = z.infer<typeof Or3ExtensionManifestSchema>;

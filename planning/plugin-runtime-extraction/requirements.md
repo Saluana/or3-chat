@@ -108,3 +108,14 @@ As a maintainer, I want migration coverage and rollback safety, so extraction ca
 - Unit tests SHALL cover loader selection logic, dedupe guards, and manifest contract validation.
 - Integration tests SHALL cover install -> enable -> runtime activation and disable/uninstall behavior.
 - Rollout SHALL support fallback to built-in Tasks plugin until extraction is fully validated.
+
+### 10. Co-located plugin layout and manifest-first registration
+
+**User Story 10.1**
+As a plugin author, I want one plugin root folder to define both client runtime and server route wiring, so plugin code is easier to reason about and maintain.
+
+**Acceptance Criteria**
+- Plugin runtime SHALL support a manifest-declared client entrypoint and optional server route declarations from the same plugin root.
+- Server route declarations SHALL be explicit in manifest metadata (no implicit directory magic) and constrained to plugin-scoped route prefixes.
+- Existing plugins that do not provide new runtime declarations SHALL continue to work unchanged through legacy loading paths.
+- Manifest validation SHALL report actionable errors for invalid entry paths, duplicate route definitions, or disallowed route prefixes.
