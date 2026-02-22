@@ -21,30 +21,9 @@
 import { computed, watch } from 'vue';
 import { setActiveWorkspaceDb } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { shouldClearWorkspaceForNullSession } from './shouldClearWorkspaceForNullSession';
 
 let workspaceChangeToken = 0;
-
-async function shouldClearWorkspaceForNullSession(oldWorkspaceId: string | null): Promise<boolean> {
-    if (!oldWorkspaceId) return true;
-    if (!import.meta.client) return true;
-
-    try {
-        const { resolveClientAuthStatus } = await import(
-            '~/composables/auth/useClientAuthStatus.client'
-        );
-        const status = await resolveClientAuthStatus();
-        if (!status.ready) {
-            return false;
-        }
-        if (status.authenticated === undefined) {
-            return false;
-        }
-        return !status.authenticated;
-    } catch {
-        // If auth status cannot be resolved, avoid destructive fallback to default DB.
-        return false;
-    }
-}
 
 export function useWorkspaceManager() {
     const { data: sessionData } = useSessionContext();
@@ -75,7 +54,6 @@ export function useWorkspaceManager() {
 
             if (newId) {
                 setActiveWorkspaceDb(newId);
-                console.log('[workspace-manager] Workspace activated:', newId);
                 return;
             }
 
@@ -83,7 +61,6 @@ export function useWorkspaceManager() {
             if (session?.authenticated === false) {
                 if (token !== workspaceChangeToken) return;
                 setActiveWorkspaceDb(null);
-                console.log('[workspace-manager] Workspace cleared');
                 return;
             }
 
@@ -101,7 +78,6 @@ export function useWorkspaceManager() {
             }
 
             setActiveWorkspaceDb(null);
-            console.log('[workspace-manager] Workspace cleared');
         },
         { immediate: true }
     );

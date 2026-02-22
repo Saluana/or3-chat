@@ -260,6 +260,9 @@ export function useModelStore() {
                                     validated.success &&
                                     validated.data.length
                                 ) {
+                                    catalog.value = validated.data;
+                                    lastLoadedAt.value =
+                                        updatedAtMs || Date.now();
                                     console.warn(
                                         '[models-cache] network failed; serving stale cached models',
                                         {

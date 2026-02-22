@@ -138,15 +138,20 @@ export function useProjectsCrud() {
         for (const project of projects) {
             const entries = normalizeProjectData(project.data);
             const hasChange = entries.some(
-                (entry) => entry.id === entryId && entry.name !== title
+                (entry) =>
+                    entry.id === entryId &&
+                    (entry.name !== title || entry.kind !== kind)
             );
             if (hasChange) {
                 const nextEntries = entries.map((entry) => {
-                    if (entry.id === entryId && entry.name !== title) {
+                    if (
+                        entry.id === entryId &&
+                        (entry.name !== title || entry.kind !== kind)
+                    ) {
                         return {
                             ...entry,
                             name: title,
-                            kind: entry.kind,
+                            kind,
                         };
                     }
                     return entry;

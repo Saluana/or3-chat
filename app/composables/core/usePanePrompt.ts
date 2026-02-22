@@ -8,6 +8,9 @@ const pendingByPane: Record<string, string | null> = reactive({});
  * Flag to ensure hook handler is registered only once globally.
  */
 let hookHandlerRegistered = false;
+let paneCloseCleanupHandler:
+    | ((payload: { pane: { id?: string } }) => void)
+    | null = null;
 
 /**
  * `setupPanePromptCleanup`
@@ -39,16 +42,14 @@ export function setupPanePromptCleanup() {
 
     try {
         const hooks = useHooks();
-        
-        hooks.addAction(
-            'ui.pane.close:action:after',
-            ({ pane }) => {
-                if (pane.id) {
-                    clearPanePendingPrompt(pane.id);
-                }
-            },
-            10
-        );
+
+        paneCloseCleanupHandler = ({ pane }) => {
+            if (pane.id) {
+                clearPanePendingPrompt(pane.id);
+            }
+        };
+
+        hooks.addAction('ui.pane.close:action:after', paneCloseCleanupHandler, 10);
         
         hookHandlerRegistered = true;
     } catch (error) {
@@ -143,6 +144,19 @@ if (import.meta.dev) {
 // HMR cleanup
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
+        if (paneCloseCleanupHandler) {
+            try {
+                const hooks = useHooks();
+                hooks.removeAction(
+                    'ui.pane.close:action:after',
+                    paneCloseCleanupHandler,
+                    10
+                );
+            } catch {
+                // ignore HMR disposal failures
+            }
+            paneCloseCleanupHandler = null;
+        }
         hookHandlerRegistered = false;
     });
 }

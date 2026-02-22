@@ -60,21 +60,19 @@ export function usePostsList(
     const observable = liveQuery(async () => {
         try {
             const sortField = sort === 'created_at' ? 'created_at' : 'updated_at';
-            
-            // Query posts by postType, filter soft-deleted
-            const query = getDb().posts
-                .where('postType')
-                .equals(postType)
-                .and((p) => !p.deleted);
+            const ordered = sortDir === 'asc'
+                ? getDb().posts.orderBy(sortField)
+                : getDb().posts.orderBy(sortField).reverse();
 
-            // Apply sorting
-            const results = await query.sortBy(sortField);
-            
-            // Apply sort direction
-            const sorted = sortDir === 'asc' ? results : results.reverse();
-            
-            // Apply limit if specified
-            const sliced = limit ? sorted.slice(0, limit) : sorted;
+            let query = ordered.filter(
+                (p) => p.postType === postType && !p.deleted
+            );
+
+            if (limit && limit > 0) {
+                query = query.limit(limit);
+            }
+
+            const sliced = await query.toArray();
 
             // Parse meta for each post
             return sliced.map((p): PostData => ({

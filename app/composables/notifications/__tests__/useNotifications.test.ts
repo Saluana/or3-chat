@@ -24,6 +24,9 @@ vi.mock('~/composables/auth/useSessionContext', () => ({
 
 import { setActiveWorkspaceDb, getDb } from '~/db/client';
 import { useNotifications } from '~/composables/notifications/useNotifications';
+import { FALLBACK_NOTIFICATION_USER_ID } from '~/core/notifications/notification-user';
+
+const mutedThreadsKey = `notification_muted_threads:${FALLBACK_NOTIFICATION_USER_ID}`;
 
 async function waitFor(predicate: () => boolean): Promise<void> {
     for (let i = 0; i < 20; i++) {
@@ -175,14 +178,14 @@ describe('useNotifications', () => {
         await state.muteThread('thread-1');
         await waitFor(() => state.isThreadMuted('thread-1'));
 
-        const kv = await db.kv.get('notification_muted_threads');
+        const kv = await db.kv.get(mutedThreadsKey);
         expect(kv?.value).toBe(JSON.stringify(['thread-1']));
         expect(state.isThreadMuted('thread-1')).toBe(true);
 
         await state.unmuteThread('thread-1');
         await waitFor(() => !state.isThreadMuted('thread-1'));
 
-        const kvAfter = await db.kv.get('notification_muted_threads');
+        const kvAfter = await db.kv.get(mutedThreadsKey);
         expect(kvAfter?.value).toBe(JSON.stringify([]));
 
         scope.stop();
@@ -194,8 +197,8 @@ describe('useNotifications', () => {
         const db = setActiveWorkspaceDb('test-notifications-mute-invalid');
         sessionDataRef.value = { session: null };
         await db.kv.put({
-            id: 'notification_muted_threads',
-            name: 'notification_muted_threads',
+            id: mutedThreadsKey,
+            name: mutedThreadsKey,
             value: JSON.stringify({ bad: true }),
             deleted: false,
             created_at: 1,
@@ -213,7 +216,7 @@ describe('useNotifications', () => {
         await state.muteThread('thread-1');
         await waitFor(() => state.isThreadMuted('thread-1'));
 
-        const kvAfter = await db.kv.get('notification_muted_threads');
+        const kvAfter = await db.kv.get(mutedThreadsKey);
         expect(kvAfter?.value).toBe(JSON.stringify(['thread-1']));
 
         scope.stop();

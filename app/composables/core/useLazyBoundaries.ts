@@ -59,7 +59,18 @@ function emitTelemetry(payload: LazyTelemetryPayload) {
             payload.error || ''
         );
     }
-    registry.telemetryListeners.forEach((listener) => listener(payload));
+    registry.telemetryListeners.forEach((listener) => {
+        try {
+            listener(payload);
+        } catch (error) {
+            if (import.meta.dev) {
+                console.warn(
+                    '[lazy-boundary] telemetry listener failed:',
+                    error
+                );
+            }
+        }
+    });
 }
 
 /**

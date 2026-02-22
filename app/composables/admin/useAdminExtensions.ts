@@ -5,6 +5,7 @@
 
 import { ref } from 'vue';
 import { useConfirmDialog } from './useConfirmDialog';
+import { parseErrorMessage } from '~/utils/admin/parse-error';
 
 /**
  * Standard admin intent header for admin API calls.
@@ -93,8 +94,6 @@ export async function uninstallExtension(
 
     if (onSuccess) await onSuccess();
 }
-
-import { parseErrorMessage } from '~/utils/admin/parse-error';
 
 /**
  * Composable for file input handling.

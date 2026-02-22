@@ -1,4 +1,5 @@
 import { ref, type Ref } from 'vue';
+import { useRuntimeConfig } from '#imports';
 import { getDb } from '~/db/client';
 import { reportError, err, asAppError, type AppError, type ErrorCode } from '~/utils/errors';
 import { useHooks } from '~/core/hooks/useHooks';
@@ -180,6 +181,12 @@ function validateBackupMeta(meta: unknown): ImportMetadata {
  */
 export function useWorkspaceBackup(): WorkspaceBackupApi {
     const hooks = useHooks();
+    let appBaseURL = '/';
+    try {
+        appBaseURL = useRuntimeConfig().app.baseURL || '/';
+    } catch {
+        appBaseURL = '/';
+    }
 
     const state: WorkspaceBackupState = {
         isExporting: ref(false),
@@ -315,7 +322,14 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 const streamSaverApi =
                     streamSaver as typeof import('streamsaver');
 
-                const localMitmUrl = `${window.location.origin}/streamsaver/mitm.html?version=2.0.0`;
+                const normalizedBaseUrl =
+                    appBaseURL.endsWith('/')
+                        ? appBaseURL
+                        : `${appBaseURL}/`;
+                const localMitmUrl = new URL(
+                    `streamsaver/mitm.html?version=2.0.0`,
+                    `${window.location.origin}${normalizedBaseUrl}`
+                ).toString();
                 if (streamSaverApi.mitm !== localMitmUrl) {
                     streamSaverApi.mitm = localMitmUrl;
                 }

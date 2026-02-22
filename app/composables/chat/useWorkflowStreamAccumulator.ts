@@ -1147,6 +1147,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         pendingNodeTokens.clear();
         pendingBranchTokens.clear();
         finalized = false;
+        totalTokens = 0;
 
         state.attachments = undefined;
         state.imageCaption = undefined;

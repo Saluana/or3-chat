@@ -175,7 +175,9 @@ export function useTaskListService(api?: PanePluginApi | null) {
         await updateMetaAtomic(listId, (meta) => {
             meta.tasks = meta.tasks.map((task) => {
                 if (task.id !== taskId) return task;
-                const dueAt = normalizeDueAt(patch.due_at ?? task.due_at);
+                const dueAt = normalizeDueAt(
+                    patch.due_at === undefined ? task.due_at : patch.due_at
+                );
                 const status = patch.status ?? task.status;
                 const label =
                     patch.title && task.label_source !== 'manual'

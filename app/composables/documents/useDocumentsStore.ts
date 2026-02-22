@@ -70,7 +70,9 @@ export async function flush(id: string) {
         return st.flushPromise;
     }
 
-    if (!st.pendingTitle && !st.pendingContent) return; // nothing to persist
+    if (st.pendingTitle === undefined && st.pendingContent === undefined) {
+        return; // nothing to persist
+    }
 
     // Cancel any pending debounced save
     // Cancel any pending debounced save

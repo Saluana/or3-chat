@@ -23,14 +23,16 @@ let _loadPromise: Promise<void> | null = null;
  */
 function migrateFromLocalStorage(): string | null {
     if (typeof localStorage === 'undefined') return null;
-    
+
     const stored = localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!stored) return null;
-    
+
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+
     // Mark as migrated by removing from localStorage
     // Note: We keep the cookie for SSR, but localStorage is no longer the source of truth
     console.log('[useThemeSelection] Migrated theme selection from localStorage to KV');
-    
+
     return stored;
 }
 
@@ -61,8 +63,7 @@ async function loadSelection(): Promise<void> {
             const migrated = migrateFromLocalStorage();
             if (migrated) {
                 _selectedTheme.value = migrated;
-                // Persist to KV (async, don't wait)
-                void setKvByName(THEME_SELECTION_KV_KEY, migrated);
+                await setKvByName(THEME_SELECTION_KV_KEY, migrated);
                 _loaded = true;
                 return;
             }

@@ -34,6 +34,9 @@ import {
 
 // Zod schema for validating muted threads data from KV store
 const mutedThreadsSchema = z.array(z.string());
+const mutedThreadsKeyForUser = (currentUserId: string) =>
+    `notification_muted_threads:${currentUserId}`;
+const legacyMutedThreadsKey = 'notification_muted_threads';
 
 // Singleton service state to prevent memory leaks from duplicate listeners
 let sharedService: NotificationService | null = null;
@@ -247,10 +250,13 @@ export function useNotifications(): NotificationsComposable {
         mutedThreadsSubscription = null;
     }
 
-    function startMutedThreadsSubscription(): void {
+    function startMutedThreadsSubscription(currentUserId: string): void {
+        const scopedMutedThreadsKey = mutedThreadsKeyForUser(currentUserId);
         const mutedThreadsObservable = liveQuery(async () => {
             try {
-                const kvRecord = await db.kv.get('notification_muted_threads');
+                const kvRecord =
+                    (await db.kv.get(scopedMutedThreadsKey)) ||
+                    (await db.kv.get(legacyMutedThreadsKey));
                 if (!kvRecord?.value) return [];
 
                 // Parse and validate with Zod to prevent runtime crashes from malformed data
@@ -300,7 +306,7 @@ export function useNotifications(): NotificationsComposable {
         stopNotificationSubscriptions();
         stopMutedThreadsSubscription();
         startNotificationSubscriptions(nextUserId);
-        startMutedThreadsSubscription();
+        startMutedThreadsSubscription(nextUserId);
     }
 
     if (sessionContext) {
@@ -314,8 +320,6 @@ export function useNotifications(): NotificationsComposable {
     } else {
         syncUserId();
     }
-
-    startMutedThreadsSubscription();
 
     // Cleanup subscriptions and service ref count
     if (getCurrentScope()) {
@@ -340,12 +344,13 @@ export function useNotifications(): NotificationsComposable {
     };
 
     const persistMutedThreads = async (muted: string[]): Promise<void> => {
+        const key = mutedThreadsKeyForUser(userId.value);
         await db.transaction('rw', getWriteTxTableNames(db, 'kv'), async () => {
-            const existing = await db.kv.get('notification_muted_threads');
+            const existing = await db.kv.get(key);
             const now = nowSec();
             await db.kv.put({
-                id: 'notification_muted_threads',
-                name: 'notification_muted_threads',
+                id: key,
+                name: key,
                 value: JSON.stringify(muted),
                 deleted: false,
                 created_at: existing?.created_at ?? now,

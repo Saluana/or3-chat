@@ -22,7 +22,6 @@ type OramaInstance = any;
 
 let dbInstance: OramaInstance | null = null;
 const indexedState = new Map<string, number>(); // id -> updated_at
-let lastQueryToken = 0;
 
 export function useThreadSearch(threads: Ref<Thread[]>) {
     const query = ref('');
@@ -30,10 +29,15 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
     const ready = ref(false);
     const busy = ref(false);
     const idToThread = ref<Record<string, Thread>>({});
+    let lastQueryToken = 0;
+    let indexDirty = false;
 
     async function ensureIndex() {
         if (import.meta.server) return;
-        if (busy.value) return;
+        if (busy.value) {
+            indexDirty = true;
+            return;
+        }
 
         busy.value = true;
         try {
@@ -97,6 +101,11 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
             ready.value = true;
         } finally {
             busy.value = false;
+            if (indexDirty) {
+                indexDirty = false;
+                await ensureIndex();
+                await runSearch();
+            }
         }
     }
 

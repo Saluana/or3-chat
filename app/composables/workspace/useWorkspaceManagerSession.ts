@@ -1,26 +1,8 @@
 import type { Ref } from 'vue';
 import type { useSessionContext } from '~/composables/auth/useSessionContext';
+import { shouldClearWorkspaceForNullSession } from './shouldClearWorkspaceForNullSession';
 
 type SessionContextLike = ReturnType<typeof useSessionContext>;
-
-async function shouldClearWorkspaceForNullSession(
-    oldWorkspaceId: string | null
-): Promise<boolean> {
-    if (!oldWorkspaceId) return true;
-    if (!import.meta.client) return true;
-
-    try {
-        const { resolveClientAuthStatus } = await import(
-            '~/composables/auth/useClientAuthStatus.client'
-        );
-        const status = await resolveClientAuthStatus();
-        if (!status.ready) return false;
-        if (status.authenticated === undefined) return false;
-        return !status.authenticated;
-    } catch {
-        return false;
-    }
-}
 
 export function useWorkspaceManagerSession(
     sessionContext: SessionContextLike,

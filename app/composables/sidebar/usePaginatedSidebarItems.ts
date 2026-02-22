@@ -12,7 +12,7 @@
  * - Does not implement rendering or infinite scroll UI
  * - Does not perform server-side pagination
  */
-import { ref, shallowRef, type Ref, onMounted, onUnmounted } from 'vue';
+import { ref, shallowRef, type Ref, onMounted, onUnmounted, watch } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
 import type { Thread, Post } from '~/db';
 import { getDb } from '~/db/client';
@@ -217,6 +217,15 @@ export function usePaginatedSidebarItems(
     onMounted(() => {
         startSubscription();
     });
+
+    if (searchQuery) {
+        watch(
+            () => searchQuery.value,
+            () => {
+                reset();
+            }
+        );
+    }
 
     onUnmounted(() => {
         subscription?.unsubscribe();

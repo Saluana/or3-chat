@@ -281,7 +281,7 @@ export function unregisterEditorExtension(id: string) {
  * - Returning a defensive copy
  */
 export function listEditorNodes(): EditorNode[] {
-    return nodesReactiveList.items.sort((a, b) => {
+    return [...nodesReactiveList.items].sort((a, b) => {
         const orderDiff = (a.order ?? 200) - (b.order ?? 200);
         // Stable sort: tie-break by id
         return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
@@ -304,7 +304,7 @@ export function listEditorNodes(): EditorNode[] {
  * - Returning a defensive copy
  */
 export function listEditorMarks(): EditorMark[] {
-    return marksReactiveList.items.sort((a, b) => {
+    return [...marksReactiveList.items].sort((a, b) => {
         const orderDiff = (a.order ?? 200) - (b.order ?? 200);
         // Stable sort: tie-break by id
         return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
@@ -327,7 +327,7 @@ export function listEditorMarks(): EditorMark[] {
  * - Returning a defensive copy
  */
 export function listEditorExtensions(): EditorExtension[] {
-    return extensionsReactiveList.items.sort((a, b) => {
+    return [...extensionsReactiveList.items].sort((a, b) => {
         const orderDiff = (a.order ?? 200) - (b.order ?? 200);
         // Stable sort: tie-break by id
         return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);

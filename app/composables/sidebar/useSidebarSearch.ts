@@ -332,6 +332,13 @@ export function useSidebarSearch(
         await ensureIndex();
         await runSearch();
     }, SEARCH_DEBOUNCE_MS);
+    const cancelDebouncedRebuild = () => {
+        (
+            debouncedRebuild as unknown as {
+                cancel?: () => void;
+            }
+        ).cancel?.();
+    };
 
     const stopDataWatch = watch(
         [threads, projects, documents],
@@ -357,6 +364,7 @@ export function useSidebarSearch(
 
     // Cleanup on component unmount
     onBeforeUnmount(() => {
+        cancelDebouncedRebuild();
         while (cleanupFns.length) {
             const stop = cleanupFns.pop();
             stop?.();
@@ -366,6 +374,7 @@ export function useSidebarSearch(
     // HMR cleanup: clear timers on module disposal
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
+            cancelDebouncedRebuild();
             while (cleanupFns.length) {
                 const stop = cleanupFns.pop();
                 stop?.();

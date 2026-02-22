@@ -97,7 +97,7 @@ export function useSessionContext() {
     }
 
     if (!state.value) {
-        void refresh();
+        void refresh().catch(() => undefined);
     }
 
     return {
