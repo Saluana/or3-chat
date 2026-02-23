@@ -13,6 +13,15 @@ export default defineNuxtRouteMiddleware(() => {
 
     const granted = useCookie<unknown>('or3_wizard_granted').value;
     if (String(granted ?? '') !== '1') {
+        if (import.meta.client) {
+            const token = globalThis.sessionStorage
+                .getItem('or3:wizard:token')
+                ?.trim();
+            if (token) {
+                return;
+            }
+        }
+
         return abortNavigation(
             createError({
                 statusCode: 403,

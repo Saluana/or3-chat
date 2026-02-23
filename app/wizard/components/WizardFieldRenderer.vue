@@ -1,7 +1,10 @@
 <template>
     <div class="space-y-2">
         <div class="flex items-center justify-between gap-3">
-            <label class="text-sm font-medium text-[var(--md-on-surface)]">
+            <label
+                :for="fieldId"
+                class="text-sm font-medium text-[var(--md-on-surface)]"
+            >
                 {{ field.label }}
             </label>
             <UButton
@@ -16,6 +19,7 @@
 
         <p
             v-if="field.help"
+            :id="helpId"
             class="text-xs text-[var(--md-on-surface)]/50"
         >
             {{ field.help }}
@@ -27,9 +31,11 @@
                 :class="errorClass"
             >
                 <UCheckbox
+                    :id="fieldId"
                     :model-value="booleanValue"
                     :label="booleanLabel"
                     :disabled="disabled"
+                    :aria-describedby="ariaDescribedBy"
                     @update:model-value="onCheckboxChange"
                 />
             </div>
@@ -37,32 +43,38 @@
 
         <template v-else-if="field.type === 'select'">
             <USelect
+                :id="fieldId"
                 :model-value="selectValue"
                 :items="selectItems"
                 :disabled="disabled"
                 class="w-full"
+                :aria-describedby="ariaDescribedBy"
                 @update:model-value="onUSelectChange"
             />
         </template>
 
         <template v-else-if="field.type === 'multi-string'">
             <UInput
+                :id="fieldId"
                 :model-value="multiStringValue"
                 :disabled="disabled"
                 placeholder="value-a, value-b, value-c"
                 class="w-full"
                 :ui="{ base: errorClass }"
+                :aria-describedby="ariaDescribedBy"
                 @update:model-value="onMultiStringChange"
             />
         </template>
 
         <template v-else>
             <UInput
+                :id="fieldId"
                 :type="inputType"
                 :model-value="textValue"
                 :disabled="disabled"
                 class="w-full"
                 :ui="{ base: errorClass }"
+                :aria-describedby="ariaDescribedBy"
                 @update:model-value="onTextValueChange"
                 @blur="onFieldBlur"
             />
@@ -70,12 +82,14 @@
 
         <p
             v-if="error"
+            :id="errorId"
             class="text-xs text-[var(--md-error)]"
         >
             {{ error }}
         </p>
         <p
-            v-else-if="touched && !textValue && field.type !== 'boolean' && field.type !== 'select'"
+            v-else-if="showEmptyFieldHint"
+            :id="emptyStateId"
             class="text-xs text-[var(--md-on-surface)]/40"
         >
             This field is empty.
@@ -104,10 +118,24 @@ const emit = defineEmits<{
     (event: 'generate-secret', key: keyof WizardAnswers): void;
 }>();
 
+const touched = ref(false);
+
 const errorClass = computed(() =>
     props.error
         ? 'border-[var(--md-error)]! ring-1! ring-[var(--md-error)]!'
         : ''
+);
+
+const fieldId = computed(() =>
+    `wizard-field-${String(props.field.key).replace(/[^a-zA-Z0-9_-]/g, '-')}`
+);
+
+const helpId = computed(() =>
+    props.field.help ? `${fieldId.value}-help` : ''
+);
+
+const errorId = computed(() =>
+    props.error ? `${fieldId.value}-error` : ''
 );
 
 const showSecretGenerateButton = computed(
@@ -149,7 +177,22 @@ const booleanValue = computed(() => Boolean(props.modelValue));
 
 const booleanLabel = computed(() => (booleanValue.value ? 'Enabled' : 'Disabled'));
 
-const touched = ref(false);
+const showEmptyFieldHint = computed(
+    () =>
+        touched.value &&
+        !textValue.value &&
+        props.field.type !== 'boolean' &&
+        props.field.type !== 'select'
+);
+
+const emptyStateId = computed(() =>
+    showEmptyFieldHint.value ? `${fieldId.value}-empty` : ''
+);
+
+const ariaDescribedBy = computed(() => {
+    const ids = [helpId.value, errorId.value, emptyStateId.value].filter(Boolean);
+    return ids.length > 0 ? ids.join(' ') : undefined;
+});
 
 function onFieldBlur(): void {
     touched.value = true;

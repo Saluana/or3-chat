@@ -75,7 +75,7 @@ Usage:
 
 Options:
   --name        Name of the sandbox folder (default: tmp-sandbox-<timestamp>)
-  --source      Source sandbox template path (default: ../or3-sandbox/sandbox3)
+  --source      Source sandbox template path (default: auto-detect ../or3-sandbox/sandbox3)
   --dest        Destination path (default: sibling of source using --name)
   --no-install  Skip bun install in the new sandbox
   --force       Remove destination first if it already exists
@@ -158,10 +158,18 @@ async function main(): Promise<void> {
 
     const repoRoot = resolve(import.meta.dir, '../..');
     const or3Root = resolve(repoRoot, '..');
-
-    const source = resolve(
-        getStringFlag(flags, 'source') ?? resolve(or3Root, 'or3-sandbox', 'sandbox3')
-    );
+    const defaultSource = resolve(or3Root, 'or3-sandbox', 'sandbox3');
+    const sourceFlag = getStringFlag(flags, 'source')?.trim();
+    if (!sourceFlag && !existsSync(defaultSource)) {
+        console.log(
+            'No default sandbox template was found at ../or3-sandbox/sandbox3.'
+        );
+        console.log(
+            'Pass --source <path> to a template repo/folder, or add a local template first.'
+        );
+        return;
+    }
+    const source = resolve(sourceFlag || defaultSource);
 
     const name =
         getStringFlag(flags, 'name')?.trim() || `tmp-sandbox-${formatStamp()}`;

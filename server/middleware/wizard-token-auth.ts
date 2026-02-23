@@ -2,9 +2,11 @@ import {
     createError,
     defineEventHandler,
     getCookie,
+    getHeader,
     getRequestURL,
     sendRedirect,
     setCookie,
+    type H3Event,
 } from 'h3';
 import { useRuntimeConfig } from '#imports';
 
@@ -25,9 +27,33 @@ function isWizardPath(pathname: string): boolean {
     return pathname === '/wizard' || pathname.startsWith('/wizard/');
 }
 
+function isWizardApiPath(pathname: string): boolean {
+    return pathname === '/api/wizard' || pathname.startsWith('/api/wizard/');
+}
+
+function setWizardTokenCookie(event: H3Event, token: string, secure: boolean): void {
+    setCookie(event, WIZARD_TOKEN_COOKIE, token, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure,
+        path: '/',
+        maxAge: COOKIE_MAX_AGE_SECONDS,
+    });
+}
+
+function setWizardGrantedCookie(event: H3Event, secure: boolean): void {
+    setCookie(event, WIZARD_GRANTED_COOKIE, '1', {
+        httpOnly: false,
+        sameSite: 'lax',
+        secure,
+        path: '/wizard',
+        maxAge: COOKIE_MAX_AGE_SECONDS,
+    });
+}
+
 export default defineEventHandler((event) => {
     const url = getRequestURL(event);
-    if (!isWizardPath(url.pathname)) {
+    if (!isWizardPath(url.pathname) && !isWizardApiPath(url.pathname)) {
         return;
     }
 
@@ -39,47 +65,33 @@ export default defineEventHandler((event) => {
         });
     }
 
-    const expectedToken = String(config.wizardUi.token ?? '').trim();
+    const expectedToken = String(config.wizardUi.token).trim();
     if (!expectedToken) {
         return;
     }
 
     const queryToken = (url.searchParams.get('token') ?? '').trim();
+    const headerToken = String(getHeader(event, 'x-wizard-token') || '').trim();
     const cookieToken = String(getCookie(event, WIZARD_TOKEN_COOKIE) ?? '').trim();
 
     if (queryToken === expectedToken) {
         const secure = shouldUseSecureCookies(url);
-        setCookie(event, WIZARD_TOKEN_COOKIE, expectedToken, {
-            httpOnly: true,
-            sameSite: 'lax',
-            secure,
-            path: '/',
-            maxAge: COOKIE_MAX_AGE_SECONDS,
-        });
-        setCookie(event, WIZARD_GRANTED_COOKIE, '1', {
-            httpOnly: false,
-            sameSite: 'lax',
-            secure,
-            path: '/wizard',
-            maxAge: COOKIE_MAX_AGE_SECONDS,
-        });
+        setWizardTokenCookie(event, expectedToken, secure);
+        setWizardGrantedCookie(event, secure);
 
-        const redirectUrl = new URL(url.toString());
-        redirectUrl.searchParams.delete('token');
-        const redirectPath = `${redirectUrl.pathname}${redirectUrl.search}`;
-
-        return sendRedirect(event, redirectPath || '/wizard', 302);
+        if (isWizardPath(url.pathname)) {
+            const redirectUrl = new URL(url.toString());
+            redirectUrl.searchParams.delete('token');
+            const redirectPath = `${redirectUrl.pathname}${redirectUrl.search}`;
+            return sendRedirect(event, redirectPath || '/wizard', 302);
+        }
+        return;
     }
 
-    if (cookieToken === expectedToken) {
+    if (headerToken === expectedToken || cookieToken === expectedToken) {
         const secure = shouldUseSecureCookies(url);
-        setCookie(event, WIZARD_GRANTED_COOKIE, '1', {
-            httpOnly: false,
-            sameSite: 'lax',
-            secure,
-            path: '/wizard',
-            maxAge: COOKIE_MAX_AGE_SECONDS,
-        });
+        setWizardTokenCookie(event, expectedToken, secure);
+        setWizardGrantedCookie(event, secure);
         return;
     }
 

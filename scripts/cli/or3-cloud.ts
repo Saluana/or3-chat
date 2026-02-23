@@ -1188,6 +1188,8 @@ async function runInit(flags: CliFlags): Promise<void> {
                     patch.dryRun = dryRun || Boolean(patch.dryRun);
                 }
 
+                await api.submitAnswers(session.id, patch);
+
                 const connectionTestTarget = getConnectionTestTarget(
                     step,
                     draftAnswers
@@ -1215,7 +1217,6 @@ async function runInit(flags: CliFlags): Promise<void> {
                     }
                 }
 
-                await api.submitAnswers(session.id, patch);
                 stepIndex += 1;
             }
 

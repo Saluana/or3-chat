@@ -33,7 +33,7 @@
                     type="button"
                     class="group relative block w-full cursor-zoom-in overflow-hidden rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-primary)]"
                     :aria-label="`Expand ${selectedThemeLabel} preview`"
-                    @click="lightboxOpen = true"
+                    @click="openLightbox"
                 >
                     <img
                         :src="previewImage"
@@ -66,15 +66,26 @@
                     ref="lightboxEl"
                     class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
                     tabindex="-1"
-                    @click.self="lightboxOpen = false"
-                    @keydown.esc="lightboxOpen = false"
+                    role="dialog"
+                    aria-modal="true"
+                    :aria-labelledby="lightboxTitleId"
+                    :aria-describedby="lightboxHintId"
+                    @click.self="closeLightbox"
+                    @keydown="onLightboxKeydown"
                 >
                     <div class="relative max-h-full max-w-5xl w-full">
+                        <h3
+                            :id="lightboxTitleId"
+                            class="sr-only"
+                        >
+                            {{ selectedThemeLabel }} preview
+                        </h3>
                         <button
+                            ref="closeButtonEl"
                             type="button"
                             class="absolute -right-3 -top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-800 shadow-lg transition-transform hover:scale-110 focus:outline-none"
                             aria-label="Close preview"
-                            @click="lightboxOpen = false"
+                            @click="closeLightbox"
                         >
                             <svg class="h-4 w-4" viewBox="0 0 16 16" fill="none">
                                 <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -85,7 +96,12 @@
                             :alt="selectedThemeLabel"
                             class="max-h-[85vh] w-full rounded-lg object-contain shadow-2xl"
                         />
-                        <p class="mt-3 text-center text-xs text-white/60">{{ selectedThemeLabel }} · Click outside or press Esc to close</p>
+                        <p
+                            :id="lightboxHintId"
+                            class="mt-3 text-center text-xs text-white/60"
+                        >
+                            {{ selectedThemeLabel }} · Click outside or press Esc to close
+                        </p>
                     </div>
                 </div>
             </Transition>
@@ -110,9 +126,81 @@ const emit = defineEmits<{
 
 const lightboxOpen = ref(false);
 const lightboxEl = ref<HTMLElement | null>(null);
+const closeButtonEl = ref<HTMLElement | null>(null);
+const previouslyFocusedEl = ref<HTMLElement | null>(null);
+const lightboxTitleId = 'wizard-theme-preview-title';
+const lightboxHintId = 'wizard-theme-preview-hint';
+
+const LIGHTBOX_FOCUSABLE_SELECTOR =
+    'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function getLightboxFocusableElements(): HTMLElement[] {
+    if (!lightboxEl.value) return [];
+    return Array.from(
+        lightboxEl.value.querySelectorAll<HTMLElement>(LIGHTBOX_FOCUSABLE_SELECTOR)
+    );
+}
+
+function openLightbox(): void {
+    lightboxOpen.value = true;
+}
+
+function closeLightbox(): void {
+    lightboxOpen.value = false;
+}
+
+function onLightboxKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        closeLightbox();
+        return;
+    }
+
+    if (event.key !== 'Tab') {
+        return;
+    }
+
+    const focusableElements = getLightboxFocusableElements();
+    if (focusableElements.length === 0) {
+        event.preventDefault();
+        lightboxEl.value?.focus();
+        return;
+    }
+
+    const first = focusableElements[0]!;
+    const last = focusableElements[focusableElements.length - 1]!;
+    const active = import.meta.client
+        ? (document.activeElement as HTMLElement | null)
+        : null;
+
+    if (event.shiftKey) {
+        if (!active || active === first || !lightboxEl.value?.contains(active)) {
+            event.preventDefault();
+            last.focus();
+        }
+        return;
+    }
+
+    if (!active || active === last || !lightboxEl.value?.contains(active)) {
+        event.preventDefault();
+        first.focus();
+    }
+}
 
 watch(lightboxOpen, (open) => {
-    if (open) nextTick(() => lightboxEl.value?.focus());
+    if (open) {
+        if (import.meta.client) {
+            previouslyFocusedEl.value = document.activeElement as HTMLElement | null;
+        }
+        nextTick(() => {
+            const focusableElements = getLightboxFocusableElements();
+            (closeButtonEl.value ?? focusableElements[0] ?? lightboxEl.value)?.focus();
+        });
+        return;
+    }
+
+    previouslyFocusedEl.value?.focus();
+    previouslyFocusedEl.value = null;
 });
 
 const visibleFields = computed<WizardField[]>(() =>

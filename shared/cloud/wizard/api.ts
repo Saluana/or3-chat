@@ -419,12 +419,10 @@ function prepareSessionForPersistence(session: WizardSession): WizardSession {
 
 async function persistSession(session: WizardSession): Promise<void> {
     const secretAnswers = pickSecretAnswers(session.answers);
-    if (Object.keys(secretAnswers).length > 0) {
-        const existing = transientSessionSecrets.get(session.id) ?? {};
-        transientSessionSecrets.set(session.id, {
-            ...existing,
-            ...secretAnswers,
-        });
+    if (Object.keys(secretAnswers).length === 0) {
+        transientSessionSecrets.delete(session.id);
+    } else {
+        transientSessionSecrets.set(session.id, secretAnswers);
     }
     await saveSession(prepareSessionForPersistence(session));
 }

@@ -18,6 +18,7 @@ import type {
 
 type SessionResponse = {
     session: WizardSession;
+    wizardToken?: string;
 };
 
 type TestConnectionResponse = {
@@ -198,6 +199,14 @@ function setSessionStorageItem(key: string, value: string): void {
 function removeSessionStorageItem(key: string): void {
     if (!import.meta.client) return;
     globalThis.sessionStorage.removeItem(key);
+}
+
+function getWizardTokenFromLocation(): string | null {
+    if (!import.meta.client) return null;
+    const token = new URL(globalThis.location.href).searchParams.get('token');
+    if (!token) return null;
+    const trimmed = token.trim();
+    return trimmed.length > 0 ? trimmed : null;
 }
 
 function normalizeErrorMessage(error: unknown): string {
@@ -714,6 +723,11 @@ export function useWizardSession() {
         clearStatus();
         clearValidationState();
 
+        const bootstrapToken = getWizardTokenFromLocation();
+        if (bootstrapToken) {
+            setSessionStorageItem(WIZARD_TOKEN_KEY, bootstrapToken);
+        }
+
         const storedSessionId = getSessionStorageItem(SESSION_STORAGE_KEY) ?? undefined;
 
         const loadSession = async (sessionId?: string): Promise<SessionResponse> => {
@@ -739,6 +753,9 @@ export function useWizardSession() {
 
             session.value = response.session;
             setSessionStorageItem(SESSION_STORAGE_KEY, response.session.id);
+            if (response.wizardToken?.trim()) {
+                setSessionStorageItem(WIZARD_TOKEN_KEY, response.wizardToken.trim());
+            }
 
             const savedStepId = getSessionStorageItem(STEP_STORAGE_KEY);
             const initialStepId = savedStepId || response.session.currentStepId || 'target';

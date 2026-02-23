@@ -22,6 +22,7 @@ import {
     executeDependencyInstallPlan,
     parseInstallPackageManager,
 } from '../../shared/cloud/wizard/install-plan';
+import { applyConvexEnv } from '../../shared/cloud/wizard/deploy';
 import type {
     WizardAnswers,
     WizardApplyResult,
@@ -66,6 +67,17 @@ function toBoolean(value: unknown, fallback: boolean): boolean {
 function normalizeErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
     return String(error);
+}
+
+function shouldApplyConvexEnv(answers: WizardAnswers): boolean {
+    if (answers.authProvider !== 'clerk') {
+        return false;
+    }
+
+    return (
+        (answers.syncEnabled && answers.syncProvider === 'convex') ||
+        (answers.storageEnabled && answers.storageProvider === 'convex')
+    );
 }
 
 async function runCommandCapture(
@@ -253,6 +265,23 @@ export function assertWebWizardEnabled(event: H3Event): void {
     }
 }
 
+export function getWizardClientToken(event: H3Event): string | undefined {
+    const expectedToken = toStringOrUndefined(useRuntimeConfig(event).wizardUi.token);
+    if (!expectedToken) {
+        return undefined;
+    }
+
+    const headerToken = toStringOrUndefined(getHeader(event, 'x-wizard-token'));
+    const queryToken = toStringOrUndefined(getQuery(event).token);
+    const cookieToken = toStringOrUndefined(getCookie(event, 'or3_wizard_token'));
+    const isAuthorizedToken =
+        headerToken === expectedToken ||
+        queryToken === expectedToken ||
+        cookieToken === expectedToken;
+
+    return isAuthorizedToken ? expectedToken : undefined;
+}
+
 export function setWizardNoStore(event: H3Event): void {
     setHeader(event, 'Cache-Control', 'no-store');
 }
@@ -365,6 +394,12 @@ export async function runWizardDeploy(
         dryRun: toBoolean(options.dryRun, false),
         createBackup: toBoolean(options.createBackup, true),
     });
+
+    if (!options.skipDeploy && shouldApplyConvexEnv(answers)) {
+        await applyConvexEnv(answers, {
+            dryRun: applyResult.dryRun,
+        });
+    }
 
     if (options.skipDeploy || applyResult.dryRun) {
         return {
