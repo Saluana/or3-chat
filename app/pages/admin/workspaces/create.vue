@@ -113,6 +113,7 @@ import {
     useAdminUserLookup,
     type AdminLookupUser,
 } from '~/composables/admin/useAdminUserLookup';
+import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
 
 type User = AdminLookupUser;
 
@@ -178,6 +179,7 @@ async function handleSubmit() {
         const result = await $fetch<{ workspaceId: string }>('/api/admin/workspaces', {
             method: 'POST',
             credentials: 'include',
+            headers: ADMIN_HEADERS,
             body: {
                 name: form.name.trim(),
                 description: form.description.trim() || undefined,

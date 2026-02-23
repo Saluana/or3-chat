@@ -11,42 +11,16 @@
  * - Cleans up intervals and resources.
  */
 import { defineNitroPlugin } from 'nitropack/runtime';
+import { createShutdownController } from '../utils/shutdown/controller';
 
 const SHUTDOWN_TIMEOUT_MS = Number(process.env.OR3_SHUTDOWN_TIMEOUT_MS) || 15_000;
-
-let isShuttingDown = false;
 
 /**
  * Graceful shutdown handler.
  * Logs shutdown signal and allows time for in-flight requests to complete.
  */
 async function handleShutdown(signal: string): Promise<void> {
-    if (isShuttingDown) {
-        console.warn(`[shutdown] Already shutting down, ignoring ${signal}`);
-        return;
-    }
-
-    isShuttingDown = true;
-    console.info(`[shutdown] Received ${signal}, initiating graceful shutdown...`);
-
-    try {
-        // Log active background jobs (if background jobs are enabled)
-        // Background job providers should implement their own cleanup hooks
-        const activeJobs = await getActiveBackgroundJobCount();
-        if (activeJobs > 0) {
-            console.warn(`[shutdown] ${activeJobs} background jobs are still in-flight`);
-        }
-
-        // Wait for drain or timeout
-        console.info(`[shutdown] Waiting up to ${SHUTDOWN_TIMEOUT_MS}ms for in-flight requests to complete...`);
-        await new Promise(resolve => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS));
-
-        console.info('[shutdown] Shutdown complete');
-        process.exit(0);
-    } catch (error) {
-        console.error('[shutdown] Error during shutdown:', error);
-        process.exit(1);
-    }
+    await controller.startShutdown(signal);
 }
 
 /**
@@ -63,7 +37,43 @@ async function getActiveBackgroundJobCount(): Promise<number> {
     }
 }
 
+const controller = createShutdownController(
+    {
+        shutdownTimeoutMs: SHUTDOWN_TIMEOUT_MS,
+        getBackgroundJobCount: getActiveBackgroundJobCount,
+        exitProcess: (code) => process.exit(code),
+    }
+);
+
 export default defineNitroPlugin((nitro) => {
+    nitro.hooks.hook('request', (event) => {
+        const path = event.path || event.node.req.url || '/';
+        const accepted = controller.beginRequest(path);
+
+        if (!accepted) {
+            event.node.res.statusCode = 503;
+            event.node.res.setHeader('content-type', 'application/json; charset=utf-8');
+            event.node.res.setHeader('retry-after', '5');
+            event.node.res.end(
+                JSON.stringify({
+                    statusCode: 503,
+                    statusMessage: 'Service unavailable: server shutting down',
+                })
+            );
+            return;
+        }
+
+        let completed = false;
+        const complete = () => {
+            if (completed) return;
+            completed = true;
+            controller.endRequest();
+        };
+
+        event.node.res.once('finish', complete);
+        event.node.res.once('close', complete);
+    });
+
     // Register shutdown handlers
     process.on('SIGTERM', () => handleShutdown('SIGTERM'));
     process.on('SIGINT', () => handleShutdown('SIGINT'));

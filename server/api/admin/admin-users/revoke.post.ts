@@ -8,6 +8,7 @@ import { defineEventHandler, readBody, createError } from 'h3';
 import { requireAdminApiContext } from '../../../admin/api';
 import { getAdminUserStore } from '../../../admin/stores/registry';
 import { isAdminEnabled } from '../../../utils/admin/is-admin-enabled';
+import { checkGenericRateLimit, getClientIp } from '../../../admin/auth/rate-limit';
 
 interface RevokeAdminBody {
     userId: string;
@@ -35,8 +36,22 @@ export default defineEventHandler(async (event) => {
         });
     }
 
+    // Rate limit check
+    const clientIp = getClientIp(event);
+    const rateLimit = checkGenericRateLimit(clientIp, 'admin-api');
+
+    if (!rateLimit.allowed) {
+        throw createError({
+            statusCode: 429,
+            statusMessage: 'Too many requests',
+        });
+    }
+
     // Require super admin context
-    await requireAdminApiContext(event, { superAdminOnly: true });
+    await requireAdminApiContext(event, {
+        mutation: true,
+        superAdminOnly: true,
+    });
 
     const body = await readBody<RevokeAdminBody | Record<string, unknown> | null>(event);
     const userId =

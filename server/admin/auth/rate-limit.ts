@@ -1,4 +1,9 @@
-import { getRequestIP, type H3Event } from 'h3';
+import type { H3Event } from 'h3';
+import { useRuntimeConfig } from '#imports';
+import {
+    getClientIp as getProxyAwareClientIp,
+    normalizeProxyTrustConfig,
+} from '../../utils/net/request-identity';
 
 /**
  * Rate limiting for admin login attempts.
@@ -159,7 +164,9 @@ export function clearRateLimit(ip: string, username: string): void {
  * Falls back to 'unknown' if cannot be determined.
  */
 export function getClientIp(event: H3Event): string {
-    return getRequestIP(event, { xForwardedFor: true }) ?? 'unknown';
+    const config = useRuntimeConfig(event);
+    const proxyConfig = normalizeProxyTrustConfig(config.security.proxy);
+    return getProxyAwareClientIp(event, proxyConfig) ?? 'unknown';
 }
 
 /**
@@ -196,6 +203,10 @@ export function checkGenericRateLimit(
 
     if (!entry) {
         // First attempt
+        rateLimitStore.set(key, {
+            count: 1,
+            windowStart: now,
+        });
         return {
             allowed: true,
             remaining: maxRequests - 1,

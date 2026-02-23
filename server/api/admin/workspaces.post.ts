@@ -69,7 +69,10 @@ export default defineEventHandler(async (event) => {
     }
 
     // Require admin context
-    const adminCtx = await requireAdminApiContext(event);
+    const adminCtx = await requireAdminApiContext(event, {
+        mutation: true,
+        superAdminOnly: true,
+    });
 
     const body = await readBody<CreateWorkspaceBody>(event);
     const { name, description, ownerUserId } = body;
@@ -98,8 +101,8 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    // Validate owner user ID format (Convex ID pattern: users:<base36-id>)
-    if (!ownerUserId || !/^users:[a-zA-Z0-9_-]+$/.test(ownerUserId)) {
+    // Validate owner user ID presence (provider-specific formats vary)
+    if (!ownerUserId || !ownerUserId.trim()) {
         throw createError({
             statusCode: 400,
             statusMessage: 'Valid owner user ID is required',
@@ -118,7 +121,7 @@ export default defineEventHandler(async (event) => {
     const result = await store.createWorkspace({
         name: sanitizedName,
         description: sanitizedDescription,
-        ownerUserId,
+        ownerUserId: ownerUserId.trim(),
     });
 
     const actorId = adminCtx.principal.kind === 'super_admin' 
@@ -128,7 +131,7 @@ export default defineEventHandler(async (event) => {
     await event.context.adminHooks?.doAction('admin.workspace:action:created', {
         workspaceId: result.workspaceId,
         name: sanitizedName,
-        ownerUserId,
+        ownerUserId: ownerUserId.trim(),
         createdBy: { kind: adminCtx.principal.kind, id: actorId },
     });
 

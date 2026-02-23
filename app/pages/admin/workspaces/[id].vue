@@ -172,6 +172,7 @@
 
 <script setup lang="ts">
 import { formatDate } from '~/utils/date';
+import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
 interface Member {
     userId: string;
     email?: string;
@@ -254,6 +255,7 @@ async function handleSoftDelete() {
         await $fetch(`/api/admin/workspaces/${workspaceId}/soft-delete`, {
             method: 'POST',
             credentials: 'include',
+            headers: ADMIN_HEADERS,
         });
         toast.add({
             title: 'Workspace deleted',
@@ -277,6 +279,7 @@ async function handleRestore() {
         await $fetch(`/api/admin/workspaces/${workspaceId}/restore`, {
             method: 'POST',
             credentials: 'include',
+            headers: ADMIN_HEADERS,
         });
         toast.add({
             title: 'Workspace restored',
@@ -338,6 +341,7 @@ async function createInvite() {
             {
                 method: 'POST',
                 credentials: 'include',
+                headers: ADMIN_HEADERS,
                 body: {
                     email: inviteEmail.value,
                     role: inviteRole.value,
@@ -378,6 +382,7 @@ async function revokeInvite(inviteId: string) {
         await $fetch('/api/admin/workspace/invites/revoke', {
             method: 'POST',
             credentials: 'include',
+            headers: ADMIN_HEADERS,
             body: { inviteId },
         });
         invites.value = invites.value.map((invite) =>

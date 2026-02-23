@@ -2,6 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createMockH3Event } from '../../../tests/utils/mock-h3';
 import type { H3Event } from 'h3';
 
+const getProviderAdminAdapterMock = vi.hoisted(() => vi.fn());
+const createStubProviderAdapterMock = vi.hoisted(() =>
+    vi.fn((kind: 'auth' | 'sync' | 'storage', provider: string) => ({
+        getStatus: vi.fn(async () => ({
+            details: {},
+            warnings: provider
+                ? []
+                : [{ level: 'error' as const, message: `${kind} provider missing` }],
+            actions: [],
+        })),
+    }))
+);
+
 type RuntimeConfigMock = {
     sync: { enabled: boolean; provider: string };
     storage: {
@@ -41,11 +54,21 @@ vi.mock('#imports', () => ({
     useRuntimeConfig: () => runtimeConfigMock,
 }));
 
+vi.mock('../../admin/providers/registry', () => ({
+    getProviderAdminAdapter: getProviderAdminAdapterMock,
+}));
+
+vi.mock('../../admin/providers/adapters/stub', () => ({
+    createStubProviderAdapter: createStubProviderAdapterMock,
+}));
+
 describe('Health check endpoint', () => {
     let handler: any;
 
     beforeEach(async () => {
         vi.resetModules();
+        getProviderAdminAdapterMock.mockReset().mockReturnValue(null);
+        createStubProviderAdapterMock.mockClear();
         runtimeConfigMock.sync = { enabled: true, provider: 'convex' };
         runtimeConfigMock.storage = { enabled: true, provider: 'convex' };
         runtimeConfigMock.auth = { enabled: true, provider: 'clerk' };
@@ -82,14 +105,26 @@ describe('Health check endpoint', () => {
         expect(response.providers?.sync).toEqual({
             available: true,
             provider: 'convex',
+            checks: {
+                warnings: [],
+                errors: [],
+            },
         });
         expect(response.providers?.storage).toEqual({
             available: true,
             provider: 'convex',
+            checks: {
+                warnings: [],
+                errors: [],
+            },
         });
         expect(response.providers?.auth).toEqual({
             available: true,
             provider: 'clerk',
+            checks: {
+                warnings: [],
+                errors: [],
+            },
         });
     });
 
@@ -107,5 +142,40 @@ describe('Health check endpoint', () => {
         const response = await handler(event);
 
         expect(response.status).toBe('degraded');
+    });
+
+    it('marks as degraded when provider adapter reports an error warning', async () => {
+        getProviderAdminAdapterMock.mockImplementation(
+            (kind: 'auth' | 'sync' | 'storage', provider: string) => {
+                if (kind === 'sync' && provider === 'convex') {
+                    return {
+                        getStatus: vi.fn(async () => ({
+                            details: {},
+                            warnings: [{ level: 'error' as const, message: 'convex unreachable' }],
+                            actions: [],
+                        })),
+                    };
+                }
+
+                return {
+                    getStatus: vi.fn(async () => ({
+                        details: {},
+                        warnings: [],
+                        actions: [],
+                    })),
+                };
+            }
+        );
+
+        const event = createMockH3Event({
+            method: 'GET',
+            path: '/api/health?deep=true',
+            query: { deep: 'true' },
+        });
+
+        const response = await handler(event);
+
+        expect(response.status).toBe('degraded');
+        expect(response.providers?.sync?.checks?.errors).toContain('convex unreachable');
     });
 });

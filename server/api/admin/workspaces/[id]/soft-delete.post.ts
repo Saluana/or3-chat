@@ -1,14 +1,14 @@
 /**
- * @module server/api/admin/workspaces/soft-delete.post
+ * @module server/api/admin/workspaces/[id]/soft-delete.post
  *
  * Purpose:
  * Marks a workspace as deleted without immediately purging data.
  */
 import { defineEventHandler, getRouterParam, createError } from 'h3';
-import { requireAdminApiContext } from '../../../admin/api';
-import { getWorkspaceAccessStore } from '../../../admin/stores/registry';
-import { isAdminEnabled } from '../../../utils/admin/is-admin-enabled';
-import { checkGenericRateLimit, getClientIp } from '../../../admin/auth/rate-limit';
+import { requireAdminApiContext } from '../../../../admin/api';
+import { getWorkspaceAccessStore } from '../../../../admin/stores/registry';
+import { isAdminEnabled } from '../../../../utils/admin/is-admin-enabled';
+import { checkGenericRateLimit, getClientIp } from '../../../../admin/auth/rate-limit';
 
 /**
  * POST /api/admin/workspaces/:id/soft-delete
@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
     // Rate limit check
     const clientIp = getClientIp(event);
     const rateLimit = checkGenericRateLimit(clientIp, 'admin-api');
-    
+
     if (!rateLimit.allowed) {
         throw createError({
             statusCode: 429,
@@ -68,9 +68,10 @@ export default defineEventHandler(async (event) => {
         deletedAt: Date.now(),
     });
 
-    const actorId = adminCtx.principal.kind === 'super_admin' 
-        ? adminCtx.principal.username 
-        : adminCtx.principal.userId;
+    const actorId =
+        adminCtx.principal.kind === 'super_admin'
+            ? adminCtx.principal.username
+            : adminCtx.principal.userId;
 
     await event.context.adminHooks?.doAction('admin.workspace:action:deleted', {
         workspaceId,
