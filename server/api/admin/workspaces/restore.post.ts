@@ -29,7 +29,10 @@ export default defineEventHandler(async (event) => {
     }
 
     // Require admin context
-    await requireAdminApiContext(event);
+    await requireAdminApiContext(event, {
+        mutation: true,
+        superAdminOnly: true,
+    });
 
     // Get workspace ID
     const workspaceId = getRouterParam(event, 'id');

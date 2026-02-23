@@ -130,6 +130,7 @@
 <script setup lang="ts">
 import { formatDate } from '~/utils/date';
 import { refDebounced } from '@vueuse/core';
+import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
 import {
     useAdminUserLookup,
     type AdminLookupUser,
@@ -239,6 +240,7 @@ async function grantAdmin(userId: string, email?: string) {
         await $fetch('/api/admin/admin-users/grant', {
             method: 'POST',
             credentials: 'include',
+            headers: ADMIN_HEADERS,
             body: { userId },
         });
         toast.add({
@@ -276,6 +278,7 @@ async function revokeAdmin(userId: string) {
         await $fetch('/api/admin/admin-users/revoke', {
             method: 'POST',
             credentials: 'include',
+            headers: ADMIN_HEADERS,
             body: { userId },
         });
         toast.add({

@@ -78,7 +78,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Require admin context
-    await requireAdminApiContext(event);
+    await requireAdminApiContext(event, { superAdminOnly: true });
 
     // Get admin username for cache scoping
     const adminClaims = await getAdminFromCookie(event);

@@ -34,6 +34,11 @@ function providerOptions(kind: 'auth' | 'sync' | 'storage') {
     return listImplementedProviders(kind).map((provider) => ({
         label: provider.label,
         value: provider.id,
+        description: [
+            `Pros: ${provider.pros.join('; ')}`,
+            `Cons: ${provider.cons.join('; ')}`,
+            `Best for: ${provider.idealUseCase}`,
+        ].join('\n'),
     }));
 }
 
@@ -99,26 +104,56 @@ function providerFieldsStep(
               ? isSyncAdvancedEnabled
               : isStorageAdvancedEnabled;
 
-    const fields = descriptor.fields.map((field) =>
-        withVisibleWhen(field, (current) => {
-            if (!current.ssrAuthEnabled) return false;
-            if (kind === 'sync' && !current.syncEnabled) return false;
-            if (kind === 'storage' && !current.storageEnabled) return false;
+    const advancedToggleKey =
+        kind === 'auth'
+            ? 'authAdvancedEnabled'
+            : kind === 'sync'
+              ? 'syncAdvancedEnabled'
+              : 'storageAdvancedEnabled';
 
-            const selectedProviderId =
-                kind === 'auth'
-                    ? current.authProvider
-                    : kind === 'sync'
-                      ? current.syncProvider
-                      : current.storageProvider;
-            if (selectedProviderId !== providerId) return false;
+    const visibleForSelectedProvider = (current: WizardAnswers): boolean => {
+        if (!current.ssrAuthEnabled) return false;
+        if (kind === 'sync' && !current.syncEnabled) return false;
+        if (kind === 'storage' && !current.storageEnabled) return false;
 
-            if (field.tier === 'advanced' && !advancedEnabled(current)) {
-                return false;
-            }
-            return true;
-        })
-    );
+        const selectedProviderId =
+            kind === 'auth'
+                ? current.authProvider
+                : kind === 'sync'
+                  ? current.syncProvider
+                  : current.storageProvider;
+        return selectedProviderId === providerId;
+    };
+
+    const coreFields = descriptor.fields
+        .filter((field) => field.tier !== 'advanced')
+        .map((field) => withVisibleWhen(field, visibleForSelectedProvider));
+    const advancedFields = descriptor.fields
+        .filter((field) => field.tier === 'advanced')
+        .map((field) =>
+            withVisibleWhen(field, (current) => {
+                if (!visibleForSelectedProvider(current)) return false;
+                return advancedEnabled(current);
+            })
+        );
+
+    const fields: WizardField[] = [
+        ...coreFields,
+        ...(advancedFields.length > 0
+            ? [
+                  {
+                      key: advancedToggleKey,
+                      type: 'boolean',
+                      label: 'Show advanced options?',
+                      help: 'Enable extra provider tuning options for this section.',
+                      defaultValue: false,
+                      tier: 'core',
+                      visibleWhen: visibleForSelectedProvider,
+                  } satisfies WizardField,
+              ]
+            : []),
+        ...advancedFields,
+    ];
 
     return {
         id,
@@ -231,52 +266,6 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
             ],
         },
         {
-            id: 'advanced-gates',
-            title: 'Advanced Settings',
-            description:
-                'Choose how deep you want to configure each section.\n' +
-                'Expert mode enables all advanced prompts at once.',
-            fields: [
-                {
-                    key: 'allAdvancedEnabled',
-                    type: 'boolean',
-                    label: 'Enable expert mode for all sections',
-                    help: 'When enabled, all advanced settings are shown.',
-                    defaultValue: false,
-                },
-                {
-                    key: 'baseAdvancedEnabled',
-                    type: 'boolean',
-                    label: 'Configure advanced OR3 base settings',
-                    visibleWhen: (current) => !current.allAdvancedEnabled,
-                },
-                {
-                    key: 'authAdvancedEnabled',
-                    type: 'boolean',
-                    label: 'Configure advanced auth provider settings',
-                    visibleWhen: (current) => !current.allAdvancedEnabled,
-                },
-                {
-                    key: 'syncAdvancedEnabled',
-                    type: 'boolean',
-                    label: 'Configure advanced sync provider settings',
-                    visibleWhen: (current) => !current.allAdvancedEnabled,
-                },
-                {
-                    key: 'storageAdvancedEnabled',
-                    type: 'boolean',
-                    label: 'Configure advanced storage provider settings',
-                    visibleWhen: (current) => !current.allAdvancedEnabled,
-                },
-                {
-                    key: 'cloudAdvancedEnabled',
-                    type: 'boolean',
-                    label: 'Configure advanced AI, limits, and security settings',
-                    visibleWhen: (current) => !current.allAdvancedEnabled,
-                },
-            ],
-        },
-        {
             id: 'branding',
             title: 'Your Brand',
             description: 'Give your instance a name. You can always change this later.',
@@ -287,6 +276,14 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     label: 'What should your site be called?',
                     help: 'This name appears in the browser tab and UI. Example: "Acme AI Chat"',
                     required: true,
+                    tier: 'core',
+                },
+                {
+                    key: 'baseAdvancedEnabled',
+                    type: 'boolean',
+                    label: 'Show advanced options?',
+                    help: 'Enable logo/favicon and theme installation controls.',
+                    defaultValue: false,
                     tier: 'core',
                 },
                 {
@@ -355,8 +352,8 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 { key: 'workflowsEnabled', type: 'boolean', label: 'Workflows (automation pipelines)' },
                 { key: 'documentsEnabled', type: 'boolean', label: 'Documents (rich text editor)' },
                 { key: 'backupEnabled', type: 'boolean', label: 'Backups (export/import conversations)' },
-                { key: 'mentionsEnabled', type: 'boolean', label: 'Mentions (@-mention users)' },
-                { key: 'dashboardEnabled', type: 'boolean', label: 'Dashboard (analytics overview)' },
+                { key: 'mentionsEnabled', type: 'boolean', label: 'Mentions (@-mention documents and chats)' },
+                { key: 'dashboardEnabled', type: 'boolean', label: 'Dashboard' },
             ],
         },
         {
@@ -459,6 +456,21 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 tier: 'core',
             },
             {
+                key: 'limitsEnabled',
+                type: 'boolean',
+                label: 'Enable usage limits',
+                help: 'Helps prevent abuse by capping how much users can do.',
+                tier: 'core',
+            },
+            {
+                key: 'cloudAdvancedEnabled',
+                type: 'boolean',
+                label: 'Show advanced options?',
+                help: 'Enable advanced OpenRouter, limits, and security controls.',
+                defaultValue: false,
+                tier: 'core',
+            },
+            {
                 key: 'openrouterAllowUserOverride',
                 type: 'boolean',
                 label: 'Let users bring their own OpenRouter key',
@@ -473,13 +485,6 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 help: 'When on, users must enter their own key to use the app. Useful if you don\'t want to pay for API usage.',
                 tier: 'advanced',
                 visibleWhen: isCloudAdvancedEnabled,
-            },
-            {
-                key: 'limitsEnabled',
-                type: 'boolean',
-                label: 'Enable usage limits',
-                help: 'Helps prevent abuse by capping how much users can do.',
-                tier: 'core',
             },
             {
                 key: 'requestsPerMinute',

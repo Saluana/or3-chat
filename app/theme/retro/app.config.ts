@@ -64,7 +64,7 @@ export default {
                 },
                 // Override size variant so padding wins over defaults
                 size: {
-                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
+                    xs: { base: 'h-[24px] px-[8px]! text-[12px]' },
                     sm: {
                         base: 'h-[32px] px-[12px]! text-[15px]',
                         leadingIcon: 'shrink-0 h-5 w-5',
@@ -125,29 +125,30 @@ export default {
         },
         checkbox: {
             slots: {
+                root: 'relative flex items-center',
                 base: 'rounded-[var(--md-border-radius)] ring-0! border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
             },
             variants: {
                 size: {
                     xs: {
+                        base: 'size-[20px]',
+                        container: 'h-[22px]',
+                    },
+                    sm: {
                         base: 'size-[24px]',
                         container: 'h-[26px]',
                     },
-                    sm: {
-                        base: 'size-[30px]',
-                        container: 'h-[32px]',
-                    },
                     md: {
-                        base: 'size-[38px]',
-                        container: 'h-[40px]',
+                        base: 'size-[28px]',
+                        container: 'h-[30px]',
                     },
                     lg: {
-                        base: 'size-[46px]',
-                        container: 'h-[48px]',
+                        base: 'size-[32px]',
+                        container: 'h-[34px]',
                     },
                     xl: {
-                        base: 'size-[54px]',
-                        container: 'h-[56px]',
+                        base: 'size-[36px]',
+                        container: 'h-[38px]',
                     },
                 },
             },

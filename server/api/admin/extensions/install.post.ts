@@ -26,6 +26,7 @@ import {
 } from 'h3';
 import { z } from 'zod';
 import { requireAdminApi } from '../../../admin/api';
+import { getClientIp } from '../../../admin/auth/rate-limit';
 import {
     installExtensionFromZip,
     resolveExtensionInstallLimits,
@@ -90,9 +91,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Rate limit: 5 extension installs per hour per user
-    const clientId = getRequestHeader(event, 'x-forwarded-for') 
-        || event.node.req.socket.remoteAddress 
-        || 'unknown';
+    const clientId = getClientIp(event);
     const allowed = await checkRateLimit(`extension:install:${clientId}`, {
         max: 5,
         window: 3600,

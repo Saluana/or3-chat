@@ -28,7 +28,7 @@
  * @see DependencyInstallPlan for the plan structure
  */
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { getProviderDescriptor } from './catalog';
 import type { WizardAnswers } from './types';
@@ -115,6 +115,27 @@ function readExistingDependencySpecs(instanceDir: string): Map<string, string> {
         ...parsed.optionalDependencies,
     };
     return new Map(Object.entries(all));
+}
+
+function isDependencySpecSatisfied(
+    existingSpec: string | undefined,
+    requestedSpec: string
+): boolean {
+    if (!existingSpec) return false;
+
+    // Local/file specs must match exactly so local-vs-registry intent is preserved.
+    if (requestedSpec.startsWith('file:')) {
+        return existingSpec === requestedSpec;
+    }
+
+    // Bare package names (no explicit version/range) mean "ensure present".
+    // Any existing dependency spec satisfies this.
+    return requestedSpec === existingSpec || !requestedSpec.includes('@');
+}
+
+function isPackageInstalled(instanceDir: string, packageName: string): boolean {
+    const packageJsonPath = resolve(instanceDir, 'node_modules', packageName, 'package.json');
+    return existsSync(packageJsonPath);
 }
 
 export function isInstallPackageManager(
@@ -209,7 +230,10 @@ export function createDependencyInstallPlan(
         themeArtifacts,
         commands: {
             bun: installSpecs.length > 0 ? `bun add ${installSpecs.join(' ')}` : 'bun add',
-            npm: installSpecs.length > 0 ? `npm install ${installSpecs.join(' ')}` : 'npm install',
+            npm:
+                installSpecs.length > 0
+                    ? `npm install --legacy-peer-deps ${installSpecs.join(' ')}`
+                    : 'npm install --legacy-peer-deps',
         },
     };
 }
@@ -246,6 +270,78 @@ function runCommand(
     });
 }
 
+function patchNitroPluginImports(filePath: string): void {
+    if (!existsSync(filePath)) return;
+    const source = readFileSync(filePath, 'utf8');
+
+    const needsDefineNitroPlugin = source.includes('defineNitroPlugin(')
+        && !source.includes('defineNitroPlugin } from "#imports"')
+        && !source.includes("defineNitroPlugin } from '#imports'")
+        && !/import\s*\{[^}]*\bdefineNitroPlugin\b[^}]*\}\s*from\s*['"]#imports['"]/.test(source);
+    const needsRuntimeConfig = source.includes('useRuntimeConfig(')
+        && !/import\s*\{[^}]*\buseRuntimeConfig\b[^}]*\}\s*from\s*['"]#imports['"]/.test(source);
+
+    if (!needsDefineNitroPlugin && !needsRuntimeConfig) return;
+
+    const importMatch = source.match(/import\s*\{\s*([^}]*)\s*\}\s*from\s*['"]#imports['"];?/);
+    let next = source;
+
+    if (importMatch && importMatch[0]) {
+        const existing = importMatch[1]
+            ?.split(',')
+            .map((part) => part.trim())
+            .filter(Boolean) ?? [];
+        const names = new Set(existing);
+        if (needsDefineNitroPlugin) names.add('defineNitroPlugin');
+        if (needsRuntimeConfig) names.add('useRuntimeConfig');
+        const replacement = `import { ${Array.from(names).join(', ')} } from \"#imports\";`;
+        next = next.replace(importMatch[0], replacement);
+    } else {
+        const imports: string[] = [];
+        if (needsDefineNitroPlugin) imports.push('defineNitroPlugin');
+        if (needsRuntimeConfig) imports.push('useRuntimeConfig');
+        next = `import { ${imports.join(', ')} } from \"#imports\";\n${next}`;
+    }
+
+    if (next !== source) {
+        writeFileSync(filePath, next, 'utf8');
+    }
+}
+
+function collectJsFiles(dirPath: string): string[] {
+    if (!existsSync(dirPath)) return [];
+
+    const files: string[] = [];
+    for (const entry of readdirSync(dirPath)) {
+        const absPath = resolve(dirPath, entry);
+        const stats = statSync(absPath);
+        if (stats.isDirectory()) {
+            files.push(...collectJsFiles(absPath));
+            continue;
+        }
+        if (stats.isFile() && absPath.endsWith('.js')) {
+            files.push(absPath);
+        }
+    }
+
+    return files;
+}
+
+function patchInstalledProviderPlugins(instanceDir: string, packages: string[]): void {
+    const providerPackages = packages.filter((name) => name.startsWith('or3-provider-'));
+    for (const packageName of providerPackages) {
+        const serverRuntimeDir = resolve(
+            instanceDir,
+            'node_modules',
+            packageName,
+            'dist/runtime/server'
+        );
+        for (const filePath of collectJsFiles(serverRuntimeDir)) {
+            patchNitroPluginImports(filePath);
+        }
+    }
+}
+
 /**
  * Executes a dependency install plan using the specified package manager.
  *
@@ -275,19 +371,46 @@ export async function executeDependencyInstallPlan(
     if (!options.enabled) return;
     if (plan.packages.length === 0) return;
     if (options.dryRun) return;
+    const providerPackages = plan.packages.filter((name) =>
+        name.startsWith('or3-provider-')
+    );
     const installSpecs = resolveInstallSpecs(plan.packages, answers.instanceDir);
     const existingSpecs = readExistingDependencySpecs(answers.instanceDir);
     const specsToInstall = installSpecs.filter((spec, index) => {
         const packageName = plan.packages[index];
         if (!packageName) return true;
-        return existingSpecs.get(packageName) !== spec;
+        if (!isPackageInstalled(answers.instanceDir, packageName)) return true;
+        return !isDependencySpecSatisfied(existingSpecs.get(packageName), spec);
     });
-    if (specsToInstall.length === 0) return;
-
-    if (options.packageManager === 'bun') {
-        await runCommand('bun', ['add', ...specsToInstall], answers.instanceDir);
+    if (specsToInstall.length === 0) {
+        patchInstalledProviderPlugins(answers.instanceDir, providerPackages);
         return;
     }
 
-    await runCommand('npm', ['install', ...specsToInstall], answers.instanceDir);
+    if (options.packageManager === 'bun') {
+        await runCommand('bun', ['add', ...specsToInstall], answers.instanceDir);
+        patchInstalledProviderPlugins(answers.instanceDir, providerPackages);
+        return;
+    }
+
+    try {
+        await runCommand(
+            'npm',
+            ['install', '--legacy-peer-deps', ...specsToInstall],
+            answers.instanceDir
+        );
+        patchInstalledProviderPlugins(answers.instanceDir, providerPackages);
+        return;
+    } catch (error) {
+        const hasBunLockfile = existsSync(resolve(answers.instanceDir, 'bun.lock'));
+        if (!hasBunLockfile) {
+            throw error;
+        }
+
+        console.warn(
+            '[wizard] npm install failed in a Bun-managed project. Retrying with bun add.'
+        );
+        await runCommand('bun', ['add', ...specsToInstall], answers.instanceDir);
+        patchInstalledProviderPlugins(answers.instanceDir, providerPackages);
+    }
 }

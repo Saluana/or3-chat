@@ -157,6 +157,15 @@ export const providerCatalog: WizardProviderDescriptor[] = [
         kind: 'auth',
         id: 'basic-auth',
         label: 'Basic Auth (Default)',
+        pros: [
+            'Zero external dependencies and quick local setup.',
+            'Full control over auth data in your own infrastructure.',
+        ],
+        cons: [
+            'You manage user lifecycle and credential security yourself.',
+            'No built-in social login or enterprise SSO features.',
+        ],
+        idealUseCase: 'Self-hosted teams wanting a simple default stack.',
         implemented: true,
         docsUrl: '/cloud/provider-basic-auth',
         dependencies: [
@@ -250,6 +259,15 @@ export const providerCatalog: WizardProviderDescriptor[] = [
         kind: 'auth',
         id: 'clerk',
         label: 'Clerk',
+        pros: [
+            'Managed auth with production-ready session handling.',
+            'Strong ecosystem support for MFA, SSO, and user management.',
+        ],
+        cons: [
+            'Requires an external SaaS dependency.',
+            'More setup surface (keys, issuer, provider wiring).',
+        ],
+        idealUseCase: 'Teams that want managed auth and enterprise features fast.',
         implemented: true,
         docsUrl: '/cloud/provider-clerk',
         dependencies: [
@@ -282,6 +300,15 @@ export const providerCatalog: WizardProviderDescriptor[] = [
         kind: 'sync',
         id: 'sqlite',
         label: 'SQLite (Default)',
+        pros: [
+            'Local durable storage with minimal operational overhead.',
+            'Great performance for single-node and small-team deployments.',
+        ],
+        cons: [
+            'Not horizontally distributed out of the box.',
+            'Operational replication/backups are your responsibility.',
+        ],
+        idealUseCase: 'Single-instance deployments prioritizing simplicity.',
         implemented: true,
         docsUrl: '/cloud/provider-sqlite',
         dependencies: [
@@ -341,6 +368,15 @@ export const providerCatalog: WizardProviderDescriptor[] = [
         kind: 'sync',
         id: 'convex',
         label: 'Convex',
+        pros: [
+            'Realtime-first sync and managed backend ergonomics.',
+            'Scales multi-user collaboration without local DB ops.',
+        ],
+        cons: [
+            'Adds external platform dependency and deployment model changes.',
+            'Requires Convex project/bootstrap workflow.',
+        ],
+        idealUseCase: 'Collaborative apps needing managed realtime sync.',
         implemented: true,
         docsUrl: '/cloud/provider-convex',
         dependencies: [
@@ -383,6 +419,15 @@ export const providerCatalog: WizardProviderDescriptor[] = [
         kind: 'storage',
         id: 'fs',
         label: 'Filesystem (Default)',
+        pros: [
+            'Fast local file IO with low complexity.',
+            'No extra cloud account required for development.',
+        ],
+        cons: [
+            'Not ideal for multi-instance distributed deployments.',
+            'Durability/backups depend on your host filesystem strategy.',
+        ],
+        idealUseCase: 'Local or single-node deployments with simple file storage.',
         implemented: true,
         docsUrl: '/cloud/provider-fs',
         dependencies: [
@@ -423,6 +468,15 @@ export const providerCatalog: WizardProviderDescriptor[] = [
         kind: 'storage',
         id: 's3',
         label: 'S3 Compatible (AWS / R2 / MinIO)',
+        pros: [
+            'Durable object storage with broad ecosystem compatibility.',
+            'Works across AWS and S3-compatible providers.',
+        ],
+        cons: [
+            'Requires credential and bucket policy management.',
+            'Latency and egress costs depend on provider/region choices.',
+        ],
+        idealUseCase: 'Production deployments needing scalable object storage.',
         implemented: true,
         docsUrl: '/cloud/provider-s3',
         dependencies: [
@@ -519,6 +573,15 @@ export const providerCatalog: WizardProviderDescriptor[] = [
         kind: 'storage',
         id: 'convex',
         label: 'Convex',
+        pros: [
+            'Unified backend when already using Convex for sync.',
+            'Reduces provider surface area in Convex-centric stacks.',
+        ],
+        cons: [
+            'Ties storage lifecycle to Convex setup and limits.',
+            'Less portable than plain S3-compatible storage.',
+        ],
+        idealUseCase: 'Teams standardizing fully on Convex infrastructure.',
         implemented: true,
         docsUrl: '/cloud/provider-convex',
         dependencies: [
@@ -730,6 +793,226 @@ export function applySkippedAdvancedDefaults(
     return next;
 }
 
+function normalizeEnvValue(value: string | undefined): string | undefined {
+    if (value === undefined) return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+
+    if (
+        (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+        (trimmed.startsWith("'") && trimmed.endsWith("'"))
+    ) {
+        return trimmed
+            .slice(1, -1)
+            .replace(/\\"/g, '"')
+            .replace(/\\'/g, "'")
+            .replace(/\\n/g, '\n');
+    }
+
+    return trimmed;
+}
+
+function readEnvString(
+    envMap: Record<string, string>,
+    ...keys: string[]
+): string | undefined {
+    for (const key of keys) {
+        const normalized = normalizeEnvValue(envMap[key]);
+        if (normalized !== undefined) {
+            return normalized;
+        }
+    }
+    return undefined;
+}
+
+function readEnvBoolean(
+    envMap: Record<string, string>,
+    ...keys: string[]
+): boolean | undefined {
+    const value = readEnvString(envMap, ...keys);
+    if (value === undefined) return undefined;
+    if (value === '') return undefined;
+
+    const normalized = value.toLowerCase();
+    if (normalized === 'true' || normalized === '1' || normalized === 'yes') {
+        return true;
+    }
+    if (normalized === 'false' || normalized === '0' || normalized === 'no') {
+        return false;
+    }
+    return undefined;
+}
+
+function readEnvNumber(
+    envMap: Record<string, string>,
+    ...keys: string[]
+): number | undefined {
+    const value = readEnvString(envMap, ...keys);
+    if (value === undefined || value === '') return undefined;
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return undefined;
+    return parsed;
+}
+
+function inferWizardModeFromProviderSelection(
+    answers: Pick<WizardAnswers, 'authProvider' | 'syncProvider' | 'storageProvider'>
+): WizardMode {
+    if (
+        answers.authProvider === 'basic-auth' &&
+        answers.syncProvider === 'sqlite' &&
+        answers.storageProvider === 'fs'
+    ) {
+        return 'preset-local';
+    }
+
+    if (
+        answers.authProvider === 'clerk' &&
+        answers.syncProvider === 'convex' &&
+        answers.storageProvider === 'convex'
+    ) {
+        return 'preset-clerk-convex';
+    }
+
+    return 'custom';
+}
+
+function presetNameFromWizardMode(wizardMode: WizardMode): string | undefined {
+    if (wizardMode === 'preset-local') return 'recommended';
+    if (wizardMode === 'preset-clerk-convex') return 'legacy-clerk-convex';
+    return undefined;
+}
+
+/**
+ * Maps existing `.env` values to wizard answer keys for pre-fill behavior.
+ */
+export function mapEnvToWizardAnswers(
+    envMap: Record<string, string>
+): Partial<WizardAnswers> {
+    const mapped: Partial<WizardAnswers> = {};
+
+    const assignString = (key: keyof WizardAnswers, ...envKeys: string[]) => {
+        const value = readEnvString(envMap, ...envKeys);
+        if (value !== undefined) {
+            (mapped as Record<keyof WizardAnswers, unknown>)[key] = value;
+        }
+    };
+
+    const assignBoolean = (key: keyof WizardAnswers, ...envKeys: string[]) => {
+        const value = readEnvBoolean(envMap, ...envKeys);
+        if (value !== undefined) {
+            (mapped as Record<keyof WizardAnswers, unknown>)[key] = value;
+        }
+    };
+
+    const assignNumber = (key: keyof WizardAnswers, ...envKeys: string[]) => {
+        const value = readEnvNumber(envMap, ...envKeys);
+        if (value !== undefined) {
+            (mapped as Record<keyof WizardAnswers, unknown>)[key] = value;
+        }
+    };
+
+    assignBoolean('ssrAuthEnabled', 'SSR_AUTH_ENABLED');
+    assignString('authProvider', 'OR3_AUTH_PROVIDER', 'AUTH_PROVIDER');
+    assignBoolean('guestAccessEnabled', 'OR3_GUEST_ACCESS_ENABLED');
+
+    assignBoolean('syncEnabled', 'OR3_CLOUD_SYNC_ENABLED', 'OR3_SYNC_ENABLED');
+    assignString('syncProvider', 'OR3_SYNC_PROVIDER');
+    assignBoolean(
+        'storageEnabled',
+        'OR3_CLOUD_STORAGE_ENABLED',
+        'OR3_STORAGE_ENABLED'
+    );
+    assignString('storageProvider', 'NUXT_PUBLIC_STORAGE_PROVIDER');
+
+    assignString('or3SiteName', 'OR3_SITE_NAME');
+    assignString('or3DefaultTheme', 'OR3_DEFAULT_THEME');
+    assignString('or3LogoUrl', 'OR3_LOGO_URL');
+    assignString('or3FaviconUrl', 'OR3_FAVICON_URL');
+
+    assignBoolean('workflowsEnabled', 'OR3_WORKFLOWS_ENABLED');
+    assignBoolean('documentsEnabled', 'OR3_DOCUMENTS_ENABLED');
+    assignBoolean('backupEnabled', 'OR3_BACKUP_ENABLED');
+    assignBoolean('mentionsEnabled', 'OR3_MENTIONS_ENABLED');
+    assignBoolean('dashboardEnabled', 'OR3_DASHBOARD_ENABLED');
+
+    assignString('basicAuthJwtSecret', 'OR3_BASIC_AUTH_JWT_SECRET');
+    assignString('basicAuthRefreshSecret', 'OR3_BASIC_AUTH_REFRESH_SECRET');
+    assignNumber('basicAuthAccessTtlSeconds', 'OR3_BASIC_AUTH_ACCESS_TTL_SECONDS');
+    assignNumber('basicAuthRefreshTtlSeconds', 'OR3_BASIC_AUTH_REFRESH_TTL_SECONDS');
+    assignString('basicAuthDbPath', 'OR3_BASIC_AUTH_DB_PATH');
+    assignString('basicAuthBootstrapEmail', 'OR3_BASIC_AUTH_BOOTSTRAP_EMAIL');
+    assignString(
+        'basicAuthBootstrapPassword',
+        'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD'
+    );
+
+    assignString('clerkPublishableKey', 'NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY');
+    assignString('clerkSecretKey', 'NUXT_CLERK_SECRET_KEY');
+
+    assignString('sqliteDbPath', 'OR3_SQLITE_DB_PATH');
+    assignString('sqlitePragmaJournalMode', 'OR3_SQLITE_PRAGMA_JOURNAL_MODE');
+    assignString('sqlitePragmaSynchronous', 'OR3_SQLITE_PRAGMA_SYNCHRONOUS');
+    assignBoolean('sqliteAllowInMemory', 'OR3_SQLITE_ALLOW_IN_MEMORY');
+    assignBoolean('sqliteStrict', 'OR3_SQLITE_STRICT');
+
+    assignString('convexUrl', 'VITE_CONVEX_URL');
+    assignString('convexSelfHostedAdminKey', 'CONVEX_SELF_HOSTED_ADMIN_KEY');
+    assignString('convexSelfHostedSiteUrl', 'VITE_CONVEX_SITE_URL');
+    assignString('convexClerkIssuerUrl', 'CLERK_ISSUER_URL');
+    assignString('convexAdminJwtSecret', 'OR3_ADMIN_JWT_SECRET');
+
+    assignString('fsRoot', 'OR3_STORAGE_FS_ROOT');
+    assignString('fsTokenSecret', 'OR3_STORAGE_FS_TOKEN_SECRET');
+    assignNumber('fsUrlTtlSeconds', 'OR3_STORAGE_FS_URL_TTL_SECONDS');
+
+    assignString('s3Endpoint', 'OR3_STORAGE_S3_ENDPOINT');
+    assignString('s3Region', 'OR3_STORAGE_S3_REGION');
+    assignString('s3Bucket', 'OR3_STORAGE_S3_BUCKET');
+    assignString('s3AccessKeyId', 'OR3_STORAGE_S3_ACCESS_KEY_ID');
+    assignString('s3SecretAccessKey', 'OR3_STORAGE_S3_SECRET_ACCESS_KEY');
+    assignString('s3SessionToken', 'OR3_STORAGE_S3_SESSION_TOKEN');
+    assignBoolean('s3ForcePathStyle', 'OR3_STORAGE_S3_FORCE_PATH_STYLE');
+    assignString('s3KeyPrefix', 'OR3_STORAGE_S3_KEY_PREFIX');
+    assignNumber('s3UrlTtlSeconds', 'OR3_STORAGE_S3_URL_TTL_SECONDS');
+    assignBoolean('s3RequireChecksum', 'OR3_STORAGE_S3_REQUIRE_CHECKSUM');
+
+    assignString('openrouterInstanceApiKey', 'OPENROUTER_API_KEY');
+    assignBoolean(
+        'openrouterAllowUserOverride',
+        'OR3_OPENROUTER_ALLOW_USER_OVERRIDE'
+    );
+    assignBoolean('openrouterRequireUserKey', 'OR3_OPENROUTER_REQUIRE_USER_KEY');
+
+    assignBoolean('limitsEnabled', 'OR3_LIMITS_ENABLED');
+    assignNumber('requestsPerMinute', 'OR3_REQUESTS_PER_MINUTE');
+    assignNumber('maxConversations', 'OR3_MAX_CONVERSATIONS');
+    assignNumber('maxMessagesPerDay', 'OR3_MAX_MESSAGES_PER_DAY');
+    assignString('limitsStorageProvider', 'OR3_LIMITS_STORAGE_PROVIDER');
+
+    const allowedOrigins = readEnvString(envMap, 'OR3_ALLOWED_ORIGINS');
+    if (allowedOrigins !== undefined) {
+        mapped.allowedOrigins = allowedOrigins
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean);
+    }
+
+    assignBoolean('forceHttps', 'OR3_FORCE_HTTPS');
+    assignBoolean('strictConfig', 'OR3_STRICT_CONFIG');
+    assignBoolean('trustProxy', 'OR3_TRUST_PROXY');
+
+    const forwardedHeader = readEnvString(envMap, 'OR3_FORWARDED_FOR_HEADER');
+    if (
+        forwardedHeader === 'x-forwarded-for' ||
+        forwardedHeader === 'x-real-ip'
+    ) {
+        mapped.forwardedForHeader = forwardedHeader;
+    }
+
+    return mapped;
+}
+
 /**
  * Creates a complete `WizardAnswers` object populated with sensible defaults.
  *
@@ -752,6 +1035,7 @@ export function createDefaultAnswers(
         instanceDir: string;
         envFile?: '.env' | '.env.local';
         presetName?: string;
+        existingEnv?: Record<string, string>;
     } = {
         instanceDir: process.cwd(),
     }
@@ -817,7 +1101,29 @@ export function createDefaultAnswers(
         forwardedForHeader: 'x-forwarded-for',
     };
 
-    return applyWizardModeDefaults(base, wizardMode);
+    const withModeDefaults = applyWizardModeDefaults(base, wizardMode);
+    const envOverrides = mapEnvToWizardAnswers(input.existingEnv ?? {});
+    const merged = {
+        ...withModeDefaults,
+        ...envOverrides,
+    };
+
+    const hasProviderOverride =
+        envOverrides.authProvider !== undefined ||
+        envOverrides.syncProvider !== undefined ||
+        envOverrides.storageProvider !== undefined;
+
+    if (!hasProviderOverride) {
+        return merged;
+    }
+
+    const inferredWizardMode = inferWizardModeFromProviderSelection(merged);
+    return {
+        ...merged,
+        wizardMode: inferredWizardMode,
+        presetName:
+            presetNameFromWizardMode(inferredWizardMode) ?? merged.presetName,
+    };
 }
 
 /**

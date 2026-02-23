@@ -48,7 +48,10 @@ export default defineEventHandler(async (event) => {
     }
 
     // Require super admin context
-    await requireAdminApiContext(event, { superAdminOnly: true });
+    await requireAdminApiContext(event, {
+        mutation: true,
+        superAdminOnly: true,
+    });
 
     const body = await readBody<GrantAdminBody | Record<string, unknown> | null>(event);
     const userId =
