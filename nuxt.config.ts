@@ -310,6 +310,7 @@ export default defineNuxtConfig({
         admin: adminConfig,
         wizardUi: {
             enabled: process.env.OR3_WIZARD_UI_ENABLED === 'true',
+            token: process.env.OR3_WIZARD_UI_TOKEN ?? '',
         },
         // Background streaming configuration (SSR mode only)
         backgroundJobs: {

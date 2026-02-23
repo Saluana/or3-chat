@@ -5,6 +5,7 @@
  */
 import {
     createError,
+    getHeader,
     getQuery,
     setHeader,
     type H3Event,
@@ -55,16 +56,38 @@ function normalizeErrorMessage(error: unknown): string {
     return String(error);
 }
 
+let _hasLoggedNonDevWarning = false;
+
 export function assertWebWizardEnabled(event: H3Event): void {
     const config = useRuntimeConfig(event);
-    if (config.wizardUi.enabled === true) {
-        return;
+    if (config.wizardUi.enabled !== true) {
+        throw createError({
+            statusCode: 404,
+            statusMessage: 'Not Found',
+        });
     }
 
-    throw createError({
-        statusCode: 404,
-        statusMessage: 'Not Found',
-    });
+    if (!_hasLoggedNonDevWarning && !import.meta.dev) {
+        _hasLoggedNonDevWarning = true;
+        console.warn(
+            '[wizard] ⚠️  Wizard UI is enabled in a non-dev build. ' +
+            'Disable OR3_WIZARD_UI_ENABLED for production.'
+        );
+    }
+
+    const expectedToken = config.wizardUi.token;
+    if (expectedToken) {
+        const provided =
+            getHeader(event, 'x-wizard-token') ??
+            toStringOrUndefined(getQuery(event).token);
+
+        if (provided !== expectedToken) {
+            throw createError({
+                statusCode: 403,
+                statusMessage: 'Invalid wizard token.',
+            });
+        }
+    }
 }
 
 export function setWizardNoStore(event: H3Event): void {

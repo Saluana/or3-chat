@@ -124,8 +124,11 @@ async function waitForHttpReady(url: string, timeoutMs = 45000): Promise<void> {
     let lastError = '';
     while (Date.now() < deadline) {
         try {
-            const response = await fetch(url);
-            if (response.status < 500) {
+            const response = await fetch(url, { redirect: 'manual' });
+            await response.body?.cancel();
+            // Any HTTP response (including redirects) means the server is up.
+            // Only a connection error (caught below) means it is not ready yet.
+            if (response.status === 0 || response.status < 600) {
                 return;
             }
             lastError = `HTTP ${response.status}`;
@@ -769,8 +772,14 @@ async function runUiInit(flags: CliFlags): Promise<void> {
         port = await pickAvailablePort(4173);
     }
 
-    const url = `http://127.0.0.1:${port}/wizard`;
-    console.log(`\nLaunching web wizard on ${url}`);
+    const wizardToken = crypto.randomUUID();
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const wizardUrl = `${baseUrl}/wizard?token=${wizardToken}`;
+    // Use a static asset prefix to health-check: this path is served by Vite/Nitro
+    // without going through SSR auth middleware and cannot redirect-loop.
+    const healthUrl = `${baseUrl}/_nuxt/`;
+
+    console.log('\nStarting wizard server...');
 
     const uiServer = Bun.spawn(
         ['bun', 'run', 'dev', '--', '--host', '127.0.0.1', '--port', String(port)],
@@ -781,6 +790,7 @@ async function runUiInit(flags: CliFlags): Promise<void> {
                 SSR_AUTH_ENABLED: 'true',
                 HOST: '127.0.0.1',
                 OR3_WIZARD_UI_ENABLED: 'true',
+                OR3_WIZARD_UI_TOKEN: wizardToken,
             },
             stdin: 'inherit',
             stdout: 'inherit',
@@ -800,14 +810,24 @@ async function runUiInit(flags: CliFlags): Promise<void> {
     process.once('SIGTERM', shutdown);
 
     try {
-        await waitForHttpReady(url);
-        openDefaultBrowser(url);
-        console.log('Web wizard ready. Press Ctrl+C to stop.');
+        await waitForHttpReady(healthUrl);
+
+        console.log('');
+        console.log('┌──────────────────────────────────────────────────────┐');
+        console.log('│  OR3 Cloud Wizard                                    │');
+        console.log(`│  ${wizardUrl.padEnd(52)} │`);
+        console.log('│  Press Ctrl+C to stop                                │');
+        console.log('└──────────────────────────────────────────────────────┘');
+        console.log('');
+
+        openDefaultBrowser(wizardUrl);
+
         const exitCode = await uiServer.exited;
         if (exitCode !== 0) {
             throw new Error(`Wizard UI server exited with code ${exitCode}.`);
         }
     } finally {
+        shutdown();
         process.off('SIGINT', shutdown);
         process.off('SIGTERM', shutdown);
     }

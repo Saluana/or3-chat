@@ -40,6 +40,7 @@ type ConnectionRequest = {
 
 const STEP_STORAGE_KEY = 'or3:wizard:step-id';
 const SESSION_STORAGE_KEY = 'or3:wizard:session-id';
+const WIZARD_TOKEN_KEY = 'or3:wizard:token';
 
 const FIELD_ERROR_RULES: Array<{
     key: keyof WizardAnswers;
@@ -205,6 +206,12 @@ function normalizeErrorMessage(error: unknown): string {
     return 'Unknown error';
 }
 
+function wizardFetchHeaders(): Record<string, string> {
+    const token = getSessionStorageItem(WIZARD_TOKEN_KEY);
+    if (token) return { 'x-wizard-token': token };
+    return {};
+}
+
 export function useWizardSession() {
     const session = ref<WizardSession | null>(null);
     const currentStepId = ref('target');
@@ -334,6 +341,7 @@ export function useWizardSession() {
         try {
             const response = await $fetch<SessionResponse>('/api/wizard/session', {
                 method: 'PATCH',
+                headers: wizardFetchHeaders(),
                 body: {
                     sessionId: session.value.id,
                     patch,
@@ -478,6 +486,7 @@ export function useWizardSession() {
                 '/api/wizard/test-connection',
                 {
                     method: 'POST',
+                    headers: wizardFetchHeaders(),
                     body: request,
                 }
             );
@@ -555,6 +564,7 @@ export function useWizardSession() {
         try {
             const response = await $fetch<DeployResponse>('/api/wizard/deploy', {
                 method: 'POST',
+                headers: wizardFetchHeaders(),
                 body: {
                     sessionId: session.value.id,
                     dryRun: input.dryRun,
@@ -616,9 +626,12 @@ export function useWizardSession() {
 
         const loadSession = async (sessionId?: string): Promise<SessionResponse> => {
             if (!sessionId) {
-                return $fetch<SessionResponse>('/api/wizard/session');
+                return $fetch<SessionResponse>('/api/wizard/session', {
+                    headers: wizardFetchHeaders(),
+                });
             }
             return $fetch<SessionResponse>('/api/wizard/session', {
+                headers: wizardFetchHeaders(),
                 query: { sessionId },
             });
         };
