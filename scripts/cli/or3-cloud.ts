@@ -2,6 +2,7 @@
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { isAbsolute, resolve } from 'node:path';
+import { createServer } from 'node:net';
 import { Or3CloudWizardApi } from '../../shared/cloud/wizard/api';
 import {
     buildRedactedSummary,
@@ -87,6 +88,81 @@ function toInt(value: string): number | null {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return null;
     return Math.trunc(parsed);
+}
+
+function normalizeErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
+async function isPortAvailable(port: number): Promise<boolean> {
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        return false;
+    }
+
+    return new Promise((resolve) => {
+        const server = createServer();
+        server.once('error', () => resolve(false));
+        server.once('listening', () => {
+            server.close(() => resolve(true));
+        });
+        server.listen(port, '127.0.0.1');
+    });
+}
+
+async function pickAvailablePort(start = 4173): Promise<number> {
+    for (let port = start; port < start + 1000; port += 1) {
+        if (await isPortAvailable(port)) {
+            return port;
+        }
+    }
+    throw new Error(`Could not find an available port in range ${start}-${start + 999}.`);
+}
+
+async function waitForHttpReady(url: string, timeoutMs = 45000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    let lastError = '';
+    while (Date.now() < deadline) {
+        try {
+            const response = await fetch(url);
+            if (response.status < 500) {
+                return;
+            }
+            lastError = `HTTP ${response.status}`;
+        } catch (error) {
+            lastError = normalizeErrorMessage(error);
+        }
+        await Bun.sleep(300);
+    }
+
+    throw new Error(
+        `Timed out waiting for ${url}${lastError ? ` (${lastError})` : ''}.`
+    );
+}
+
+function openDefaultBrowser(url: string): void {
+    let command: string[] | null = null;
+    if (process.platform === 'darwin') {
+        command = ['open', url];
+    } else if (process.platform === 'win32') {
+        command = ['cmd', '/c', 'start', '', url];
+    } else if (process.platform === 'linux') {
+        command = ['xdg-open', url];
+    }
+
+    if (!command) return;
+
+    try {
+        const proc = Bun.spawn(command, {
+            stdout: 'ignore',
+            stderr: 'ignore',
+        });
+        proc.unref?.();
+    } catch (error) {
+        console.log(
+            `Could not open browser automatically: ${normalizeErrorMessage(error)}`
+        );
+    }
 }
 
 function normalizeAnswers(sessionAnswers: Partial<WizardAnswers>): WizardAnswers {
@@ -674,6 +750,69 @@ function printDeployResult(result: WizardDeployResult): void {
     }
 }
 
+async function runUiInit(flags: CliFlags): Promise<void> {
+    const instanceDir = toStringFlag(flags, 'instance-dir') ?? process.cwd();
+    const explicitPort = toStringFlag(flags, 'ui-port') ?? toStringFlag(flags, 'port');
+
+    let port: number;
+    if (explicitPort) {
+        const parsed = toInt(explicitPort);
+        if (parsed === null || parsed < 1 || parsed > 65535) {
+            throw new Error(`Invalid port value "${explicitPort}".`);
+        }
+        const available = await isPortAvailable(parsed);
+        if (!available) {
+            throw new Error(`Port ${parsed} is already in use.`);
+        }
+        port = parsed;
+    } else {
+        port = await pickAvailablePort(4173);
+    }
+
+    const url = `http://127.0.0.1:${port}/wizard`;
+    console.log(`\nLaunching web wizard on ${url}`);
+
+    const uiServer = Bun.spawn(
+        ['bun', 'run', 'dev', '--', '--host', '127.0.0.1', '--port', String(port)],
+        {
+            cwd: instanceDir,
+            env: {
+                ...process.env,
+                SSR_AUTH_ENABLED: 'true',
+                HOST: '127.0.0.1',
+                OR3_WIZARD_UI_ENABLED: 'true',
+            },
+            stdin: 'inherit',
+            stdout: 'inherit',
+            stderr: 'inherit',
+        }
+    );
+
+    const shutdown = () => {
+        try {
+            uiServer.kill();
+        } catch {
+            // Best-effort shutdown.
+        }
+    };
+
+    process.once('SIGINT', shutdown);
+    process.once('SIGTERM', shutdown);
+
+    try {
+        await waitForHttpReady(url);
+        openDefaultBrowser(url);
+        console.log('Web wizard ready. Press Ctrl+C to stop.');
+        const exitCode = await uiServer.exited;
+        if (exitCode !== 0) {
+            throw new Error(`Wizard UI server exited with code ${exitCode}.`);
+        }
+    } finally {
+        process.off('SIGINT', shutdown);
+        process.off('SIGTERM', shutdown);
+    }
+}
+
 async function runFastInit(flags: CliFlags): Promise<void> {
     const api = new Or3CloudWizardApi();
     const dryRun = toBooleanFlag(flags, 'dry-run');
@@ -738,7 +877,7 @@ async function runFastInit(flags: CliFlags): Promise<void> {
 function printHelp(): void {
     console.log(`or3-cloud commands
 
-  or3-cloud init [--preset recommended|clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--manual] [--fast] [--enable-install] [--package-manager bun|npm] [--no-focused-prompts]
+  or3-cloud init [--preset recommended|clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--manual] [--fast] [--ui] [--ui-port <port>] [--enable-install] [--package-manager bun|npm] [--no-focused-prompts]
   or3-cloud validate [--env-file .env|.env.local] [--strict]
   or3-cloud presets list
   or3-cloud presets save <name> [--session <id>]
@@ -750,6 +889,10 @@ function printHelp(): void {
 
 async function runInit(flags: CliFlags): Promise<void> {
     printBanner();
+    if (toBooleanFlag(flags, 'ui')) {
+        await runUiInit(flags);
+        return;
+    }
     if (toBooleanFlag(flags, 'fast')) {
         await runFastInit(flags);
         return;

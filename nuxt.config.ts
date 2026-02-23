@@ -308,6 +308,9 @@ export default defineNuxtConfig({
             },
         },
         admin: adminConfig,
+        wizardUi: {
+            enabled: process.env.OR3_WIZARD_UI_ENABLED === 'true',
+        },
         // Background streaming configuration (SSR mode only)
         backgroundJobs: {
             enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
@@ -360,6 +363,9 @@ export default defineNuxtConfig({
                 basePath: adminConfig.basePath,
                 pluginRuntimeLoaderEnabled: adminConfig.pluginRuntimeLoaderEnabled,
                 pluginRouteDispatcherEnabled: adminConfig.pluginRouteDispatcherEnabled,
+            },
+            wizardUi: {
+                enabled: process.env.OR3_WIZARD_UI_ENABLED === 'true',
             },
             // Feature toggles from OR3 config - exposed for client-side gating
             features: {

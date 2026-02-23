@@ -352,8 +352,8 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 { key: 'workflowsEnabled', type: 'boolean', label: 'Workflows (automation pipelines)' },
                 { key: 'documentsEnabled', type: 'boolean', label: 'Documents (rich text editor)' },
                 { key: 'backupEnabled', type: 'boolean', label: 'Backups (export/import conversations)' },
-                { key: 'mentionsEnabled', type: 'boolean', label: 'Mentions (@-mention users)' },
-                { key: 'dashboardEnabled', type: 'boolean', label: 'Dashboard (analytics overview)' },
+                { key: 'mentionsEnabled', type: 'boolean', label: 'Mentions (@-mention documents and chats)' },
+                { key: 'dashboardEnabled', type: 'boolean', label: 'Dashboard' },
             ],
         },
         {

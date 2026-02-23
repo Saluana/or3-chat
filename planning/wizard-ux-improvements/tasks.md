@@ -58,7 +58,7 @@ artifact_id: c3d4e5f6-a7b8-6c7d-0e1f-2a3b4c5d6e7f
 
 ## Phase 3: Web UI Backend (Nitro Server)
 
-- [ ] **3.1 Create the WebWizardServer**
+- [x] **3.1 Create the WebWizardServer**
   - Create a new Nitro server entry point (e.g., `server/wizard/index.ts`) that wraps `Or3CloudWizardApi`.
   - Implement REST endpoints:
     - `GET /api/wizard/session`
@@ -67,28 +67,28 @@ artifact_id: c3d4e5f6-a7b8-6c7d-0e1f-2a3b4c5d6e7f
     - `POST /api/wizard/deploy`
   - *Requirements: 1*
 
-- [ ] **3.2 Integrate WebWizardServer with CLI**
+- [x] **3.2 Integrate WebWizardServer with CLI**
   - Update `scripts/cli/or3-cloud.ts` to accept an `--ui` flag.
   - When `--ui` is present, spawn the Nitro server on an available port and open the default browser to `http://localhost:<port>`.
   - *Requirements: 1*
 
 ## Phase 4: Web UI Frontend (Vue/Nuxt)
 
-- [ ] **4.1 Setup WebWizardClient**
+- [x] **4.1 Setup WebWizardClient**
   - Create a standalone Vue/Nuxt application (e.g., in `app/wizard/`) to serve as the UI.
   - Configure Tailwind CSS and Nuxt UI components for styling.
   - *Requirements: 1*
 
-- [ ] **4.2 Implement Wizard State Management**
+- [x] **4.2 Implement Wizard State Management**
   - Create `useWizardSession` composable to manage state, API calls to the Nitro server, and step navigation.
   - *Requirements: 1*
 
-- [ ] **4.3 Build Step Components**
+- [x] **4.3 Build Step Components**
   - Create Vue components for each wizard step (Target, Preset, Branding, Themes, Providers, Review).
   - Implement live visual previews for the "Themes" step.
   - *Requirements: 1*
 
-- [ ] **4.4 Integrate Enhancements into Web UI**
+- [x] **4.4 Integrate Enhancements into Web UI**
   - Add "Generate Secure Key" buttons next to secret inputs.
   - Implement inline connection testing with loading states and error messages.
   - Add interactive provider comparison cards with pros/cons.
