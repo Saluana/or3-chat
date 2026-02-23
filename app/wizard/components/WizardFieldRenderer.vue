@@ -7,7 +7,7 @@
             <UButton
                 v-if="showSecretGenerateButton"
                 label="Generate Secure Key"
-                size="xs"
+                size="sm"
                 variant="basic"
                 :disabled="disabled"
                 @click="emitGenerateSecret"

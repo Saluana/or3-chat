@@ -11,6 +11,8 @@ type DeployBody = {
     createBackup?: boolean;
     strict?: boolean;
     skipDeploy?: boolean;
+    installDependencies?: boolean;
+    packageManager?: string;
 };
 
 export default defineEventHandler(async (event) => {
@@ -30,6 +32,8 @@ export default defineEventHandler(async (event) => {
         createBackup: body.createBackup,
         strict: body.strict,
         skipDeploy: body.skipDeploy,
+        installDependencies: body.installDependencies,
+        packageManager: body.packageManager,
     });
 
     if (!result.ok) {

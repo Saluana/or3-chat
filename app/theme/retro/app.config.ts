@@ -64,7 +64,7 @@ export default {
                 },
                 // Override size variant so padding wins over defaults
                 size: {
-                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
+                    xs: { base: 'h-[24px] px-[8px]! text-[12px]' },
                     sm: {
                         base: 'h-[32px] px-[12px]! text-[15px]',
                         leadingIcon: 'shrink-0 h-5 w-5',

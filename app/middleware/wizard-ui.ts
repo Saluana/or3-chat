@@ -1,8 +1,6 @@
-import { abortNavigation, createError, defineNuxtRouteMiddleware, navigateTo } from '#app';
+import { abortNavigation, createError, defineNuxtRouteMiddleware } from '#app';
 
-const WIZARD_TOKEN_KEY = 'or3:wizard:token';
-
-export default defineNuxtRouteMiddleware((to) => {
+export default defineNuxtRouteMiddleware(() => {
     const config = useRuntimeConfig();
     if (config.public.wizardUi.enabled !== true) {
         return abortNavigation(
@@ -13,18 +11,13 @@ export default defineNuxtRouteMiddleware((to) => {
         );
     }
 
-    if (!import.meta.client) return;
-
-    const tokenFromQuery = typeof to.query.token === 'string' ? to.query.token.trim() : '';
-
-    if (tokenFromQuery) {
-        globalThis.sessionStorage.setItem(WIZARD_TOKEN_KEY, tokenFromQuery);
-
-        // Strip the token from the visible URL to keep it out of browser history.
-        const { token: _, ...remainingQuery } = to.query;
-        return navigateTo(
-            { path: to.path, query: remainingQuery, hash: to.hash },
-            { replace: true }
+    const granted = useCookie<unknown>('or3_wizard_granted').value;
+    if (String(granted ?? '') !== '1') {
+        return abortNavigation(
+            createError({
+                statusCode: 403,
+                statusMessage: 'Invalid wizard token.',
+            })
         );
     }
 });

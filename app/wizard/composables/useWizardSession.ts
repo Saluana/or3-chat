@@ -206,10 +206,97 @@ function normalizeErrorMessage(error: unknown): string {
     return 'Unknown error';
 }
 
+function isWizardValidationResult(value: unknown): value is WizardValidationResult {
+    if (!value || typeof value !== 'object') return false;
+    const candidate = value as Partial<WizardValidationResult>;
+    return Array.isArray(candidate.errors) && Array.isArray(candidate.warnings);
+}
+
+function extractDeployErrorPayload(error: unknown): DeployResponse | null {
+    if (!error || typeof error !== 'object') return null;
+
+    const container = error as {
+        data?: unknown;
+        response?: { _data?: unknown };
+    };
+
+    const candidates: unknown[] = [
+        container.data,
+        container.response?._data,
+    ];
+
+    for (const candidate of candidates) {
+        if (!candidate || typeof candidate !== 'object') continue;
+        const direct = candidate as Partial<DeployResponse> & { data?: unknown };
+
+        if (isWizardValidationResult(direct.validation)) {
+            return {
+                ok: Boolean(direct.ok),
+                validation: direct.validation,
+                applyResult: direct.applyResult,
+                deployResult: direct.deployResult,
+            };
+        }
+
+        const nested = direct.data as Partial<DeployResponse> | undefined;
+        if (nested && isWizardValidationResult(nested.validation)) {
+            return {
+                ok: Boolean(nested.ok),
+                validation: nested.validation,
+                applyResult: nested.applyResult,
+                deployResult: nested.deployResult,
+            };
+        }
+    }
+
+    return null;
+}
+
 function wizardFetchHeaders(): Record<string, string> {
     const token = getSessionStorageItem(WIZARD_TOKEN_KEY);
     if (token) return { 'x-wizard-token': token };
     return {};
+}
+
+async function waitForAccessUrlReady(accessUrl: string, timeoutMs = 45000): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    const healthUrl = `${accessUrl.replace(/\/$/, '')}/api/healthz`;
+
+    while (Date.now() < deadline) {
+        try {
+            await fetch(healthUrl, {
+                method: 'GET',
+                mode: 'no-cors',
+                cache: 'no-store',
+            });
+            return true;
+        } catch {
+            // Keep polling until timeout.
+        }
+        await new Promise((resolve) => globalThis.setTimeout(resolve, 300));
+    }
+
+    return false;
+}
+
+async function shutdownWizardUiBestEffort(): Promise<void> {
+    try {
+        await $fetch('/api/wizard/shutdown', {
+            method: 'POST',
+            headers: wizardFetchHeaders(),
+        });
+    } catch {
+        // Best effort only.
+    }
+}
+
+async function redirectToAccessUrl(accessUrl?: string): Promise<void> {
+    if (!import.meta.client) return;
+    if (!accessUrl) return;
+    const ready = await waitForAccessUrlReady(accessUrl, 45000);
+    if (!ready) return;
+    await shutdownWizardUiBestEffort();
+    globalThis.location.assign(accessUrl);
 }
 
 export function useWizardSession() {
@@ -578,11 +665,16 @@ export function useWizardSession() {
             validationWarnings.value = response.validation.warnings;
             statusMessage.value = input.skipDeploy
                 ? 'Validation passed.'
-                : 'Deployment completed.';
+                : response.deployResult?.accessUrl
+                  ? 'Deployment completed.'
+                  : response.deployResult?.instructions || 'Deployment completed.';
+            if (!input.skipDeploy) {
+                void redirectToAccessUrl(response.deployResult?.accessUrl);
+            }
             return response;
         } catch (error) {
-            const payload = (error as { data?: DeployResponse }).data;
-            if (payload?.validation) {
+            const payload = extractDeployErrorPayload(error);
+            if (payload) {
                 deployResponse.value = payload;
                 setStepAndFieldErrors(payload.validation);
                 statusMessage.value = 'Validation failed. Fix highlighted fields and try again.';

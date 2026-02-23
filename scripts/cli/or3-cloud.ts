@@ -753,6 +753,37 @@ function printDeployResult(result: WizardDeployResult): void {
     }
 }
 
+async function ensureUiWizardDependencies(
+    instanceDir: string,
+    packageManagerFlag?: string
+): Promise<void> {
+    const packageManager = parseInstallPackageManager(packageManagerFlag);
+    const api = new Or3CloudWizardApi();
+    const session = await api.createSession({
+        instanceDir,
+        includeSecrets: false,
+        prefillFromEnv: true,
+    });
+
+    try {
+        const answers = session.answers;
+        const installPlan = createDependencyInstallPlan(answers);
+        if (installPlan.packages.length === 0) {
+            return;
+        }
+
+        console.log(`\nEnsuring provider dependencies are installed (${packageManager})...`);
+        await executeDependencyInstallPlan(answers, installPlan, {
+            enabled: true,
+            packageManager,
+        });
+    } finally {
+        await api.discardSession(session.id).catch(() => {
+            // Best effort cleanup.
+        });
+    }
+}
+
 async function runUiInit(flags: CliFlags): Promise<void> {
     const instanceDir = toStringFlag(flags, 'instance-dir') ?? process.cwd();
     const explicitPort = toStringFlag(flags, 'ui-port') ?? toStringFlag(flags, 'port');
@@ -778,6 +809,11 @@ async function runUiInit(flags: CliFlags): Promise<void> {
     // Use a static asset prefix to health-check: this path is served by Vite/Nitro
     // without going through SSR auth middleware and cannot redirect-loop.
     const healthUrl = `${baseUrl}/_nuxt/`;
+
+    await ensureUiWizardDependencies(
+        instanceDir,
+        toStringFlag(flags, 'package-manager')
+    );
 
     console.log('\nStarting wizard server...');
 
