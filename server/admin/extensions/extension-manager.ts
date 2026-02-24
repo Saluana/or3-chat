@@ -22,6 +22,7 @@ import { join } from 'node:path';
 import type { ExtensionKind, InstalledExtensionRecord } from './types';
 import { Or3ExtensionManifestSchema } from './types';
 import { ensureExtensionsDirs, EXTENSIONS_BASE_DIR, getKindDir } from './paths';
+import { removeSyncedThemeFromApp } from './theme-install-sync';
 
 /**
  * Purpose:
@@ -160,4 +161,7 @@ export async function uninstallExtension(
     const kindDir = getKindDir(kind);
     const targetDir = join(EXTENSIONS_BASE_DIR, kindDir, id);
     await fs.rm(targetDir, { recursive: true, force: true });
+    if (kind === 'theme') {
+        await removeSyncedThemeFromApp(id);
+    }
 }

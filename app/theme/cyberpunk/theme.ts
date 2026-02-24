@@ -141,9 +141,7 @@ export default defineTheme({
                 base: {
                     image: '/backgrounds/cyberpunk.png',
                     opacity: 0.29,
-                    repeat: 'repeat',
-                    size: '733px',
-                    fit: undefined,
+                    fit: 'cover',
                 },
             },
             sidebar: {

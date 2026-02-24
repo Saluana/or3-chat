@@ -27,6 +27,7 @@ import { unzip, Unzip, UnzipInflate } from 'fflate';
 import type { ExtensionKind, Or3ExtensionManifest } from './types';
 import { Or3ExtensionManifestSchema } from './types';
 import { ensureExtensionsDirs, EXTENSIONS_BASE_DIR, getKindDir } from './paths';
+import { removeSyncedThemeFromApp, syncInstalledThemeToApp } from './theme-install-sync';
 
 /**
  * Purpose:
@@ -344,6 +345,16 @@ export async function installExtensionFromZip(
 
         await fs.rm(targetDir, { recursive: true, force: true });
         await fs.rename(tmpDir, targetDir);
+
+        if (manifest.kind === 'theme') {
+            try {
+                await syncInstalledThemeToApp(manifest.id, targetDir);
+            } catch (error) {
+                await fs.rm(targetDir, { recursive: true, force: true });
+                await removeSyncedThemeFromApp(manifest.id);
+                throw error;
+            }
+        }
 
         return manifest;
     } catch (error) {
