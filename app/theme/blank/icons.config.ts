@@ -119,6 +119,10 @@ export default <IconMap>{
     'dashboard.backup': 'tabler:book-upload',
     'dashboard.restore': 'tabler:book-upload',
 
+    // Admin
+    'admin.workspace': 'tabler:building',
+    'admin.workspaces': 'tabler:buildings',
+
     // Documents / Editor
     'editor.code': 'tabler:code',
     'editor.list': 'tabler:list',

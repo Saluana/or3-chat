@@ -22,7 +22,7 @@
                 <UAlert
                     v-else-if="error"
                     color="error"
-                    icon="i-heroicons-exclamation-triangle"
+                    :icon="warningIcon"
                     title="Failed to load workspaces"
                     :description="error.message"
                 />
@@ -35,11 +35,11 @@
                         @click="selectAndClose(workspace)"
                     >
                         <div
-                            class="w-12 h-12 rounded-lg bg-[var(--md-primary-container)] flex items-center justify-center flex-shrink-0"
+                            class="w-12 h-12 rounded-lg bg-[var(--md-surface-container-high)] flex items-center justify-center flex-shrink-0"
                         >
                             <UIcon
-                                name="i-heroicons-building-office"
-                                class="w-6 h-6 text-[var(--md-on-primary-container)]"
+                                :name="workspaceIcon"
+                                class="w-6 h-6 text-[var(--md-primary)]"
                             />
                         </div>
                         <div class="flex-1 min-w-0">
@@ -69,7 +69,7 @@
                         class="text-center py-12"
                     >
                         <UIcon
-                            name="i-heroicons-building-office"
+                            :name="workspaceIcon"
                             class="w-12 h-12 mx-auto text-[var(--md-outline)] mb-3"
                         />
                         <p class="text-[var(--md-on-surface-variant)]">
@@ -97,6 +97,8 @@ const emit = defineEmits<{
 
 const isOpen = defineModel<boolean>({ default: false });
 const { getMessage } = useApiError();
+const workspaceIcon = useIcon('admin.workspace');
+const warningIcon = useIcon('ui.warning');
 
 const workspaces = ref<Workspace[]>([]);
 const pending = ref(false);

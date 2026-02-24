@@ -18,11 +18,7 @@
             <div class="h-40 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
         </div>
 
-        <div v-else-if="themes.length === 0" class="text-sm opacity-70 py-8 text-center bg-[var(--md-surface-container-low)] rounded">
-                No themes installed.
-        </div>
-
-        <div v-else class="space-y-6">
+        <template v-else>
             <!-- Restart Required Banner -->
             <div v-if="restartRequired" class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)] flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
@@ -33,7 +29,7 @@
                     </div>
                 </div>
                 <UButton
-                    size="xs"
+                    size="sm"
                     color="error"
                     variant="solid"
                     :disabled="!isOwner || !statusData?.status?.admin?.allowRestart"
@@ -55,13 +51,17 @@
                         class="hidden"
                         @change="installTheme"
                     />
-                    <UButton size="xs" :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
+                    <UButton size="sm" :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
                         Install .zip
                     </UButton>
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div v-if="themes.length === 0" class="text-sm opacity-70 py-8 text-center bg-[var(--md-surface-container-low)] rounded">
+                No themes installed.
+            </div>
+
+            <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div
                     v-for="theme in themes"
                     :key="theme.id"
@@ -80,7 +80,7 @@
                     
                     <div class="pt-4 mt-auto border-t border-[var(--md-outline-variant)]/50 flex items-center justify-between gap-2">
                         <UButton
-                            size="xs"
+                            size="sm"
                             :color="defaultTheme === theme.id ? 'neutral' : 'primary'"
                             :variant="defaultTheme === theme.id ? 'soft' : 'solid'"
                             :disabled="!isOwner || defaultTheme === theme.id"
@@ -89,7 +89,7 @@
                             {{ defaultTheme === theme.id ? 'Active' : 'Set Default' }}
                         </UButton>
                          <UButton
-                            size="xs"
+                            size="sm"
                             color="error"
                             variant="ghost"
                             :disabled="!isOwner"
@@ -101,7 +101,7 @@
                 </div>
             </div>
             </div>
-        </div>
+        </template>
     </div>
 </template>
 

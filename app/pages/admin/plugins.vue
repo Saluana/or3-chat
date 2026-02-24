@@ -25,7 +25,7 @@
                         class="hidden"
                         @change="installPlugin"
                     />
-                    <UButton size="xs" :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
+                    <UButton size="sm"  :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
                         Install .zip
                     </UButton>
                 </div>
@@ -86,7 +86,7 @@
 
                     <div class="mt-4 pt-4 border-t border-[var(--md-outline-variant)]/50 flex flex-wrap items-center gap-2">
                         <UButton
-                            size="xs"
+                            size="sm"
                             :color="enabledSet.has(plugin.id) ? 'neutral' : 'primary'"
                             :variant="enabledSet.has(plugin.id) ? 'soft' : 'solid'"
                             :disabled="!isOwner || toggleLoading[plugin.id]"
@@ -96,7 +96,7 @@
                             {{ enabledSet.has(plugin.id) ? 'Disable' : 'Enable' }}
                         </UButton>
                         <UButton
-                            size="xs"
+                            size="sm"
                             color="error"
                             variant="ghost"
                             :disabled="!isOwner"
@@ -107,10 +107,17 @@
                         
                         <div class="flex-1"></div>
 
-                        <UPopover>
-                            <UButton color="neutral" variant="ghost" size="xs" label="Settings" trailing-icon="i-heroicons-chevron-down-20-solid" />
-                            <template #panel>
-                                <div class="p-4 w-96 space-y-3">
+                        <UPopover
+                            :content="{
+                                side: 'left',
+                                align: 'end',
+                                sideOffset: 8,
+                                collisionPadding: 16,
+                            }"
+                        >
+                            <UButton color="neutral" variant="ghost" size="sm" label="Settings" trailing-icon="i-heroicons-chevron-down-20-solid" />
+                            <template #content>
+                                <div class="p-4 w-80 max-h-[min(28rem,calc(100vh-4rem))] overflow-y-auto space-y-3">
                                     <div class="text-xs font-semibold uppercase opacity-60">Access policy</div>
                                     <div class="space-y-2 p-2 rounded border border-[var(--md-outline-variant)]/50">
                                         <label class="flex items-center gap-2 text-xs">
