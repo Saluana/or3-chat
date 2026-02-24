@@ -62,6 +62,26 @@ echo $NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY  # Should be set for auth
 - Check for cookie-blocking extensions
 - Look for `SessionContext` errors in console
 
+### "I Logged Out of Admin But Still Have Elevated Access"
+
+**Symptoms:** After clicking admin logout, admin grants still exist and some privileged non-panel operations may still succeed.
+
+**Cause:** In Clerk + Convex mode, admin grants are persisted in `admin_users` and are separate from the super-admin cookie.
+
+`POST /api/admin/auth/logout` clears only `or3_admin`. It does not sign out Clerk and does not revoke deployment admin grants.
+
+Note:
+- `/admin/*` pages are super-admin-only. A deployment-admin grant alone should not open the admin panel.
+
+**Checks:**
+- Open `/admin/admin-users` as super admin and verify whether the user has a grant.
+
+**Fix:**
+- Revoke the user in `/admin/admin-users` if they should not have deployment admin.
+- Optionally sign out Clerk from the main app session too.
+
+See: [admin-access-bridge](./admin-access-bridge)
+
 ### Workspace Not Created
 
 **Symptoms:** Logged in but no workspace, sync fails immediately.

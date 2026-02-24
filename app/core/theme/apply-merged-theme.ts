@@ -29,7 +29,10 @@
  * @see docs/theme-backgrounds.md for background system documentation
  */
 import type { UserThemeOverrides } from './user-overrides-types';
-import type { ThemeBackgrounds } from '../../theme/_shared/types';
+import type {
+    ThemeBackgrounds,
+    ThemeBackgroundSlots,
+} from '../../theme/_shared/types';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 import {
     applyThemeBackgrounds,
@@ -88,7 +91,7 @@ export async function applyMergedTheme(
     }
 
     // Get base theme backgrounds from loaded theme
-    const baseBackgrounds = theme.backgrounds;
+    const baseBackgrounds = resolveModeBackgrounds(theme.backgrounds, mode);
 
     const r = document.documentElement.style;
 
@@ -312,6 +315,39 @@ function buildMergedBackgrounds(
     }
 
     return result;
+}
+
+function resolveModeBackgrounds(
+    base: ThemeBackgrounds | undefined,
+    mode: 'light' | 'dark'
+): ThemeBackgrounds | undefined {
+    if (!base) return undefined;
+    if (mode !== 'dark' || !base.dark) {
+        return {
+            content: {
+                base: { ...base.content?.base },
+                overlay: { ...base.content?.overlay },
+            },
+            sidebar: { ...base.sidebar },
+            headerGradient: { ...base.headerGradient },
+            bottomNavGradient: { ...base.bottomNavGradient },
+        };
+    }
+
+    const dark = base.dark as ThemeBackgroundSlots;
+
+    return {
+        content: {
+            base: { ...base.content?.base, ...dark.content?.base },
+            overlay: { ...base.content?.overlay, ...dark.content?.overlay },
+        },
+        sidebar: { ...base.sidebar, ...dark.sidebar },
+        headerGradient: { ...base.headerGradient, ...dark.headerGradient },
+        bottomNavGradient: {
+            ...base.bottomNavGradient,
+            ...dark.bottomNavGradient,
+        },
+    };
 }
 
 interface LayerInput {

@@ -26,6 +26,7 @@
         <div
             class="flex-1 h-dvh w-full relative"
             :class="legacyCompatClasses.height"
+            :style="paneChromeClearanceStyle"
         >
             <div
                 id="top-nav"
@@ -977,6 +978,16 @@ async function handleHeaderAction(entry: HeaderActionEntry) {
     }
 }
 const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
+const paneChromeClearanceStyle = computed(() => {
+    const hasOverlayChrome = !showTopOffset.value;
+    return {
+        '--or3-pane-chrome-top-clearance': hasOverlayChrome ? '46px' : '0px',
+        '--or3-pane-chrome-left-clearance': hasOverlayChrome ? '56px' : '0px',
+        '--or3-pane-chrome-right-clearance': hasOverlayChrome
+            ? '112px'
+            : '0px',
+    };
+});
 
 function toggleDashboard() {
     if (!dashboardEnabled.value) return;

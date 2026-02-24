@@ -104,9 +104,9 @@ export interface ThemeBackgroundLayer {
 }
 
 /**
- * Named background slots exposed through the theme DSL
+ * Shared background slots for a single color mode.
  */
-export interface ThemeBackgrounds {
+export interface ThemeBackgroundSlots {
     content?: {
         base?: ThemeBackgroundLayer;
         overlay?: ThemeBackgroundLayer;
@@ -114,6 +114,17 @@ export interface ThemeBackgrounds {
     sidebar?: ThemeBackgroundLayer;
     headerGradient?: ThemeBackgroundLayer;
     bottomNavGradient?: ThemeBackgroundLayer;
+}
+
+/**
+ * Named background slots exposed through the theme DSL
+ */
+export interface ThemeBackgrounds extends ThemeBackgroundSlots {
+    /**
+     * Optional dark-mode overrides for background layers.
+     * Only specify fields you want to differ from light/default.
+     */
+    dark?: ThemeBackgroundSlots;
 }
 
 /**

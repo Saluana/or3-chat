@@ -306,6 +306,7 @@
 <script setup lang="ts">
 import { useAdminPages } from '~/composables/admin/useAdminPlugins';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
+import { useAdminSession } from '~/composables/admin/useAdminData';
 import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
 import WorkspaceIndicator from '~/components/admin/WorkspaceIndicator.vue';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
@@ -317,6 +318,7 @@ const appVersion =
 
 const route = useRoute();
 const adminPages = useAdminPages();
+const { data: adminSession } = useAdminSession();
 const { getMessage } = useApiError();
 const { isOpen: isConfirmOpen, options: confirmOptions, onConfirm, onCancel } = useConfirmDialog();
 
@@ -432,14 +434,25 @@ interface NavLink {
     icon: string;
 }
 
+const isSuperAdmin = computed(
+    () => adminSession.value?.kind === 'super_admin'
+);
+
 const navLinks = computed<NavLink[]>(() => {
     const base: NavLink[] = [
         { label: 'Overview', to: '/admin', icon: homeIcon.value },
-        { label: 'Workspaces', to: '/admin/workspaces', icon: userIcon.value },
         { label: 'Plugins', to: '/admin/plugins', icon: pluginsIcon.value },
         { label: 'Themes', to: '/admin/themes', icon: settingsIcon.value },
         { label: 'System', to: '/admin/system', icon: systemIcon.value },
     ];
+
+    if (isSuperAdmin.value) {
+        base.splice(1, 0, {
+            label: 'Workspaces',
+            to: '/admin/workspaces',
+            icon: userIcon.value,
+        });
+    }
     
     // Sort logic or visual separators could be added here
     const pluginLinks = adminPages.value.map((page) => ({

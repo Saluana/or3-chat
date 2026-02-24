@@ -35,6 +35,21 @@ Access to LLM models is handled separately via **OAuth PKCE** with OpenRouter. T
 *   **Storage**: Token is saved in local Dexie DB (`kv` table).
 *   **Usage**: The token is injected directly into browser-side API calls to OpenRouter.
 
+### 4. Admin Dashboard Authorization (Clerk + Convex)
+
+Admin dashboard access is super-admin-only.
+
+- `deploymentAdmin` is still resolved from Convex `admin_users`.
+- Super-admin bootstrap can auto-grant the current Clerk user via the signed bridge flow.
+- That grant does not bypass super-admin-only `/admin/*` route policy.
+
+Important:
+
+- Admin logout clears the super-admin cookie only.
+- It does not revoke `admin_users` grants.
+
+See: [admin-access-bridge](./admin-access-bridge)
+
 ---
 
 ## Server-Side Implementation
@@ -256,6 +271,8 @@ const isValid = computed(() => {
 3. Client clears local state
 4. Auth provider signs out (e.g., Clerk signOut)
 5. Workspace data remains in Dexie (local-first)
+
+For Clerk + Convex admin grant persistence details, see: [admin-access-bridge](./admin-access-bridge)
 
 ---
 

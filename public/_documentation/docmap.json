@@ -680,6 +680,12 @@
                     "summary": "Dedicated setup guide for `or3-provider-convex`. Covers install, Convex backend init/codegen, required config, and the Clerk to Convex bridge flow."
                 },
                 {
+                    "name": "admin-access-bridge.md",
+                    "path": "/cloud/admin-access-bridge",
+                    "category": "Architecture",
+                    "summary": "Explains Clerk + Convex admin identity bridging for the admin dashboard, including how super-admin login can bootstrap `admin_users`, why grants persist, and why admin logout does not revoke Clerk deployment-admin access."
+                },
+                {
                     "name": "provider-sqlite.md",
                     "path": "/cloud/provider-sqlite",
                     "category": "Guide",
