@@ -10,7 +10,7 @@
                 v-bind="mergedButtonProps"
                 type="button"
                 aria-label="Notifications"
-                :class="[baseButtonClass, buttonClass]"
+                :class="['notification-bell-btn', baseButtonClass, buttonClass]"
             >
                 <template #default>
                     <span class="flex flex-col items-center gap-1 w-full relative">
