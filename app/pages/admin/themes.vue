@@ -124,14 +124,14 @@
                         <UButton
                             v-if="theme.isInstalledExtension"
                             size="xs"
-                                                        class="w-fit px-1.5!"
+                            icon="i-lucide-trash-2"
+                            class="aspect-square p-0!"
                             color="error"
                             variant="ghost"
                             :disabled="!isOwner"
+                            :aria-label="`Uninstall ${theme.id}`"
                             @click="uninstallTheme(theme.id)"
-                        >
-                            Uninstall
-                        </UButton>
+                        />
                     </div>
                 </div>
             </div>
