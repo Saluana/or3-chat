@@ -590,6 +590,12 @@
                     "summary": "Quick start guide for creating custom themes in OR3. Learn how to use the refined theme system to create a custom theme in under 30 minutes. Covers theme scaffolding with CLI tools, defining Material Design 3 color palettes, component overrides with CSS-like selectors, testing and validation, and applying themes with the v-theme directive."
                 },
                 {
+                    "name": "custom-theme-tutorial.md",
+                    "path": "/themes/custom-theme-tutorial",
+                    "category": "Tutorial",
+                    "summary": "End-to-end tutorial for building, packaging, and installing a custom OR3 theme. Walks through scaffolding with the CLI, defining a full Material Design 3 color palette (light + dark), adding component overrides, icon overrides, Nuxt UI slot patches, scoped CSS, and background images. Covers creating the or3.manifest.json, zipping the theme correctly, installing via the admin panel or API, and uninstalling. Uses the built-in Cyberpunk theme as a reference throughout."
+                },
+                {
                     "name": "api-reference.md",
                     "path": "/themes/api-reference",
                     "category": "Reference",
