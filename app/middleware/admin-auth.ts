@@ -24,7 +24,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
             },
         });
 
-        if (data.authenticated) {
+        if (data.authenticated && data.kind === 'super_admin') {
             return;
         }
 

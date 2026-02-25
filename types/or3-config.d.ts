@@ -55,6 +55,12 @@ export interface Or3Config {
          * @default "blank"
          */
         defaultTheme?: string;
+
+        /**
+         * Themes that users cannot select. Comma-separated IDs in env var.
+         * @default []
+         */
+        disabledThemes?: string[];
     };
 
     /**
@@ -199,6 +205,7 @@ export interface ResolvedOr3Config {
         logoUrl: string;
         faviconUrl: string;
         defaultTheme: string;
+        disabledThemes: string[];
     };
     features: {
         workflows: {

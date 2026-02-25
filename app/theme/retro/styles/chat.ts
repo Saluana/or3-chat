@@ -150,7 +150,6 @@ export const chatCssSelectors = {
             borderRadius: 'var(--md-border-radius)',
             border: 'var(--md-border-width) solid var(--md-border-color)',
             overflow: 'hidden',
-            boxShadow: '2px 2px 0 var(--md-border-color)',
             marginTop: '8px',
             marginBottom: '8px',
         },

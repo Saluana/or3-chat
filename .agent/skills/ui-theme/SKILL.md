@@ -1,11 +1,73 @@
 ---
-name: Or3 Theming skill
-description: How to develop UI components and work with the OR3 theme system
+name: OR3 UI Theme + Design
+description: Design and implement polished OR3 UI using the OR3 theme system (Nuxt UI variants in app.config.ts, v-theme overrides, theme icons/backgrounds). Use for new screens/components, redesigns, theme creation/migration, and "make this look pro" visual polish while preserving the retro look.
 ---
 
-# UI/UX & Theme System Skill
+# UI Theme + Design Skill
 
-This skill covers the OR3 theme engine, component theming, and plugin development.
+You are a senior product designer and front-end engineer working inside the OR3 Chat codebase.
+
+Goal: ship UI that feels intentional (clear hierarchy, good spacing, strong typography), while staying inside OR3's theming system. Do not introduce a new styling system or one-off CSS that bypasses theme tokens.
+
+---
+
+## Default Workflow (Design Like A Pro)
+
+1. **Clarify the brief (fast)**:
+   - What screen/component and which states: default, hover/active/focus, loading, empty, error?
+   - Which density (compact/normal/cozy) and breakpoints (mobile/desktop) must look great?
+   - Ask for a reference screenshot or example (the user already provided good ones) and name what to borrow: typography, spacing, depth, background, motion.
+
+2. **Design in layers (don't jump to colors first)**:
+   - **Layout**: spacing, alignment, grid, grouping, whitespace.
+   - **Hierarchy**: type scale/weight, contrast, primary vs secondary actions.
+   - **Skin**: theme tokens, borders, shadows, backgrounds, motion.
+
+3. **Implement using OR3 primitives**:
+   - Prefer **Nuxt UI components** and variants in `app/app.config.ts` (or theme-level `ui` patches).
+   - Use `v-theme` for any themed component. Use contexts + identifiers (`chat.send`, `sidebar.new-chat`) so themes can override cleanly.
+   - Extend variants in one place (avoid "random Tailwind soup" in components).
+
+4. **Polish pass**:
+   - Add states (hover/active/focus/disabled) with consistent affordances.
+   - Verify contrast, focus rings, and keyboard navigation.
+   - Add subtle motion only where it clarifies state changes (respect reduced motion).
+
+5. **Deliverables**:
+   - Summarize the visual intent in 3-6 bullets.
+   - List files changed and why (tokens/variants/overrides vs component code).
+
+---
+
+## Fast Design Heuristics (What "Pro" Usually Means)
+
+- **Hierarchy**: 1 primary action per surface; secondary actions visually quieter.
+- **Whitespace**: increase spacing before adding borders/shadows; group by proximity.
+- **Typography**: fewer sizes, larger jumps; use weight/size/opacity to create lanes of attention.
+- **Color**: start neutral; use one strong accent; keep saturation under control in dense UIs.
+- **Depth**: pick one shadow language; be consistent (OR3's retro look prefers hard borders + restrained shadows).
+- **Backgrounds**: avoid flat emptiness; use subtle patterns/gradients/shapes, but keep contrast low so content wins.
+
+For deeper guidance and inspiration, read:
+- `./references/design-playbook.md`
+- `./references/inspiration.md`
+
+---
+
+## Theme Documentation (Internal)
+
+These docs are indexed in `public/_documentation/docmap.json` under the "Themes" section:
+
+- Architecture: `public/_documentation/themes/architecture.md` (route: `/themes/architecture`)
+- Quick start: `public/_documentation/themes/quick-start.md` (route: `/themes/quick-start`)
+- API reference: `public/_documentation/themes/api-reference.md` (route: `/themes/api-reference`)
+- Best practices: `public/_documentation/themes/best-practices.md` (route: `/themes/best-practices`)
+- CSS selectors: `public/_documentation/themes/css-selectors.md` (route: `/themes/css-selectors`)
+- Theme icons: `public/_documentation/themes/theme-icons.md` (route: `/themes/theme-icons`)
+- Troubleshooting: `public/_documentation/themes/troubleshooting.md` (route: `/themes/troubleshooting`)
+- Migration guide: `public/_documentation/themes/migration-guide.md` (route: `/themes/migration-guide`)
+
+Use them to avoid re-deriving selector rules, CLI commands, and resolver behavior.
 
 ---
 
@@ -52,6 +114,8 @@ This skill covers the OR3 theme engine, component theming, and plugin developmen
 | **Theme Plugins** | `app/plugins/90.theme.*.ts` | Load and apply themes |
 | **Auto Theme** | `app/plugins/91.auto-theme.client.ts` | Light/dark mode detection |
 | **Core Theme** | `app/core/theme/` | Backgrounds, user overrides |
+| **Nuxt UI Variants** | `app/app.config.ts` | App-wide Nuxt UI component slots/variants (retro defaults) |
+| **Root App Config** | `app.config.ts` | Base Nuxt UI config (keep changes minimal; themes may patch via `theme.ui`) |
 | **Icon Registry** | `app/theme/_shared/icon-registry.ts` | Theme-aware icons |
 
 ---
@@ -73,7 +137,9 @@ Themes are discovered via `import.meta.glob` from `app/theme/*/theme.ts` (exclud
 
 ## 2. Creating a Theme
 
-### Minimal Example
+Follow the internal quick start first: `public/_documentation/themes/quick-start.md`.
+
+### Minimal Example (for reference)
 
 ```typescript
 // app/theme/my-theme/theme.ts

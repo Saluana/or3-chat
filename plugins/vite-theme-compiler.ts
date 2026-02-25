@@ -7,8 +7,12 @@
 
 import type { Plugin } from 'vite';
 import type { PluginContext } from 'rollup';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { ThemeCompiler } from '../scripts/theme-compiler';
 import type { CompilationResult } from '../app/theme/_shared/types';
+
+const execFileAsync = promisify(execFile);
 
 export interface ThemePluginOptions {
     /** Whether to fail the build on compilation errors (default: true) */
@@ -121,48 +125,48 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
          * Handle HMR updates for theme files
          */
         async handleHotUpdate({ file, server }) {
-            // Check if the changed file is a theme file or icon config
-            if (
-                file.includes('/theme/') &&
-                (file.endsWith('theme.ts') || file.endsWith('icons.config.ts'))
-            ) {
-                console.log(
-                    '[theme-compiler] Theme file changed, recompiling...'
-                );
+            const normalized = file.replace(/\\/g, '/');
 
-                // Reset compilation flag to allow recompilation
-                compiled = false;
+            // Only handle .ts files under app/theme/<name>/ (skip _shared)
+            const markerIdx = normalized.indexOf('/app/theme/');
+            if (markerIdx === -1) return;
 
-                try {
-                    if (!compiler) {
-                        compiler = new ThemeCompiler();
-                    }
+            const rel = normalized.slice(markerIdx + '/app/theme/'.length);
+            if (rel.startsWith('_')) return;
+
+            const isEntryFile =
+                file.endsWith('theme.ts') || file.endsWith('icons.config.ts');
+
+            console.log(`[theme-compiler] Theme file changed: ${rel}`);
+
+            try {
+                // For entry files, also recompile theme definitions & types
+                if (isEntryFile) {
+                    compiled = false;
+                    if (!compiler) compiler = new ThemeCompiler();
                     const result = await compiler.compileAll();
-
                     if (result.totalErrors > 0) {
-                        console.error('[theme-compiler] Recompilation failed');
                         console.error(formatErrors(result));
-                    } else {
-                        console.log(
-                            '[theme-compiler] ✅ Theme recompiled successfully'
-                        );
-
-                        // Trigger full page reload for theme changes
-                        server.ws.send({
-                            type: 'full-reload',
-                            path: '*',
-                        });
                     }
-                } catch (error) {
-                    console.error(
-                        '[theme-compiler] HMR recompilation failed:',
-                        error
-                    );
                 }
 
-                // Return empty array to prevent default HMR
-                return [];
+                // Rebuild CSS via subprocess (fresh process = no ESM cache)
+                const runtime = process.versions.bun ? process.execPath : 'bun';
+                await execFileAsync(runtime, ['run', 'scripts/build-theme-css.ts'], {
+                    cwd: process.cwd(),
+                });
+
+                console.log('[theme-compiler] ✅ Theme CSS rebuilt');
+
+                server.ws.send({
+                    type: 'full-reload',
+                    path: '*',
+                });
+            } catch (error) {
+                console.error('[theme-compiler] HMR rebuild failed:', error);
             }
+
+            return [];
         },
     };
 }

@@ -45,6 +45,11 @@ type AdminApiOptions = {
      * Use for sensitive operations like password changes, system configuration.
      */
     superAdminOnly?: boolean;
+    /**
+     * Allow workspace-admin principals to access this endpoint.
+     * Defaults to false (super-admin-only).
+     */
+    allowWorkspaceAdmin?: boolean;
 };
 
 /**
@@ -135,6 +140,14 @@ export async function requireAdminApiContext(
     }
 
     requireAdminContext(event, context);
+
+    const workspaceAdminAllowed = options.allowWorkspaceAdmin ?? false;
+    if (!isSuperAdmin(context) && !workspaceAdminAllowed) {
+        throw createError({
+            statusCode: 403,
+            statusMessage: 'Forbidden: Super admin access required',
+        });
+    }
 
     // Check super admin requirement
     if (options.superAdminOnly && !isSuperAdmin(context)) {

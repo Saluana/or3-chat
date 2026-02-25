@@ -250,7 +250,7 @@
             >
                 <div class="max-w-5xl mx-auto flex items-center justify-between">
                     <div class="flex items-center gap-3">
-                        <UIcon name="i-heroicons-building-office" class="w-5 h-5 text-[var(--md-on-surface-variant)]" />
+                        <UIcon :name="workspaceIcon" class="w-5 h-5 text-[var(--md-on-surface-variant)]" />
                         <div>
                             <span class="text-sm text-[var(--md-on-surface-variant)]">Working in:</span>
                             <span class="text-sm font-medium text-[var(--md-on-surface)] ml-1">{{ selectedWorkspace?.name }}</span>
@@ -260,7 +260,7 @@
                         size="sm"
                         color="neutral"
                         variant="soft"
-                        icon="i-heroicons-arrow-path"
+                        :icon="refreshIcon"
                         @click="openWorkspaceSelector"
                     >
                         Change
@@ -279,6 +279,8 @@
             v-model="isConfirmOpen"
             :title="confirmOptions.title"
             :message="confirmOptions.message"
+            :important-note="confirmOptions.importantNote"
+            :note-tone="confirmOptions.noteTone"
             :confirm-text="confirmOptions.confirmText"
             :danger="confirmOptions.danger"
             @confirm="onConfirm"
@@ -290,7 +292,7 @@
         <div class="flex items-center justify-center h-screen bg-[var(--md-surface)]">
             <div class="text-center max-w-md mx-auto p-8">
                 <div class="mb-6">
-                    <UIcon name="i-heroicons-exclamation-triangle" class="w-16 h-16 mx-auto text-[var(--md-sys-color-error)]" />
+                    <UIcon :name="warningIcon" class="w-16 h-16 mx-auto text-[var(--md-sys-color-error)]" />
                 </div>
                 <h1 class="text-2xl font-bold mb-4 text-[var(--md-on-surface)]">Something went wrong</h1>
                 <p class="text-[var(--md-on-surface-variant)] mb-6">{{ error?.message || 'An unexpected error occurred' }}</p>
@@ -306,6 +308,7 @@
 <script setup lang="ts">
 import { useAdminPages } from '~/composables/admin/useAdminPlugins';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
+import { useAdminSession } from '~/composables/admin/useAdminData';
 import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
 import WorkspaceIndicator from '~/components/admin/WorkspaceIndicator.vue';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
@@ -317,6 +320,7 @@ const appVersion =
 
 const route = useRoute();
 const adminPages = useAdminPages();
+const { data: adminSession } = useAdminSession();
 const { getMessage } = useApiError();
 const { isOpen: isConfirmOpen, options: confirmOptions, onConfirm, onCancel } = useConfirmDialog();
 
@@ -360,10 +364,13 @@ const logoutIcon = useIcon('ui.logout');
 
 // Nav link icons (Issue 27: Move useIcon calls to top level)
 const homeIcon = useIcon('dashboard.home');
-const userIcon = useIcon('sidebar.user');
+const workspacesIcon = useIcon('admin.workspaces');
+const workspaceIcon = useIcon('admin.workspace');
 const pluginsIcon = useIcon('dashboard.plugins');
 const settingsIcon = useIcon('dashboard.settings');
 const systemIcon = useIcon('ui.settings');
+const refreshIcon = useIcon('ui.refresh');
+const warningIcon = useIcon('ui.warning');
 
 const toast = useToast();
 
@@ -432,14 +439,25 @@ interface NavLink {
     icon: string;
 }
 
+const isSuperAdmin = computed(
+    () => adminSession.value?.kind === 'super_admin'
+);
+
 const navLinks = computed<NavLink[]>(() => {
     const base: NavLink[] = [
         { label: 'Overview', to: '/admin', icon: homeIcon.value },
-        { label: 'Workspaces', to: '/admin/workspaces', icon: userIcon.value },
         { label: 'Plugins', to: '/admin/plugins', icon: pluginsIcon.value },
         { label: 'Themes', to: '/admin/themes', icon: settingsIcon.value },
         { label: 'System', to: '/admin/system', icon: systemIcon.value },
     ];
+
+    if (isSuperAdmin.value) {
+        base.splice(1, 0, {
+            label: 'Workspaces',
+            to: '/admin/workspaces',
+            icon: workspacesIcon.value,
+        });
+    }
     
     // Sort logic or visual separators could be added here
     const pluginLinks = adminPages.value.map((page) => ({

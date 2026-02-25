@@ -1,4 +1,5 @@
 import { ref, watch, type Ref } from 'vue';
+import { useAdminSession } from '~/composables/admin/useAdminData';
 import { useAdminWorkspaceContext } from '~/composables/admin/useAdminWorkspaceContext';
 
 export function useAdminWorkspaceGate(
@@ -6,7 +7,17 @@ export function useAdminWorkspaceGate(
 ) {
     const { hasWorkspace, selectWorkspace, selectedWorkspaceId } =
         useAdminWorkspaceContext();
-    const showWorkspaceSelector = ref(!hasWorkspace.value);
+    const { data: session } = useAdminSession();
+    const showWorkspaceSelector = ref(false);
+
+    watch(
+        [hasWorkspace, () => session.value?.kind],
+        ([hasSelectedWorkspace, adminKind]) => {
+            showWorkspaceSelector.value =
+                adminKind === 'super_admin' && !hasSelectedWorkspace;
+        },
+        { immediate: true }
+    );
 
     function onWorkspaceSelected(workspace: unknown) {
         selectWorkspace(workspace as never);
@@ -14,7 +25,9 @@ export function useAdminWorkspaceGate(
 
     watch(selectedWorkspaceId, (newId) => {
         if (!newId) {
-            showWorkspaceSelector.value = true;
+            if (session.value?.kind === 'super_admin') {
+                showWorkspaceSelector.value = true;
+            }
             return;
         }
         showWorkspaceSelector.value = false;

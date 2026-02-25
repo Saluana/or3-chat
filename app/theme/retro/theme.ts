@@ -150,6 +150,19 @@ export default defineTheme({
             image: null,
             color: 'transparent',
         },
+        dark: {
+            content: {
+                base: {
+                    opacity: 0.02,
+                },
+                overlay: {
+                    opacity: 0.03,
+                },
+            },
+            sidebar: {
+                opacity: 0.04,
+            },
+        },
     },
 
     fonts: {

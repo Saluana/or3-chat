@@ -152,6 +152,7 @@ const brandingConfig = {
     appName: or3Config.site.name,
     logoUrl: or3Config.site.logoUrl,
     defaultTheme: or3Config.site.defaultTheme,
+    disabledThemes: or3Config.site.disabledThemes,
 };
 const legalConfig = {
     termsUrl: or3Config.legal.termsUrl,
@@ -399,6 +400,7 @@ export default defineNuxtConfig({
                     logoUrl: or3Config.site.logoUrl,
                     faviconUrl: or3Config.site.faviconUrl,
                     defaultTheme: or3Config.site.defaultTheme,
+                    disabledThemes: or3Config.site.disabledThemes,
                 },
                 limits: {
                     maxFileSizeBytes: or3Config.limits.maxFileSizeBytes,

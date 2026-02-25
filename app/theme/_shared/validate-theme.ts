@@ -217,6 +217,27 @@ export function validateThemeDefinition(
             config.backgrounds.bottomNavGradient,
             'backgrounds.bottomNavGradient'
         );
+
+        validateLayer(
+            config.backgrounds.dark?.content?.base,
+            'backgrounds.dark.content.base'
+        );
+        validateLayer(
+            config.backgrounds.dark?.content?.overlay,
+            'backgrounds.dark.content.overlay'
+        );
+        validateLayer(
+            config.backgrounds.dark?.sidebar,
+            'backgrounds.dark.sidebar'
+        );
+        validateLayer(
+            config.backgrounds.dark?.headerGradient,
+            'backgrounds.dark.headerGradient'
+        );
+        validateLayer(
+            config.backgrounds.dark?.bottomNavGradient,
+            'backgrounds.dark.bottomNavGradient'
+        );
     }
 
     // Validate propMaps if present

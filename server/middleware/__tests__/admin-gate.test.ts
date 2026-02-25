@@ -3,8 +3,12 @@ import type { H3Event } from 'h3';
 import { testRuntimeConfig } from '../../../tests/setup';
 import adminGate from '../admin-gate';
 
+const resolveAdminRequestContextMock = vi.hoisted(() =>
+    vi.fn().mockResolvedValue(null)
+);
+
 vi.mock('../../admin/context', () => ({
-    resolveAdminRequestContext: vi.fn().mockResolvedValue(null),
+    resolveAdminRequestContext: resolveAdminRequestContextMock,
 }));
 
 function makeEvent(input: {
@@ -12,12 +16,25 @@ function makeEvent(input: {
     method: string;
     headers: Record<string, string>;
 }): H3Event {
+    const responseHeaders: Record<string, string> = {};
     return {
         path: input.path,
         method: input.method,
         node: {
             req: {
                 headers: input.headers,
+            },
+            res: {
+                statusCode: 200,
+                setHeader(name: string, value: string) {
+                    responseHeaders[name.toLowerCase()] = value;
+                },
+                getHeader(name: string) {
+                    return responseHeaders[name.toLowerCase()];
+                },
+                end() {
+                    return undefined;
+                },
             },
         },
         context: {},
@@ -26,6 +43,7 @@ function makeEvent(input: {
 
 describe('admin-gate proxy host allowlist', () => {
     beforeEach(() => {
+        resolveAdminRequestContextMock.mockReset().mockResolvedValue(null);
         testRuntimeConfig.value = {
             ...testRuntimeConfig.value,
             admin: {
@@ -96,5 +114,80 @@ describe('admin-gate proxy host allowlist', () => {
         });
 
         await expect(adminGate(event)).resolves.toBeUndefined();
+    });
+
+    it('redirects super admin login to workspaces', async () => {
+        resolveAdminRequestContextMock.mockResolvedValue({
+            principal: { kind: 'super_admin', username: 'root' },
+        });
+
+        const event = makeEvent({
+            path: '/admin/login',
+            method: 'GET',
+            headers: {
+                host: 'internal.local',
+                'x-forwarded-host': 'admin.example.com',
+            },
+        });
+
+        await expect(adminGate(event)).resolves.toBeUndefined();
+        expect(event.node.res.statusCode).toBe(307);
+        expect(event.node.res.getHeader('location')).toBe('/admin/workspaces');
+    });
+
+    it('keeps workspace admin on login page', async () => {
+        resolveAdminRequestContextMock.mockResolvedValue({
+            principal: {
+                kind: 'workspace_admin',
+                userId: 'u_1',
+                session: {
+                    authenticated: true,
+                },
+            },
+            session: {
+                authenticated: true,
+            },
+        });
+
+        const event = makeEvent({
+            path: '/admin/login',
+            method: 'GET',
+            headers: {
+                host: 'internal.local',
+                'x-forwarded-host': 'admin.example.com',
+            },
+        });
+
+        await expect(adminGate(event)).resolves.toBeUndefined();
+        expect(event.node.res.statusCode).toBe(200);
+        expect(event.node.res.getHeader('location')).toBeUndefined();
+    });
+
+    it('redirects workspace admin away from protected admin UI routes', async () => {
+        resolveAdminRequestContextMock.mockResolvedValue({
+            principal: {
+                kind: 'workspace_admin',
+                userId: 'u_1',
+                session: {
+                    authenticated: true,
+                },
+            },
+            session: {
+                authenticated: true,
+            },
+        });
+
+        const event = makeEvent({
+            path: '/admin/system',
+            method: 'GET',
+            headers: {
+                host: 'internal.local',
+                'x-forwarded-host': 'admin.example.com',
+            },
+        });
+
+        await expect(adminGate(event)).resolves.toBeUndefined();
+        expect(event.node.res.statusCode).toBe(307);
+        expect(event.node.res.getHeader('location')).toBe('/admin/login');
     });
 });

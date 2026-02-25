@@ -169,7 +169,9 @@ export async function loadThemeCSS(themeName: string): Promise<void> {
     return new Promise((resolve) => {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = `/themes/${themeName}.css`;
+        link.href = import.meta.dev
+            ? `/themes/${themeName}.css?t=${Date.now()}`
+            : `/themes/${themeName}.css`;
         link.setAttribute('data-theme-css', themeName);
 
         link.onload = () => resolve();

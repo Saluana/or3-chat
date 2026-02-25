@@ -50,5 +50,5 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    return { ok: true };
+    return { ok: true, restartRequired: body.data.kind === 'theme' };
 });

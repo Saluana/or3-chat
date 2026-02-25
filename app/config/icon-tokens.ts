@@ -124,6 +124,10 @@ export const DEFAULT_ICONS = {
     'dashboard.backup': 'pixelarticons:briefcase-download',
     'dashboard.restore': 'pixelarticons:briefcase-upload',
 
+    // Admin
+    'admin.workspace': 'pixelarticons:building',
+    'admin.workspaces': 'pixelarticons:buildings',
+
     // Documents / Editor
     'editor.code': 'pixelarticons:code',
     'editor.list': 'pixelarticons:list',

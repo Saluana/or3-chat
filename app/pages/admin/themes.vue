@@ -18,11 +18,7 @@
             <div class="h-40 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
         </div>
 
-        <div v-else-if="themes.length === 0" class="text-sm opacity-70 py-8 text-center bg-[var(--md-surface-container-low)] rounded">
-                No themes installed.
-        </div>
-
-        <div v-else class="space-y-6">
+        <template v-else>
             <!-- Restart Required Banner -->
             <div v-if="restartRequired" class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)] flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
@@ -33,7 +29,7 @@
                     </div>
                 </div>
                 <UButton
-                    size="xs"
+                    size="sm"
                     color="error"
                     variant="solid"
                     :disabled="!isOwner || !statusData?.status?.admin?.allowRestart"
@@ -55,58 +51,97 @@
                         class="hidden"
                         @change="installTheme"
                     />
-                    <UButton size="xs" :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
+                    <UButton size="sm" :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
                         Install .zip
                     </UButton>
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div v-if="adminThemes.length === 0" class="text-sm opacity-70 py-8 text-center bg-[var(--md-surface-container-low)] rounded">
+                No themes installed.
+            </div>
+
+            <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div
-                    v-for="theme in themes"
+                    v-for="theme in adminThemes"
                     :key="theme.id"
-                    class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] hover:bg-[var(--md-surface-container-low)] transition-colors flex flex-col h-full"
+                    class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] hover:bg-[var(--md-surface-container-low)] transition-colors flex flex-col"
                 >
-                    <div class="flex-1">
-                        <div class="flex items-center justify-between mb-2">
-                             <div class="font-semibold text-lg">{{ theme.name }}</div>
-                             <UBadge v-if="defaultTheme === theme.id" color="primary" variant="subtle">Default</UBadge>
-                        </div>
-                        <div class="text-xs opacity-70 font-mono mb-2">{{ theme.id }} • v{{ theme.version }}</div>
-                        <div v-if="theme.description" class="text-sm opacity-80 line-clamp-2 mb-4">
-                            {{ theme.description }}
+                    <!-- Header -->
+                    <div class="flex items-start justify-between gap-2 mb-1">
+                        <h4 class="font-semibold text-base leading-tight">{{ theme.name }}</h4>
+                        <div class="flex items-center gap-1 shrink-0">
+                            <UBadge v-if="activeTheme === theme.id" color="success" variant="subtle" size="xs">Active</UBadge>
+                            <UBadge v-if="defaultTheme === theme.id" color="primary" variant="subtle" size="xs">Default</UBadge>
+                            <UBadge v-if="disabledThemes.has(theme.id)" color="error" variant="subtle" size="xs">Disabled</UBadge>
+                            <UBadge v-if="theme.isBuiltIn && !theme.isInstalledExtension" color="neutral" variant="subtle" size="xs">Built-in</UBadge>
                         </div>
                     </div>
-                    
-                    <div class="pt-4 mt-auto border-t border-[var(--md-outline-variant)]/50 flex items-center justify-between gap-2">
+
+                    <!-- Meta -->
+                    <div class="text-xs opacity-50 font-mono mb-2">
+                        {{ theme.id }}<span v-if="theme.version"> • v{{ theme.version }}</span>
+                    </div>
+
+                    <!-- Description -->
+                    <p v-if="theme.description" class="text-sm opacity-70 line-clamp-2 mb-0 flex-1">
+                        {{ theme.description }}
+                    </p>
+                    <div v-else class="flex-1" />
+
+                    <!-- Actions -->
+                    <div class="pt-3 mt-3 border-t border-[var(--md-outline-variant)]/30 flex items-center gap-2">
                         <UButton
                             size="xs"
-                            :color="defaultTheme === theme.id ? 'neutral' : 'primary'"
-                            :variant="defaultTheme === theme.id ? 'soft' : 'solid'"
+                            class="w-fit px-1.5!"
+                            color="neutral"
+                            variant="soft"
+                            :disabled="activeTheme === theme.id || disabledThemes.has(theme.id)"
+                            @click="activateTheme(theme.id)"
+                        >
+                            Activate
+                        </UButton>
+                        <UButton
+                            size="xs"
+                            class="w-fit px-1.5!"
+                            variant="soft"
                             :disabled="!isOwner || defaultTheme === theme.id"
                             @click="setDefaultTheme(theme.id)"
                         >
-                            {{ defaultTheme === theme.id ? 'Active' : 'Set Default' }}
+                            Set Default
                         </UButton>
-                         <UButton
+                        <UButton
                             size="xs"
+                            class="w-fit px-1.5!"
+                            :color="disabledThemes.has(theme.id) ? 'success' : 'warning'"
+                            variant="soft"
+                            :disabled="!isOwner || defaultTheme === theme.id"
+                            @click="toggleThemeDisabled(theme.id)"
+                        >
+                            {{ disabledThemes.has(theme.id) ? 'Enable' : 'Disable' }}
+                        </UButton>
+                        <div class="flex-1" />
+                        <UButton
+                            v-if="theme.isInstalledExtension"
+                            size="xs"
+                            icon="i-lucide-trash-2"
+                            class="aspect-square p-0!"
                             color="error"
                             variant="ghost"
                             :disabled="!isOwner"
+                            :aria-label="`Uninstall ${theme.id}`"
                             @click="uninstallTheme(theme.id)"
-                        >
-                            Uninstall
-                        </UButton>
+                        />
                     </div>
                 </div>
             </div>
             </div>
-        </div>
+        </template>
     </div>
 </template>
 
 <script setup lang="ts">
-import { installExtension, uninstallExtension, ADMIN_HEADERS, type ExtensionItem } from '~/composables/admin/useAdminExtensions';
+import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
 import { useAdminExtensions, useAdminSystemConfig, useAdminWorkspace, useAdminSystemStatus } from '~/composables/admin/useAdminData';
 import { useAdminAuth } from '~/composables/admin/useAdminAuth';
 import { useExtensionManagement } from '~/composables/admin/useExtensionManagement';
@@ -114,6 +149,7 @@ import { useServerRestart } from '~/composables/admin/useServerRestart';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
 import { useAdminWorkspaceGate } from '~/composables/admin/useAdminWorkspaceGate';
+import { useNuxtApp } from '#imports';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
 
 definePageMeta({
@@ -138,29 +174,135 @@ const pending = computed(() => extStatus.value === 'pending' || workspaceStatus.
 const themes = computed(
     () => (data.value?.items ?? []).filter((i) => i.kind === 'theme')
 );
+const builtInThemes = ref<Array<{ id: string; name: string; description?: string }>>([]);
+
+const adminThemes = computed(() => {
+    const map = new Map<string, {
+        id: string;
+        name: string;
+        description?: string;
+        version?: string;
+        isBuiltIn: boolean;
+        isInstalledExtension: boolean;
+    }>();
+
+    for (const theme of builtInThemes.value) {
+        map.set(theme.id, {
+            id: theme.id,
+            name: theme.name,
+            description: theme.description,
+            isBuiltIn: true,
+            isInstalledExtension: false,
+        });
+    }
+
+    for (const theme of themes.value) {
+        const existing = map.get(theme.id);
+        map.set(theme.id, {
+            id: theme.id,
+            name: theme.name,
+            description: theme.description || existing?.description,
+            version: theme.version,
+            isBuiltIn: Boolean(existing?.isBuiltIn),
+            isInstalledExtension: true,
+        });
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+});
 
 const { isOwner } = useAdminAuth(workspaceData);
-const { fileInput, triggerFileInput, install, uninstall } = useExtensionManagement(isOwner);
+const { fileInput, triggerFileInput, install } = useExtensionManagement(isOwner);
 const { restart, restartRequired } = useServerRestart(
     isOwner,
     computed(() => statusData.value?.status?.admin?.allowRestart)
 );
 const { confirm } = useConfirmDialog();
+const nuxtApp = useNuxtApp();
 const toast = useToast();
+const activeTheme = computed(() => {
+    const themeApi = (nuxtApp as unknown as {
+        $theme?: { activeTheme?: { value?: string } };
+    }).$theme;
+    return themeApi?.activeTheme?.value ?? '';
+});
+
+onMounted(async () => {
+    try {
+        const { loadThemeManifest } = await import('~/theme/_shared/theme-manifest');
+        const manifest = await loadThemeManifest();
+        builtInThemes.value = manifest.map((entry) => ({
+            id: entry.name,
+            name: entry.definition?.displayName || entry.name,
+            description: entry.definition?.description,
+        }));
+    } catch {
+        builtInThemes.value = [
+            { id: 'retro', name: 'Retro' },
+            { id: 'blank', name: 'Blank' },
+        ];
+    }
+});
 
 const defaultTheme = computed(() => {
     const entry = configData.value?.entries?.find((e) => e.key === 'OR3_DEFAULT_THEME');
     return entry?.value ?? '';
 });
 
+const disabledThemes = computed(() => {
+    const entry = configData.value?.entries?.find((e) => e.key === 'OR3_DISABLED_THEMES');
+    const raw = entry?.value ?? '';
+    return new Set(raw.split(',').map(s => s.trim()).filter(Boolean));
+});
+
+async function toggleThemeDisabled(themeId: string) {
+    if (!isOwner.value) return;
+    const current = new Set(disabledThemes.value);
+    const enabling = current.has(themeId);
+    if (enabling) {
+        current.delete(themeId);
+    } else {
+        current.add(themeId);
+    }
+    try {
+        const res = await $fetch<{ ok: boolean; restartRequired?: boolean }>('/api/admin/system/config/write', {
+            method: 'POST',
+            headers: ADMIN_HEADERS,
+            body: { entries: [{ key: 'OR3_DISABLED_THEMES', value: [...current].join(',') }] },
+        });
+        if (res.restartRequired) {
+            restartRequired.value = true;
+        }
+        toast.add({
+            title: enabling ? 'Theme enabled' : 'Theme disabled',
+            description: enabling
+                ? `"${themeId}" is now available to users.`
+                : `"${themeId}" is now hidden from users.`,
+            color: 'success',
+        });
+        await refresh();
+    } catch (error: unknown) {
+        const message = parseErrorMessage(error, 'Failed to update disabled themes');
+        toast.add({ title: 'Error', description: message, color: 'error' });
+    }
+}
+
 async function installTheme() {
     try {
         await install('theme', refresh);
+        restartRequired.value = true;
         toast.add({
             title: 'Theme installed',
-            description: 'The theme has been installed successfully.',
-            color: 'success',
+            description: 'The theme has been installed. Restart is required before it can be used reliably.',
+            color: 'info',
         });
+        if (import.meta.dev) {
+            toast.add({
+                title: 'Manual restart required in dev',
+                description: 'Please restart the dev server manually (Ctrl+C, then bun run dev:ssr).',
+                color: 'warning',
+            });
+        }
     } catch (error: unknown) {
         const message = parseErrorMessage(error, 'Failed to install theme');
         toast.add({ title: 'Error', description: message, color: 'error' });
@@ -169,12 +311,63 @@ async function installTheme() {
 
 async function uninstallTheme(themeId: string) {
     try {
-        await uninstall(themeId, 'theme', refresh);
+        if (!isOwner.value) return;
+
+        const confirmed = await confirm({
+            title: 'Uninstall Theme',
+            message: `Are you sure you want to uninstall "${themeId}"?`,
+            confirmText: 'Uninstall',
+            danger: true,
+            importantNote:
+                'Important: In development mode you must restart the dev server manually after install/uninstall to fully apply theme and icon changes.',
+            noteTone: 'warning',
+        });
+
+        if (!confirmed) return;
+
+        const themeApi = (nuxtApp as unknown as {
+            $theme?: {
+                activeTheme?: { value?: string };
+                setActiveTheme?: (name: string) => Promise<void>;
+            };
+        }).$theme;
+
+        const activeThemeName = themeApi?.activeTheme?.value;
+        if (activeThemeName === themeId && themeApi?.setActiveTheme) {
+            const fallback = defaultTheme.value && defaultTheme.value !== themeId
+                ? defaultTheme.value
+                : 'retro';
+            await themeApi.setActiveTheme(fallback);
+        }
+
+        if (defaultTheme.value === themeId) {
+            const fallbackDefault = themeId === 'retro' ? 'blank' : 'retro';
+            await $fetch('/api/admin/system/config/write', {
+                method: 'POST',
+                headers: ADMIN_HEADERS,
+                body: { entries: [{ key: 'OR3_DEFAULT_THEME', value: fallbackDefault }] },
+            });
+        }
+
+        await $fetch('/api/admin/extensions/uninstall', {
+            method: 'POST',
+            headers: ADMIN_HEADERS,
+            body: { id: themeId, kind: 'theme' },
+        });
+        await refresh();
+        restartRequired.value = true;
         toast.add({
             title: 'Theme uninstalled',
-            description: 'The theme has been removed.',
-            color: 'success',
+            description: 'The theme has been removed. Restart is required to fully flush cached theme modules.',
+            color: 'info',
         });
+        if (import.meta.dev) {
+            toast.add({
+                title: 'Manual restart required in dev',
+                description: 'Please restart the dev server manually (Ctrl+C, then bun run dev:ssr).',
+                color: 'warning',
+            });
+        }
     } catch (error: unknown) {
         const message = parseErrorMessage(error, 'Failed to uninstall theme');
         toast.add({ title: 'Error', description: message, color: 'error' });
@@ -199,6 +392,17 @@ async function setDefaultTheme(themeId: string) {
         if (res.restartRequired) {
             restartRequired.value = true;
         }
+
+        try {
+            const themeApi = (nuxtApp as unknown as {
+                $theme?: { setActiveTheme?: (name: string) => Promise<void> };
+            }).$theme;
+            if (themeApi?.setActiveTheme) {
+                await themeApi.setActiveTheme(themeId);
+            }
+        } catch {
+            // Non-fatal: config update succeeded.
+        }
         
         toast.add({
             title: 'Default theme updated',
@@ -208,6 +412,19 @@ async function setDefaultTheme(themeId: string) {
         await refresh();
     } catch (error: unknown) {
         const message = parseErrorMessage(error, 'Failed to update default theme');
+        toast.add({ title: 'Error', description: message, color: 'error' });
+    }
+}
+
+async function activateTheme(themeId: string) {
+    try {
+        const themeApi = (nuxtApp as unknown as {
+            $theme?: { setActiveTheme?: (name: string) => Promise<void> };
+        }).$theme;
+        if (!themeApi?.setActiveTheme) return;
+        await themeApi.setActiveTheme(themeId);
+    } catch (error: unknown) {
+        const message = parseErrorMessage(error, 'Failed to activate theme');
         toast.add({ title: 'Error', description: message, color: 'error' });
     }
 }

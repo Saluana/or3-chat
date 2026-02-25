@@ -5,6 +5,8 @@ export type ConfirmOptions = {
     message: string;
     confirmText?: string;
     danger?: boolean;
+    importantNote?: string;
+    noteTone?: 'info' | 'warning';
 };
 
 type ConfirmState = {
@@ -20,7 +22,18 @@ const state = reactive<ConfirmState>({
 });
 
 export function useConfirmDialog() {
-    const isOpen = computed(() => state.isOpen);
+    const isOpen = computed({
+        get: () => state.isOpen,
+        set: (val: boolean) => {
+            if (!val && state.isOpen) {
+                // Dismissal via UModal X button or overlay click
+                state.resolve?.(false);
+                state.resolve = null;
+                state.options = null;
+            }
+            state.isOpen = val;
+        },
+    });
     const options = computed(() => state.options);
 
     function confirm(opts: ConfirmOptions): Promise<boolean> {

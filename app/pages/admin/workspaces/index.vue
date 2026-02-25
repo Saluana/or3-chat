@@ -10,14 +10,14 @@
                         to="/admin/admin-users"
                         variant="soft"
                         color="neutral"
-                        icon="i-heroicons-users"
+                        :icon="usersIcon"
                     >
                         Admin Users
                     </UButton>
                     <UButton
                         to="/admin/workspaces/create"
                         color="primary"
-                        icon="i-heroicons-plus"
+                        :icon="plusIcon"
                     >
                         Create Workspace
                     </UButton>
@@ -29,7 +29,7 @@
                 <UInput
                     v-model="search"
                     placeholder="Search workspaces..."
-                    icon="i-heroicons-magnifying-glass"
+                    :icon="searchIcon"
                     class="flex-1 min-w-[200px]"
                 />
                 <USelectMenu
@@ -66,8 +66,8 @@
                 >
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-4">
-                            <div class="w-10 h-10 rounded-lg bg-[var(--md-primary-container)] flex items-center justify-center">
-                                <UIcon name="i-heroicons-building-office" class="w-5 h-5 text-[var(--md-on-primary-container)]" />
+                            <div class="w-10 h-10 rounded-lg bg-[var(--md-surface-container-high)] flex items-center justify-center">
+                                <UIcon :name="workspaceIcon" class="w-5 h-5 text-[var(--md-primary)]" />
                             </div>
                             <div>
                                 <div class="font-medium flex items-center gap-2">
@@ -88,7 +88,7 @@
                             :loading="navigatingTo === workspace.id"
                             variant="ghost"
                             color="neutral"
-                            icon="i-heroicons-arrow-right"
+                            :icon="arrowRightIcon"
                         >
                             View
                         </UButton>
@@ -123,7 +123,7 @@
 
             <!-- Empty State -->
             <div v-else class="text-center py-12">
-                <UIcon name="i-heroicons-building-office" class="w-12 h-12 mx-auto mb-4 opacity-30" />
+                <UIcon :name="workspaceIcon" class="w-12 h-12 mx-auto mb-4 opacity-30" />
                 <p class="text-lg font-medium opacity-70">No workspaces found</p>
                 <p class="text-sm opacity-50">Try adjusting your search or filters</p>
             </div>
@@ -139,6 +139,13 @@ definePageMeta({
     layout: 'admin',
     middleware: ['admin-auth'],
 });
+
+// Icons
+const workspaceIcon = useIcon('admin.workspace');
+const usersIcon = useIcon('sidebar.user');
+const plusIcon = useIcon('ui.plus');
+const searchIcon = useIcon('ui.search');
+const arrowRightIcon = useIcon('ui.chevron.right');
 
 const search = ref('');
 const showDeleted = ref(false);

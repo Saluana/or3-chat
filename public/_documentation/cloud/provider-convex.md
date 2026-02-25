@@ -86,6 +86,16 @@ Direct Convex auth uses token broker flow:
 
 This keeps Clerk-specific token minting out of core sync/storage code.
 
+## Super Admin Bridge (Deployment Admin Grants)
+
+When using Clerk + Convex, there is an additional bridge used by the admin dashboard:
+
+- Logging into `/admin/login` as super admin and having an active Clerk session can auto-grant that Clerk user deployment admin access.
+- The grant is persisted in Convex (`admin_users`) and is not removed by admin logout.
+- This is expected bootstrap behavior, not Clerk role assignment.
+
+See the detailed behavior here: [admin-access-bridge](./admin-access-bridge).
+
 ## Common Issues
 
 ### Provider not loaded
@@ -108,6 +118,7 @@ If `AUTH_PROVIDER=clerk` and Convex is active, install `or3-provider-clerk` so t
 
 - [providers](./providers)
 - [provider-clerk](./provider-clerk)
+- [admin-access-bridge](./admin-access-bridge)
 - [sync-layer](./sync-layer)
 - [storage-layer](./storage-layer)
 - [or3-cloud-config](./or3-cloud-config)

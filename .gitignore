@@ -37,3 +37,7 @@ extensions/**
 !extensions/plugins/.gitkeep
 !extensions/themes/.gitkeep
 !extensions/admin-plugins/.gitkeep
+
+
+test-theme
+test-theme-cyberpunk.zip

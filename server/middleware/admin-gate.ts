@@ -153,9 +153,15 @@ export default defineEventHandler(async (event) => {
 
     // Allow unauthenticated access to login paths (checked after rewrite)
     if (isLoginPath(event.path)) {
-        // Redirect to workspaces if already authenticated
+        // Redirect super admins away from login.
+        // Workspace admins are intentionally kept on the login page so they can
+        // elevate with super-admin credentials when needed.
         const adminContext = await resolveAdminRequestContext(event);
-        if (adminContext && event.path === '/admin/login') {
+        if (
+            adminContext &&
+            adminContext.principal.kind === 'super_admin' &&
+            event.path === '/admin/login'
+        ) {
             return sendRedirect(event, `${basePath}/workspaces`, 307);
         }
         return;
@@ -171,6 +177,17 @@ export default defineEventHandler(async (event) => {
         } else {
             return sendRedirect(event, `${basePath}/login`, 307);
         }
+    }
+
+    // Super-admin-only admin panel/API policy.
+    if (adminContext.principal.kind !== 'super_admin') {
+        if (event.path.startsWith('/api/')) {
+            throw createError({
+                statusCode: 403,
+                statusMessage: 'Forbidden: Super admin access required',
+            });
+        }
+        return sendRedirect(event, `${basePath}/login`, 307);
     }
 
     // Store admin context in event for downstream use
