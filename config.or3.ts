@@ -52,6 +52,9 @@ export const or3Config = defineOr3Config({
         logoUrl: process.env.OR3_LOGO_URL || '',
         faviconUrl: process.env.OR3_FAVICON_URL || '',
         defaultTheme: process.env.OR3_DEFAULT_THEME || 'blank',
+        disabledThemes: process.env.OR3_DISABLED_THEMES
+            ? process.env.OR3_DISABLED_THEMES.split(',').map(s => s.trim()).filter(Boolean)
+            : [],
     },
 
     // All features enabled by default. Set OR3_*_ENABLED=false to disable.

@@ -341,6 +341,12 @@ export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
         group: 'UI & Branding',
         order: 5,
     },
+    'OR3_DISABLED_THEMES': {
+        label: 'Disabled Themes',
+        description: 'Comma-separated list of theme IDs that users cannot select',
+        group: 'UI & Branding',
+        order: 6,
+    },
     'OR3_DEFAULT_PANE_COUNT': {
         label: 'Default Pane Count',
         description: 'Default number of chat panes to display',

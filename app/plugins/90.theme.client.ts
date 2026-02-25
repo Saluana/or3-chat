@@ -142,6 +142,14 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             ? configuredDefaultTheme
             : null;
     const availableThemes = new Set(themeManifest.keys());
+
+    // Build disabled themes set from runtime config
+    const rawDisabledThemes = (runtimeConfig.public as Record<string, unknown>).branding as Record<string, unknown> | undefined;
+    const disabledThemesArray = rawDisabledThemes?.disabledThemes;
+    const disabledThemes = new Set(
+        Array.isArray(disabledThemesArray) ? (disabledThemesArray as string[]).filter(Boolean) : []
+    );
+
     const DEFAULT_THEME =
         normalizedConfiguredDefault &&
         availableThemes.has(normalizedConfiguredDefault)
@@ -536,6 +544,14 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 }
                 return;
             }
+        }
+
+        // Block switching to a disabled theme (unless it's the default — admin wouldn't disable the default)
+        if (disabledThemes.has(target) && target !== DEFAULT_THEME) {
+            if (import.meta.dev) {
+                console.warn(`[theme] Theme "${target}" is disabled. Falling back to "${DEFAULT_THEME}".`);
+            }
+            target = DEFAULT_THEME;
         }
 
         const available = await ensureThemeLoaded(target);

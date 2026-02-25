@@ -137,7 +137,11 @@ export default defineEventHandler(async (event) => {
             kind: manifest.kind,
             version: manifest.version,
         });
-        return { ok: true, manifest };
+        return {
+            ok: true,
+            manifest,
+            restartRequired: manifest.kind === 'theme',
+        };
     } catch (error) {
         throw createError({
             statusCode: 400,

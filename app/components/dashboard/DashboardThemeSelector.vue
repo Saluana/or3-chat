@@ -45,7 +45,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useNuxtApp, useIcon } from '#imports';
+import { useNuxtApp, useIcon, useRuntimeConfig } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 
@@ -57,9 +57,21 @@ interface ThemeInfo {
 
 const nuxtApp = useNuxtApp();
 const themePlugin = nuxtApp.$theme as ThemePlugin;
+const runtimeConfig = useRuntimeConfig();
 
-const availableThemes = ref<ThemeInfo[]>([]);
+const allThemes = ref<ThemeInfo[]>([]);
 const activeTheme = computed(() => themePlugin?.activeTheme?.value || 'retro');
+
+const disabledThemes = computed(() => {
+    const raw = (runtimeConfig.public as Record<string, unknown>).branding as Record<string, unknown> | undefined;
+    const list = raw?.disabledThemes;
+    if (Array.isArray(list)) return new Set(list as string[]);
+    return new Set<string>();
+});
+
+const availableThemes = computed(() =>
+    allThemes.value.filter(t => !disabledThemes.value.has(t.name))
+);
 
 onMounted(async () => {
     // Load available themes from manifest
@@ -68,7 +80,7 @@ onMounted(async () => {
             '~/theme/_shared/theme-manifest'
         );
         const manifest = await loadThemeManifest();
-        availableThemes.value = manifest.map((entry) => ({
+        allThemes.value = manifest.map((entry) => ({
             name: entry.name,
             displayName:
                 entry.definition?.displayName ||
@@ -78,7 +90,7 @@ onMounted(async () => {
     } catch (error) {
         console.error('[ThemeSelector] Failed to load theme manifest:', error);
         // Fallback to known themes
-        availableThemes.value = [
+        allThemes.value = [
             { name: 'retro', displayName: 'Retro' },
             { name: 'blank', displayName: 'Blank' },
         ];

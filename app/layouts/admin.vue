@@ -279,6 +279,8 @@
             v-model="isConfirmOpen"
             :title="confirmOptions.title"
             :message="confirmOptions.message"
+            :important-note="confirmOptions.importantNote"
+            :note-tone="confirmOptions.noteTone"
             :confirm-text="confirmOptions.confirmText"
             :danger="confirmOptions.danger"
             @confirm="onConfirm"

@@ -25,6 +25,7 @@ export const DEFAULT_OR3_CONFIG: ResolvedOr3Config = {
         logoUrl: '',
         faviconUrl: '',
         defaultTheme: DEFAULT_THEME,
+        disabledThemes: [],
     },
     features: {
         workflows: {
@@ -84,6 +85,7 @@ const or3ConfigSchema = z
                 logoUrl: z.string().optional(),
                 faviconUrl: z.string().optional(),
                 defaultTheme: z.string().optional(),
+                disabledThemes: z.array(z.string()).optional(),
             })
             .optional()
             .transform((val) => ({
@@ -92,6 +94,7 @@ const or3ConfigSchema = z
                 logoUrl: val?.logoUrl ?? DEFAULT_OR3_CONFIG.site.logoUrl,
                 faviconUrl: val?.faviconUrl ?? DEFAULT_OR3_CONFIG.site.faviconUrl,
                 defaultTheme: val?.defaultTheme ?? DEFAULT_OR3_CONFIG.site.defaultTheme,
+                disabledThemes: val?.disabledThemes ?? DEFAULT_OR3_CONFIG.site.disabledThemes,
             })),
         features: z
             .object({

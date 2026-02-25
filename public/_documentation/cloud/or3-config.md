@@ -34,6 +34,7 @@ export const or3Config = defineOr3Config({
 | `site.logoUrl` | `OR3_LOGO_URL` | `""` | Custom logo URL |
 | `site.faviconUrl` | `OR3_FAVICON_URL` | `""` | Custom favicon URL |
 | `site.defaultTheme` | `OR3_DEFAULT_THEME` | `"blank"` | Default theme name |
+| `site.disabledThemes` | `OR3_DISABLED_THEMES` | `[]` | Comma-separated theme IDs users cannot select |
 
 ### Feature Toggles
 

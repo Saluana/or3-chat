@@ -81,6 +81,14 @@ Controls branding and basic identity.
 - Purpose: Default theme name for new users.
 - Notes: Must match a theme available in the app.
 
+#### `site.disabledThemes`
+
+- Type: `string[]`
+- Default: `[]`
+- Env: `OR3_DISABLED_THEMES`
+- Purpose: List of theme IDs that users cannot select.
+- Notes: Comma-separated env value (e.g. `OR3_DISABLED_THEMES=retro,dark`). Disabled themes are hidden from the dashboard theme picker. Togglable from the admin panel.
+
 ### `features`
 
 Feature toggles. All default to enabled.
@@ -668,6 +676,7 @@ SSR_AUTH_ENABLED=false
 
 OR3_SITE_NAME="OR3"
 OR3_DEFAULT_THEME="retro"
+OR3_DISABLED_THEMES=
 OR3_DOCUMENTS_ENABLED=true
 OR3_WORKFLOWS_ENABLED=false
 ```

@@ -8,6 +8,7 @@ const FALLBACK_OR3_CONFIG: ResolvedOr3Config = {
         logoUrl: '',
         faviconUrl: '',
         defaultTheme: 'blank',
+        disabledThemes: [],
     },
     features: {
         workflows: {
