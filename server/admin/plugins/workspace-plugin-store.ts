@@ -110,7 +110,7 @@ export async function bootstrapDefaultEnabledPlugins(
     defaultPluginIds: string[]
 ): Promise<string[]> {
     const raw = await store.get(workspaceId, 'plugins.enabled');
-    if (raw !== null && raw !== undefined) {
+    if (raw != null) {
         return getEnabledPlugins(store, workspaceId);
     }
     const normalized = Array.from(

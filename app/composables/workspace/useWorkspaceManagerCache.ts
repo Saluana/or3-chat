@@ -1,16 +1,17 @@
 import { ref } from 'vue';
 import type { WorkspaceSummary } from '~/core/workspace/types';
+import type { Or3DB } from '~/db/client';
 import { getKvByName, setKvByName } from '~/db/kv';
 
 export function useWorkspaceManagerCache(
-    baseDb: unknown,
+    baseDb: Or3DB,
     cacheKey: string
 ) {
     const cachedWorkspaces = ref<WorkspaceSummary[]>([]);
     const cachedActiveId = ref<string | null>(null);
 
     async function loadCache() {
-        const cached = await getKvByName(cacheKey, baseDb as any);
+        const cached = await getKvByName(cacheKey, baseDb);
         if (!cached?.value) return;
         try {
             const parsed = JSON.parse(cached.value) as {
@@ -42,7 +43,7 @@ export function useWorkspaceManagerCache(
                 workspaces: list,
                 activeId: cachedActiveId.value,
             }),
-            baseDb as any
+            baseDb
         );
     }
 

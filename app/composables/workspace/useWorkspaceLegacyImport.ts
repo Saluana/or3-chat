@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue';
-import { getWorkspaceDb } from '~/db/client';
+import { getWorkspaceDb, type Or3DB } from '~/db/client';
 
 type LegacyStats = {
     threads: number;
@@ -7,7 +7,7 @@ type LegacyStats = {
     projects: number;
 };
 
-export function useWorkspaceLegacyImport(baseDb: any) {
+export function useWorkspaceLegacyImport(baseDb: Or3DB) {
     const legacyStats = ref<LegacyStats>({
         threads: 0,
         messages: 0,
@@ -55,7 +55,7 @@ export function useWorkspaceLegacyImport(baseDb: any) {
         await targetDb.transaction('rw', Object.values(tableDefinitions), async () => {
             async function copyTable<T>(
                 sourceTable: { toArray: () => Promise<T[]> },
-                targetTable: { bulkPut: (items: readonly T[]) => Promise<any> }
+                targetTable: { bulkPut: (items: readonly T[]) => Promise<unknown> }
             ) {
                 const sourceRows = await sourceTable.toArray();
                 if (sourceRows.length === 0) return;

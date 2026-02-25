@@ -22,7 +22,7 @@ export function getPendingAttachmentCount(
     attachments: AttachmentLike[] | null | undefined
 ): number {
     if (!attachments?.length) return 0;
-    return attachments.filter((att) => att?.status === 'pending').length;
+    return attachments.filter((att) => att.status === 'pending').length;
 }
 
 export function guardPendingAttachmentSend(

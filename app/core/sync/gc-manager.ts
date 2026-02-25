@@ -151,7 +151,9 @@ export class GcManager {
     }
 
     private async runGc(): Promise<void> {
-        if (!this.active || this.running) return;
+        const isActive = () => this.active;
+
+        if (!isActive() || this.running) return;
         this.running = true;
 
         try {
@@ -169,7 +171,7 @@ export class GcManager {
                 await this.db.tombstones.bulkDelete(eligibleIds);
             }
 
-            if (!this.active) {
+            if (!isActive()) {
                 return;
             }
 
@@ -187,7 +189,7 @@ export class GcManager {
                 await this.provider.gcChangeLog(this.scope, this.config.retentionSeconds);
             }
         } catch (error) {
-            if (!this.active || isAbortLikeError(error)) {
+            if (!isActive() || isAbortLikeError(error)) {
                 return;
             }
             console.error('[GcManager] GC failed:', error);

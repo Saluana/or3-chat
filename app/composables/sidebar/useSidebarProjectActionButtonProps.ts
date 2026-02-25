@@ -23,6 +23,6 @@ export function useSidebarProjectActionButtonProps(
         size: 'sm' as const,
         ...(options.icon ? { icon: options.icon } : {}),
         ...(options.className ? { class: options.className } : {}),
-        ...(overrides.value as any),
+        ...overrides.value,
     }));
 }

@@ -27,7 +27,7 @@ export function useMessageMarkdown(message: Ref<MessageLike>) {
     const themePlugin = computed<ThemePlugin>(() => nuxtApp.$theme);
     const currentShikiTheme = computed(() => {
         const themeObj = themePlugin.value;
-        const themeName = themeObj.current?.value ?? themeObj.get();
+        const themeName = themeObj.current.value;
         return String(themeName).startsWith('dark')
             ? 'github-dark'
             : 'github-light';

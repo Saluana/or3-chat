@@ -66,10 +66,10 @@ import {
     onMounted,
     onBeforeUnmount,
     ref,
+    shallowRef,
     watch,
     computed,
     nextTick,
-    type Ref,
 } from 'vue';
 import ToolbarButton from './ToolbarButton.vue';
 import {
@@ -120,12 +120,12 @@ watch(
     }
 );
 
-const editor = ref<Editor | null>(null);
+const editor = shallowRef<Editor | null>(null);
 const editorMountEl = ref<HTMLElement | null>(null);
 let didUnmount = false;
 
 // Get plugin-registered toolbar buttons
-const pluginButtons = useEditorToolbarButtons(editor as Ref<Editor | null>);
+const pluginButtons = useEditorToolbarButtons(editor);
 
 // Theme integration for title input
 const titleInputProps = computed(() => {

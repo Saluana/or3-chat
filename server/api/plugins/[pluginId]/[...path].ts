@@ -96,9 +96,12 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid route handler path' });
     }
 
-    let handlerModule: unknown;
+    let handlerModule: { default?: unknown; handler?: unknown };
     try {
-        handlerModule = await import(pathToFileURL(modulePath).href);
+        handlerModule = (await import(pathToFileURL(modulePath).href)) as {
+            default?: unknown;
+            handler?: unknown;
+        };
     } catch (error) {
         throw createError({
             statusCode: 500,
@@ -112,9 +115,9 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const handler =
-        ((handlerModule as { default?: unknown })?.default ??
-            (handlerModule as { handler?: unknown })?.handler) as RuntimePluginRouteHandler | undefined;
+    const handler = (handlerModule.default ?? handlerModule.handler) as
+        | RuntimePluginRouteHandler
+        | undefined;
 
     if (typeof handler !== 'function') {
         throw createError({

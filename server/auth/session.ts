@@ -214,7 +214,7 @@ export async function resolveSessionContext(
         return nullSession;
     }
 
-    const storeId = config.public.sync?.provider || 'convex';
+    const storeId = config.public.sync.provider || 'convex';
     const sharedCacheKey = getSharedSessionCacheKey(
         providerSession.provider,
         providerSession.user.id,

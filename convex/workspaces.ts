@@ -752,7 +752,8 @@ export const consumeInvite = mutation({
 
         const invite = candidates
             .filter((row) => row.status === 'pending')
-            .sort((a, b) => a.created_at - b.created_at)[0];
+            .sort((a, b) => a.created_at - b.created_at)
+            .at(0);
 
         if (!invite) {
             return { ok: false as const, reason: 'not_found' as const };

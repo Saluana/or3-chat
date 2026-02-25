@@ -23,7 +23,7 @@ export function buildTocFromElement(
     const offsets: Record<string, number> = {};
 
     for (const heading of headings) {
-        const text = heading.textContent?.trim();
+        const text = heading.textContent.trim();
         if (!text) continue;
 
         let id = heading.id || slugifyHeading(text);
@@ -50,7 +50,7 @@ export function getHeadingOffsets(root: HTMLElement): Record<string, number> {
     const headings = root.querySelectorAll<HTMLElement>('[id]');
     const offsets: Record<string, number> = {};
     for (const heading of headings) {
-        const id = heading.id?.trim();
+        const id = heading.id.trim();
         if (!id) continue;
         offsets[id] = heading.offsetTop;
     }

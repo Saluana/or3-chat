@@ -22,6 +22,7 @@
     "server/**/*.ts",
     "shared/**/*.ts",
     "convex/**/*.ts",
+    "extensions/**/*.ts",
     "config.or3.ts",
     "config.or3cloud.ts",
     "or3.providers.generated.ts"

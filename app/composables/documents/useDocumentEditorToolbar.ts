@@ -1,4 +1,6 @@
 import { computed, type Ref } from 'vue';
+import type { Editor } from '@tiptap/vue-3';
+import { redo, undo } from '@tiptap/pm/history';
 import type { EditorToolbarButton } from '~/composables';
 
 interface CoreToolbarItem {
@@ -10,22 +12,36 @@ interface CoreToolbarItem {
     onActivate: () => void;
 }
 
+type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
+
+function isHeadingLevel(level: number): level is HeadingLevel {
+    return Number.isInteger(level) && level >= 1 && level <= 6;
+}
+
 export function useDocumentEditorCommands(
-    editor: Ref<any>,
+    editor: Ref<Editor | null>,
     emitContent: () => void
 ) {
     const commands: Record<string, () => void> = {
-        toggleBold: () => (editor.value as any)?.chain().focus().toggleBold().run(),
-        toggleItalic: () => (editor.value as any)?.chain().focus().toggleItalic().run(),
-        toggleCode: () => (editor.value as any)?.chain().focus().toggleCode().run(),
+        toggleBold: () => editor.value?.chain().focus().toggleMark('bold').run(),
+        toggleItalic: () => editor.value?.chain().focus().toggleMark('italic').run(),
+        toggleCode: () => editor.value?.chain().focus().toggleMark('code').run(),
         toggleBulletList: () =>
-            (editor.value as any)?.chain().focus().toggleBulletList().run(),
+            editor.value?.chain().focus().toggleList('bulletList', 'listItem').run(),
         toggleOrderedList: () =>
-            (editor.value as any)?.chain().focus().toggleOrderedList().run(),
+            editor.value?.chain().focus().toggleList('orderedList', 'listItem').run(),
         setHorizontalRule: () =>
-            (editor.value as any)?.chain().focus().setHorizontalRule().run(),
-        undo: () => (editor.value as any)?.commands.undo(),
-        redo: () => (editor.value as any)?.commands.redo(),
+            editor.value?.chain().focus().insertContent({ type: 'horizontalRule' }).run(),
+        undo: () => {
+            const current = editor.value;
+            if (!current) return;
+            undo(current.state, current.view.dispatch);
+        },
+        redo: () => {
+            const current = editor.value;
+            if (!current) return;
+            redo(current.state, current.view.dispatch);
+        },
     };
 
     function cmd(name: string) {
@@ -34,19 +50,17 @@ export function useDocumentEditorCommands(
     }
 
     function isActive(name: string) {
-        return (editor.value as any)?.isActive(name) || false;
+        return editor.value?.isActive(name) ?? false;
     }
 
     function isActiveHeading(level: number) {
-        return (editor.value as any)?.isActive('heading', { level }) || false;
+        if (!isHeadingLevel(level)) return false;
+        return editor.value?.isActive('heading', { level }) ?? false;
     }
 
     function toggleHeading(level: number) {
-        (editor.value as any)
-            ?.chain()
-            .focus()
-            .toggleHeading({ level: level as any })
-            .run();
+        if (!isHeadingLevel(level)) return;
+        editor.value?.chain().focus().toggleNode('heading', 'paragraph', { level }).run();
         emitContent();
     }
 
@@ -54,7 +68,7 @@ export function useDocumentEditorCommands(
         const ed = editor.value;
         if (!ed || !btn.isActive) return false;
         try {
-            return btn.isActive(ed as any);
+            return btn.isActive(ed);
         } catch (error) {
             if (import.meta.dev) {
                 console.error(
@@ -70,7 +84,7 @@ export function useDocumentEditorCommands(
         const ed = editor.value;
         if (!ed) return;
         try {
-            btn.onClick(ed as any);
+            void btn.onClick(ed);
         } catch (error) {
             if (import.meta.dev) {
                 console.error(

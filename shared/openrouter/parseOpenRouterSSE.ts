@@ -180,14 +180,14 @@ export async function* parseOpenRouterSSE(
                         const reasoningDetails = choice.delta?.reasoning_details;
                         if (Array.isArray(reasoningDetails)) {
                             for (const detail of reasoningDetails) {
-                                if (detail?.type === 'reasoning.text' && detail.text) {
+                                if (detail.type === 'reasoning.text' && detail.text) {
                                     yield {
                                         type: 'reasoning',
                                         text: detail.text,
                                     };
                                     reasoningYielded = true;
                                 } else if (
-                                    detail?.type === 'reasoning.summary' &&
+                                    detail.type === 'reasoning.summary' &&
                                     detail.summary
                                 ) {
                                     yield {
