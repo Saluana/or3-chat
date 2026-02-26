@@ -35,6 +35,46 @@ const DEFAULT_MAX_BYTES = 25 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_REDIRECTS = 5;
 
+/**
+ * GitHub file page URLs (`github.com/.../blob/...`) return HTML unless `raw=1` is set.
+ * Normalize those inputs so user-pasted GitHub UI links still work.
+ */
+function normalizeInitialUrl(rawUrl: string): string {
+    let parsed: URL;
+    try {
+        parsed = new URL(rawUrl);
+    } catch {
+        return rawUrl;
+    }
+
+    if (parsed.hostname.toLowerCase() !== 'github.com') {
+        return rawUrl;
+    }
+
+    if (!parsed.pathname.includes('/blob/')) {
+        return rawUrl;
+    }
+
+    parsed.searchParams.set('raw', '1');
+    return parsed.toString();
+}
+
+/**
+ * Zip signatures: PK\x03\x04 (local header), PK\x05\x06 (empty archive), PK\x07\x08 (spanned).
+ */
+function isZipLikePayload(buffer: Uint8Array): boolean {
+    if (buffer.length < 4) return false;
+    return (
+        buffer[0] === 0x50
+        && buffer[1] === 0x4b
+        && (
+            (buffer[2] === 0x03 && buffer[3] === 0x04)
+            || (buffer[2] === 0x05 && buffer[3] === 0x06)
+            || (buffer[2] === 0x07 && buffer[3] === 0x08)
+        )
+    );
+}
+
 // ── CIDR-based IP blocking ──────────────────────────────────────────
 
 /**
@@ -209,7 +249,7 @@ export async function fetchZipFromUrl(
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-        let currentUrl = rawUrl;
+        let currentUrl = normalizeInitialUrl(rawUrl);
 
         for (let hop = 0; hop <= maxRedirects; hop++) {
             // Validate URL string on every hop
@@ -289,6 +329,13 @@ export async function fetchZipFromUrl(
             for (const chunk of chunks) {
                 combined.set(chunk, offset);
                 offset += chunk.byteLength;
+            }
+
+            if (!isZipLikePayload(combined)) {
+                throw new Error(
+                    'Remote URL did not return a ZIP archive (received non-ZIP content). '
+                    + 'If using GitHub, use the direct archive/download URL.'
+                );
             }
 
             return Buffer.from(combined);

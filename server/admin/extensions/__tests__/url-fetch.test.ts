@@ -262,6 +262,22 @@ describe('fetchZipFromUrl', () => {
         expect(buf.length).toBe(4);
     });
 
+    it('normalizes GitHub blob URLs to raw download requests', async () => {
+        const payload = new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
+        const fetchMock = mockFetch().mockResolvedValue(mockFetchResponse(payload));
+
+        await fetchZipFromUrl(
+            'https://github.com/Saluana/or3-theme-cyberpunk/blob/main/cyberpunk-theme.zip',
+            { _dnsResolve: publicDns }
+        );
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const firstCall = fetchMock.mock.calls[0];
+        const requestedUrl = String(firstCall?.[0]);
+        expect(requestedUrl).toContain('github.com/Saluana/or3-theme-cyberpunk/blob/main/cyberpunk-theme.zip');
+        expect(requestedUrl).toContain('raw=1');
+    });
+
     it('rejects empty response body', async () => {
         const stream = new ReadableStream<Uint8Array>({
             start(controller) {
@@ -277,6 +293,19 @@ describe('fetchZipFromUrl', () => {
                 _dnsResolve: publicDns,
             })
         ).rejects.toThrow('empty response');
+    });
+
+    it('rejects non-zip payloads with a helpful message', async () => {
+        const html = new TextEncoder().encode('<!doctype html><html><body>Not a zip</body></html>');
+        mockFetch().mockResolvedValue(mockFetchResponse(html, {
+            headers: { 'content-type': 'text/html' },
+        }));
+
+        await expect(
+            fetchZipFromUrl('https://example.com/not-zip', {
+                _dnsResolve: publicDns,
+            })
+        ).rejects.toThrow('did not return a ZIP archive');
     });
 
     it('rejects when Content-Length exceeds maxBytes', async () => {
