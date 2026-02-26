@@ -45,6 +45,16 @@ Notes:
 - `runtime.server.routes` are optional and only valid under the host dispatcher namespace.
 - Keep manifest JSON as the canonical runtime contract (non-executable, deterministic).
 
+### Installing plugins
+
+Once your plugin is packaged as a ZIP with `or3.manifest.json` at the root, there are three ways to install it:
+
+1. **Admin panel — Upload .zip**: Go to **Admin → Plugins**, click **Install .zip**, and select your file.
+2. **Admin panel — Import from URL**: Click **Import from URL** and paste an HTTPS link to a `.zip` archive (e.g. a GitHub archive URL like `https://github.com/user/repo/archive/refs/heads/main.zip`).
+3. **API**: `POST /api/admin/extensions/install` with multipart file upload, JSON `{ "url": "..." }`, or JSON `{ "zipBase64": "..." }`.
+
+See the [custom theme tutorial](/themes/custom-theme-tutorial) for detailed curl examples — the same endpoint and methods apply to plugins.
+
 ## 1. Dashboard Plugins
 
 Dashboard plugins add custom tiles to the dashboard grid and optionally provide full-page experiences with navigation.

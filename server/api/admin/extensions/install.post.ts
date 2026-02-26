@@ -33,9 +33,15 @@ import {
 } from '../../../admin/extensions/install';
 import { invalidateExtensionsCache } from '../../../admin/extensions/extension-manager';
 import { checkRateLimit } from '../../../utils/rate-limit';
+import { fetchZipFromUrl } from '../../../admin/extensions/url-fetch';
 
 const BodySchema = z.object({
     zipBase64: z.string().min(1),
+    force: z.boolean().optional(),
+});
+
+const UrlBodySchema = z.object({
+    url: z.string().url().min(1),
     force: z.boolean().optional(),
 });
 
@@ -54,7 +60,26 @@ async function readZipPayload(event: H3Event) {
         return { buffer: Buffer.from(file.data), force };
     }
 
-    const body = BodySchema.safeParse(await readBody(event));
+    const rawBody = await readBody(event);
+
+    // Try URL-based install first
+    const urlBody = UrlBodySchema.safeParse(rawBody);
+    if (urlBody.success) {
+        try {
+            const buffer = await fetchZipFromUrl(urlBody.data.url);
+            return { buffer, force: Boolean(urlBody.data.force) };
+        } catch (error) {
+            throw createError({
+                statusCode: 422,
+                statusMessage: error instanceof Error
+                    ? `URL fetch failed: ${error.message}`
+                    : 'URL fetch failed',
+            });
+        }
+    }
+
+    // Fall back to base64 payload
+    const body = BodySchema.safeParse(rawBody);
     if (!body.success) return null;
     return { buffer: Buffer.from(body.data.zipBase64, 'base64'), force: Boolean(body.data.force) };
 }

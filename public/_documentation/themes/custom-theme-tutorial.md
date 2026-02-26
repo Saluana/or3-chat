@@ -423,8 +423,12 @@ ocean-dark-v1.0.0.zip
 
 ## Part 9 — Install via admin panel
 
+There are two ways to install from the admin panel:
+
+### Option A — Upload a .zip file
+
 1. Open the admin panel → **Themes** page.
-2. Click **Install Theme** (or **Install Extension** if the button is labelled generically).
+2. Click **Install .zip**.
 3. Upload your `ocean-dark-v1.0.0.zip`.
 4. The server extracts the ZIP, validates the manifest, writes to
    `extensions/themes/ocean-dark/`, and symlinks it into `app/theme/ocean-dark/`.
@@ -432,7 +436,25 @@ ocean-dark-v1.0.0.zip
    theme to be discovered by `import.meta.glob`.
 6. After restart, select **Ocean Dark** in Settings → Theme.
 
+### Option B — Import from URL
+
+1. Open the admin panel → **Themes** page.
+2. Click **Import from URL**.
+3. Paste a direct HTTPS link to a `.zip` archive. GitHub archive URLs work:
+   ```
+   https://github.com/user/repo/archive/refs/heads/main.zip
+   ```
+4. Click **Install**. The server fetches the ZIP, validates the URL (HTTPS-only,
+   no private IPs, DNS rebinding protection), then runs the same install pipeline.
+5. **Restart** as described above.
+
+> **URL requirements**: Only HTTPS URLs are accepted. The server blocks requests
+> to private/reserved IP ranges, validates DNS resolution, and enforces the same
+> 25 MB size limit. Redirects are followed (up to 5 hops) with per-hop validation.
+
 ### Installing via API (curl)
+
+**Multipart file upload:**
 
 ```bash
 curl -X POST https://your-or3-instance.com/api/admin/extensions/install \
@@ -445,6 +467,15 @@ Pass `force=true` to overwrite an existing version:
 
 ```bash
 -F "force=true"
+```
+
+**URL-based install:**
+
+```bash
+curl -X POST https://your-or3-instance.com/api/admin/extensions/install \
+  -H "Content-Type: application/json" \
+  -H "Cookie: <admin-session-cookie>" \
+  -d '{"url": "https://github.com/user/repo/archive/refs/heads/main.zip", "force": false}'
 ```
 
 ### Installing via Base64 JSON body

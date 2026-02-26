@@ -1,10 +1,11 @@
 import { type Ref, type ComputedRef } from 'vue';
-import { installExtension, uninstallExtension, useFileInput, type ExtensionKind } from './useAdminExtensions';
+import { installExtension, installExtensionFromUrl, uninstallExtension, useFileInput, type ExtensionKind } from './useAdminExtensions';
 
 export type ExtensionManagement = {
     fileInput: Ref<HTMLInputElement | null>;
     triggerFileInput: () => void;
     install: (kind: ExtensionKind, onSuccess?: () => Promise<void>) => Promise<void>;
+    installFromUrl: (kind: ExtensionKind, url: string, onSuccess?: () => Promise<void>) => Promise<void>;
     uninstall: (id: string, kind: ExtensionKind, onSuccess?: () => Promise<void>) => Promise<void>;
 };
 
@@ -24,6 +25,16 @@ export function useExtensionManagement(
         await installExtension({ kind, file, onSuccess });
     }
 
+    async function installFromUrl(
+        kind: ExtensionKind,
+        url: string,
+        onSuccess?: () => Promise<void>
+    ) {
+        if (!isOwner.value) return;
+        if (!url.trim()) return;
+        await installExtensionFromUrl({ kind, url: url.trim(), onSuccess });
+    }
+
     async function uninstall(
         id: string,
         kind: ExtensionKind,
@@ -37,6 +48,7 @@ export function useExtensionManagement(
         fileInput,
         triggerFileInput,
         install,
+        installFromUrl,
         uninstall,
     };
 }

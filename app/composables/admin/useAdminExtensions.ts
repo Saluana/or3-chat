@@ -68,6 +68,46 @@ export async function installExtension(options: ExtensionInstallOptions): Promis
     }
 }
 
+export type ExtensionUrlInstallOptions = {
+    kind: ExtensionKind;
+    url: string;
+    force?: boolean;
+    onSuccess?: () => Promise<void>;
+};
+
+/**
+ * Install an extension (plugin or theme) from a remote URL.
+ * The server fetches the ZIP and runs the same install pipeline.
+ */
+export async function installExtensionFromUrl(options: ExtensionUrlInstallOptions): Promise<void> {
+    const { url, force = false, onSuccess } = options;
+
+    try {
+        await $fetch('/api/admin/extensions/install', {
+            method: 'POST',
+            body: { url, force },
+            headers: ADMIN_HEADERS,
+        });
+        if (onSuccess) await onSuccess();
+    } catch (error: unknown) {
+        const message = parseErrorMessage(error, '');
+
+        if (message.toLowerCase().includes('already installed')) {
+            const { confirm } = useConfirmDialog();
+            const confirmed = await confirm({
+                title: `${options.kind === 'plugin' ? 'Plugin' : 'Theme'} Already Installed`,
+                message: `This ${options.kind === 'plugin' ? 'plugin' : 'theme'} is already installed. Do you want to replace it with the new version?`,
+                danger: true,
+                confirmText: 'Replace',
+            });
+            if (!confirmed) return;
+            await installExtensionFromUrl({ ...options, force: true });
+        } else {
+            throw error;
+        }
+    }
+}
+
 /**
  * Uninstall an extension by ID and kind.
  */

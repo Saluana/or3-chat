@@ -17,7 +17,7 @@
                     "name": "plugin-quickstart.md",
                     "path": "/start/plugin-quickstart",
                     "category": "Tutorial",
-                    "summary": "Hands-on tutorial showing how to create plugins for OR3. Covers dashboard pages, chat message actions, and sidebar extensions with complete working examples and best practices."
+                    "summary": "Hands-on tutorial showing how to create plugins for OR3. Covers dashboard pages, chat message actions, sidebar extensions, installation methods (file upload, URL import, API), and the installable package contract with complete working examples and best practices."
                 },
                 {
                     "name": "development-setup.md",
@@ -593,7 +593,7 @@
                     "name": "custom-theme-tutorial.md",
                     "path": "/themes/custom-theme-tutorial",
                     "category": "Tutorial",
-                    "summary": "End-to-end tutorial for building, packaging, and installing a custom OR3 theme. Walks through scaffolding with the CLI, defining a full Material Design 3 color palette (light + dark), adding component overrides, icon overrides, Nuxt UI slot patches, scoped CSS, and background images. Covers creating the or3.manifest.json, zipping the theme correctly, installing via the admin panel or API, and uninstalling. Uses the built-in Cyberpunk theme as a reference throughout."
+                    "summary": "End-to-end tutorial for building, packaging, and installing a custom OR3 theme. Walks through scaffolding with the CLI, defining a full Material Design 3 color palette (light + dark), adding component overrides, icon overrides, Nuxt UI slot patches, scoped CSS, and background images. Covers creating the or3.manifest.json, zipping the theme correctly, installing via the admin panel (file upload or URL import), API (multipart, URL JSON, or base64), and uninstalling. Uses the built-in Cyberpunk theme as a reference throughout."
                 },
                 {
                     "name": "api-reference.md",

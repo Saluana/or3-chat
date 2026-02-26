@@ -51,11 +51,17 @@
                         class="hidden"
                         @change="installTheme"
                     />
+                    <UButton size="sm" :disabled="!isOwner" @click="showUrlModal = true" icon="i-heroicons-link">
+                        Import from URL
+                    </UButton>
                     <UButton size="sm" :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
                         Install .zip
                     </UButton>
                 </div>
             </div>
+
+            <!-- URL Import Modal -->
+            <AdminUrlImportModal v-model="showUrlModal" label="Theme" :loading="urlInstalling" @install="installThemeFromUrl" />
 
             <div v-if="adminThemes.length === 0" class="text-sm opacity-70 py-8 text-center bg-[var(--md-surface-container-low)] rounded">
                 No themes installed.
@@ -212,7 +218,7 @@ const adminThemes = computed(() => {
 });
 
 const { isOwner } = useAdminAuth(workspaceData);
-const { fileInput, triggerFileInput, install } = useExtensionManagement(isOwner);
+const { fileInput, triggerFileInput, install, installFromUrl } = useExtensionManagement(isOwner);
 const { restart, restartRequired } = useServerRestart(
     isOwner,
     computed(() => statusData.value?.status?.admin?.allowRestart)
@@ -220,6 +226,29 @@ const { restart, restartRequired } = useServerRestart(
 const { confirm } = useConfirmDialog();
 const nuxtApp = useNuxtApp();
 const toast = useToast();
+
+// URL import state
+const showUrlModal = ref(false);
+const urlInstalling = ref(false);
+
+async function installThemeFromUrl(url: string) {
+    urlInstalling.value = true;
+    try {
+        await installFromUrl('theme', url, refresh);
+        showUrlModal.value = false;
+        restartRequired.value = true;
+        toast.add({
+            title: 'Theme installed',
+            description: 'The theme has been installed from URL. Restart is required.',
+            color: 'info',
+        });
+    } catch (error: unknown) {
+        const message = parseErrorMessage(error, 'Failed to install theme from URL');
+        toast.add({ title: 'Error', description: message, color: 'error' });
+    } finally {
+        urlInstalling.value = false;
+    }
+}
 const activeTheme = computed(() => {
     const themeApi = (nuxtApp as unknown as {
         $theme?: { activeTheme?: { value?: string } };

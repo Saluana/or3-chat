@@ -25,11 +25,17 @@
                         class="hidden"
                         @change="installPlugin"
                     />
+                    <UButton size="sm" :disabled="!isOwner" @click="showUrlModal = true" icon="i-heroicons-link">
+                        Import from URL
+                    </UButton>
                     <UButton size="sm"  :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
                         Install .zip
                     </UButton>
                 </div>
             </div>
+
+            <!-- URL Import Modal -->
+            <AdminUrlImportModal v-model="showUrlModal" label="Plugin" :loading="urlInstalling" @install="installPluginFromUrl" />
 
             <div
                 v-if="configuredPluginModules.length > 0"
@@ -227,8 +233,31 @@ const { data: workspaceData, refresh: refreshWorkspace } = useAdminWorkspace(sel
 const { isOwner } = useAdminAuth(workspaceData);
 
 // 4. Extension Management
-const { fileInput, triggerFileInput, install, uninstall } = useExtensionManagement(isOwner);
+const { fileInput, triggerFileInput, install, installFromUrl, uninstall } = useExtensionManagement(isOwner);
 const runtimeConfig = useRuntimeConfig();
+
+// URL import state
+const showUrlModal = ref(false);
+const urlInstalling = ref(false);
+const toast = useToast();
+
+async function installPluginFromUrl(url: string) {
+    urlInstalling.value = true;
+    try {
+        await installFromUrl('plugin', url, refresh);
+        showUrlModal.value = false;
+        toast.add({
+            title: 'Plugin installed',
+            description: 'The plugin has been installed from URL.',
+            color: 'success',
+        });
+    } catch (error: unknown) {
+        const message = parseErrorMessage(error, 'Failed to install plugin from URL');
+        toast.add({ title: 'Error', description: message, color: 'error' });
+    } finally {
+        urlInstalling.value = false;
+    }
+}
 const configuredPluginModules =
     (runtimeConfig.public as {
         or3?: { plugins?: { modules?: string[] } };
@@ -250,7 +279,6 @@ const accessByPlugin = reactive<
 >({});
 const toggleLoading = reactive<Record<string, boolean>>({});
 const loadedSet = ref<Set<string>>(new Set());
-const toast = useToast();
 
 async function refreshLoadedState() {
     try {
