@@ -8,6 +8,19 @@ import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { getJobLiveState } from '../../../utils/background-jobs/viewers';
+const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
+
+function logBgStream(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (process.env.NODE_ENV === 'production') return;
+    if (details) {
+        console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
 
 /**
  * GET /api/jobs/:id/status
@@ -27,6 +40,7 @@ export default defineEventHandler(async (event) => {
     const jobId = getRouterParam(event, 'id');
 
     if (!jobId) {
+        logBgStream('jobs-status-missing-job-id', {});
         setResponseStatus(event, 400);
         return { error: 'Missing job ID' };
     }
@@ -41,6 +55,9 @@ export default defineEventHandler(async (event) => {
     }
 
     if (!userId) {
+        logBgStream('jobs-status-auth-required', {
+            jobId,
+        });
         setResponseStatus(event, 401);
         return { error: 'Authentication required' };
     }
@@ -49,6 +66,10 @@ export default defineEventHandler(async (event) => {
     const job = await provider.getJob(jobId, userId);
 
     if (!job) {
+        logBgStream('jobs-status-job-not-found', {
+            jobId,
+            userId,
+        });
         setResponseStatus(event, 404);
         return { error: 'Job not found or unauthorized' };
     }
@@ -83,6 +104,22 @@ export default defineEventHandler(async (event) => {
         liveState && liveState.status !== 'streaming'
             ? liveState.status
             : job.status;
+    const shouldLogStatusRequest =
+        effectiveStatus !== 'streaming' ||
+        offset === null ||
+        !Number.isFinite(offset ?? NaN);
+    if (shouldLogStatusRequest) {
+        logBgStream('jobs-status-request', {
+            jobId,
+            userId,
+            requestedOffset: offset,
+            jobStatus: job.status,
+            effectiveStatus,
+            jobContentLength: job.content.length,
+            liveStatePresent: Boolean(liveState),
+            liveContentLength: liveState?.content.length ?? 0,
+        });
+    }
 
     if (
         typeof offset === 'number' &&
@@ -93,6 +130,22 @@ export default defineEventHandler(async (event) => {
         const contentLength = effectiveContent.length;
         const safeOffset = Math.min(offset, contentLength);
         const contentDelta = effectiveContent.slice(safeOffset);
+        const shouldLogDeltaResponse =
+            effectiveStatus !== 'streaming' ||
+            contentDelta.length >= 256 ||
+            safeOffset < offset;
+        if (shouldLogDeltaResponse) {
+            logBgStream('jobs-status-response-delta', {
+                jobId,
+                userId,
+                status: effectiveStatus,
+                requestedOffset: offset,
+                safeOffset,
+                contentLength,
+                deltaLength: contentDelta.length,
+                includesFullContent: safeOffset < offset,
+            });
+        }
         return {
             id: job.id,
             status: effectiveStatus,
@@ -111,6 +164,12 @@ export default defineEventHandler(async (event) => {
         };
     }
 
+    logBgStream('jobs-status-response-full', {
+        jobId,
+        userId,
+        status: effectiveStatus,
+        contentLength: effectiveContent.length,
+    });
     return {
         id: job.id,
         status: effectiveStatus,

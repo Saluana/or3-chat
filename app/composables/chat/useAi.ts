@@ -69,6 +69,7 @@ import { useHooks } from '#imports';
 import { consumeWorkflowHandlingFlag } from '~/plugins/workflow-slash-commands.client';
 import { resolveNotificationUserId } from '~/core/notifications/notification-user';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 // settings/model store are provided elsewhere at runtime; keep dynamic access guards
 import type {
     ChatSettings,
@@ -123,6 +124,8 @@ type OpenRouterMessage =
           [key: string]: unknown;
       };
 
+type ChatHistoryModule = typeof import('~/utils/chat/history');
+
 // Per-instance streaming tail state
 
 /**
@@ -159,6 +162,14 @@ export function useChat(
     const aborted = ref<boolean>(false);
     const { apiKey, setKey } = useUserApiKey();
     const runtimeConfig = useRuntimeConfig();
+    const syncConfig = runtimeConfig.public?.sync;
+    const serverNotificationsEnabled = computed(
+        () =>
+            runtimeConfig.public?.ssrAuthEnabled === true &&
+            syncConfig?.enabled === true &&
+            syncConfig?.provider === CONVEX_PROVIDER_ID &&
+            Boolean(syncConfig?.convexUrl)
+    );
     const sessionContext =
         runtimeConfig.public.ssrAuthEnabled === true ? useSessionContext() : null;
     const notificationUserId = computed(() =>
@@ -190,11 +201,39 @@ export function useChat(
     const threadIdRef = ref<string | undefined>(initialThreadId);
     const historyLoadedFor = ref<string | null>(null);
     const cleanupFns: Array<() => void> = [];
+    const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
+    const logBgStream = (
+        stage: string,
+        details?: Record<string, unknown>
+    ): void => {
+        if (!import.meta.dev) return;
+        if (details) {
+            console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+            return;
+        }
+        console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+    };
+    const warnBgStream = (
+        stage: string,
+        details?: Record<string, unknown>
+    ): void => {
+        if (!import.meta.dev) return;
+        if (details) {
+            console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+            return;
+        }
+        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+    };
 
     watch(
         () => notificationUserId.value,
         (nextUserId) => {
             if (!nextUserId) return;
+            logBgStream('notification-user-sync', {
+                threadId: threadIdRef.value || null,
+                nextUserId,
+                trackerCount: backgroundJobTrackers.size,
+            });
             for (const tracker of backgroundJobTrackers.values()) {
                 tracker.userId = nextUserId;
             }
@@ -238,9 +277,19 @@ export function useChat(
         streamId.value = undefined;
     }
 
-    const backgroundStreamingConfig = computed(() =>
-        (runtimeConfig.public as { backgroundStreaming?: { enabled?: boolean } })
-            .backgroundStreaming
+    const backgroundStreamingConfig = computed(
+        () =>
+            (
+                runtimeConfig.public as {
+                    backgroundStreaming?: {
+                        enabled?: boolean;
+                        startMode?: 'foreground' | 'background';
+                    };
+                }
+            ).backgroundStreaming
+    );
+    const backgroundStreamStartMode = computed(
+        () => backgroundStreamingConfig.value?.startMode ?? 'foreground'
     );
     const backgroundStreamingAllowed = computed(
         () => {
@@ -634,6 +683,13 @@ export function useChat(
     );
 
     let historySyncInFlight = false;
+    let historyModulePromise: Promise<ChatHistoryModule> | null = null;
+    const getHistoryModule = async (): Promise<ChatHistoryModule> => {
+        if (!historyModulePromise) {
+            historyModulePromise = import('~/utils/chat/history');
+        }
+        return historyModulePromise;
+    };
     /**
      * Purpose:
      * Loads thread history into memory and reattaches background jobs if needed.
@@ -648,14 +704,22 @@ export function useChat(
      * - Safe to call repeatedly
      */
     async function ensureHistorySynced() {
-        if (historySyncInFlight) return;
+        if (historySyncInFlight) {
+            logBgStream('history-sync-skip-in-flight', {
+                threadId: threadIdRef.value || null,
+            });
+            return;
+        }
         if (threadIdRef.value && historyLoadedFor.value !== threadIdRef.value) {
+            logBgStream('history-sync-start', {
+                threadId: threadIdRef.value,
+                historyLoadedFor: historyLoadedFor.value,
+                detached: detached.value,
+            });
             historySyncInFlight = true;
             try {
                 if (detached.value) detached.value = false;
-                const { ensureThreadHistoryLoaded } = await import(
-                    '~/utils/chat/history'
-                );
+                const { ensureThreadHistoryLoaded } = await getHistoryModule();
                 await ensureThreadHistoryLoaded(
                     threadIdRef,
                     historyLoadedFor,
@@ -665,6 +729,12 @@ export function useChat(
                     .filter((m: ChatMessage) => m.role !== 'tool')
                     .map((m) => ensureUiMessage(m));
                 await reattachBackgroundJobs();
+                logBgStream('history-sync-complete', {
+                    threadId: threadIdRef.value,
+                    rawCount: rawMessages.value.length,
+                    uiCount: messages.value.length,
+                    attachedJobs: attachedBackgroundJobs.size,
+                });
             } finally {
                 historySyncInFlight = false;
             }
@@ -750,7 +820,17 @@ export function useChat(
     function clearBackgroundJobSubscriptions(options?: {
         keepTracking?: boolean;
     }): void {
-        if (!backgroundJobDisposers.length) return;
+        if (!backgroundJobDisposers.length) {
+            logBgStream('clear-bg-subs-skip-none', {
+                keepTracking: options?.keepTracking === true,
+            });
+            return;
+        }
+        logBgStream('clear-bg-subs-start', {
+            keepTracking: options?.keepTracking === true,
+            disposerCount: backgroundJobDisposers.length,
+            attachedJobs: [...attachedBackgroundJobs],
+        });
         for (const jobId of attachedBackgroundJobs) {
             const tracker = backgroundJobTrackers.get(jobId);
             if (tracker && !options?.keepTracking) {
@@ -765,6 +845,9 @@ export function useChat(
             }
         }
         attachedBackgroundJobs.clear();
+        logBgStream('clear-bg-subs-complete', {
+            keepTracking: options?.keepTracking === true,
+        });
     }
 
     /**
@@ -789,11 +872,25 @@ export function useChat(
         isReattach?: boolean;
         useSse?: boolean;
     }): BackgroundJobTracker {
+        logBgStream('attach-bg-job-start', {
+            jobId: params.jobId,
+            messageId: params.messageId,
+            threadId: params.threadId,
+            userId: params.userId,
+            isReattach: Boolean(params.isReattach),
+            useSse: Boolean(params.useSse),
+            initialContentLength:
+                typeof params.initialContent === 'string'
+                    ? params.initialContent.length
+                    : 0,
+            detached: detached.value,
+        });
         const tracker = ensureBackgroundJobTracker({
             jobId: params.jobId,
             userId: params.userId,
             threadId: params.threadId,
             messageId: params.messageId,
+            preferServerNotifications: serverNotificationsEnabled.value,
             // Seed with DB content - server must have MORE to update
             initialContent: params.initialContent,
             useSse: params.useSse,
@@ -811,6 +908,12 @@ export function useChat(
             if (target && params.initialContent.length > target.text.length) {
                 target.text = params.initialContent;
             }
+            logBgStream('attach-bg-job-reattach-seed', {
+                jobId: params.jobId,
+                messageId: params.messageId,
+                trackerContentLength: tracker.lastContent.length,
+                targetLength: resolveUiMessage(params.messageId)?.text.length ?? 0,
+            });
         }
         if (params.isReattach && tailAssistant.value?.id === params.messageId) {
             // Seed stream accumulator with current content
@@ -822,7 +925,15 @@ export function useChat(
                 streamAcc.append(params.initialContent, { kind: 'text' });
             }
         }
-        if (!attachedBackgroundJobs.has(params.jobId)) {
+        const shouldBindUiSubscriber = !detached.value;
+        if (shouldBindUiSubscriber && !attachedBackgroundJobs.has(params.jobId)) {
+            logBgStream('attach-bg-job-bind-subscriber', {
+                jobId: params.jobId,
+                messageId: params.messageId,
+                threadId: params.threadId,
+                detached: detached.value,
+                attachedAlready: attachedBackgroundJobs.has(params.jobId),
+            });
             const subscriber: BackgroundJobSubscriber = {
                 onUpdate: ({ content, delta, status }) => {
                     if (detached.value) {
@@ -865,10 +976,23 @@ export function useChat(
                 },
                 onComplete: ({ content, status }) => {
                     if (detached.value) {
+                        logBgStream('attach-bg-job-on-complete-skipped-detached', {
+                            jobId: params.jobId,
+                            messageId: params.messageId,
+                        });
                         return;
                     }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
+                    logBgStream('attach-bg-job-on-complete', {
+                        jobId: params.jobId,
+                        messageId: params.messageId,
+                        status: status.status,
+                        contentLength: content.length,
+                        toolCalls: Array.isArray(status.tool_calls)
+                            ? status.tool_calls.length
+                            : 0,
+                    });
                     target.text = content;
                     const nextToolCalls = normalizeBackgroundToolCalls(
                         status.tool_calls
@@ -896,10 +1020,20 @@ export function useChat(
                 },
                 onError: ({ status }) => {
                     if (detached.value) {
+                        logBgStream('attach-bg-job-on-error-skipped-detached', {
+                            jobId: params.jobId,
+                            messageId: params.messageId,
+                        });
                         return;
                     }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
+                    logBgStream('attach-bg-job-on-error', {
+                        jobId: params.jobId,
+                        messageId: params.messageId,
+                        status: status.status,
+                        error: status.error || null,
+                    });
                     const nextToolCalls = normalizeBackgroundToolCalls(
                         status.tool_calls
                     );
@@ -923,10 +1057,19 @@ export function useChat(
                 },
                 onAbort: ({ status }) => {
                     if (detached.value) {
+                        logBgStream('attach-bg-job-on-abort-skipped-detached', {
+                            jobId: params.jobId,
+                            messageId: params.messageId,
+                        });
                         return;
                     }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
+                    logBgStream('attach-bg-job-on-abort', {
+                        jobId: params.jobId,
+                        messageId: params.messageId,
+                        status: status.status,
+                    });
                     const nextToolCalls = normalizeBackgroundToolCalls(
                         status.tool_calls
                     );
@@ -954,12 +1097,30 @@ export function useChat(
             const unsubscribe = subscribeBackgroundJob(tracker, subscriber);
             attachedBackgroundJobs.add(params.jobId);
             backgroundJobDisposers.push(unsubscribe);
+            logBgStream('attach-bg-job-subscriber-registered', {
+                jobId: params.jobId,
+                attachedCount: attachedBackgroundJobs.size,
+                disposerCount: backgroundJobDisposers.length,
+                trackerStatus: tracker.status,
+                trackerPolling: tracker.polling,
+                trackerStreaming: tracker.streaming,
+            });
             if (params.isReattach && !tracker.polling && !tracker.streaming) {
                 // Only prime if polling hasn't started yet
+                logBgStream('attach-bg-job-prime-triggered', {
+                    jobId: params.jobId,
+                });
                 void primeBackgroundJobUpdate(tracker);
             }
             // If polling is already running, resetting tracker.lastContent = ''
             // will cause next poll to fetch full content automatically
+        } else {
+            logBgStream('attach-bg-job-subscriber-not-bound', {
+                jobId: params.jobId,
+                shouldBindUiSubscriber,
+                alreadyAttached: attachedBackgroundJobs.has(params.jobId),
+                detached: detached.value,
+            });
         }
         return tracker;
     }
@@ -976,13 +1137,28 @@ export function useChat(
      * - No-op when background streaming is disabled
      */
     async function reattachBackgroundJobs(): Promise<void> {
-        if (!backgroundStreamingAllowed.value || !threadIdRef.value) return;
+        if (!backgroundStreamingAllowed.value || !threadIdRef.value) {
+            logBgStream('reattach-skip-disabled-or-missing-thread', {
+                threadId: threadIdRef.value || null,
+                backgroundStreamingAllowed: backgroundStreamingAllowed.value,
+            });
+            return;
+        }
+        logBgStream('reattach-start', {
+            threadId: threadIdRef.value,
+            detached: detached.value,
+            activeBackgroundJobId: backgroundJobId.value,
+        });
 
         try {
             const dbMessages = (await messagesByThread(threadIdRef.value)) as
                 | StoredMessage[]
                 | undefined;
             const list = Array.isArray(dbMessages) ? dbMessages : [];
+            logBgStream('reattach-scan', {
+                threadId: threadIdRef.value,
+                messageCount: list.length,
+            });
             for (const msg of list) {
                 if (msg.role !== 'assistant' || !msg.pending || !msg.data) continue;
                 const data = msg.data as Record<string, unknown>;
@@ -1012,14 +1188,30 @@ export function useChat(
                     isReattach: true,
                     useSse: backgroundStreamingAllowed.value,
                 });
+                logBgStream('reattach-job-bound', {
+                    threadId: threadIdRef.value,
+                    messageId: msg.id,
+                    jobId,
+                    status,
+                    initialContentLength: initialContent.length,
+                });
 
                 if (!backgroundJobId.value) backgroundJobId.value = jobId;
                 if (backgroundJobMode.value === 'none') {
                     backgroundJobMode.value = 'background';
                 }
             }
-        } catch {
-            /* intentionally empty */
+            logBgStream('reattach-complete', {
+                threadId: threadIdRef.value,
+                attachedJobs: attachedBackgroundJobs.size,
+                backgroundJobId: backgroundJobId.value,
+                backgroundJobMode: backgroundJobMode.value,
+            });
+        } catch (error) {
+            warnBgStream('reattach-failed', {
+                threadId: threadIdRef.value || null,
+                error: error instanceof Error ? error.message : String(error),
+            });
         }
     }
 
@@ -1313,13 +1505,12 @@ export function useChat(
         let currentModelId: string | undefined;
         try {
             const startedAt = Date.now();
-            const modelId = await hooks.applyFilters(
+            const modelIdPromise = hooks.applyFilters(
                 'ai.chat.model:filter:select',
                 model
             );
-            currentModelId = modelId;
+            const historySyncPromise = ensureHistorySynced();
 
-            const messagesWithSystemRaw = [...rawMessages.value];
             let masterPrompt = '';
             try {
                 const { settings } = useAiSettings();
@@ -1330,11 +1521,19 @@ export function useChat(
             } catch {
                 masterPrompt = '';
             }
-            const systemMessage = await buildSystemPromptMessage({
+            const systemMessagePromise = buildSystemPromptMessage({
                 threadId: threadIdRef.value,
                 activePromptContent: activePromptContent.value,
                 masterPrompt,
             });
+            const [modelId] = await Promise.all([
+                modelIdPromise,
+                historySyncPromise,
+            ]);
+            currentModelId = modelId;
+            const systemMessage = await systemMessagePromise;
+
+            const messagesWithSystemRaw = [...rawMessages.value];
             if (systemMessage) {
                 messagesWithSystemRaw.unshift(systemMessage);
             }
@@ -1349,8 +1548,6 @@ export function useChat(
                 Array.isArray(effectiveMessages) ? effectiveMessages : []
             ).filter(shouldKeepAssistantMessage);
 
-            // Load thread history if not already loaded
-            await ensureHistorySynced();
             let orMessages = await buildOpenRouterMessagesForSend({
                 effectiveMessages: sanitizedEffectiveMessages,
                 assistantHashes,
@@ -1452,12 +1649,25 @@ export function useChat(
 
             const allowBackgroundStreaming =
                 backgroundStreamingAllowed.value &&
-                enabledToolDefs.length === 0 &&
+                backgroundStreamStartMode.value === 'background' &&
                 modalities.length === 1 &&
                 modalities[0] === 'text';
+            logBgStream('send-message-stream-mode-decision', {
+                threadId: threadIdRef.value || null,
+                allowBackgroundStreaming,
+                backgroundStreamingAllowed: backgroundStreamingAllowed.value,
+                backgroundStreamStartMode: backgroundStreamStartMode.value,
+                enabledToolCount: enabledToolDefs.length,
+                modalities,
+            });
 
             if (allowBackgroundStreaming) {
                 backgroundJobMode.value = 'background';
+                logBgStream('send-message-background-start', {
+                    threadId: threadIdRef.value || null,
+                    messageId: assistantDbMsg.id,
+                    streamId: newStreamId,
+                });
 
                 const rawAssistant: ChatMessage = {
                     role: 'assistant',
@@ -1509,6 +1719,12 @@ export function useChat(
                         threadId: threadIdRef.value!,
                         messageId: assistantDbMsg.id,
                     };
+                    logBgStream('send-message-background-job-created', {
+                        threadId: threadIdRef.value!,
+                        messageId: assistantDbMsg.id,
+                        streamId: newStreamId,
+                        jobId: result.jobId,
+                    });
 
                     if (assistantDbMsg.data && typeof assistantDbMsg.data === 'object') {
                         assistantDbMsg.data = {
@@ -1538,12 +1754,27 @@ export function useChat(
                         useSse: backgroundStreamingAllowed.value,
                     });
 
+                    logBgStream('send-message-background-await-completion', {
+                        jobId: tracker.jobId,
+                        threadId: threadIdRef.value!,
+                        messageId: assistantDbMsg.id,
+                    });
                     await tracker.completion;
+                    logBgStream('send-message-background-completed', {
+                        jobId: tracker.jobId,
+                        threadId: threadIdRef.value!,
+                        messageId: assistantDbMsg.id,
+                    });
                 } catch (error) {
                     const errMessage =
                         error instanceof Error
                             ? error.message
                             : 'Background stream failed';
+                    warnBgStream('send-message-background-failed', {
+                        threadId: threadIdRef.value || null,
+                        messageId: assistantDbMsg.id,
+                        error: errMessage,
+                    });
                     const target = resolveUiMessage(assistantDbMsg.id);
                     if (target) {
                         target.pending = false;
@@ -1982,6 +2213,14 @@ export function useChat(
             Boolean(abortController.value);
 
         if (isBackgroundActive || isForegroundStreamActive) {
+            logBgStream('clear-detach-active-stream', {
+                threadId: threadIdRef.value || null,
+                isBackgroundActive,
+                isForegroundStreamActive,
+                backgroundJobId: backgroundJobId.value,
+                backgroundJobMode: backgroundJobMode.value,
+                loading: loading.value,
+            });
             detached.value = true;
             clearBackgroundJobSubscriptions({ keepTracking: true });
             disposeHooks();
@@ -2016,6 +2255,9 @@ export function useChat(
         rawMessages.value = [];
         messages.value = [];
         streamAcc.reset();
+        logBgStream('clear-full-reset', {
+            threadId: threadIdRef.value || null,
+        });
     }
 
     /**
@@ -2084,6 +2326,11 @@ export function useChat(
         if (backgroundJobId.value) {
             const jobId = backgroundJobId.value;
             const info = backgroundJobInfo.value;
+            logBgStream('abort-background-job', {
+                jobId,
+                threadId: info?.threadId || threadIdRef.value || null,
+                messageId: info?.messageId || null,
+            });
             backgroundJobId.value = null;
             backgroundJobMode.value = 'none';
             backgroundJobInfo.value = null;
@@ -2115,7 +2362,18 @@ export function useChat(
             return;
         }
 
-        if (!loading.value || !abortController.value) return;
+        if (!loading.value || !abortController.value) {
+            logBgStream('abort-ignored-no-active-foreground', {
+                loading: loading.value,
+                hasAbortController: Boolean(abortController.value),
+                threadId: threadIdRef.value || null,
+            });
+            return;
+        }
+        logBgStream('abort-foreground-stream', {
+            threadId: threadIdRef.value || null,
+            streamId: streamId.value || null,
+        });
         aborted.value = true;
         try {
             abortController.value.abort();

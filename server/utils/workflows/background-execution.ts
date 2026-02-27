@@ -25,6 +25,31 @@ import {
 import { OpenRouter } from '@openrouter/sdk';
 import { registerHitlRequest, clearHitlRequestsForJob } from './hitl-store';
 import { normalizeOpenRouterBaseUrl } from '~~/shared/openrouter/url';
+const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
+
+function logBgStream(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (process.env.NODE_ENV === 'production') return;
+    if (details) {
+        console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
+
+function warnBgStream(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (process.env.NODE_ENV === 'production') return;
+    if (details) {
+        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
 
 const MAX_WORKFLOW_STATE_BYTES = 64 * 1024;
 type ConversationHistoryMessage = { role: string; content: string };
@@ -195,6 +220,14 @@ async function runWorkflowInBackground(
     });
 
     initJobLiveState(jobId);
+    logBgStream('workflow-background-start', {
+        jobId,
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+        threadId: params.threadId,
+        messageId: params.messageId,
+        workflowId: params.workflowId,
+    });
 
     const runtimeConfig = useRuntimeConfig();
     const client = new OpenRouter({
@@ -472,14 +505,29 @@ async function runWorkflowInBackground(
             workflow_state: workflowState,
         });
 
-        if (shouldNotify()) {
+        const notifyOnComplete = shouldNotify();
+        logBgStream('workflow-notify-decision-complete', {
+            jobId,
+            workflowId: params.workflowId,
+            notifyOnComplete,
+            hasViewers: hasJobViewers(jobId),
+        });
+        if (notifyOnComplete) {
             try {
                 await notificationEmitter?.emitBackgroundJobComplete(
                     params.workspaceId,
                     params.userId,
                     params.threadId,
-                    jobId
+                    jobId,
+                    params.messageId
                 );
+                logBgStream('workflow-notify-complete-sent', {
+                    jobId,
+                    workflowId: params.workflowId,
+                    userId: params.userId,
+                    workspaceId: params.workspaceId,
+                    threadId: params.threadId,
+                });
             } catch (notifyError) {
                 logBackgroundEvent(
                     'warn',
@@ -493,6 +541,14 @@ async function runWorkflowInBackground(
                                 : String(notifyError),
                     }
                 );
+                warnBgStream('workflow-notify-complete-failed', {
+                    jobId,
+                    workflowId: params.workflowId,
+                    error:
+                        notifyError instanceof Error
+                            ? notifyError.message
+                            : String(notifyError),
+                });
             }
         }
     } catch (error) {
@@ -533,7 +589,14 @@ async function runWorkflowInBackground(
             error: error instanceof Error ? error.message : String(error),
             workflow_state: workflowState,
         });
-        if (shouldNotify()) {
+        const notifyOnError = shouldNotify();
+        logBgStream('workflow-notify-decision-error', {
+            jobId,
+            workflowId: params.workflowId,
+            notifyOnError,
+            hasViewers: hasJobViewers(jobId),
+        });
+        if (notifyOnError) {
             try {
                 await notificationEmitter?.emitBackgroundJobError(
                     params.workspaceId,
@@ -542,6 +605,13 @@ async function runWorkflowInBackground(
                     jobId,
                     error instanceof Error ? error.message : String(error)
                 );
+                logBgStream('workflow-notify-error-sent', {
+                    jobId,
+                    workflowId: params.workflowId,
+                    userId: params.userId,
+                    workspaceId: params.workspaceId,
+                    threadId: params.threadId,
+                });
             } catch (notifyError) {
                 logBackgroundEvent(
                     'warn',
@@ -555,6 +625,14 @@ async function runWorkflowInBackground(
                                 : String(notifyError),
                     }
                 );
+                warnBgStream('workflow-notify-error-failed', {
+                    jobId,
+                    workflowId: params.workflowId,
+                    error:
+                        notifyError instanceof Error
+                            ? notifyError.message
+                            : String(notifyError),
+                });
             }
         }
         throw error;

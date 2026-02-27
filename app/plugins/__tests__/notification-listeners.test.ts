@@ -22,6 +22,18 @@ const hooksMock = {
 
 const createMock = vi.fn().mockResolvedValue(null);
 const panesRef = { value: [] as Array<{ mode?: string; threadId?: string }> };
+const runtimeConfigRef = {
+    value: { public: { ssrAuthEnabled: false } } as {
+        public: {
+            ssrAuthEnabled?: boolean;
+            sync?: {
+                enabled?: boolean;
+                provider?: string;
+                convexUrl?: string;
+            };
+        };
+    },
+};
 
 vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => hooksMock,
@@ -52,7 +64,7 @@ vi.mock('#app', () => ({
 }));
 
 vi.mock('#imports', () => ({
-    useRuntimeConfig: () => ({ public: { ssrAuthEnabled: false } }),
+    useRuntimeConfig: () => runtimeConfigRef.value,
 }));
 
 vi.mock('~/composables/auth/useSessionContext', () => ({
@@ -66,6 +78,7 @@ describe('notification listeners plugin', () => {
         addActionMock.mockClear();
         createMock.mockClear();
         panesRef.value = [];
+        runtimeConfigRef.value = { public: { ssrAuthEnabled: false } };
     });
 
     it('is a no-op outside the client runtime', async () => {
@@ -129,5 +142,30 @@ describe('notification listeners plugin', () => {
         });
 
         expect(createMock).not.toHaveBeenCalled();
+    });
+
+    it('emits AI completion notification even when server notifications are enabled', async () => {
+        setClient(true);
+        runtimeConfigRef.value = {
+            public: {
+                ssrAuthEnabled: true,
+                sync: {
+                    enabled: true,
+                    provider: 'convex',
+                    convexUrl: 'https://example.convex.site',
+                },
+            },
+        };
+        await import('~/plugins/notification-listeners.client');
+
+        const handler = handlers.get('ai.chat.stream:action:complete');
+        await handler?.({
+            threadId: 'thread-2',
+            assistantId: 'msg-1',
+            streamId: 'stream-1',
+            totalLength: 10,
+        });
+
+        expect(createMock).toHaveBeenCalledTimes(1);
     });
 });

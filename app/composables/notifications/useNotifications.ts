@@ -44,6 +44,31 @@ let sharedServiceUserId: string | null = null;
 let sharedServiceWorkspaceId: string | null = null;
 let serviceCleanup: (() => void) | null = null;
 let serviceRefCount = 0;
+const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
+
+function logBgNotification(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (!import.meta.dev) return;
+    if (details) {
+        console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
+
+function warnBgNotification(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (!import.meta.dev) return;
+    if (details) {
+        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
 
 /**
  * Reactive notification state and actions returned by {@link useNotifications}.
@@ -142,11 +167,19 @@ export function useNotifications(): NotificationsComposable {
             sharedServiceUserId === nextUserId &&
             sharedServiceWorkspaceId === nextWorkspaceId
         ) {
+            logBgNotification('notifications-service-reuse', {
+                userId: nextUserId,
+                workspaceId: nextWorkspaceId,
+            });
             return sharedService;
         }
         if (serviceCleanup) {
             serviceCleanup();
         }
+        logBgNotification('notifications-service-create', {
+            userId: nextUserId,
+            workspaceId: nextWorkspaceId,
+        });
         sharedService = new NotificationService(db, hooks, nextUserId);
         sharedServiceUserId = nextUserId;
         sharedServiceWorkspaceId = nextWorkspaceId;
@@ -155,6 +188,11 @@ export function useNotifications(): NotificationsComposable {
     }
 
     serviceRefCount++;
+    logBgNotification('notifications-service-ref-increment', {
+        serviceRefCount,
+        userId: userId.value,
+        workspaceId: workspaceId.value,
+    });
 
     let service = ensureSharedService(userId.value, workspaceId.value);
 
@@ -177,6 +215,9 @@ export function useNotifications(): NotificationsComposable {
 
     function startNotificationSubscriptions(currentUserId: string): void {
         loading.value = true;
+        logBgNotification('notifications-subscribe-start', {
+            userId: currentUserId,
+        });
 
         const notificationsObservable = liveQuery(async () => {
             try {
@@ -201,10 +242,18 @@ export function useNotifications(): NotificationsComposable {
             next: (result) => {
                 notifications.value = result;
                 loading.value = false;
+                logBgNotification('notifications-subscribe-next', {
+                    userId: currentUserId,
+                    count: result.length,
+                });
             },
             error: (err) => {
                 if (!isDatabaseClosedError(err)) {
                     console.error('[useNotifications] Subscription error:', err);
+                    warnBgNotification('notifications-subscribe-error', {
+                        userId: currentUserId,
+                        error: err instanceof Error ? err.message : String(err),
+                    });
                 }
                 loading.value = false;
             },
@@ -233,6 +282,10 @@ export function useNotifications(): NotificationsComposable {
         unreadCountSubscription = unreadCountObservable.subscribe({
             next: (count) => {
                 unreadCount.value = count;
+                logBgNotification('notifications-unread-next', {
+                    userId: currentUserId,
+                    unread: count,
+                });
             },
             error: (err) => {
                 if (!isDatabaseClosedError(err)) {
@@ -240,6 +293,10 @@ export function useNotifications(): NotificationsComposable {
                         '[useNotifications] Unread count subscription error:',
                         err
                     );
+                    warnBgNotification('notifications-unread-error', {
+                        userId: currentUserId,
+                        error: err instanceof Error ? err.message : String(err),
+                    });
                 }
             },
         });
@@ -251,6 +308,9 @@ export function useNotifications(): NotificationsComposable {
     }
 
     function startMutedThreadsSubscription(currentUserId: string): void {
+        logBgNotification('notifications-muted-subscribe-start', {
+            userId: currentUserId,
+        });
         const scopedMutedThreadsKey = mutedThreadsKeyForUser(currentUserId);
         const mutedThreadsObservable = liveQuery(async () => {
             try {
@@ -263,12 +323,20 @@ export function useNotifications(): NotificationsComposable {
                 const parseResult = mutedThreadsSchema.safeParse(JSON.parse(kvRecord.value));
                 if (!parseResult.success) {
                     console.warn('[useNotifications] Invalid muted threads data, resetting:', parseResult.error.message);
+                    warnBgNotification('notifications-muted-invalid-data', {
+                        userId: currentUserId,
+                        error: parseResult.error.message,
+                    });
                     return [];
                 }
                 return parseResult.data;
             } catch (err) {
                 if (!isDatabaseClosedError(err)) {
                     console.error('[useNotifications] Muted threads error:', err);
+                    warnBgNotification('notifications-muted-query-error', {
+                        userId: currentUserId,
+                        error: err instanceof Error ? err.message : String(err),
+                    });
                 }
                 return [];
             }
@@ -277,10 +345,18 @@ export function useNotifications(): NotificationsComposable {
         mutedThreadsSubscription = mutedThreadsObservable.subscribe({
             next: (threads) => {
                 mutedThreadsData.value = threads;
+                logBgNotification('notifications-muted-next', {
+                    userId: currentUserId,
+                    mutedCount: threads.length,
+                });
             },
             error: (err) => {
                 if (!isDatabaseClosedError(err)) {
                     console.error('[useNotifications] Muted threads subscription error:', err);
+                    warnBgNotification('notifications-muted-subscribe-error', {
+                        userId: currentUserId,
+                        error: err instanceof Error ? err.message : String(err),
+                    });
                 }
             },
         });
@@ -300,6 +376,13 @@ export function useNotifications(): NotificationsComposable {
             !unreadCountSubscription ||
             !mutedThreadsSubscription;
         if (!needsResubscribe) return;
+        logBgNotification('notifications-sync-user', {
+            prevUserId: userId.value,
+            nextUserId,
+            prevWorkspaceId: workspaceId.value,
+            nextWorkspaceId,
+            needsResubscribe,
+        });
         userId.value = nextUserId;
         workspaceId.value = nextWorkspaceId;
         service = ensureSharedService(nextUserId, nextWorkspaceId);
@@ -329,12 +412,21 @@ export function useNotifications(): NotificationsComposable {
 
             // Decrement service ref count and cleanup when no more users
             serviceRefCount--;
+            logBgNotification('notifications-service-ref-decrement', {
+                serviceRefCount,
+                userId: userId.value,
+                workspaceId: workspaceId.value,
+            });
             if (serviceRefCount === 0 && serviceCleanup) {
                 serviceCleanup();
                 sharedService = null;
                 sharedServiceUserId = null;
                 sharedServiceWorkspaceId = null;
                 serviceCleanup = null;
+                logBgNotification('notifications-service-cleanup-final', {
+                    userId: userId.value,
+                    workspaceId: workspaceId.value,
+                });
             }
         });
     }
@@ -374,6 +466,12 @@ export function useNotifications(): NotificationsComposable {
     };
 
     const push = async (payload: NotificationCreatePayload): Promise<void> => {
+        logBgNotification('notifications-push-action', {
+            userId: userId.value,
+            type: payload.type,
+            threadId: payload.threadId || null,
+            title: payload.title,
+        });
         await hooks.doAction('notify:action:push', payload);
     };
 

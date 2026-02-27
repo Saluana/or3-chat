@@ -41,6 +41,31 @@ import { logBackgroundEvent } from './logging';
 import type { ToolCall, ToolDefinition } from '~/utils/chat/types';
 import { executeServerTool } from '../chat/tool-registry';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
+const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
+
+function logBgStream(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (process.env.NODE_ENV === 'production') return;
+    if (details) {
+        console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
+
+function warnBgStream(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (process.env.NODE_ENV === 'production') return;
+    if (details) {
+        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
 
 function createAbortError(message = 'Job aborted by user'): Error {
     const err = new Error(message);
@@ -180,6 +205,14 @@ export async function startBackgroundStream(
 ): Promise<BackgroundStreamResult> {
     const provider = await getJobProvider();
     const model = (params.body.model as string) || 'unknown';
+    logBgStream('server-background-start-attempt', {
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+        threadId: params.threadId,
+        messageId: params.messageId,
+        model,
+        hasTools: Array.isArray(params.body.tools) && params.body.tools.length > 0,
+    });
 
     // Create job
     const jobId = await provider.createJob({
@@ -201,6 +234,14 @@ export async function startBackgroundStream(
 
     // Fire-and-forget the streaming
     streamInBackground(jobId, params, provider).catch((err) => {
+        warnBgStream('server-background-loop-failed', {
+            jobId,
+            userId: params.userId,
+            workspaceId: params.workspaceId,
+            threadId: params.threadId,
+            messageId: params.messageId,
+            error: err instanceof Error ? err.message : String(err),
+        });
         logBackgroundEvent('error', 'background.chat.failed', {
             jobId,
             userId: params.userId,
@@ -210,6 +251,14 @@ export async function startBackgroundStream(
             error: err instanceof Error ? err.message : String(err),
         });
         void provider.failJob(jobId, err instanceof Error ? err.message : String(err));
+    });
+    logBgStream('server-background-started', {
+        jobId,
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+        threadId: params.threadId,
+        messageId: params.messageId,
+        model,
     });
 
     return { jobId, status: 'streaming' };
@@ -262,6 +311,15 @@ export async function consumeBackgroundStream(params: {
     let flushScheduled = false;
     let flushInFlight = Promise.resolve();
     let flushError: unknown = null;
+    logBgStream('server-consume-background-start', {
+        jobId: params.jobId,
+        userId: params.context.userId,
+        workspaceId: params.context.workspaceId,
+        threadId: params.context.threadId,
+        flushEveryChunk,
+        updateInterval: UPDATE_INTERVAL,
+        updateIntervalMs: UPDATE_INTERVAL_MS,
+    });
 
     initJobLiveState(params.jobId);
 
@@ -303,6 +361,10 @@ export async function consumeBackgroundStream(params: {
             }
         }).catch((err) => {
             flushError = err;
+            warnBgStream('server-consume-background-flush-error', {
+                jobId: params.jobId,
+                error: err instanceof Error ? err.message : String(err),
+            });
         });
 
         return flushInFlight;
@@ -371,6 +433,11 @@ export async function consumeBackgroundStream(params: {
 
         // Complete the job
         await params.provider.completeJob(params.jobId, fullContent);
+        logBgStream('server-consume-background-complete', {
+            jobId: params.jobId,
+            chunks,
+            contentLength: fullContent.length,
+        });
         emitJobStatus(params.jobId, 'complete', {
             content: fullContent,
             contentLength: fullContent.length,
@@ -378,15 +445,29 @@ export async function consumeBackgroundStream(params: {
             completedAt: Date.now(),
         });
 
-        if (shouldNotify()) {
+        const notifyOnComplete = shouldNotify();
+        logBgStream('server-consume-background-notify-decision-complete', {
+            jobId: params.jobId,
+            notifyOnComplete,
+            hasViewers: hasJobViewers(params.jobId),
+            subscribersSuppressed: !notifyOnComplete,
+        });
+        if (notifyOnComplete) {
             // Emit server-side notification for job completion
             try {
                 await notificationEmitter?.emitBackgroundJobComplete(
                     params.context.workspaceId,
                     params.context.userId,
                     params.context.threadId,
-                    params.jobId
+                    params.jobId,
+                    params.context.messageId
                 );
+                logBgStream('server-consume-background-notify-complete-sent', {
+                    jobId: params.jobId,
+                    userId: params.context.userId,
+                    workspaceId: params.context.workspaceId,
+                    threadId: params.context.threadId,
+                });
             } catch (err) {
                 logBackgroundEvent(
                     'warn',
@@ -396,6 +477,10 @@ export async function consumeBackgroundStream(params: {
                         error: err instanceof Error ? err.message : String(err),
                     }
                 );
+                warnBgStream('server-consume-background-notify-complete-failed', {
+                    jobId: params.jobId,
+                    error: err instanceof Error ? err.message : String(err),
+                });
                 // Do not fail the job if notification fails
             }
         }
@@ -404,6 +489,11 @@ export async function consumeBackgroundStream(params: {
         clearFlushTimer();
         if (err instanceof Error && err.name === 'AbortError') {
             // Job was aborted (already marked in provider)
+            logBgStream('server-consume-background-aborted', {
+                jobId: params.jobId,
+                chunks,
+                contentLength: fullContent.length,
+            });
             emitJobStatus(params.jobId, 'aborted', {
                 content: fullContent,
                 contentLength: fullContent.length,
@@ -420,8 +510,21 @@ export async function consumeBackgroundStream(params: {
             completedAt: Date.now(),
             error: err instanceof Error ? err.message : String(err),
         });
+        warnBgStream('server-consume-background-error', {
+            jobId: params.jobId,
+            chunks,
+            contentLength: fullContent.length,
+            error: err instanceof Error ? err.message : String(err),
+        });
 
-        if (shouldNotify()) {
+        const notifyOnError = shouldNotify();
+        logBgStream('server-consume-background-notify-decision-error', {
+            jobId: params.jobId,
+            notifyOnError,
+            hasViewers: hasJobViewers(params.jobId),
+            subscribersSuppressed: !notifyOnError,
+        });
+        if (notifyOnError) {
             // Emit error notification
             try {
                 await notificationEmitter?.emitBackgroundJobError(
@@ -431,6 +534,12 @@ export async function consumeBackgroundStream(params: {
                     params.jobId,
                     err instanceof Error ? err.message : String(err)
                 );
+                logBgStream('server-consume-background-notify-error-sent', {
+                    jobId: params.jobId,
+                    userId: params.context.userId,
+                    workspaceId: params.context.workspaceId,
+                    threadId: params.context.threadId,
+                });
             } catch (notifyErr) {
                 logBackgroundEvent(
                     'warn',
@@ -443,6 +552,13 @@ export async function consumeBackgroundStream(params: {
                                 : String(notifyErr),
                     }
                 );
+                warnBgStream('server-consume-background-notify-error-failed', {
+                    jobId: params.jobId,
+                    error:
+                        notifyErr instanceof Error
+                            ? notifyErr.message
+                            : String(notifyErr),
+                });
             }
         }
 
@@ -495,6 +611,15 @@ export async function consumeBackgroundStreamWithTools(params: {
     const emitToolState = async () => {
         const tool_calls = Array.from(toolStates.values());
         await params.provider.updateJob(params.jobId, { tool_calls });
+        logBgStream('server-consume-tools-state', {
+            jobId: params.jobId,
+            toolCallCount: tool_calls.length,
+            statusSummary: tool_calls.map((call) => ({
+                id: call.id,
+                name: call.name,
+                status: call.status,
+            })),
+        });
         emitJobStatus(params.jobId, 'streaming', {
             content: fullContent,
             contentLength: fullContent.length,
@@ -504,6 +629,13 @@ export async function consumeBackgroundStreamWithTools(params: {
     };
 
     initJobLiveState(params.jobId);
+    logBgStream('server-consume-tools-start', {
+        jobId: params.jobId,
+        userId: params.context.userId,
+        workspaceId: params.context.workspaceId,
+        threadId: params.context.threadId,
+        toolCount: Array.isArray(params.body.tools) ? params.body.tools.length : 0,
+    });
 
     const orMessages = Array.isArray(params.body.messages)
         ? params.body.messages.slice()
@@ -557,6 +689,13 @@ export async function consumeBackgroundStreamWithTools(params: {
                 },
                 body: JSON.stringify(requestBody),
                 signal: params.abortSignal,
+            });
+            logBgStream('server-consume-tools-upstream-response', {
+                jobId: params.jobId,
+                iteration: loopIteration,
+                status: upstream.status,
+                ok: upstream.ok,
+                hasBody: Boolean(upstream.body),
             });
 
             if (!upstream.ok || !upstream.body) {
@@ -742,14 +881,27 @@ export async function consumeBackgroundStreamWithTools(params: {
             tool_calls: Array.from(toolStates.values()),
         });
 
-        if (shouldNotify()) {
+        const notifyOnComplete = shouldNotify();
+        logBgStream('server-consume-tools-notify-decision-complete', {
+            jobId: params.jobId,
+            notifyOnComplete,
+            hasViewers: hasJobViewers(params.jobId),
+        });
+        if (notifyOnComplete) {
             try {
                 await notificationEmitter?.emitBackgroundJobComplete(
                     params.context.workspaceId,
                     params.context.userId,
                     params.context.threadId,
-                    params.jobId
+                    params.jobId,
+                    params.context.messageId
                 );
+                logBgStream('server-consume-tools-notify-complete-sent', {
+                    jobId: params.jobId,
+                    userId: params.context.userId,
+                    workspaceId: params.context.workspaceId,
+                    threadId: params.context.threadId,
+                });
             } catch (err) {
                 logBackgroundEvent(
                     'warn',
@@ -759,10 +911,19 @@ export async function consumeBackgroundStreamWithTools(params: {
                         error: err instanceof Error ? err.message : String(err),
                     }
                 );
+                warnBgStream('server-consume-tools-notify-complete-failed', {
+                    jobId: params.jobId,
+                    error: err instanceof Error ? err.message : String(err),
+                });
             }
         }
     } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
+            logBgStream('server-consume-tools-aborted', {
+                jobId: params.jobId,
+                chunks,
+                contentLength: fullContent.length,
+            });
             emitJobStatus(params.jobId, 'aborted', {
                 content: fullContent,
                 contentLength: fullContent.length,
@@ -781,6 +942,13 @@ export async function consumeBackgroundStreamWithTools(params: {
             error: err instanceof Error ? err.message : String(err),
             tool_calls: Array.from(toolStates.values()),
         });
+        warnBgStream('server-consume-tools-error', {
+            jobId: params.jobId,
+            iteration: loopIteration,
+            chunks,
+            contentLength: fullContent.length,
+            error: err instanceof Error ? err.message : String(err),
+        });
         logBackgroundEvent('error', 'background.tools.failed', {
             jobId: params.jobId,
             iteration: loopIteration,
@@ -796,7 +964,13 @@ export async function consumeBackgroundStreamWithTools(params: {
             })),
         });
 
-        if (shouldNotify()) {
+        const notifyOnError = shouldNotify();
+        logBgStream('server-consume-tools-notify-decision-error', {
+            jobId: params.jobId,
+            notifyOnError,
+            hasViewers: hasJobViewers(params.jobId),
+        });
+        if (notifyOnError) {
             try {
                 await notificationEmitter?.emitBackgroundJobError(
                     params.context.workspaceId,
@@ -805,6 +979,12 @@ export async function consumeBackgroundStreamWithTools(params: {
                     params.jobId,
                     err instanceof Error ? err.message : String(err)
                 );
+                logBgStream('server-consume-tools-notify-error-sent', {
+                    jobId: params.jobId,
+                    userId: params.context.userId,
+                    workspaceId: params.context.workspaceId,
+                    threadId: params.context.threadId,
+                });
             } catch (notifyErr) {
                 logBackgroundEvent(
                     'warn',
@@ -817,6 +997,13 @@ export async function consumeBackgroundStreamWithTools(params: {
                                 : String(notifyErr),
                     }
                 );
+                warnBgStream('server-consume-tools-notify-error-failed', {
+                    jobId: params.jobId,
+                    error:
+                        notifyErr instanceof Error
+                            ? notifyErr.message
+                            : String(notifyErr),
+                });
             }
         }
 
@@ -851,7 +1038,19 @@ async function streamInBackground(
 
     const hasTools =
         Array.isArray(cleanBody.tools) && cleanBody.tools.length > 0;
+    logBgStream('server-stream-in-background-start', {
+        jobId,
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+        threadId: params.threadId,
+        messageId: params.messageId,
+        hasTools,
+    });
     if (hasTools) {
+        logBgStream('server-stream-in-background-tools-mode', {
+            jobId,
+            toolCount: Array.isArray(cleanBody.tools) ? cleanBody.tools.length : 0,
+        });
         await consumeBackgroundStreamWithTools({
             jobId,
             body: cleanBody,
@@ -879,9 +1078,20 @@ async function streamInBackground(
         body: JSON.stringify(cleanBody),
         signal: ac.signal,
     });
+    logBgStream('server-stream-in-background-upstream-response', {
+        jobId,
+        status: upstream.status,
+        ok: upstream.ok,
+        hasBody: Boolean(upstream.body),
+    });
 
     if (!upstream.ok || !upstream.body) {
         const errorText = await upstream.text().catch(() => '<no body>');
+        warnBgStream('server-stream-in-background-upstream-failed', {
+            jobId,
+            status: upstream.status,
+            errorPreview: errorText.slice(0, 200),
+        });
         throw new Error(
             `OpenRouter error ${upstream.status}: ${errorText.slice(0, 200)}`
         );

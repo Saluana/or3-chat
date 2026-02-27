@@ -11,7 +11,8 @@ export interface NotificationEmitter {
         workspaceId: string,
         userId: string,
         threadId: string,
-        jobId: string
+        jobId: string,
+        messageId?: string
     ): Promise<string | null>;
     emitBackgroundJobError(
         workspaceId: string,

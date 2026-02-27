@@ -36,6 +36,7 @@ export type BackgroundJobTracker = {
     userId: string;
     threadId: string;
     messageId: string;
+    preferServerNotifications?: boolean;
     status: BackgroundJobStatus['status'];
     lastWorkflowVersion: number;
     lastContent: string;
@@ -44,6 +45,8 @@ export type BackgroundJobTracker = {
     polling: boolean;
     streaming: boolean;
     active: boolean;
+    preferSse?: boolean;
+    pollRunId?: number;
     streamUnsubscribe?: () => void;
     subscribers: Set<BackgroundJobSubscriber>;
     completion: Promise<BackgroundJobStatus>;
@@ -92,6 +95,7 @@ export type EnsureBackgroundJobTrackerParams = {
     userId: string;
     threadId: string;
     messageId: string;
+    preferServerNotifications?: boolean;
     initialContent?: string;
     useSse?: boolean;
 };

@@ -87,6 +87,38 @@ export const backgroundJobTrackers = new Map<string, BackgroundJobTracker>();
 
 let cachedNotificationHooks: TypedHookEngine | null = null;
 let cachedWorkflowHooks: TypedHookEngine | null = null;
+const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
+
+function bgStreamLog(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (!import.meta.dev) return;
+    if (details) {
+        console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
+
+function bgStreamWarn(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (!import.meta.dev) return;
+    if (details) {
+        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
+
+function isClientRuntime(): boolean {
+    const override = (globalThis as { __OR3_TEST_CLIENT?: boolean })
+        .__OR3_TEST_CLIENT;
+    if (typeof override === 'boolean') return override;
+    return Boolean(import.meta.client);
+}
 
 function workflowVersionOf(value: unknown): number {
     if (!value || typeof value !== 'object') return -1;
@@ -130,14 +162,34 @@ function resolveWorkflowHooks(): TypedHookEngine | null {
 /**
  * Internal helper. Checks if a thread is muted via KV store.
  */
-async function isThreadMuted(threadId: string): Promise<boolean> {
-    if (!import.meta.client) return false;
+async function isThreadMuted(
+    threadId: string,
+    userId?: string
+): Promise<boolean> {
+    if (!isClientRuntime()) return false;
     try {
-        const kv = await getDb().kv.get(BACKGROUND_JOB_MUTED_KEY);
+        const scopedKey =
+            userId && userId.length > 0
+                ? `${BACKGROUND_JOB_MUTED_KEY}:${userId}`
+                : null;
+        const kv =
+            (scopedKey ? await getDb().kv.get(scopedKey) : null) ||
+            (await getDb().kv.get(BACKGROUND_JOB_MUTED_KEY));
         if (!kv?.value) return false;
         const parsed: unknown = JSON.parse(kv.value);
-        return Array.isArray(parsed) && parsed.includes(threadId);
+        const muted = Array.isArray(parsed) && parsed.includes(threadId);
+        bgStreamLog('mute-check', {
+            threadId,
+            userId: userId || null,
+            muted,
+            scopedKey,
+        });
+        return muted;
     } catch {
+        bgStreamWarn('mute-check-failed', {
+            threadId,
+            userId: userId || null,
+        });
         return false;
     }
 }
@@ -149,20 +201,52 @@ async function emitBackgroundComplete(
     tracker: BackgroundJobTracker,
     status: BackgroundJobStatus
 ): Promise<void> {
-    if (!import.meta.client) return;
+    if (!isClientRuntime()) return;
     if (!tracker.threadId) return;
     // Notify when detached OR when app tab is backgrounded.
     // Hidden-tab sessions can keep SSE subscribers active, which otherwise
     // suppresses completion notifications indefinitely.
     const hasSubscribers = tracker.subscribers.size > 0;
+    if (tracker.preferServerNotifications && !hasSubscribers) {
+        bgStreamLog('notify-suppressed-prefer-server-notifications', {
+            jobId: tracker.jobId,
+            threadId: tracker.threadId,
+            status: status.status,
+            hasSubscribers,
+        });
+        return;
+    }
     const isTabHidden =
         typeof document !== 'undefined' &&
         document.visibilityState === 'hidden';
-    if (hasSubscribers && !isTabHidden) return;
-    if (await isThreadMuted(tracker.threadId)) return;
+    if (hasSubscribers && !isTabHidden) {
+        bgStreamLog('notify-suppressed-active-subscribers', {
+            jobId: tracker.jobId,
+            threadId: tracker.threadId,
+            subscriberCount: tracker.subscribers.size,
+            status: status.status,
+            isTabHidden,
+        });
+        return;
+    }
+    if (await isThreadMuted(tracker.threadId, tracker.userId)) {
+        bgStreamLog('notify-suppressed-muted-thread', {
+            jobId: tracker.jobId,
+            threadId: tracker.threadId,
+            status: status.status,
+        });
+        return;
+    }
 
     const hooks = resolveNotificationHooks();
-    if (!hooks) return;
+    if (!hooks) {
+        bgStreamWarn('notify-suppressed-hooks-unavailable', {
+            jobId: tracker.jobId,
+            threadId: tracker.threadId,
+            status: status.status,
+        });
+        return;
+    }
     const isError = status.status === 'error';
     const isAbort = status.status === 'aborted';
     const type = isError || isAbort ? 'system.warning' : 'ai.message.received';
@@ -193,24 +277,49 @@ async function emitBackgroundComplete(
     };
 
     try {
+        bgStreamLog('notify-attempt', {
+            jobId: tracker.jobId,
+            threadId: tracker.threadId,
+            status: status.status,
+            hasSubscribers,
+            isTabHidden,
+            hasPushAction: hooks.hasAction('notify:action:push'),
+        });
         // Prefer hook-based creation so the currently active NotificationService
         // instance owns user scoping (prevents stale tracker user IDs).
         if (hooks.hasAction('notify:action:push')) {
             await hooks.doAction('notify:action:push', payload);
+            bgStreamLog('notify-emitted-via-hooks', {
+                jobId: tracker.jobId,
+                threadId: tracker.threadId,
+                status: status.status,
+                type: payload.type,
+            });
             return;
         }
 
         const session = getCachedSessionContext();
-        const userId = resolveNotificationUserId(session) || tracker.userId;
+        const sessionUserId =
+            session?.authenticated && session.user?.id ? session.user.id : null;
+        const userId =
+            sessionUserId ?? tracker.userId ?? resolveNotificationUserId(session);
         const service = new NotificationService(getDb(), hooks, userId);
-        await service.create(payload);
+        const created = await service.create(payload);
+        bgStreamLog('notify-emitted-via-service', {
+            jobId: tracker.jobId,
+            threadId: tracker.threadId,
+            status: status.status,
+            type: payload.type,
+            created: Boolean(created),
+            userId,
+        });
     } catch (error) {
-        if (import.meta.dev) {
-            console.warn(
-                '[background-jobs] Failed to emit completion notification',
-                error
-            );
-        }
+        bgStreamWarn('notify-failed', {
+            jobId: tracker.jobId,
+            threadId: tracker.threadId,
+            status: status.status,
+            error: error instanceof Error ? error.message : String(error),
+        });
     }
 }
 
@@ -222,7 +331,7 @@ async function persistBackgroundJobUpdate(
     status: BackgroundJobStatus,
     content: string
 ): Promise<boolean> {
-    if (!import.meta.client) return true;
+    if (!isClientRuntime()) return true;
 
     const now = Date.now();
     const statusChanged = status.status !== tracker.status;
@@ -237,7 +346,14 @@ async function persistBackgroundJobUpdate(
     const existing = (await getDb().messages.get(tracker.messageId)) as
         | StoredMessage
         | undefined;
-    if (!existing) return false;
+    if (!existing) {
+        bgStreamWarn('persist-message-missing', {
+            jobId: tracker.jobId,
+            messageId: tracker.messageId,
+            status: status.status,
+        });
+        return false;
+    }
 
     const baseData =
         existing.data && typeof existing.data === 'object'
@@ -284,6 +400,18 @@ async function persistBackgroundJobUpdate(
     tracker.status = status.status;
     tracker.lastPersistAt = now;
     tracker.lastPersistedLength = content.length;
+    bgStreamLog('persist-complete', {
+        jobId: tracker.jobId,
+        messageId: tracker.messageId,
+        status: status.status,
+        contentLength: content.length,
+        statusChanged,
+        shouldPersistContent,
+        includeWorkflowState,
+        toolCallCount: Array.isArray(status.tool_calls)
+            ? status.tool_calls.length
+            : 0,
+    });
     return true;
 }
 
@@ -344,8 +472,28 @@ async function ensureFullBackgroundStatus(
         (contentLen === null || status.content.length >= contentLen);
     if (hasFullContent) return status;
     try {
-        return await pollJobStatus(tracker.jobId);
+        bgStreamLog('ensure-full-status-refetch', {
+            jobId: tracker.jobId,
+            priorStatus: status.status,
+            priorContentLength:
+                typeof status.content === 'string' ? status.content.length : 0,
+            declaredContentLength: contentLen,
+        });
+        const refetched = await pollJobStatus(tracker.jobId);
+        bgStreamLog('ensure-full-status-refetched', {
+            jobId: tracker.jobId,
+            status: refetched.status,
+            contentLength:
+                typeof refetched.content === 'string'
+                    ? refetched.content.length
+                    : 0,
+        });
+        return refetched;
     } catch {
+        bgStreamWarn('ensure-full-status-refetch-failed', {
+            jobId: tracker.jobId,
+            priorStatus: status.status,
+        });
         return status;
     }
 }
@@ -357,12 +505,39 @@ async function handleBackgroundStatus(
     tracker: BackgroundJobTracker,
     status: BackgroundJobStatus
 ): Promise<boolean> {
-    if (!tracker.active) return false;
+    if (!tracker.active) {
+        bgStreamLog('status-ignored-inactive', {
+            jobId: tracker.jobId,
+            incomingStatus: status.status,
+        });
+        return false;
+    }
     let nextStatus = status;
     if (nextStatus.status !== 'streaming') {
         nextStatus = await ensureFullBackgroundStatus(tracker, nextStatus);
     }
     const { safeContent, delta } = deriveBackgroundContent(tracker, nextStatus);
+    const shouldLogStatusProgress =
+        nextStatus.status !== 'streaming' ||
+        delta.length >= 256 ||
+        (Array.isArray(nextStatus.tool_calls) &&
+            nextStatus.tool_calls.length > 0);
+    if (shouldLogStatusProgress) {
+        bgStreamLog('status-processed', {
+            jobId: tracker.jobId,
+            status: nextStatus.status,
+            incomingContentLength:
+                typeof nextStatus.content === 'string'
+                    ? nextStatus.content.length
+                    : 0,
+            trackerContentLengthBefore: tracker.lastContent.length,
+            safeContentLength: safeContent.length,
+            deltaLength: delta.length,
+            subscribers: tracker.subscribers.size,
+            polling: tracker.polling,
+            streaming: tracker.streaming,
+        });
+    }
     tracker.lastContent = safeContent;
 
     const persisted = await persistBackgroundJobUpdate(
@@ -371,6 +546,10 @@ async function handleBackgroundStatus(
         safeContent
     );
     if (!persisted) {
+        bgStreamWarn('status-persist-failed-stop-tracking', {
+            jobId: tracker.jobId,
+            status: nextStatus.status,
+        });
         tracker.active = false;
         tracker.polling = false;
         tracker.streaming = false;
@@ -429,6 +608,12 @@ async function handleBackgroundStatus(
             }
         }
         tracker.resolveCompletion(nextStatus);
+        bgStreamLog('status-terminal-cleanup', {
+            jobId: tracker.jobId,
+            status: nextStatus.status,
+            contentLength: safeContent.length,
+            subscribers: tracker.subscribers.size,
+        });
         tracker.active = false;
         tracker.polling = false;
         tracker.streaming = false;
@@ -467,21 +652,42 @@ async function handleBackgroundStatus(
 export async function primeBackgroundJobUpdate(
     tracker: BackgroundJobTracker
 ): Promise<void> {
+    bgStreamLog('prime-start', {
+        jobId: tracker.jobId,
+        knownContentLength: tracker.lastContent.length,
+        subscribers: tracker.subscribers.size,
+    });
     // Fetch full content from server (no offset) - server is source of truth
     let initialStatus: BackgroundJobStatus | null = null;
     try {
         initialStatus = await pollJobStatus(tracker.jobId);
     } catch {
+        bgStreamWarn('prime-status-fetch-failed', {
+            jobId: tracker.jobId,
+        });
         initialStatus = null;
     }
 
     if (!initialStatus) return;
+    bgStreamLog('prime-status-received', {
+        jobId: tracker.jobId,
+        status: initialStatus.status,
+        contentLength:
+            typeof initialStatus.content === 'string'
+                ? initialStatus.content.length
+                : 0,
+    });
 
     // Handle terminal states
     if (initialStatus.status !== 'streaming') {
         const fullStatus = await ensureFullBackgroundStatus(tracker, initialStatus);
         const content = fullStatus.content || '';
         tracker.lastContent = content;
+        bgStreamLog('prime-terminal-status', {
+            jobId: tracker.jobId,
+            status: fullStatus.status,
+            contentLength: content.length,
+        });
         const update: BackgroundJobUpdate = {
             status: fullStatus,
             content,
@@ -504,12 +710,22 @@ export async function primeBackgroundJobUpdate(
     const serverContent = initialStatus.content || '';
     if (serverContent.length >= tracker.lastContent.length) {
         tracker.lastContent = serverContent;
+        bgStreamLog('prime-streaming-sync', {
+            jobId: tracker.jobId,
+            previousLength: tracker.lastPersistedLength,
+            serverContentLength: serverContent.length,
+        });
         const persisted = await persistBackgroundJobUpdate(
             tracker,
             initialStatus,
             serverContent
         );
-        if (!persisted) return;
+        if (!persisted) {
+            bgStreamWarn('prime-persist-failed', {
+                jobId: tracker.jobId,
+            });
+            return;
+        }
         const update: BackgroundJobUpdate = {
             status: initialStatus,
             content: serverContent,
@@ -528,11 +744,20 @@ export async function primeBackgroundJobUpdate(
  */
 async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
     if (tracker.polling) return;
+    if (typeof tracker.pollRunId !== 'number') tracker.pollRunId = 0;
+    const runId = tracker.pollRunId + 1;
+    tracker.pollRunId = runId;
     tracker.polling = true;
     tracker.active = true;
+    bgStreamLog('poll-start', {
+        jobId: tracker.jobId,
+        runId,
+        baselineLength: tracker.lastContent.length,
+        subscribers: tracker.subscribers.size,
+    });
     const isActive = () => tracker.active;
 
-    while (isActive()) {
+    while (isActive() && tracker.pollRunId === runId) {
         let status: BackgroundJobStatus;
         try {
             status = await pollJobStatus(
@@ -541,6 +766,11 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
             );
         } catch (err) {
             const error = err instanceof Error ? err.message : 'Unknown error';
+            bgStreamWarn('poll-status-failed', {
+                jobId: tracker.jobId,
+                runId,
+                error,
+            });
             status = {
                 id: tracker.jobId,
                 status: 'error',
@@ -554,9 +784,25 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
                 content: tracker.lastContent,
             };
         }
+        if (!isActive() || tracker.pollRunId !== runId) break;
 
         const shouldContinue = await handleBackgroundStatus(tracker, status);
         if (!shouldContinue) break;
+        if (
+            tracker.preferSse &&
+            tracker.subscribers.size > 0 &&
+            tracker.status === 'streaming' &&
+            !tracker.streaming
+        ) {
+            tracker.polling = false;
+            bgStreamLog('poll-upgrade-to-sse', {
+                jobId: tracker.jobId,
+                runId,
+                subscribers: tracker.subscribers.size,
+            });
+            startBackgroundJobTracking(tracker, { useSse: true });
+            return;
+        }
 
         const pollInterval =
             tracker.subscribers.size > 0
@@ -564,7 +810,16 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
                 : BACKGROUND_JOB_POLL_INTERVAL_MS;
         await sleep(pollInterval);
     }
-    tracker.polling = false;
+    if (tracker.pollRunId === runId) {
+        tracker.polling = false;
+    }
+    bgStreamLog('poll-stop', {
+        jobId: tracker.jobId,
+        runId,
+        active: tracker.active,
+        pollRunId: tracker.pollRunId,
+        status: tracker.status,
+    });
 }
 
 /**
@@ -596,7 +851,15 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
 export function stopBackgroundJobTracking(
     tracker: BackgroundJobTracker
 ): void {
+    bgStreamLog('stop-tracking', {
+        jobId: tracker.jobId,
+        status: tracker.status,
+        subscribers: tracker.subscribers.size,
+        polling: tracker.polling,
+        streaming: tracker.streaming,
+    });
     tracker.active = false;
+    tracker.pollRunId = (tracker.pollRunId ?? 0) + 1;
     tracker.polling = false;
     tracker.streaming = false;
     if (tracker.streamUnsubscribe) {
@@ -616,8 +879,21 @@ function startBackgroundJobTracking(
     tracker: BackgroundJobTracker,
     options?: { useSse?: boolean }
 ): void {
-    if (tracker.polling || tracker.streaming) return;
+    if (tracker.polling || tracker.streaming) {
+        bgStreamLog('start-tracking-skipped-already-running', {
+            jobId: tracker.jobId,
+            polling: tracker.polling,
+            streaming: tracker.streaming,
+            requestedSse: Boolean(options?.useSse),
+        });
+        return;
+    }
     if (options?.useSse) {
+        bgStreamLog('start-sse', {
+            jobId: tracker.jobId,
+            offset: tracker.lastContent.length,
+            subscribers: tracker.subscribers.size,
+        });
         tracker.streaming = true;
         tracker.active = true;
         let closed = false;
@@ -629,6 +905,11 @@ function startBackgroundJobTracking(
             closed = true;
             tracker.streaming = false;
             tracker.streamUnsubscribe = undefined;
+            bgStreamLog('sse-closed', {
+                jobId: tracker.jobId,
+                status: tracker.status,
+                subscribers: tracker.subscribers.size,
+            });
             if (unsubscribe) {
                 try {
                     unsubscribe();
@@ -643,6 +924,24 @@ function startBackgroundJobTracking(
                 jobId: tracker.jobId,
                 offset: tracker.lastContent.length,
                 onStatus: (status) => {
+                    const shouldLogSseStatus =
+                        status.status !== 'streaming' ||
+                        (typeof status.content_delta === 'string' &&
+                            status.content_delta.length >= 256);
+                    if (shouldLogSseStatus) {
+                        bgStreamLog('sse-status', {
+                            jobId: tracker.jobId,
+                            status: status.status,
+                            contentLength:
+                                typeof status.content === 'string'
+                                    ? status.content.length
+                                    : 0,
+                            deltaLength:
+                                typeof status.content_delta === 'string'
+                                    ? status.content_delta.length
+                                    : 0,
+                        });
+                    }
                     chain = chain
                         .then(() => handleBackgroundStatus(tracker, status))
                         .then((shouldContinue) => {
@@ -652,18 +951,41 @@ function startBackgroundJobTracking(
                         })
                         .catch(() => {
                             // Fallback to polling on handler error
+                            bgStreamWarn('sse-handler-error-fallback-poll', {
+                                jobId: tracker.jobId,
+                            });
                             closeStream();
                             void pollBackgroundJob(tracker);
                         });
                 },
-                onError: () => {
+                onError: (error) => {
                     if (!closed) {
+                        const terminalState =
+                            tracker.status !== 'streaming' || !tracker.active;
+                        if (terminalState) {
+                            bgStreamLog('sse-error-ignored-terminal', {
+                                jobId: tracker.jobId,
+                                status: tracker.status,
+                                active: tracker.active,
+                                error: error.message,
+                            });
+                            closeStream();
+                            return;
+                        }
+                        bgStreamWarn('sse-error-fallback-poll', {
+                            jobId: tracker.jobId,
+                            error: error.message,
+                        });
                         closeStream();
                         void pollBackgroundJob(tracker);
                     }
                 },
             });
-        } catch {
+        } catch (error) {
+            bgStreamWarn('sse-start-failed-fallback-poll', {
+                jobId: tracker.jobId,
+                error: error instanceof Error ? error.message : String(error),
+            });
             closeStream();
             void pollBackgroundJob(tracker);
             return;
@@ -673,6 +995,11 @@ function startBackgroundJobTracking(
         return;
     }
 
+    bgStreamLog('start-poll', {
+        jobId: tracker.jobId,
+        subscribers: tracker.subscribers.size,
+        status: tracker.status,
+    });
     void pollBackgroundJob(tracker);
 }
 
@@ -719,8 +1046,27 @@ export function ensureBackgroundJobTracker(
 ): BackgroundJobTracker {
     const existing = backgroundJobTrackers.get(params.jobId);
     if (existing) {
+        bgStreamLog('tracker-reused', {
+            jobId: params.jobId,
+            existingStatus: existing.status,
+            existingContentLength: existing.lastContent.length,
+            incomingInitialLength:
+                typeof params.initialContent === 'string'
+                    ? params.initialContent.length
+                    : 0,
+            useSse: Boolean(params.useSse),
+            subscribers: existing.subscribers.size,
+            polling: existing.polling,
+            streaming: existing.streaming,
+        });
+        if (typeof existing.pollRunId !== 'number') {
+            existing.pollRunId = 0;
+        }
         if (typeof existing.lastWorkflowVersion !== 'number') {
             existing.lastWorkflowVersion = -1;
+        }
+        if (typeof existing.preferSse !== 'boolean') {
+            existing.preferSse = false;
         }
         if (params.userId && existing.userId !== params.userId) {
             existing.userId = params.userId;
@@ -733,6 +1079,12 @@ export function ensureBackgroundJobTracker(
         ) {
             existing.lastContent = params.initialContent;
             existing.lastPersistedLength = params.initialContent.length;
+        }
+        if (params.useSse) {
+            existing.preferSse = true;
+        }
+        if (typeof params.preferServerNotifications === 'boolean') {
+            existing.preferServerNotifications = params.preferServerNotifications;
         }
         if (params.useSse && !existing.polling && !existing.streaming) {
             startBackgroundJobTracking(existing, { useSse: true });
@@ -752,6 +1104,7 @@ export function ensureBackgroundJobTracker(
         threadId: params.threadId,
         messageId: params.messageId,
         status: 'streaming',
+        preferServerNotifications: Boolean(params.preferServerNotifications),
         lastWorkflowVersion: -1,
         lastContent: seedContent,
         lastPersistedLength: seedContent.length,
@@ -759,11 +1112,22 @@ export function ensureBackgroundJobTracker(
         polling: false,
         streaming: false,
         active: false,
+        preferSse: Boolean(params.useSse),
+        pollRunId: 0,
         subscribers: new Set<BackgroundJobSubscriber>(),
         completion,
         resolveCompletion,
     };
     backgroundJobTrackers.set(params.jobId, tracker);
+    bgStreamLog('tracker-created', {
+        jobId: tracker.jobId,
+        threadId: tracker.threadId,
+        messageId: tracker.messageId,
+        userId: tracker.userId,
+        initialContentLength: seedContent.length,
+        preferSse: tracker.preferSse,
+        preferServerNotifications: tracker.preferServerNotifications === true,
+    });
     startBackgroundJobTracking(tracker, { useSse: params.useSse });
     return tracker;
 }
@@ -808,13 +1172,50 @@ export function subscribeBackgroundJob(
     tracker: BackgroundJobTracker,
     subscriber: BackgroundJobSubscriber
 ): () => void {
+    if (typeof tracker.pollRunId !== 'number') tracker.pollRunId = 0;
+    if (typeof tracker.preferSse !== 'boolean') tracker.preferSse = false;
     tracker.subscribers.add(subscriber);
+    bgStreamLog('subscriber-added', {
+        jobId: tracker.jobId,
+        subscribers: tracker.subscribers.size,
+        preferSse: tracker.preferSse,
+        polling: tracker.polling,
+        streaming: tracker.streaming,
+        status: tracker.status,
+    });
+    if (
+        tracker.preferSse &&
+        tracker.subscribers.size > 0 &&
+        tracker.status === 'streaming' &&
+        !tracker.streaming
+    ) {
+        if (tracker.polling) {
+            tracker.pollRunId += 1;
+            tracker.polling = false;
+            bgStreamLog('subscriber-upgrade-cancel-poll', {
+                jobId: tracker.jobId,
+                pollRunId: tracker.pollRunId,
+            });
+        }
+        startBackgroundJobTracking(tracker, { useSse: true });
+    }
     return () => {
         tracker.subscribers.delete(subscriber);
+        bgStreamLog('subscriber-removed', {
+            jobId: tracker.jobId,
+            subscribers: tracker.subscribers.size,
+            active: tracker.active,
+            status: tracker.status,
+            polling: tracker.polling,
+            streaming: tracker.streaming,
+        });
         if (tracker.subscribers.size > 0 || !tracker.active) return;
         // No active UI subscribers: drop SSE viewer so server-side notification
         // suppression doesn't hide completion notifications.
         if (tracker.streaming && tracker.streamUnsubscribe) {
+            bgStreamLog('subscriber-none-close-sse', {
+                jobId: tracker.jobId,
+            });
             try {
                 tracker.streamUnsubscribe();
             } catch {
@@ -824,6 +1225,9 @@ export function subscribeBackgroundJob(
         // Keep tracking via polling so local persistence and completion callbacks
         // continue even while detached.
         if (!tracker.polling && tracker.status === 'streaming') {
+            bgStreamLog('subscriber-none-start-poll', {
+                jobId: tracker.jobId,
+            });
             void pollBackgroundJob(tracker);
         }
     };

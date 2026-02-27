@@ -30,6 +30,16 @@ import type { ChatMessage, ContentPart } from '~/utils/chat/types';
 import type { ModelInputMessage } from '../../../../types/chat-internal';
 import type { OpenRouterMessage } from './types';
 import { hashToContentPart } from './files';
+type OpenRouterBuildModule = typeof import('~/core/auth/openrouter-build');
+
+let openRouterBuildModulePromise: Promise<OpenRouterBuildModule> | null = null;
+
+async function getOpenRouterBuildModule(): Promise<OpenRouterBuildModule> {
+    if (!openRouterBuildModulePromise) {
+        openRouterBuildModulePromise = import('~/core/auth/openrouter-build');
+    }
+    return openRouterBuildModulePromise;
+}
 
 /**
  * `ResolveSystemPromptParams`
@@ -154,6 +164,14 @@ export async function buildOpenRouterMessagesForSend(
             })
         );
 
+    let lastUserIdx = -1;
+    for (let i = modelInputMessages.length - 1; i >= 0; i -= 1) {
+        if (modelInputMessages[i]?.role === 'user') {
+            lastUserIdx = i;
+            break;
+        }
+    }
+
     if (params.assistantHashes.length && params.prevAssistantId) {
         const target = modelInputMessages.find(
             (m) => m.id === params.prevAssistantId
@@ -165,46 +183,43 @@ export async function buildOpenRouterMessagesForSend(
     const contextHashesList = Array.isArray(params.contextHashes)
         ? params.contextHashes.slice(0, maxMessageFileHashes)
         : [];
-    if (contextHashesList.length) {
-        const seenContext = new Set<string>(
-            Array.isArray(params.fileHashes) ? params.fileHashes : []
-        );
-        const contextParts: ContentPart[] = [];
-        for (const h of contextHashesList) {
-            if (!h || seenContext.has(h)) continue;
-            if (contextParts.length >= maxMessageFileHashes) break;
-            const part = await hashToContentPart(h);
-            if (part) {
-                contextParts.push(part);
-                seenContext.add(h);
-            }
+    if (contextHashesList.length && lastUserIdx >= 0) {
+        const seenContext = new Set<string>([
+            ...(Array.isArray(params.fileHashes) ? params.fileHashes : []),
+        ]);
+        const uniqueContextHashes: string[] = [];
+        for (const hash of contextHashesList) {
+            if (!hash || seenContext.has(hash)) continue;
+            seenContext.add(hash);
+            uniqueContextHashes.push(hash);
+            if (uniqueContextHashes.length >= maxMessageFileHashes) break;
         }
+
+        const resolvedContextParts = await Promise.all(
+            uniqueContextHashes.map((hash) => hashToContentPart(hash))
+        );
+        const contextParts: ContentPart[] = resolvedContextParts.filter(
+            (part): part is ContentPart => part !== null
+        );
+
         if (contextParts.length) {
-            const lastUserIdx = [...modelInputMessages]
-                .map((m, idx: number) => (m.role === 'user' ? idx : -1))
-                .filter((idx) => idx >= 0)
-                .pop();
-            if (lastUserIdx != null && lastUserIdx >= 0) {
-                const target = modelInputMessages[lastUserIdx];
-                if (target) {
-                    if (!Array.isArray(target.content)) {
-                        if (typeof target.content === 'string') {
-                            target.content = [
-                                { type: 'text', text: target.content },
-                            ];
-                        } else {
-                            target.content = [];
-                        }
+            const target = modelInputMessages[lastUserIdx];
+            if (target) {
+                if (!Array.isArray(target.content)) {
+                    if (typeof target.content === 'string') {
+                        target.content = [
+                            { type: 'text', text: target.content },
+                        ];
+                    } else {
+                        target.content = [];
                     }
-                    target.content.push(...contextParts);
                 }
+                target.content.push(...contextParts);
             }
         }
     }
 
-    const { buildOpenRouterMessages } = await import(
-        '~/core/auth/openrouter-build'
-    );
+    const { buildOpenRouterMessages } = await getOpenRouterBuildModule();
     const orMessages: OpenRouterMessage[] = await buildOpenRouterMessages(
         modelInputMessages,
         {

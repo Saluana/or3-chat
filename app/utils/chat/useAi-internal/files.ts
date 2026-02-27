@@ -28,6 +28,7 @@
  */
 
 import type { ContentPart } from '~/utils/chat/types';
+type DbFilesModule = typeof import('~/db/files');
 
 /**
  * Normalized file reference for UI state.
@@ -56,6 +57,15 @@ const blobToDataUrl = (blob: Blob): Promise<string> =>
         fr.onload = () => resolve(fr.result as string);
         fr.readAsDataURL(blob);
     });
+
+let dbFilesModulePromise: Promise<DbFilesModule> | null = null;
+
+async function getDbFilesModule(): Promise<DbFilesModule> {
+    if (!dbFilesModulePromise) {
+        dbFilesModulePromise = import('~/db/files');
+    }
+    return dbFilesModulePromise;
+}
 
 /**
  * UI path. Verifies blob existence and returns hash reference without Base64.
@@ -96,7 +106,7 @@ export async function normalizeFileUrl(f: { type: string; url: string }): Promis
     try {
         // Local hash -> verify blob exists, return hash reference
         if (!/^https?:|^data:|^blob:/i.test(url)) {
-            const { getFileBlob } = await import('~/db/files');
+            const { getFileBlob } = await getDbFilesModule();
             const blob = await getFileBlob(url);
             if (blob) {
                 // Return hash reference - verified blob exists
@@ -160,7 +170,7 @@ export async function prepareFilesForModel(
         try {
             // Hash reference -> load from IndexedDB and convert to Base64
             if (!/^https?:|^data:|^blob:/i.test(f.url)) {
-                const { getFileMeta, getFileBlob } = await import('~/db/files');
+                const { getFileMeta, getFileBlob } = await getDbFilesModule();
                 const blob = await getFileBlob(f.url);
                 if (!blob) continue;
 
@@ -184,7 +194,9 @@ export async function prepareFilesForModel(
             // blob: URL -> fetch and convert to Base64
             if (f.url.startsWith('blob:')) {
                 try {
-                    const blob = await $fetch<Blob>(f.url, { responseType: 'blob' });
+                    const blobResponse = await fetch(f.url);
+                    if (!blobResponse.ok) continue;
+                    const blob = await blobResponse.blob();
                     const dataUrl = await blobToDataUrl(blob);
                     if (mime.startsWith('image/')) {
                         parts.push({ type: 'image', image: dataUrl, mediaType: mime });
@@ -237,9 +249,11 @@ export async function prepareFilesForModel(
  */
 export async function hashToContentPart(hash: string): Promise<ContentPart | null> {
     try {
-        const { getFileMeta, getFileBlob } = await import('~/db/files');
-        const meta = await getFileMeta(hash).catch(() => null);
-        const blob = await getFileBlob(hash);
+        const { getFileMeta, getFileBlob } = await getDbFilesModule();
+        const [meta, blob] = await Promise.all([
+            getFileMeta(hash).catch(() => null),
+            getFileBlob(hash),
+        ]);
         if (!blob) return null;
 
         // Only include images/PDFs to avoid bloating text-only contexts

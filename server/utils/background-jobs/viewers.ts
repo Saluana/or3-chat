@@ -20,6 +20,19 @@
  */
 
 import type { BackgroundJob } from './types';
+const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
+
+function logBgStream(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (process.env.NODE_ENV === 'production') return;
+    if (details) {
+        console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
 
 const jobViewers = new Map<string, number>();
 const LIVE_JOB_RETENTION_MS = 30_000;
@@ -70,6 +83,10 @@ const jobStreams = new Map<string, LiveJobState>();
 export function registerJobViewer(jobId: string): () => void {
     const nextCount = (jobViewers.get(jobId) ?? 0) + 1;
     jobViewers.set(jobId, nextCount);
+    logBgStream('viewers-register', {
+        jobId,
+        viewers: nextCount,
+    });
 
     let disposed = false;
     return () => {
@@ -82,6 +99,10 @@ export function registerJobViewer(jobId: string): () => void {
         } else {
             jobViewers.delete(jobId);
         }
+        logBgStream('viewers-unregister', {
+            jobId,
+            viewers: Math.max(remaining, 0),
+        });
     };
 }
 
@@ -118,12 +139,24 @@ export function registerJobStream(
 ): () => void {
     const state = ensureJobLiveState(jobId);
     state.listeners.add(listener);
+    logBgStream('viewers-stream-listener-add', {
+        jobId,
+        listeners: state.listeners.size,
+        status: state.status,
+        contentLength: state.content.length,
+    });
 
     let disposed = false;
     return () => {
         if (disposed) return;
         disposed = true;
         state.listeners.delete(listener);
+        logBgStream('viewers-stream-listener-remove', {
+            jobId,
+            listeners: state.listeners.size,
+            status: state.status,
+            contentLength: state.content.length,
+        });
         maybeCleanupJobLiveState(jobId, state);
     };
 }
@@ -138,6 +171,12 @@ export function initJobLiveState(jobId: string): void {
         clearTimeout(state.cleanupTimer);
         state.cleanupTimer = null;
     }
+    logBgStream('viewers-live-state-init', {
+        jobId,
+        listeners: state.listeners.size,
+        status: state.status,
+        contentLength: state.content.length,
+    });
 }
 
 /**
@@ -214,6 +253,14 @@ export function emitJobStatus(
         tool_calls: meta.tool_calls,
         workflow_state: meta.workflow_state,
     };
+    logBgStream('viewers-emit-status', {
+        jobId,
+        status,
+        contentLength: meta.contentLength,
+        chunksReceived: meta.chunksReceived,
+        listeners: state.listeners.size,
+        hasError: Boolean(meta.error),
+    });
     for (const listener of state.listeners) {
         listener(event);
     }
@@ -233,6 +280,9 @@ function ensureJobLiveState(jobId: string): LiveJobState {
             cleanupTimer: null,
         };
         jobStreams.set(jobId, state);
+        logBgStream('viewers-live-state-created', {
+            jobId,
+        });
     }
     return state;
 }
@@ -241,7 +291,16 @@ function scheduleCleanup(jobId: string, state: LiveJobState): void {
     if (state.cleanupTimer) return;
     state.cleanupTimer = setTimeout(() => {
         jobStreams.delete(jobId);
+        logBgStream('viewers-live-state-cleanup-run', {
+            jobId,
+        });
     }, LIVE_JOB_RETENTION_MS);
+    logBgStream('viewers-live-state-cleanup-scheduled', {
+        jobId,
+        retentionMs: LIVE_JOB_RETENTION_MS,
+        listeners: state.listeners.size,
+        status: state.status,
+    });
     if (typeof state.cleanupTimer.unref === 'function') {
         state.cleanupTimer.unref();
     }

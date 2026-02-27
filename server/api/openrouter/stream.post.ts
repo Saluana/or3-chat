@@ -39,6 +39,31 @@ import {
     startBackgroundStream,
     isBackgroundStreamingAvailable,
 } from '../../utils/background-jobs/stream-handler';
+const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
+
+function logBgStream(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (process.env.NODE_ENV === 'production') return;
+    if (details) {
+        console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
+
+function warnBgStream(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (process.env.NODE_ENV === 'production') return;
+    if (details) {
+        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
 
 function parseForwardedProto(raw: string | undefined): 'http' | 'https' | null {
     if (!raw) return null;
@@ -69,6 +94,11 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 400);
         return 'Invalid request body';
     }
+    const backgroundRequested = isBackgroundModeRequest(body);
+    logBgStream('api-stream-request', {
+        backgroundRequested,
+        backgroundAvailable: isBackgroundStreamingAvailable(),
+    });
 
     // Req 1, 4: Select API key. Prefer user key when connected.
     const config = useRuntimeConfig(event);
@@ -99,6 +129,14 @@ export default defineEventHandler(async (event) => {
             requireUserKey,
             hasAuthHeader: Boolean(authHeader),
         });
+        warnBgStream('api-stream-missing-api-key', {
+            hasRuntimeConfigKey: Boolean(config.openrouterApiKey),
+            hasEnvKey: Boolean(process.env.OPENROUTER_API_KEY),
+            allowUserOverride,
+            requireUserKey,
+            hasAuthHeader: Boolean(authHeader),
+            hasClientKey: Boolean(clientKey),
+        });
     }
     if (!apiKey) {
         if (requireUserKey) {
@@ -109,23 +147,7 @@ export default defineEventHandler(async (event) => {
         return 'Missing OpenRouter API key';
     }
 
-    // Resolve user key for rate limiting (user ID or IP)
-    let rateKey: string = 'anonymous';
-    if (isSsrAuthEnabled(event)) {
-        const session = await resolveSessionContext(event);
-        if (session.authenticated && session.user?.id) {
-            rateKey = `user:${session.user.id}`;
-        }
-    }
-    if (rateKey === 'anonymous') {
-        const proxyConfig = normalizeProxyTrustConfig(config.security.proxy);
-        const ip = getClientIp(event, proxyConfig) || getRequestIP(event) || 'unknown';
-        rateKey = `ip:${ip}`;
-    }
-
     const limits = config.limits;
-
-    // Check requestsPerMinute limit
     const minuteConfig =
         limits.enabled !== false && limits.requestsPerMinute > 0
             ? {
@@ -133,6 +155,43 @@ export default defineEventHandler(async (event) => {
                   maxRequests: limits.requestsPerMinute,
               }
             : null;
+    const dailyConfig =
+        limits.enabled !== false && limits.maxMessagesPerDay > 0
+            ? {
+                  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+                  maxRequests: limits.maxMessagesPerDay,
+              }
+            : null;
+
+    let sessionLoaded = false;
+    let cachedSession: Awaited<
+        ReturnType<typeof resolveSessionContext>
+    > | null = null;
+    const getSession = async () => {
+        if (!isSsrAuthEnabled(event)) return null;
+        if (!sessionLoaded) {
+            cachedSession = await resolveSessionContext(event);
+            sessionLoaded = true;
+        }
+        return cachedSession;
+    };
+
+    // Resolve user key for rate limiting (user ID or IP)
+    let rateKey: string = 'anonymous';
+    if (minuteConfig || dailyConfig) {
+        const session = await getSession();
+        if (session?.authenticated && session.user?.id) {
+            rateKey = `user:${session.user.id}`;
+        }
+        if (rateKey === 'anonymous') {
+            const proxyConfig = normalizeProxyTrustConfig(config.security.proxy);
+            const ip =
+                getClientIp(event, proxyConfig) ||
+                getRequestIP(event) ||
+                'unknown';
+            rateKey = `ip:${ip}`;
+        }
+    }
 
     // Atomic check-and-record for per-minute rate limit (prevents TOCTOU race)
     let minuteResult: { allowed: boolean; remaining: number; retryAfterMs?: number } | null = null;
@@ -156,14 +215,6 @@ export default defineEventHandler(async (event) => {
 
     // Check maxMessagesPerDay limit (24-hour rolling window)
     // Uses pluggable provider with atomic check-and-record
-    const dailyConfig =
-        limits.enabled !== false && limits.maxMessagesPerDay > 0
-            ? {
-                  windowMs: 24 * 60 * 60 * 1000, // 24 hours
-                  maxRequests: limits.maxMessagesPerDay,
-              }
-            : null;
-
     // We'll check daily limit and record atomically
     const provider = dailyConfig ? getRateLimitProvider() : null;
     let dailyLimitResult: { allowed: boolean; remaining: number; retryAfterMs?: number } | null = null;
@@ -197,12 +248,15 @@ export default defineEventHandler(async (event) => {
     // =============================
     // If background mode is requested and enabled, start a background job
     // and return immediately with the job ID.
-    if (isBackgroundModeRequest(body) && isBackgroundStreamingAvailable()) {
+    if (backgroundRequested && isBackgroundStreamingAvailable()) {
+        logBgStream('api-stream-background-path', {
+            requested: backgroundRequested,
+        });
         // Resolve user ID for authorization
         let userId: string | null = null;
         let workspaceId: string | null = null;
-        if (isSsrAuthEnabled(event)) {
-            const session = await resolveSessionContext(event);
+        const session = await getSession();
+        if (session) {
             if (session.authenticated && session.user?.id && session.workspace?.id) {
                 userId = session.user.id;
                 workspaceId = session.workspace.id;
@@ -215,16 +269,28 @@ export default defineEventHandler(async (event) => {
                         hasWorkspace: Boolean(session.workspace?.id),
                     });
                 }
+                warnBgStream('api-stream-background-session-missing', {
+                    authenticated: session.authenticated,
+                    hasUser: Boolean(session.user?.id),
+                    hasWorkspace: Boolean(session.workspace?.id),
+                });
             }
         }
 
         if (!userId || !workspaceId) {
+            warnBgStream('api-stream-background-auth-required', {
+                hasUserId: Boolean(userId),
+                hasWorkspaceId: Boolean(workspaceId),
+            });
             setResponseStatus(event, 401);
             return { error: 'Authentication required for background streaming' };
         }
 
         const validation = validateBackgroundParams(body);
         if (!validation.valid) {
+            warnBgStream('api-stream-background-validation-failed', {
+                error: validation.error || 'unknown',
+            });
             setResponseStatus(event, 400);
             return { error: validation.error };
         }
@@ -233,6 +299,12 @@ export default defineEventHandler(async (event) => {
         const proto = resolveRequestProto(host, getHeader(event, 'x-forwarded-proto'));
 
         try {
+            logBgStream('api-stream-background-start-attempt', {
+                userId,
+                workspaceId,
+                threadId: validation.threadId!,
+                messageId: validation.messageId!,
+            });
             const result = await startBackgroundStream({
                 body,
                 apiKey,
@@ -242,9 +314,24 @@ export default defineEventHandler(async (event) => {
                 messageId: validation.messageId!,
                 referer: `${proto}://${host}`,
             });
+            logBgStream('api-stream-background-start-success', {
+                jobId: result.jobId,
+                status: result.status,
+                userId,
+                workspaceId,
+                threadId: validation.threadId!,
+                messageId: validation.messageId!,
+            });
 
             return result;
         } catch (err) {
+            warnBgStream('api-stream-background-start-failed', {
+                userId,
+                workspaceId,
+                threadId: validation.threadId!,
+                messageId: validation.messageId!,
+                error: err instanceof Error ? err.message : String(err),
+            });
             if (err instanceof Error && err.message.includes('Max concurrent')) {
                 setResponseStatus(event, 503);
                 return { error: 'Server busy, try again later' };
@@ -252,6 +339,9 @@ export default defineEventHandler(async (event) => {
             setResponseStatus(event, 500);
             return { error: err instanceof Error ? err.message : 'Background stream failed' };
         }
+    }
+    if (backgroundRequested && !isBackgroundStreamingAvailable()) {
+        warnBgStream('api-stream-background-requested-but-unavailable', {});
     }
 
     // =============================
@@ -263,6 +353,7 @@ export default defineEventHandler(async (event) => {
 
     // Listen for client disconnect
     event.node.req.on('close', () => {
+        logBgStream('api-stream-foreground-client-closed', {});
         ac.abort();
     });
 
@@ -284,13 +375,22 @@ export default defineEventHandler(async (event) => {
             body: JSON.stringify(body),
             signal: ac.signal,
         });
+        logBgStream('api-stream-foreground-upstream-response', {
+            ok: upstream.ok,
+            status: upstream.status,
+            hasBody: Boolean(upstream.body),
+        });
     } catch (e: unknown) {
         // Handle abort or network error
         if (e instanceof Error && e.name === 'AbortError') {
             // Client disconnected
+            logBgStream('api-stream-foreground-upstream-aborted', {});
             return;
         }
         // Other network error
+        warnBgStream('api-stream-foreground-upstream-network-failed', {
+            error: e instanceof Error ? e.message : String(e),
+        });
         setResponseStatus(event, 502);
         return 'Failed to reach OpenRouter';
     }
@@ -303,6 +403,11 @@ export default defineEventHandler(async (event) => {
         } catch {
             respText = '<error-reading-body>';
         }
+        warnBgStream('api-stream-foreground-upstream-non-ok', {
+            status: upstream.status,
+            hasBody: Boolean(upstream.body),
+            responsePreview: respText.slice(0, 300),
+        });
         setResponseStatus(event, upstream.status);
         return respText.slice(0, 2000);
     }
@@ -340,5 +445,8 @@ export default defineEventHandler(async (event) => {
 
     // Just pipe the upstream SSE directly to client - no need to parse and re-encode
     // The client will parse it with the shared parser
+    logBgStream('api-stream-foreground-pipe-start', {
+        status: upstream.status,
+    });
     return sendStream(event, upstream.body);
 });

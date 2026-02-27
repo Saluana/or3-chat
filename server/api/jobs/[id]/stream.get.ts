@@ -19,6 +19,31 @@ import {
     registerJobStream,
     registerJobViewer,
 } from '../../../utils/background-jobs/viewers';
+const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
+
+function logBgStream(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (process.env.NODE_ENV === 'production') return;
+    if (details) {
+        console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
+
+function warnBgStream(
+    stage: string,
+    details?: Record<string, unknown>
+): void {
+    if (process.env.NODE_ENV === 'production') return;
+    if (details) {
+        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
+        return;
+    }
+    console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
+}
 
 type StreamEventPayload = {
     event: 'snapshot' | 'delta' | 'status';
@@ -106,6 +131,7 @@ export default defineEventHandler(async (event) => {
     const jobId = getRouterParam(event, 'id');
 
     if (!jobId) {
+        warnBgStream('jobs-stream-missing-job-id', {});
         setResponseStatus(event, 400);
         return { error: 'Missing job ID' };
     }
@@ -120,6 +146,9 @@ export default defineEventHandler(async (event) => {
     }
 
     if (!userId) {
+        warnBgStream('jobs-stream-auth-required', {
+            jobId,
+        });
         setResponseStatus(event, 401);
         return { error: 'Authentication required' };
     }
@@ -128,6 +157,10 @@ export default defineEventHandler(async (event) => {
     const initialJob = await provider.getJob(jobId, userId);
 
     if (!initialJob) {
+        warnBgStream('jobs-stream-job-not-found', {
+            jobId,
+            userId,
+        });
         setResponseStatus(event, 404);
         return { error: 'Job not found or unauthorized' };
     }
@@ -139,6 +172,14 @@ export default defineEventHandler(async (event) => {
         typeof offset === 'number' && Number.isFinite(offset) && offset >= 0
             ? Math.min(offset, initialJob.content.length)
             : 0;
+    logBgStream('jobs-stream-request', {
+        jobId,
+        userId,
+        initialStatus: initialJob.status,
+        initialContentLength: initialJob.content.length,
+        requestedOffset: offset,
+        effectiveOffset: initialOffset,
+    });
 
     setHeader(event, 'Content-Type', 'text/event-stream');
     setHeader(event, 'Cache-Control', 'no-cache, no-transform');
@@ -157,12 +198,24 @@ export default defineEventHandler(async (event) => {
                     : IDLE_POLL_INTERVAL_MS;
 
             const disposeViewer = registerJobViewer(jobId);
+            logBgStream('jobs-stream-viewer-registered', {
+                jobId,
+                userId,
+                initialStatus: initialJob.status,
+            });
             let disposeLive: (() => void) | null = null;
             const isClosed = () => closed;
 
-            const closeStream = () => {
+            const closeStream = (reason: string) => {
                 if (isClosed()) return;
                 closed = true;
+                logBgStream('jobs-stream-close', {
+                    jobId,
+                    userId,
+                    reason,
+                    lastStatus,
+                    lastContentLength,
+                });
                 try {
                     controller.close();
                 } catch {
@@ -176,11 +229,34 @@ export default defineEventHandler(async (event) => {
             };
 
             event.node.req.on('close', () => {
-                closeStream();
+                closeStream('client_disconnect');
             });
 
             const write = (payload: StreamEventPayload) => {
                 if (isClosed()) return;
+                const deltaLength =
+                    typeof payload.status.content_delta === 'string'
+                        ? payload.status.content_delta.length
+                        : 0;
+                const shouldLogWrite =
+                    payload.event !== 'delta' ||
+                    payload.status.status !== 'streaming' ||
+                    deltaLength >= 256;
+                if (shouldLogWrite) {
+                    logBgStream('jobs-stream-write', {
+                        jobId,
+                        userId,
+                        event: payload.event,
+                        status: payload.status.status,
+                        contentLengthHint:
+                            typeof payload.status.content_length === 'number'
+                                ? payload.status.content_length
+                                : null,
+                        deltaLength,
+                        includesContent:
+                            typeof payload.status.content === 'string',
+                    });
+                }
                 controller.enqueue(
                     encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)
                 );
@@ -212,6 +288,28 @@ export default defineEventHandler(async (event) => {
                 // Subscribe to live stream updates (fast path when viewer is attached).
                 disposeLive = registerJobStream(jobId, (liveEvent) => {
                     if (isClosed()) return;
+                    const deltaLength =
+                        liveEvent.type === 'delta'
+                            ? liveEvent.content_delta.length
+                            : 0;
+                    const shouldLogLiveEvent =
+                        liveEvent.type !== 'delta' ||
+                        (liveEvent.type === 'status' &&
+                            liveEvent.status !== 'streaming') ||
+                        deltaLength >= 256;
+                    if (shouldLogLiveEvent) {
+                        logBgStream('jobs-stream-live-event', {
+                            jobId,
+                            userId,
+                            type: liveEvent.type,
+                            status:
+                                liveEvent.type === 'status'
+                                    ? liveEvent.status
+                                    : 'streaming',
+                            contentLength: liveEvent.content_length,
+                            deltaLength,
+                        });
+                    }
                     if (liveEvent.type === 'delta') {
                         if (liveEvent.content_length <= lastContentLength)
                             return;
@@ -285,7 +383,7 @@ export default defineEventHandler(async (event) => {
                         ),
                     });
                     if (liveEvent.status !== 'streaming') {
-                        closeStream();
+                        closeStream('live_terminal_status');
                     }
                 });
 
@@ -325,6 +423,10 @@ export default defineEventHandler(async (event) => {
 
                     const job = await provider.getJob(jobId, userId);
                     if (!job) {
+                        warnBgStream('jobs-stream-poll-job-missing', {
+                            jobId,
+                            userId,
+                        });
                         write({
                             event: 'status',
                             status: {
@@ -351,6 +453,25 @@ export default defineEventHandler(async (event) => {
 
                     const hasNewContent = job.content.length > lastContentLength;
                     const statusChanged = job.status !== lastStatus;
+                    const deltaLength = hasNewContent
+                        ? job.content.length - lastContentLength
+                        : 0;
+                    const shouldLogPollTick =
+                        statusChanged ||
+                        job.status !== 'streaming' ||
+                        deltaLength >= 256;
+                    if (shouldLogPollTick) {
+                        logBgStream('jobs-stream-poll-tick', {
+                            jobId,
+                            userId,
+                            polledStatus: job.status,
+                            polledContentLength: job.content.length,
+                            hasNewContent,
+                            statusChanged,
+                            deltaLength,
+                            pollInterval,
+                        });
+                    }
 
                     if (hasNewContent) {
                         const delta = job.content.slice(lastContentLength);
@@ -398,6 +519,11 @@ export default defineEventHandler(async (event) => {
                 if (isClosed()) return;
                 const message =
                     err instanceof Error ? err.message : 'Stream error';
+                warnBgStream('jobs-stream-error', {
+                    jobId,
+                    userId,
+                    error: message,
+                });
                 write({
                     event: 'status',
                     status: {
@@ -416,7 +542,7 @@ export default defineEventHandler(async (event) => {
                 });
             } finally {
                 clearInterval(keepAlive);
-                closeStream();
+                closeStream('finally_cleanup');
             }
         },
         cancel() {
