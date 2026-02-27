@@ -19,31 +19,16 @@ import {
     registerJobStream,
     registerJobViewer,
 } from '../../../utils/background-jobs/viewers';
-const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
 
 function logBgStream(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (process.env.NODE_ENV === 'production') return;
-    if (details) {
-        console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
+    _stage: string,
+    _details?: Record<string, unknown>
+): void {}
 
 function warnBgStream(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (process.env.NODE_ENV === 'production') return;
-    if (details) {
-        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
+    _stage: string,
+    _details?: Record<string, unknown>
+): void {}
 
 type StreamEventPayload = {
     event: 'snapshot' | 'delta' | 'status';
@@ -294,8 +279,6 @@ export default defineEventHandler(async (event) => {
                             : 0;
                     const shouldLogLiveEvent =
                         liveEvent.type !== 'delta' ||
-                        (liveEvent.type === 'status' &&
-                            liveEvent.status !== 'streaming') ||
                         deltaLength >= 256;
                     if (shouldLogLiveEvent) {
                         logBgStream('jobs-stream-live-event', {

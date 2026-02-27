@@ -17,32 +17,6 @@ import { getDb } from '~/db/client';
 import { newId } from '~/db/util';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
-import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
-const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
-
-function logBgNotification(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (!import.meta.dev) return;
-    if (details) {
-        console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
-
-function warnBgNotification(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (!import.meta.dev) return;
-    if (details) {
-        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
 
 /**
  * Create a notification for system warnings and errors
@@ -73,24 +47,12 @@ export async function emitSystemNotification(payload: {
         sessionContext?.data.value?.session
     );
     const service = new NotificationService(getDb(), hooks, userId);
-    logBgNotification('plugin-emit-system-notification-attempt', {
-        userId,
-        title: payload.title,
-        threadId: payload.threadId || null,
-        documentId: payload.documentId || null,
-    });
-    const created = await service.create({
+    await service.create({
         type: 'system.warning',
         title: payload.title,
         body: payload.body,
         threadId: payload.threadId,
         documentId: payload.documentId,
-    });
-    logBgNotification('plugin-emit-system-notification-result', {
-        userId,
-        created: Boolean(created),
-        notificationId: created?.id ?? null,
-        threadId: payload.threadId || null,
     });
 }
 
@@ -103,12 +65,6 @@ export default defineNuxtPlugin(() => {
             ? useSessionContext()
             : null;
     const hooks = useHooks();
-    const syncConfig = runtimeConfig.public?.sync;
-    const serverNotificationsEnabled =
-        runtimeConfig.public?.ssrAuthEnabled === true &&
-        syncConfig?.enabled === true &&
-        syncConfig?.provider === CONVEX_PROVIDER_ID &&
-        Boolean(syncConfig?.convexUrl);
     const getNotificationUserId = () =>
         resolveNotificationUserId(sessionContext?.data.value?.session);
     const conflictDedupe = new Map<string, number>();
@@ -157,13 +113,7 @@ export default defineNuxtPlugin(() => {
     function shouldDedupe(key: string): boolean {
         const now = Date.now();
         const lastSeen = streamDedupe.get(key);
-        if (lastSeen && now - lastSeen < DEDUPE_WINDOW_MS) {
-            logBgNotification('plugin-dedupe-hit', {
-                key,
-                ageMs: now - lastSeen,
-            });
-            return true;
-        }
+        if (lastSeen && now - lastSeen < DEDUPE_WINDOW_MS) return true;
         streamDedupe.set(key, now);
         return false;
     }
@@ -231,21 +181,8 @@ export default defineNuxtPlugin(() => {
     // AI stream completion notifications (only when thread is not open)
     hooks.addAction('ai.chat.stream:action:complete', async (payload) => {
         try {
-            if (serverNotificationsEnabled) {
-                logBgNotification('plugin-stream-complete-server-enabled-client-fallback', {
-                    threadId: payload?.threadId || null,
-                });
-            }
-            if (!payload?.threadId) {
-                logBgNotification('plugin-stream-complete-skip-missing-thread', {});
-                return;
-            }
-            if (isThreadOpen(payload.threadId)) {
-                logBgNotification('plugin-stream-complete-skip-thread-open', {
-                    threadId: payload.threadId,
-                });
-                return;
-            }
+            if (!payload?.threadId) return;
+            if (isThreadOpen(payload.threadId)) return;
             const dedupeKey = `complete:${payload.streamId || payload.assistantId}`;
             if (shouldDedupe(dedupeKey)) return;
 
@@ -254,12 +191,6 @@ export default defineNuxtPlugin(() => {
                 hooks,
                 getNotificationUserId()
             );
-            logBgNotification('plugin-stream-complete-notify-attempt', {
-                threadId: payload.threadId,
-                assistantId: payload.assistantId,
-                streamId: payload.streamId || null,
-                dedupeKey,
-            });
             const created = await service.create({
                 type: 'ai.message.received',
                 title: 'AI response ready',
@@ -275,45 +206,17 @@ export default defineNuxtPlugin(() => {
                     },
                 ],
             });
-            logBgNotification('plugin-stream-complete-notify-result', {
-                threadId: payload.threadId,
-                assistantId: payload.assistantId,
-                streamId: payload.streamId || null,
-                created: Boolean(created),
-                notificationId: created?.id ?? null,
-            });
         } catch (err) {
             console.error('[notification-listeners] Failed to create AI completion notification:', err);
-            warnBgNotification('plugin-stream-complete-notify-failed', {
-                error: err instanceof Error ? err.message : String(err),
-            });
         }
     });
 
     // AI stream error notifications (skip aborts)
     hooks.addAction('ai.chat.stream:action:error', async (payload) => {
         try {
-            if (serverNotificationsEnabled) {
-                logBgNotification('plugin-stream-error-server-enabled-client-fallback', {
-                    threadId: payload?.threadId || null,
-                });
-            }
-            if (!payload?.threadId) {
-                logBgNotification('plugin-stream-error-skip-missing-thread', {});
-                return;
-            }
-            if (payload.aborted) {
-                logBgNotification('plugin-stream-error-skip-aborted', {
-                    threadId: payload.threadId,
-                });
-                return;
-            }
-            if (isThreadOpen(payload.threadId)) {
-                logBgNotification('plugin-stream-error-skip-thread-open', {
-                    threadId: payload.threadId,
-                });
-                return;
-            }
+            if (!payload?.threadId) return;
+            if (payload.aborted) return;
+            if (isThreadOpen(payload.threadId)) return;
             const dedupeKey = `error:${payload.streamId || payload.threadId}`;
             if (shouldDedupe(dedupeKey)) return;
 
@@ -322,13 +225,7 @@ export default defineNuxtPlugin(() => {
                 hooks,
                 getNotificationUserId()
             );
-            logBgNotification('plugin-stream-error-notify-attempt', {
-                threadId: payload.threadId,
-                streamId: payload.streamId || null,
-                dedupeKey,
-                aborted: payload.aborted === true,
-            });
-            const created = await service.create({
+            await service.create({
                 type: 'system.warning',
                 title: 'AI response failed',
                 body:
@@ -337,17 +234,8 @@ export default defineNuxtPlugin(() => {
                         : 'Background response failed.',
                 threadId: payload.threadId,
             });
-            logBgNotification('plugin-stream-error-notify-result', {
-                threadId: payload.threadId,
-                streamId: payload.streamId || null,
-                created: Boolean(created),
-                notificationId: created?.id ?? null,
-            });
         } catch (err) {
             console.error('[notification-listeners] Failed to create AI error notification:', err);
-            warnBgNotification('plugin-stream-error-notify-failed', {
-                error: err instanceof Error ? err.message : String(err),
-            });
         }
     });
 });

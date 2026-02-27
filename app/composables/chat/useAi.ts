@@ -201,29 +201,14 @@ export function useChat(
     const threadIdRef = ref<string | undefined>(initialThreadId);
     const historyLoadedFor = ref<string | null>(null);
     const cleanupFns: Array<() => void> = [];
-    const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
     const logBgStream = (
-        stage: string,
-        details?: Record<string, unknown>
-    ): void => {
-        if (!import.meta.dev) return;
-        if (details) {
-            console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-            return;
-        }
-        console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-    };
+        _stage: string,
+        _details?: Record<string, unknown>
+    ): void => {};
     const warnBgStream = (
-        stage: string,
-        details?: Record<string, unknown>
-    ): void => {
-        if (!import.meta.dev) return;
-        if (details) {
-            console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-            return;
-        }
-        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-    };
+        _stage: string,
+        _details?: Record<string, unknown>
+    ): void => {};
 
     watch(
         () => notificationUserId.value,

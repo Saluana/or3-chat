@@ -20,19 +20,11 @@
  */
 
 import type { BackgroundJob } from './types';
-const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
 
 function logBgStream(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (process.env.NODE_ENV === 'production') return;
-    if (details) {
-        console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
+    _stage: string,
+    _details?: Record<string, unknown>
+): void {}
 
 const jobViewers = new Map<string, number>();
 const LIVE_JOB_RETENTION_MS = 30_000;

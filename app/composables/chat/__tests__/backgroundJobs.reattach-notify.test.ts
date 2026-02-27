@@ -142,11 +142,7 @@ describe('backgroundJobs reattach + notifications', () => {
 
     it('does not fallback to polling when SSE closes after tracker reached terminal state', async () => {
         pollJobStatusMock.mockResolvedValue(makeStatus('streaming'));
-        let onErrorHandler: ((error: Error) => void) | null = null;
-        subscribeBackgroundJobStreamMock.mockImplementation((params: unknown) => {
-            onErrorHandler = (params as { onError?: (error: Error) => void }).onError ?? null;
-            return () => {};
-        });
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
 
         const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
         const { ensureBackgroundJobTracker, backgroundJobTrackers } = mod;
@@ -161,6 +157,11 @@ describe('backgroundJobs reattach + notifications', () => {
 
         tracker.status = 'complete';
         tracker.active = false;
+        const onErrorHandler = (
+            subscribeBackgroundJobStreamMock.mock.calls[0]?.[0] as
+                | { onError?: (error: Error) => void }
+                | undefined
+        )?.onError;
         onErrorHandler?.(new Error('SSE closed after completion'));
         await new Promise((resolve) => setTimeout(resolve, 0));
 

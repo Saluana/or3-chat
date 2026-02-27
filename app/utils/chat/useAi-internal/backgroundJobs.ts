@@ -87,31 +87,15 @@ export const backgroundJobTrackers = new Map<string, BackgroundJobTracker>();
 
 let cachedNotificationHooks: TypedHookEngine | null = null;
 let cachedWorkflowHooks: TypedHookEngine | null = null;
-const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
-
 function bgStreamLog(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (!import.meta.dev) return;
-    if (details) {
-        console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
+    _stage: string,
+    _details?: Record<string, unknown>
+): void {}
 
 function bgStreamWarn(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (!import.meta.dev) return;
-    if (details) {
-        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
+    _stage: string,
+    _details?: Record<string, unknown>
+): void {}
 
 function isClientRuntime(): boolean {
     const override = (globalThis as { __OR3_TEST_CLIENT?: boolean })

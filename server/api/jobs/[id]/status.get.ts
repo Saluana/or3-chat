@@ -8,19 +8,11 @@ import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { getJobLiveState } from '../../../utils/background-jobs/viewers';
-const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
 
 function logBgStream(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (process.env.NODE_ENV === 'production') return;
-    if (details) {
-        console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
+    _stage: string,
+    _details?: Record<string, unknown>
+): void {}
 
 /**
  * GET /api/jobs/:id/status

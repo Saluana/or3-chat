@@ -25,31 +25,16 @@ import {
 import { OpenRouter } from '@openrouter/sdk';
 import { registerHitlRequest, clearHitlRequestsForJob } from './hitl-store';
 import { normalizeOpenRouterBaseUrl } from '~~/shared/openrouter/url';
-const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
 
 function logBgStream(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (process.env.NODE_ENV === 'production') return;
-    if (details) {
-        console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
+    _stage: string,
+    _details?: Record<string, unknown>
+): void {}
 
 function warnBgStream(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (process.env.NODE_ENV === 'production') return;
-    if (details) {
-        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
+    _stage: string,
+    _details?: Record<string, unknown>
+): void {}
 
 const MAX_WORKFLOW_STATE_BYTES = 64 * 1024;
 type ConversationHistoryMessage = { role: string; content: string };

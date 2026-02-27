@@ -45,31 +45,6 @@ const NotificationCreatePayloadSchema = z.object({
     documentId: z.string().optional(),
     actions: z.array(NotificationActionSchema).optional(),
 });
-const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
-
-function logBgNotification(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (!import.meta.dev) return;
-    if (details) {
-        console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
-
-function warnBgNotification(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (!import.meta.dev) return;
-    if (details) {
-        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
 
 /**
  * Purpose:
@@ -107,26 +82,16 @@ export class NotificationService {
     startListening(): () => void {
         if (this.isListening) {
             console.warn('[NotificationService] Already listening, skipping duplicate registration');
-            warnBgNotification('notification-service-start-skip-already-listening', {
-                userId: this.userId,
-            });
             return () => this.stopListening();
         }
 
         this.actionHandler = async (payload: unknown) => {
-            logBgNotification('notification-service-hook-push-received', {
-                userId: this.userId,
-            });
             const parsed = NotificationCreatePayloadSchema.safeParse(payload);
             if (!parsed.success) {
                 console.warn(
                     '[NotificationService] Invalid notification payload',
                     parsed.error.message
                 );
-                warnBgNotification('notification-service-hook-push-invalid', {
-                    userId: this.userId,
-                    error: parsed.error.message,
-                });
                 return;
             }
             await this.create(parsed.data);
@@ -134,9 +99,6 @@ export class NotificationService {
 
         this.hooks.addAction('notify:action:push', this.actionHandler);
         this.isListening = true;
-        logBgNotification('notification-service-start-listening', {
-            userId: this.userId,
-        });
 
         return () => this.stopListening();
     }
@@ -150,9 +112,6 @@ export class NotificationService {
             this.hooks.removeAction('notify:action:push', this.actionHandler);
             this.actionHandler = null;
             this.isListening = false;
-            logBgNotification('notification-service-stop-listening', {
-                userId: this.userId,
-            });
         }
     }
 
@@ -183,18 +142,8 @@ export class NotificationService {
                 '[NotificationService] Invalid notification payload',
                 parsedPayload.error.message
             );
-            warnBgNotification('notification-service-create-invalid-payload', {
-                userId: this.userId,
-                error: parsedPayload.error.message,
-            });
             return null;
         }
-        logBgNotification('notification-service-create-attempt', {
-            userId: this.userId,
-            type: parsedPayload.data.type,
-            threadId: parsedPayload.data.threadId || null,
-            title: parsedPayload.data.title,
-        });
         // Apply filter hook to allow modifications or rejection
         const filtered = await this.hooks.applyFilters(
             'notify:filter:before_store',
@@ -204,11 +153,6 @@ export class NotificationService {
 
         // If filter returns false or nullish, reject the notification
         if (!filtered) {
-            logBgNotification('notification-service-create-filter-rejected', {
-                userId: this.userId,
-                type: parsedPayload.data.type,
-                threadId: parsedPayload.data.threadId || null,
-            });
             return null;
         }
 
@@ -218,10 +162,6 @@ export class NotificationService {
                 '[NotificationService] Invalid filtered notification payload',
                 filteredPayload.error.message
             );
-            warnBgNotification('notification-service-create-filter-invalid', {
-                userId: this.userId,
-                error: filteredPayload.error.message,
-            });
             return null;
         }
 
@@ -244,12 +184,6 @@ export class NotificationService {
 
         await this.runNotificationWriteTx(async () => {
             await this.db.notifications.add(notification);
-        });
-        logBgNotification('notification-service-create-success', {
-            userId: this.userId,
-            notificationId: notification.id,
-            type: notification.type,
-            threadId: notification.thread_id || null,
         });
         return notification;
     }

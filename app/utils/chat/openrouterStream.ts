@@ -60,31 +60,6 @@ type OpenRouterRequestBody = {
 // Cache key for detecting static build (no server routes)
 const SERVER_ROUTE_AVAILABLE_CACHE_KEY = 'or3:server-route-available';
 const SERVER_ROUTE_AVAILABLE_TTL_MS = 15 * 60 * 1000; // 15 minutes
-const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
-
-function logBgStream(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (!import.meta.dev) return;
-    if (details) {
-        console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.debug(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
-
-function warnBgStream(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (!import.meta.dev) return;
-    if (details) {
-        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
 
 /**
  * Check if server routes are available (not a static build).
@@ -463,14 +438,6 @@ export async function startBackgroundStream(params: {
     toolChoice?: ToolChoice;
     toolRuntime?: Record<string, string>;
 }): Promise<BackgroundStreamResult> {
-    logBgStream('client-start-background-request', {
-        threadId: params.threadId,
-        messageId: params.messageId,
-        model: params.model,
-        modalities: params.modalities,
-        hasApiKey: Boolean(params.apiKey),
-        toolCount: Array.isArray(params.tools) ? params.tools.length : 0,
-    });
     const body: OpenRouterRequestBody & {
         _background: true;
         _threadId: string;
@@ -510,12 +477,6 @@ export async function startBackgroundStream(params: {
         credentials: 'include',
         body: JSON.stringify(body),
     });
-    logBgStream('client-start-background-response', {
-        threadId: params.threadId,
-        messageId: params.messageId,
-        status: resp.status,
-        ok: resp.ok,
-    });
 
     if (!resp.ok) {
         if (resp.status === 404 || resp.status === 405) {
@@ -526,22 +487,10 @@ export async function startBackgroundStream(params: {
             resp,
             `Background stream failed: ${resp.status}`
         );
-        warnBgStream('client-start-background-failed', {
-            threadId: params.threadId,
-            messageId: params.messageId,
-            status: resp.status,
-            message,
-        });
         throw new Error(message);
     }
 
     const result = await resp.json() as BackgroundStreamResult;
-    logBgStream('client-start-background-success', {
-        threadId: params.threadId,
-        messageId: params.messageId,
-        jobId: result.jobId,
-        status: result.status,
-    });
     
     // Mark background streaming as available since it worked
     setBackgroundStreamingAvailable(true);
@@ -570,35 +519,10 @@ export async function pollJobStatus(
             resp,
             `Job status failed: ${resp.status}`
         );
-        warnBgStream('client-poll-job-failed', {
-            jobId,
-            status: resp.status,
-            message,
-        });
         throw new Error(message);
     }
 
     const status = await resp.json() as BackgroundJobStatus;
-    const deltaLength =
-        typeof status.content_delta === 'string' ? status.content_delta.length : 0;
-    const shouldLogPollStatus =
-        status.status !== 'streaming' ||
-        deltaLength >= 256 ||
-        offset === 0 ||
-        offset === undefined;
-    if (shouldLogPollStatus) {
-        logBgStream('client-poll-job-success', {
-            jobId,
-            status: status.status,
-            contentLength:
-                typeof status.content === 'string' ? status.content.length : 0,
-            deltaLength,
-            contentLengthHint:
-                typeof status.content_length === 'number'
-                    ? status.content_length
-                    : null,
-        });
-    }
     return status;
 }
 
@@ -675,48 +599,14 @@ export function subscribeBackgroundJobStream(params: {
         offset !== null
             ? `/api/jobs/${params.jobId}/stream?offset=${offset}`
             : `/api/jobs/${params.jobId}/stream`;
-    logBgStream('client-sse-open', {
-        jobId: params.jobId,
-        offset,
-        url,
-    });
 
     const es = new EventSource(url);
 
     es.onmessage = (event) => {
         try {
             const parsed = JSON.parse(event.data) as BackgroundJobStreamEvent;
-            const deltaLength =
-                typeof parsed.status.content_delta === 'string'
-                    ? parsed.status.content_delta.length
-                    : 0;
-            const shouldLogSseMessage =
-                parsed.event !== 'delta' ||
-                parsed.status.status !== 'streaming' ||
-                deltaLength >= 256;
-            if (shouldLogSseMessage) {
-                logBgStream('client-sse-message', {
-                    jobId: params.jobId,
-                    event: parsed.event,
-                    status: parsed.status.status,
-                    contentLength:
-                        typeof parsed.status.content === 'string'
-                            ? parsed.status.content.length
-                            : 0,
-                    deltaLength,
-                    contentLengthHint:
-                        typeof parsed.status.content_length === 'number'
-                            ? parsed.status.content_length
-                            : null,
-                });
-            }
             params.onStatus(parsed.status);
         } catch (err) {
-            warnBgStream('client-sse-parse-error', {
-                jobId: params.jobId,
-                error: err instanceof Error ? err.message : String(err),
-                sample: event.data.slice(0, 200),
-            });
             if (params.onError) {
                 params.onError(
                     err instanceof Error ? err : new Error('Invalid SSE payload')
@@ -726,20 +616,12 @@ export function subscribeBackgroundJobStream(params: {
     };
 
     es.onerror = () => {
-        warnBgStream('client-sse-error', {
-            jobId: params.jobId,
-            readyState: es.readyState,
-        });
         if (params.onError) {
             params.onError(new Error('Background SSE connection failed'));
         }
     };
 
     return () => {
-        logBgStream('client-sse-close', {
-            jobId: params.jobId,
-            readyState: es.readyState,
-        });
         try {
             es.close();
         } catch {

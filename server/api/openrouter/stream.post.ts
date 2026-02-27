@@ -39,31 +39,16 @@ import {
     startBackgroundStream,
     isBackgroundStreamingAvailable,
 } from '../../utils/background-jobs/stream-handler';
-const BG_STREAM_NOTIF_LOG_PREFIX = '[bg-stream & notifications]';
 
 function logBgStream(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (process.env.NODE_ENV === 'production') return;
-    if (details) {
-        console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.info(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
+    _stage: string,
+    _details?: Record<string, unknown>
+): void {}
 
 function warnBgStream(
-    stage: string,
-    details?: Record<string, unknown>
-): void {
-    if (process.env.NODE_ENV === 'production') return;
-    if (details) {
-        console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage, details);
-        return;
-    }
-    console.warn(BG_STREAM_NOTIF_LOG_PREFIX, stage);
-}
+    _stage: string,
+    _details?: Record<string, unknown>
+): void {}
 
 function parseForwardedProto(raw: string | undefined): 'http' | 'https' | null {
     if (!raw) return null;
