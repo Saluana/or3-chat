@@ -6,7 +6,7 @@ import {
 
 describe('theme manifest app config integration', () => {
     it('loads app.config.ts for themes that provide one', async () => {
-        const manifest = await loadThemeManifest();
+        const { entries: manifest } = await loadThemeManifest();
         const blankEntry = manifest.find((entry) => entry.dirName === 'blank');
 
         expect(blankEntry).toBeTruthy();
@@ -28,7 +28,7 @@ describe('theme manifest app config integration', () => {
     });
 
     it('loads app.config.ts for retro theme', async () => {
-        const manifest = await loadThemeManifest();
+        const { entries: manifest } = await loadThemeManifest();
         const retroEntry = manifest.find((entry) => entry.dirName === 'retro');
 
         expect(retroEntry).toBeTruthy();
@@ -44,8 +44,8 @@ describe('theme manifest app config integration', () => {
         const mockEntry = {
             name: 'mock-theme',
             dirName: 'mock',
-            definition: {} as any,
-            loader: async () => ({ default: {} as any }),
+            definition: {} as never,
+            loader: async () => ({ default: {} as never }),
             stylesheets: [],
             isDefault: false,
             hasCssSelectorStyles: false,

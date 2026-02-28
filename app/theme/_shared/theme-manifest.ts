@@ -91,6 +91,16 @@ export interface ThemeManifestEntry {
     iconsLoader?: ThemeIconsLoader;
 }
 
+export interface ThemeManifestError {
+    path: string;
+    error: unknown;
+}
+
+export interface ThemeManifestResult {
+    entries: ThemeManifestEntry[];
+    errors: ThemeManifestError[];
+}
+
 /**
  * `loadThemeManifest`
  *
@@ -100,8 +110,9 @@ export interface ThemeManifestEntry {
  * Constraints:
  * - Missing or invalid theme modules are skipped in dev
  */
-export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
+export async function loadThemeManifest(): Promise<ThemeManifestResult> {
     const manifest: ThemeManifestEntry[] = [];
+    const errors: ThemeManifestError[] = [];
 
     const results = await Promise.all(
         rawThemeEntries.map(async (entry) => {
@@ -142,12 +153,7 @@ export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
                         iconModules[`../${entry.dirName}/icons.config.ts`],
                 };
             } catch (error) {
-                if (import.meta.dev) {
-                    console.warn(
-                        `[theme] Failed to load theme module at ${entry.path}:`,
-                        error
-                    );
-                }
+                errors.push({ path: entry.path, error });
                 return null;
             }
         })
@@ -159,8 +165,20 @@ export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
         }
     }
 
-    return manifest;
+    if (import.meta.dev && errors.length > 0) {
+        console.warn(
+            `[theme] Failed to load ${errors.length} theme module(s).`,
+            errors
+        );
+    }
+
+    return {
+        entries: manifest,
+        errors,
+    };
 }
+
+const stylesheetInFlight = new Map<string, Promise<void>>();
 
 /**
  * `loadThemeStylesheets`
@@ -191,6 +209,13 @@ export async function loadThemeStylesheets(
             return;
         }
 
+        const dedupeKey = `${entry.name}|${href}`;
+
+        const existingInFlight = stylesheetInFlight.get(dedupeKey);
+        if (existingInFlight) {
+            return existingInFlight;
+        }
+
         const existingLink = doc.querySelector(
             `link[data-theme-stylesheet="${entry.name}"][href="${href}"]`
         );
@@ -199,7 +224,7 @@ export async function loadThemeStylesheets(
             return;
         }
 
-        return new Promise<void>((resolve) => {
+        const inFlight = new Promise<void>((resolve) => {
             const link = doc.createElement('link');
             link.rel = 'stylesheet';
             link.href = href;
@@ -216,7 +241,12 @@ export async function loadThemeStylesheets(
             };
 
             doc.head.appendChild(link);
+        }).finally(() => {
+            stylesheetInFlight.delete(dedupeKey);
         });
+
+        stylesheetInFlight.set(dedupeKey, inFlight);
+        return inFlight;
     });
 
     await Promise.all(promises);

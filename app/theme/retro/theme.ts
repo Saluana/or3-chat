@@ -115,7 +115,7 @@ export default defineTheme({
             onInfo: '#DDE3E8',
             success: '#51cf66',
             warning: '#ffa94d',
-            error: '#ffb3b3',
+            error: '#ff6b6b',
             topHeaderBg: '#1A1E23',
         },
     },

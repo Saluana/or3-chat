@@ -80,7 +80,7 @@ onMounted(async () => {
             '~/theme/_shared/theme-manifest'
         );
         const manifest = await loadThemeManifest();
-        allThemes.value = manifest.map((entry) => ({
+        allThemes.value = manifest.entries.map((entry) => ({
             name: entry.name,
             displayName:
                 entry.definition?.displayName ||
@@ -113,7 +113,7 @@ const themeButtonProps = computed(() => {
         size: 'md' as const,
         variant: 'soft' as const,
         color: 'primary' as const,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 </script>

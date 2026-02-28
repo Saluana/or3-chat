@@ -40,6 +40,7 @@ import { KNOWN_THEME_CONTEXTS } from './contexts';
  * - Returns a default component of "button" when no component is provided
  */
 const selectorCache = new Map<string, ParsedSelector>();
+const MAX_SELECTOR_CACHE_ENTRIES = 500;
 
 export function parseSelector(selector: string): ParsedSelector {
     if (selectorCache.has(selector)) {
@@ -72,6 +73,12 @@ export function parseSelector(selector: string): ParsedSelector {
         attributes: attributes.length > 0 ? attributes : undefined,
     };
 
+    if (selectorCache.size >= MAX_SELECTOR_CACHE_ENTRIES) {
+        const firstKey = selectorCache.keys().next().value;
+        if (firstKey) {
+            selectorCache.delete(firstKey);
+        }
+    }
     selectorCache.set(selector, result);
     return result;
 }

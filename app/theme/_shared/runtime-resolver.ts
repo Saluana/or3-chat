@@ -21,47 +21,12 @@ import type {
     CompiledTheme,
     AttributeMatcher,
     PropClassMaps,
+    ResolveParams,
+    ResolvedOverride,
+    ResolvedOverrideProps,
 } from './types';
 
-/**
- * `ResolveParams`
- *
- * Purpose:
- * Parameters for resolving overrides for a component instance.
- *
- * Constraints:
- * - `component` must match the theme override component name
- */
-export interface ResolveParams {
-    /** Component type (e.g., 'button', 'input', 'modal') */
-    component: string;
-
-    /** Context name (e.g., 'chat', 'sidebar', 'dashboard') */
-    context?: string;
-
-    /** Theme identifier (e.g., 'chat.send', 'search.query') */
-    identifier?: string;
-
-    /** Component state (e.g., 'hover', 'active', 'focus') */
-    state?: string;
-
-    /** HTML element for attribute matching */
-    element?: HTMLElement;
-
-    /** Whether component is a Nuxt UI component (for prop mapping) */
-    isNuxtUI?: boolean;
-}
-
-/**
- * `ResolvedOverride`
- *
- * Purpose:
- * Resolved props to apply to a component.
- */
-export interface ResolvedOverride {
-    /** Merged props to apply to component */
-    props: Record<string, unknown>;
-}
+export type { ResolveParams, ResolvedOverride } from './types';
 
 /**
  * Internal LRU cache for override resolution.
@@ -86,6 +51,8 @@ class LRUCache<K, V> {
     }
 
     set(key: K, value: V): void {
+        // Map-based LRU: simple, dependency-free, and O(1) enough for our hot path.
+        // We intentionally avoid a more complex "true" linked-list LRU here.
         // Delete if exists to re-insert at end
         if (this.cache.has(key)) {
             this.cache.delete(key);
@@ -402,7 +369,7 @@ export class RuntimeResolver {
      * @returns Merged override props
      */
     private merge(overrides: CompiledOverride[]): ResolvedOverride {
-        const merged: Record<string, unknown> = {};
+        const merged: ResolvedOverrideProps = {};
 
         // Iterate in reverse (lowest specificity first, highest last)
         // This ensures highest specificity wins
@@ -479,7 +446,7 @@ export class RuntimeResolver {
      */
     private mapPropsToClasses(override: ResolvedOverride): ResolvedOverride {
         const classes: string[] = [];
-        const cleanProps: Record<string, unknown> = {};
+        const cleanProps: ResolvedOverrideProps = {};
 
         const entries = Object.entries(override.props);
 

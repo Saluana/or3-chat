@@ -56,6 +56,8 @@ export function generateThemeCssVariables(def: ThemeDefinition): string {
     return lightBlock + (darkBlock ? '\n' + darkBlock : '');
 }
 
+// Safe to keep unbounded: keys come from theme token names, which are finite
+// and author-controlled (not user-generated runtime input).
 const kebabCache = new Map<string, string>();
 
 function kebab(str: string): string {

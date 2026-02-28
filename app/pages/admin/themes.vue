@@ -260,7 +260,7 @@ onMounted(async () => {
     try {
         const { loadThemeManifest } = await import('~/theme/_shared/theme-manifest');
         const manifest = await loadThemeManifest();
-        builtInThemes.value = manifest.map((entry) => ({
+        builtInThemes.value = manifest.entries.map((entry) => ({
             id: entry.name,
             name: entry.definition?.displayName || entry.name,
             description: entry.definition?.description,

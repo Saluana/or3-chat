@@ -1,4 +1,4 @@
-import type { ThemePlugin } from '~/plugins/90.theme.client';
+import type { ThemePlugin } from '~/theme/_shared/types';
 
 declare module '#app' {
     interface NuxtApp {

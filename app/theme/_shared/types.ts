@@ -1,3 +1,6 @@
+import type { Ref } from 'vue';
+import type { RuntimeResolver } from './runtime-resolver';
+
 /**
  * @module app/theme/_shared/types
  *
@@ -487,15 +490,27 @@ export interface ResolveParams {
  */
 export interface ResolvedOverride {
     /** Merged props */
-    props: Record<string, unknown> & {
-        /** Development debugging attributes */
-        'data-theme-target'?: string;
-        'data-theme-matches'?: string;
-        /** Standard component props */
-        class?: string;
-        style?: Record<string, string>;
-        ui?: Record<string, unknown>;
-        /** Allow any additional component-specific props */
-        [key: string]: unknown;
-    };
+    props: ResolvedOverrideProps;
+}
+
+export interface ResolvedOverrideProps extends Record<string, unknown> {
+    'data-theme-target'?: string;
+    'data-theme-matches'?: string;
+    class?: string;
+    style?: Record<string, string>;
+    ui?: Record<string, unknown>;
+}
+
+export interface ThemePlugin {
+    set: (name: string) => void;
+    toggle: () => void;
+    get: () => string;
+    system: () => string;
+    current: Ref<string>;
+    activeTheme: Ref<string>;
+    resolversVersion: Ref<number>;
+    setActiveTheme: (themeName: string) => Promise<void>;
+    getResolver: (themeName: string) => RuntimeResolver | null;
+    loadTheme: (themeName: string) => Promise<CompiledTheme | null>;
+    getTheme: (themeName: string) => CompiledTheme | null;
 }

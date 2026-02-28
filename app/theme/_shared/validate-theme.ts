@@ -310,6 +310,14 @@ export function validateThemeDefinition(
 function isValidColor(color: string): boolean {
     const trimmed = color.trim();
 
+    if (
+        typeof CSS !== 'undefined' &&
+        typeof CSS.supports === 'function' &&
+        CSS.supports('color', trimmed)
+    ) {
+        return true;
+    }
+
     // Hex colors: #rgb, #rrggbb, #rrggbbaa, #rgba
     if (
         /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(

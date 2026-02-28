@@ -24,8 +24,17 @@ Theme Definition (app/theme/*/theme.ts)
 - optional `icons.config.ts`
 - optional `*.css` stylesheets
 
-Each theme becomes a `ThemeManifestEntry` with loaders and metadata. The
-default theme is taken from `isDefault` or the first discovered theme.
+Each theme becomes a `ThemeManifestEntry` with loaders and metadata.
+
+Default theme precedence is:
+
+1. `runtimeConfig.public.branding.defaultTheme` (if valid)
+2. Theme marked with `isDefault`
+3. First manifest entry
+4. Fallback constant (`retro`)
+
+In dev mode, OR3 logs one warning when runtime config overrides manifest
+default selection.
 
 ## 2) Runtime compilation
 

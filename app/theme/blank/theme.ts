@@ -1,11 +1,7 @@
 /**
- * Retro Theme - Default Theme for Or3 Chat
+ * Blank Theme
  *
- * This is the original retro aesthetic theme, migrated to the refined theme system.
- * It features pixel-perfect styling with hard borders, offset shadows, and a nostalgic vibe.
- *
- * All retro-specific styles are contained within this theme package and loaded
- * conditionally when the retro theme is active.
+ * Minimal baseline theme for clean UI experiments and low-noise previews.
  */
 
 import { defineTheme } from '../_shared/define-theme';
@@ -18,7 +14,7 @@ export default defineTheme({
     name: 'blank',
     displayName: 'Blank theme',
     description: 'Minimalist blank theme with clean and simple design',
-    isDefault: true,
+    isDefault: false,
 
     borderWidth: '1px',
     borderRadius: '12px',
