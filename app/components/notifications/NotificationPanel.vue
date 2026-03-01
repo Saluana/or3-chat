@@ -5,10 +5,7 @@
             <span class="text-sm font-semibold text-[var(--md-on-surface)]">Notifications</span>
             <UButton
                 v-if="unreadCount > 0"
-                class="w-fit px-1! notification-mark-all-read-btn"
-                variant="link"
-                color="primary"
-                size="xs"
+                v-bind="markAllReadButtonProps"
                 @click="handleMarkAllRead"
             >
                 Mark all read
@@ -46,11 +43,7 @@
         <!-- Footer -->
         <div v-if="notifications.length > 0 && !showClearConfirm" class="px-3 py-2 border-t border-[var(--md-border-color)]">
             <UButton
-            class="notification-clear-btn"
-                variant="link"
-                color="error"
-                size="xs"
-                block
+                v-bind="clearAllButtonProps"
                 @click="showClearConfirm = true"
             >
                 Clear all
@@ -61,10 +54,10 @@
         <div v-if="showClearConfirm" class="px-3 py-2 border-t border-[var(--md-border-color)] bg-[var(--md-error-container)]">
             <p class="text-xs text-[var(--md-on-error-container)] mb-2">Clear all notifications?</p>
             <div class="flex gap-2">
-                <UButton class="w-fit px-1! notif-clear-cancel" size="xs" variant="solid"  @click="showClearConfirm = false">
+                <UButton v-bind="clearCancelButtonProps" @click="showClearConfirm = false">
                     Cancel
                 </UButton>
-                <UButton class="w-fit px-1! notif-clear-confirm" size="xs" color="error" variant="solid" @click="confirmClearAll">
+                <UButton v-bind="clearConfirmButtonProps" @click="confirmClearAll">
                     Clear
                 </UButton>
             </div>
@@ -76,6 +69,7 @@
 import { ref } from 'vue';
 import { useIcon } from '~/composables/useIcon';
 import { useNotifications } from '~/composables/notifications/useNotifications';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const iconBell = useIcon('notification.bell');
 
@@ -83,6 +77,65 @@ const { notifications, unreadCount, loading, markRead, markAllRead, clearAll } =
     useNotifications();
 
 const showClearConfirm = ref(false);
+
+const markAllReadOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'notifications.mark-all-read',
+    isNuxtUI: true,
+});
+
+const clearAllOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'notifications.clear-all',
+    isNuxtUI: true,
+});
+
+const clearCancelOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'notifications.clear.cancel',
+    isNuxtUI: true,
+});
+
+const clearConfirmOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'notifications.clear.confirm',
+    isNuxtUI: true,
+});
+
+const markAllReadButtonProps = computed(() => ({
+    variant: 'link' as const,
+    color: 'primary' as const,
+    size: 'xs' as const,
+    class: 'w-fit',
+    ...markAllReadOverrides.value,
+}));
+
+const clearAllButtonProps = computed(() => ({
+    variant: 'ghost' as const,
+    color: 'error' as const,
+    size: 'xs' as const,
+    block: true,
+    ...clearAllOverrides.value,
+}));
+
+const clearCancelButtonProps = computed(() => ({
+    variant: 'solid' as const,
+    size: 'sm' as const,
+    class: 'w-fit',
+    ...clearCancelOverrides.value,
+}));
+
+const clearConfirmButtonProps = computed(() => ({
+    variant: 'solid' as const,
+    color: 'error' as const,
+    size: 'sm' as const,
+    class: 'w-fit',
+    ...clearConfirmOverrides.value,
+}));
 
 async function handleMarkAllRead() {
     await markAllRead();

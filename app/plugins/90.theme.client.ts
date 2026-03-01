@@ -335,14 +335,12 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         loadedThemes: new Set<string>(),
         loadingThemes: new Map<string, Promise<boolean>>(),
     };
-    let hasMounted = false;
-
     const syncActiveComponents = () => {
         const theme = themeRegistry.get(activeTheme.value);
         const manifest = themeManifest.get(activeTheme.value);
 
         activeComponents.value =
-            hasMounted && theme && manifest
+            theme && manifest
                 ? createThemeComponentMap(
                       manifest.dirName,
                       theme.customComponents
@@ -699,11 +697,6 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     };
 
     nuxtApp.provide('theme', themeApi);
-
-    nuxtApp.hook('app:mounted', () => {
-        hasMounted = true;
-        syncActiveComponents();
-    });
 
     // Ensure the determined active theme is applied on first load
     try {

@@ -100,6 +100,29 @@ export const sidebarOverrides = {
 
     'button#sidebar.bottom-nav.credits': SidebarPopoverButtonConfig,
 
+    /* --- Notification panel actions --- */
+    'button#notifications.mark-all-read': {
+        class: 'w-fit',
+        size: 'xs',
+    },
+    'button#notifications.clear-all': {
+        size: 'xs',
+    },
+    'button#notifications.clear.cancel': {
+        class: 'w-fit',
+        size: 'xs',
+        ui: {
+            base: 'px-[10px]! min-w-0!',
+        },
+    },
+    'button#notifications.clear.confirm': {
+        class: 'w-fit',
+        size: 'xs',
+        ui: {
+            base: 'px-[10px]! min-w-0!',
+        },
+    },
+
     /* --- Collapsed sidebar buttons --- */
     'button#sidebar.collapsed-page': {
         ui: {

@@ -135,4 +135,9 @@ export default <IconMap>{
     'image.delete': 'tabler:photo-x',
     'image.repeat': 'tabler:repeat',
     'image.multiple': 'tabler:library-photo',
+
+    'notification.bell': 'tabler:bell',
+    'notification.message': 'tabler:message',
+    'notification.warning': 'tabler:alert-triangle',
+    'notification.sync': 'tabler:refresh',
 };
