@@ -131,7 +131,7 @@ import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
-import { useToast, useHooks } from '#imports';
+import { useToast, useHooks, useChat } from '#imports';
 import { getMaxMessageFileHashes } from '~/db/files-util';
 import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
 import type {

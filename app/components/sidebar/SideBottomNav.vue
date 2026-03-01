@@ -97,6 +97,7 @@
 
 <script lang="ts" setup>
 import { computed, ref, useAttrs } from 'vue';
+import { useRuntimeConfig } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useOr3Config } from '~/composables/useOr3Config';

@@ -266,6 +266,10 @@ import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
 
 import { isMobile } from '~/state/global';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
+import { useActivePrompt } from '~/composables/chat/useActivePrompt';
+import { useDefaultPrompt } from '~/composables/chat/useDefaultPrompt';
+import { useTokenizer } from '~/composables/core/useTokenizer';
 
 // Props & modal open bridging (like SettingsModal pattern)
 const props = defineProps<{

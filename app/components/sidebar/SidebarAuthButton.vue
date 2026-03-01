@@ -115,11 +115,13 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, ref } from 'vue';
+import { useRuntimeConfig } from '#imports';
 import { state } from '~/state/global';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import SidebarAuthButtonClerk from './SidebarAuthButtonClerk.client.vue';
 import SidebarAuthButtonFallback from './SidebarAuthButtonFallback.client.vue';
 import { resolveAuthUiAdapter } from '~/core/auth-ui/registry';
+import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 
 // Check if SSR auth is enabled via runtime config
 const runtimeConfig = useRuntimeConfig();

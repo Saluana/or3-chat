@@ -95,6 +95,7 @@ import {
     useDocumentEditorCommands,
     useDocumentEditorToolbar,
 } from '~/composables/documents/useDocumentEditorToolbar';
+import { useIcon } from '~/composables/useIcon';
 
 const props = defineProps<{ documentId: string }>();
 

@@ -347,10 +347,15 @@ import {
     type ComposerActionEntry,
     type ComposerActionContext,
 } from '#imports';
+import { useHooks } from '~/core/hooks/useHooks';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useButtonOverrides } from '~/composables/useTypedThemeOverrides';
 import { useIcon } from '~/composables/useIcon';
 import { useLocalStorage } from '@vueuse/core';
+import {
+    registerPaneInput,
+    unregisterPaneInput,
+} from '~/composables/chat/useChatInputBridge';
 import type {
     ImageSettings,
     LargeTextBlock,

@@ -448,13 +448,14 @@ export async function runWizardDeploy(
                     ? [
                         'Open http://127.0.0.1:3000 in your browser.',
                         'Sign in with your bootstrap/admin account.',
-                        'Open the admin panel and verify auth/sync/storage status.',
+                        'Open the admin dashboard at /admin to manage your instance.',
                     ]
                     : [
                         'Ensure port 3000 is free before starting local dev.',
                         'Start the app manually with: bun run dev:ssr',
                         'Open http://127.0.0.1:3000 in your browser after startup.',
                         'Sign in with your bootstrap/admin account.',
+                        'Open the admin dashboard at /admin to manage your instance.',
                     ],
             },
         };

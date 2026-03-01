@@ -162,6 +162,12 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
     setEnv(env, 'OR3_TRUST_PROXY', boolToEnv(answers.trustProxy));
     setEnv(env, 'OR3_FORWARDED_FOR_HEADER', answers.forwardedForHeader);
 
+    // Admin dashboard credentials
+    if (answers.ssrAuthEnabled) {
+        setEnv(env, 'OR3_ADMIN_USERNAME', answers.adminUsername);
+        setEnv(env, 'OR3_ADMIN_PASSWORD', answers.adminPassword);
+    }
+
     if (answers.authProvider === 'basic-auth') {
         setEnv(env, 'OR3_BASIC_AUTH_JWT_SECRET', answers.basicAuthJwtSecret);
         setEnv(

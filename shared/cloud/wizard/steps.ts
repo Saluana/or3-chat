@@ -28,6 +28,11 @@
  * @see providerCatalog for provider field definitions
  */
 import { getProviderDescriptor, listImplementedProviders } from './catalog';
+import {
+    ADMIN_USERNAME_MIN_LENGTH,
+    formatAdminPasswordPolicyFailure,
+    getAdminPasswordPolicyFailures,
+} from './admin-dashboard';
 import type { WizardAnswers, WizardField, WizardStep } from './types';
 
 function providerOptions(kind: 'auth' | 'sync' | 'storage') {
@@ -592,6 +597,73 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 (current.syncProvider === 'convex' ||
                     current.storageProvider === 'convex')
             ),
+    });
+
+    steps.push({
+        id: 'admin-dashboard',
+        title: 'Admin Dashboard',
+        description:
+            'Set up a super admin account for the admin dashboard.\n' +
+            'This is separate from user login — it\'s how you manage your instance.',
+        fields: [
+            {
+                key: 'adminUsername',
+                type: 'text',
+                label: 'Admin username',
+                help: 'Choose a username for the admin dashboard. This is not the same as a user account.',
+                required: true,
+                tier: 'core',
+                validate: (value, answers) => {
+                    const username = String(value ?? '').trim();
+                    const currentUsername = String(
+                        answers.adminUsername ?? ''
+                    ).trim();
+                    const reusesExistingUsername =
+                        username.length > 0 &&
+                        currentUsername.length > 0 &&
+                        username === currentUsername;
+                    if (
+                        !reusesExistingUsername &&
+                        username.length > 0 &&
+                        username.length < ADMIN_USERNAME_MIN_LENGTH
+                    ) {
+                        return `Admin username must be at least ${ADMIN_USERNAME_MIN_LENGTH} characters.`;
+                    }
+                    return null;
+                },
+            },
+            {
+                key: 'adminPassword',
+                type: 'password',
+                label: 'Admin password',
+                help: 'Choose a strong password for the admin dashboard.',
+                required: true,
+                secret: true,
+                tier: 'core',
+                validate: (value, answers) => {
+                    const password = String(value ?? '').trim();
+                    if (!password) return null;
+                    const currentPassword = String(
+                        answers.adminPassword ?? ''
+                    ).trim();
+                    const reusesExistingPassword =
+                        currentPassword.length > 0 &&
+                        password === currentPassword;
+                    if (reusesExistingPassword) {
+                        return null;
+                    }
+                    const firstFailure = getAdminPasswordPolicyFailures(
+                        password
+                    )[0];
+                    if (!firstFailure) return null;
+                    return formatAdminPasswordPolicyFailure(firstFailure, {
+                        label: 'Admin password',
+                        verb: 'must',
+                    });
+                },
+            },
+        ],
+        canSkip: (current) => !current.ssrAuthEnabled,
     });
 
     const openRouterStepIndex = steps.findIndex(

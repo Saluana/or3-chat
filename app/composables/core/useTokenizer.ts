@@ -4,7 +4,7 @@
  * the encoder as a fallback (SSR-safe).
  */
 
-import { onMounted, ref } from 'vue';
+import { getCurrentInstance, onMounted, ref } from 'vue';
 
 type EncodeFn = (text: string) => number[];
 
@@ -188,10 +188,17 @@ const runWorkerRequest = async <T>(
 export function useTokenizer() {
     const isReady = ref(!process.client);
 
-    onMounted(async () => {
-        await ensureWorker();
-        isReady.value = true;
-    });
+    const hasComponentInstance = Boolean(getCurrentInstance());
+    if (hasComponentInstance) {
+        onMounted(async () => {
+            await ensureWorker();
+            isReady.value = true;
+        });
+    } else if (import.meta.client) {
+        void ensureWorker().finally(() => {
+            isReady.value = true;
+        });
+    }
 
     const countTokens = async (text: string): Promise<number> => {
         if (!text) return 0;

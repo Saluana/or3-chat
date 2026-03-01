@@ -187,6 +187,7 @@ import { useModelSearch } from '~/core/search/useModelSearch';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
 
 const props = defineProps<{

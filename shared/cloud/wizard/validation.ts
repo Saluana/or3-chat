@@ -38,6 +38,11 @@ import {
     normalizeAdvancedToggles,
     SECRET_ANSWER_KEYS,
 } from './catalog';
+import {
+    ADMIN_USERNAME_MIN_LENGTH,
+    formatAdminPasswordPolicyFailure,
+    getAdminPasswordPolicyFailures,
+} from './admin-dashboard';
 import { deriveEnvFromAnswers } from './derive';
 import type { WizardAnswers, WizardValidationResult } from './types';
 
@@ -278,6 +283,31 @@ function validateFieldLevel(answers: WizardAnswers): {
             warnings.push(
                 'OR3_ADMIN_JWT_SECRET is required in Convex backend env for Clerk + Convex.'
             );
+        }
+    }
+
+    // Admin dashboard credentials
+    if (answers.ssrAuthEnabled) {
+        const adminUser = answers.adminUsername?.trim() ?? '';
+        const adminPass = answers.adminPassword?.trim() ?? '';
+        if (!adminUser || !adminPass) {
+            errors.push(
+                'OR3_ADMIN_USERNAME and OR3_ADMIN_PASSWORD are required when SSR auth is enabled.'
+            );
+        } else {
+            if (adminUser.length < ADMIN_USERNAME_MIN_LENGTH) {
+                warnings.push(
+                    `OR3_ADMIN_USERNAME should be at least ${ADMIN_USERNAME_MIN_LENGTH} characters.`
+                );
+            }
+            for (const failure of getAdminPasswordPolicyFailures(adminPass)) {
+                warnings.push(
+                    formatAdminPasswordPolicyFailure(failure, {
+                        label: 'OR3_ADMIN_PASSWORD',
+                        verb: 'should',
+                    })
+                );
+            }
         }
     }
 

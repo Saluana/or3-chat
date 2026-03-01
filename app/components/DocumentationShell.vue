@@ -339,10 +339,18 @@ import {
 } from 'vue';
 import type { PropType } from 'vue';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
+import {
+    useNuxtApp,
+    useRoute,
+    useAsyncData,
+    useRequestURL,
+    navigateTo,
+} from '#imports';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import { useScrollLock } from '~/composables/core/useScrollLock';
 import LazySearchPanel from '~/components/documents/LazySearchPanel.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
 import { useMutationObserver, useEventListener } from '@vueuse/core';
 import { useDocumentationNavigation } from '~/composables/documents/useDocumentationNavigation';
@@ -670,7 +678,7 @@ const { data: docmapData } = await useAsyncData(
 // Apply docmap immediately if available (server or client)
 if (docmapData.value) {
     docmap.value = docmapData.value;
-    applyDocmapNavigation(docmap.value);
+    applyDocmapNavigation(docmapData.value);
 }
 
 watch(docmapData, (newData) => {

@@ -1,4 +1,4 @@
-import { ref, watch, onBeforeUnmount, type Ref } from 'vue';
+import { ref, watch, type Ref } from 'vue';
 import { watchDebounced } from '@vueuse/core';
 import type { Thread } from '~/db';
 import {
@@ -160,11 +160,6 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
     });
 
     watchDebounced(query, () => void runSearch(), { debounce: 120 });
-
-    // Cleanup on component unmount
-    onBeforeUnmount(() => {
-        // No manual timer cleanup needed with watchDebounced
-    });
 
     // HMR cleanup: clear timer on module disposal
     if (import.meta.hot) {

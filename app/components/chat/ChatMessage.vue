@@ -365,6 +365,8 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useMessageThumbnails } from '~/composables/chat/useMessageThumbnails';
 import { useMessageMarkdown } from '~/composables/chat/useMessageMarkdown';
+import { useMessageEditing } from '~/composables/chat/useMessageEditing';
+import { useMessageActions } from '~/composables/chat/useMessageActions';
 
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };

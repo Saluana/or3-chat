@@ -2,10 +2,14 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { generateAdminPassword } from '../../shared/cloud/wizard/admin-dashboard';
 import { createDefaultAnswers } from '../../shared/cloud/wizard/catalog';
 import { applyAnswers } from '../../shared/cloud/wizard/apply';
 import { buildDeployPlan } from '../../shared/cloud/wizard/deploy';
-import { deriveEnvFromAnswers } from '../../shared/cloud/wizard/derive';
+import {
+    deriveEnvFromAnswers,
+    deriveWizardOwnedEnvUpdates,
+} from '../../shared/cloud/wizard/derive';
 import { getWizardSteps } from '../../shared/cloud/wizard/steps';
 import {
     createDependencyInstallPlan,
@@ -27,6 +31,8 @@ function validRecommendedAnswers() {
         basicAuthBootstrapPassword: 'SuperSecurePassword123',
         fsTokenSecret: 'fs-token-secret-fs-token-secret-fs-token',
         fsRoot: '/tmp/or3-storage',
+        adminUsername: 'admin',
+        adminPassword: 'AdminPassword123',
     };
 }
 
@@ -105,6 +111,56 @@ describe('or3 cloud wizard validation', () => {
             'or3-provider-fs/nuxt',
             'or3-provider-sqlite/nuxt',
         ]);
+    });
+
+    it('does not include convex backend-only admin jwt env in wizard-owned updates', () => {
+        const answers = {
+            ...validRecommendedAnswers(),
+            authProvider: 'clerk' as const,
+            clerkPublishableKey: 'pk_test_123',
+            clerkSecretKey: 'sk_test_123',
+            syncProvider: 'convex' as const,
+            storageProvider: 'convex' as const,
+            convexUrl: 'https://test.convex.cloud',
+            convexClerkIssuerUrl: 'https://example.clerk.accounts.dev',
+            convexAdminJwtSecret: 'convex-admin-secret-convex-admin-secret-123',
+        };
+        const { env } = deriveEnvFromAnswers(answers);
+        const updates = deriveWizardOwnedEnvUpdates(env);
+
+        expect(Object.keys(updates)).not.toContain('OR3_ADMIN_JWT_SECRET');
+    });
+
+    it('requires admin dashboard credentials when SSR auth is enabled', () => {
+        const result = validateAnswers({
+            ...validRecommendedAnswers(),
+            adminUsername: undefined,
+            adminPassword: undefined,
+        });
+        expect(result.ok).toBe(false);
+        expect(result.errors.join('\n')).toContain(
+            'OR3_ADMIN_USERNAME and OR3_ADMIN_PASSWORD are required when SSR auth is enabled.'
+        );
+    });
+
+    it('warns instead of failing for legacy weak admin passwords', () => {
+        const result = validateAnswers({
+            ...validRecommendedAnswers(),
+            adminUsername: 'admin',
+            adminPassword: 'alllowercase123',
+        });
+        expect(result.ok).toBe(true);
+        expect(result.warnings.join('\n')).toContain(
+            'OR3_ADMIN_PASSWORD should contain at least one uppercase letter.'
+        );
+    });
+
+    it('generates admin passwords that satisfy the shared policy', () => {
+        const generated = generateAdminPassword(24);
+        expect(generated).toHaveLength(24);
+        expect(/[A-Z]/.test(generated)).toBe(true);
+        expect(/[a-z]/.test(generated)).toBe(true);
+        expect(/[0-9]/.test(generated)).toBe(true);
     });
 
     it('uses updated template wording and includes custom mode', () => {

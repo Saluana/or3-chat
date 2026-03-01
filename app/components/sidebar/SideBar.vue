@@ -421,6 +421,8 @@ import { useSidebarProjectDisplay } from '~/composables/sidebar/useSidebarProjec
 import {
     useSidebarSections,
     useSidebarFooterActions,
+    type SidebarSection,
+    type SidebarFooterActionEntry,
 } from '~/composables/sidebar/useSidebarSections';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';

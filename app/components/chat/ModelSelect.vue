@@ -19,6 +19,9 @@
 import { computed, watch, ref } from 'vue';
 import { isMobile } from '~/state/global';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useModelStore } from '~/composables/chat/useModelStore';
+import { useIcon } from '~/composables/useIcon';
+import type { OpenRouterModel } from '~/core/auth/models-service';
 
 interface Emits {
     (e: 'update:model', value: string): void;
@@ -118,7 +121,7 @@ const show = computed(
 
 const items = computed(() =>
     (favoriteModels.value || [])
-        .map((m) => {
+        .map((m: OpenRouterModel) => {
             const value = m.canonical_slug ?? m.id;
             if (!value) return null;
             return {

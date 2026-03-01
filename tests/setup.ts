@@ -2,6 +2,50 @@ import 'fake-indexeddb/auto';
 // Global test setup: mock heavy virtualization lib to avoid jsdom/Bun hangs.
 import { vi } from 'vitest';
 import { defineComponent, h, computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { config } from '@vue/test-utils';
+
+const PassthroughDiv = defineComponent({
+    name: 'PassthroughDiv',
+    template: '<div><slot /></div>',
+});
+
+const UIconStub = defineComponent({
+    name: 'UIcon',
+    props: {
+        name: { default: '' },
+    },
+    template: '<span class="u-icon" :data-name="String(name)"><slot /></span>',
+});
+
+const UButtonStub = defineComponent({
+    name: 'UButton',
+    emits: ['click'],
+    template:
+        '<button type="button" @click="$emit(\'click\', $event)"><slot /></button>',
+});
+
+config.global.stubs = {
+    ...config.global.stubs,
+    UIcon: UIconStub,
+    UButton: UButtonStub,
+    UCard: PassthroughDiv,
+    UPopover: PassthroughDiv,
+    UTooltip: PassthroughDiv,
+    UInput: PassthroughDiv,
+    UForm: PassthroughDiv,
+    ClientOnly: PassthroughDiv,
+    ChatSettingsPopover: PassthroughDiv,
+    Suspense: PassthroughDiv,
+};
+
+config.global.config = {
+    ...(config.global.config ?? {}),
+    warnHandler(msg, instance, trace) {
+        // Ignore Vue's one-time Suspense experimental warning in unit tests.
+        if (msg.includes('<Suspense> is an experimental feature')) return;
+        console.warn(msg, instance, trace);
+    },
+};
 
 // Nuxt macro stub for non-Nuxt Vitest runtime.
 // Many pages call definePageMeta() without an explicit import.

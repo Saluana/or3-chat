@@ -198,7 +198,7 @@
 </template>
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useToast } from '#imports';
+import { useToast, navigateTo } from '#imports';
 import {
     useSidebarFooterActions,
     type SidebarFooterActionEntry,

@@ -65,6 +65,7 @@ import { Placeholder } from '@tiptap/extensions';
 import { useDebounceFn } from '@vueuse/core';
 import { getPrompt, updatePrompt, type PromptRecord } from '~/db/prompts';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
 
 const props = defineProps<{ promptId: string }>();

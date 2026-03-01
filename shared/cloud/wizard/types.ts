@@ -249,6 +249,12 @@ export interface WizardAnswers {
     trustProxy: boolean;
     /** Maps to `OR3_FORWARDED_FOR_HEADER`. */
     forwardedForHeader: 'x-forwarded-for' | 'x-real-ip';
+
+    // ── Admin Dashboard ──
+    /** Maps to `OR3_ADMIN_USERNAME`. Required to enable the admin dashboard. */
+    adminUsername?: string;
+    /** Maps to `OR3_ADMIN_PASSWORD`. Required to enable the admin dashboard. */
+    adminPassword?: string;
 }
 
 /** Input type for a wizard field. Determines how the CLI or web UI renders the prompt. */

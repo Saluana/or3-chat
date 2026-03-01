@@ -83,6 +83,26 @@ vi.mock('../file-upload-utils', () => ({
     persistAttachment: vi.fn().mockResolvedValue({ hash: 'test-hash' })
 }));
 
+const ThemedModelCatalogModal = {
+    template: '<div class="themed-model-catalog-modal" />',
+};
+const ThemedSystemPromptsModal = {
+    template: '<div class="themed-system-prompts-modal" />',
+};
+const ThemedModelSelect = {
+    template: '<div class="themed-model-select" />',
+};
+
+const createThemeMock = () => ({
+    activeComponents: {
+        value: {
+            'model-catalog-modal': ThemedModelCatalogModal,
+            'system-prompts-modal': ThemedSystemPromptsModal,
+            'model-selector': ThemedModelSelect,
+        },
+    },
+});
+
 describe('ChatInputDropper', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -97,6 +117,9 @@ describe('ChatInputDropper', () => {
                 threadId: 'test-thread',
             },
             global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
                 stubs: {
                     EditorContent: true,
                     UIcon: true,
@@ -128,7 +151,12 @@ describe('ChatInputDropper', () => {
 
     it('processes files when file dialog selection changes', async () => {
         const wrapper = mount(ChatInputDropper, {
-            props: { loading: false }
+            props: { loading: false },
+            global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
+            },
         });
 
         const file = new File(['test'], 'test.png', { type: 'image/png' });
@@ -157,7 +185,12 @@ describe('ChatInputDropper', () => {
 
     it('handles drop events via useDropZone', async () => {
         const wrapper = mount(ChatInputDropper, {
-            props: { loading: false }
+            props: { loading: false },
+            global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
+            },
         });
 
         const file = new File(['drop'], 'drop.png', { type: 'image/png' });
@@ -176,7 +209,12 @@ describe('ChatInputDropper', () => {
 
     it('updates isDragging state on enter/leave', async () => {
         const wrapper = mount(ChatInputDropper, {
-            props: { loading: false }
+            props: { loading: false },
+            global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
+            },
         });
 
         mockIsOverDropZone.value = true;

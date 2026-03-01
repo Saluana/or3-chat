@@ -4,5 +4,7 @@ import './types/database.d.ts';
 import './types/sidebar.d.ts';
 import './types/h3.d.ts';
 import './types/convex-http-client.d.ts';
+import './types/nuxt.d.ts';
+import './types/css.d.ts';
 
 export {};

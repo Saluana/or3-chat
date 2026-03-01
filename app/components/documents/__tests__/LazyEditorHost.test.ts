@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { defineComponent } from 'vue';
 import LazyEditorHost from '../LazyEditorHost.vue';
 
 // Mock the DocumentEditorRoot component
@@ -11,6 +12,12 @@ vi.mock('../DocumentEditorRoot.vue', () => ({
     },
 }));
 
+const SuspenseStub = defineComponent({
+    name: 'Suspense',
+    emits: ['resolve'],
+    template: '<div class="suspense-stub"><slot /></div>',
+});
+
 describe('LazyEditorHost - memory leaks', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -21,6 +28,11 @@ describe('LazyEditorHost - memory leaks', () => {
         const wrapper = mount(LazyEditorHost, {
             props: {
                 documentId: 'doc1',
+            },
+            global: {
+                stubs: {
+                    Suspense: SuspenseStub,
+                },
             },
         });
 
@@ -37,6 +49,11 @@ describe('LazyEditorHost - memory leaks', () => {
         const wrapper = mount(LazyEditorHost, {
             props: {
                 documentId: 'doc1',
+            },
+            global: {
+                stubs: {
+                    Suspense: SuspenseStub,
+                },
             },
         });
 
@@ -59,6 +76,11 @@ describe('LazyEditorHost - memory leaks', () => {
             props: {
                 documentId: 'doc1',
             },
+            global: {
+                stubs: {
+                    Suspense: SuspenseStub,
+                },
+            },
         });
 
         await wrapper.vm.$nextTick();
@@ -77,6 +99,11 @@ describe('LazyEditorHost - memory leaks', () => {
         const wrapper = mount(LazyEditorHost, {
             props: {
                 documentId: 'doc1',
+            },
+            global: {
+                stubs: {
+                    Suspense: SuspenseStub,
+                },
             },
         });
 

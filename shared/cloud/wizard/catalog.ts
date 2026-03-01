@@ -53,6 +53,7 @@ export const SECRET_ANSWER_KEYS: Array<keyof WizardAnswers> = [
     's3SecretAccessKey',
     's3SessionToken',
     'convexSelfHostedAdminKey',
+    'adminPassword',
 ];
 
 /**
@@ -138,6 +139,8 @@ export const WIZARD_OWNED_ENV_KEYS = [
     'OR3_STRICT_CONFIG',
     'OR3_TRUST_PROXY',
     'OR3_FORWARDED_FOR_HEADER',
+    'OR3_ADMIN_USERNAME',
+    'OR3_ADMIN_PASSWORD',
 ] as const;
 
 /**
@@ -1009,6 +1012,9 @@ export function mapEnvToWizardAnswers(
     ) {
         mapped.forwardedForHeader = forwardedHeader;
     }
+
+    assignString('adminUsername', 'OR3_ADMIN_USERNAME');
+    assignString('adminPassword', 'OR3_ADMIN_PASSWORD');
 
     return mapped;
 }

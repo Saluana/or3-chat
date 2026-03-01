@@ -152,8 +152,10 @@ import {
     registerDashboardPluginPage,
     type DashboardPlugin,
 } from '~/composables';
+import { useRuntimeConfig } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 import { isMobile } from '~/state/global';
 
 const props = defineProps<{

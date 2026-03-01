@@ -24,6 +24,7 @@ import {
     buildOr3ConfigFromEnv,
 } from '../../server/admin/config/resolve-config';
 import { applyConvexEnv } from '../../shared/cloud/wizard/deploy';
+import { generateAdminPassword } from '../../shared/cloud/wizard/admin-dashboard';
 import {
     createDependencyInstallPlan,
     executeDependencyInstallPlan,
@@ -708,6 +709,10 @@ function findValidationFailureStepId(
             patterns: ['CLERK_ISSUER_URL', 'OR3_ADMIN_JWT_SECRET'],
         },
         {
+            stepId: 'admin-dashboard',
+            patterns: ['OR3_ADMIN_USERNAME', 'OR3_ADMIN_PASSWORD'],
+        },
+        {
             stepId: 'openrouter-limits-security',
             patterns: [
                 'OPENROUTER_',
@@ -890,6 +895,9 @@ async function runFastInit(flags: CliFlags): Promise<void> {
         prefillFromEnv: false,
     });
 
+    const adminUsername = 'admin';
+    const adminPassword = generateAdminPassword(24);
+
     await api.submitAnswers(session.id, {
         wizardMode: 'preset-local',
         presetName: 'recommended',
@@ -900,6 +908,8 @@ async function runFastInit(flags: CliFlags): Promise<void> {
         basicAuthBootstrapPassword: bootstrapPassword,
         fsTokenSecret: api.generateSecureSecret(48),
         fsRoot,
+        adminUsername,
+        adminPassword,
     });
 
     const validation = await api.validate(
@@ -925,6 +935,9 @@ async function runFastInit(flags: CliFlags): Promise<void> {
 
     console.log(`  Bootstrap email: ${bootstrapEmail}`);
     console.log(`  Bootstrap password: ${bootstrapPassword}`);
+    console.log('');
+    console.log(`  Admin dashboard username: ${adminUsername}`);
+    console.log(`  Admin dashboard password: ${adminPassword}`);
 
     const deployResult = await api.deploy(session.id);
     printDeployResult(deployResult);

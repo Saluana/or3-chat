@@ -94,6 +94,15 @@ vi.mock('@vueuse/core', () => ({
 const LazyChatMessage = { template: '<div>Message</div>' };
 const LazyChatInputDropper = { template: '<div>Input</div>' };
 
+const createThemeMock = () => ({
+    activeComponents: {
+        value: {
+            'chat-message': LazyChatMessage,
+            'chat-input': LazyChatInputDropper,
+        },
+    },
+});
+
 describe('ChatContainer', () => {
     const defaultProps = {
         threadId: 'thread-1',
@@ -111,6 +120,9 @@ describe('ChatContainer', () => {
         const wrapper = mount(ChatContainer, {
             props: defaultProps,
             global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
                 stubs: {
                     LazyChatMessage,
                     LazyChatInputDropper,
@@ -197,6 +209,9 @@ describe('ChatContainer', () => {
         const wrapper = mount(ChatContainer, {
             props: defaultProps,
             global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
                 stubs: {
                     LazyChatMessage,
                     LazyChatInputDropper,
@@ -217,6 +232,9 @@ describe('ChatContainer', () => {
         const wrapper = mount(ChatContainer, {
             props: defaultProps,
             global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
                 stubs: {
                     LazyChatMessage,
                     LazyChatInputDropper,
@@ -256,6 +274,9 @@ describe('ChatContainer', () => {
         const wrapper = mount(ChatContainer, {
             props: defaultProps,
             global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
                 stubs: {
                     LazyChatMessage,
                     LazyChatInputDropper,

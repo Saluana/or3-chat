@@ -4,6 +4,7 @@ import {
     createDefaultAnswers,
     normalizeAdvancedToggles,
 } from '~~/shared/cloud/wizard/catalog';
+import { generateAdminPassword } from '~~/shared/cloud/wizard/admin-dashboard';
 import { getWizardSteps } from '~~/shared/cloud/wizard/steps';
 import type {
     WizardAnswers,
@@ -86,6 +87,8 @@ const FIELD_ERROR_RULES: Array<{
     { key: 'trustProxy', patterns: ['OR3_TRUST_PROXY'] },
     { key: 'forwardedForHeader', patterns: ['OR3_FORWARDED_FOR_HEADER'] },
     { key: 'strictConfig', patterns: ['OR3_STRICT_CONFIG'] },
+    { key: 'adminUsername', patterns: ['OR3_ADMIN_USERNAME'] },
+    { key: 'adminPassword', patterns: ['OR3_ADMIN_PASSWORD'] },
 ];
 
 const STEP_ERROR_RULES: Array<{
@@ -139,6 +142,10 @@ const STEP_ERROR_RULES: Array<{
     {
         stepId: 'convex-env',
         patterns: ['CLERK_ISSUER_URL', 'OR3_ADMIN_JWT_SECRET'],
+    },
+    {
+        stepId: 'admin-dashboard',
+        patterns: ['OR3_ADMIN_USERNAME', 'OR3_ADMIN_PASSWORD'],
     },
 ];
 
@@ -414,7 +421,11 @@ export function useWizardSession() {
     }
 
     function generateSecureKey(key: keyof WizardAnswers, length = 48): void {
-        updateAnswer(key, randomSecret(length) as WizardAnswers[keyof WizardAnswers]);
+        const nextValue =
+            key === 'adminPassword'
+                ? generateAdminPassword(length)
+                : randomSecret(length);
+        updateAnswer(key, nextValue as WizardAnswers[keyof WizardAnswers]);
     }
 
     function buildPatchFromStep(step: WizardStep): Partial<WizardAnswers> {
