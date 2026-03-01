@@ -33,6 +33,8 @@ describe('defineOr3CloudConfig', () => {
         expect(config.services.llm?.openRouter?.allowUserOverride).toBe(true);
         expect(config.storage.allowedMimeTypes?.length).toBeGreaterThan(0);
         expect(config.backgroundStreaming?.maxConcurrentJobsPerUser).toBe(5);
+        expect(config.webhooks?.maxPerUser).toBe(20);
+        expect(config.webhooks?.rateLimitPerMinute).toBe(120);
     });
 
     it('throws in strict mode when instance key is required', () => {
@@ -187,6 +189,22 @@ describe('defineOr3CloudConfig', () => {
         });
         expect(config.security?.allowedOrigins).toEqual(['https://example.com']);
         expect(config.security?.forceHttps).toBeDefined(); // default preserved
+    });
+
+    it('merges webhook config with defaults', () => {
+        const config = defineOr3CloudConfig({
+            ...baseConfig,
+            webhooks: {
+                enabled: true,
+                maxPerUser: 10,
+                blockPrivateIps: true,
+            },
+        });
+
+        expect(config.webhooks?.enabled).toBe(true);
+        expect(config.webhooks?.maxPerUser).toBe(10);
+        expect(config.webhooks?.adminMax).toBe(50);
+        expect(config.webhooks?.blockPrivateIps).toBe(true);
     });
 });
 

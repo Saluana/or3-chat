@@ -3,67 +3,67 @@
 ## Phase 1: Foundation (Store, Crypto, Config)
 
 ### 1.1 Shared Types & Event Catalog
-- [ ] Create `shared/webhooks/event-types.ts`:
-  - [ ] Export `WEBHOOK_EVENT_TYPES` array and `WEBHOOK_EVENT_DESCRIPTIONS` map (user scope: 10 events)
-  - [ ] Export `ADMIN_WEBHOOK_EVENT_TYPES` array and `ADMIN_WEBHOOK_EVENT_DESCRIPTIONS` map (admin scope: 11 events)
-  - [ ] Export `WebhookEventType` union type (user) and `AdminWebhookEventType` union type (admin)
-  - [ ] Export `WebhookScope` type (`'user' | 'admin'`)
-- [ ] Create `shared/webhooks/event-schemas.ts` — export payload data shape interfaces (`ThreadEventData`, `MessageEventData`, `DocumentEventData`, `NotificationEventData`, `MessageCompletedEventData`, plus admin event data types: `AdminUserEventData`, `AdminWorkspaceEventData`, `AdminPluginEventData`, `AdminErrorEventData`, `AdminJobEventData`)
-- [ ] Create `shared/webhooks/payload.ts` — export `WebhookPayload` envelope interface (includes optional `scope` field)
+- [x] Create `shared/webhooks/event-types.ts`:
+  - [x] Export `WEBHOOK_EVENT_TYPES` array and `WEBHOOK_EVENT_DESCRIPTIONS` map (user scope: 10 events)
+  - [x] Export `ADMIN_WEBHOOK_EVENT_TYPES` array and `ADMIN_WEBHOOK_EVENT_DESCRIPTIONS` map (admin scope: 11 events)
+  - [x] Export `WebhookEventType` union type (user) and `AdminWebhookEventType` union type (admin)
+  - [x] Export `WebhookScope` type (`'user' | 'admin'`)
+- [x] Create `shared/webhooks/event-schemas.ts` — export payload data shape interfaces (`ThreadEventData`, `MessageEventData`, `DocumentEventData`, `NotificationEventData`, `MessageCompletedEventData`, plus admin event data types: `AdminUserEventData`, `AdminWorkspaceEventData`, `AdminPluginEventData`, `AdminErrorEventData`, `AdminJobEventData`)
+- [x] Create `shared/webhooks/payload.ts` — export `WebhookPayload` envelope interface (includes optional `scope` field)
 
 **Requirements**: 2.1, 2.2, 9.2, 9.6
 
 ### 1.2 Cloud Config Extension
-- [ ] Add `webhooks` section to `config.or3cloud.ts` with all env vars (`OR3_WEBHOOKS_ENABLED`, `OR3_WEBHOOKS_MAX_PER_USER`, `OR3_WEBHOOKS_ADMIN_MAX`, `OR3_WEBHOOKS_RATE_LIMIT_PER_MINUTE`, `OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS`, `OR3_WEBHOOKS_BLOCK_PRIVATE_IPS`, `OR3_WEBHOOKS_ENCRYPTION_KEY`, `OR3_WEBHOOKS_MAX_RETRY_HOURS`, `OR3_WEBHOOKS_LOG_RETENTION_HOURS`)
-- [ ] Add `webhooks` to `runtimeConfig` type declarations in `nuxt.config.ts`
-- [ ] Add `webhooks.enabled` to `runtimeConfig.public` so the client knows whether to show the dashboard tile
+- [x] Add `webhooks` section to `config.or3cloud.ts` with all env vars (`OR3_WEBHOOKS_ENABLED`, `OR3_WEBHOOKS_MAX_PER_USER`, `OR3_WEBHOOKS_ADMIN_MAX`, `OR3_WEBHOOKS_RATE_LIMIT_PER_MINUTE`, `OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS`, `OR3_WEBHOOKS_BLOCK_PRIVATE_IPS`, `OR3_WEBHOOKS_ENCRYPTION_KEY`, `OR3_WEBHOOKS_MAX_RETRY_HOURS`, `OR3_WEBHOOKS_LOG_RETENTION_HOURS`)
+- [x] Add `webhooks` to `runtimeConfig` type declarations in `nuxt.config.ts`
+- [x] Add `webhooks.enabled` to `runtimeConfig.public` so the client knows whether to show the dashboard tile
 
 **Requirements**: 7.1, 9.5
 
 ### 1.3 Crypto Module
-- [ ] Create `server/utils/webhooks/crypto.ts` — `generateSigningSecret()`, `encryptSecret()`, `decryptSecret()`
-- [ ] Write unit tests for crypto module:
-  - [ ] Signing secret generation produces correct prefix (`whs_`) and sufficient entropy
-  - [ ] Encrypt/decrypt round-trip preserves plaintext
-  - [ ] Decrypt with wrong key throws
+- [x] Create `server/utils/webhooks/crypto.ts` — `generateSigningSecret()`, `encryptSecret()`, `decryptSecret()`
+- [x] Write unit tests for crypto module:
+  - [x] Signing secret generation produces correct prefix (`whs_`) and sufficient entropy
+  - [x] Encrypt/decrypt round-trip preserves plaintext
+  - [x] Decrypt with wrong key throws
 
 **Requirements**: 5.1, 5.2
 
 ### 1.4 SSRF-Safe Delivery Agent
-- [ ] Create `server/utils/webhooks/ssrf-safe-agent.ts` — `createSsrfSafeAgent()` using undici `Agent` with custom `connect.lookup` callback
-- [ ] Implement private IP check at DNS resolution time (blocks 10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x, ::1, fe80:, fc00:, fd00:)
-- [ ] Write unit tests:
-  - [ ] Public IP resolves normally
-  - [ ] Private IP throws before connection is established
-  - [ ] IPv6 loopback (::1) is blocked
-  - [ ] Link-local addresses blocked
-  - [ ] DNS rebind scenario: hostname resolves to private IP at connect time → blocked
+- [x] Create `server/utils/webhooks/ssrf-safe-agent.ts` — `createSsrfSafeAgent()` using undici `Agent` with custom `connect.lookup` callback
+- [x] Implement private IP check at DNS resolution time (blocks 10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x, ::1, fe80:, fc00:, fd00:)
+- [x] Write unit tests:
+  - [x] Public IP resolves normally
+  - [x] Private IP throws before connection is established
+  - [x] IPv6 loopback (::1) is blocked
+  - [x] Link-local addresses blocked
+  - [x] DNS rebind scenario: hostname resolves to private IP at connect time → blocked
 
 **Requirements**: 5.3
 
 ### 1.5 Payload Signing
-- [ ] Create `server/utils/webhooks/signing.ts` — `signPayload()`, `buildDeliveryHeaders()`
-- [ ] Implement HMAC-SHA256 over `${timestamp}.${body}` (Stripe/Shopify pattern)
-- [ ] Write unit tests:
-  - [ ] Signature is deterministic for same inputs
-  - [ ] Different timestamps produce different signatures
-  - [ ] Signature format: `sha256={hex}` with timestamp prefix in signed content
-  - [ ] Headers contain all required fields (`X-OR3-Event`, `X-OR3-Signature`, `X-OR3-Event-ID`, `X-OR3-Timestamp`, `User-Agent`)
+- [x] Create `server/utils/webhooks/signing.ts` — `signPayload()`, `buildDeliveryHeaders()`
+- [x] Implement HMAC-SHA256 over `${timestamp}.${body}` (Stripe/Shopify pattern)
+- [x] Write unit tests:
+  - [x] Signature is deterministic for same inputs
+  - [x] Different timestamps produce different signatures
+  - [x] Signature format: `sha256={hex}` with timestamp prefix in signed content
+  - [x] Headers contain all required fields (`X-OR3-Event`, `X-OR3-Signature`, `X-OR3-Event-ID`, `X-OR3-Timestamp`, `User-Agent`)
 
 **Requirements**: 4.1, 5.1
 
 ### 1.6 URL Validator
-- [ ] Create `server/utils/webhooks/url-validator.ts` — `validateWebhookUrl()`
-- [ ] Write unit tests:
-  - [ ] Valid HTTPS URL passes
-  - [ ] Valid HTTP URL passes when HTTPS not required
-  - [ ] HTTP URL rejected when HTTPS required
-  - [ ] Invalid URL rejected
-  - [ ] Non-HTTP protocols rejected (ftp, ws, etc.)
-  - [ ] Private IPs blocked when `blockPrivateIps` enabled (127.0.0.1, 10.x, 192.168.x, etc.)
-  - [ ] Private IPs allowed when `blockPrivateIps` disabled
+- [x] Create `server/utils/webhooks/url-validator.ts` — `validateWebhookUrl()`
+- [x] Write unit tests:
+  - [x] Valid HTTPS URL passes
+  - [x] Valid HTTP URL passes when HTTPS not required
+  - [x] HTTP URL rejected when HTTPS required
+  - [x] Invalid URL rejected
+  - [x] Non-HTTP protocols rejected (ftp, ws, etc.)
+  - [x] Private IPs blocked when `blockPrivateIps` enabled (127.0.0.1, 10.x, 192.168.x, etc.)
+  - [x] Private IPs allowed when `blockPrivateIps` disabled
 
-- [ ] Note: URL validation at CRUD time is defense-in-depth only; dispatch-time SSRF protection (§1.4) is the primary guard against DNS rebinding
+- [x] Note: URL validation at CRUD time is defense-in-depth only; dispatch-time SSRF protection (§1.4) is the primary guard against DNS rebinding
 
 **Requirements**: 3.1, 5.3
 
@@ -72,13 +72,13 @@
 ## Phase 2: Store Layer
 
 ### 2.1 Store Types & Registry
-- [ ] Create `server/utils/webhooks/store/types.ts` — `WebhookRegistration` (with `scope`, `custom_hooks`, `signing_secret_enc` fields), `WebhookDeliveryLog`, `WebhookStore` interfaces
-  - [ ] `WebhookRegistration` includes `scope: 'user' | 'admin'`, `custom_hooks: string[]`, `signing_secret_enc: string`, nullable `user_id`, `workspace_id`
-  - [ ] `WebhookDeliveryLog` includes `status: 'pending' | 'in_flight' | 'success' | 'failed' | 'cancelled'`, `claimed_by: string | null`, `claimed_at: number | null`
-  - [ ] `WebhookStore` includes admin-specific methods: `listAdminWebhooks()`, `listWebhooksByCustomHook()`, `listActiveCustomHookNames()`
-  - [ ] `WebhookStore` includes multi-worker methods: `claimPendingDeliveries(workerId, limit)`, `resetStaleInFlightDeliveries(olderThanMs)`
-  - [ ] `WebhookStore` includes bulk action: `disableAllWebhooks(userId, workspaceId)`
-- [ ] Create `server/utils/webhooks/store/registry.ts` — `registerWebhookStore()`, `getWebhookStore()`, `getActiveWebhookStore()`, `listWebhookStoreIds()`
+- [x] Create `server/utils/webhooks/store/types.ts` — `WebhookRegistration` (with `scope`, `custom_hooks`, `signing_secret_enc` fields), `WebhookDeliveryLog`, `WebhookStore` interfaces
+  - [x] `WebhookRegistration` includes `scope: 'user' | 'admin'`, `custom_hooks: string[]`, `signing_secret_enc: string`, nullable `user_id`, `workspace_id`
+  - [x] `WebhookDeliveryLog` includes `status: 'pending' | 'in_flight' | 'success' | 'failed' | 'cancelled'`, `claimed_by: string | null`, `claimed_at: number | null`
+  - [x] `WebhookStore` includes admin-specific methods: `listAdminWebhooks()`, `listWebhooksByCustomHook()`, `listActiveCustomHookNames()`
+  - [x] `WebhookStore` includes multi-worker methods: `claimPendingDeliveries(workerId, limit)`, `resetStaleInFlightDeliveries(olderThanMs)`
+  - [x] `WebhookStore` includes bulk action: `disableAllWebhooks(userId, workspaceId)`
+- [x] Create `server/utils/webhooks/store/registry.ts` — `registerWebhookStore()`, `getWebhookStore()`, `getActiveWebhookStore()`, `listWebhookStoreIds()`
 
 **Requirements**: 1.1, 3.1, 4.1, 4.4, 9.1, 9.3, 9.4
 

@@ -23,6 +23,12 @@ export const DEFAULT_REQUESTS_PER_MINUTE = 20;
 export const DEFAULT_MAX_CONVERSATIONS = 0; // 0 = unlimited
 export const DEFAULT_MAX_MESSAGES_PER_DAY = 0; // 0 = unlimited
 export const DEFAULT_EXTENSION_MAX_FILES = 2000;
+export const DEFAULT_WEBHOOKS_MAX_PER_USER = 20;
+export const DEFAULT_WEBHOOKS_ADMIN_MAX = 50;
+export const DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE = 120;
+export const DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS = 10_000;
+export const DEFAULT_WEBHOOKS_MAX_RETRY_HOURS = 1;
+export const DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS = 72;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Background Streaming

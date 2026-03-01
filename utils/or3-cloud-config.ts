@@ -29,6 +29,12 @@ import {
     DEFAULT_STORAGE_ALLOWED_MIME_TYPES,
     DEFAULT_STORAGE_GC_RETENTION_SECONDS,
     DEFAULT_STORAGE_GC_COOLDOWN_MS,
+    DEFAULT_WEBHOOKS_MAX_PER_USER,
+    DEFAULT_WEBHOOKS_ADMIN_MAX,
+    DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE,
+    DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
+    DEFAULT_WEBHOOKS_MAX_RETRY_HOURS,
+    DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS,
 } from '../shared/config/constants';
 
 const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
@@ -140,6 +146,17 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         maxConcurrentJobs: DEFAULT_BACKGROUND_MAX_JOBS,
         maxConcurrentJobsPerUser: DEFAULT_BACKGROUND_MAX_JOBS_PER_USER,
         jobTimeoutSeconds: DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
+    },
+    webhooks: {
+        enabled: false,
+        maxPerUser: DEFAULT_WEBHOOKS_MAX_PER_USER,
+        adminMax: DEFAULT_WEBHOOKS_ADMIN_MAX,
+        rateLimitPerMinute: DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE,
+        deliveryTimeoutMs: DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
+        blockPrivateIps: false,
+        encryptionKey: undefined,
+        maxRetryHours: DEFAULT_WEBHOOKS_MAX_RETRY_HOURS,
+        logRetentionHours: DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS,
     },
 };
 
@@ -265,6 +282,19 @@ const cloudConfigSchema = z
                 jobTimeoutSeconds: z.number().int().min(1).optional(),
             })
             .optional(),
+        webhooks: z
+            .object({
+                enabled: z.boolean().optional(),
+                maxPerUser: z.number().int().min(1).optional(),
+                adminMax: z.number().int().min(1).optional(),
+                rateLimitPerMinute: z.number().int().min(1).optional(),
+                deliveryTimeoutMs: z.number().int().min(1).optional(),
+                blockPrivateIps: z.boolean().optional(),
+                encryptionKey: z.string().min(1).optional(),
+                maxRetryHours: z.number().int().min(1).optional(),
+                logRetentionHours: z.number().int().min(1).optional(),
+            })
+            .optional(),
     })
 
 const formatConfigErrors = (errors: string[]) => {
@@ -334,6 +364,10 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
         backgroundStreaming: {
             ...DEFAULT_OR3_CLOUD_CONFIG.backgroundStreaming,
             ...config.backgroundStreaming,
+        },
+        webhooks: {
+            ...DEFAULT_OR3_CLOUD_CONFIG.webhooks,
+            ...config.webhooks,
         },
     };
 }
