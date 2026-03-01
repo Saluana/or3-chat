@@ -7,7 +7,8 @@
     >
         <!-- Workflow Execution Status (Progress/Steps) -->
         <div v-if="props.message.workflowState" class="mb-4">
-            <WorkflowExecutionStatus
+            <component
+                :is="$theme.activeComponents.value['workflow-status']"
                 :workflow-state="props.message.workflowState"
             />
         </div>
@@ -79,7 +80,6 @@ import { computed, onMounted } from 'vue';
 import { useClipboard } from '@vueuse/core';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { deriveStartNodeId } from '~/utils/chat/workflow-types';
-import WorkflowExecutionStatus from './WorkflowExecutionStatus.vue';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import type { ThemePlugin } from '~/plugins/90.theme.client';

@@ -40,7 +40,7 @@
         />
 
         <!-- Auth Button (Clerk SSR or OpenRouter) - placed above user info -->
-        <SidebarAuthButton />
+        <component :is="$theme.activeComponents.value['sidebar-auth-button']" />
 
         <!-- MY INFO (OpenRouter only - hidden in SSR auth mode) -->
         <UPopover
@@ -89,8 +89,8 @@
             </template>
         </UPopover>
     </div>
-    <lazy-modal-model-catalog
-        hydrate-on-visible
+    <component
+        :is="$theme.activeComponents.value['model-catalog-modal']"
         v-model:showModal="showSettingsModal"
     />
 </template>

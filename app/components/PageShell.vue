@@ -1,7 +1,8 @@
 <template>
     <resizable-sidebar-layout :collapsed-width="64" ref="layoutRef">
         <template #sidebar-expanded>
-            <SidenavSideBar
+            <component
+                :is="$theme.activeComponents.value.sidebar"
                 ref="sideNavExpandedRef"
                 :active-thread="activeChatThreadId"
                 @chat-selected="onSidebarSelected"
@@ -12,7 +13,8 @@
             />
         </template>
         <template #sidebar-collapsed>
-            <sidebar-side-nav-content-collapsed
+            <component
+                :is="$theme.activeComponents.value['sidebar-collapsed']"
                 :active-thread="activeChatThreadId"
                 class="w-[65px]"
                 @new-chat="onNewChat"
@@ -218,7 +220,8 @@
                 </div>
             </div>
         </div>
-        <lazy-dashboard
+        <component
+            :is="$theme.activeComponents.value['dashboard-modal']"
             v-if="dashboardEnabled"
             v-model:showModal="showDashboardModal"
         />
@@ -228,7 +231,6 @@
 // Generic PageShell merging chat + docs functionality.
 // Props allow initializing with a thread OR a document and choosing default mode.
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import SidenavSideBar from '~/components/sidebar/SideBar.vue';
 import { useMultiPane, type PaneState } from '~/composables/core/useMultiPane';
 import { usePaneApps } from '~/composables/core/usePaneApps';
 import { getDb } from '~/db/client';
@@ -252,13 +254,12 @@ import {
     markRaw,
     nextTick,
     watch,
-    defineAsyncComponent,
 } from 'vue';
-import ChatContainer from '~/components/chat/ChatContainer.vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
 import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
+import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import {
     validateDbRecordWithRetry,
     type ValidationStatus,
@@ -278,10 +279,6 @@ const legacyCompatClasses = {
     bgSurfaceVariant20: `bg-[${'var(--md-surface-variant)'}]/20`,
     bgSurfaceVariant10: `bg-[${'var(--md-surface-variant)'}]/10`,
 } as const;
-
-const DocumentEditorAsync = defineAsyncComponent(
-    () => import('~/components/documents/DocumentEditor.vue')
-);
 
 const props = withDefaults(
     defineProps<{
@@ -356,13 +353,13 @@ useResizeObserver(paneContainerRef, (entries) => {
     debouncedRecalculate(entry.contentRect.width);
 });
 
+const themePlugin = useNuxtApp().$theme as ThemePlugin | undefined;
+
 function useButtonThemeProps(
     identifier: string,
     fallback: Record<string, unknown> = {}
 ) {
-    const theme = useNuxtApp().$theme as ThemePlugin | undefined;
-
-    const overrides = theme
+    const overrides = themePlugin
         ? useThemeOverrides({
               component: 'button',
               identifier,
@@ -589,7 +586,10 @@ function resolvePaneComponent(pane: PaneState): Component {
         if (import.meta.dev) {
             console.debug('[PageShell] resolve component: chat');
         }
-        return ChatContainer;
+        return (
+            themePlugin?.activeComponents.value['chat-page'] ??
+            CORE_APP_COMPONENT_DEFAULTS['chat-page']
+        );
     }
 
     // Built-in: doc (lazy loaded)
@@ -603,7 +603,10 @@ function resolvePaneComponent(pane: PaneState): Component {
         if (import.meta.dev) {
             console.debug('[PageShell] resolve component: doc');
         }
-        return DocumentEditorAsync;
+        return (
+            themePlugin?.activeComponents.value['document-editor'] ??
+            CORE_APP_COMPONENT_DEFAULTS['document-editor']
+        );
     }
 
     // Custom pane app

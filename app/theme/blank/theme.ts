@@ -19,6 +19,9 @@ export default defineTheme({
     borderWidth: '1px',
     borderRadius: '12px',
         stylesheets: ['~/theme/blank/styles.css'],
+            customComponents: {
+        'chat-input': './components/ChatInput.vue',
+    },
     // Material Design 3 color palette for retro theme
     // These will generate CSS variables for both light and dark modes
     colors: {

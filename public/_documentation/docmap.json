@@ -602,6 +602,12 @@
                     "summary": "Complete API reference for OR3's refined theme system. Documents all public APIs including defineTheme() factory function, v-theme directive usage patterns, RuntimeResolver class for theme resolution, CLI commands for theme management, TypeScript types (ThemeName, ThemeContext, ThemeIdentifier), composables (useTheme, useRuntimeResolver), and advanced utilities for selector parsing and specificity calculation."
                 },
                 {
+                    "name": "component-overrides.md",
+                    "path": "/themes/component-overrides",
+                    "category": "Guide",
+                    "summary": "Detailed guide to the theme component override system. Explains when to use `customComponents` instead of prop overrides or CSS selectors, how theme-local Vue components are registered, how the runtime resolves and applies them, SSR and hydration behavior, wrapper-vs-fork tradeoffs, contract preservation, and common debugging pitfalls."
+                },
+                {
                     "name": "migration-guide.md",
                     "path": "/themes/migration-guide",
                     "category": "Guide",

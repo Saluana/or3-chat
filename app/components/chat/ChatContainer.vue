@@ -35,7 +35,8 @@
                         :data-msg-id="item.id"
                         :data-stream-id="item.stream_id"
                     >
-                        <LazyChatMessage
+                        <component
+                            :is="$theme.activeComponents.value['chat-message']"
                             :message="item"
                             :thread-id="props.threadId"
                             @retry="onRetry"
@@ -81,7 +82,8 @@
                         class="pointer-events-auto"
                     />
                 </div>
-                <lazy-chat-input-dropper
+                <component
+                    :is="$theme.activeComponents.value['chat-input']"
                     :loading="inputLoading"
                     :streaming="streamingActive"
                     :container-width="containerWidth"

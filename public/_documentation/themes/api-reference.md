@@ -27,7 +27,34 @@ export interface ThemeDefinition {
   propMaps?: PropClassMaps;
   backgrounds?: ThemeBackgrounds;
   icons?: Record<string, string>;
+  customComponents?: Partial<Record<AppThemeComponent, string>>;
 }
+```
+
+For a practical guide to replacing app components, see
+`/themes/component-overrides`.
+
+### AppThemeComponent
+
+Theme component overrides are keyed by a strict union. Paths are relative to the
+theme root directory, for example:
+`customComponents: { 'chat-message': './components/MyChatMessage.vue' }`.
+
+```ts
+export type AppThemeComponent =
+  | 'sidebar'
+  | 'sidebar-collapsed'
+  | 'chat-page'
+  | 'chat-message'
+  | 'chat-input'
+  | 'document-editor'
+  | 'dashboard-modal'
+  | 'model-selector'
+  | 'system-prompts-modal'
+  | 'model-catalog-modal'
+  | 'sidebar-auth-button'
+  | 'documentation-shell'
+  | 'workflow-status';
 ```
 
 ### ColorPalette
@@ -269,6 +296,19 @@ Key APIs:
 - `getTheme(themeName)`
 - `loadTheme(themeName)`
 - `resolversVersion` ref
+- `activeComponents` ref
+
+### activeComponents
+
+`activeComponents` is the runtime map of resolved app component targets.
+
+It always contains every supported `AppThemeComponent` key. Any key not
+overridden by the active theme points to the core default component.
+
+The client keeps this map on the default component set through hydration, then
+swaps in theme overrides after mount. That behavior is intentional and prevents
+SSR hydration mismatches when a theme override renders a different root
+structure than the core component.
 
 ## CLI Commands
 

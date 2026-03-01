@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, shallowRef } from 'vue';
 import { defineNuxtPlugin, useAppConfig, useRuntimeConfig } from '#imports';
 import { defu } from 'defu';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
@@ -34,6 +34,10 @@ import {
     setActiveThemeSafe,
     type ThemeLoadState,
 } from '~/theme/_shared/theme-loader';
+import {
+    CORE_APP_COMPONENT_DEFAULTS,
+    createThemeComponentMap,
+} from '~/theme/_shared/theme-components-registry';
 
 export type { ThemePlugin } from '~/theme/_shared/types';
 
@@ -320,6 +324,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     // Active theme name (for refined theme system)
     const activeTheme = ref<string>(DEFAULT_THEME);
+    const activeComponents = shallowRef({
+        ...CORE_APP_COMPONENT_DEFAULTS,
+    });
     const resolversVersion = ref(0);
     const bumpResolversVersion = () => {
         resolversVersion.value += 1;
@@ -327,6 +334,20 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const loadState: ThemeLoadState = {
         loadedThemes: new Set<string>(),
         loadingThemes: new Map<string, Promise<boolean>>(),
+    };
+    let hasMounted = false;
+
+    const syncActiveComponents = () => {
+        const theme = themeRegistry.get(activeTheme.value);
+        const manifest = themeManifest.get(activeTheme.value);
+
+        activeComponents.value =
+            hasMounted && theme && manifest
+                ? createThemeComponentMap(
+                      manifest.dirName,
+                      theme.customComponents
+                  )
+                : { ...CORE_APP_COMPONENT_DEFAULTS };
     };
 
     /**
@@ -395,6 +416,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             propMaps: definition.propMaps,
             backgrounds: definition.backgrounds,
             icons: themeIcons ?? undefined,
+            customComponents: definition.customComponents,
         };
 
         themeRegistry.set(themeName, compiledTheme);
@@ -598,6 +620,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 resolveToken: themeBackgroundTokenResolver,
             });
         }
+
+        syncActiveComponents();
+
         bumpResolversVersion();
     };
 
@@ -670,9 +695,15 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         getResolver, // Function to get resolver for a theme
         loadTheme, // Function to dynamically load a theme
         getTheme: (themeName: string) => themeRegistry.get(themeName) || null, // Get cached theme
+        activeComponents,
     };
 
     nuxtApp.provide('theme', themeApi);
+
+    nuxtApp.hook('app:mounted', () => {
+        hasMounted = true;
+        syncActiveComponents();
+    });
 
     // Ensure the determined active theme is applied on first load
     try {

@@ -1,4 +1,4 @@
-import { ref, type Ref } from 'vue';
+import { ref, shallowRef, type Ref } from 'vue';
 import { callWithNuxt, type NuxtApp } from '#app';
 import { useAppConfig, useHead, useRuntimeConfig } from '#imports';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
@@ -28,6 +28,10 @@ import {
     setActiveThemeSafe,
     type ThemeLoadState,
 } from '~/theme/_shared/theme-loader';
+import {
+    CORE_APP_COMPONENT_DEFAULTS,
+    createThemeComponentMap,
+} from '~/theme/_shared/theme-components-registry';
 
 export default defineNuxtPlugin(async (nuxtApp) => {
     const ACTIVE_THEME_COOKIE = 'or3_active_theme';
@@ -39,6 +43,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         themeManifest.set(entry.name, entry);
     }
     const runtimeConfig = useRuntimeConfig();
+    const activeComponents = shallowRef({
+        ...CORE_APP_COMPONENT_DEFAULTS,
+    });
 
     const appConfig = useAppConfig() as any;
     const baseAppConfig = cloneDeep(appConfig);
@@ -190,6 +197,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             propMaps: definition.propMaps,
             backgrounds: definition.backgrounds,
             icons: themeIcons,
+            customComponents: definition.customComponents,
         };
 
         themeRegistry.set(themeName, compiledTheme);
@@ -278,6 +286,18 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const resolversVersion = ref(0);
     const bumpResolversVersion = () => {
         resolversVersion.value += 1;
+    };
+    const syncActiveComponents = () => {
+        const compiledTheme = themeRegistry.get(activeTheme.value);
+        const manifestEntry = themeManifest.get(activeTheme.value);
+
+        activeComponents.value =
+            compiledTheme && manifestEntry
+                ? createThemeComponentMap(
+                      manifestEntry.dirName,
+                      compiledTheme.customComponents
+                  )
+                : { ...CORE_APP_COMPONENT_DEFAULTS };
     };
 
     // Ensure the default theme is available for initial SSR render
@@ -375,6 +395,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         recordInitialAppConfigPatch(patch);
         const compiledTheme = themeRegistry.get(target);
         applyThemeUiConfig(compiledTheme || null);
+        syncActiveComponents();
 
         // Inject CSS variables and stylesheets into the head for SSR/Static builds
         if (compiledTheme) {
@@ -451,6 +472,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         getResolver,
         loadTheme,
         getTheme: (themeName: string) => themeRegistry.get(themeName) || null,
+        activeComponents,
     };
 
     nuxtApp.provide('theme', themeApi);

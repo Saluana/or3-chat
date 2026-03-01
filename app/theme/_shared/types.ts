@@ -1,4 +1,4 @@
-import type { Ref } from 'vue';
+import type { Component, Ref, ShallowRef } from 'vue';
 import type { RuntimeResolver } from './runtime-resolver';
 
 /**
@@ -18,6 +18,24 @@ import type { RuntimeResolver } from './runtime-resolver';
  * Material Design 3 Color Palette
  * Defines all the color tokens used in a theme.
  */
+export const APP_THEME_COMPONENT_KEYS = [
+    'sidebar',
+    'sidebar-collapsed',
+    'chat-page',
+    'chat-message',
+    'chat-input',
+    'document-editor',
+    'dashboard-modal',
+    'model-selector',
+    'system-prompts-modal',
+    'model-catalog-modal',
+    'sidebar-auth-button',
+    'documentation-shell',
+    'workflow-status',
+] as const;
+
+export type AppThemeComponent = (typeof APP_THEME_COMPONENT_KEYS)[number];
+
 type CustomColorTokens = Record<string, string | undefined>;
 
 interface BaseColorPalette {
@@ -281,6 +299,9 @@ export interface ThemeDefinition {
 
     /** Icon overrides for this theme */
     icons?: Record<string, string>;
+
+    /** Theme-provided Vue component overrides keyed by supported app surface */
+    customComponents?: Partial<Record<AppThemeComponent, string>>;
 }
 
 export interface ThemeFontSet {
@@ -409,6 +430,9 @@ export interface CompiledTheme {
 
     /** Icon overrides for this theme */
     icons?: Record<string, string>;
+
+    /** Theme-provided Vue component override paths */
+    customComponents?: Partial<Record<AppThemeComponent, string>>;
 }
 
 /**
@@ -513,4 +537,5 @@ export interface ThemePlugin {
     getResolver: (themeName: string) => RuntimeResolver | null;
     loadTheme: (themeName: string) => Promise<CompiledTheme | null>;
     getTheme: (themeName: string) => CompiledTheme | null;
+    activeComponents: ShallowRef<Record<AppThemeComponent, Component>>;
 }

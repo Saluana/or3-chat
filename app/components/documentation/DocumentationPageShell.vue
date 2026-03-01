@@ -1,7 +1,3 @@
 <template>
-    <DocumentationShell />
+    <component :is="$theme.activeComponents.value['documentation-shell']" />
 </template>
-
-<script setup lang="ts">
-import DocumentationShell from '~/components/DocumentationShell.vue';
-</script>

@@ -162,9 +162,31 @@ To change the default theme for the app:
 bun run theme:switch
 ```
 
+## 8) Replace whole app surfaces (optional)
+
+If you need to replace a full app component instead of only changing props or
+CSS, use `customComponents`.
+
+```ts
+customComponents: {
+  sidebar: './components/MySidebar.vue',
+  'chat-input': './components/MyChatInput.vue',
+}
+```
+
+Use this for layout-level changes such as:
+
+- a custom sidebar shell
+- a redesigned chat input
+- a theme-specific message or workflow status surface
+
+For the full contract, lifecycle, and best-practices guide, see
+`/themes/component-overrides`.
+
 ## Troubleshooting quick hits
 
 - No overrides? Ensure `v-theme` is used and the identifier matches.
 - Wrong context? Add `data-context` or use `context` in the directive.
 - Missing CSS selector styles? Run `bun run theme:build-css`.
+- Component override not showing? Check the `customComponents` key and file path.
 - Types missing? Run `bun run theme:validate`.

@@ -135,8 +135,8 @@
                     v-if="!isMobile && containerWidth && containerWidth > 400"
                     class="chat-input-model-select hidden sm:block sm:flex-1 min-w-0 sm:min-w-[200px] sm:max-w-full"
                 >
-                    <LazyChatModelSelect
-                        hydrate-on-interaction="focus"
+                    <component
+                        :is="$theme.activeComponents.value['model-selector']"
                         v-model:model="selectedModel"
                         :loading="loading"
                         class="w-full min-w-0 max-w-full"
@@ -302,9 +302,12 @@
                 </p>
             </div>
         </div>
-        <lazy-modal-model-catalog v-model:showModal="showModelCatalog" />
-        <LazyChatSystemPromptsModal
-            hydrate-on-visible
+        <component
+            :is="$theme.activeComponents.value['model-catalog-modal']"
+            v-model:showModal="showModelCatalog"
+        />
+        <component
+            :is="$theme.activeComponents.value['system-prompts-modal']"
             v-model:showModal="showSystemPrompts"
             :thread-id="props.threadId"
             :pane-id="props.paneId"
