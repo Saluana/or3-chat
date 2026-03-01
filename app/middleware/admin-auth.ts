@@ -9,6 +9,20 @@
  */
 import { defineNuxtRouteMiddleware, navigateTo } from '#app';
 
+type FetchLikeError = {
+    statusCode?: number;
+    status?: number;
+    response?: {
+        status?: number;
+    };
+};
+
+function getStatus(error: unknown): number | undefined {
+    if (typeof error !== 'object' || error === null) return undefined;
+    const e = error as FetchLikeError;
+    return e.statusCode ?? e.status ?? e.response?.status;
+}
+
 export default defineNuxtRouteMiddleware(async (to) => {
     // Skip for login page
     if (to.path === '/admin/login' || to.path.startsWith('/admin/login/')) {
@@ -29,10 +43,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
         }
 
         return navigateTo('/admin/login');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const status = error?.statusCode || error?.status || error?.response?.status;
+    } catch (error: unknown) {
+        const status = getStatus(error);
 
         if (status === 404) {
             // Admin endpoint not available (admin disabled or not configured)

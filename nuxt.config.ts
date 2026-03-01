@@ -94,7 +94,7 @@ const syncProviderAvailable = isProviderAvailable(or3CloudConfig.sync.provider);
 const storageProviderAvailable = isProviderAvailable(or3CloudConfig.storage.provider);
 
 const effectiveSsrAuthEnabled =
-    isSsrAuthEnabled && authProviderAvailable;
+    isSsrAuthEnabled && authProviderAvailable && syncProviderAvailable;
 
 const resolvedRegistrationMode =
     or3CloudConfig.auth.registrationMode ??
@@ -113,9 +113,9 @@ if (isSsrAuthEnabled && !authProviderAvailable) {
         `[or3-provider] Auth provider "${or3CloudConfig.auth.provider}" is not available. Falling back to local-only auth mode.`
     );
 }
-if (or3CloudConfig.sync.enabled && !syncProviderAvailable) {
+if (isSsrAuthEnabled && !syncProviderAvailable) {
     console.warn(
-        `[or3-provider] Sync provider "${or3CloudConfig.sync.provider}" is not available. Sync is disabled.`
+        `[or3-provider] Sync provider "${or3CloudConfig.sync.provider}" is not available. SSR auth requires the matching AuthWorkspaceStore, so cloud auth and sync are disabled.`
     );
 }
 if (or3CloudConfig.storage.enabled && !storageProviderAvailable) {

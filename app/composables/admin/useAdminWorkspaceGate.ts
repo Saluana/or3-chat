@@ -2,6 +2,13 @@ import { ref, watch, type Ref } from 'vue';
 import { useAdminSession } from '~/composables/admin/useAdminData';
 import { useAdminWorkspaceContext } from '~/composables/admin/useAdminWorkspaceContext';
 
+interface WorkspaceSelection {
+    id: string;
+    name: string;
+    memberCount: number;
+    ownerEmail?: string;
+}
+
 export function useAdminWorkspaceGate(
     refreshWorkspace?: (workspaceId: Ref<string | null>) => void | Promise<void>
 ) {
@@ -19,8 +26,8 @@ export function useAdminWorkspaceGate(
         { immediate: true }
     );
 
-    function onWorkspaceSelected(workspace: unknown) {
-        selectWorkspace(workspace as never);
+    function onWorkspaceSelected(workspace: WorkspaceSelection) {
+        selectWorkspace(workspace);
     }
 
     watch(selectedWorkspaceId, (newId) => {

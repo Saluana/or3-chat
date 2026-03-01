@@ -664,28 +664,8 @@ export async function primeBackgroundJobUpdate(
 
     // Handle terminal states
     if (initialStatus.status !== 'streaming') {
-        const fullStatus = await ensureFullBackgroundStatus(tracker, initialStatus);
-        const content = fullStatus.content || '';
-        tracker.lastContent = content;
-        bgStreamLog('prime-terminal-status', {
-            jobId: tracker.jobId,
-            status: fullStatus.status,
-            contentLength: content.length,
-        });
-        const update: BackgroundJobUpdate = {
-            status: fullStatus,
-            content,
-            delta: content,
-        };
-        for (const subscriber of tracker.subscribers) {
-            if (fullStatus.status === 'complete') {
-                subscriber.onComplete?.(update);
-            } else if (fullStatus.status === 'error') {
-                subscriber.onError?.(update);
-            } else if (fullStatus.status === 'aborted') {
-                subscriber.onAbort?.(update);
-            }
-        }
+        tracker.active = true;
+        await handleBackgroundStatus(tracker, initialStatus);
         return;
     }
 

@@ -193,7 +193,7 @@ async function handleSubmit() {
         });
 
         router.push(`/admin/workspaces/${result.workspaceId}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
         toast.add({
             title: 'Failed to create workspace',
             description: getMessage(err, 'Unable to create workspace'),

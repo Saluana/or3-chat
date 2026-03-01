@@ -84,7 +84,7 @@ Flow for unknown users:
 1. Resolve `existingUser = store.getUser(...)`.
 2. If exists, proceed.
 3. Else evaluate registration policy.
-4. If allowed, call `getOrCreateUser(...)` then workspace resolution.
+4. If allowed, validate any invite against current store state first, then call `getOrCreateUser(...)` and continue to workspace resolution.
 5. If denied, return/throw deterministic 403 with no sensitive leakage.
 
 ### 3. Invite domain model and store contract
@@ -217,7 +217,7 @@ For OAuth/managed providers (e.g., Clerk):
 
 - Provider handles identity creation UX externally.
 - OR3 enforces policy during first `resolveSessionContext()` provisioning.
-- In `invite_only`, provisioning succeeds only when invite resolution succeeds.
+- In `invite_only`, provisioning succeeds only when invite resolution succeeds and store validation passes before a new user record is created.
 
 This satisfies “register with any enabled provider” while keeping provider runtime boundaries intact.
 

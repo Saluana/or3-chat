@@ -156,6 +156,7 @@ type ServiceResult<T> =
   - Authorization checks for job status/stream endpoints
 - **E2E tests**
   - Run workflow in background, switch threads, reattach, verify final output
+  - Reattach to an already-finished background job and verify the prime path persists final state, resolves completion waiters, and removes the tracker
   - Execute tool in background, ensure tool results are persisted and follow-up LLM response completes
 - **Performance tests**
   - Concurrency limits and timeouts under load

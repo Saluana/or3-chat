@@ -216,9 +216,11 @@ onMounted(() => {
 // Reset page when filters change
 watch([debouncedSearch, showDeleted], () => {
     page.value = 1;
+    if (!import.meta.client) return;
+    void refreshWorkspaces();
 });
 
-watch([debouncedSearch, showDeleted, page, perPage], () => {
+watch([page, perPage], () => {
     if (!import.meta.client) return;
     void refreshWorkspaces();
 });

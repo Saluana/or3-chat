@@ -86,6 +86,7 @@ export function useAdminExtensions() {
         key: 'admin:extensions',
         dedupe: 'defer',
         ...adminFetchOptions,
+        server: false,
     });
 }
 
@@ -96,6 +97,7 @@ export function useAdminSystemConfigEnriched() {
             key: 'admin:system:config:enriched',
             dedupe: 'defer',
             ...adminFetchOptions,
+            server: false,
         }
     );
 }
@@ -107,6 +109,7 @@ export function useAdminSystemConfig() {
             key: 'admin:system:config',
             dedupe: 'defer',
             ...adminFetchOptions,
+            server: false,
         }
     );
 }

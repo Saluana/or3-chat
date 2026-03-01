@@ -21,6 +21,10 @@ The three plans are directionally aligned, but there are several conflicts and m
 - Sync wire payload validation now accepts camelCase and snake_case inputs, then normalizes to snake_case before ingestion.
 - Background tool/workflow execution now emits structured JSON logs with recursive secret redaction for token-like fields/values.
 - Provider and operations documentation for the default stack (basic-auth + sqlite + fs) is now published and indexed in docmap.
+- SSR auth now turns off when the selected sync/AuthWorkspaceStore provider package is unavailable, preventing server session resolution from entering a dead store.
+- Invite-only registration now validates the signed invite against current store state before provisioning a new internal user mapping.
+- Reattach priming for terminal background jobs now reuses the normal terminal cleanup path, so final persistence, notifications, completion promises, and tracker eviction stay consistent.
+- Wizard local-dev deploy no longer kills arbitrary processes on port 3000; it now surfaces a manual-action warning instead.
 
 ## Critical conflicts and gaps
 

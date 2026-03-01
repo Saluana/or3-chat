@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
+import { createInviteToken, hashInviteToken } from '../invite-token';
 import { registerAuthProvider } from '../registry';
 import {
     resolveSessionContext,
@@ -27,9 +28,12 @@ const altProviderGetSessionMock = vi.hoisted(() => vi.fn(async () => ({
 })));
 
 const authWorkspaceStoreMock = vi.hoisted(() => ({
+    getUser: vi.fn().mockResolvedValue(null),
     getOrCreateUser: vi.fn().mockResolvedValue({ userId: 'user-1' }),
     getOrCreateDefaultWorkspace: vi.fn().mockResolvedValue({ workspaceId: 'ws-1', workspaceName: 'Default' }),
     getWorkspaceRole: vi.fn().mockResolvedValue('owner'),
+    listInvites: vi.fn().mockResolvedValue([]),
+    consumeInvite: vi.fn().mockResolvedValue({ ok: true, role: 'viewer' }),
 }));
 
 const getAuthWorkspaceStoreMock = vi.hoisted(() => vi.fn(() => authWorkspaceStoreMock));
@@ -61,10 +65,15 @@ registerAuthProvider({
     }),
 });
 
-function makeEvent(): H3Event {
+function makeEvent(headers: Record<string, string> = {}): H3Event {
     return {
         context: {},
-        node: { req: { socket: { remoteAddress: '127.0.0.1' } } },
+        node: {
+            req: {
+                headers,
+                socket: { remoteAddress: '127.0.0.1' },
+            },
+        },
     } as H3Event;
 }
 
@@ -86,12 +95,18 @@ describe('resolveSessionContext provisioning and caching', () => {
             claims: { exp: Math.floor(Date.now() / 1000) + 60 },
         });
 
+        authWorkspaceStoreMock.getUser.mockReset().mockResolvedValue(null);
         authWorkspaceStoreMock.getOrCreateUser.mockReset().mockResolvedValue({ userId: 'user-1' });
         authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockReset().mockResolvedValue({
             workspaceId: 'ws-1',
             workspaceName: 'Default',
         });
         authWorkspaceStoreMock.getWorkspaceRole.mockReset().mockResolvedValue('owner');
+        authWorkspaceStoreMock.listInvites.mockReset().mockResolvedValue([]);
+        authWorkspaceStoreMock.consumeInvite.mockReset().mockResolvedValue({
+            ok: true,
+            role: 'viewer',
+        });
         getAuthWorkspaceStoreMock.mockReset().mockReturnValue(authWorkspaceStoreMock);
 
         adminCheckerMock.checkDeploymentAdmin.mockReset().mockResolvedValue(false);
@@ -103,6 +118,8 @@ describe('resolveSessionContext provisioning and caching', () => {
                 enabled: true,
                 provider: PROVIDER_ID,
                 autoProvision: true,
+                registrationMode: undefined,
+                invite: undefined,
                 sessionProvisioningFailure: 'throw',
             },
             public: {
@@ -161,6 +178,65 @@ describe('resolveSessionContext provisioning and caching', () => {
             statusMessage: 'Registration is currently disabled. Please contact an administrator.',
         });
         expect(authWorkspaceStoreMock.getOrCreateUser).not.toHaveBeenCalled();
+    });
+
+    it('does not provision a user before invite-only email validation passes', async () => {
+        const inviteToken = createInviteToken(
+            {
+                workspaceId: 'ws-1',
+                email: 'user@test.com',
+                exp: Math.floor(Date.now() / 1000) + 3600,
+            },
+            'invite-secret'
+        );
+
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            auth: {
+                ...testRuntimeConfig.value.auth,
+                registrationMode: 'invite_only',
+                invite: {
+                    tokenSecret: 'invite-secret',
+                },
+            },
+        };
+        providerGetSessionMock.mockResolvedValueOnce({
+            provider: PROVIDER_ID,
+            user: {
+                id: 'user-1',
+                email: 'other@test.com',
+                displayName: 'User',
+            },
+            expiresAt: new Date(Date.now() + 60_000),
+            claims: { exp: Math.floor(Date.now() / 1000) + 60 },
+        });
+        authWorkspaceStoreMock.listInvites.mockResolvedValueOnce([
+            {
+                id: 'invite-1',
+                workspaceId: 'ws-1',
+                email: 'user@test.com',
+                role: 'viewer',
+                status: 'pending',
+                invitedByUserId: 'owner-1',
+                expiresAt: Date.now() + 60_000,
+                tokenHash: hashInviteToken(inviteToken),
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            },
+        ]);
+
+        await expect(
+            resolveSessionContext(
+                makeEvent({
+                    'x-or3-invite-token': inviteToken,
+                })
+            )
+        ).rejects.toMatchObject({
+            statusCode: 403,
+            statusMessage: 'Invite token is invalid or expired.',
+        });
+        expect(authWorkspaceStoreMock.getOrCreateUser).not.toHaveBeenCalled();
+        expect(authWorkspaceStoreMock.consumeInvite).not.toHaveBeenCalled();
     });
 
     it('returns unauthenticated when provider is not registered', async () => {
@@ -277,6 +353,10 @@ describe('resolveSessionContext provisioning and caching', () => {
     it('throws when workspace store for provider is missing', async () => {
         testRuntimeConfig.value = {
             ...testRuntimeConfig.value,
+            sync: {
+                ...testRuntimeConfig.value.sync,
+                provider: 'missing-store',
+            },
             public: {
                 ...testRuntimeConfig.value.public,
                 sync: { provider: 'missing-store' },

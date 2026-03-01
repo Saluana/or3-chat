@@ -93,34 +93,12 @@
                 </div>
 
                 <!-- Mobile Navigation Links -->
-                <nav class="flex-1 overflow-y-auto p-2 space-y-1" aria-label="Admin pages">
-                    <NuxtLink
-                        v-for="link in navLinks"
-                        :key="link.to"
-                        :to="link.to"
-                        :aria-current="isActive(link.to) ? 'page' : undefined"
-                        class="flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-[var(--md-sys-shape-corner-small,4px)] transition-all duration-200 hover:bg-[var(--md-primary)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)]"
-                        :class="[
-                            isActive(link.to)
-                                ? 'bg-[var(--md-primary)]/15 text-[var(--md-primary)] shadow-sm'
-                                : 'text-[var(--md-on-surface-variant)]'
-                        ]"
-                        @click="closeMobileMenu"
-                    >
-                        <UIcon
-                            v-if="link.icon"
-                            :name="link.icon"
-                            class="w-5 h-5 flex-shrink-0"
-                            :class="isActive(link.to) ? 'text-[var(--md-primary)]' : 'opacity-70'"
-                        />
-                        <span class="flex-1">{{ link.label }}</span>
-                        <UIcon
-                            v-if="isActive(link.to)"
-                            :name="activeIndicatorIcon"
-                            class="w-4 h-4 opacity-60"
-                        />
-                    </NuxtLink>
-                </nav>
+                <AdminNavLinks
+                    :links="navLinks"
+                    :active-path="route.path"
+                    density="mobile"
+                    @navigate="closeMobileMenu"
+                />
 
                 <!-- Mobile Logout -->
                 <div class="p-2 border-t border-[var(--md-outline-variant)]">
@@ -175,37 +153,12 @@
             </div>
 
             <!-- Desktop Navigation Links -->
-            <nav class="flex-1 overflow-y-auto p-2 space-y-1" aria-label="Admin pages">
-                <NuxtLink
-                    v-for="link in navLinks"
-                    :key="link.to"
-                    :to="link.to"
-                    :aria-current="isActive(link.to) ? 'page' : undefined"
-                    class="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-[var(--md-sys-shape-corner-small,4px)] transition-all duration-200 hover:bg-[var(--md-primary)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)] group relative"
-                    :class="[
-                        isActive(link.to)
-                            ? 'bg-[var(--md-primary)]/15 text-[var(--md-primary)] shadow-sm'
-                            : 'text-[var(--md-on-surface-variant)]',
-                        { 'justify-center': isDesktopCollapsed }
-                    ]"
-                >
-                    <UIcon
-                        v-if="link.icon"
-                        :name="link.icon"
-                        class="w-5 h-5 flex-shrink-0"
-                        :class="isActive(link.to) ? 'text-[var(--md-primary)]' : 'opacity-70 group-hover:opacity-100'"
-                    />
-                    <span v-if="!isDesktopCollapsed" class="flex-1 truncate">{{ link.label }}</span>
-
-                    <!-- Tooltip for collapsed state -->
-                    <div
-                        v-if="isDesktopCollapsed"
-                        class="absolute left-full ml-2 px-2 py-1 bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface)] text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity duration-150"
-                    >
-                        {{ link.label }}
-                    </div>
-                </NuxtLink>
-            </nav>
+            <AdminNavLinks
+                :links="navLinks"
+                :active-path="route.path"
+                density="desktop"
+                :collapsed="isDesktopCollapsed"
+            />
 
             <!-- Desktop Logout -->
             <div class="p-2 border-t border-[var(--md-outline-variant)]">
@@ -309,6 +262,7 @@
 import { useAdminPages } from '~/composables/admin/useAdminPlugins';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
 import { useAdminSession } from '~/composables/admin/useAdminData';
+import AdminNavLinks from '~/components/admin/AdminNavLinks.vue';
 import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
 import WorkspaceIndicator from '~/components/admin/WorkspaceIndicator.vue';
 import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
@@ -359,7 +313,6 @@ const menuIcon = useIcon('ui.menu');
 const closeIcon = useIcon('ui.close');
 const collapseIcon = useIcon('ui.chevron.left');
 const expandIcon = useIcon('ui.chevron.right');
-const activeIndicatorIcon = useIcon('ui.check');
 const logoutIcon = useIcon('ui.logout');
 
 // Nav link icons (Issue 27: Move useIcon calls to top level)
@@ -469,13 +422,6 @@ const navLinks = computed<NavLink[]>(() => {
     return [...base, ...pluginLinks];
 });
 
-function isActive(path: string) {
-    if (path === '/admin') {
-        return route.path === '/admin';
-    }
-    return route.path.startsWith(path);
-}
-
 // Issue 29: Track whether we modified overflow to avoid conflicts
 const didModifyOverflow = ref(false);
 
@@ -516,33 +462,3 @@ onUnmounted(() => {
     }
 });
 </script>
-
-<style scoped>
-/* Smooth transitions for sidebar width changes */
-aside {
-    will-change: width;
-}
-
-/* Custom scrollbar for navigation */
-nav::-webkit-scrollbar {
-    width: 4px;
-}
-
-nav::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-nav::-webkit-scrollbar-thumb {
-    background: var(--md-outline-variant);
-    border-radius: 2px;
-}
-
-nav::-webkit-scrollbar-thumb:hover {
-    background: var(--md-outline);
-}
-
-/* Ensure tooltip doesn't get cut off */
-.group:hover .absolute {
-    display: block;
-}
-</style>

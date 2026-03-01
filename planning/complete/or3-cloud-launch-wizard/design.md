@@ -434,6 +434,9 @@ For “local dev” target, the wizard should run:
 - `bunx convex dev` only when a Convex provider is selected (optional background mode)
 - `SSR_AUTH_ENABLED=true bun run dev` (or `bun run dev:ssr` which already sets it)
 
+Safety rule:
+- If port `3000` is already occupied, the wizard must not kill arbitrary processes. It should report that the port is busy and ask the operator to stop the existing service or start OR3 manually on a free port.
+
 ### Production build
 
 For “prod build” target, the wizard should run:

@@ -173,11 +173,6 @@
 <script setup lang="ts">
 import { formatDate } from '~/utils/date';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
-interface Member {
-    userId: string;
-    email?: string;
-    role: 'owner' | 'editor' | 'viewer';
-}
 import type { WorkspaceSummary, WorkspaceMemberInfo } from '~/types/global';
 
 interface Workspace extends WorkspaceSummary {
@@ -190,11 +185,10 @@ definePageMeta({
 });
 
 const route = useRoute();
-const router = useRouter();
 const toast = useToast();
 const { getMessage } = useApiError();
 const { confirm } = useConfirmDialog();
-const workspaceId = route.params.id as string;
+const workspaceId = computed(() => String(route.params.id ?? ''));
 
 const isDeleting = ref(false);
 const isRestoring = ref(false);
@@ -219,12 +213,12 @@ async function refreshWorkspace() {
     error.value = null;
     try {
         workspace.value = await $fetch<Workspace>(
-            `/api/admin/workspaces/${workspaceId}`,
+            `/api/admin/workspaces/${workspaceId.value}`,
             {
                 credentials: 'include',
             }
         );
-    } catch (err: any) {
+    } catch (err: unknown) {
         workspace.value = null;
         error.value =
             err instanceof Error
@@ -252,7 +246,7 @@ async function handleSoftDelete() {
 
     isDeleting.value = true;
     try {
-        await $fetch(`/api/admin/workspaces/${workspaceId}/soft-delete`, {
+        await $fetch(`/api/admin/workspaces/${workspaceId.value}/soft-delete`, {
             method: 'POST',
             credentials: 'include',
             headers: ADMIN_HEADERS,
@@ -262,7 +256,7 @@ async function handleSoftDelete() {
             color: 'success',
         });
         await refreshWorkspace();
-    } catch (err: any) {
+    } catch (err: unknown) {
         toast.add({
             title: 'Failed to delete workspace',
             description: getMessage(err, 'Unable to delete workspace'),
@@ -276,7 +270,7 @@ async function handleSoftDelete() {
 async function handleRestore() {
     isRestoring.value = true;
     try {
-        await $fetch(`/api/admin/workspaces/${workspaceId}/restore`, {
+        await $fetch(`/api/admin/workspaces/${workspaceId.value}/restore`, {
             method: 'POST',
             credentials: 'include',
             headers: ADMIN_HEADERS,
@@ -286,7 +280,7 @@ async function handleRestore() {
             color: 'success',
         });
         await refreshWorkspace();
-    } catch (err: any) {
+    } catch (err: unknown) {
         toast.add({
             title: 'Failed to restore workspace',
             description: getMessage(err, 'Unable to restore workspace'),
@@ -321,7 +315,7 @@ async function loadInvites() {
                 color: 'warning',
             });
         }
-    } catch (err: any) {
+    } catch (err: unknown) {
         toast.add({
             title: 'Failed to load invites',
             description: getMessage(err, 'Unable to load invites'),
@@ -366,7 +360,7 @@ async function createInvite() {
             color: 'success',
         });
         await copyInviteUrl(response.invite.inviteUrl);
-    } catch (err: any) {
+    } catch (err: unknown) {
         toast.add({
             title: 'Failed to create invite',
             description: getMessage(err, 'Unable to create invite'),
@@ -390,7 +384,7 @@ async function revokeInvite(inviteId: string) {
                 ? { ...invite, status: 'revoked' }
                 : invite
         );
-    } catch (err: any) {
+    } catch (err: unknown) {
         toast.add({
             title: 'Failed to revoke invite',
             description: getMessage(err, 'Unable to revoke invite'),
@@ -407,8 +401,12 @@ async function copyInviteUrl(url: string) {
     }
 }
 
-onMounted(() => {
-    void refreshWorkspace();
-    void loadInvites();
-});
+watch(
+    workspaceId,
+    () => {
+        void refreshWorkspace();
+        void loadInvites();
+    },
+    { immediate: true }
+);
 </script>

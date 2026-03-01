@@ -219,4 +219,36 @@ describe('backgroundJobs reattach + notifications', () => {
         expect(notificationCreateMock).not.toHaveBeenCalled();
         backgroundJobTrackers.clear();
     });
+
+    it('runs terminal cleanup when priming a stopped tracker during reattach', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        pollJobStatusMock.mockResolvedValueOnce(
+            makeStatus('complete', { content: 'done', content_length: 4 })
+        );
+
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const {
+            ensureBackgroundJobTracker,
+            stopBackgroundJobTracking,
+            primeBackgroundJobUpdate,
+            backgroundJobTrackers,
+        } = mod;
+
+        const tracker = ensureBackgroundJobTracker({
+            jobId: 'job-1',
+            userId: 'real-user-123',
+            threadId: 'thread-1',
+            messageId: 'msg-1',
+            useSse: true,
+        });
+
+        stopBackgroundJobTracking(tracker);
+        await primeBackgroundJobUpdate(tracker);
+
+        await expect(tracker.completion).resolves.toMatchObject({
+            status: 'complete',
+        });
+        expect(upsertMessageMock).toHaveBeenCalledTimes(1);
+        expect(backgroundJobTrackers.has('job-1')).toBe(false);
+    });
 });

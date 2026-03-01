@@ -214,7 +214,14 @@ export async function resolveSessionContext(
         return nullSession;
     }
 
-    const storeId = config.public.sync.provider || 'convex';
+    const storeId =
+        (config.sync as { provider?: string } | undefined)?.provider ||
+        (
+            config.public as {
+                sync?: { provider?: string };
+            }
+        )?.sync?.provider ||
+        'convex';
     const sharedCacheKey = getSharedSessionCacheKey(
         providerSession.provider,
         providerSession.user.id,
@@ -295,6 +302,51 @@ export async function resolveSessionContext(
                 });
             }
 
+            if (registrationDecision.invite) {
+                if (typeof store.consumeInvite !== 'function') {
+                    throw createError({
+                        statusCode: 503,
+                        statusMessage: 'Auth store missing invite consume capability.',
+                    });
+                }
+                if (typeof store.listInvites !== 'function') {
+                    throw createError({
+                        statusCode: 503,
+                        statusMessage: 'Auth store missing invite lookup capability.',
+                    });
+                }
+
+                const providerEmail =
+                    providerSession.user.email?.trim().toLowerCase() ?? '';
+                const inviteEmail =
+                    registrationDecision.invite.payload.email.trim().toLowerCase();
+                if (!providerEmail || providerEmail !== inviteEmail) {
+                    throw createError({
+                        statusCode: 403,
+                        statusMessage: 'Invite token is invalid or expired.',
+                    });
+                }
+
+                const pendingInvite = (
+                    await store.listInvites({
+                        workspaceId: registrationDecision.invite.payload.workspaceId,
+                        status: 'pending',
+                        limit: 500,
+                    })
+                ).find(
+                    (invite) =>
+                        invite.tokenHash === registrationDecision.invite.tokenHash &&
+                        invite.email.trim().toLowerCase() === inviteEmail &&
+                        invite.expiresAt > Date.now()
+                );
+                if (!pendingInvite) {
+                    throw createError({
+                        statusCode: 403,
+                        statusMessage: 'Invite token is invalid or expired.',
+                    });
+                }
+            }
+
             const created = await store.getOrCreateUser({
                 provider: providerSession.provider,
                 providerUserId: providerSession.user.id,
@@ -304,27 +356,19 @@ export async function resolveSessionContext(
             userId = created.userId;
 
             if (registrationDecision.invite) {
-                if (typeof store.consumeInvite !== 'function') {
+                const inviteEmail =
+                    registrationDecision.invite.payload.email.trim().toLowerCase();
+                const consumeInvite = store.consumeInvite;
+                if (typeof consumeInvite !== 'function') {
                     throw createError({
                         statusCode: 503,
                         statusMessage: 'Auth store missing invite consume capability.',
                     });
                 }
 
-                if (
-                    providerSession.user.email &&
-                    providerSession.user.email.trim().toLowerCase() !==
-                        registrationDecision.invite.payload.email.trim().toLowerCase()
-                ) {
-                    throw createError({
-                        statusCode: 403,
-                        statusMessage: 'Invite token is invalid or expired.',
-                    });
-                }
-
-                const consumeResult = await store.consumeInvite({
+                const consumeResult = await consumeInvite({
                     workspaceId: registrationDecision.invite.payload.workspaceId,
-                    email: registrationDecision.invite.payload.email,
+                    email: inviteEmail,
                     tokenHash: registrationDecision.invite.tokenHash,
                     acceptedUserId: userId,
                 });

@@ -80,80 +80,6 @@ function shouldApplyConvexEnv(answers: WizardAnswers): boolean {
     );
 }
 
-async function runCommandCapture(
-    command: string,
-    args: string[]
-): Promise<{ code: number; stdout: string; stderr: string }> {
-    return await new Promise((resolve) => {
-        const child = spawn(command, args, {
-            stdio: ['ignore', 'pipe', 'pipe'],
-            shell: false,
-            env: process.env,
-        });
-
-        let stdout = '';
-        let stderr = '';
-        child.stdout.on('data', (chunk) => {
-            stdout += String(chunk);
-        });
-        child.stderr.on('data', (chunk) => {
-            stderr += String(chunk);
-        });
-
-        child.on('error', () => {
-            resolve({ code: 1, stdout, stderr });
-        });
-
-        child.on('exit', (code) => {
-            resolve({ code: code ?? 1, stdout, stderr });
-        });
-    });
-}
-
-function isProcessAlive(pid: number): boolean {
-    try {
-        process.kill(pid, 0);
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-async function killProcessesListeningOnPort(port: number): Promise<number[]> {
-    if (process.platform !== 'darwin' && process.platform !== 'linux') {
-        return [];
-    }
-
-    const result = await runCommandCapture('lsof', ['-ti', `tcp:${port}`]);
-    const pids = result.stdout
-        .split(/\r?\n/)
-        .map((line) => Number.parseInt(line.trim(), 10))
-        .filter((pid) => Number.isFinite(pid) && pid > 0 && pid !== process.pid);
-
-    if (pids.length === 0) return [];
-
-    for (const pid of pids) {
-        try {
-            process.kill(pid, 'SIGTERM');
-        } catch {
-            // Ignore race conditions (already dead / permission mismatch).
-        }
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 350));
-
-    for (const pid of pids) {
-        if (!isProcessAlive(pid)) continue;
-        try {
-            process.kill(pid, 'SIGKILL');
-        } catch {
-            // Ignore race conditions (already dead / permission mismatch).
-        }
-    }
-
-    return pids;
-}
-
 async function waitForHttpReady(url: string, timeoutMs = 45000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     let lastError = '';
@@ -413,21 +339,20 @@ export async function runWizardDeploy(
         const localDevUrl = 'http://127.0.0.1:3000';
         let instructions = 'Local dev is running.';
         let accessUrl: string | undefined;
+        let started = false;
 
-        const terminatedPids = await killProcessesListeningOnPort(3000);
-        const stillListening = await isPortListening(3000, '127.0.0.1');
-        if (stillListening) {
+        const portInUse = await isPortListening(3000, '127.0.0.1');
+        if (portInUse) {
             instructions =
-                'Port 3000 is still occupied after restart attempt. Stop the running process and retry deployment.';
+                'Port 3000 is already in use. The wizard will not stop unrelated processes; stop the existing service and rerun deployment, or start OR3 manually on a free port.';
         } else {
             startLocalDevDetached(answers.instanceDir);
+            started = true;
             try {
                 await waitForHttpReady(`${localDevUrl}/api/healthz`, 45000);
                 accessUrl = localDevUrl;
-                if (terminatedPids.length > 0) {
-                    instructions =
-                        'Local dev restarted with fresh environment values from the updated env file.';
-                }
+                instructions =
+                    'Local dev started with the updated environment values.';
             } catch (error) {
                 instructions =
                     'Started local dev in background, but startup did not become reachable within timeout. ' +
@@ -440,7 +365,7 @@ export async function runWizardDeploy(
             validation,
             applyResult,
             deployResult: {
-                started: true,
+                started,
                 commands: ['bun run dev:ssr'],
                 instructions,
                 accessUrl,

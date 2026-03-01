@@ -144,7 +144,7 @@ async function handleLogin() {
 
         // Redirect to workspaces page
         router.push('/admin/workspaces');
-    } catch (err: any) {
+    } catch (err: unknown) {
         error.value = getMessage(err, 'Login failed');
     } finally {
         isLoading.value = false;

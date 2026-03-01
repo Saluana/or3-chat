@@ -224,6 +224,9 @@ Resolution algorithm (server):
 6. Select active workspace (initially: user's first workspace).
 7. Return `SessionContext`.
 
+Runtime gating note:
+- SSR auth should only be considered enabled when both the selected auth provider and the selected `AuthWorkspaceStore` backend are available. If either package is missing, return local-only behavior instead of attempting session resolution.
+
 Per-request caching:
 
 -   cache resolved `SessionContext` on the H3 event context to avoid multiple provider calls.
