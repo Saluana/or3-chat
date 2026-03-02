@@ -12,6 +12,7 @@ import { emitJobDelta, emitJobStatus, hasJobViewers, initJobLiveState } from '..
 import { logBackgroundEvent } from '../background-jobs/logging';
 import { executeServerTool, listServerTools } from '../chat/tool-registry';
 import { getNotificationEmitter } from '../notifications/registry';
+import { emitBackgroundJobWebhookEvent } from '../webhooks/hook-emissions';
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
 import {
     OpenRouterExecutionAdapter,
@@ -489,6 +490,14 @@ async function runWorkflowInBackground(
             completedAt: Date.now(),
             workflow_state: workflowState,
         });
+        await emitBackgroundJobWebhookEvent({
+            status: 'completed',
+            jobId,
+            workspaceId: params.workspaceId,
+            userId: params.userId,
+            threadId: params.threadId,
+            messageId: params.messageId,
+        });
 
         const notifyOnComplete = shouldNotify();
         logBgStream('workflow-notify-decision-complete', {
@@ -573,6 +582,15 @@ async function runWorkflowInBackground(
             completedAt: Date.now(),
             error: error instanceof Error ? error.message : String(error),
             workflow_state: workflowState,
+        });
+        await emitBackgroundJobWebhookEvent({
+            status: 'failed',
+            jobId,
+            workspaceId: params.workspaceId,
+            userId: params.userId,
+            threadId: params.threadId,
+            messageId: params.messageId,
+            error: error instanceof Error ? error.message : String(error),
         });
         const notifyOnError = shouldNotify();
         logBgStream('workflow-notify-decision-error', {

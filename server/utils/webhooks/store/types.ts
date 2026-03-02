@@ -1,4 +1,5 @@
-export type WebhookScope = 'user' | 'admin';
+import type { WebhookScope } from '../../../../shared/webhooks/event-types';
+
 export type WebhookHealth = 'healthy' | 'failing' | 'unknown';
 export type WebhookDeliveryStatus =
     | 'pending'

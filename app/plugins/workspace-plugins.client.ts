@@ -137,8 +137,13 @@ export default defineNuxtPlugin(() => {
         for (const pluginId of manifest.enabledPluginIds) {
             const loader = findLoader(modules, pluginId, manifest.runtime[pluginId]?.clientEntry);
             if (!loader) {
-                if (import.meta.dev) {
-                    console.warn(`[workspace-plugins] no client entry resolved for plugin "${pluginId}"`);
+                const clientEntry = manifest.runtime[pluginId]?.clientEntry;
+                if (clientEntry) {
+                    console.warn(
+                        `[workspace-plugins] no bundled client entry resolved for plugin "${pluginId}". ` +
+                            `If it was installed after the current build, run Rebuild + Restart ` +
+                            `before enabling it (${clientEntry}).`
+                    );
                 }
                 continue;
             }

@@ -38,6 +38,7 @@ import {
     evaluateUnknownUserRegistration,
     resolveRegistrationMode,
 } from './registration';
+import { emitWebhookSystemHook } from '../utils/webhooks/runtime';
 
 const SESSION_CONTEXT_KEY_PREFIX = '__or3_session_context_';
 const REQUEST_ID_KEY = '__or3_request_id';
@@ -354,6 +355,11 @@ export async function resolveSessionContext(
                 displayName: providerSession.user.displayName,
             });
             userId = created.userId;
+            await emitWebhookSystemHook('auth.user:action:created', {
+                userId,
+                provider: providerSession.provider,
+                email: providerSession.user.email ?? null,
+            });
 
             if (registrationDecision.invite) {
                 const inviteEmail =

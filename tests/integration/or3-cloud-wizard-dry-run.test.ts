@@ -66,6 +66,8 @@ describe('or3 cloud wizard dry-run flows', () => {
             basicAuthBootstrapPassword: 'MyPassword123',
             fsTokenSecret: 'fs-secret-fs-secret-fs-secret-fs-secret',
             fsRoot: '/tmp/or3-storage',
+            adminUsername: 'admin',
+            adminPassword: 'AdminPass1234!',
         });
 
         const validation = await api.validate(session.id, { strict: true });
@@ -101,6 +103,8 @@ describe('or3 cloud wizard dry-run flows', () => {
             convexClerkIssuerUrl: 'https://clerk.example.com',
             convexAdminJwtSecret: 'convex-admin-secret',
             openrouterInstanceApiKey: 'or-instance-key',
+            adminUsername: 'admin',
+            adminPassword: 'AdminPass1234!',
         });
 
         const validation = await api.validate(session.id, { strict: true });

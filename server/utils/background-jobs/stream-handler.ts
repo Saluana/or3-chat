@@ -41,6 +41,10 @@ import { logBackgroundEvent } from './logging';
 import type { ToolCall, ToolDefinition } from '~/utils/chat/types';
 import { executeServerTool } from '../chat/tool-registry';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
+import {
+    emitBackgroundJobWebhookEvent,
+    emitMessageCompletedWebhookEvent,
+} from '../webhooks/hook-emissions';
 
 function logBgStream(
     _stage: string,
@@ -429,6 +433,23 @@ export async function consumeBackgroundStream(params: {
             chunksReceived: chunks,
             completedAt: Date.now(),
         });
+        await emitBackgroundJobWebhookEvent({
+            status: 'completed',
+            jobId: params.jobId,
+            workspaceId: params.context.workspaceId,
+            userId: params.context.userId,
+            threadId: params.context.threadId,
+            messageId: params.context.messageId,
+        });
+        await emitMessageCompletedWebhookEvent({
+            threadId: params.context.threadId,
+            messageId: params.context.messageId,
+            modelId:
+                typeof params.context.body.model === 'string'
+                    ? params.context.body.model
+                    : null,
+            jobId: params.jobId,
+        });
 
         const notifyOnComplete = shouldNotify();
         logBgStream('server-consume-background-notify-decision-complete', {
@@ -493,6 +514,15 @@ export async function consumeBackgroundStream(params: {
             contentLength: fullContent.length,
             chunksReceived: chunks,
             completedAt: Date.now(),
+            error: err instanceof Error ? err.message : String(err),
+        });
+        await emitBackgroundJobWebhookEvent({
+            status: 'failed',
+            jobId: params.jobId,
+            workspaceId: params.context.workspaceId,
+            userId: params.context.userId,
+            threadId: params.context.threadId,
+            messageId: params.context.messageId,
             error: err instanceof Error ? err.message : String(err),
         });
         warnBgStream('server-consume-background-error', {
@@ -865,6 +895,23 @@ export async function consumeBackgroundStreamWithTools(params: {
             completedAt: Date.now(),
             tool_calls: Array.from(toolStates.values()),
         });
+        await emitBackgroundJobWebhookEvent({
+            status: 'completed',
+            jobId: params.jobId,
+            workspaceId: params.context.workspaceId,
+            userId: params.context.userId,
+            threadId: params.context.threadId,
+            messageId: params.context.messageId,
+        });
+        await emitMessageCompletedWebhookEvent({
+            threadId: params.context.threadId,
+            messageId: params.context.messageId,
+            modelId:
+                typeof params.context.body.model === 'string'
+                    ? params.context.body.model
+                    : null,
+            jobId: params.jobId,
+        });
 
         const notifyOnComplete = shouldNotify();
         logBgStream('server-consume-tools-notify-decision-complete', {
@@ -926,6 +973,15 @@ export async function consumeBackgroundStreamWithTools(params: {
             completedAt: Date.now(),
             error: err instanceof Error ? err.message : String(err),
             tool_calls: Array.from(toolStates.values()),
+        });
+        await emitBackgroundJobWebhookEvent({
+            status: 'failed',
+            jobId: params.jobId,
+            workspaceId: params.context.workspaceId,
+            userId: params.context.userId,
+            threadId: params.context.threadId,
+            messageId: params.context.messageId,
+            error: err instanceof Error ? err.message : String(err),
         });
         warnBgStream('server-consume-tools-error', {
             jobId: params.jobId,

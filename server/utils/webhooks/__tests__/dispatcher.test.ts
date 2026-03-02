@@ -1,0 +1,393 @@
+/* @vitest-environment node */
+import { randomUUID } from 'node:crypto';
+import Database from 'better-sqlite3';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { encryptSecret } from '../crypto';
+import { createWebhookDispatcher } from '../dispatcher';
+import { resetNotificationEmitters, registerNotificationEmitter } from '../../notifications/registry';
+import { createSqliteWebhookStore } from '../store/sqlite-store';
+import type { WebhookRegistration, WebhookStore } from '../store/types';
+
+type TestContext = {
+    db: InstanceType<typeof Database>;
+    store: WebhookStore;
+};
+
+const openDatabases = new Set<InstanceType<typeof Database>>();
+
+function createTestContext(): TestContext {
+    const db = new Database(':memory:');
+    openDatabases.add(db);
+    return {
+        db,
+        store: createSqliteWebhookStore({ database: db }),
+    };
+}
+
+async function createStoredWebhook(
+    store: WebhookStore,
+    overrides: Partial<
+        Omit<WebhookRegistration, 'id' | 'health' | 'created_at' | 'updated_at'>
+    > = {}
+): Promise<WebhookRegistration> {
+    return store.createWebhook({
+        scope: 'user',
+        user_id: 'user-1',
+        workspace_id: 'ws-1',
+        url: 'https://example.com/webhooks',
+        label: 'Primary',
+        events: ['thread.created'],
+        custom_hooks: [],
+        signing_secret_enc: encryptSecret('whs_test_secret', 'test-encryption-key'),
+        enabled: true,
+        ...overrides,
+    });
+}
+
+afterEach(() => {
+    for (const db of openDatabases) {
+        db.close();
+    }
+    openDatabases.clear();
+    resetNotificationEmitters();
+    vi.useRealTimers();
+});
+
+beforeEach(() => {
+    resetNotificationEmitters();
+});
+
+describe('webhook dispatcher', () => {
+    it('enqueues deliveries without performing network I/O on the request path', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store);
+        const fetchImpl = vi.fn(async () => new Response('ok', { status: 200 }));
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: false,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                fetchImpl,
+            },
+            'worker-1'
+        );
+
+        await dispatcher.enqueue({
+            webhookId: webhook.id,
+            eventType: 'thread.created',
+            eventId: randomUUID(),
+            payload: { ok: true },
+        });
+
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(fetchImpl).not.toHaveBeenCalled();
+        expect(log?.status).toBe('pending');
+    });
+
+    it('marks successful deliveries as success', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store);
+        const fetchImpl = vi.fn(async () => new Response('ok', { status: 200 }));
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: false,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                fetchImpl,
+            },
+            'worker-1'
+        );
+
+        await dispatcher.enqueue({
+            webhookId: webhook.id,
+            eventType: 'thread.created',
+            eventId: randomUUID(),
+            payload: {
+                ok: true,
+            },
+        });
+        await dispatcher.claimAndProcess();
+
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(log).toMatchObject({
+            status: 'success',
+            http_status: 200,
+            response_body: 'ok',
+        });
+    });
+
+    it('schedules a retry with the expected backoff after failure', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-03-01T12:00:00.000Z'));
+
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store);
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: false,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                fetchImpl: vi.fn(async () => new Response('nope', { status: 500 })),
+            },
+            'worker-1'
+        );
+
+        await dispatcher.enqueue({
+            webhookId: webhook.id,
+            eventType: 'thread.created',
+            eventId: randomUUID(),
+            payload: { ok: true },
+        });
+        await dispatcher.claimAndProcess();
+
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(log.status).toBe('pending');
+        expect(log.attempt).toBe(2);
+        expect(log.next_retry_at).toBe(Date.now() + 30_000);
+    });
+
+    it('marks final failures and emits a notification', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store);
+        const notificationSpy = vi.fn(async () => null);
+
+        registerNotificationEmitter('test', {
+            emitBackgroundJobComplete: async () => null,
+            emitBackgroundJobError: async () => null,
+            emitWebhookDeliveryFailed: notificationSpy,
+        });
+
+        await store.createDeliveryLog({
+            webhook_id: webhook.id,
+            event_id: randomUUID(),
+            event_type: 'thread.created',
+            attempt: 6,
+            status: 'pending',
+            claimed_by: null,
+            claimed_at: null,
+            http_status: null,
+            error_message: null,
+            request_payload: '{"ok":true}',
+            response_body: null,
+            duration_ms: null,
+            next_retry_at: Date.now() - 1,
+            created_at: Date.now(),
+        });
+
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: false,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                fetchImpl: vi.fn(async () => new Response('fail', { status: 500 })),
+            },
+            'worker-1'
+        );
+
+        await dispatcher.claimAndProcess();
+
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(log.status).toBe('failed');
+        expect(notificationSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('cancels deliveries when the webhook is disabled before processing', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store, {
+            enabled: false,
+        });
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: false,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                fetchImpl: vi.fn(async () => new Response('ok', { status: 200 })),
+            },
+            'worker-1'
+        );
+
+        await store.createDeliveryLog({
+            webhook_id: webhook.id,
+            event_id: randomUUID(),
+            event_type: 'thread.created',
+            attempt: 2,
+            status: 'pending',
+            claimed_by: null,
+            claimed_at: null,
+            http_status: null,
+            error_message: null,
+            request_payload: '{"ok":true}',
+            response_body: null,
+            duration_ms: null,
+            next_retry_at: Date.now() - 1,
+            created_at: Date.now(),
+        });
+
+        await dispatcher.claimAndProcess();
+
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(log.status).toBe('cancelled');
+    });
+
+    it('sends a test ping and returns the result shape', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store, {
+            scope: 'admin',
+            user_id: null,
+        });
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: false,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                fetchImpl: vi.fn(async () => new Response('pong', { status: 202 })),
+            },
+            'worker-1'
+        );
+
+        const result = await dispatcher.sendTestPing(webhook, 'whs_test_secret');
+        expect(result).toMatchObject({
+            success: true,
+            statusCode: 202,
+        });
+    });
+
+    it('drops events when the per-webhook rate limit is exceeded', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store);
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 1,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: false,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                fetchImpl: vi.fn(async () => new Response('ok', { status: 200 })),
+            },
+            'worker-1'
+        );
+
+        await dispatcher.enqueue({
+            webhookId: webhook.id,
+            eventType: 'thread.created',
+            eventId: randomUUID(),
+            payload: { ok: true },
+        });
+        await dispatcher.enqueue({
+            webhookId: webhook.id,
+            eventType: 'thread.created',
+            eventId: randomUUID(),
+            payload: { ok: true },
+        });
+
+        const logs = await store.getDeliveryLogs(webhook.id, 0);
+        expect(logs).toHaveLength(1);
+    });
+
+    it('blocks private IPs at dispatch time when SSRF protection is enabled', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store, {
+            url: 'http://127.0.0.1/webhooks',
+        });
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: true,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+            },
+            'worker-1'
+        );
+
+        await dispatcher.enqueue({
+            webhookId: webhook.id,
+            eventType: 'thread.created',
+            eventId: randomUUID(),
+            payload: { ok: true },
+        });
+        await dispatcher.claimAndProcess();
+
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(log.status).toBe('pending');
+        expect(log.error_message?.toLowerCase()).toContain('private ip');
+    });
+
+    it('does not process the same delivery twice across concurrent dispatchers', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store);
+        const fetchImpl = vi.fn(async () => new Response('ok', { status: 200 }));
+
+        await store.createDeliveryLog({
+            webhook_id: webhook.id,
+            event_id: randomUUID(),
+            event_type: 'thread.created',
+            attempt: 1,
+            status: 'pending',
+            claimed_by: null,
+            claimed_at: null,
+            http_status: null,
+            error_message: null,
+            request_payload: '{"ok":true}',
+            response_body: null,
+            duration_ms: null,
+            next_retry_at: Date.now() - 1,
+            created_at: Date.now(),
+        });
+
+        const dispatcherA = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: false,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                fetchImpl,
+            },
+            'worker-a'
+        );
+        const dispatcherB = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: false,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                fetchImpl,
+            },
+            'worker-b'
+        );
+
+        await Promise.all([
+            dispatcherA.claimAndProcess(),
+            dispatcherB.claimAndProcess(),
+        ]);
+
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(log.status).toBe('success');
+    });
+});

@@ -33,7 +33,7 @@ export type ExtensionInstallOptions = {
  * Install an extension (plugin or theme) from a .zip file.
  * Handles duplicate detection and retry with force flag.
  */
-export async function installExtension(options: ExtensionInstallOptions): Promise<void> {
+export async function installExtension(options: ExtensionInstallOptions): Promise<boolean> {
     const { file, force = false, onSuccess } = options;
     const formData = new FormData();
     formData.append('file', file);
@@ -48,6 +48,7 @@ export async function installExtension(options: ExtensionInstallOptions): Promis
             headers: ADMIN_HEADERS,
         });
         if (onSuccess) await onSuccess();
+        return true;
     } catch (error: unknown) {
         const message = parseErrorMessage(error, '');
         
@@ -59,9 +60,9 @@ export async function installExtension(options: ExtensionInstallOptions): Promis
                 danger: true,
                 confirmText: 'Replace',
             });
-            if (!confirmed) return;
+            if (!confirmed) return false;
             // Retry with force flag
-            await installExtension({ ...options, force: true });
+            return await installExtension({ ...options, force: true });
         } else {
             throw error;
         }
@@ -79,7 +80,7 @@ export type ExtensionUrlInstallOptions = {
  * Install an extension (plugin or theme) from a remote URL.
  * The server fetches the ZIP and runs the same install pipeline.
  */
-export async function installExtensionFromUrl(options: ExtensionUrlInstallOptions): Promise<void> {
+export async function installExtensionFromUrl(options: ExtensionUrlInstallOptions): Promise<boolean> {
     const { url, force = false, onSuccess } = options;
 
     try {
@@ -89,6 +90,7 @@ export async function installExtensionFromUrl(options: ExtensionUrlInstallOption
             headers: ADMIN_HEADERS,
         });
         if (onSuccess) await onSuccess();
+        return true;
     } catch (error: unknown) {
         const message = parseErrorMessage(error, '');
 
@@ -100,8 +102,8 @@ export async function installExtensionFromUrl(options: ExtensionUrlInstallOption
                 danger: true,
                 confirmText: 'Replace',
             });
-            if (!confirmed) return;
-            await installExtensionFromUrl({ ...options, force: true });
+            if (!confirmed) return false;
+            return await installExtensionFromUrl({ ...options, force: true });
         } else {
             throw error;
         }

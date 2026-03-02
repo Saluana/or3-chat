@@ -19,6 +19,23 @@
         </div>
 
         <template v-else>
+            <div
+                v-if="rebuildRequired"
+                class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)]"
+            >
+                <div class="flex items-center gap-3">
+                    <UIcon name="i-heroicons-exclamation-triangle" class="w-5 h-5 flex-shrink-0" />
+                    <div>
+                        <div class="font-semibold text-sm">Rebuild + Restart Required</div>
+                        <div class="text-xs opacity-80">
+                            Newly installed or removed themes are bundled at build time. In production,
+                            run Rebuild + Restart from Admin &gt; System. In development, restart the
+                            dev server manually to rescan theme modules.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Restart Required Banner -->
             <div v-if="restartRequired" class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)] flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
@@ -226,22 +243,46 @@ const { restart, restartRequired } = useServerRestart(
 const { confirm } = useConfirmDialog();
 const nuxtApp = useNuxtApp();
 const toast = useToast();
+const rebuildRequired = ref(false);
 
 // URL import state
 const showUrlModal = ref(false);
 const urlInstalling = ref(false);
 
+function notifyThemeBundleChange(action: 'install' | 'uninstall', source: 'file' | 'url' = 'file') {
+    const actionLabel = action === 'install' ? 'installed' : 'removed';
+    const sourceLabel = source === 'url' ? ' from URL' : '';
+
+    if (import.meta.dev) {
+        restartRequired.value = true;
+        toast.add({
+            title: `Theme ${action === 'install' ? 'installed' : 'uninstalled'}`,
+            description: `The theme has been ${actionLabel}${sourceLabel}. Restart the dev server to reload theme modules.`,
+            color: 'info',
+        });
+        toast.add({
+            title: 'Manual restart required in dev',
+            description: 'Please restart the dev server manually (Ctrl+C, then bun run dev:ssr).',
+            color: 'warning',
+        });
+        return;
+    }
+
+    rebuildRequired.value = true;
+    toast.add({
+        title: `Theme ${action === 'install' ? 'installed' : 'uninstalled'}`,
+        description: `The theme has been ${actionLabel}${sourceLabel}. Rebuild + Restart is required before theme bundles update in production.`,
+        color: 'info',
+    });
+}
+
 async function installThemeFromUrl(url: string) {
     urlInstalling.value = true;
     try {
-        await installFromUrl('theme', url, refresh);
+        const installed = await installFromUrl('theme', url, refresh);
+        if (!installed) return;
         showUrlModal.value = false;
-        restartRequired.value = true;
-        toast.add({
-            title: 'Theme installed',
-            description: 'The theme has been installed from URL. Restart is required.',
-            color: 'info',
-        });
+        notifyThemeBundleChange('install', 'url');
     } catch (error: unknown) {
         const message = parseErrorMessage(error, 'Failed to install theme from URL');
         toast.add({ title: 'Error', description: message, color: 'error' });
@@ -318,20 +359,9 @@ async function toggleThemeDisabled(themeId: string) {
 
 async function installTheme() {
     try {
-        await install('theme', refresh);
-        restartRequired.value = true;
-        toast.add({
-            title: 'Theme installed',
-            description: 'The theme has been installed. Restart is required before it can be used reliably.',
-            color: 'info',
-        });
-        if (import.meta.dev) {
-            toast.add({
-                title: 'Manual restart required in dev',
-                description: 'Please restart the dev server manually (Ctrl+C, then bun run dev:ssr).',
-                color: 'warning',
-            });
-        }
+        const installed = await install('theme', refresh);
+        if (!installed) return;
+        notifyThemeBundleChange('install');
     } catch (error: unknown) {
         const message = parseErrorMessage(error, 'Failed to install theme');
         toast.add({ title: 'Error', description: message, color: 'error' });
@@ -384,19 +414,7 @@ async function uninstallTheme(themeId: string) {
             body: { id: themeId, kind: 'theme' },
         });
         await refresh();
-        restartRequired.value = true;
-        toast.add({
-            title: 'Theme uninstalled',
-            description: 'The theme has been removed. Restart is required to fully flush cached theme modules.',
-            color: 'info',
-        });
-        if (import.meta.dev) {
-            toast.add({
-                title: 'Manual restart required in dev',
-                description: 'Please restart the dev server manually (Ctrl+C, then bun run dev:ssr).',
-                color: 'warning',
-            });
-        }
+        notifyThemeBundleChange('uninstall');
     } catch (error: unknown) {
         const message = parseErrorMessage(error, 'Failed to uninstall theme');
         toast.add({ title: 'Error', description: message, color: 'error' });

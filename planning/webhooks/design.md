@@ -878,6 +878,22 @@ app/components/dashboard/webhooks/
 └─────────────────────────────────────────────────────┘
 ```
 
+---
+
+### 16. Final Implementation Notes
+
+The shipped implementation keeps the design intact with a few practical adjustments:
+
+- The long-lived Nitro runtime lives in `server/plugins/20.webhooks.ts` so it participates in the existing ordered plugin convention.
+- The request-scoped admin hook engine in `server/plugins/admin-hooks.ts` mirrors every emitted admin action onto `nitroApp.hooks`, which lets the process-wide webhook bridge observe admin mutations without replacing the local per-request admin hook API.
+- Server-side user content hooks are emitted at the actual persistence/execution boundaries:
+  - SQLite sync apply emits `db.*:action:after` hooks after committed writes.
+  - Background chat completion emits both `background.job:*` and `ai.chat.stream:action:complete`.
+  - Foreground SSR streaming uses a tee’d stream monitor so `message.completed` is emitted only after the proxied SSE stream ends normally.
+  - Provider-backed notification writes mirror `notify:action:push` after the notification record is created.
+- Admin webhook custom-hook listeners are refreshed through the active runtime registry after admin webhook create/update/delete/toggle mutations.
+- The event bridge fast-path cache is keyed by `scope + event + workspace` instead of only `scope + event`, which avoids false negatives for workspace-scoped subscriptions.
+
 #### Component Details
 
 **WebhooksList.vue**:

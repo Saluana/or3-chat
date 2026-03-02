@@ -59,6 +59,7 @@
         "lru-cache": "^11.2.4",
         "nuxt": "^4.2.1",
         "or3-provider-basic-auth": "file:../or3-provider-basic-auth",
+        "or3-provider-convex": "file:../or3-provider-convex",
         "or3-provider-fs": "file:../or3-provider-fs",
         "or3-provider-sqlite": "file:../or3-provider-sqlite",
         "or3-scroll": "0.0.3",

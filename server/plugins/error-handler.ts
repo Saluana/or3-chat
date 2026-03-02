@@ -11,6 +11,7 @@
  */
 import { defineNitroPlugin } from 'nitropack/runtime';
 import { getRequestURL, getMethod } from 'h3';
+import { emitWebhookSystemHook } from '../utils/webhooks/runtime';
 
 interface ErrorLogEntry {
     level: 'error';
@@ -79,5 +80,23 @@ export default defineNitroPlugin((nitro) => {
 
         // Log as structured JSON
         console.error(JSON.stringify(logEntry));
+
+        if (path.startsWith('/api/sync')) {
+            void emitWebhookSystemHook('sync:action:error', {
+                source: 'sync',
+                message: logEntry.message,
+                status,
+                method,
+                path,
+            });
+        } else if (path.startsWith('/api/storage')) {
+            void emitWebhookSystemHook('storage:action:error', {
+                source: 'storage',
+                message: logEntry.message,
+                status,
+                method,
+                path,
+            });
+        }
     });
 });

@@ -83,14 +83,14 @@ describe('installExtensionFromZip', () => {
                             {
                                 method: 'GET',
                                 path: 'hello',
-                                handler: 'server/hello.get.ts',
+                                handler: 'server/hello.get.js',
                             },
                         ],
                     },
                 },
             }),
             'plugin.client.ts': 'export default {}',
-            'server/hello.get.ts': 'export default () => ({ ok: true })',
+            'server/hello.get.js': 'export default () => ({ ok: true })',
         });
 
         const manifest = await installExtensionFromZip(zip, true);
@@ -112,12 +112,37 @@ describe('installExtensionFromZip', () => {
                             {
                                 method: 'GET',
                                 path: 'hello',
-                                handler: 'server/a.get.ts',
+                                handler: 'server/a.get.js',
                             },
                             {
                                 method: 'GET',
                                 path: 'hello',
-                                handler: 'server/b.get.ts',
+                                handler: 'server/b.get.js',
+                            },
+                        ],
+                    },
+                },
+            }),
+        });
+
+        await expect(installExtensionFromZip(zip, false)).rejects.toThrow('Invalid manifest');
+    });
+
+    it('rejects TypeScript runtime route handlers', async () => {
+        const zip = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Test',
+                version: '0.0.1',
+                capabilities: [],
+                runtime: {
+                    server: {
+                        routes: [
+                            {
+                                method: 'GET',
+                                path: 'hello',
+                                handler: 'server/hello.get.ts',
                             },
                         ],
                     },

@@ -63,7 +63,7 @@ describe('useExtensionManagement', () => {
         const mockFile = new File(['test'], 'test.zip');
         mockFileInput.value = { files: [mockFile] } as unknown as HTMLInputElement;
 
-        mockInstallExtension.mockResolvedValue(undefined);
+        mockInstallExtension.mockResolvedValue(true);
 
         const onSuccess = vi.fn();
         await install('plugin', onSuccess);
@@ -103,7 +103,7 @@ describe('useExtensionManagement', () => {
         const mockFile = new File(['test'], 'theme.zip');
         mockFileInput.value = { files: [mockFile] } as unknown as HTMLInputElement;
 
-        mockInstallExtension.mockResolvedValue(undefined);
+        mockInstallExtension.mockResolvedValue(true);
         mockUninstallExtension.mockResolvedValue(undefined);
 
         await install('theme');

@@ -410,6 +410,11 @@ const navLinks = computed<NavLink[]>(() => {
             to: '/admin/workspaces',
             icon: workspacesIcon.value,
         });
+        base.splice(2, 0, {
+            label: 'Webhooks',
+            to: '/admin/webhooks',
+            icon: pluginsIcon.value,
+        });
     }
     
     // Sort logic or visual separators could be added here

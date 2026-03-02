@@ -4,8 +4,8 @@ import { installExtension, installExtensionFromUrl, uninstallExtension, useFileI
 export type ExtensionManagement = {
     fileInput: Ref<HTMLInputElement | null>;
     triggerFileInput: () => void;
-    install: (kind: ExtensionKind, onSuccess?: () => Promise<void>) => Promise<void>;
-    installFromUrl: (kind: ExtensionKind, url: string, onSuccess?: () => Promise<void>) => Promise<void>;
+    install: (kind: ExtensionKind, onSuccess?: () => Promise<void>) => Promise<boolean>;
+    installFromUrl: (kind: ExtensionKind, url: string, onSuccess?: () => Promise<void>) => Promise<boolean>;
     uninstall: (id: string, kind: ExtensionKind, onSuccess?: () => Promise<void>) => Promise<void>;
 };
 
@@ -19,10 +19,10 @@ export function useExtensionManagement(
     const { fileInput, triggerFileInput } = useFileInput();
 
     async function install(kind: ExtensionKind, onSuccess?: () => Promise<void>) {
-        if (!isOwner.value) return;
+        if (!isOwner.value) return false;
         const file = fileInput.value?.files?.[0];
-        if (!file) return;
-        await installExtension({ kind, file, onSuccess });
+        if (!file) return false;
+        return await installExtension({ kind, file, onSuccess });
     }
 
     async function installFromUrl(
@@ -30,9 +30,9 @@ export function useExtensionManagement(
         url: string,
         onSuccess?: () => Promise<void>
     ) {
-        if (!isOwner.value) return;
-        if (!url.trim()) return;
-        await installExtensionFromUrl({ kind, url: url.trim(), onSuccess });
+        if (!isOwner.value) return false;
+        if (!url.trim()) return false;
+        return await installExtensionFromUrl({ kind, url: url.trim(), onSuccess });
     }
 
     async function uninstall(

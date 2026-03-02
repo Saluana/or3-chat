@@ -13,6 +13,18 @@
             </p>
         </div>
 
+        <div
+            v-if="rebuildRequired"
+            class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)]"
+        >
+            <div class="font-semibold text-sm">Rebuild + Restart Required</div>
+            <div class="text-xs opacity-80 mt-1">
+                Newly installed client plugins are bundled at build time. In production, run
+                Rebuild + Restart from Admin &gt; System before enabling them. In development,
+                restart the dev server to pick up new client modules.
+            </div>
+        </div>
+
         <div class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
             <div class="mb-4 flex items-center justify-between">
                 <h3 class="text-lg font-medium">Installed</h3>
@@ -87,7 +99,10 @@
                         v-if="enabledSet.has(plugin.id) && !loadedSet.has(plugin.id)"
                         class="mt-2 text-xs opacity-75"
                     >
-                        Enabled in workspace settings, but runtime manifest does not currently include it. Check plugin manifest/runtime config and logs.
+                        Enabled in workspace settings, but the runtime manifest does not currently
+                        expose this plugin. If it was installed after the current build and includes
+                        client code, run Rebuild + Restart from Admin &gt; System before expecting
+                        it to load in production.
                     </p>
 
                     <div class="mt-4 pt-4 border-t border-[var(--md-outline-variant)]/50 flex flex-wrap items-center gap-2">
@@ -240,16 +255,20 @@ const runtimeConfig = useRuntimeConfig();
 const showUrlModal = ref(false);
 const urlInstalling = ref(false);
 const toast = useToast();
+const rebuildRequired = ref(false);
 
 async function installPluginFromUrl(url: string) {
     urlInstalling.value = true;
     try {
-        await installFromUrl('plugin', url, refresh);
+        const installed = await installFromUrl('plugin', url, refresh);
+        if (!installed) return;
         showUrlModal.value = false;
+        rebuildRequired.value = true;
         toast.add({
             title: 'Plugin installed',
-            description: 'The plugin has been installed from URL.',
-            color: 'success',
+            description:
+                'The plugin has been installed from URL. Rebuild + Restart is required before new client runtime modules can load in production.',
+            color: 'info',
         });
     } catch (error: unknown) {
         const message = parseErrorMessage(error, 'Failed to install plugin from URL');
@@ -339,7 +358,15 @@ async function togglePlugin(pluginId: string) {
 }
 
 async function installPlugin() {
-    await install('plugin', refresh);
+    const installed = await install('plugin', refresh);
+    if (!installed) return;
+    rebuildRequired.value = true;
+    toast.add({
+        title: 'Plugin installed',
+        description:
+            'The plugin has been installed. Rebuild + Restart is required before new client runtime modules can load in production.',
+        color: 'info',
+    });
 }
 
 async function uninstallPlugin(pluginId: string) {

@@ -1,5 +1,5 @@
 import { pathToFileURL } from 'node:url';
-import { relative, resolve, sep } from 'node:path';
+import { extname, relative, resolve, sep } from 'node:path';
 import { createError, defineEventHandler, getMethod, getRouterParam } from 'h3';
 import { useRuntimeConfig } from '#imports';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
@@ -94,6 +94,13 @@ export default defineEventHandler(async (event) => {
         relativePath.includes(`${sep}..${sep}`);
     if (escapesPluginRoot) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid route handler path' });
+    }
+    const handlerExtension = extname(modulePath).toLowerCase();
+    if (['.ts', '.tsx', '.mts', '.cts'].includes(handlerExtension)) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'Plugin route handlers must be precompiled JavaScript files',
+        });
     }
 
     let handlerModule: { default?: unknown; handler?: unknown };
