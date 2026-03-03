@@ -1,21 +1,22 @@
 @reference '../../assets/css/main.css';
 
 [data-theme="blank"] {
+    /* ── Base reset: borderless, shadowless ── */
     .theme-btn {
-        @apply flex items-center justify-center;
+        @apply flex items-center justify-center border-0 shadow-none;
     }
 
     .sb-group-header {
-        @apply px-2.5;
+        @apply px-2.5 text-xs font-medium text-[var(--md-on-surface-variant)] uppercase tracking-wider;
     }
 
     .sidebar-scroll {
-	@apply pr-3 pt-5;
-}
+        @apply pr-2 pt-2;
+    }
 
-	#nav-header {
-        @apply mb-0 ml-3 mr-6 pb-5 pl-0  border-b-[length:var(--md-border-width)] border-b-[rgba(8,109,184,0.3)];
-	}
+    #nav-header {
+        @apply mb-0 ml-2 mr-2 pb-2 pl-0 border-none;
+    }
 
     .chat-input-wrapper {
         min-height: 0px !important;
@@ -28,5 +29,73 @@
 
     .chat-input {
         margin-bottom: 0 !important;
+    }
+
+    /* ── ChatGPT-style user message bubble ── */
+    .cm-user {
+        background: var(--md-surface-hover) !important;
+        color: var(--md-on-surface) !important;
+        border-radius: 18px !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 12px 18px !important;
+    }
+
+    /* ── Assistant messages: no background ── */
+    .cm-assistant {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    /* ── Action buttons: minimal gray icons ── */
+    .cm-action-group {
+        background: var(--md-surface) !important;
+        border: none !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+        border-radius: 8px !important;
+    }
+
+    /* ── Markdown prose: match ChatGPT text rendering ── */
+    .cm-markdown-assistant {
+        font-size: 16px;
+        line-height: 1.7;
+        letter-spacing: -0.003em;
+        color: var(--md-on-surface);
+    }
+
+    /* ── Modal: clean and round ── */
+    .modal-overlay {
+        backdrop-filter: blur(4px);
+    }
+
+    /* ── Cards and sections: subtle depth ── */
+    .section-card {
+        border: none !important;
+        border-radius: 12px !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    }
+
+    /* ── Scroll styling ── */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+    }
+
+    /* ── HR dividers like ChatGPT between messages ── */
+    hr {
+        border-color: var(--md-border-color);
+        opacity: 0.5;
+    }
+}
+
+/* ── Dark mode overrides ── */
+[data-theme="blank"].dark {
+    * {
+        scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    }
+
+    .cm-user {
+        background: var(--md-surface-hover) !important;
     }
 }

@@ -1,47 +1,47 @@
-// Shared button config for attach and settings buttons
+// ChatGPT-style button config: minimal, borderless, round
 const chatInputButtonConfig = {
-    variant: 'soft' as const,
+    variant: 'ghost' as const,
     size: 'sm' as const,
-    class: 'min-h-[32px] w-[32px] text-primary flex items-center justify-center p-0 rounded-[var(--md-border-radius)] hover:bg-[var(--md-info-hover)] active:bg-[var(--md-surface-active)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
+    class: 'min-h-[36px] w-[36px] text-[var(--md-on-surface-variant)] flex items-center justify-center p-0 rounded-full hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0',
 };
 
 export const chatOverrides = {
-    /* --- Chat Content --- */
     'button#shell.pane-close': {
-        class: 'backdrop-blur! flex items-center justify-center',
+        class: 'flex items-center justify-center border-0',
     },
     'button#chat.scroll-to-bottom': {
         trailing: true,
-        class: 'text-xs bg-primary/20 text-[var(--md-on-surface)] backdrop-blur-xl hover:bg-primary/30 active:bg-primary/40 shadow rounded-full border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] p-2 flex items-center justify-center',
+        class: 'text-xs bg-[var(--md-surface)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] shadow-md rounded-full border-0 p-2 flex items-center justify-center',
         label: 'Scroll to bottom',
     },
-    // All ChatMessage action buttons (copy/retry/branch/edit/etc.)
+    // Message action buttons: subtle gray icons
     'button.message': {
-        class: 'flex items-center justify-center bg-info text-[var(--md-on-info)] hover:bg-[var(--md-info-hover)] active:bg-[var(--md-info)]/80',
+        class: 'flex items-center justify-center bg-transparent text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 rounded-lg',
     },
     'button#message.reasoning-toggle': {
-        class: 'flex items-center justify-center bg-info/20 text-[var(--md-on-surface)]/90 hover:bg-[var(--md-info-hover)]/30 active:bg-[var(--md-info)]/80',
+        class: 'flex items-center justify-center bg-transparent text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 rounded-lg',
     },
     /* --- Chat Input --- */
     'button#chat.send': {
         variant: 'solid',
         color: 'primary',
-        class: 'theme-btn flex items-center justify-center bg-primary hover:bg-[var(--md-primary-hover)]! active:bg-[var(--md-primary-active)]! disabled:bg-primary! disabled:opacity-40! aria-disabled:bg-primary! aria-disabled:opacity-40! text-white! ',
+        class: 'theme-btn flex items-center justify-center bg-[var(--md-on-surface)] hover:bg-[var(--md-on-surface)]/80! active:bg-[var(--md-on-surface)]/70! disabled:opacity-30! aria-disabled:opacity-30! text-[var(--md-surface)]! rounded-full! border-0!',
     },
     'button#chat.stop': {
         variant: 'solid',
         color: 'error',
+        class: 'rounded-full! border-0!',
     },
     'div#chat.editor': {
-        class: 'font-[IBM_Plex_Sans] text-[16px]',
+        class: 'text-[16px]',
     },
     'div#chat.input-main-container': {
-        class: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus-within:border-[color:var(--md-primary)] focus-within:ring-1 focus-within:ring-[color:var(--md-primary)] shadow-lg',
+        class: 'rounded-[28px] shadow-[0_4px_8px_rgba(0,0,0,0.04)] border-0 hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-within:shadow-[0_4px_16px_rgba(0,0,0,0.1)]',
     },
     'button#chat.attach': chatInputButtonConfig,
     'button#chat.settings': chatInputButtonConfig,
     'selectmenu#chat.model-select': {
-        class: 'h-[32px] rounded-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px] ring-0! hover:ring-1! focus-visible:ring-1! cursor-pointer focus-visible:ring-[color:var(--md-primary)]! text-[14px]!',
+        class: 'h-[36px] rounded-full border-0 px-3 bg-transparent w-full min-w-[100px] max-w-[320px] ring-0! hover:bg-[var(--md-surface-hover)]! cursor-pointer text-[14px]!',
         ui: {
             base: 'text-[14px]!',
             value: 'text-[14px]!',
@@ -49,16 +49,16 @@ export const chatOverrides = {
             item: 'text-[14px]!',
             itemLabel: 'text-[14px]!',
             content:
-                'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[14px]!',
+                'ring-0! border-0! rounded-xl bg-[var(--md-surface)] shadow-lg text-[14px]!',
         },
         searchInput: {
             ui: {
-                base: 'text-[14px]! rounded-none shadow-none! rounded-t-[var(--md-border-radius)]!',
+                base: 'text-[14px]! rounded-none shadow-none! rounded-t-xl!',
             },
         },
     },
     'button.settings': {
-        class: 'rounded-none text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] not-last:border-b-[length:var(--md-border-width)] not-last:border-b-[color:var(--md-border-color)] last:rounded-b-[var(--md-border-radius)]',
+        class: 'rounded-none text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0',
         ui: {
             label: 'text-[14px]!',
         },
@@ -69,44 +69,44 @@ export const chatOverrides = {
         },
     },
     'div#message.user-container': {
-        class: 'px-4! py-3! bg-[var(--md-primary-border)] rounded-[var(--md-border-radius)]',
+        class: 'px-4! py-3! bg-[var(--md-surface-hover)] rounded-[18px]',
     },
 };
 
 export const chatCssSelectors = {
     '#btn-reasoning-toggle': {
         style: {
-            backgroundColor: 'var(--md-surface) !important',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            borderRadius: 'var(--md-border-radius)',
+            backgroundColor: 'var(--md-surface-hover)',
+            border: 'none',
+            borderRadius: '10px',
         },
     },
     '#btn-reasoning-toggle:hover': {
         style: {
-            backgroundColor: 'var(--md-surface-hover) !important',
+            backgroundColor: 'var(--md-surface-active)',
         },
     },
     '.reasoning-box': {
         style: {
-            background: 'var(--md-surface)',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            borderRadius: 'var(--md-border-radius)',
+            background: 'var(--md-surface-hover)',
+            border: 'none',
+            borderRadius: '12px',
         },
     },
     '.cm-text-user': {
         style: {
-            fontFamily:
-                '"IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important',
             fontSize: '16px',
+            color: 'var(--md-on-surface)',
         },
     },
     '.cm-action-group': {
         style: {
-            backgroundColor: 'var(--md-surface-container-high)',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+            backgroundColor: 'var(--md-surface)',
+            border: 'none',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06)',
+            borderRadius: '8px',
             opacity: '0',
-            transition: 'opacity 0.2s ease-in-out',
+            transition: 'opacity 0.15s ease',
         },
     },
     '.group:hover .cm-action-group': {
@@ -119,17 +119,14 @@ export const chatCssSelectors = {
             opacity: '1',
         },
     },
-    // Chat container vertical dividers: apply a right border to every chat container except the last one
     '.chat-container-root:not(:last-child)': {
         style: {
-            borderRight: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRight: '1px solid var(--md-border-color)',
         },
     },
-    // Only add a top border when there are multiple panes: apply to any pane that is not the first child
     '.chat-container-root:not(:first-child)': {
         style: {
-            borderTop:
-                'var(--md-border-width) solid var(--md-border-color) !important',
+            borderTop: '1px solid var(--md-border-color) !important',
         },
     },
     '.cm-assistant': {
@@ -145,17 +142,17 @@ export const chatCssSelectors = {
     '#btn-collapse-attachments': {
         style: {
             backgroundColor: 'transparent !important',
-            color: 'var(--md-on-primary) !important',
+            color: 'var(--md-on-surface-variant) !important',
             cursor: 'pointer',
         },
     },
     '.tool-call-indicator': {
         style: {
-            backgroundColor: 'var(--md-surface)',
-            borderRadius: 'var(--md-border-radius)',
-            border: '1px solid var(--md-border-color)',
+            backgroundColor: 'var(--md-surface-hover)',
+            borderRadius: '12px',
+            border: 'none',
             overflow: 'hidden',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+            boxShadow: 'none',
             marginTop: '8px',
             marginBottom: '8px',
         },
@@ -169,7 +166,7 @@ export const chatCssSelectors = {
     '.tool-call-indicator-summary': {
         style: {
             background: 'transparent !important',
-            padding: '10px 12px',
+            padding: '10px 14px',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -178,22 +175,22 @@ export const chatCssSelectors = {
     },
     '.tool-call-indicator-summary:hover': {
         style: {
-            backgroundColor: 'var(--md-surface-hover) !important',
+            backgroundColor: 'var(--md-surface-active) !important',
         },
     },
     '.tool-call-expanded-content': {
         style: {
             borderTop: '1px solid var(--md-border-color)',
             padding: '12px',
-            backgroundColor: 'var(--md-surface-container-lowest)',
+            backgroundColor: 'var(--md-surface)',
         },
     },
     '.retro-tool-call-content': {
         style: {
-            backgroundColor: 'var(--md-surface-container) !important',
+            backgroundColor: 'var(--md-surface-hover) !important',
             border: 'none !important',
-            borderRadius: '6px !important',
-            fontFamily: '"IBM Plex Mono", monospace !important',
+            borderRadius: '8px !important',
+            fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace !important',
             fontSize: '12px !important',
             padding: '12px !important',
             margin: '8px 0 !important',
@@ -208,30 +205,29 @@ export const chatCssSelectors = {
             fontWeight: '500',
         },
     },
-    // Status text (second span)
     '.tool-call-header-text:nth-of-type(2)': {
         style: {
             fontSize: '10px !important',
             fontWeight: '600',
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
-            backgroundColor: 'var(--md-surface-container-high)',
+            backgroundColor: 'var(--md-surface-active)',
             color: 'var(--md-on-surface) !important',
             padding: '2px 8px',
             borderRadius: '999px',
-            border: '1px solid var(--md-outline-variant)',
+            border: 'none',
         },
     },
     '.tool-call-indicator-summary-icon': {
         style: {
-            color: 'var(--md-primary) !important',
+            color: 'var(--md-on-surface-variant) !important',
             display: 'flex',
             alignItems: 'center',
         },
     },
     '.tool-call-indicator-summary-icon .iconify': {
         style: {
-            color: 'var(--md-primary) !important',
+            color: 'var(--md-on-surface-variant) !important',
         },
     },
     '.cm-actions-user': {

@@ -1,5 +1,5 @@
 const SidebarPopoverButtonConfig = {
-    class: 'justify-start font-light !normal-case',
+    class: 'justify-start font-normal !normal-case border-0',
     variant: 'ghost',
     size: 'sm',
     ui: {
@@ -8,56 +8,48 @@ const SidebarPopoverButtonConfig = {
 };
 
 export const sidebarOverrides = {
-    /* --- core --- */
-
-    // Note: border for chat containers is applied via CSS selector below to avoid duplicate class merges
-
-    /* --- Sidebar header --- */
     'div#sidebar.header:collapsed': {
-        class: 'w-[63px]!',
+        class: 'w-[64px]!',
     },
     'button[data-id="sidebar.filter"]': {
-        class: 'shadow',
+        class: 'border-0',
     },
     'button#sidebar.filter-item': SidebarPopoverButtonConfig,
 
     'input#sidebar.search': {
         ui: {
-            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)] shadow text-[14px]! h-[40px]!',
+            base: 'border-0 rounded-xl bg-[var(--md-surface-hover)] hover:bg-[var(--md-surface-active)] ring-0! focus:ring-0 text-[14px]! h-[36px]!',
         },
     },
     'selectmenu#sidebar.project-select': {
-        class: 'h-[40px] rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] ring-0 data-[state=open]:ring-1! data-[state=open]:bg-[var(--md-surface-hover)]! w-full cursor-pointer',
+        class: 'h-[36px] rounded-xl border-0 ring-0 data-[state=open]:bg-[var(--md-surface-hover)]! w-full cursor-pointer',
         ui: {
-            base: 'text-[16px]!',
-            value: 'text-[16px]!',
-            placeholder: 'text-[16px]!',
+            base: 'text-[14px]!',
+            value: 'text-[14px]!',
+            placeholder: 'text-[14px]!',
             content:
-                'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[16px]!',
+                'ring-0! border-0! rounded-xl bg-[var(--md-surface)] shadow-lg text-[14px]!',
         },
         searchInput: {
             ui: {
-                base: 'text-[14px]! rounded-none rounded-t-[var(--md-border-radius)]!',
+                base: 'text-[14px]! rounded-none rounded-t-xl!',
             },
         },
     },
 
-    /* --- Sidenav content --- */
-
-    // Sidebar item buttons
+    // Sidebar item buttons: ChatGPT style - clean, minimal, rounded
     'button#ui.glass-button': {
-        activeClass: 'bg-blue-500',
-        class: 'font-[IBM_Plex_Sans] text-[12px] font-light border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)]/30 text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] backdrop-blur',
+        activeClass: 'bg-[var(--md-surface-active)]',
+        class: 'text-[14px] font-normal border-0 rounded-[10px] bg-transparent text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
     },
     'div#sidebar.project-group-container': {
-        class: 'font-[IBM_Plex_Sans] text-[12px] font-light border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)]/30 text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] backdrop-blur',
+        class: 'text-[14px] font-normal border-0 rounded-[10px] bg-transparent text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
     },
     'button#sidebar.new-chat': {
-        variant: 'solid',
-        color: 'primary',
+        variant: 'ghost',
+        class: 'text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! border-0! rounded-[10px]',
     },
 
-    //Sidebar popover buttons for threads, documents, projects
     'button#sidebar.thread-rename': SidebarPopoverButtonConfig,
     'button#sidebar.thread-add-to-project': SidebarPopoverButtonConfig,
     'button#sidebar.thread-delete': SidebarPopoverButtonConfig,
@@ -70,122 +62,176 @@ export const sidebarOverrides = {
     'button#sidebar.project-delete': SidebarPopoverButtonConfig,
     'button#sidebar.project-extra-action': SidebarPopoverButtonConfig,
 
-    /* --- Sidebar bottom nav buttons --- */
+    /* --- Bottom nav buttons: clean, borderless --- */
     'button#sidebar.bottom-nav.info': {
-        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] hover:bg-[var(--md-info-hover)]! active:bg-[var(--md-info-active)]!',
+        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
     },
     'button#sidebar.bottom-nav.connect': {
-        variant: 'outline',
-        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[color:var(--md-on-surface)]! transition-colors duration-150',
+        variant: 'ghost',
+        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 border-0! rounded-xl text-[var(--md-on-surface-variant)]! transition-colors duration-150',
     },
     'button#sidebar.bottom-nav.connect:connected': {
-        class: 'border-[var(--md-success)]/60! bg-[var(--md-success)]/20 hover:border-[color:var(--md-error)]! hover:bg-[var(--md-error)]/30! active:bg-[var(--md-error)]/40! text-[color:var(--md-on-surface)]',
+        class: 'bg-[var(--md-success)]/10 text-[var(--md-success)]! hover:bg-[var(--md-error)]/10! hover:text-[var(--md-error)]!',
     },
     'button#sidebar.bottom-nav.connect:disconnected': {
-        class: 'hover:bg-[var(--md-success)]/15! active:bg-[var(--md-success)]/25',
+        class: 'hover:bg-[var(--md-success)]/10!',
     },
 
-    // SSR Auth button (Clerk sign-in/account) - PRIMARY CTA
-    // Uses subtle primary tint to draw attention as main action
     'button#sidebar.bottom-nav.auth': {
-        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-[var(--md-primary)]/8 border-[length:var(--md-border-width)] border-[color:var(--md-primary)]/30 rounded-[var(--md-border-radius)] text-[var(--md-primary)] hover:bg-[var(--md-primary)]/15! hover:border-[color:var(--md-primary)]/50! active:bg-[var(--md-primary)]/25!',
+        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
     },
 
-    // Dashboard button - SECONDARY action (neutral styling)
     'button#sidebar.bottom-nav.dashboard': {
-        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)]/70 hover:bg-[var(--md-surface-hover)]! hover:text-[var(--md-on-surface)]! active:bg-[var(--md-surface-active)]!',
+        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
     },
 
     'button#sidebar.bottom-nav.activity': SidebarPopoverButtonConfig,
-
     'button#sidebar.bottom-nav.credits': SidebarPopoverButtonConfig,
 
-    /* --- Notification panel actions --- */
+    /* --- Notification panel --- */
     'button#notifications.mark-all-read': {
-        class: 'w-fit',
+        class: 'w-fit border-0',
         size: 'xs',
     },
     'button#notifications.clear-all': {
         size: 'xs',
+        class: 'border-0',
     },
     'button#notifications.clear.cancel': {
-        class: 'w-fit',
+        class: 'w-fit border-0',
         size: 'xs',
         ui: {
             base: 'px-[10px]! min-w-0!',
         },
     },
     'button#notifications.clear.confirm': {
-        class: 'w-fit',
+        class: 'w-fit border-0',
         size: 'xs',
         ui: {
             base: 'px-[10px]! min-w-0!',
         },
     },
 
-    /* --- Collapsed sidebar buttons --- */
+    /* --- Collapsed sidebar --- */
     'button#sidebar.collapsed-page': {
         ui: {
-            base: 'h-[48px] w-[48px] bg-transparent hover:bg-[var(--md-surface-hover)] hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] text-[var(--md-on-surface)]',
-            leadingIcon: 'w-6 h-6',
+            base: 'h-[40px] w-[40px] flex items-center justify-center bg-transparent hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 text-[var(--md-on-surface)] rounded-xl p-0!',
+            leadingIcon: 'w-5 h-5',
         },
     },
     'button#sidebar.collapsed-page:active': {
         ui: {
-            base: 'h-[48px] w-[48px] bg-[var(--md-surface-active)] ring-1 ring-[var(--md-primary-border)]/20 hover:ring-1 hover:ring-[var(--md-primary-border)]/50 hover:bg-[var(--md-surface-active)]  text-[var(--md-on-surface)]',
-            leadingIcon: 'w-6 h-6',
+            base: 'h-[40px] w-[40px] flex items-center justify-center bg-[var(--md-surface-active)] hover:bg-[var(--md-surface-active)] border-0 text-[var(--md-on-surface)] rounded-xl p-0!',
+            leadingIcon: 'w-5 h-5',
         },
     },
 };
 
 export const sidebarCssSelectors = {
-    // Sidebar container border
+    // No border on sidebar - ChatGPT style
     '#sidebar-container-outer': {
         style: {
-            borderRight: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRight: 'none',
+            backgroundColor: 'var(--md-surface-variant)',
         },
     },
     '.sidenav-header-separator': {
         style: {
-            borderBottom: 'var(--md-border-width) solid var(--md-border-color)',
+            borderBottom: 'none',
         },
     },
     '.hud-button': {
         style: {
-            background:
-                'color-mix(in srgb, var(--md-surface) 30%, transparent)',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            borderRadius: 'var(--md-border-radius)',
-            boxShadow:
-                '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+            background: 'transparent',
+            border: 'none',
+            borderRadius: '10px',
+            boxShadow: 'none',
         },
     },
     '#top-header': {
         style: {
-            backgroundColor: 'var(--md-surface)',
+            backgroundColor: 'var(--md-surface-variant)',
         },
     },
     '.sidebar-section-heading': {
         style: {
-            fontFamily:
-                '"IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important',
-            fontSize: '18px',
-            fontWeight: '700',
+            fontSize: '12px',
+            fontWeight: '600',
             textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            color: 'var(--md-on-surface)/70%',
+            letterSpacing: '0.06em',
+            color: 'var(--md-on-surface-variant)',
         },
     },
     '#nav-top-section .iconify': {
         style: {
-            fontSize: '25px !important',
+            fontSize: '20px !important',
+            width: '20px',
+            height: '20px',
+        },
+    },
+    '#nav-collapsed-container .iconify': {
+        style: {
+            fontSize: '20px !important',
+            width: '20px',
+            height: '20px',
         },
     },
     '#nav-collapsed-container': {
         style: {
             minWidth: '64px !important',
             maxWidth: '64px !important',
-            borderRight: 'var(--md-border-width) solid var(--md-border-color)',
+            width: '64px !important',
+            borderRight: 'none',
+            backgroundColor: 'var(--md-surface-variant)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+        },
+    },
+    // Fix the wrapper width set by PageShell on the collapsed slot
+    '#sidebar-content-collapsed': {
+        style: {
+            width: '64px !important',
+            minWidth: '64px !important',
+            maxWidth: '64px !important',
+        },
+    },
+    // Bottom nav: match rail width and center contents
+    '.bottomnav-root': {
+        style: {
+            width: '64px !important',
+            borderTop: 'none',
+            paddingBottom: '8px',
+            paddingTop: '4px',
+        },
+    },
+    // Page buttons section: center within the 64px rail
+    '#nav-pages-section': {
+        style: {
+            borderTop: 'none',
+            alignItems: 'center',
+        },
+    },
+    // Top section buttons: center within the 64px rail
+    '#nav-top-section': {
+        style: {
+            alignItems: 'center',
+            paddingLeft: '0',
+            paddingRight: '0',
+        },
+    },
+    '#nav-top-section .new-chat-wrapper': {
+        style: {
+            paddingRight: '0',
+            justifyContent: 'center',
+        },
+    },
+    // Footer section: center
+    '#nav-footer-section': {
+        style: {
+            alignItems: 'center',
+            paddingLeft: '0',
+            paddingRight: '0',
         },
     },
 };

@@ -1,7 +1,7 @@
 /**
  * Blank Theme
  *
- * Minimal baseline theme for clean UI experiments and low-noise previews.
+ * ChatGPT-inspired clean minimal theme.
  */
 
 import { defineTheme } from '../_shared/define-theme';
@@ -13,107 +13,104 @@ import { documentsOverrides, documentsStyles } from './styles/documents';
 export default defineTheme({
     name: 'blank',
     displayName: 'Blank theme',
-    description: 'Minimalist blank theme with clean and simple design',
+    description: 'ChatGPT-inspired clean minimal theme',
     isDefault: false,
 
-    borderWidth: '1px',
-    borderRadius: '12px',
-        stylesheets: ['~/theme/blank/styles.css'],
-            customComponents: {
+    borderWidth: '0px',
+    borderRadius: '10px',
+    stylesheets: ['~/theme/blank/styles.css'],
+    customComponents: {
         'chat-input': './components/ChatInput.vue',
     },
-    // Material Design 3 color palette for retro theme
-    // These will generate CSS variables for both light and dark modes
     colors: {
-        // Primary colors
-        primary: '#086DB8',
-        primaryTint: '#2A8FD6',
-        primaryShade: '#064F89',
+        // Primary: near-black like ChatGPT
+        primary: '#0d0d0d',
+        primaryTint: '#333333',
+        primaryShade: '#000000',
         onPrimary: '#ffffff',
-        primaryContainer: '#1d1f20ff',
-        onPrimaryContainer: '#002020',
-        primaryBorder: '#0A5D99',
-        primaryHover: '#0A7FD1',
-        primaryActive: '#075A8F',
+        primaryContainer: '#f0f0f0',
+        onPrimaryContainer: '#0d0d0d',
+        primaryBorder: '#e5e5e5',
+        primaryHover: '#1a1a1a',
+        primaryActive: '#000000',
 
-        // Secondary colors
-        secondary: '#ff6b6b',
+        // Secondary: muted gray
+        secondary: '#8f8f8f',
         onSecondary: '#ffffff',
-        secondaryContainer: '#ffd7d7',
-        onSecondaryContainer: '#410002',
+        secondaryContainer: '#f0f0f0',
+        onSecondaryContainer: '#333333',
 
-        // Tertiary colors
-        tertiary: '#ffe66d',
-        onTertiary: '#000000',
-        tertiaryContainer: '#fff9c4',
-        onTertiaryContainer: '#1f1b00',
+        // Tertiary
+        tertiary: '#0d0d0d',
+        onTertiary: '#ffffff',
+        tertiaryContainer: '#e8e8e8',
+        onTertiaryContainer: '#1a1a1a',
 
-        // Surface colors
+        // Surface: white base, light gray variants
         surface: '#ffffff',
-        surfaceHover: '#F2F7FC',
-        surfaceActive: '#EBF3FB',
-        onSurface: '#022344',
-        surfaceVariant: '#ffffff',
-        onSurfaceVariant: '#43474e',
-        inverseSurface: '#2f3033',
-        inverseOnSurface: '#f1f0f4',
+        surfaceHover: '#f5f5f5',
+        surfaceActive: '#ececec',
+        onSurface: '#0d0d0d',
+        surfaceVariant: '#f9f9f9',
+        onSurfaceVariant: '#666666',
+        inverseSurface: '#0d0d0d',
+        inverseOnSurface: '#ffffff',
 
         // Outline & borders
-        outline: '#73777f',
+        outline: '#d9d9d9',
         borderColor: '#e5e5e5',
 
-        // Semantic colors
-        success: '#51cf66',
-        warning: '#ffa94d',
-        error: '#ff6b6b',
-        errorHover: '#ff8787',
-        errorActive: '#ff4d4d',
-        info: '#E8F1F8',
-        infoHover: '#DCEAF4',
-        infoActive: '#C6DDEE',
-        onInfo: '#000000',
+        // Semantic
+        success: '#10a37f',
+        warning: '#f59e0b',
+        error: '#ef4444',
+        errorHover: '#dc2626',
+        errorActive: '#b91c1c',
+        info: '#f7f7f8',
+        infoHover: '#ececed',
+        infoActive: '#e3e3e4',
+        onInfo: '#0d0d0d',
 
-        // Dark mode overrides
         dark: {
-            primary: '#2C638B',
-            primaryTint: '#4E8FBC',
-            primaryShade: '#204968',
-            onPrimary: '#FFFFFF',
-            primaryContainer: '#00504e',
-            onPrimaryContainer: '#b2f5ea',
-            primaryBorder: '#234E6D',
-            primaryHover: '#3978A4',
-            primaryActive: '#234C67',
+            primary: '#ffffff',
+            primaryTint: '#e0e0e0',
+            primaryShade: '#cccccc',
+            onPrimary: '#0d0d0d',
+            primaryContainer: '#2f2f2f',
+            onPrimaryContainer: '#e0e0e0',
+            primaryBorder: '#424242',
+            primaryHover: '#e0e0e0',
+            primaryActive: '#cccccc',
 
-            secondary: '#ffb3b3',
-            onSecondary: '#5f1314',
-            secondaryContainer: '#7d1f20',
-            onSecondaryContainer: '#ffd7d7',
+            secondary: '#9e9e9e',
+            onSecondary: '#0d0d0d',
+            secondaryContainer: '#424242',
+            onSecondaryContainer: '#e0e0e0',
 
-            tertiary: '#ffe66d',
-            onTertiary: '#3a3000',
-            tertiaryContainer: '#554600',
-            onTertiaryContainer: '#fff9c4',
+            tertiary: '#ffffff',
+            onTertiary: '#0d0d0d',
+            tertiaryContainer: '#424242',
+            onTertiaryContainer: '#e0e0e0',
 
-            surface: '#000000',
-            surfaceHover: '#172332',
-            surfaceActive: '#223344',
-            onSurface: '#e2e2e6',
-            surfaceVariant: '#000000',
-            onSurfaceVariant: '#c3c7cf',
-            inverseSurface: '#e2e2e6',
-            inverseOnSurface: '#2f3033',
+            surface: '#212121',
+            surfaceHover: '#2f2f2f',
+            surfaceActive: '#383838',
+            onSurface: '#ececec',
+            surfaceVariant: '#171717',
+            onSurfaceVariant: '#b0b0b0',
+            inverseSurface: '#ececec',
+            inverseOnSurface: '#212121',
 
-            outline: '#8d9199',
-            borderColor: '#3A4A57',
+            outline: '#555555',
+            borderColor: '#424242',
 
-            info: '#111417',
-            infoHover: '#1A1F23',
-            infoActive: '#0C0E10',
-            onInfo: '#DDE3E8',
-            success: '#51cf66',
-            warning: '#ffa94d',
-            error: '#ffb3b3',
+            info: '#2f2f2f',
+            infoHover: '#383838',
+            infoActive: '#424242',
+            onInfo: '#e0e0e0',
+            success: '#10a37f',
+            warning: '#f59e0b',
+            error: '#ef4444',
         },
     },
 
@@ -121,52 +118,50 @@ export default defineTheme({
         content: {
             base: { color: 'var(--md-surface)' },
         },
-        sidebar: {},
+        sidebar: { color: 'var(--md-surface-variant)' },
     },
 
     fonts: {
-        sans: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
-        heading: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+        sans: 'ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif',
+        heading:
+            'ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif',
         baseSize: '16px',
         baseWeight: '400',
     },
 
-    // Component overrides using the new selector syntax
-    // These provide default styling for all retro-themed components
     overrides: {
         formField: {
             ui: {
                 base: 'flex flex-col',
-                label: 'text-xs font-light px-1 text-[var(--md-on-surface)]/70 -mb-0.5!',
+                label: 'text-xs font-medium px-1 text-[var(--md-on-surface)]/70 -mb-0.5!',
                 help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
             },
         },
-        // Global input overrides
         input: {
             ui: {
-                root: 'font-[IBM_Plex_Sans]!',
+                root: '',
                 variants: {
                     variant: {
                         outline:
-                            'text-highlighted bg-default ring-0 focus-visible:ring-1 focus-visible:ring-[color:var(--md-primary)]',
+                            'text-highlighted bg-default ring-0 border-[color:var(--md-border-color)] focus-visible:ring-1 focus-visible:ring-[color:var(--md-on-surface)]/20',
                     },
                     size: {
-                        sm: { base: 'h-[32px] text-[12px]!' },
-                        md: { base: 'h-[40px] text-[14px]!' },
-                        lg: { base: 'h-[48px] text-[16px]!' },
+                        sm: { base: 'h-[32px] text-[13px]!' },
+                        md: { base: 'h-[36px] text-[14px]!' },
+                        lg: { base: 'h-[44px] text-[16px]!' },
                     },
                 },
             },
         },
         selectmenu: {
             ui: {
-                base: 'text-[15px] leading-[20px]',
-                value: 'text-[15px]',
-                placeholder: 'text-[15px]',
-                label: 'text-[15px]',
-                item: 'text-[15px]',
-                itemLabel: 'text-[15px]',
-                content: 'text-[15px]',
+                base: 'text-[14px] leading-[20px]',
+                value: 'text-[14px]',
+                placeholder: 'text-[14px]',
+                label: 'text-[14px]',
+                item: 'text-[14px]',
+                itemLabel: 'text-[14px]',
+                content: 'text-[14px]',
             },
         },
 
@@ -175,8 +170,6 @@ export default defineTheme({
         ...dashboardOverrides,
         ...documentsOverrides,
     },
-    // CSS Selectors for direct DOM targeting
-    // These target elements that can't easily be integrated with the component override system
     cssSelectors: {
         ...sidebarCssSelectors,
         ...chatCssSelectors,
@@ -190,8 +183,14 @@ export default defineTheme({
         '#top-header .theme-btn': {
             style: {
                 border: 'none !important',
-                minHeight: '24px',
-                minWidth: '24px',
+                minHeight: '36px',
+                minWidth: '36px',
+            },
+        },
+        '#top-nav .theme-btn .iconify': {
+            style: {
+                width: '20px',
+                height: '20px',
             },
         },
     },
