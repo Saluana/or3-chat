@@ -111,4 +111,24 @@ describe('sync schemas', () => {
 
         expect(parsed.success).toBe(true);
     });
+
+    it('accepts PushResult webhook emission metadata fields', () => {
+        const parsed = PushResultSchema.safeParse({
+            results: [
+                {
+                    opId: 'op-2',
+                    success: true,
+                    serverVersion: 43,
+                    tableName: 'threads',
+                    operation: 'put',
+                    payload: { id: 'thread-1', title: 'Renamed' },
+                    wasExisting: true,
+                    applied: true,
+                },
+            ],
+            serverVersion: 43,
+        });
+
+        expect(parsed.success).toBe(true);
+    });
 });

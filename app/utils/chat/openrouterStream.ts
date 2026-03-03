@@ -143,6 +143,8 @@ export async function* openRouterStream(params: {
     model: string;
     orMessages: ORMessage[];
     modalities: string[];
+    threadId?: string;
+    messageId?: string;
     tools?: ToolDefinition[];
     toolChoice?: ToolChoice;
     signal?: AbortSignal;
@@ -172,6 +174,13 @@ export async function* openRouterStream(params: {
         modalities,
         stream: true,
     };
+
+    if (params.threadId) {
+        body._threadId = params.threadId;
+    }
+    if (params.messageId) {
+        body._messageId = params.messageId;
+    }
 
     if (params.reasoning) {
         body.reasoning = params.reasoning;

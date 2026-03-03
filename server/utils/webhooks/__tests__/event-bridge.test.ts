@@ -158,7 +158,7 @@ describe('webhook event bridge', () => {
         expect(harness.enqueue).toHaveBeenCalledTimes(2);
     });
 
-    it('skips repeated empty lookups after learning an event has no subscriptions', async () => {
+    it('re-checks curated event subscriptions on every emission', async () => {
         const harness = createTestHarness();
         const bridge = createWebhookEventBridge(
             harness.store,
@@ -177,11 +177,11 @@ describe('webhook event bridge', () => {
             workspace_id: 'ws-1',
         });
 
-        expect(harness.listByEvent).toHaveBeenCalledTimes(1);
+        expect(harness.listByEvent).toHaveBeenCalledTimes(2);
         expect(harness.enqueue).not.toHaveBeenCalled();
     });
 
-    it('does not reuse empty lookup cache entries across workspaces', async () => {
+    it('queries each workspace-specific event emission independently', async () => {
         const harness = createTestHarness();
         const bridge = createWebhookEventBridge(
             harness.store,

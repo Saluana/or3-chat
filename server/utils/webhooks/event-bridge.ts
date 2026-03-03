@@ -6,9 +6,12 @@ import type { WebhookStore } from './store/types';
 export const USER_HOOK_TO_EVENT_MAP: Record<string, string> = {
     'db.threads.create:action:after': 'thread.created',
     'db.threads.update:action:after': 'thread.updated',
+    'db.threads.upsert:action:after': 'thread.updated',
     'db.threads.delete:action:soft:after': 'thread.deleted',
     'db.messages.create:action:after': 'message.created',
+    'db.messages.append:action:after': 'message.created',
     'db.messages.update:action:after': 'message.updated',
+    'db.messages.upsert:action:after': 'message.updated',
     'ai.chat.stream:action:complete': 'message.completed',
     'db.documents.create:action:after': 'document.created',
     'db.documents.update:action:after': 'document.updated',
@@ -114,36 +117,7 @@ export function createWebhookEventBridge(
     };
     const curatedUnhooks: Array<() => void> = [];
     const customUnhooks = new Map<string, () => void>();
-    const inactiveEventTypes = new Set<string>();
     let started = false;
-
-    const buildInactiveKey = (
-        scope: 'user' | 'admin',
-        eventType: string,
-        workspaceId?: string
-    ): string => `${scope}:${eventType}:${workspaceId ?? '*'}`;
-
-    const maybeSkipInactive = (
-        scope: 'user' | 'admin',
-        eventType: string,
-        workspaceId?: string
-    ): boolean => inactiveEventTypes.has(buildInactiveKey(scope, eventType, workspaceId));
-
-    const markInactive = (
-        scope: 'user' | 'admin',
-        eventType: string,
-        workspaceId?: string
-    ): void => {
-        inactiveEventTypes.add(buildInactiveKey(scope, eventType, workspaceId));
-    };
-
-    const markActive = (
-        scope: 'user' | 'admin',
-        eventType: string,
-        workspaceId?: string
-    ): void => {
-        inactiveEventTypes.delete(buildInactiveKey(scope, eventType, workspaceId));
-    };
 
     async function handleCuratedEvent(
         scope: 'user' | 'admin',
@@ -153,9 +127,6 @@ export function createWebhookEventBridge(
         const primaryPayload = args.length <= 1 ? args[0] : args;
         const workspaceId =
             extractWorkspaceId(primaryPayload) ?? extractWorkspaceIdFromArgs(args);
-        if (maybeSkipInactive(scope, eventType, workspaceId)) {
-            return;
-        }
         const webhooks = await store.listWebhooksByEvent(
             eventType,
             scope,
@@ -163,11 +134,8 @@ export function createWebhookEventBridge(
         );
 
         if (webhooks.length === 0) {
-            markInactive(scope, eventType, workspaceId);
             return;
         }
-
-        markActive(scope, eventType, workspaceId);
 
         for (const webhook of webhooks) {
             if (!webhook.enabled) {
@@ -245,7 +213,6 @@ export function createWebhookEventBridge(
             }
 
             started = true;
-            inactiveEventTypes.clear();
             registerMappedHooks(USER_HOOK_TO_EVENT_MAP, 'user');
             registerMappedHooks(ADMIN_HOOK_TO_EVENT_MAP, 'admin');
             void this.refreshCustomHookListeners();
@@ -260,12 +227,9 @@ export function createWebhookEventBridge(
                 unhook();
             }
             customUnhooks.clear();
-            inactiveEventTypes.clear();
         },
 
         async refreshCustomHookListeners() {
-            inactiveEventTypes.clear();
-
             const nextHooks = new Set(await store.listActiveCustomHookNames());
             for (const [hookName, unhook] of customUnhooks.entries()) {
                 if (!nextHooks.has(hookName)) {

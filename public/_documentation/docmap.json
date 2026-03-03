@@ -664,8 +664,8 @@
                 {
                     "name": "webhooks.md",
                     "path": "/cloud/webhooks",
-                    "category": "Reference",
-                    "summary": "Reference for OR3 user and admin webhooks. Covers the event catalogs, payload envelope, HMAC signature verification, admin custom hook subscriptions, and the webhook-specific cloud configuration surface."
+                    "category": "Guide",
+                    "summary": "Complete guide to OR3 webhooks. Covers quick-start setup, user and admin event catalogs with data shapes, payload envelope and headers, HMAC-SHA256 signature verification, a full Express.js receiver example with TypeScript, verification snippets for Python and Go, retry policy, SSRF protection, signing secret encryption, configuration reference, delivery logs, admin custom hook subscriptions, and troubleshooting."
                 },
                 {
                     "name": "or3-cloud-wizard.md",

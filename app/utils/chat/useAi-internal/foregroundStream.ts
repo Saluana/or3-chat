@@ -215,6 +215,8 @@ export async function runForegroundStreamLoop(
                 typeof openRouterStream
             >[0]['orMessages'],
             modalities: ctx.modalities,
+            threadId: ctx.threadId,
+            messageId: ctx.assistantId,
             tools: ctx.tools,
             signal: ctx.abortSignal,
         });
