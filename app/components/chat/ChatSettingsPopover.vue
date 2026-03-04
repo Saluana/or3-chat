@@ -32,7 +32,7 @@
         <div
             class="chat-settings-switch flex justify-between w-full items-center py-1 px-3 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
         >
-            <USwitch v-bind="thinkingSwitchProps" class="w-full"></USwitch>
+            <USwitch v-bind="thinkingSwitchProps" class="w-full" v-model="thinkingEnabled"></USwitch>
             <UIcon :name="useIcon('chat.reasoning').value" class="w-5 h-5" />
         </div>
 
@@ -168,6 +168,7 @@ const props = defineProps<{
     containerWidth?: number;
     loading?: boolean;
     streaming?: boolean;
+    thinkingSupported?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -270,6 +271,7 @@ function getCategorySubtitle(category: string) {
 // These will be provided by the parent component via v-model
 const selectedModel = defineModel<string>('model');
 const webSearchEnabled = defineModel<boolean>('webSearchEnabled');
+const thinkingEnabled = defineModel<boolean>('thinkingEnabled');
 
 const iconChevronRight = useIcon('ui.chevron.right');
 const iconChevronDown = useIcon('ui.chevron.down');
@@ -327,6 +329,7 @@ const thinkingSwitchProps = computed(() => {
         color: 'primary' as const,
         size: 'sm' as const,
         label: 'Enable thinking',
+        disabled: props.thinkingSupported === false,
         ...overrides.value,
     };
 });

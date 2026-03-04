@@ -611,6 +611,7 @@ type ChatInputSendPayload = {
         size: '1024x1024' | '1024x1536' | '1536x1024';
     };
     webSearchEnabled: boolean;
+    thinkingEnabled: boolean;
 };
 
 function onSend(payload: ChatInputSendPayload) {
@@ -677,6 +678,7 @@ function onSend(payload: ChatInputSendPayload) {
             file_hashes,
             extraTextParts,
             online: !!payload.webSearchEnabled,
+            thinking: !!payload.thinkingEnabled,
             context_hashes,
         })
         ?.then(() => {

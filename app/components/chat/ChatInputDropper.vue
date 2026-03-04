@@ -87,9 +87,13 @@
                                         :container-width="containerWidth"
                                         :loading="loading"
                                         :streaming="props.streaming"
+                                        :thinking-supported="modelSupportsThinking"
                                         v-model:model="selectedModel"
                                         v-model:web-search-enabled="
                                             webSearchEnabled
+                                        "
+                                        v-model:thinking-enabled="
+                                            thinkingEnabled
                                         "
                                         @open-system-prompts="
                                             showSystemPrompts = true
@@ -379,9 +383,10 @@ const iconStop = useIcon('chat.stop');
 const iconUpload = useIcon('chat.upload');
 const iconClose = useIcon('ui.close');
 
-const { favoriteModels, getFavoriteModels } = useModelStore();
+const { favoriteModels, getFavoriteModels, catalog } = useModelStore();
 const { settings: aiSettings } = useAiSettings();
 const webSearchEnabled = ref<boolean>(false);
+const thinkingEnabled = ref<boolean>(false);
 const LAST_MODEL_KEY = 'last_selected_model';
 const runtimeConfig = useRuntimeConfig();
 const openRouterConfig = computed(() => runtimeConfig.public?.openRouter ?? {});
@@ -550,6 +555,7 @@ const emit = defineEmits<{
             model: string;
             settings: ImageSettings;
             webSearchEnabled: boolean;
+            thinkingEnabled: boolean;
         }
     ): void;
     (e: 'prompt-change', value: string): void;
@@ -758,6 +764,34 @@ const {
 });
 
 const selectedModel = ref<string>('openai/gpt-oss-120b');
+
+const modelSupportsThinking = computed(() => {
+    const selected = selectedModel.value;
+    if (!selected) return false;
+    const baseModel = selected.endsWith(':thinking')
+        ? selected.slice(0, -':thinking'.length)
+        : selected;
+
+    const model =
+        catalog.value.find((item) => item.id === baseModel) ||
+        favoriteModels.value.find((item) => item.id === baseModel);
+    const supported = Array.isArray(model?.supported_parameters)
+        ? model.supported_parameters
+        : [];
+
+    return supported.some(
+        (parameter) =>
+            parameter === 'reasoning' ||
+            parameter.startsWith('reasoning.') ||
+            parameter === 'thinking'
+    );
+});
+
+watch(modelSupportsThinking, (supported) => {
+    if (!supported && thinkingEnabled.value) {
+        thinkingEnabled.value = false;
+    }
+});
 // hiddenFileInput removed
 // hiddenFileInputListener removed
 const imageSettings = ref<ImageSettings>({
@@ -936,6 +970,8 @@ const handleSend = async () => {
             model: selectedModel.value,
             settings: imageSettings.value,
             webSearchEnabled: webSearchEnabled.value,
+            thinkingEnabled:
+                thinkingEnabled.value && modelSupportsThinking.value,
         });
         // Reset local state and editor content so placeholder shows again
         promptText.value = '';

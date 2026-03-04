@@ -41,6 +41,7 @@ type ChatInputSendPayload = {
     model: string;
     settings: ImageSettings;
     webSearchEnabled: boolean;
+    thinkingEnabled: boolean;
 };
 
 type ResizePayload = {

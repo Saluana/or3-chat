@@ -38,6 +38,13 @@ type ORMessage = {
     [key: string]: unknown;
 };
 
+export type OpenRouterReasoningConfig = {
+    effort?: 'low' | 'medium' | 'high';
+    enabled?: boolean;
+    max_tokens?: number;
+    exclude?: boolean;
+};
+
 interface ServerRouteCacheEntry {
     available: boolean;
     timestamp: number;
@@ -48,7 +55,7 @@ type OpenRouterRequestBody = {
     messages: ORMessage[];
     modalities: string[];
     stream: true;
-    reasoning?: unknown;
+    reasoning?: OpenRouterReasoningConfig;
     tools?: ToolDefinition[];
     tool_choice?: ToolChoice;
     _background?: true;
@@ -148,7 +155,7 @@ export async function* openRouterStream(params: {
     tools?: ToolDefinition[];
     toolChoice?: ToolChoice;
     signal?: AbortSignal;
-    reasoning?: unknown;
+    reasoning?: OpenRouterReasoningConfig;
 }): AsyncGenerator<ORStreamEvent, void, unknown> {
     const { apiKey, model, orMessages, modalities, tools, signal } = params;
     const hasApiKey = Boolean(apiKey);
@@ -442,7 +449,7 @@ export async function startBackgroundStream(params: {
     modalities: string[];
     threadId: string;
     messageId: string;
-    reasoning?: unknown;
+    reasoning?: OpenRouterReasoningConfig;
     tools?: ToolDefinition[];
     toolChoice?: ToolChoice;
     toolRuntime?: Record<string, string>;
