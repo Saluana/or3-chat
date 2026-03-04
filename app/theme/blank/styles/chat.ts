@@ -30,7 +30,7 @@ export const chatOverrides = {
     'button#chat.stop': {
         variant: 'solid',
         color: 'error',
-        class: 'rounded-full! border-0!',
+        class: 'flex items-center justify-center rounded-full! border-0!',
     },
     'div#chat.editor': {
         class: 'text-[16px]',

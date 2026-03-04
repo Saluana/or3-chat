@@ -311,6 +311,83 @@ describe('sqlite webhook store', () => {
         });
     });
 
+
+    it('supports explicit null clearing in delivery log updates', async () => {
+        const { store } = createTestContext();
+        const webhook = await store.createWebhook(createWebhookInput());
+
+        const created = await store.createDeliveryLog(
+            createDeliveryLogInput(webhook.id, {
+                status: 'in_flight',
+                claimed_by: 'worker-a',
+                claimed_at: Date.now(),
+                http_status: 500,
+                error_message: 'boom',
+                response_body: 'failed',
+                duration_ms: 123,
+                next_retry_at: Date.now() + 60_000,
+            })
+        );
+
+        await store.updateDeliveryLog(created.id, {
+            status: 'success',
+            http_status: null,
+            error_message: null,
+            response_body: null,
+            duration_ms: null,
+            next_retry_at: null,
+        });
+
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(log).toMatchObject({
+            status: 'success',
+            claimed_by: null,
+            claimed_at: null,
+            http_status: null,
+            error_message: null,
+            response_body: null,
+            duration_ms: null,
+            next_retry_at: null,
+        });
+    });
+
+    it('returns only recent terminal deliveries for health windows', async () => {
+        const { store } = createTestContext();
+        const webhook = await store.createWebhook(createWebhookInput());
+
+        await store.createDeliveryLog(
+            createDeliveryLogInput(webhook.id, {
+                status: 'pending',
+                created_at: 10,
+            })
+        );
+        await store.createDeliveryLog(
+            createDeliveryLogInput(webhook.id, {
+                status: 'success',
+                created_at: 20,
+            })
+        );
+        await store.createDeliveryLog(
+            createDeliveryLogInput(webhook.id, {
+                status: 'failed',
+                created_at: 30,
+            })
+        );
+        await store.createDeliveryLog(
+            createDeliveryLogInput(webhook.id, {
+                status: 'success',
+                created_at: 40,
+            })
+        );
+
+        const logs = await store.getRecentTerminalDeliveries(webhook.id, 2);
+        expect(logs).toHaveLength(2);
+        expect(logs.map((log) => [log.status, log.created_at])).toEqual([
+            ['success', 40],
+            ['failed', 30],
+        ]);
+    });
+
     it('cancels and deletes logs by webhook and purges expired rows', async () => {
         const { store } = createTestContext();
         const webhookA = await store.createWebhook(createWebhookInput());

@@ -57,6 +57,7 @@ export interface WebhookDispatcherConfig {
     batchSize?: number;
     pollIntervalMs?: number;
     reaperIntervalMs?: number;
+    deliveryConcurrency?: number;
     fetchImpl?: DispatchingFetch;
 }
 
@@ -114,17 +115,13 @@ async function recalculateWebhookHealth(
     store: WebhookStore,
     webhookId: string
 ): Promise<void> {
-    const logs = await store.getDeliveryLogs(webhookId, 0);
-    const recentTerminal = logs.filter(
-        (log) => log.status === 'success' || log.status === 'failed'
-    );
+    const lastThree = await store.getRecentTerminalDeliveries(webhookId, 3);
 
-    if (recentTerminal.length === 0) {
+    if (lastThree.length === 0) {
         await store.updateWebhookHealth(webhookId, 'unknown');
         return;
     }
 
-    const lastThree = recentTerminal.slice(0, 3);
     if (lastThree.some((log) => log.status === 'failed')) {
         await store.updateWebhookHealth(webhookId, 'failing');
         return;
@@ -166,6 +163,10 @@ export function createWebhookDispatcher(
     const reaperIntervalMs = Math.max(
         1000,
         Math.floor(config.reaperIntervalMs ?? DEFAULT_REAPER_INTERVAL_MS)
+    );
+    const deliveryConcurrency = Math.max(
+        1,
+        Math.floor(config.deliveryConcurrency ?? 4)
     );
     const fetchImpl: DispatchingFetch =
         config.fetchImpl ??
@@ -343,8 +344,24 @@ export function createWebhookDispatcher(
                 config.rateLimitPerMinute
             );
             if (!rateLimit.allowed) {
+                await store.createDeliveryLog({
+                    webhook_id: job.webhookId,
+                    event_id: job.eventId,
+                    event_type: job.eventType,
+                    attempt: 1,
+                    status: 'cancelled',
+                    claimed_by: null,
+                    claimed_at: null,
+                    http_status: null,
+                    error_message: `Rate limit exceeded. Retry after ${new Date(rateLimit.resetAt).toISOString()}`,
+                    request_payload: JSON.stringify(job.payload),
+                    response_body: null,
+                    duration_ms: null,
+                    next_retry_at: rateLimit.resetAt,
+                    created_at: Date.now(),
+                });
                 console.warn(
-                    `[webhooks] Dropped event ${job.eventType} for webhook ${job.webhookId} due to rate limiting`
+                    `[webhooks] Rate-limited event ${job.eventType} for webhook ${job.webhookId}`
                 );
                 return;
             }
@@ -375,9 +392,15 @@ export function createWebhookDispatcher(
             processing = true;
             try {
                 const claimed = await store.claimPendingDeliveries(workerId, batchSize);
-                for (const log of claimed) {
-                    await processClaimedDelivery(log);
-                }
+                const workers = Array.from(
+                    { length: Math.min(deliveryConcurrency, claimed.length) },
+                    async (_, workerIndex) => {
+                        for (let i = workerIndex; i < claimed.length; i += deliveryConcurrency) {
+                            await processClaimedDelivery(claimed[i]!);
+                        }
+                    }
+                );
+                await Promise.all(workers);
             } finally {
                 processing = false;
             }

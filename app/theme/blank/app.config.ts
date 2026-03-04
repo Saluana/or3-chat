@@ -16,14 +16,14 @@ export default {
         modal: {
             slots: {
                 overlay:
-                    'fixed inset-0 bg-black/40 backdrop-blur-sm',
+                    'fixed inset-0 bg-black/30 backdrop-blur-[1px]',
                 content:
-                    'border-0 rounded-2xl ring-0 fixed divide-y divide-[var(--md-border-color)] flex flex-col focus:outline-none shadow-xl overflow-hidden',
-                body: 'border-y-0 p-4',
-                header: 'border-none bg-[#1a1a1a] px-4! py-0 min-h-[48px] w-full justify-between flex items-center text-white!',
-                title: 'text-white font-semibold text-base!',
+                    'border border-[rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.08)] rounded-2xl ring-0 fixed divide-y-0 flex flex-col focus:outline-none shadow-[0_12px_28px_rgba(0,0,0,0.12)] overflow-hidden bg-[var(--md-surface)]',
+                body: 'p-5',
+                header: 'border-b border-[rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.1)] bg-transparent px-5! py-0 min-h-[52px] w-full justify-between flex items-center',
+                title: 'text-[var(--md-on-surface)] font-normal text-lg!',
                 description: 'hidden',
-                close: 'relative! top-auto! end-auto! flex items-center justify-center leading-none h-[32px] w-[32px] p-0 rounded-full bg-white/20! hover:bg-white/30! text-white!',
+                close: 'relative! top-auto! end-auto! flex items-center justify-center leading-none h-[36px] w-[36px] p-0 rounded-lg bg-transparent! hover:bg-[var(--md-surface-hover)]! text-[var(--md-on-surface-variant)]!',
             },
         },
         button: {
@@ -58,7 +58,7 @@ export default {
                     error: 'text-[var(--md-on-error)] hover:bg-[var(--md-error-hover)] active:bg-[var(--md-error-active)]',
                 },
                 size: {
-                    xs: { base: 'h-[24px] w-[24px] px-0! text-[13px]' },
+                    xs: { base: 'h-[24px] px-[8px]! text-[13px]' },
                     sm: {
                         base: 'h-[32px] px-[12px]! text-[14px]',
                         leadingIcon: 'shrink-0 h-4 w-4',
@@ -91,7 +91,7 @@ export default {
         },
         input: {
             slots: {
-                base: 'border-0 rounded-xl bg-[var(--md-surface-hover)] hover:bg-[var(--md-surface-active)] ring-0! focus:ring-0 dark:border dark:border-[rgba(255,255,255,0.1)]',
+                base: 'border border-[rgba(0,0,0,0.15)] rounded-xl bg-transparent hover:border-[rgba(0,0,0,0.25)] ring-0! focus:ring-0 focus:border-[rgba(0,0,0,0.3)] dark:border-[rgba(255,255,255,0.15)] dark:hover:border-[rgba(255,255,255,0.25)] dark:focus:border-[rgba(255,255,255,0.3)] dark:bg-transparent',
             },
             variants: {
                 leading: { true: 'ps-10!' },
@@ -172,7 +172,7 @@ export default {
         },
         textarea: {
             slots: {
-                base: 'border-0 rounded-xl bg-[var(--md-surface-hover)] ring-0! focus:ring-0 dark:border dark:border-[rgba(255,255,255,0.1)]',
+                base: 'border border-[rgba(0,0,0,0.15)] rounded-xl bg-transparent ring-0! focus:ring-0 focus:border-[rgba(0,0,0,0.3)] dark:border-[rgba(255,255,255,0.15)] dark:focus:border-[rgba(255,255,255,0.3)] dark:bg-transparent',
             },
         },
         selectMenu: {

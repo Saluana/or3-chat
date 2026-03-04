@@ -41,6 +41,26 @@ export interface WebhookEventBridge {
 
 type HookArgs = unknown[];
 
+const ENQUEUE_CONCURRENCY = 8;
+
+async function enqueueWithConcurrency<T>(
+    items: readonly T[],
+    limit: number,
+    worker: (item: T) => Promise<void>
+): Promise<void> {
+    const safeLimit = Math.max(1, Math.floor(limit));
+    const workers = Array.from(
+        { length: Math.min(safeLimit, items.length) },
+        async (_, workerIndex) => {
+            for (let i = workerIndex; i < items.length; i += safeLimit) {
+                await worker(items[i]!);
+            }
+        }
+    );
+
+    await Promise.all(workers);
+}
+
 function toRecord(value: unknown): Record<string, unknown> {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
         return {};
@@ -137,9 +157,9 @@ export function createWebhookEventBridge(
             return;
         }
 
-        for (const webhook of webhooks) {
+        await enqueueWithConcurrency(webhooks, ENQUEUE_CONCURRENCY, async (webhook) => {
             if (!webhook.enabled) {
-                continue;
+                return;
             }
 
             const payload = buildWebhookPayload({
@@ -161,7 +181,7 @@ export function createWebhookEventBridge(
                 eventId: payload.event_id,
                 payload,
             });
-        }
+        });
     }
 
     async function handleCustomHook(
@@ -173,12 +193,12 @@ export function createWebhookEventBridge(
             extractWorkspaceId(primaryPayload) ?? extractWorkspaceIdFromArgs(args);
         const webhooks = await store.listWebhooksByCustomHook(hookName);
 
-        for (const webhook of webhooks) {
+        await enqueueWithConcurrency(webhooks, ENQUEUE_CONCURRENCY, async (webhook) => {
             if (!webhook.enabled) {
-                continue;
+                return;
             }
             if (webhook.workspace_id && webhook.workspace_id !== workspaceId) {
-                continue;
+                return;
             }
 
             const payload = buildWebhookPayload({
@@ -194,7 +214,7 @@ export function createWebhookEventBridge(
                 eventId: payload.event_id,
                 payload,
             });
-        }
+        });
     }
 
     function registerMappedHooks(map: Record<string, string>, scope: 'user' | 'admin'): void {

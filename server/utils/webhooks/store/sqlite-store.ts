@@ -173,6 +173,13 @@ class SqliteWebhookStore implements WebhookStore {
                 FOREIGN KEY (webhook_id) REFERENCES webhook_registrations(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS webhook_custom_hooks (
+                webhook_id TEXT NOT NULL,
+                hook_name TEXT NOT NULL,
+                PRIMARY KEY (webhook_id, hook_name),
+                FOREIGN KEY (webhook_id) REFERENCES webhook_registrations(id) ON DELETE CASCADE
+            );
+
             CREATE INDEX IF NOT EXISTS idx_webhook_registrations_scope_user_workspace
                 ON webhook_registrations (scope, user_id, workspace_id);
             CREATE INDEX IF NOT EXISTS idx_webhook_delivery_logs_webhook_created
@@ -181,6 +188,21 @@ class SqliteWebhookStore implements WebhookStore {
                 ON webhook_delivery_logs (status, next_retry_at);
             CREATE INDEX IF NOT EXISTS idx_webhook_delivery_logs_status_claimed
                 ON webhook_delivery_logs (status, claimed_at);
+            CREATE INDEX IF NOT EXISTS idx_webhook_custom_hooks_hook_name
+                ON webhook_custom_hooks (hook_name);
+        `);
+
+        this.db.exec(`
+            INSERT OR IGNORE INTO webhook_custom_hooks (webhook_id, hook_name)
+            SELECT wr.id, json_each.value
+            FROM webhook_registrations AS wr,
+                 json_each(
+                    CASE
+                        WHEN json_valid(wr.custom_hooks) THEN wr.custom_hooks
+                        ELSE '[]'
+                    END
+                )
+            WHERE typeof(json_each.value) = 'text'
         `);
     }
 
@@ -199,31 +221,44 @@ class SqliteWebhookStore implements WebhookStore {
             updated_at: now,
         };
 
-        this.db
-            .prepare(
+        const create = this.db.transaction(() => {
+            this.db
+                .prepare(
+                    `
+                    INSERT INTO webhook_registrations (
+                        id, scope, user_id, workspace_id, url, label, events, custom_hooks,
+                        signing_secret_enc, enabled, health, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `
-                INSERT INTO webhook_registrations (
-                    id, scope, user_id, workspace_id, url, label, events, custom_hooks,
-                    signing_secret_enc, enabled, health, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `
-            )
-            .run(
-                row.id,
-                row.scope,
-                row.user_id,
-                row.workspace_id,
-                row.url,
-                row.label,
-                JSON.stringify(row.events),
-                JSON.stringify(row.custom_hooks),
-                row.signing_secret_enc,
-                row.enabled ? 1 : 0,
-                row.health,
-                row.created_at,
-                row.updated_at
-            );
+                )
+                .run(
+                    row.id,
+                    row.scope,
+                    row.user_id,
+                    row.workspace_id,
+                    row.url,
+                    row.label,
+                    JSON.stringify(row.events),
+                    JSON.stringify(row.custom_hooks),
+                    row.signing_secret_enc,
+                    row.enabled ? 1 : 0,
+                    row.health,
+                    row.created_at,
+                    row.updated_at
+                );
 
+            const insertCustomHook = this.db.prepare(
+                `
+                INSERT OR IGNORE INTO webhook_custom_hooks (webhook_id, hook_name)
+                VALUES (?, ?)
+            `
+            );
+            for (const hookName of row.custom_hooks) {
+                insertCustomHook.run(row.id, hookName);
+            }
+        });
+
+        create();
         return row;
     }
 
@@ -252,26 +287,44 @@ class SqliteWebhookStore implements WebhookStore {
             updated_at: Date.now(),
         };
 
-        this.db
-            .prepare(
+        const update = this.db.transaction(() => {
+            this.db
+                .prepare(
+                    `
+                    UPDATE webhook_registrations
+                    SET url = ?, label = ?, events = ?, custom_hooks = ?, enabled = ?, workspace_id = ?, health = ?, updated_at = ?
+                    WHERE id = ?
                 `
-                UPDATE webhook_registrations
-                SET url = ?, label = ?, events = ?, custom_hooks = ?, enabled = ?, workspace_id = ?, health = ?, updated_at = ?
-                WHERE id = ?
-            `
-            )
-            .run(
-                next.url,
-                next.label,
-                JSON.stringify(next.events),
-                JSON.stringify(next.custom_hooks),
-                next.enabled ? 1 : 0,
-                next.workspace_id,
-                next.health,
-                next.updated_at,
-                webhookId
-            );
+                )
+                .run(
+                    next.url,
+                    next.label,
+                    JSON.stringify(next.events),
+                    JSON.stringify(next.custom_hooks),
+                    next.enabled ? 1 : 0,
+                    next.workspace_id,
+                    next.health,
+                    next.updated_at,
+                    webhookId
+                );
 
+            if ('custom_hooks' in patch) {
+                this.db
+                    .prepare('DELETE FROM webhook_custom_hooks WHERE webhook_id = ?')
+                    .run(webhookId);
+                const insertCustomHook = this.db.prepare(
+                    `
+                    INSERT OR IGNORE INTO webhook_custom_hooks (webhook_id, hook_name)
+                    VALUES (?, ?)
+                `
+                );
+                for (const hookName of next.custom_hooks) {
+                    insertCustomHook.run(webhookId, hookName);
+                }
+            }
+        });
+
+        update();
         return next;
     }
 
@@ -377,35 +430,30 @@ class SqliteWebhookStore implements WebhookStore {
         const rows = this.db
             .prepare(
                 `
-                SELECT * FROM webhook_registrations
-                WHERE scope = 'admin' AND enabled = 1
+                SELECT wr.* FROM webhook_registrations wr
+                INNER JOIN webhook_custom_hooks wch ON wch.webhook_id = wr.id
+                WHERE wr.scope = 'admin' AND wr.enabled = 1 AND wch.hook_name = ?
             `
             )
-            .all() as WebhookRow[];
+            .all(hookName) as WebhookRow[];
 
-        return rows
-            .map(toWebhookRegistration)
-            .filter((webhook) => webhook.custom_hooks.includes(hookName));
+        return rows.map(toWebhookRegistration);
     }
 
     async listActiveCustomHookNames(): Promise<string[]> {
         const rows = this.db
             .prepare(
                 `
-                SELECT custom_hooks FROM webhook_registrations
-                WHERE scope = 'admin' AND enabled = 1
+                SELECT DISTINCT wch.hook_name
+                FROM webhook_custom_hooks wch
+                INNER JOIN webhook_registrations wr ON wr.id = wch.webhook_id
+                WHERE wr.scope = 'admin' AND wr.enabled = 1
+                ORDER BY wch.hook_name ASC
             `
             )
-            .all() as Array<{ custom_hooks: string }>;
+            .all() as Array<{ hook_name: string }>;
 
-        const names = new Set<string>();
-        for (const row of rows) {
-            for (const hookName of parseStringArray(row.custom_hooks)) {
-                names.add(hookName);
-            }
-        }
-
-        return Array.from(names).sort();
+        return rows.map((row) => row.hook_name);
     }
 
     async updateWebhookHealth(
@@ -502,6 +550,18 @@ class SqliteWebhookStore implements WebhookStore {
         const status = patch.status ?? current.status;
         const clearClaim = status !== 'in_flight';
 
+        const attempt = 'attempt' in patch ? patch.attempt : current.attempt;
+        const httpStatus =
+            'http_status' in patch ? patch.http_status : current.http_status;
+        const errorMessage =
+            'error_message' in patch ? patch.error_message : current.error_message;
+        const responseBody =
+            'response_body' in patch ? patch.response_body : current.response_body;
+        const durationMs =
+            'duration_ms' in patch ? patch.duration_ms : current.duration_ms;
+        const nextRetryAt =
+            'next_retry_at' in patch ? patch.next_retry_at : current.next_retry_at;
+
         this.db
             .prepare(
                 `
@@ -513,12 +573,12 @@ class SqliteWebhookStore implements WebhookStore {
             )
             .run(
                 status,
-                patch.attempt ?? current.attempt,
-                patch.http_status ?? current.http_status,
-                patch.error_message ?? current.error_message,
-                patch.response_body ?? current.response_body,
-                patch.duration_ms ?? current.duration_ms,
-                patch.next_retry_at ?? current.next_retry_at,
+                attempt,
+                httpStatus,
+                errorMessage,
+                responseBody,
+                durationMs,
+                nextRetryAt,
                 clearClaim ? null : current.claimed_by,
                 clearClaim ? null : current.claimed_at,
                 logId
@@ -538,6 +598,26 @@ class SqliteWebhookStore implements WebhookStore {
             `
             )
             .all(webhookId, since) as DeliveryLogRow[];
+
+        return rows.map(toDeliveryLog);
+    }
+
+
+    async getRecentTerminalDeliveries(
+        webhookId: string,
+        limit: number
+    ): Promise<WebhookDeliveryLog[]> {
+        const safeLimit = Math.max(1, Math.floor(limit));
+        const rows = this.db
+            .prepare(
+                `
+                SELECT * FROM webhook_delivery_logs
+                WHERE webhook_id = ? AND status IN ('success', 'failed')
+                ORDER BY created_at DESC
+                LIMIT ?
+            `
+            )
+            .all(webhookId, safeLimit) as DeliveryLogRow[];
 
         return rows.map(toDeliveryLog);
     }

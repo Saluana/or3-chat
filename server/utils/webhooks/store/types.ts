@@ -96,6 +96,10 @@ export interface WebhookStore {
         >
     ): Promise<void>;
     getDeliveryLogs(webhookId: string, since: number): Promise<WebhookDeliveryLog[]>;
+    getRecentTerminalDeliveries(
+        webhookId: string,
+        limit: number
+    ): Promise<WebhookDeliveryLog[]>;
 
     claimPendingDeliveries(
         workerId: string,
