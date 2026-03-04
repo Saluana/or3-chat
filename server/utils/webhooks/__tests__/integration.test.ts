@@ -6,7 +6,7 @@ import { encryptSecret } from '../crypto';
 import { createWebhookDispatcher } from '../dispatcher';
 import { createWebhookEventBridge } from '../event-bridge';
 import { signPayload } from '../signing';
-import { createSqliteWebhookStore } from '../store/sqlite-store';
+import { createSqliteWebhookStore } from 'or3-provider-sqlite/webhooks/sqlite-store';
 import type { WebhookRegistration, WebhookStore } from '../store/types';
 
 const openDatabases = new Set<InstanceType<typeof Database>>();

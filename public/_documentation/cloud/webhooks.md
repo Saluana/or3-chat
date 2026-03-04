@@ -518,6 +518,7 @@ Logs are retained for the configured `OR3_WEBHOOKS_LOG_RETENTION_HOURS` (default
 - The dispatcher polls for claimable work every 5 seconds and processes in batches of 25.
 - A webhook is marked `failing` health after consecutive delivery failures.
 - Use the **Test Ping** button in the UI to verify connectivity before going live.
+- Webhook persistence is **provider-owned**. The active sync provider must register a `WebhookStore` implementation.
 
 ---
 

@@ -1,9 +1,6 @@
-import { createSqliteWebhookStore } from './sqlite-store';
 import {
     getActiveWebhookStore,
     getWebhookStore,
-    listWebhookStoreIds,
-    registerWebhookStore,
 } from './registry';
 import type { WebhookStore } from './types';
 
@@ -36,13 +33,6 @@ export function resolveConfiguredWebhookStore(
     const providerId = resolveWebhookStoreProviderId(config);
     if (!providerId) {
         return null;
-    }
-
-    if (providerId === 'sqlite' && !listWebhookStoreIds().includes('sqlite')) {
-        registerWebhookStore({
-            id: 'sqlite',
-            create: createSqliteWebhookStore,
-        });
     }
 
     store = getWebhookStore(providerId);

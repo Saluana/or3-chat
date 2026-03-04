@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { encryptSecret } from '../crypto';
 import { createWebhookDispatcher } from '../dispatcher';
 import { resetNotificationEmitters, registerNotificationEmitter } from '../../notifications/registry';
-import { createSqliteWebhookStore } from '../store/sqlite-store';
+import { createSqliteWebhookStore } from 'or3-provider-sqlite/webhooks/sqlite-store';
 import type { WebhookRegistration, WebhookStore } from '../store/types';
 
 type TestContext = {
@@ -435,7 +435,7 @@ describe('webhook dispatcher', () => {
             created_at: Date.now(),
         });
 
-        let releaseFirst: (() => void) | null = null;
+        let releaseFirst: () => void = () => {};
         const firstStarted = new Promise<void>((resolve) => {
             releaseFirst = resolve;
         });
@@ -469,7 +469,7 @@ describe('webhook dispatcher', () => {
             expect(fetchImpl).toHaveBeenCalledTimes(2);
         });
         expect(secondStarted).toBe(true);
-        releaseFirst?.();
+        releaseFirst();
         await processing;
     });
 

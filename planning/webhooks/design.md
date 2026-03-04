@@ -178,21 +178,17 @@ export function getActiveWebhookStore(): WebhookStore | null; // reads runtimeCo
 export function listWebhookStoreIds(): string[];
 ```
 
-### Default SQLite Implementation
+### Provider-Owned Implementations
 
-The default store uses SQLite (same as `or3-provider-sqlite`). Providers can register alternatives.
+Webhook stores are provider-owned and registered through the store registry.
+Core owns only the `WebhookStore` contract + registry surface.
 
 ```typescript
-// server/utils/webhooks/store/sqlite-store.ts
+// or3-provider-sqlite/src/runtime/server/webhooks/sqlite-webhook-store.ts
+// or3-provider-convex/src/runtime/server/webhooks/convex-webhook-store.ts
 
-export function createSqliteWebhookStore(): WebhookStore {
-  // Uses better-sqlite3 with the same DB connection pattern as or3-provider-sqlite
-  // Tables: webhook_registrations, webhook_delivery_logs
-  // Indexes: (scope, user_id, workspace_id), (webhook_id, created_at), (status, next_retry_at)
-  // claimPendingDeliveries uses a single atomic transaction (or backend-native equivalent)
-  // that selects due pending rows, marks them in_flight, and returns only the claimed rows
-  // resetStaleInFlightDeliveries uses a single store operation that clears stale claims
-}
+registerWebhookStore({ id: 'sqlite', create: createSqliteWebhookStore })
+registerWebhookStore({ id: 'convex', create: createConvexWebhookStore })
 ```
 
 ---

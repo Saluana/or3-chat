@@ -9,7 +9,7 @@ import {
     getWebhookStore,
     registerWebhookStore,
 } from '../../../../utils/webhooks/store/registry';
-import { createSqliteWebhookStore } from '../../../../utils/webhooks/store/sqlite-store';
+import { createSqliteWebhookStore } from 'or3-provider-sqlite/webhooks/sqlite-store';
 import type {
     WebhookDeliveryLog,
     WebhookRegistration,

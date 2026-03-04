@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createSqliteWebhookStore } from '../sqlite-store';
+import { createSqliteWebhookStore } from 'or3-provider-sqlite/webhooks/sqlite-store';
 import type { WebhookDeliveryLog, WebhookRegistration, WebhookStore } from '../types';
 
 type TestContext = {

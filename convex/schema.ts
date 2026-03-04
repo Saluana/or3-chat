@@ -357,6 +357,68 @@ export default defineSchema({
         .index('by_workspace_user', ['workspace_id', 'user_id', 'created_at']),
 
     // ============================================================
+    // WEBHOOKS
+    // ============================================================
+
+    /**
+     * Webhook registrations - stores user/admin webhook subscriptions.
+     */
+    webhook_registrations: defineTable({
+        id: v.string(),
+        scope: v.union(v.literal('user'), v.literal('admin')),
+        user_id: v.optional(v.string()),
+        workspace_id: v.optional(v.string()),
+        url: v.string(),
+        label: v.string(),
+        events: v.array(v.string()),
+        custom_hooks: v.array(v.string()),
+        signing_secret_enc: v.string(),
+        enabled: v.boolean(),
+        health: v.union(v.literal('healthy'), v.literal('failing'), v.literal('unknown')),
+        created_at: v.number(),
+        updated_at: v.number(),
+    })
+        .index('by_webhook_id', ['id'])
+        .index('by_scope_created', ['scope', 'created_at'])
+        .index('by_scope_enabled_created', ['scope', 'enabled', 'created_at'])
+        .index('by_scope_user_workspace_created', ['scope', 'user_id', 'workspace_id', 'created_at']),
+
+    /**
+     * Webhook delivery logs - durable queue/history for webhook attempts.
+     */
+    webhook_delivery_logs: defineTable({
+        id: v.string(),
+        webhook_id: v.string(),
+        event_id: v.string(),
+        event_type: v.string(),
+        attempt: v.number(),
+        status: v.union(
+            v.literal('pending'),
+            v.literal('in_flight'),
+            v.literal('success'),
+            v.literal('failed'),
+            v.literal('cancelled')
+        ),
+        claimed_by: v.optional(v.string()),
+        claimed_at: v.optional(v.number()),
+        claimed_at_sort: v.number(),
+        http_status: v.optional(v.number()),
+        error_message: v.optional(v.string()),
+        request_payload: v.string(),
+        response_body: v.optional(v.string()),
+        duration_ms: v.optional(v.number()),
+        next_retry_at: v.optional(v.number()),
+        next_retry_at_sort: v.number(),
+        created_at: v.number(),
+    })
+        .index('by_log_id', ['id'])
+        .index('by_created', ['created_at'])
+        .index('by_webhook_created', ['webhook_id', 'created_at'])
+        .index('by_webhook_status_created', ['webhook_id', 'status', 'created_at'])
+        .index('by_status_retry_created', ['status', 'next_retry_at_sort', 'created_at'])
+        .index('by_status_claimed', ['status', 'claimed_at_sort']),
+
+    // ============================================================
     // RATE LIMITING
     // ============================================================
 
