@@ -328,11 +328,13 @@ function forwardResize(payload: ResizePayload) {
         0 2px 8px -2px color-mix(in srgb, var(--md-error) 30%, transparent);
 }
 
-/* ── Attachments grid ── */
+/* ── Attachments grid: above input like ChatGPT ── */
 :deep(.blank2-chat-dropper .chat-input-attachments) {
+    order: -1;
     position: relative;
     z-index: 1;
-    margin: 0.5rem 1rem 3rem;
+    margin: 0.75rem 0.75rem 0;
+    padding: 0;
     gap: 0.5rem;
     grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
 }
@@ -370,7 +372,7 @@ function forwardResize(payload: ResizePayload) {
     }
 
     :deep(.blank2-chat-dropper .chat-input-attachments) {
-        margin-bottom: 2.75rem;
+        margin: 0.5rem 0.5rem 0;
     }
 
     :deep(.blank2-chat-dropper .chat-input-attachment-btn button),
