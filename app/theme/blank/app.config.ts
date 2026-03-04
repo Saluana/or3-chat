@@ -127,7 +127,7 @@ export default {
         popover: {
             slots: {
                 content:
-                    'bg-[var(--md-surface)] ring-0 rounded-xl border-0 shadow-lg p-1',
+                    'bg-[var(--md-surface)] ring-0 rounded-2xl border border-[rgba(0,0,0,0.06)] dark:border-[rgba(255,255,255,0.08)] shadow-[0_2px_8px_rgba(0,0,0,0.08),0_0_1px_rgba(0,0,0,0.06)] p-1.5',
             },
         },
         switch: {

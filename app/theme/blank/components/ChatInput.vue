@@ -4,7 +4,7 @@
             class="blank2-chat-dropper"
             v-bind="attrs"
             :loading="props.loading"
-            :container-width="props.containerWidth"
+            :container-width="1"
             :thread-id="props.threadId"
             :streaming="props.streaming"
             :pane-id="props.paneId"
@@ -261,7 +261,6 @@ function forwardResize(payload: ResizePayload) {
 :deep(.blank2-chat-dropper .chat-input-settings-btn button:hover) {
     background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important;
     color: var(--md-primary) !important;
-    transform: scale(1.08);
 }
 
 :deep(.blank2-chat-dropper .chat-input-attachment-btn button:active),
