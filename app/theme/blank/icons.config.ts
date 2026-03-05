@@ -82,6 +82,7 @@ export default <IconMap>{
     'ui.clock': 'tabler:clock',
     'ui.chart': 'tabler:chart-bar',
     'ui.shield': 'tabler:shield',
+    'ui.chevron.right': 'tabler:chevron-right',
     'ui.chevron.left': 'tabler:chevron-left',
     'ui.chevron.down': 'tabler:chevron-down',
     'ui.wait': 'tabler:hourglass',

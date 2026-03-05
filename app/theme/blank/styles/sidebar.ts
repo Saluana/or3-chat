@@ -7,6 +7,10 @@ const SidebarPopoverButtonConfig = {
     },
 };
 
+const SidebarCollapsedTopButtonConfig = {
+    class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
+};
+
 export const sidebarOverrides = {
     'div#sidebar.header:collapsed': {
         class: 'w-[64px]!',
@@ -47,8 +51,11 @@ export const sidebarOverrides = {
     },
     'button#sidebar.new-chat': {
         variant: 'ghost',
-        class: 'text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! border-0! rounded-[10px]',
+        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! border-0! rounded-xl',
     },
+    'button#sidebar.collapsed-search': SidebarCollapsedTopButtonConfig,
+    'button#sidebar.new-document': SidebarCollapsedTopButtonConfig,
+    'button#sidebar.new-project': SidebarCollapsedTopButtonConfig,
 
     'button#sidebar.thread-rename': SidebarPopoverButtonConfig,
     'button#sidebar.thread-add-to-project': SidebarPopoverButtonConfig,
