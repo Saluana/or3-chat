@@ -422,8 +422,17 @@ describe('admin webhook API routes', () => {
         await store.createDeliveryLog(
             createDeliveryLogInput(webhook.id, {
                 status: 'success',
+                http_status: 202,
+                response_body: 'ok-1',
+                next_retry_at: null,
+            })
+        );
+        await store.createDeliveryLog(
+            createDeliveryLogInput(webhook.id, {
+                status: 'success',
                 http_status: 204,
                 response_body: 'ok',
+                next_retry_at: null,
             })
         );
 
@@ -447,6 +456,9 @@ describe('admin webhook API routes', () => {
         );
         expect(testResult.success).toBe(true);
         expect(sendTestPingMock).toHaveBeenCalledTimes(1);
+
+        const refreshedWebhook = await store.getWebhook(webhook.id);
+        expect(refreshedWebhook?.health).toBe('healthy');
 
         const logs = await logsHandler(
             makeEvent({

@@ -442,6 +442,7 @@ export async function consumeBackgroundStream(params: {
             messageId: params.context.messageId,
         });
         await emitMessageCompletedWebhookEvent({
+            workspaceId: params.context.workspaceId,
             threadId: params.context.threadId,
             messageId: params.context.messageId,
             modelId:
@@ -904,6 +905,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             messageId: params.context.messageId,
         });
         await emitMessageCompletedWebhookEvent({
+            workspaceId: params.context.workspaceId,
             threadId: params.context.threadId,
             messageId: params.context.messageId,
             modelId:

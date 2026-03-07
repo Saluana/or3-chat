@@ -37,26 +37,142 @@ export function normalizeWebhookAddress(value: string): string {
     return normalized;
 }
 
-export function isPrivateIpv6Address(value: string): boolean {
+function parseIpv4Octets(value: string): number[] | null {
+    const parts = value.split('.');
+    if (parts.length !== 4) {
+        return null;
+    }
+
+    const octets = parts.map((segment) => {
+        if (!/^\d{1,3}$/.test(segment)) {
+            return Number.NaN;
+        }
+        return Number(segment);
+    });
+
+    return octets.every((segment) => Number.isInteger(segment) && segment >= 0 && segment <= 255)
+        ? octets
+        : null;
+}
+
+function parseIpv6Words(value: string): number[] | null {
     const normalized = normalizeWebhookAddress(value);
+    if (!normalized) {
+        return null;
+    }
 
-    if (!normalized) return false;
-    if (normalized === '::1' || normalized === '::') return true;
+    let ipv6 = normalized;
+    if (ipv6.includes('.')) {
+        const lastColon = ipv6.lastIndexOf(':');
+        if (lastColon < 0) {
+            return null;
+        }
 
-    const firstGroup = normalized.split(':', 1)[0] ?? '';
-    if (firstGroup.startsWith('fc') || firstGroup.startsWith('fd')) {
+        const octets = parseIpv4Octets(ipv6.slice(lastColon + 1));
+        if (!octets) {
+            return null;
+        }
+
+        ipv6 = `${ipv6.slice(0, lastColon)}:${((octets[0]! << 8) | octets[1]!).toString(16)}:${((octets[2]! << 8) | octets[3]!).toString(16)}`;
+    }
+
+    const hasCompression = ipv6.includes('::');
+    if (hasCompression && ipv6.indexOf('::') !== ipv6.lastIndexOf('::')) {
+        return null;
+    }
+
+    const [headRaw, tailRaw = ''] = ipv6.split('::');
+    const head = headRaw ? headRaw.split(':').filter(Boolean) : [];
+    const tail = tailRaw ? tailRaw.split(':').filter(Boolean) : [];
+
+    if (!hasCompression && head.length !== 8) {
+        return null;
+    }
+    if (hasCompression && head.length + tail.length > 7) {
+        return null;
+    }
+
+    const words: number[] = [];
+    const pushWord = (segment: string) => {
+        if (!/^[0-9a-f]{1,4}$/i.test(segment)) {
+            return false;
+        }
+
+        const parsed = Number.parseInt(segment, 16);
+        if (!Number.isInteger(parsed) || parsed < 0 || parsed > 0xffff) {
+            return false;
+        }
+
+        words.push(parsed);
+        return true;
+    };
+
+    for (const segment of head) {
+        if (!pushWord(segment)) {
+            return null;
+        }
+    }
+
+    if (hasCompression) {
+        const zeroFill = 8 - head.length - tail.length;
+        for (let index = 0; index < zeroFill; index += 1) {
+            words.push(0);
+        }
+    }
+
+    for (const segment of tail) {
+        if (!pushWord(segment)) {
+            return null;
+        }
+    }
+
+    return words.length === 8 ? words : null;
+}
+
+function wordsToIpv4(words: readonly number[]): string {
+    return [
+        (words[6]! >> 8) & 0xff,
+        words[6]! & 0xff,
+        (words[7]! >> 8) & 0xff,
+        words[7]! & 0xff,
+    ].join('.');
+}
+
+function extractEmbeddedIpv4(words: readonly number[]): string | null {
+    const compatible = words.slice(0, 6).every((segment) => segment === 0);
+    const mapped =
+        compatible ||
+        (words.slice(0, 5).every((segment) => segment === 0) && words[5] === 0xffff);
+
+    return mapped ? wordsToIpv4(words) : null;
+}
+
+export function isPrivateIpv6Address(value: string): boolean {
+    const words = parseIpv6Words(value);
+    if (!words) return false;
+
+    if (words.every((segment) => segment === 0)) {
         return true;
     }
 
-    if (!firstGroup.startsWith('fe')) {
-        return false;
+    if (
+        words.slice(0, 7).every((segment) => segment === 0) &&
+        words[7] === 1
+    ) {
+        return true;
     }
 
-    const thirdNibble = firstGroup[2];
-    return thirdNibble === '8'
-        || thirdNibble === '9'
-        || thirdNibble === 'a'
-        || thirdNibble === 'b';
+    const embeddedIpv4 = extractEmbeddedIpv4(words);
+    if (embeddedIpv4) {
+        return isPrivateIp(embeddedIpv4);
+    }
+
+    const firstWord = words[0]!;
+    if ((firstWord & 0xfe00) === 0xfc00) {
+        return true;
+    }
+
+    return (firstWord & 0xffc0) === 0xfe80;
 }
 
 export function isBlockedWebhookAddress(value: string): boolean {

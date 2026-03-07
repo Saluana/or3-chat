@@ -101,6 +101,16 @@ describe('ssrf-safe webhook lookup', () => {
         });
     });
 
+    it('blocks IPv4-mapped IPv6 loopback addresses', async () => {
+        await expect(
+            runLookup({
+                addresses: [{ address: '::ffff:127.0.0.1', family: 6 }],
+            })
+        ).rejects.toMatchObject({
+            code: 'EPRIVATEIP',
+        });
+    });
+
     it('blocks a hostname that resolves to a private IP at connect time', async () => {
         await expect(
             runLookup({

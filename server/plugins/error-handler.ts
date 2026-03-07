@@ -81,7 +81,7 @@ export default defineNitroPlugin((nitro) => {
         // Log as structured JSON
         console.error(JSON.stringify(logEntry));
 
-        if (path.startsWith('/api/sync')) {
+        if (status >= 500 && path.startsWith('/api/sync')) {
             void emitWebhookSystemHook('sync:action:error', {
                 source: 'sync',
                 message: logEntry.message,
@@ -89,7 +89,7 @@ export default defineNitroPlugin((nitro) => {
                 method,
                 path,
             });
-        } else if (path.startsWith('/api/storage')) {
+        } else if (status >= 500 && path.startsWith('/api/storage')) {
             void emitWebhookSystemHook('storage:action:error', {
                 source: 'storage',
                 message: logEntry.message,

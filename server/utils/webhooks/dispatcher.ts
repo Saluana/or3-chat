@@ -111,7 +111,7 @@ async function emitWebhookFailureNotification(
     });
 }
 
-async function recalculateWebhookHealth(
+export async function recalculateWebhookHealth(
     store: WebhookStore,
     webhookId: string
 ): Promise<void> {

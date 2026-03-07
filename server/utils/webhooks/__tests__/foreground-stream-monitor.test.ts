@@ -35,12 +35,14 @@ describe('foreground stream monitor', () => {
 
         await mirrorForegroundStreamCompletion({
             stream: createStream(),
+            workspaceId: 'ws-1',
             threadId: 'thread-1',
             messageId: 'message-1',
             modelId: 'openai/gpt-4o-mini',
         });
 
         expect(emitMessageCompletedWebhookEventMock).toHaveBeenCalledWith({
+            workspaceId: 'ws-1',
             threadId: 'thread-1',
             messageId: 'message-1',
             modelId: 'openai/gpt-4o-mini',
@@ -60,6 +62,7 @@ describe('foreground stream monitor', () => {
 
         await mirrorForegroundStreamCompletion({
             stream: createErroredStream(abortError),
+            workspaceId: 'ws-1',
             threadId: 'thread-1',
             messageId: 'message-1',
             modelId: 'openai/gpt-4o-mini',

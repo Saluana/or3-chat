@@ -180,6 +180,20 @@ describe('sqlite webhook store', () => {
         expect(adminMatches.map((webhook) => webhook.id).sort()).toEqual(
             [adminGlobal.id, adminScoped.id].sort()
         );
+
+        const adminWithoutWorkspace = await store.listWebhooksByEvent(
+            'thread.created',
+            'admin'
+        );
+        expect(adminWithoutWorkspace.map((webhook) => webhook.id)).toEqual([
+            adminGlobal.id,
+        ]);
+
+        const userWithoutWorkspace = await store.listWebhooksByEvent(
+            'thread.created',
+            'user'
+        );
+        expect(userWithoutWorkspace).toEqual([]);
     });
 
     it('bulk-disables only matching user webhooks', async () => {

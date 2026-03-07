@@ -1,5 +1,8 @@
 import { defineEventHandler } from 'h3';
-import { buildWebhookTestPingPayload } from '../../../utils/webhooks/dispatcher';
+import {
+    buildWebhookTestPingPayload,
+    recalculateWebhookHealth,
+} from '../../../utils/webhooks/dispatcher';
 import {
     createWebhookRouteDispatcher,
     requireOwnedWebhook,
@@ -46,6 +49,7 @@ export default defineEventHandler(async (event) => {
             duration_ms: result.durationMs,
             next_retry_at: null,
         });
+        await recalculateWebhookHealth(store, webhook.id);
 
         return result;
     } finally {

@@ -42,6 +42,27 @@ export interface WebhookEventBridge {
 type HookArgs = unknown[];
 
 const ENQUEUE_CONCURRENCY = 8;
+const CUSTOM_HOOK_PATTERN = /:(action|filter):/;
+
+function logWebhookBridgeError(
+    message: string,
+    context: {
+        hookName?: string;
+        eventType?: string;
+        webhookId?: string;
+        error: unknown;
+    }
+): void {
+    console.warn(`[webhooks] ${message}`, {
+        hookName: context.hookName,
+        eventType: context.eventType,
+        webhookId: context.webhookId,
+        error:
+            context.error instanceof Error
+                ? context.error.message
+                : String(context.error),
+    });
+}
 
 async function enqueueWithConcurrency<T>(
     items: readonly T[],
@@ -134,9 +155,11 @@ export function createWebhookEventBridge(
 ): WebhookEventBridge {
     const hooks = nitroApp.hooks as unknown as {
         hook: (name: string, fn: (...args: HookArgs) => unknown) => () => void;
+        callHook: (name: string, ...args: HookArgs) => Promise<unknown>;
     };
     const curatedUnhooks: Array<() => void> = [];
     const customUnhooks = new Map<string, () => void>();
+    const originalCallHook = hooks.callHook.bind(nitroApp.hooks);
     let started = false;
 
     async function handleCuratedEvent(
@@ -147,6 +170,9 @@ export function createWebhookEventBridge(
         const primaryPayload = args.length <= 1 ? args[0] : args;
         const workspaceId =
             extractWorkspaceId(primaryPayload) ?? extractWorkspaceIdFromArgs(args);
+        if (scope === 'user' && !workspaceId) {
+            return;
+        }
         const webhooks = await store.listWebhooksByEvent(
             eventType,
             scope,
@@ -162,25 +188,33 @@ export function createWebhookEventBridge(
                 return;
             }
 
-            const payload = buildWebhookPayload({
-                event: eventType,
-                data: primaryPayload,
-                workspaceId: workspaceId ?? webhook.workspace_id,
-                userId:
-                    scope === 'user'
-                        ? webhook.user_id ??
-                          extractUserId(primaryPayload) ??
-                          extractUserIdFromArgs(args)
-                        : undefined,
-                scope,
-            });
+            try {
+                const payload = buildWebhookPayload({
+                    event: eventType,
+                    data: primaryPayload,
+                    workspaceId: workspaceId ?? null,
+                    userId:
+                        scope === 'user'
+                            ? webhook.user_id ??
+                              extractUserId(primaryPayload) ??
+                              extractUserIdFromArgs(args)
+                            : undefined,
+                    scope,
+                });
 
-            await dispatcher.enqueue({
-                webhookId: webhook.id,
-                eventType,
-                eventId: payload.event_id,
-                payload,
-            });
+                await dispatcher.enqueue({
+                    webhookId: webhook.id,
+                    eventType,
+                    eventId: payload.event_id,
+                    payload,
+                });
+            } catch (error) {
+                logWebhookBridgeError('Failed to enqueue curated webhook delivery', {
+                    eventType,
+                    webhookId: webhook.id,
+                    error,
+                });
+            }
         });
     }
 
@@ -201,26 +235,40 @@ export function createWebhookEventBridge(
                 return;
             }
 
-            const payload = buildWebhookPayload({
-                event: hookName,
-                data: args,
-                workspaceId: workspaceId ?? webhook.workspace_id,
-                scope: 'admin',
-            });
+            try {
+                const payload = buildWebhookPayload({
+                    event: hookName,
+                    data: args,
+                    workspaceId: workspaceId ?? null,
+                    scope: 'admin',
+                });
 
-            await dispatcher.enqueue({
-                webhookId: webhook.id,
-                eventType: hookName,
-                eventId: payload.event_id,
-                payload,
-            });
+                await dispatcher.enqueue({
+                    webhookId: webhook.id,
+                    eventType: hookName,
+                    eventId: payload.event_id,
+                    payload,
+                });
+            } catch (error) {
+                logWebhookBridgeError('Failed to enqueue custom webhook delivery', {
+                    hookName,
+                    webhookId: webhook.id,
+                    error,
+                });
+            }
         });
     }
 
     function registerMappedHooks(map: Record<string, string>, scope: 'user' | 'admin'): void {
         for (const [hookName, eventType] of Object.entries(map)) {
             const unhook = hooks.hook(hookName, (...args: HookArgs) => {
-                return handleCuratedEvent(scope, eventType, args);
+                return handleCuratedEvent(scope, eventType, args).catch((error) => {
+                    logWebhookBridgeError('Failed to process curated webhook event', {
+                        hookName,
+                        eventType,
+                        error,
+                    });
+                });
             });
             curatedUnhooks.push(unhook);
         }
@@ -233,6 +281,25 @@ export function createWebhookEventBridge(
             }
 
             started = true;
+            hooks.callHook = async (hookName: string, ...args: HookArgs) => {
+                const result = await originalCallHook(hookName, ...args);
+                if (
+                    started &&
+                    CUSTOM_HOOK_PATTERN.test(hookName) &&
+                    !customUnhooks.has(hookName)
+                ) {
+                    await handleCustomHook(hookName, args).catch((error) => {
+                        logWebhookBridgeError(
+                            'Failed to process fallback custom webhook event',
+                            {
+                                hookName,
+                                error,
+                            }
+                        );
+                    });
+                }
+                return result;
+            };
             registerMappedHooks(USER_HOOK_TO_EVENT_MAP, 'user');
             registerMappedHooks(ADMIN_HOOK_TO_EVENT_MAP, 'admin');
             void this.refreshCustomHookListeners();
@@ -240,6 +307,7 @@ export function createWebhookEventBridge(
 
         stop() {
             started = false;
+            hooks.callHook = originalCallHook;
             while (curatedUnhooks.length > 0) {
                 curatedUnhooks.pop()?.();
             }

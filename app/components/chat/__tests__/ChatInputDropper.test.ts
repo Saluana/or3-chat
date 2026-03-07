@@ -52,6 +52,7 @@ vi.mock('#imports', () => ({
     useOpenRouterAuth: () => ({ startLogin: vi.fn() }),
     useComposerActions: () => [],
     useModelStore: () => ({ 
+        catalog: ref([]),
         favoriteModels: ref([]),
         getFavoriteModels: vi.fn().mockResolvedValue([])
     }),

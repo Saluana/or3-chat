@@ -11,6 +11,7 @@ export interface BackgroundJobWebhookEventInput {
 }
 
 export interface MessageCompletedWebhookEventInput {
+    workspaceId: string;
     threadId: string;
     messageId: string;
     modelId?: string | null;
@@ -57,6 +58,7 @@ export async function emitMessageCompletedWebhookEvent(
     input: MessageCompletedWebhookEventInput
 ): Promise<void> {
     await emitWebhookSystemHook('ai.chat.stream:action:complete', {
+        workspaceId: input.workspaceId,
         threadId: input.threadId,
         messageId: input.messageId,
         modelId: input.modelId ?? null,

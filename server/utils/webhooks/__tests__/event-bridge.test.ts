@@ -234,6 +234,66 @@ describe('webhook event bridge', () => {
         expect(harness.enqueue).not.toHaveBeenCalled();
     });
 
+    it('skips user webhook events that do not expose a workspace id', async () => {
+        const harness = createTestHarness();
+        const bridge = createWebhookEventBridge(
+            harness.store,
+            harness.dispatcher,
+            harness.nitroApp
+        );
+
+        harness.byEvent.set('user:message.completed:ws-1', [
+            activeWebhook({ id: 'wh_message', events: ['message.completed'] }),
+        ]);
+
+        bridge.start();
+        await harness.nitroApp.hooks.callHook('ai.chat.stream:action:complete', {
+            threadId: 'thread-1',
+            messageId: 'message-1',
+        });
+
+        expect(harness.listByEvent).not.toHaveBeenCalled();
+        expect(harness.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('keeps fan-out alive when one enqueue fails', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const harness = createTestHarness();
+        harness.enqueue.mockImplementation(async (job) => {
+            if (job.webhookId === 'wh_bad') {
+                throw new Error('broken enqueue');
+            }
+        });
+        const bridge = createWebhookEventBridge(
+            harness.store,
+            harness.dispatcher,
+            harness.nitroApp
+        );
+
+        harness.byEvent.set('user:thread.created:ws-1', [
+            activeWebhook({ id: 'wh_bad' }),
+            activeWebhook({ id: 'wh_ok' }),
+        ]);
+
+        bridge.start();
+        await expect(
+            harness.nitroApp.hooks.callHook('db.threads.create:action:after', {
+                id: 'thread-1',
+                workspace_id: 'ws-1',
+            })
+        ).resolves.toBeUndefined();
+
+        expect(harness.enqueue).toHaveBeenCalledTimes(2);
+        expect(warnSpy).toHaveBeenCalledWith(
+            '[webhooks] Failed to enqueue curated webhook delivery',
+            expect.objectContaining({
+                eventType: 'thread.created',
+                webhookId: 'wh_bad',
+            })
+        );
+        warnSpy.mockRestore();
+    });
+
     it('applies the admin workspace filter for custom hooks', async () => {
         const harness = createTestHarness();
         const bridge = createWebhookEventBridge(
@@ -242,15 +302,15 @@ describe('webhook event bridge', () => {
             harness.nitroApp
         );
 
-        harness.setActiveCustomHooks(['custom:hook']);
-        harness.byCustomHook.set('custom:hook', [
+        harness.setActiveCustomHooks(['custom:action:hook']);
+        harness.byCustomHook.set('custom:action:hook', [
             activeWebhook({ id: 'wh_match', user_id: null, workspace_id: 'ws-1' }),
             activeWebhook({ id: 'wh_skip', user_id: null, workspace_id: 'ws-2' }),
         ]);
 
         bridge.start();
         await bridge.refreshCustomHookListeners();
-        await harness.nitroApp.hooks.callHook('custom:hook', {
+        await harness.nitroApp.hooks.callHook('custom:action:hook', {
             id: 'payload-1',
             workspace_id: 'ws-1',
         });
@@ -258,7 +318,31 @@ describe('webhook event bridge', () => {
         expect(harness.enqueue).toHaveBeenCalledTimes(1);
         expect(harness.enqueue.mock.calls[0]?.[0]).toMatchObject({
             webhookId: 'wh_match',
-            eventType: 'custom:hook',
+            eventType: 'custom:action:hook',
+        });
+    });
+
+    it('processes custom hooks even before local listeners are refreshed', async () => {
+        const harness = createTestHarness();
+        const bridge = createWebhookEventBridge(
+            harness.store,
+            harness.dispatcher,
+            harness.nitroApp
+        );
+
+        harness.byCustomHook.set('custom:action:hook', [
+            activeWebhook({ id: 'wh_fallback', user_id: null, workspace_id: null }),
+        ]);
+
+        bridge.start();
+        await harness.nitroApp.hooks.callHook('custom:action:hook', {
+            id: 'payload-1',
+        });
+
+        expect(harness.enqueue).toHaveBeenCalledTimes(1);
+        expect(harness.enqueue.mock.calls[0]?.[0]).toMatchObject({
+            webhookId: 'wh_fallback',
+            eventType: 'custom:action:hook',
         });
     });
 
@@ -270,15 +354,15 @@ describe('webhook event bridge', () => {
             harness.nitroApp
         );
 
-        harness.setActiveCustomHooks(['custom:hook']);
-        harness.byCustomHook.set('custom:hook', [
+        harness.setActiveCustomHooks(['custom:action:hook']);
+        harness.byCustomHook.set('custom:action:hook', [
             activeWebhook({ id: 'wh_match', user_id: null, workspace_id: 'ws-1' }),
         ]);
 
         bridge.start();
         await bridge.refreshCustomHookListeners();
         await harness.nitroApp.hooks.callHook(
-            'custom:hook',
+            'custom:action:hook',
             { id: 'first' },
             { workspace_id: 'ws-1' }
         );
@@ -286,7 +370,7 @@ describe('webhook event bridge', () => {
         expect(harness.enqueue).toHaveBeenCalledTimes(1);
         expect(harness.enqueue.mock.calls[0]?.[0]).toMatchObject({
             webhookId: 'wh_match',
-            eventType: 'custom:hook',
+            eventType: 'custom:action:hook',
         });
     });
 
@@ -298,20 +382,21 @@ describe('webhook event bridge', () => {
             harness.nitroApp
         );
 
-        harness.setActiveCustomHooks(['custom:hook']);
-        harness.byCustomHook.set('custom:hook', [
+        harness.setActiveCustomHooks(['custom:action:hook']);
+        harness.byCustomHook.set('custom:action:hook', [
             activeWebhook({ id: 'wh_1', user_id: null, workspace_id: null }),
         ]);
 
         bridge.start();
         await bridge.refreshCustomHookListeners();
-        await harness.nitroApp.hooks.callHook('custom:hook', { id: 'payload-1' });
+        await harness.nitroApp.hooks.callHook('custom:action:hook', { id: 'payload-1' });
         expect(harness.enqueue).toHaveBeenCalledTimes(1);
 
         harness.enqueue.mockClear();
         harness.setActiveCustomHooks([]);
+        harness.byCustomHook.delete('custom:action:hook');
         await bridge.refreshCustomHookListeners();
-        await harness.nitroApp.hooks.callHook('custom:hook', { id: 'payload-2' });
+        await harness.nitroApp.hooks.callHook('custom:action:hook', { id: 'payload-2' });
 
         expect(harness.enqueue).not.toHaveBeenCalled();
     });

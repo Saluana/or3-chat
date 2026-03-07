@@ -630,6 +630,9 @@ describe('user webhook API routes', () => {
             })
         );
 
+        const refreshedWebhook = await store.getWebhook(webhook.id);
+        expect(refreshedWebhook?.health).toBe('failing');
+
         const now = Date.now();
         await store.createDeliveryLog(
             createDeliveryLogInput(webhook.id, {

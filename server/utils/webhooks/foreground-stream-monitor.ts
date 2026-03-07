@@ -16,12 +16,13 @@ async function drainStream(stream: ReadableStream<Uint8Array>): Promise<void> {
 
 export async function mirrorForegroundStreamCompletion(params: {
     stream: ReadableStream<Uint8Array>;
+    workspaceId: string | null;
     threadId: string | null;
     messageId: string | null;
     modelId: string | null;
     onError?: (error: unknown) => void;
 }): Promise<void> {
-    if (!params.threadId || !params.messageId) {
+    if (!params.workspaceId || !params.threadId || !params.messageId) {
         return;
     }
 
@@ -29,6 +30,7 @@ export async function mirrorForegroundStreamCompletion(params: {
         await drainStream(params.stream);
 
         await emitMessageCompletedWebhookEvent({
+            workspaceId: params.workspaceId,
             threadId: params.threadId,
             messageId: params.messageId,
             modelId: params.modelId,
