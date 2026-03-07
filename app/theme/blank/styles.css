@@ -46,6 +46,8 @@
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
     }
 
     /* ── Action buttons: minimal gray icons ── */
