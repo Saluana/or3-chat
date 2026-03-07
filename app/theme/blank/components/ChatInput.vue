@@ -208,11 +208,15 @@ function forwardResize(payload: ResizePayload) {
     scrollbar-color: color-mix(in srgb, var(--md-outline) 25%, transparent) transparent;
 }
 
-:deep(.blank2-chat-dropper .chat-input-editor),
-:deep(.blank2-chat-dropper .ProseMirror) {
+:deep(.blank2-chat-dropper .chat-input-editor) {
     min-height: 2.5rem !important;
     display: flex;
     align-items: center;
+    padding: 0;
+}
+
+:deep(.blank2-chat-dropper .ProseMirror) {
+    width: 100%;
     padding: 0;
     font-size: 0.975rem;
     line-height: 1.5;

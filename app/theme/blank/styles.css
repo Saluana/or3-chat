@@ -7,7 +7,7 @@
     }
 
     .sb-group-header {
-        @apply px-2.5 text-xs font-medium text-[var(--md-on-surface-variant)] uppercase tracking-wider;
+        @apply px-2.5 text-xs font-medium text-(--md-on-surface-variant) uppercase tracking-wider;
     }
 
     .sidebar-scroll {
@@ -62,6 +62,77 @@
         line-height: 1.7;
         letter-spacing: -0.003em;
         color: var(--md-on-surface);
+    }
+
+    /* ── Code blocks: map streamdown tokens to theme tokens ── */
+    --sd-primary: var(--md-primary);
+    --sd-primary-variant: var(--md-primary-variant);
+    --sd-on-primary: var(--md-on-primary);
+    --sd-on-surface: var(--md-on-surface);
+    --sd-surface: var(--md-surface);
+    --sd-surface-container: var(--md-surface-container);
+    --sd-surface-container-low: var(--md-surface-container-low);
+    --sd-surface-container-lowest: var(--md-surface-container-lowest);
+    --sd-surface-container-high: var(--md-surface-container-high);
+    --sd-border-color: color-mix(in srgb, var(--md-outline) 20%, transparent);
+    --sd-border-radius: 12px;
+    --sd-font-family-base: inherit;
+    --sd-font-family-heading: inherit;
+    --sd-font-family-code-header: inherit;
+    --sd-font-family-code: 'Courier New', ui-monospace, monospace;
+
+    .or3-prose {
+        --or3-prose-code-inline-bg: color-mix(
+            in srgb,
+            var(--md-on-surface) 7%,
+            var(--md-surface)
+        );
+        --or3-prose-code-inline-fg: var(--md-on-surface);
+        --or3-prose-code-block-bg: color-mix(
+            in srgb,
+            var(--md-on-surface) 4%,
+            var(--md-surface)
+        );
+        --or3-prose-code-header-bg: color-mix(
+            in srgb,
+            var(--md-on-surface) 6%,
+            var(--md-surface)
+        );
+        --or3-prose-code-header-fg: var(--md-on-surface-variant);
+        --or3-prose-code-border: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
+        --or3-prose-code-button-fg: var(--md-on-surface-variant);
+        --or3-prose-code-button-hover-bg: color-mix(in srgb, var(--md-on-surface) 10%, var(--md-surface));
+        --or3-prose-code-button-hover-fg: var(--md-on-surface);
+    }
+
+    .or3-prose [data-streamdown='code-block'] {
+        border-radius: 14px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .or3-prose [data-streamdown='code-block-header'] {
+        padding: 0.55rem 0.75rem;
+        font-size: 0.75rem;
+    }
+
+    .or3-prose [data-streamdown='code-lang'] {
+        font-weight: 500;
+        letter-spacing: 0.06em;
+    }
+
+    .or3-prose [data-streamdown='code-body'] {
+        padding: 0.9rem 1rem 1rem;
+    }
+
+    .or3-prose [data-streamdown='code'] {
+        font-size: 0.8125rem !important;
+        line-height: 1.65;
+    }
+
+    .or3-prose [data-streamdown='copy-button'],
+    .or3-prose [data-streamdown='download-button'] {
+        padding: 0.3rem;
+        border-radius: 8px;
     }
 
     /* ── Modal: clean and round ── */

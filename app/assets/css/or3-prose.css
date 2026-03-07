@@ -1,4 +1,16 @@
 .or3-prose {
+    --or3-prose-code-inline-bg: var(--md-surface-container);
+    --or3-prose-code-inline-fg: var(--md-on-surface);
+    --or3-prose-code-block-bg: var(--md-surface-container-lowest);
+    --or3-prose-code-header-bg: var(--md-surface-container-low);
+    --or3-prose-code-header-fg: var(--md-on-surface-variant);
+    --or3-prose-code-border: color-mix(in srgb, var(--md-outline) 18%, transparent);
+    --or3-prose-code-button-bg: transparent;
+    --or3-prose-code-button-fg: var(--md-on-surface-variant);
+    --or3-prose-code-button-hover-bg: var(--md-surface-container);
+    --or3-prose-code-button-hover-fg: var(--md-on-surface);
+    --or3-prose-table-header-bg: var(--md-surface-container-low);
+    --or3-prose-table-header-fg: var(--md-on-surface);
     font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
         Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue',
         sans-serif !important;
@@ -65,17 +77,13 @@
 }
 
 .or3-prose :deep(code) {
-    background: var(--md-surface-container);
-    padding: 0.1rem 0.1rem;
-    color: var(--md-on-surface);
-    font-family: 'Courier New', monospace;
+    background: var(--or3-prose-code-inline-bg);
+    padding: 0.1rem 0.25rem;
+    color: var(--or3-prose-code-inline-fg);
+    border-radius: calc(var(--md-border-radius) * 0.65);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+        'Courier New', monospace;
     font-size: 0.9em;
-}
-
-@media (prefers-color-scheme: dark) {
-    .or3-prose :deep(code) {
-        color: white !important;
-    }
 }
 
 .or3-prose :deep(pre) {
@@ -92,52 +100,55 @@
     padding: 0;
     border: none;
     font-size: 16px;
+    border-radius: 0;
 }
 
 /* Streamdown code blocks */
 .or3-prose :deep([data-streamdown='code-block']) {
     margin: 1rem 0;
-    border: var(--md-border-width) solid var(--md-border-color);
-    border-radius: var(--md-border-radius);
+    border: var(--md-border-width) solid var(--or3-prose-code-border);
+    border-radius: calc(var(--md-border-radius) + 2px);
+    background: var(--or3-prose-code-block-bg);
     overflow: hidden;
 }
 
 /* Streamdown code blocks */
 .or3-prose :deep([data-streamdown='code-body']) {
-    padding-bottom: 0 !important;
+    padding: 1rem;
+    overflow-x: auto;
 }
 
 /* Streamdown code blocks */
 .or3-prose :deep([data-streamdown='pre']) {
-    padding-bottom: 20px !important;
+    padding-bottom: 0 !important;
 }
 
 .or3-prose :deep([data-streamdown='code-block-header']) {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.5rem 1rem;
-    background: var(--md-primary);
-    border-bottom: var(--md-border-width) solid var(--md-border-color);
-    font-family: 'Press Start 2P', monospace;
-    font-size: 16px;
+    gap: 0.75rem;
+    min-height: 2.5rem;
+    padding: 0.45rem 0.75rem;
+    background: var(--or3-prose-code-header-bg);
+    border-bottom: var(--md-border-width) solid var(--or3-prose-code-border);
+    font-family: inherit;
+    font-size: 0.875rem;
+    color: var(--or3-prose-code-header-fg);
 }
 
 .or3-prose :deep([data-streamdown='code-lang']) {
     text-transform: uppercase;
-    color: var(--md-on-primary);
-    letter-spacing: 0.5px;
-    font-size: 10px !important;
+    color: var(--or3-prose-code-header-fg);
+    letter-spacing: 0.08em;
+    font-size: 0.7rem !important;
+    font-weight: 600;
 }
 
 .or3-prose :deep([data-streamdown='code']) {
-font-family: "VT323", monospace !important;
-    font-size: 18px !important;
-}
-
-.or3-prose :deep([data-streamdown='code-body']) {
-    padding: 1rem;
-    overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+        'Courier New', monospace !important;
+    font-size: 0.875rem !important;
 }
 
 .or3-prose :deep([data-streamdown='code-body'] pre) {
@@ -145,21 +156,36 @@ font-family: "VT323", monospace !important;
     padding: 0;
     border: none;
     background: transparent;
+    font-weight: 400;
 }
 
-.or3-prose :deep([data-streamdown='copy-button']) {
-    padding: 0.25rem 0.5rem;
-    background: var(--md-primary);
-    color: white;
-    border: var(--md-border-width) solid var(--md-border-color);
-    border-radius: var(--md-border-radius);
+.or3-prose :deep([data-streamdown='code-actions']) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.or3-prose :deep([data-streamdown='copy-button']),
+.or3-prose :deep([data-streamdown='download-button']) {
+    padding: 0.2rem 0.45rem;
+    background: var(--or3-prose-code-button-bg);
+    color: var(--or3-prose-code-button-fg);
+    border: 1px solid transparent;
+    border-radius: calc(var(--md-border-radius) * 0.8);
     cursor: pointer;
-    font-size: 0.75rem;
-    transition: background 0.2s;
+    font-size: 0.7rem;
+    line-height: 1;
+    transition:
+        background 0.2s,
+        color 0.2s,
+        border-color 0.2s;
 }
 
-.or3-prose :deep([data-streamdown='copy-button']:hover) {
-    background: var(--md-primary-variant);
+.or3-prose :deep([data-streamdown='copy-button']:hover),
+.or3-prose :deep([data-streamdown='download-button']:hover) {
+    background: var(--or3-prose-code-button-hover-bg);
+    color: var(--or3-prose-code-button-hover-fg);
+    border-color: var(--or3-prose-code-border);
 }
 
 .or3-prose :deep(blockquote) {
@@ -167,6 +193,7 @@ font-family: "VT323", monospace !important;
     padding-left: 1rem;
     margin: 1rem 0;
     font-style: italic;
+    color: var(--md-on-surface);
 }
 
 .or3-prose :deep(ul),
@@ -182,49 +209,48 @@ font-family: "VT323", monospace !important;
 
 
 .or3-prose :deep(th) {
-    border-right: var(--md-border-width) solid var(--md-border-color);
+    border-bottom: var(--md-border-width) solid var(--md-border-color);
     padding: 0.5rem 0.75rem;
     text-align: left;
-    color: var(--md-on-primary);
-    font-size: 16px;
+    color: var(--or3-prose-table-header-fg);
+    font-size: 0.875rem;
     white-space: nowrap;
-    background: var(--md-primary);
-    font-weight: bold;
+    background: var(--or3-prose-table-header-bg);
+    font-weight: 600;
 }
 
 .or3-prose :deep(td) {
-    border: var(--md-border-width) solid var(--md-border-color);
+    border-bottom: var(--md-border-width) solid var(--md-border-color);
     padding: 0.5rem 0.75rem;
     text-align: left;
-    font-size: 16px;
+    font-size: 0.875rem;
 }
 
 
 /* Safety net for table layout */
-[data-streamdown='table-wrapper'] {
+.or3-prose :deep([data-streamdown='table-wrapper']) {
     border: var(--md-border-width) solid var(--md-border-color);
     border-radius: var(--md-border-radius);
     margin-top: 32px !important;
     margin-bottom: 32px;
-    margin-right: 4px; /* Space for shadow */
     overflow-x: auto;
     width: fit-content;
-    max-width: calc(100% - 4px); /* Account for shadow space */
+    max-width: 100%;
 }
 
 
 
-[data-streamdown='table'] {
+.or3-prose :deep([data-streamdown='table']) {
     margin-bottom: 0px;
     margin-top: 0px;
-    border-bottom: var(--md-border-width) solid var(--md-border-color);
+    border-bottom: none;
     border-left: none;
     border-right: none;
     width: auto;
     min-width: min-content;
 }
 
-[data-streamdown='th'] {
+.or3-prose :deep([data-streamdown='th']) {
     padding-top: 8px;
     padding-bottom: 8px;
     border-bottom: var(--md-border-width) solid var(--md-border-color);
@@ -233,30 +259,32 @@ font-family: "VT323", monospace !important;
     white-space: nowrap;
 }
 
-[data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='th']:first-child,
-[data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='td']:first-child {
+.or3-prose :deep([data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='th']:first-child),
+.or3-prose :deep([data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='td']:first-child) {
     border-left: 0;
 }
-[data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='th']:last-child,
-[data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='td']:last-child {
+.or3-prose :deep([data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='th']:last-child),
+.or3-prose :deep([data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='td']:last-child) {
     border-right: 0;
 }
 
 /* Zebra striping for table body rows (every 2nd data row) */
-[data-streamdown='tbody'] [data-streamdown='tr']:nth-child(even) {
+.or3-prose :deep([data-streamdown='tbody'] [data-streamdown='tr']:nth-child(even)) {
     background: var(--md-surface-container-low);
 }
-[data-streamdown='tbody'] [data-streamdown='tr']:nth-child(odd) {
+.or3-prose :deep([data-streamdown='tbody'] [data-streamdown='tr']:nth-child(odd)) {
     background: var(--md-surface-container-lowest);
 }
 /* Optional hover highlight */
-[data-streamdown='tbody'] [data-streamdown='tr']:hover {
+.or3-prose :deep([data-streamdown='tbody'] [data-streamdown='tr']:hover) {
     background: var(--md-surface-container-high);
 }
 
 .or3-prose :deep([data-streamdown='code-line-number']) {
-    margin-right: 12px;
-    padding: 20px;
+    margin-right: 0.75rem;
+    padding: 0;
+    opacity: 0.45;
+    user-select: none;
 }
 .or3-prose :deep(pre) {
     padding-left: 0;
