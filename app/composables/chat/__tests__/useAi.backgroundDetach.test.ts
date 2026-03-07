@@ -19,6 +19,11 @@ const runtimeConfigRef = {
     value: {
         public: {
             ssrAuthEnabled: true,
+            sync: {
+                enabled: false,
+                provider: 'memory',
+                convexUrl: null,
+            },
             backgroundStreaming: {
                 enabled: true,
                 startMode: 'background' as 'foreground' | 'background',
@@ -190,6 +195,7 @@ vi.mock('~/composables/chat/useAiSettings', () => ({
 vi.mock('~/composables/chat/useModelStore', () => ({
     useModelStore: () => ({
         catalog: ref([{ id: 'test-model' }]),
+        favoriteModels: ref([]),
     }),
 }));
 
@@ -262,6 +268,11 @@ describe('useChat background detach race', () => {
         runtimeConfigRef.value = {
             public: {
                 ssrAuthEnabled: true,
+                sync: {
+                    enabled: false,
+                    provider: 'memory',
+                    convexUrl: null,
+                },
                 backgroundStreaming: {
                     enabled: true,
                     startMode: 'background',

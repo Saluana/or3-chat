@@ -200,13 +200,13 @@ export function useChat(
     const aborted = ref<boolean>(false);
     const { apiKey, setKey } = useUserApiKey();
     const runtimeConfig = useRuntimeConfig();
-    const syncConfig = runtimeConfig.public?.sync;
+    const syncConfig = runtimeConfig.public.sync;
     const serverNotificationsEnabled = computed(
         () =>
-            runtimeConfig.public?.ssrAuthEnabled === true &&
-            syncConfig?.enabled === true &&
-            syncConfig?.provider === CONVEX_PROVIDER_ID &&
-            Boolean(syncConfig?.convexUrl)
+            runtimeConfig.public.ssrAuthEnabled === true &&
+            syncConfig.enabled === true &&
+            syncConfig.provider === CONVEX_PROVIDER_ID &&
+            Boolean(syncConfig.convexUrl)
     );
     const sessionContext =
         runtimeConfig.public.ssrAuthEnabled === true ? useSessionContext() : null;

@@ -82,8 +82,19 @@ function isZipLikePayload(buffer: Uint8Array): boolean {
  */
 function ipToNum(ip: string): number {
     const parts = ip.split('.').map(Number);
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    return ((parts[0]! << 24) | (parts[1]! << 16) | (parts[2]! << 8) | parts[3]!) >>> 0;
+    const [a, b, c, d] = parts;
+    if (
+        a === undefined ||
+        b === undefined ||
+        c === undefined ||
+        d === undefined ||
+        parts.length !== 4 ||
+        parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+    ) {
+        throw new Error('Invalid IPv4 address');
+    }
+
+    return ((a << 24) | (b << 16) | (c << 8) | d) >>> 0;
 }
 
 /**
@@ -304,8 +315,7 @@ export async function fetchZipFromUrl(
             const chunks: Uint8Array[] = [];
             let totalSize = 0;
 
-            // eslint-disable-next-line no-constant-condition
-            while (true) {
+            for (;;) {
                 const { done, value } = await reader.read();
                 if (done) break;
 

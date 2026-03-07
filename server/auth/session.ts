@@ -217,11 +217,9 @@ export async function resolveSessionContext(
 
     const storeId =
         (config.sync as { provider?: string } | undefined)?.provider ||
-        (
-            config.public as {
-                sync?: { provider?: string };
-            }
-        )?.sync?.provider ||
+        (config.public as {
+            sync?: { provider?: string };
+        }).sync?.provider ||
         'convex';
     const sharedCacheKey = getSharedSessionCacheKey(
         providerSession.provider,

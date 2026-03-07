@@ -33,7 +33,7 @@ export async function requireAdminWebhookApiContext(
     options: { mutation?: boolean } = {}
 ): Promise<{ store: WebhookStore }> {
     const config = useRuntimeConfig();
-    if (!config.webhooks?.enabled) {
+    if (!config.webhooks.enabled) {
         throw createError({
             statusCode: 404,
             statusMessage: 'Not Found',
@@ -60,7 +60,7 @@ export function getAdminWebhookRuntimeSettings(): AdminWebhookRuntimeSettings {
     const config = useRuntimeConfig();
 
     return {
-        adminMax: Number(config.webhooks?.adminMax ?? 50),
+        adminMax: Number(config.webhooks.adminMax),
     };
 }
 

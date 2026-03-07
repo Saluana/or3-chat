@@ -61,21 +61,18 @@ export async function startWebhookRuntime(
     const dispatcher = createWebhookDispatcher(
         store,
         {
-            rateLimitPerMinute: Number(config.webhooks.rateLimitPerMinute ?? 120),
-            deliveryTimeoutMs: Number(config.webhooks.deliveryTimeoutMs ?? 10_000),
+            rateLimitPerMinute: Number(config.webhooks.rateLimitPerMinute),
+            deliveryTimeoutMs: Number(config.webhooks.deliveryTimeoutMs),
             blockPrivateIps: Boolean(config.webhooks.blockPrivateIps),
             encryptionKey,
-            maxRetryHours: Number(config.webhooks.maxRetryHours ?? 1),
+            maxRetryHours: Number(config.webhooks.maxRetryHours),
         },
         workerId
     );
     const bridge = createWebhookEventBridge(store, dispatcher, nitroApp);
 
     const hourlyCleanup = setInterval(() => {
-        const retentionHours = Math.max(
-            1,
-            Number(config.webhooks.logRetentionHours ?? 72)
-        );
+        const retentionHours = Math.max(1, Number(config.webhooks.logRetentionHours));
         const cutoff = Date.now() - retentionHours * ONE_HOUR_MS;
         void store.purgeExpiredLogs(cutoff);
     }, ONE_HOUR_MS);

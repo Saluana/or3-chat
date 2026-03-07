@@ -57,7 +57,7 @@ export async function requireWebhookApiContext(
     event: H3Event
 ): Promise<WebhookApiContext> {
     const config = useRuntimeConfig();
-    if (!config.auth?.enabled || !config.webhooks?.enabled) {
+    if (!config.auth.enabled || !config.webhooks.enabled) {
         throw createError({
             statusCode: 404,
             statusMessage: 'Not Found',
@@ -90,8 +90,7 @@ export async function requireWebhookApiContext(
 
 export function requireWebhookEncryptionKey(): string {
     const config = useRuntimeConfig();
-    const encryptionKey =
-        (config.webhooks as { encryptionKey?: unknown } | undefined)?.encryptionKey;
+    const encryptionKey: unknown = config.webhooks.encryptionKey;
 
     if (typeof encryptionKey === 'string' && encryptionKey.trim()) {
         return encryptionKey;
@@ -119,13 +118,13 @@ export function getWebhookRuntimeSettings(): WebhookRuntimeSettings {
     const config = useRuntimeConfig();
 
     return {
-        forceHttps: Boolean(config.security?.forceHttps),
-        maxPerUser: Number(config.webhooks?.maxPerUser ?? 20),
-        rateLimitPerMinute: Number(config.webhooks?.rateLimitPerMinute ?? 120),
-        deliveryTimeoutMs: Number(config.webhooks?.deliveryTimeoutMs ?? 10_000),
-        blockPrivateIps: Boolean(config.webhooks?.blockPrivateIps),
-        maxRetryHours: Number(config.webhooks?.maxRetryHours ?? 1),
-        logRetentionHours: Number(config.webhooks?.logRetentionHours ?? 72),
+        forceHttps: Boolean(config.security.forceHttps),
+        maxPerUser: Number(config.webhooks.maxPerUser),
+        rateLimitPerMinute: Number(config.webhooks.rateLimitPerMinute),
+        deliveryTimeoutMs: Number(config.webhooks.deliveryTimeoutMs),
+        blockPrivateIps: Boolean(config.webhooks.blockPrivateIps),
+        maxRetryHours: Number(config.webhooks.maxRetryHours),
+        logRetentionHours: Number(config.webhooks.logRetentionHours),
     };
 }
 
@@ -168,7 +167,9 @@ export function resolveWebhookLogSince(rawSince: unknown): number {
         );
     }
 
-    const sinceValue = Array.isArray(rawSince) ? rawSince[0] : rawSince;
+    const sinceValue: unknown = Array.isArray(rawSince)
+        ? rawSince.at(0)
+        : rawSince;
     const since = Number(sinceValue);
 
     if (!Number.isFinite(since) || since < 0) {

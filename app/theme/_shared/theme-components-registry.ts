@@ -15,6 +15,27 @@ import {
 
 type ThemeComponentLoader = () => Promise<Component>;
 
+function isComponentLike(value: unknown): value is Component {
+    return typeof value === 'function' || typeof value === 'object';
+}
+
+function requireComponent(value: unknown, source: string): Component {
+    if (!isComponentLike(value)) {
+        throw new TypeError(`[theme] Invalid component export from ${source}`);
+    }
+
+    return value;
+}
+
+function defineAsyncVueComponent(
+    loader: () => Promise<{ default: unknown }>
+): Component {
+    return defineAsyncComponent(async () => {
+        const module = await loader();
+        return requireComponent(module.default, 'async Vue module');
+    });
+}
+
 const themeVueModules = import.meta.glob('../*/**/*.vue', {
     import: 'default',
 }) as Record<string, ThemeComponentLoader>;
@@ -24,37 +45,52 @@ const asyncChunkCache = new Map<
     { moduleKey: string; component: Component }
 >();
 
-const DashboardModalDefault = defineAsyncComponent(
+const DashboardModalDefault = defineAsyncVueComponent(
     () => import('~/components/dashboard/Dashboard.vue')
 );
 
-const SystemPromptsModalDefault = defineAsyncComponent(
+const SystemPromptsModalDefault = defineAsyncVueComponent(
     () => import('~/components/chat/SystemPromptsModal.vue')
 );
 
-const ModelCatalogModalDefault = defineAsyncComponent(
+const ModelCatalogModalDefault = defineAsyncVueComponent(
     () => import('~/components/modal/ModelCatalog.vue')
 );
 
-const DocumentEditorDefault = defineAsyncComponent(
+const DocumentEditorDefault = defineAsyncVueComponent(
     () => import('~/components/documents/DocumentEditor.vue')
 );
 
 export const CORE_APP_COMPONENT_DEFAULTS: Record<AppThemeComponent, Component> =
     {
-        sidebar: SideBar,
-        'sidebar-collapsed': SideNavContentCollapsed,
-        'chat-page': ChatContainer,
-        'chat-message': ChatMessage,
-        'chat-input': ChatInputDropper,
+        sidebar: requireComponent(SideBar, 'SideBar.vue'),
+        'sidebar-collapsed': requireComponent(
+            SideNavContentCollapsed,
+            'SideNavContentCollapsed.vue'
+        ),
+        'chat-page': requireComponent(ChatContainer, 'ChatContainer.vue'),
+        'chat-message': requireComponent(ChatMessage, 'ChatMessage.vue'),
+        'chat-input': requireComponent(
+            ChatInputDropper,
+            'ChatInputDropper.vue'
+        ),
         'document-editor': DocumentEditorDefault,
         'dashboard-modal': DashboardModalDefault,
-        'model-selector': ModelSelect,
+        'model-selector': requireComponent(ModelSelect, 'ModelSelect.vue'),
         'system-prompts-modal': SystemPromptsModalDefault,
         'model-catalog-modal': ModelCatalogModalDefault,
-        'sidebar-auth-button': SidebarAuthButton,
-        'documentation-shell': DocumentationShell,
-        'workflow-status': WorkflowExecutionStatus,
+        'sidebar-auth-button': requireComponent(
+            SidebarAuthButton,
+            'SidebarAuthButton.vue'
+        ),
+        'documentation-shell': requireComponent(
+            DocumentationShell,
+            'DocumentationShell.vue'
+        ),
+        'workflow-status': requireComponent(
+            WorkflowExecutionStatus,
+            'WorkflowExecutionStatus.vue'
+        ),
     };
 
 const shouldWarnThemeComponentFallback =

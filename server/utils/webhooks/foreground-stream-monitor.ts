@@ -3,7 +3,7 @@ import { emitMessageCompletedWebhookEvent } from './hook-emissions';
 async function drainStream(stream: ReadableStream<Uint8Array>): Promise<void> {
     const reader = stream.getReader();
     try {
-        while (true) {
+        for (;;) {
             const { done } = await reader.read();
             if (done) {
                 return;

@@ -26,8 +26,7 @@ const BodySchema = z
         workspace_id: z.string().min(1).nullable().optional(),
     })
     .refine(
-        (value) =>
-            value.events.length > 0 || (value.custom_hooks?.length ?? 0) > 0,
+        (value) => value.events.length > 0 || value.custom_hooks.length > 0,
         {
             message: 'At least one event or custom hook is required',
         }

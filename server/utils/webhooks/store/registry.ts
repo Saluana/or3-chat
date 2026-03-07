@@ -37,8 +37,8 @@ export function getWebhookStore(id: string): WebhookStore | null {
 
 export function getActiveWebhookStore(): WebhookStore | null {
     const config = useRuntimeConfig();
-    const providerId = config.sync?.provider ?? config.public?.sync?.provider;
-    if (!providerId || typeof providerId !== 'string') {
+    const providerId = config.sync.provider || config.public.sync.provider;
+    if (!providerId) {
         return null;
     }
 

@@ -286,7 +286,7 @@ async function emitBackgroundComplete(
         const sessionUserId =
             session?.authenticated && session.user?.id ? session.user.id : null;
         const userId =
-            sessionUserId ?? tracker.userId ?? resolveNotificationUserId(session);
+            sessionUserId || tracker.userId || resolveNotificationUserId(session);
         const service = new NotificationService(getDb(), hooks, userId);
         const created = await service.create(payload);
         bgStreamLog('notify-emitted-via-service', {
