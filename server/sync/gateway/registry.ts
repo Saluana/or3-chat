@@ -17,7 +17,7 @@
  * - Instances are cached per adapter ID for performance.
  */
 import type { SyncGatewayAdapter } from './types';
-import { useRuntimeConfig } from '#imports';
+import { createRuntimeConfigRegistry } from '../../utils/registry/create-runtime-config-registry';
 
 export type SyncGatewayAdapterFactory = () => SyncGatewayAdapter;
 
@@ -27,8 +27,16 @@ export interface SyncGatewayAdapterRegistryItem {
     create: SyncGatewayAdapterFactory;
 }
 
-const adapters = new Map<string, SyncGatewayAdapterRegistryItem>();
-const adapterInstances = new Map<string, SyncGatewayAdapter>();
+const registry = createRuntimeConfigRegistry<
+    SyncGatewayAdapter,
+    SyncGatewayAdapterRegistryItem
+>({
+    warnLabel: 'sync:gateway:registry',
+    cacheInstances: true,
+    resolveActiveId(config) {
+        return config.public.sync.provider;
+    },
+});
 
 /**
  * Purpose:
@@ -49,14 +57,7 @@ const adapterInstances = new Map<string, SyncGatewayAdapter>();
 export function registerSyncGatewayAdapter(
     item: SyncGatewayAdapterRegistryItem
 ): void {
-    if (import.meta.dev && adapters.has(item.id)) {
-        console.warn(
-            `[sync:gateway:registry] Replacing adapter: ${item.id}`
-        );
-    }
-    adapters.set(item.id, item);
-    // Clear cached instance when re-registering
-    adapterInstances.delete(item.id);
+    registry.register(item);
 }
 
 /**
@@ -81,21 +82,7 @@ export function registerSyncGatewayAdapter(
 export function getSyncGatewayAdapter(
     id: string
 ): SyncGatewayAdapter | null {
-    // Return cached instance if available
-    const cached = adapterInstances.get(id);
-    if (cached) {
-        return cached;
-    }
-
-    // Create and cache new instance
-    const item = adapters.get(id);
-    if (!item) {
-        return null;
-    }
-
-    const instance = item.create();
-    adapterInstances.set(id, instance);
-    return instance;
+    return registry.get(id);
 }
 
 /**
@@ -121,10 +108,7 @@ export function getSyncGatewayAdapter(
  * ```
  */
 export function getActiveSyncGatewayAdapter(): SyncGatewayAdapter | null {
-    const config = useRuntimeConfig();
-    const providerId = config.public.sync.provider;
-    if (!providerId) return null;
-    return getSyncGatewayAdapter(providerId);
+    return registry.getActive();
 }
 
 /**
@@ -133,5 +117,5 @@ export function getActiveSyncGatewayAdapter(): SyncGatewayAdapter | null {
  * Primarily used for diagnostics or configuration validation.
  */
 export function listSyncGatewayAdapterIds(): string[] {
-    return Array.from(adapters.keys());
+    return registry.listIds();
 }

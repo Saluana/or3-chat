@@ -1,20 +1,25 @@
-import { defineEventHandler, getQuery } from 'h3';
 import {
     requireOwnedWebhook,
     requireWebhookApiContext,
     requireWebhookId,
     resolveWebhookLogSince,
 } from '../_helpers';
+import { createWebhookLogsHandler } from '../route-factories';
 
-export default defineEventHandler(async (event) => {
-    const { store, userId, workspaceId } = await requireWebhookApiContext(event);
-    const webhookId = requireWebhookId(event);
-    await requireOwnedWebhook(store, webhookId, userId, workspaceId);
-
-    const since = resolveWebhookLogSince(getQuery(event).since);
-    const logs = await store.getDeliveryLogs(webhookId, since);
-
-    return {
-        logs,
-    };
-});
+export default createWebhookLogsHandler(
+    {
+        getWebhookId: requireWebhookId,
+        resolveContext(event) {
+            return requireWebhookApiContext(event);
+        },
+        resolveWebhook(context, webhookId) {
+            return requireOwnedWebhook(
+                context.store,
+                webhookId,
+                context.userId,
+                context.workspaceId
+            );
+        },
+    },
+    resolveWebhookLogSince
+);

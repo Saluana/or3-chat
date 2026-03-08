@@ -27,13 +27,13 @@
                 class="w-full"
                 v-model="webSearchEnabled"
             ></USwitch>
-            <UIcon :name="useIcon('ui.view').value" class="w-5 h-5" />
+            <UIcon :name="iconView" class="w-5 h-5" />
         </div>
         <div
             class="chat-settings-switch flex justify-between w-full items-center py-1 px-3 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
         >
             <USwitch v-bind="thinkingSwitchProps" class="w-full" v-model="thinkingEnabled"></USwitch>
-            <UIcon :name="useIcon('chat.reasoning').value" class="w-5 h-5" />
+            <UIcon :name="iconReasoning" class="w-5 h-5" />
         </div>
 
         <!-- Tool Toggles Section -->
@@ -119,7 +119,7 @@
                                 />
                                 <UIcon
                                     v-else
-                                    :name="useIcon('chat.tool.wrench').value"
+                                    :name="iconToolWrench"
                                     class="w-5 h-5"
                                 />
                             </div>
@@ -161,6 +161,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useIcon } from '~/composables/useIcon';
 import { useToolRegistry } from '~/utils/chat/tools-public';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
@@ -273,8 +274,13 @@ const selectedModel = defineModel<string>('model');
 const webSearchEnabled = defineModel<boolean>('webSearchEnabled');
 const thinkingEnabled = defineModel<boolean>('thinkingEnabled');
 
+const iconView = useIcon('ui.view');
+const iconReasoning = useIcon('chat.reasoning');
+const iconToolWrench = useIcon('chat.tool.wrench');
 const iconChevronRight = useIcon('ui.chevron.right');
 const iconChevronDown = useIcon('ui.chevron.down');
+const iconSystemPrompt = useIcon('chat.system_prompt');
+const iconModelCatalog = useIcon('chat.model.catalog');
 
 // Theme overrides - Container
 const containerProps = computed(() => {
@@ -371,7 +377,7 @@ const systemPromptsButtonProps = computed(() => {
         size: 'sm' as const,
         block: true,
         trailing: true,
-        trailingIcon: useIcon('chat.system_prompt').value,
+        trailingIcon: iconSystemPrompt.value,
         ...overrideValue,
         class: mergedClass,
     };
@@ -399,7 +405,7 @@ const modelCatalogButtonProps = computed(() => {
         size: 'sm' as const,
         block: true,
         trailing: true,
-        trailingIcon: useIcon('chat.model.catalog').value,
+        trailingIcon: iconModelCatalog.value,
         ...overrideValue,
         class: mergedClass,
     };

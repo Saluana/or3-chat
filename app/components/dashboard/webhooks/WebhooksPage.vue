@@ -50,151 +50,41 @@
 import WebhookDeliveryLog from './WebhookDeliveryLog.vue';
 import WebhookForm from './WebhookForm.vue';
 import WebhooksList from './WebhooksList.vue';
-import type {
-    ManagedWebhook,
-    ManagedWebhookTestResult,
-} from './types';
-
-const toast = useToast();
-const { getMessage } = useApiError();
-
-const formOpen = ref(false);
-const logsOpen = ref(false);
-const editingWebhook = ref<ManagedWebhook | null>(null);
-const activeLogWebhook = ref<ManagedWebhook | null>(null);
-const bulkDisabling = ref(false);
-const testingId = ref<string | null>(null);
-const testResult = ref<ManagedWebhookTestResult | null>(null);
+import { useManagedWebhooks } from '~/composables/webhooks/useManagedWebhooks';
 
 const {
-    data,
+    activeLogWebhook,
+    bulkDisabling,
+    deleteWebhook,
+    disableAll,
+    editingWebhook,
+    errorMessage,
+    formOpen,
+    handleSaved,
+    logsOpen,
+    openCreate,
+    openEdit,
+    openLogs,
     pending,
-    error,
-    refresh,
-} = await useFetch<{ webhooks: ManagedWebhook[] }>('/api/webhooks', {
-    credentials: 'include',
-    default: () => ({ webhooks: [] }),
+    sendTestPing,
+    testResult,
+    testingId,
+    toggleWebhook,
+    webhooks,
+} = await useManagedWebhooks({
+    endpoint: '/api/webhooks',
+    loadErrorMessage: 'Unable to load webhooks',
+    deleteErrorMessage: 'Unable to delete webhook',
+    updateErrorMessage: 'Unable to update webhook',
+    testErrorMessage: 'Unable to send test ping',
+    bulkDisable: {
+        endpoint: '/api/webhooks/disable-all',
+        confirmMessage: 'Disable every webhook in this workspace?',
+        successTitle: 'Webhooks disabled',
+        successDescription(disabled) {
+            return `${disabled} webhook${disabled === 1 ? '' : 's'} disabled`;
+        },
+        failureDescription: 'Unable to disable webhooks',
+    },
 });
-
-const webhooks = computed(() => data.value?.webhooks ?? []);
-const errorMessage = computed(() =>
-    error.value ? getMessage(error.value, 'Unable to load webhooks') : null
-);
-
-function openCreate() {
-    editingWebhook.value = null;
-    formOpen.value = true;
-}
-
-function openEdit(webhook: ManagedWebhook) {
-    editingWebhook.value = webhook;
-    formOpen.value = true;
-}
-
-function openLogs(webhook: ManagedWebhook) {
-    activeLogWebhook.value = webhook;
-    logsOpen.value = true;
-}
-
-async function handleSaved() {
-    await refresh();
-}
-
-async function deleteWebhook(webhook: ManagedWebhook) {
-    if (!import.meta.client || !window.confirm(`Delete "${webhook.label || webhook.url}"?`)) {
-        return;
-    }
-
-    try {
-        await $fetch(`/api/webhooks/${webhook.id}`, {
-            method: 'DELETE',
-            credentials: 'include',
-        });
-        if (activeLogWebhook.value?.id === webhook.id) {
-            logsOpen.value = false;
-            activeLogWebhook.value = null;
-        }
-        await refresh();
-    } catch (fetchError: unknown) {
-        toast.add({
-            title: 'Delete failed',
-            description: getMessage(fetchError, 'Unable to delete webhook'),
-            color: 'error',
-        });
-    }
-}
-
-async function toggleWebhook(webhook: ManagedWebhook) {
-    try {
-        await $fetch<{ webhook: ManagedWebhook }>(`/api/webhooks/${webhook.id}/toggle`, {
-            method: 'POST',
-            credentials: 'include',
-            body: {},
-        });
-        await refresh();
-    } catch (fetchError: unknown) {
-        toast.add({
-            title: 'Update failed',
-            description: getMessage(fetchError, 'Unable to update webhook'),
-            color: 'error',
-        });
-    }
-}
-
-async function disableAll() {
-    if (!import.meta.client || !window.confirm('Disable every webhook in this workspace?')) {
-        return;
-    }
-
-    bulkDisabling.value = true;
-    try {
-        const result = await $fetch<{ disabled: number }>('/api/webhooks/disable-all', {
-            method: 'POST',
-            credentials: 'include',
-        });
-        testResult.value = null;
-        await refresh();
-        toast.add({
-            title: 'Webhooks disabled',
-            description: `${result.disabled} webhook${result.disabled === 1 ? '' : 's'} disabled`,
-            color: 'success',
-        });
-    } catch (fetchError: unknown) {
-        toast.add({
-            title: 'Bulk disable failed',
-            description: getMessage(fetchError, 'Unable to disable webhooks'),
-            color: 'error',
-        });
-    } finally {
-        bulkDisabling.value = false;
-    }
-}
-
-async function sendTestPing(webhook: ManagedWebhook) {
-    testingId.value = webhook.id;
-    testResult.value = null;
-
-    try {
-        const result = await $fetch<Omit<ManagedWebhookTestResult, 'webhookId'>>(
-            `/api/webhooks/${webhook.id}/test`,
-            {
-                method: 'POST',
-                credentials: 'include',
-            }
-        );
-        testResult.value = {
-            webhookId: webhook.id,
-            ...result,
-        };
-        await refresh();
-    } catch (fetchError: unknown) {
-        toast.add({
-            title: 'Test ping failed',
-            description: getMessage(fetchError, 'Unable to send test ping'),
-            color: 'error',
-        });
-    } finally {
-        testingId.value = null;
-    }
-}
 </script>

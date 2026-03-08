@@ -32,7 +32,7 @@
                 v-bind="alertProps"
                 color="warning"
                 variant="subtle"
-                :icon="useIcon('ui.warning').value"
+                :icon="iconWarning"
                 class="text-xs"
                 title="Always create a fresh export before importing a backup—replace mode wipes current data."
             />
@@ -75,7 +75,7 @@
                     @click="onExport"
                 >
                     <UIcon
-                        :name="useIcon('dashboard.backup').value"
+                        :name="iconBackup"
                         class="h-4 w-4 mr-0.5"
                     />
                     Export workspace
@@ -127,7 +127,7 @@
                             @keydown.space.prevent="handleUploadPanelClick"
                         >
                             <UIcon
-                                :name="useIcon('ui.upload').value"
+                                :name="iconUpload"
                                 class="theme-upload-icon"
                                 aria-hidden="true"
                             />
@@ -194,7 +194,7 @@
                     v-if="peeking"
                     color="primary"
                     variant="subtle"
-                    :icon="useIcon('ui.wait').value"
+                    :icon="iconWait"
                     class="text-xs"
                     title="Validating backup metadata…"
                 />
@@ -203,7 +203,7 @@
                     v-if="peekErrorMessage"
                     color="error"
                     variant="subtle"
-                    :icon="useIcon('ui.warning').value"
+                    :icon="iconWarning"
                     class="text-xs"
                     :title="peekErrorMessage"
                 />
@@ -322,7 +322,7 @@
                     v-if="importWarningMessage"
                     color="warning"
                     variant="subtle"
-                    :icon="useIcon('ui.warning').value"
+                    :icon="iconWarning"
                     class="text-xs"
                     :title="importWarningMessage"
                 />
@@ -331,7 +331,7 @@
                     v-if="importErrorMessage"
                     color="error"
                     variant="subtle"
-                    :icon="useIcon('ui.warning').value"
+                    :icon="iconWarning"
                     class="text-xs"
                     :title="importErrorMessage"
                 />
@@ -354,7 +354,7 @@
                         @click="onImport"
                     >
                         <UIcon
-                            :name="useIcon('dashboard.restore').value"
+                            :name="iconRestore"
                             class="h-4 w-4 mr-0.5"
                         />
                         Import workspace
@@ -374,11 +374,17 @@ import {
     useWorkspaceBackup,
     type WorkspaceImportMode,
 } from '~/composables/core/useWorkspaceBackup';
+import { useIcon } from '~/composables/useIcon';
 import { err, reportError, type AppError } from '~/utils/errors';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const docsHref =
     'https://github.com/Saluana/or3-chat/blob/main/docs/UI/workspace-backup.md';
+const iconWarning = useIcon('ui.warning');
+const iconBackup = useIcon('dashboard.backup');
+const iconUpload = useIcon('ui.upload');
+const iconWait = useIcon('ui.wait');
+const iconRestore = useIcon('dashboard.restore');
 
 const liveRegion = ref<HTMLElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);

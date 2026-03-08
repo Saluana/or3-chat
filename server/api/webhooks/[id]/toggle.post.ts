@@ -1,34 +1,23 @@
-import { createError, defineEventHandler, readBody } from 'h3';
-import { z } from 'zod';
 import {
     requireOwnedWebhook,
     requireWebhookApiContext,
     requireWebhookId,
     serializeWebhook,
 } from '../_helpers';
+import { createWebhookToggleHandler } from '../route-factories';
 
-const BodySchema = z.object({
-    enabled: z.boolean().optional(),
-});
-
-export default defineEventHandler(async (event) => {
-    const body = BodySchema.safeParse((await readBody(event)) ?? {});
-    if (!body.success) {
-        throw createError({
-            statusCode: 400,
-            statusMessage: 'Invalid request',
-        });
-    }
-
-    const { store, userId, workspaceId } = await requireWebhookApiContext(event);
-    const webhookId = requireWebhookId(event);
-    const existing = await requireOwnedWebhook(store, webhookId, userId, workspaceId);
-
-    const updated = await store.updateWebhook(webhookId, {
-        enabled: body.data.enabled ?? !existing.enabled,
-    });
-
-    return {
-        webhook: serializeWebhook(updated),
-    };
+export default createWebhookToggleHandler({
+    getWebhookId: requireWebhookId,
+    async resolveContext(event) {
+        return requireWebhookApiContext(event);
+    },
+    resolveWebhook(context, webhookId) {
+        return requireOwnedWebhook(
+            context.store,
+            webhookId,
+            context.userId,
+            context.workspaceId
+        );
+    },
+    serializeWebhook,
 });

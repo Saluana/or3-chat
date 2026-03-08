@@ -22,8 +22,8 @@
                             :square="true"
                             :icon="
                                 isFullscreen
-                                    ? useIcon('ui.fullscreen.exit').value
-                                    : useIcon('ui.fullscreen').value
+                                    ? iconFullscreenExit
+                                    : iconFullscreen
                             "
                             class="theme-btn aspect-square hidden md:flex"
                             :ui="{
@@ -39,7 +39,7 @@
                         <UButton
                             size="xs"
                             :square="true"
-                            :icon="useIcon('ui.close').value"
+                            :icon="iconClose"
                             class="theme-btn aspect-square"
                             :ui="{
                                 base: 'theme-btn aspect-square flex items-center justify-center',
@@ -154,10 +154,7 @@
                             :loading="isSending"
                             :disabled="!canSend"
                         >
-                            <UIcon
-                                :name="useIcon('chat.send').value"
-                                class="h-4 w-4"
-                            />
+                            <UIcon :name="iconSend" class="h-4 w-4" />
                             <span>Send</span>
                         </UButton>
                     </div>
@@ -182,7 +179,7 @@
             <div v-if="!isExpanded">
                 <UButton
                     size="md"
-                    :icon="useIcon('ui.help').value"
+                    :icon="iconHelp"
                     :class="launcherClass"
                     :ui="{
                         base: 'theme-btn aspect-square w-12 h-12 flex items-center justify-center',
@@ -201,6 +198,7 @@ import { openRouterStream } from '~/utils/chat/openrouterStream';
 import type { ToolDefinition } from '~/utils/chat/types';
 import { useThrottleFn } from '@vueuse/core';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
+import { useIcon } from '~/composables/useIcon';
 
 const props = defineProps<{ documentationMap?: string }>();
 
@@ -253,6 +251,11 @@ const effectiveApiKey = computed(() =>
 );
 const toast = useToast();
 const { $theme } = useNuxtApp();
+const iconFullscreen = useIcon('ui.fullscreen');
+const iconFullscreenExit = useIcon('ui.fullscreen.exit');
+const iconClose = useIcon('ui.close');
+const iconSend = useIcon('chat.send');
+const iconHelp = useIcon('ui.help');
 
 const currentShikiTheme = computed(() => {
     const theme =

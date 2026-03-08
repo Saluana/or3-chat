@@ -5,10 +5,7 @@
     >
         <div class="max-w-md space-y-4">
             <div class="text-6xl opacity-50">
-                <UIcon
-                    :name="useIcon('ui.unknown').value"
-                    class="w-16 h-16 mx-auto"
-                />
+                <UIcon :name="iconUnknown" class="w-16 h-16 mx-auto" />
             </div>
             <h2 class="text-xl font-bold text-[var(--md-on-surface)]">
                 Unknown Pane Type
@@ -30,7 +27,11 @@
 </template>
 
 <script setup lang="ts">
+import { useIcon } from '~/composables/useIcon';
+
 defineProps<{
     mode: string;
 }>();
+
+const iconUnknown = useIcon('ui.unknown');
 </script>

@@ -329,6 +329,7 @@ import {
     onBeforeUnmount,
     watch,
     getCurrentInstance,
+    defineAsyncComponent,
 } from 'vue';
 import { useOr3Config } from '~/composables/useOr3Config';
 import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';

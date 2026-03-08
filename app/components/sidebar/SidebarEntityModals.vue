@@ -1,72 +1,25 @@
 <template>
-    <UModal
-        v-bind="renameModalProps"
+    <SidebarRenameEntityModal
+        :modal-props="renameModalProps"
         :open="showRenameModal"
         :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
+        :placeholder="isRenamingDoc ? 'Document title' : 'Thread title'"
+        :icon="iconEdit"
+        :value="renameTitle"
         @update:open="emit('update:showRenameModal', $event)"
-    >
-        <template #body>
-            <div class="space-y-4">
-                <UInput
-                    :model-value="renameTitle"
-                    class="w-full"
-                    :placeholder="isRenamingDoc ? 'Document title' : 'Thread title'"
-                    :icon="iconEdit"
-                    @update:model-value="emit('update:renameTitle', String($event ?? ''))"
-                    @keyup.enter="emit('saveRename')"
-                />
-            </div>
-        </template>
-        <template #footer>
-            <UButton
-                variant="ghost"
-                class="theme-btn"
-                @click="emit('update:showRenameModal', false)"
-            >
-                Cancel
-            </UButton>
-            <UButton color="primary" class="theme-btn" @click="emit('saveRename')">
-                Save
-            </UButton>
-        </template>
-    </UModal>
+        @update:value="emit('update:renameTitle', $event)"
+        @submit="emit('saveRename')"
+    />
 
-    <UModal
-        v-bind="renameProjectModalProps"
+    <SidebarRenameProjectModal
+        :modal-props="renameProjectModalProps"
         :open="showRenameProjectModal"
-        title="Rename project"
+        :value="renameProjectName"
+        :icon-folder="iconFolder"
         @update:open="emit('update:showRenameProjectModal', $event)"
-    >
-        <template #header><h3>Rename project?</h3></template>
-        <template #body>
-            <div class="space-y-4">
-                <UInput
-                    :model-value="renameProjectName"
-                    placeholder="Project name"
-                    :icon="iconFolder"
-                    @update:model-value="emit('update:renameProjectName', String($event ?? ''))"
-                    @keyup.enter="emit('saveRenameProject')"
-                />
-            </div>
-        </template>
-        <template #footer>
-            <UButton
-                variant="ghost"
-                class="theme-btn"
-                @click="emit('update:showRenameProjectModal', false)"
-            >
-                Cancel
-            </UButton>
-            <UButton
-                color="primary"
-                class="theme-btn"
-                :disabled="!renameProjectName.trim()"
-                @click="emit('saveRenameProject')"
-            >
-                Save
-            </UButton>
-        </template>
-    </UModal>
+        @update:value="emit('update:renameProjectName', $event)"
+        @submit="emit('saveRenameProject')"
+    />
 
     <UModal
         v-bind="deleteThreadModalProps"
@@ -146,6 +99,9 @@
 </template>
 
 <script setup lang="ts">
+import SidebarRenameEntityModal from './SidebarRenameEntityModal.vue';
+import SidebarRenameProjectModal from './SidebarRenameProjectModal.vue';
+
 defineProps<{
     renameModalProps: Record<string, unknown>;
     showRenameModal: boolean;

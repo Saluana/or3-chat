@@ -1,5 +1,5 @@
-import { useRuntimeConfig } from '#imports';
 import type { WebhookStore } from './types';
+import { createRuntimeConfigRegistry } from '../../registry/create-runtime-config-registry';
 
 export interface WebhookStoreRegistryItem {
     id: string;
@@ -7,44 +7,26 @@ export interface WebhookStoreRegistryItem {
     create: () => WebhookStore;
 }
 
-const stores = new Map<string, WebhookStoreRegistryItem>();
-const storeInstances = new Map<string, WebhookStore>();
+const registry = createRuntimeConfigRegistry<WebhookStore, WebhookStoreRegistryItem>({
+    warnLabel: 'webhooks:store:registry',
+    cacheInstances: true,
+    resolveActiveId(config) {
+        return config.sync.provider || config.public.sync.provider;
+    },
+});
 
 export function registerWebhookStore(item: WebhookStoreRegistryItem): void {
-    if (import.meta.dev && stores.has(item.id)) {
-        console.warn(`[webhooks:store:registry] Replacing store: ${item.id}`);
-    }
-
-    stores.set(item.id, item);
-    storeInstances.delete(item.id);
+    registry.register(item);
 }
 
 export function getWebhookStore(id: string): WebhookStore | null {
-    const cached = storeInstances.get(id);
-    if (cached) {
-        return cached;
-    }
-
-    const item = stores.get(id);
-    if (!item) {
-        return null;
-    }
-
-    const instance = item.create();
-    storeInstances.set(id, instance);
-    return instance;
+    return registry.get(id);
 }
 
 export function getActiveWebhookStore(): WebhookStore | null {
-    const config = useRuntimeConfig();
-    const providerId = config.sync.provider || config.public.sync.provider;
-    if (!providerId) {
-        return null;
-    }
-
-    return getWebhookStore(providerId);
+    return registry.getActive();
 }
 
 export function listWebhookStoreIds(): string[] {
-    return Array.from(stores.keys());
+    return registry.listIds();
 }

@@ -75,7 +75,7 @@ export const sidebarOverrides = {
     },
     'button#sidebar.bottom-nav.connect': {
         variant: 'ghost',
-        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 border-0! rounded-xl text-[var(--md-on-surface-variant)]! transition-colors duration-150',
+        class: 'h-[48px]! w-[48px]! flex items-center justify-center p-0 border-0! rounded-xl text-[var(--md-on-surface-variant)]! transition-colors duration-150',
     },
     'button#sidebar.bottom-nav.connect:connected': {
         class: 'bg-[var(--md-success)]/10 text-[var(--md-success)]! hover:bg-[var(--md-error)]/10! hover:text-[var(--md-error)]!',
@@ -231,6 +231,21 @@ export const sidebarCssSelectors = {
         style: {
             paddingRight: '0',
             justifyContent: 'center',
+        },
+    },
+    // Empty state buttons: shrink text to fit on one line at narrow widths
+    '.sb-empty-state button': {
+        style: {
+            fontSize: '12px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+        },
+    },
+    // Connect button label: tighten letter-spacing so DISCONNECT fits in square
+    '.bottomnav-root [data-connection-state] .uppercase': {
+        style: {
+            letterSpacing: 'normal',
         },
     },
     // Footer section: center

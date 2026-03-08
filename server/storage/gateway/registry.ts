@@ -15,7 +15,7 @@
  * - Instantiation is lazy to avoid unnecessary setup for unused adapters.
  */
 import type { StorageGatewayAdapter } from './types';
-import { useRuntimeConfig } from '#imports';
+import { createRuntimeConfigRegistry } from '../../utils/registry/create-runtime-config-registry';
 
 export type StorageGatewayAdapterFactory = () => StorageGatewayAdapter;
 
@@ -25,7 +25,15 @@ export interface StorageGatewayAdapterRegistryItem {
     create: StorageGatewayAdapterFactory;
 }
 
-const adapters = new Map<string, StorageGatewayAdapterRegistryItem>();
+const registry = createRuntimeConfigRegistry<
+    StorageGatewayAdapter,
+    StorageGatewayAdapterRegistryItem
+>({
+    warnLabel: 'storage:gateway:registry',
+    resolveActiveId(config) {
+        return config.public.storage.provider;
+    },
+});
 
 /**
  * Purpose:
@@ -46,12 +54,7 @@ const adapters = new Map<string, StorageGatewayAdapterRegistryItem>();
 export function registerStorageGatewayAdapter(
     item: StorageGatewayAdapterRegistryItem
 ): void {
-    if (import.meta.dev && adapters.has(item.id)) {
-        console.warn(
-            `[storage:gateway:registry] Replacing adapter: ${item.id}`
-        );
-    }
-    adapters.set(item.id, item);
+    registry.register(item);
 }
 
 /**
@@ -75,8 +78,7 @@ export function registerStorageGatewayAdapter(
 export function getStorageGatewayAdapter(
     id: string
 ): StorageGatewayAdapter | null {
-    const item = adapters.get(id);
-    return item ? item.create() : null;
+    return registry.get(id);
 }
 
 /**
@@ -102,10 +104,7 @@ export function getStorageGatewayAdapter(
  * ```
  */
 export function getActiveStorageGatewayAdapter(): StorageGatewayAdapter | null {
-    const config = useRuntimeConfig();
-    const providerId = config.public.storage.provider;
-    if (!providerId) return null;
-    return getStorageGatewayAdapter(providerId);
+    return registry.getActive();
 }
 
 /**
@@ -114,5 +113,5 @@ export function getActiveStorageGatewayAdapter(): StorageGatewayAdapter | null {
  * Primarily used for diagnostics or configuration validation.
  */
 export function listStorageGatewayAdapterIds(): string[] {
-    return Array.from(adapters.keys());
+    return registry.listIds();
 }

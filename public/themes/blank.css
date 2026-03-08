@@ -78,6 +78,17 @@
   justify-content: center;
 }
 
+[data-theme="blank"] .sb-empty-state button {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-theme="blank"] .bottomnav-root [data-connection-state] .uppercase {
+  letter-spacing: normal;
+}
+
 [data-theme="blank"] #nav-footer-section {
   align-items: center;
   padding-left: 0;

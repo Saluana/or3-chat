@@ -1,5 +1,3 @@
-import { createError, defineEventHandler, readBody } from 'h3';
-import { z } from 'zod';
 import {
     refreshAdminWebhookListeners,
     requireAdminWebhook,
@@ -7,33 +5,20 @@ import {
     requireWebhookId,
     serializeWebhook,
 } from '../_helpers';
+import { createWebhookToggleHandler } from '../../../webhooks/route-factories';
 
-const BodySchema = z.object({
-    enabled: z.boolean().optional(),
-});
-
-export default defineEventHandler(async (event) => {
-    const body = BodySchema.safeParse((await readBody(event)) ?? {});
-    if (!body.success) {
-        throw createError({
-            statusCode: 400,
-            statusMessage: 'Invalid request',
+export default createWebhookToggleHandler({
+    getWebhookId: requireWebhookId,
+    resolveContext(event) {
+        return requireAdminWebhookApiContext(event, {
+            mutation: true,
         });
-    }
-
-    const { store } = await requireAdminWebhookApiContext(event, {
-        mutation: true,
-    });
-    const webhookId = requireWebhookId(event);
-    const existing = await requireAdminWebhook(store, webhookId);
-
-    const updated = await store.updateWebhook(webhookId, {
-        enabled: body.data.enabled ?? !existing.enabled,
-    });
-
-    await refreshAdminWebhookListeners();
-
-    return {
-        webhook: serializeWebhook(updated),
-    };
+    },
+    resolveWebhook(context, webhookId) {
+        return requireAdminWebhook(context.store, webhookId);
+    },
+    serializeWebhook,
+    async afterMutation() {
+        await refreshAdminWebhookListeners();
+    },
 });

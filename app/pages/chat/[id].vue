@@ -4,22 +4,13 @@
 </template>
 <script setup lang="ts">
 import PageShell from '~/components/PageShell.vue';
-import { getDb } from '~/db/client';
 import { getThread } from '~/db/threads';
+import { useValidatedEntityPageShell } from '~/composables/useValidatedEntityPageShell';
 
-const route = useRoute();
-const routeId = computed(() => (route.params.id as string) || '');
-const ready = ref(false);
-
-onMounted(async () => {
-    try {
-        if (!getDb().isOpen()) await getDb().open();
-        const t = await getThread(routeId.value);
-        const exists = !!(t && !t.deleted);
-        if (!exists) await navigateTo('/chat', { replace: true });
-        else ready.value = true;
-    } catch {
-        await navigateTo('/chat', { replace: true });
-    }
+const { ready, routeId } = useValidatedEntityPageShell({
+    loadEntity(routeId) {
+        return getThread(routeId);
+    },
+    redirectTo: '/chat',
 });
 </script>

@@ -61,23 +61,16 @@
  */
 
 import type { Thread } from '~/db';
-import { createRegistry } from '../_registry';
+import {
+    createHistoryActionRegistry,
+    type HistoryActionRegistryItem,
+} from '../history/createHistoryActionRegistry';
 
 /** Definition for an extendable chat message action button. */
-export interface ThreadHistoryAction {
-    /** Unique id (stable across reloads). */
-    id: string;
-    /** Icon name (passed to UButton icon prop). */
-    icon: string;
-    /** Label text. */
-    label: string;
-    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
-    order?: number;
-    /** Handler invoked on click. */
-    handler: (ctx: { document: Thread }) => void | Promise<void>;
-}
+export interface ThreadHistoryAction
+    extends HistoryActionRegistryItem<Thread> {}
 
-const registry = createRegistry<ThreadHistoryAction>(
+const registry = createHistoryActionRegistry<Thread, ThreadHistoryAction>(
     '__or3ThreadHistoryActionsRegistry'
 );
 

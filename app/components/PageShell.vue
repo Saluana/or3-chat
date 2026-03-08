@@ -2,7 +2,7 @@
     <resizable-sidebar-layout :collapsed-width="64" ref="layoutRef">
         <template #sidebar-expanded>
             <component
-                :is="$theme.activeComponents.value.sidebar"
+                :is="sidebarExpandedComponent"
                 ref="sideNavExpandedRef"
                 :active-thread="activeChatThreadId"
                 @chat-selected="onSidebarSelected"
@@ -14,7 +14,7 @@
         </template>
         <template #sidebar-collapsed>
             <component
-                :is="$theme.activeComponents.value['sidebar-collapsed']"
+                :is="sidebarCollapsedComponent"
                 :active-thread="activeChatThreadId"
                 class="w-[65px]"
                 @new-chat="onNewChat"
@@ -221,7 +221,7 @@
             </div>
         </div>
         <component
-            :is="$theme.activeComponents.value['dashboard-modal']"
+            :is="dashboardModalComponent"
             v-if="dashboardEnabled"
             v-model:showModal="showDashboardModal"
         />
@@ -354,6 +354,21 @@ useResizeObserver(paneContainerRef, (entries) => {
 });
 
 const themePlugin = useNuxtApp().$theme as ThemePlugin | undefined;
+const sidebarExpandedComponent = computed(
+    () =>
+        themePlugin?.activeComponents.value.sidebar ??
+        CORE_APP_COMPONENT_DEFAULTS.sidebar
+);
+const sidebarCollapsedComponent = computed(
+    () =>
+        themePlugin?.activeComponents.value['sidebar-collapsed'] ??
+        CORE_APP_COMPONENT_DEFAULTS['sidebar-collapsed']
+);
+const dashboardModalComponent = computed(
+    () =>
+        themePlugin?.activeComponents.value['dashboard-modal'] ??
+        CORE_APP_COMPONENT_DEFAULTS['dashboard-modal']
+);
 
 function useButtonThemeProps(
     identifier: string,

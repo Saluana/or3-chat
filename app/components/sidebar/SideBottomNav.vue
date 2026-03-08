@@ -40,7 +40,7 @@
         />
 
         <!-- Auth Button (Clerk SSR or OpenRouter) - placed above user info -->
-        <component :is="$theme.activeComponents.value['sidebar-auth-button']" />
+        <component :is="sidebarAuthButtonComponent" />
 
         <!-- MY INFO (OpenRouter only - hidden in SSR auth mode) -->
         <UPopover
@@ -90,17 +90,18 @@
         </UPopover>
     </div>
     <component
-        :is="$theme.activeComponents.value['model-catalog-modal']"
+        :is="modelCatalogModalComponent"
         v-model:showModal="showSettingsModal"
     />
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, useAttrs } from 'vue';
-import { useRuntimeConfig } from '#imports';
+import { computed, defineAsyncComponent, ref, useAttrs } from 'vue';
+import { useNuxtApp, useRuntimeConfig } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useOr3Config } from '~/composables/useOr3Config';
+import SidebarAuthButton from '~/components/sidebar/SidebarAuthButton.vue';
 
 const iconUser = useIcon('sidebar.user');
 const iconActivity = useIcon('sidebar.activity');
@@ -108,6 +109,20 @@ const iconCredits = useIcon('sidebar.credits');
 const iconDashboard = useIcon('dashboard.home');
 const or3Config = useOr3Config();
 const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
+const themePlugin = useNuxtApp().$theme;
+const modelCatalogModalDefault = defineAsyncComponent(
+    () => import('~/components/modal/ModelCatalog.vue')
+);
+const sidebarAuthButtonComponent = computed(
+    () =>
+        themePlugin?.activeComponents?.value?.['sidebar-auth-button'] ??
+        SidebarAuthButton
+);
+const modelCatalogModalComponent = computed(
+    () =>
+        themePlugin?.activeComponents?.value?.['model-catalog-modal'] ??
+        modelCatalogModalDefault
+);
 
 // Check if SSR auth is enabled via runtime config
 const config = useRuntimeConfig();

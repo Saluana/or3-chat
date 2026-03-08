@@ -61,23 +61,16 @@
  */
 
 import type { Post } from '~/db';
-import { createRegistry } from '../_registry';
+import {
+    createHistoryActionRegistry,
+    type HistoryActionRegistryItem,
+} from '../history/createHistoryActionRegistry';
 
 /** Definition for an extendable chat message action button. */
-export interface DocumentHistoryAction {
-    /** Unique id (stable across reloads). */
-    id: string;
-    /** Icon name (passed to UButton icon prop). */
-    icon: string;
-    /** Label text. */
-    label: string;
-    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
-    order?: number;
-    /** Handler invoked on click. */
-    handler: (ctx: { document: Post }) => void | Promise<void>;
-}
+export interface DocumentHistoryAction
+    extends HistoryActionRegistryItem<Post> {}
 
-const registry = createRegistry<DocumentHistoryAction>(
+const registry = createHistoryActionRegistry<Post, DocumentHistoryAction>(
     '__or3DocumentHistoryActionsRegistry'
 );
 

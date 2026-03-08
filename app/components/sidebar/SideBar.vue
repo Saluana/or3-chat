@@ -89,232 +89,65 @@
         @delete-project="deleteProject"
     />
 
-    <!-- Create Project Modal -->
-    <UModal
-        v-bind="createProjectModalProps"
-        v-model:open="showCreateProjectModal"
+    <SidebarCreateProjectModal
+        :modal-props="createProjectModalProps"
+        :open="showCreateProjectModal"
         title="New Project"
-    >
-        <template #body>
-            <div class="space-y-4">
-                <UForm
-                    :state="createProjectState"
-                    @submit.prevent="submitCreateProject"
-                >
-                    <div class="flex flex-col space-y-3">
-                        <UFormField
-                            v-bind="sidebarFormFieldProps"
-                            label="Title"
-                            name="name"
-                            :error="createProjectErrors.name"
-                        >
-                            <UInput
-                                v-model="createProjectState.name"
-                                required
-                                placeholder="Project title"
-                                :icon="iconFolder"
-                                class="w-full"
-                                @keyup.enter="submitCreateProject"
-                            />
-                        </UFormField>
-                        <UFormField
-                            v-bind="sidebarFormFieldProps"
-                            label="Description"
-                            name="description"
-                        >
-                            <UTextarea
-                                class="w-full border-[var(--md-border-width)] rounded-[6px]"
-                                v-model="createProjectState.description"
-                                :rows="3"
-                                placeholder="Optional description"
-                            />
-                        </UFormField>
-                    </div>
-                </UForm>
-            </div>
-        </template>
-        <template #footer>
-            <UButton
-                variant="ghost"
-                class="theme-btn"
-                @click="closeCreateProject"
-                >Cancel</UButton
-            >
-            <UButton
-                :disabled="!createProjectState.name.trim() || creatingProject"
-                color="primary"
-                class="theme-btn"
-                @click="submitCreateProject"
-            >
-                <span v-if="!creatingProject">Create</span>
-                <span v-else class="inline-flex items-center gap-1">
-                    <UIcon name="i-lucide-loader" class="animate-spin" />
-                    Creating
-                </span>
-            </UButton>
-        </template>
-    </UModal>
+        :name="createProjectState.name"
+        :description="createProjectState.description"
+        :name-error="createProjectErrors.name"
+        :icon-folder="iconFolder"
+        :loading-icon="iconLoading"
+        :loading="creatingProject"
+        :form-field-props="sidebarFormFieldProps"
+        @update:open="showCreateProjectModal = $event"
+        @update:name="createProjectState.name = $event"
+        @update:description="createProjectState.description = $event"
+        @close="closeCreateProject"
+        @submit="submitCreateProject"
+    />
 
-    <!-- Add To Project Modal -->
-    <UModal
-        v-bind="addToProjectModalProps"
-        v-model:open="showAddToProjectModal"
+    <SidebarAddToProjectModal
+        :modal-props="addToProjectModalProps"
+        :open="showAddToProjectModal"
         title="Add to project"
-    >
-        <template #body>
-            <div class="space-y-4">
-                <div class="flex gap-2 text-xs font-mono">
-                    <button
-                        class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
-                        :class="
-                            addMode === 'select'
-                                ? 'bg-primary/30'
-                                : 'opacity-70'
-                        "
-                        @click="addMode = 'select'"
-                    >
-                        Select Existing
-                    </button>
-                    <button
-                        class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
-                        :class="
-                            addMode === 'create'
-                                ? 'bg-primary/30'
-                                : 'opacity-70'
-                        "
-                        @click="addMode = 'create'"
-                    >
-                        Create New
-                    </button>
-                </div>
-                <div v-if="addMode === 'select'" class="space-y-3">
-                    <UFormField
-                        v-bind="sidebarFormFieldProps"
-                        label="Project"
-                        name="project"
-                    >
-                        <USelectMenu
-                            v-model="selectedProjectId"
-                            :items="projectSelectOptions"
-                            :value-key="'value'"
-                            placeholder="Select project"
-                            v-bind="sidebarProjectSelectProps"
-                        />
-                    </UFormField>
-                    <p v-if="addToProjectError" class="text-error text-xs">
-                        {{ addToProjectError }}
-                    </p>
-                </div>
-                <div v-else class="space-y-3">
-                    <UFormField
-                        v-bind="sidebarFormFieldProps"
-                        label="Project Title"
-                        name="newProjectName"
-                    >
-                        <UInput
-                            v-model="newProjectName"
-                            placeholder="Project name"
-                            :icon="iconFolder"
-                            class="w-full"
-                        />
-                    </UFormField>
-                    <UFormField
-                        v-bind="sidebarFormFieldProps"
-                        label="Description"
-                        name="newProjectDescription"
-                    >
-                        <UTextarea
-                            v-model="newProjectDescription"
-                            :rows="3"
-                            placeholder="Optional description"
-                            class="w-full border-[var(--md-border-width)] rounded-[6px]"
-                        />
-                    </UFormField>
-                    <p v-if="addToProjectError" class="text-error text-xs">
-                        {{ addToProjectError }}
-                    </p>
-                </div>
-            </div>
-        </template>
-        <template #footer>
-            <UButton
-                variant="ghost"
-                class="theme-btn"
-                @click="closeAddToProject"
-                >Cancel</UButton
-            >
-            <UButton
-                color="primary"
-                :disabled="
-                    addingToProject ||
-                    (addMode === 'select'
-                        ? !selectedProjectId
-                        : !newProjectName.trim())
-                "
-                @click="submitAddToProject"
-            >
-                <span v-if="!addingToProject">Add</span>
-                <span v-else class="inline-flex items-center gap-1"
-                    ><UIcon
-                        name="i-lucide-loader"
-                        class="animate-spin"
-                    />Adding</span
-                >
-            </UButton>
-        </template>
-    </UModal>
-    <!-- New Document Naming Modal -->
-    <UModal
+        :mode="addMode"
+        :selected-project-id="selectedProjectId"
+        :new-project-name="newProjectName"
+        :new-project-description="newProjectDescription"
+        :error-message="addToProjectError"
+        :project-select-options="projectSelectOptions"
+        :icon-folder="iconFolder"
+        :loading-icon="iconLoading"
+        :loading="addingToProject"
+        :form-field-props="sidebarFormFieldProps"
+        :select-props="sidebarProjectSelectProps"
+        @update:open="showAddToProjectModal = $event"
+        @update:mode="addMode = $event"
+        @update:selected-project-id="selectedProjectId = $event"
+        @update:new-project-name="newProjectName = $event"
+        @update:new-project-description="newProjectDescription = $event"
+        @close="closeAddToProject"
+        @submit="submitAddToProject"
+    />
+
+    <SidebarCreateDocumentModal
         v-if="documentsEnabled"
-        v-bind="createDocumentModalProps"
-        v-model:open="showCreateDocumentModal"
+        :modal-props="createDocumentModalProps"
+        :open="showCreateDocumentModal"
         title="New Document"
-    >
-        <template #body>
-            <div class="space-y-4">
-                <UForm
-                    :state="newDocumentState"
-                    @submit.prevent="submitCreateDocument"
-                >
-                    <UFormField
-                        v-bind="sidebarFormFieldProps"
-                        label="Title"
-                        name="title"
-                        :error="newDocumentErrors.title"
-                    >
-                        <UInput
-                            v-model="newDocumentState.title"
-                            required
-                            placeholder="Document title"
-                            :icon="iconNote"
-                            class="w-full"
-                            @keyup.enter="submitCreateDocument"
-                        />
-                    </UFormField>
-                </UForm>
-            </div>
-        </template>
-        <template #footer>
-            <UButton
-                variant="ghost"
-                class="theme-btn"
-                @click="closeCreateDocumentModal"
-                >Cancel</UButton
-            >
-            <UButton
-                color="primary"
-                class="theme-btn"
-                :disabled="creatingDocument || !newDocumentState.title.trim()"
-                @click="submitCreateDocument"
-            >
-                <span v-if="!creatingDocument">Create</span>
-                <span v-else class="inline-flex items-center gap-1">
-                    <UIcon name="i-lucide-loader" class="animate-spin" />
-                    Creating
-                </span>
-            </UButton>
-        </template>
-    </UModal>
+        :value="newDocumentState.title"
+        :error="newDocumentErrors.title"
+        placeholder="Document title"
+        :icon="iconNote"
+        :loading-icon="iconLoading"
+        :loading="creatingDocument"
+        :form-field-props="sidebarFormFieldProps"
+        @update:open="showCreateDocumentModal = $event"
+        @update:value="newDocumentState.title = $event"
+        @close="closeCreateDocumentModal"
+        @submit="submitCreateDocument"
+    />
 </template>
 
 <script setup lang="ts">
@@ -353,6 +186,9 @@ import {
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import type { ThreadItem, DocumentItem } from '~/types/sidebar';
 import { getOpenDocumentIds, getOpenThreadIds } from '~/utils/multiPaneHelpers';
+import SidebarAddToProjectModal from './SidebarAddToProjectModal.vue';
+import SidebarCreateDocumentModal from './SidebarCreateDocumentModal.vue';
+import SidebarCreateProjectModal from './SidebarCreateProjectModal.vue';
 
 /**
  * Helper to check if a post is a document
@@ -375,6 +211,7 @@ type RenamePayload =
 const iconEdit = useIcon('ui.edit');
 const iconFolder = useIcon('sidebar.folder');
 const iconNote = useIcon('sidebar.note');
+const iconLoading = useIcon('ui.loading');
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 // (Temporarily removed virtualization for chats — use simple list for now)

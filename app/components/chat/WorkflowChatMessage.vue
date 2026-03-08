@@ -8,7 +8,7 @@
         <!-- Workflow Execution Status (Progress/Steps) -->
         <div v-if="props.message.workflowState" class="mb-4">
             <component
-                :is="$theme.activeComponents.value['workflow-status']"
+                :is="workflowStatusComponent"
                 :workflow-state="props.message.workflowState"
             />
         </div>
@@ -87,6 +87,7 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useToast } from '#imports';
 import { useOr3Config } from '~/composables/useOr3Config';
+import WorkflowExecutionStatus from './WorkflowExecutionStatus.vue';
 
 const props = defineProps<{
     message: UiChatMessage;
@@ -110,6 +111,11 @@ const currentShikiTheme = computed(() => {
         ? 'github-dark'
         : 'github-light';
 });
+const workflowStatusComponent = computed(
+    () =>
+        themePlugin.value.activeComponents.value['workflow-status'] ??
+        WorkflowExecutionStatus
+);
 
 // Prefer finalOutput, fall back to live streaming text so the last message always renders as Markdown.
 // finalOutput is set once on finalize; finalStreamingText updates during execution.

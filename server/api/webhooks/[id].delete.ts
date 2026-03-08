@@ -1,21 +1,25 @@
-import { defineEventHandler } from 'h3';
 import { resetWebhookRateLimits } from '../../utils/webhooks/rate-limit';
 import {
     requireOwnedWebhook,
     requireWebhookApiContext,
     requireWebhookId,
 } from './_helpers';
+import { createWebhookDeleteHandler } from './route-factories';
 
-export default defineEventHandler(async (event) => {
-    const { store, userId, workspaceId } = await requireWebhookApiContext(event);
-    const webhookId = requireWebhookId(event);
-
-    await requireOwnedWebhook(store, webhookId, userId, workspaceId);
-    await store.cancelDeliveriesByWebhook(webhookId);
-    await store.deleteWebhook(webhookId);
-    resetWebhookRateLimits(webhookId);
-
-    return {
-        ok: true,
-    };
-});
+export default createWebhookDeleteHandler(
+    {
+        getWebhookId: requireWebhookId,
+        resolveContext(event) {
+            return requireWebhookApiContext(event);
+        },
+        resolveWebhook(context, webhookId) {
+            return requireOwnedWebhook(
+                context.store,
+                webhookId,
+                context.userId,
+                context.workspaceId
+            );
+        },
+    },
+    resetWebhookRateLimits
+);

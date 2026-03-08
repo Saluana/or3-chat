@@ -1,4 +1,3 @@
-import { defineEventHandler } from 'h3';
 import { resetWebhookRateLimits } from '../../../utils/webhooks/rate-limit';
 import {
     refreshAdminWebhookListeners,
@@ -6,20 +5,22 @@ import {
     requireAdminWebhookApiContext,
     requireWebhookId,
 } from './_helpers';
+import { createWebhookDeleteHandler } from '../../webhooks/route-factories';
 
-export default defineEventHandler(async (event) => {
-    const { store } = await requireAdminWebhookApiContext(event, {
-        mutation: true,
-    });
-    const webhookId = requireWebhookId(event);
-
-    await requireAdminWebhook(store, webhookId);
-    await store.cancelDeliveriesByWebhook(webhookId);
-    await store.deleteWebhook(webhookId);
-    resetWebhookRateLimits(webhookId);
-    await refreshAdminWebhookListeners();
-
-    return {
-        ok: true,
-    };
-});
+export default createWebhookDeleteHandler(
+    {
+        getWebhookId: requireWebhookId,
+        resolveContext(event) {
+            return requireAdminWebhookApiContext(event, {
+                mutation: true,
+            });
+        },
+        resolveWebhook(context, webhookId) {
+            return requireAdminWebhook(context.store, webhookId);
+        },
+        async afterMutation() {
+            await refreshAdminWebhookListeners();
+        },
+    },
+    resetWebhookRateLimits
+);
