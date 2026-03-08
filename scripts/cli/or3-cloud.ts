@@ -3,6 +3,7 @@ import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { isAbsolute, resolve } from 'node:path';
 import { createServer } from 'node:net';
+import { existsSync } from 'node:fs';
 import { Or3CloudWizardApi } from '../../shared/cloud/wizard/api';
 import {
     buildRedactedSummary,
@@ -758,39 +759,31 @@ function printDeployResult(result: WizardDeployResult): void {
     }
 }
 
-async function ensureUiWizardDependencies(
-    instanceDir: string,
-    packageManagerFlag?: string
-): Promise<void> {
-    const packageManager = parseInstallPackageManager(packageManagerFlag);
-    const api = new Or3CloudWizardApi();
-    const session = await api.createSession({
-        instanceDir,
-        includeSecrets: false,
-        prefillFromEnv: true,
-    });
+function isWizardUiHostDir(pathValue: string): boolean {
+    return (
+        existsSync(resolve(pathValue, 'package.json')) &&
+        existsSync(resolve(pathValue, 'scripts/cli/or3-cloud.ts')) &&
+        existsSync(resolve(pathValue, 'app/pages/wizard/index.vue'))
+    );
+}
 
-    try {
-        const answers = session.answers;
-        const installPlan = createDependencyInstallPlan(answers);
-        if (installPlan.packages.length === 0) {
-            return;
-        }
-
-        console.log(`\nEnsuring provider dependencies are installed (${packageManager})...`);
-        await executeDependencyInstallPlan(answers, installPlan, {
-            enabled: true,
-            packageManager,
-        });
-    } finally {
-        await api.discardSession(session.id).catch(() => {
-            // Best effort cleanup.
-        });
+function resolveUiHostDir(instanceDir: string): string {
+    const currentRepoRoot = resolve(import.meta.dir, '../..');
+    if (currentRepoRoot !== instanceDir && isWizardUiHostDir(currentRepoRoot)) {
+        return currentRepoRoot;
     }
+
+    const siblingOr3Chat = resolve(instanceDir, '..', 'or3-chat');
+    if (siblingOr3Chat !== instanceDir && isWizardUiHostDir(siblingOr3Chat)) {
+        return siblingOr3Chat;
+    }
+
+    return instanceDir;
 }
 
 async function runUiInit(flags: CliFlags): Promise<void> {
     const instanceDir = toStringFlag(flags, 'instance-dir') ?? process.cwd();
+    const uiHostDir = resolveUiHostDir(instanceDir);
     const explicitPort = toStringFlag(flags, 'ui-port') ?? toStringFlag(flags, 'port');
 
     let port: number;
@@ -810,25 +803,27 @@ async function runUiInit(flags: CliFlags): Promise<void> {
 
     const wizardToken = crypto.randomUUID();
     const baseUrl = `http://127.0.0.1:${port}`;
-    const wizardUrl = `${baseUrl}/wizard?token=${wizardToken}`;
+    const wizardUrl = `${baseUrl}/wizard?token=${wizardToken}&instanceDir=${encodeURIComponent(instanceDir)}`;
     // Use a static asset prefix to health-check: this path is served by Vite/Nitro
     // without going through SSR auth middleware and cannot redirect-loop.
     const healthUrl = `${baseUrl}/_nuxt/`;
 
-    await ensureUiWizardDependencies(
-        instanceDir,
-        toStringFlag(flags, 'package-manager')
-    );
+    if (uiHostDir !== instanceDir) {
+        console.log(`\nHosting wizard UI from ${uiHostDir}`);
+        console.log(`Target instance: ${instanceDir}`);
+    }
 
     console.log('\nStarting wizard server...');
 
     const uiServer = Bun.spawn(
         ['bun', 'run', 'dev', '--', '--host', '127.0.0.1', '--port', String(port)],
         {
-            cwd: instanceDir,
+            cwd: uiHostDir,
             env: {
                 ...process.env,
-                SSR_AUTH_ENABLED: 'true',
+                // Keep the setup UI isolated from the target instance's SSR auth
+                // provider config until the wizard has written a real .env.
+                SSR_AUTH_ENABLED: 'false',
                 HOST: '127.0.0.1',
                 OR3_WIZARD_UI_ENABLED: 'true',
                 OR3_WIZARD_UI_TOKEN: wizardToken,

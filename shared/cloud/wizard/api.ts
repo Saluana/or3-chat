@@ -75,12 +75,26 @@ import type {
 } from './types';
 
 const BUILTIN_PRESETS: WizardPreset[] = [recommendedPreset, legacyPreset];
+const WIZARD_SECRET_STORE_KEY = Symbol.for('or3.cloud.wizard.transientSessionSecrets');
 /**
- * In-memory store for secret answer values.
+ * Process-global in-memory store for secret answer values.
  * Secrets are held here rather than written to disk, keyed by session ID.
- * Cleared when `discardSession()` is called.
+ * Backing the map with `globalThis` lets the wizard survive module reloads
+ * during local dev without dropping secrets mid-session.
  */
-const transientSessionSecrets = new Map<string, Partial<WizardAnswers>>();
+type WizardSecretStoreGlobal = typeof globalThis & {
+    [WIZARD_SECRET_STORE_KEY]?: Map<string, Partial<WizardAnswers>>;
+};
+
+function getTransientSessionSecrets(): Map<string, Partial<WizardAnswers>> {
+    const g = globalThis as WizardSecretStoreGlobal;
+    if (!g[WIZARD_SECRET_STORE_KEY]) {
+        g[WIZARD_SECRET_STORE_KEY] = new Map<string, Partial<WizardAnswers>>();
+    }
+    return g[WIZARD_SECRET_STORE_KEY];
+}
+
+const transientSessionSecrets = getTransientSessionSecrets();
 const DEFAULT_CONNECTION_TIMEOUT_MS = 8000;
 
 function nowIso(): string {

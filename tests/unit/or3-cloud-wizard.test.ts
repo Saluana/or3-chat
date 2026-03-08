@@ -16,6 +16,11 @@ import {
     executeDependencyInstallPlan,
     parseInstallPackageManager,
 } from '../../shared/cloud/wizard/install-plan';
+import {
+    captureWizardRollbackSnapshots,
+    restoreWizardRollbackSnapshots,
+} from '../../shared/cloud/wizard/deploy-rollback';
+import { createCleanWizardDeployEnv } from '../../shared/cloud/wizard/runtime-env';
 import { buildRedactedSummary, validateAnswers } from '../../shared/cloud/wizard/validation';
 import type { WizardAnswers, WizardStep } from '../../shared/cloud/wizard/types';
 import { writeEnvFileDetailed } from '../../server/admin/config/env-file';
@@ -580,5 +585,76 @@ describe('or3 cloud wizard apply', () => {
         expect(envLocal).toContain(
             'VITE_CONVEX_SITE_URL=http://self-hosted.convex.local:3211'
         );
+        expect(envLocal).toContain(
+            'OR3_CONVEX_ALLOW_INSECURE_HTTP=true'
+        );
+    });
+
+    it('restores env and provider-module files after a failed post-apply install', async () => {
+        const dir = await mkdtemp(resolve(tmpdir(), 'or3-wizard-rollback-'));
+        const answers = {
+            ...validRecommendedAnswers(),
+            instanceDir: dir,
+            deploymentTarget: 'local-dev' as const,
+            authProvider: 'clerk' as const,
+            syncProvider: 'convex' as const,
+            storageProvider: 'convex' as const,
+            clerkPublishableKey: 'pk_test_123',
+            clerkSecretKey: 'sk_test_123',
+            convexUrl: 'http://self-hosted.convex.local:3210',
+            convexSelfHostedAdminKey: 'self-hosted-admin-key',
+            convexSelfHostedSiteUrl: 'http://self-hosted.convex.local:3211',
+        };
+
+        const envPath = resolve(dir, '.env');
+        const envLocalPath = resolve(dir, '.env.local');
+        const providerModulesPath = resolve(dir, 'or3.providers.generated.ts');
+
+        await writeFile(envPath, 'OR3_SITE_NAME=Before\n', 'utf8');
+        await writeFile(
+            providerModulesPath,
+            'export const or3ProviderModules = [\'or3-provider-basic-auth/nuxt\'];\n',
+            'utf8'
+        );
+
+        const snapshots = await captureWizardRollbackSnapshots(answers);
+
+        await writeFile(envPath, 'OR3_SITE_NAME=After\n', 'utf8');
+        await writeFile(envLocalPath, 'VITE_CONVEX_URL=http://changed.local\n', 'utf8');
+        await writeFile(
+            providerModulesPath,
+            'export const or3ProviderModules = [\'or3-provider-convex/nuxt\'];\n',
+            'utf8'
+        );
+
+        await restoreWizardRollbackSnapshots(snapshots);
+
+        await expect(readFile(envPath, 'utf8')).resolves.toBe('OR3_SITE_NAME=Before\n');
+        await expect(readFile(providerModulesPath, 'utf8')).resolves.toBe(
+            'export const or3ProviderModules = [\'or3-provider-basic-auth/nuxt\'];\n'
+        );
+        await expect(readFile(envLocalPath, 'utf8')).rejects.toMatchObject({
+            code: 'ENOENT',
+        });
+    });
+
+    it('strips wizard-only env vars before starting local dev', () => {
+        const env = createCleanWizardDeployEnv({
+            SSR_AUTH_ENABLED: 'false',
+            OR3_WIZARD_UI_ENABLED: 'true',
+            OR3_WIZARD_UI_TOKEN: 'wizard-token',
+            OR3_WIZARD_ENABLE_INSTALL: '1',
+            AUTH_PROVIDER: 'clerk',
+            OR3_SITE_NAME: 'OR3',
+            PATH: process.env.PATH,
+        });
+
+        expect(env.SSR_AUTH_ENABLED).toBeUndefined();
+        expect(env.AUTH_PROVIDER).toBeUndefined();
+        expect(env.OR3_WIZARD_UI_ENABLED).toBeUndefined();
+        expect(env.OR3_WIZARD_UI_TOKEN).toBeUndefined();
+        expect(env.OR3_WIZARD_ENABLE_INSTALL).toBeUndefined();
+        expect(env.OR3_SITE_NAME).toBeUndefined();
+        expect(env.PATH).toBe(process.env.PATH);
     });
 });

@@ -1,5 +1,25 @@
 import { abortNavigation, createError, defineNuxtRouteMiddleware } from '#app';
 
+function hasWizardTokenInSessionStorage(): boolean {
+    if (!import.meta.client) return false;
+
+    const legacyToken = globalThis.sessionStorage.getItem('or3:wizard:token')?.trim();
+    if (legacyToken) {
+        return true;
+    }
+
+    for (let index = 0; index < globalThis.sessionStorage.length; index += 1) {
+        const key = globalThis.sessionStorage.key(index);
+        if (!key?.startsWith('or3:wizard:token:')) continue;
+        const value = globalThis.sessionStorage.getItem(key)?.trim();
+        if (value) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 export default defineNuxtRouteMiddleware(() => {
     const config = useRuntimeConfig();
     if (config.public.wizardUi.enabled !== true) {
@@ -13,13 +33,8 @@ export default defineNuxtRouteMiddleware(() => {
 
     const granted = useCookie<unknown>('or3_wizard_granted').value;
     if (String(granted ?? '') !== '1') {
-        if (import.meta.client) {
-            const token = globalThis.sessionStorage
-                .getItem('or3:wizard:token')
-                ?.trim();
-            if (token) {
-                return;
-            }
+        if (hasWizardTokenInSessionStorage()) {
+            return;
         }
 
         return abortNavigation(

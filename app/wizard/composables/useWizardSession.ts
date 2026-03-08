@@ -195,17 +195,33 @@ function toComparableValue(value: unknown): string {
 
 function getSessionStorageItem(key: string): string | null {
     if (!import.meta.client) return null;
-    return globalThis.sessionStorage.getItem(key);
+    const scopedKey = getScopedSessionStorageKey(key);
+    const scopedValue = globalThis.sessionStorage.getItem(scopedKey);
+    if (scopedValue !== null) {
+        return scopedValue;
+    }
+    if (key === WIZARD_TOKEN_KEY && scopedKey !== key) {
+        return globalThis.sessionStorage.getItem(key);
+    }
+    return null;
 }
 
 function setSessionStorageItem(key: string, value: string): void {
     if (!import.meta.client) return;
-    globalThis.sessionStorage.setItem(key, value);
+    const scopedKey = getScopedSessionStorageKey(key);
+    globalThis.sessionStorage.setItem(scopedKey, value);
+    if (key === WIZARD_TOKEN_KEY && scopedKey !== key) {
+        globalThis.sessionStorage.setItem(key, value);
+    }
 }
 
 function removeSessionStorageItem(key: string): void {
     if (!import.meta.client) return;
-    globalThis.sessionStorage.removeItem(key);
+    const scopedKey = getScopedSessionStorageKey(key);
+    globalThis.sessionStorage.removeItem(scopedKey);
+    if (key === WIZARD_TOKEN_KEY && scopedKey !== key) {
+        globalThis.sessionStorage.removeItem(key);
+    }
 }
 
 function getWizardTokenFromLocation(): string | null {
@@ -214,6 +230,27 @@ function getWizardTokenFromLocation(): string | null {
     if (!token) return null;
     const trimmed = token.trim();
     return trimmed.length > 0 ? trimmed : null;
+}
+
+function getWizardInstanceDirFromLocation(): string | null {
+    if (!import.meta.client) return null;
+    const instanceDir = new URL(globalThis.location.href).searchParams.get('instanceDir');
+    if (!instanceDir) return null;
+    const trimmed = instanceDir.trim();
+    return trimmed.length > 0 ? trimmed : null;
+}
+
+function getScopedSessionStorageKey(key: string): string {
+    if (!import.meta.client) return key;
+    const token = getWizardTokenFromLocation();
+    if (token) {
+        return `${key}:${token}`;
+    }
+    const instanceDir = getWizardInstanceDirFromLocation();
+    if (instanceDir) {
+        return `${key}:${instanceDir}`;
+    }
+    return key;
 }
 
 function normalizeErrorMessage(error: unknown): string {
@@ -735,6 +772,7 @@ export function useWizardSession() {
         clearValidationState();
 
         const bootstrapToken = getWizardTokenFromLocation();
+        const requestedInstanceDir = getWizardInstanceDirFromLocation();
         if (bootstrapToken) {
             setSessionStorageItem(WIZARD_TOKEN_KEY, bootstrapToken);
         }
@@ -745,6 +783,9 @@ export function useWizardSession() {
             if (!sessionId) {
                 return $fetch<SessionResponse>('/api/wizard/session', {
                     headers: wizardFetchHeaders(),
+                    query: requestedInstanceDir
+                        ? { instanceDir: requestedInstanceDir }
+                        : undefined,
                 });
             }
             return $fetch<SessionResponse>('/api/wizard/session', {
@@ -757,8 +798,18 @@ export function useWizardSession() {
             let response: SessionResponse;
             try {
                 response = await loadSession(storedSessionId);
+                if (
+                    storedSessionId &&
+                    requestedInstanceDir &&
+                    response.session.answers.instanceDir !== requestedInstanceDir
+                ) {
+                    removeSessionStorageItem(SESSION_STORAGE_KEY);
+                    removeSessionStorageItem(STEP_STORAGE_KEY);
+                    response = await loadSession();
+                }
             } catch {
                 removeSessionStorageItem(SESSION_STORAGE_KEY);
+                removeSessionStorageItem(STEP_STORAGE_KEY);
                 response = await loadSession();
             }
 

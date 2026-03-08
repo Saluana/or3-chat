@@ -29,7 +29,18 @@
 import { v } from 'convex/values';
 import { mutation, query, type MutationCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
-import type { NotificationAction } from '~/core/hooks/hook-types';
+
+interface NotificationAction {
+    id: string;
+    label: string;
+    kind: 'navigate' | 'callback';
+    target?: {
+        threadId?: string;
+        documentId?: string;
+        route?: string;
+    };
+    data?: Record<string, unknown>;
+}
 
 const notificationActionValidator = v.object({
     id: v.string(),

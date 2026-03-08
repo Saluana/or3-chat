@@ -1,14 +1,15 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'path';
+import * as ts from 'typescript';
 import { createLogger } from 'vite';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
-import { or3ProviderModules } from './or3.providers.generated';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
+const isWizardUiProcess = process.env.OR3_WIZARD_UI_ENABLED === 'true';
 
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
 const convexAdminKey = or3CloudConfig.sync.convex?.adminKey || '';
@@ -37,18 +38,64 @@ function isProviderAvailable(providerId: string): boolean {
     return Boolean(pkgName && isPackageInstalled(pkgName));
 }
 
-const providerIdsFromConfig = new Set<string>();
-if (or3CloudConfig.auth.enabled) providerIdsFromConfig.add(or3CloudConfig.auth.provider);
-if (or3CloudConfig.sync.enabled) providerIdsFromConfig.add(or3CloudConfig.sync.provider);
-if (or3CloudConfig.storage.enabled) providerIdsFromConfig.add(or3CloudConfig.storage.provider);
-if (or3CloudConfig.limits?.enabled && or3CloudConfig.limits.storageProvider) {
-    providerIdsFromConfig.add(or3CloudConfig.limits.storageProvider);
+function loadGeneratedProviderModules(): string[] {
+    if (isWizardUiProcess) {
+        return [];
+    }
+
+    const generatedModulesPath = resolve(__dirname, 'or3.providers.generated.ts');
+    if (!existsSync(generatedModulesPath)) {
+        return [];
+    }
+
+    try {
+        const source = readFileSync(generatedModulesPath, 'utf8');
+        const transpiled = ts.transpileModule(source, {
+            compilerOptions: {
+                module: ts.ModuleKind.CommonJS,
+                target: ts.ScriptTarget.ES2020,
+            },
+        }).outputText;
+        const module = { exports: {} as { or3ProviderModules?: unknown } };
+        const exports = module.exports;
+        const evaluate = new Function('module', 'exports', transpiled);
+        evaluate(module, exports);
+
+        const parsed = module.exports.or3ProviderModules;
+        if (!Array.isArray(parsed)) {
+            console.warn(
+                `[or3-provider] Could not parse generated provider modules from "${generatedModulesPath}".`
+            );
+            return [];
+        }
+
+        return parsed.filter((entry): entry is string => typeof entry === 'string');
+    } catch (error) {
+        console.warn(
+            `[or3-provider] Failed to read generated provider modules from "${generatedModulesPath}": ${
+                error instanceof Error ? error.message : String(error)
+            }`
+        );
+        return [];
+    }
 }
-if (
-    or3CloudConfig.backgroundStreaming?.enabled &&
-    or3CloudConfig.backgroundStreaming.storageProvider
-) {
-    providerIdsFromConfig.add(or3CloudConfig.backgroundStreaming.storageProvider);
+
+const or3ProviderModules = loadGeneratedProviderModules();
+
+const providerIdsFromConfig = new Set<string>();
+if (!isWizardUiProcess) {
+    if (or3CloudConfig.auth.enabled) providerIdsFromConfig.add(or3CloudConfig.auth.provider);
+    if (or3CloudConfig.sync.enabled) providerIdsFromConfig.add(or3CloudConfig.sync.provider);
+    if (or3CloudConfig.storage.enabled) providerIdsFromConfig.add(or3CloudConfig.storage.provider);
+    if (or3CloudConfig.limits?.enabled && or3CloudConfig.limits.storageProvider) {
+        providerIdsFromConfig.add(or3CloudConfig.limits.storageProvider);
+    }
+    if (
+        or3CloudConfig.backgroundStreaming?.enabled &&
+        or3CloudConfig.backgroundStreaming.storageProvider
+    ) {
+        providerIdsFromConfig.add(or3CloudConfig.backgroundStreaming.storageProvider);
+    }
 }
 
 const providerModulesFromConfig: string[] = [];
@@ -85,8 +132,28 @@ for (const moduleId of configuredPluginModules) {
     pluginModulesFromConfig.push(moduleId);
 }
 
+const generatedProviderModules: string[] = [];
+for (const moduleId of or3ProviderModules) {
+    const pkgName = moduleId.split('/')[0];
+    if (!pkgName) {
+        console.warn(`[or3-provider] Ignoring invalid generated provider module id "${moduleId}".`);
+        continue;
+    }
+    if (!isPackageInstalled(pkgName)) {
+        console.warn(
+            `[or3-provider] Generated provider module "${moduleId}" expects package "${pkgName}", but it is not installed yet.`
+        );
+        continue;
+    }
+    generatedProviderModules.push(moduleId);
+}
+
 const activeProviderModules = Array.from(
-    new Set([...or3ProviderModules, ...providerModulesFromConfig, ...pluginModulesFromConfig])
+    new Set([
+        ...generatedProviderModules,
+        ...providerModulesFromConfig,
+        ...pluginModulesFromConfig,
+    ])
 );
 
 const authProviderAvailable = isProviderAvailable(or3CloudConfig.auth.provider);
@@ -792,6 +859,15 @@ export default defineNuxtConfig({
         server: {
             fs: {
                 allow: ['..'],
+            },
+            watch: {
+                ignored: isWizardUiProcess
+                    ? [
+                          '**/.env',
+                          '**/.env.local',
+                          '**/or3.providers.generated.ts',
+                      ]
+                    : [],
             },
         },
         plugins: [

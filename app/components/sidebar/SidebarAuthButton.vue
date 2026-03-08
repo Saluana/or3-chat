@@ -118,7 +118,6 @@ import { computed, onMounted, ref } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { state } from '~/state/global';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
-import SidebarAuthButtonClerk from './SidebarAuthButtonClerk.client.vue';
 import SidebarAuthButtonFallback from './SidebarAuthButtonFallback.client.vue';
 import { resolveAuthUiAdapter } from '~/core/auth-ui/registry';
 import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
@@ -174,13 +173,7 @@ const isManaged = computed(
 );
 const authUiComponent = computed(() => {
     const adapter = resolveAuthUiAdapter(authProviderId.value);
-    if (adapter?.component) {
-        return adapter.component;
-    }
-    if (authProviderId.value === 'clerk') {
-        return SidebarAuthButtonClerk;
-    }
-    return SidebarAuthButtonFallback;
+    return adapter?.component ?? SidebarAuthButtonFallback;
 });
 
 const ariaLabel = computed(() => {

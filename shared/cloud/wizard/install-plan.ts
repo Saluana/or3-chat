@@ -54,6 +54,29 @@ export interface DependencyInstallPlan {
     };
 }
 
+function buildDependencyInstallPlan(
+    packageNames: Iterable<string>,
+    reasons: Record<string, string[]>,
+    instanceDir: string,
+    themeArtifacts: string[] = []
+): DependencyInstallPlan {
+    const packages = Array.from(new Set(packageNames)).sort();
+    const installSpecs = resolveInstallSpecs(packages, instanceDir);
+
+    return {
+        packages,
+        reasons,
+        themeArtifacts,
+        commands: {
+            bun: installSpecs.length > 0 ? `bun add ${installSpecs.join(' ')}` : 'bun add',
+            npm:
+                installSpecs.length > 0
+                    ? `npm install --legacy-peer-deps ${installSpecs.join(' ')}`
+                    : 'npm install --legacy-peer-deps',
+        },
+    };
+}
+
 function resolveProviderLocalInstallSpec(
     packageName: string,
     instanceDir: string
@@ -215,8 +238,6 @@ export function createDependencyInstallPlan(
         }
     }
 
-    const packages = Array.from(packageSet).sort();
-    const installSpecs = resolveInstallSpecs(packages, answers.instanceDir);
     const themeArtifacts =
         answers.themeInstallMode === 'install-all'
             ? ['all-built-in-themes']
@@ -224,18 +245,12 @@ export function createDependencyInstallPlan(
               ? answers.themesToInstall
               : [];
 
-    return {
-        packages,
+    return buildDependencyInstallPlan(
+        packageSet,
         reasons,
-        themeArtifacts,
-        commands: {
-            bun: installSpecs.length > 0 ? `bun add ${installSpecs.join(' ')}` : 'bun add',
-            npm:
-                installSpecs.length > 0
-                    ? `npm install --legacy-peer-deps ${installSpecs.join(' ')}`
-                    : 'npm install --legacy-peer-deps',
-        },
-    };
+        answers.instanceDir,
+        themeArtifacts
+    );
 }
 
 function runCommand(

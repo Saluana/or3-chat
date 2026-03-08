@@ -5,9 +5,16 @@
 import { computed, ref, watchEffect } from 'vue';
 import { $fetch } from 'ofetch';
 import { useFetch, useRuntimeConfig, useState } from '#imports';
+import type { ComputedRef, Ref } from 'vue';
 import type { SessionContext } from '~/core/hooks/hook-types';
 
 type SessionPayload = { session: SessionContext | null };
+type SessionContextState = {
+    data: ComputedRef<SessionPayload | null>;
+    pending: Ref<boolean>;
+    error: Ref<Error | null | undefined>;
+    refresh: () => Promise<SessionPayload | void>;
+};
 
 let inFlight: Promise<SessionPayload> | null = null;
 
@@ -29,7 +36,7 @@ function isAuthDisabled(): boolean {
  * Safety: when `ssrAuthEnabled` is false the composable returns static
  * unauthenticated state and never hits the network.
  */
-export function useSessionContext() {
+export function useSessionContext(): SessionContextState {
     const state = useState<SessionPayload | null>('auth-session', () => null);
     const pending = ref(false);
     const error = ref<Error | null>(null);

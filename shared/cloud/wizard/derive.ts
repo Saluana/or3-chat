@@ -55,6 +55,15 @@ function setEnv(
     env[key] = value;
 }
 
+function usesInsecureHttp(urlValue: string | undefined): boolean {
+    if (!urlValue) return false;
+    try {
+        return new URL(urlValue).protocol === 'http:';
+    } catch {
+        return false;
+    }
+}
+
 /**
  * Resolves selected provider IDs to Nuxt module paths.
  *
@@ -229,6 +238,9 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
 
     if (answers.syncProvider === 'convex' || answers.storageProvider === 'convex') {
         setEnv(env, 'VITE_CONVEX_URL', answers.convexUrl);
+        if (usesInsecureHttp(answers.convexUrl)) {
+            setEnv(env, 'OR3_CONVEX_ALLOW_INSECURE_HTTP', 'true');
+        }
         if ((answers.convexSelfHostedAdminKey?.trim() ?? '').length > 0) {
             setEnv(env, 'CONVEX_SELF_HOSTED_URL', answers.convexUrl);
         }
@@ -317,6 +329,7 @@ export function deriveLocalDevConvexEnvLocalUpdates(
         CONVEX_SELF_HOSTED_ADMIN_KEY: answers.convexSelfHostedAdminKey?.trim() ?? null,
         VITE_CONVEX_URL: answers.convexUrl?.trim() ?? null,
         VITE_CONVEX_SITE_URL: answers.convexSelfHostedSiteUrl?.trim() ?? null,
+        OR3_CONVEX_ALLOW_INSECURE_HTTP: usesInsecureHttp(answers.convexUrl) ? 'true' : null,
         CONVEX_DEPLOYMENT: null,
     };
 }

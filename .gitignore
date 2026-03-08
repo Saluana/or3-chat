@@ -26,6 +26,9 @@ logs
 !.env.example
 or3-repo.md
 
+# Convex generated artifacts
+convex/_generated/
+
 package-lock.json
 bun.lockb
 

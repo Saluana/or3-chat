@@ -16,12 +16,16 @@ import { Socket } from 'node:net';
 import { useRuntimeConfig } from '#imports';
 import { Or3CloudWizardApi } from '../../shared/cloud/wizard/api';
 import { createDefaultAnswers } from '../../shared/cloud/wizard/catalog';
-import { WIZARD_OWNED_ENV_KEYS } from '../../shared/cloud/wizard/catalog';
 import {
     createDependencyInstallPlan,
     executeDependencyInstallPlan,
     parseInstallPackageManager,
 } from '../../shared/cloud/wizard/install-plan';
+import { createCleanWizardDeployEnv } from '../../shared/cloud/wizard/runtime-env';
+import {
+    captureWizardRollbackSnapshots,
+    restoreWizardRollbackSnapshots,
+} from '../../shared/cloud/wizard/deploy-rollback';
 import { applyConvexEnv } from '../../shared/cloud/wizard/deploy';
 import type {
     WizardAnswers,
@@ -115,22 +119,42 @@ function toCompleteWizardAnswers(input: Partial<WizardAnswers>): WizardAnswers {
     };
 }
 
-function createCleanDeployEnv(): NodeJS.ProcessEnv {
-    const env: NodeJS.ProcessEnv = { ...process.env };
-    for (const key of WIZARD_OWNED_ENV_KEYS) {
-        delete env[key];
-    }
-    return env;
-}
-
 function startLocalDevDetached(instanceDir: string): void {
     const child = spawn('bun', ['run', 'dev:ssr'], {
         cwd: instanceDir,
         stdio: 'ignore',
         detached: true,
-        env: createCleanDeployEnv(),
+        env: createCleanWizardDeployEnv(),
     });
     child.unref();
+}
+
+async function prepareLocalDevRuntime(instanceDir: string): Promise<void> {
+    await new Promise<void>((resolvePromise, rejectPromise) => {
+        const child = spawn('bun', ['run', 'postinstall'], {
+            cwd: instanceDir,
+            stdio: 'ignore',
+            env: createCleanWizardDeployEnv(),
+        });
+
+        child.on('error', (error) => {
+            rejectPromise(
+                new Error(`Failed to prepare local dev runtime: ${normalizeErrorMessage(error)}`)
+            );
+        });
+
+        child.on('exit', (code) => {
+            if (code === 0) {
+                resolvePromise();
+                return;
+            }
+            rejectPromise(
+                new Error(
+                    `Failed to prepare local dev runtime (bun run postinstall exited with code ${code ?? 'unknown'}).`
+                )
+            );
+        });
+    });
 }
 
 async function isPortListening(port: number, host = '127.0.0.1'): Promise<boolean> {
@@ -236,14 +260,26 @@ export async function getOrCreateWizardSession(event: H3Event): Promise<WizardSe
     const api = useWebWizardApi();
     const query = getQuery(event);
     const sessionId = toStringOrUndefined(query.sessionId);
+    const requestedInstanceDir = toStringOrUndefined(query.instanceDir);
 
     try {
         if (sessionId) {
-            return await api.getSession(sessionId, { includeSecrets: true });
+            const session = await api.getSession(sessionId, { includeSecrets: true });
+            if (
+                requestedInstanceDir &&
+                session.answers.instanceDir !== requestedInstanceDir
+            ) {
+                return await api.createSession({
+                    instanceDir: requestedInstanceDir,
+                    includeSecrets: false,
+                    prefillFromEnv: true,
+                });
+            }
+            return session;
         }
 
         const presetName = toStringOrUndefined(query.presetName);
-        const instanceDir = toStringOrUndefined(query.instanceDir);
+        const instanceDir = requestedInstanceDir;
         const envFile = toStringOrUndefined(query.envFile) as
             | '.env'
             | '.env.local'
@@ -294,6 +330,7 @@ export async function runWizardDeploy(
     const api = useWebWizardApi();
     const session = await api.getSession(sessionId, { includeSecrets: true });
     const answers = toCompleteWizardAnswers(session.answers);
+    const dryRun = toBoolean(options.dryRun, false);
     const packageManager = parseInstallPackageManager(options.packageManager);
     const installDependencies = toBoolean(options.installDependencies, true);
 
@@ -310,16 +347,36 @@ export async function runWizardDeploy(
     }
 
     const installPlan = createDependencyInstallPlan(answers);
-    await executeDependencyInstallPlan(answers, installPlan, {
-        enabled: installDependencies,
-        packageManager,
-        dryRun: toBoolean(options.dryRun, false),
-    });
+    const rollbackSnapshots =
+        !dryRun && installDependencies && installPlan.packages.length > 0
+            ? await captureWizardRollbackSnapshots(answers)
+            : [];
 
+    // Persist env/config before dependency installs so a dev rebuild sees the
+    // selected provider configuration instead of half-installed packages.
     const applyResult = await api.apply(sessionId, {
-        dryRun: toBoolean(options.dryRun, false),
+        dryRun,
         createBackup: toBoolean(options.createBackup, true),
     });
+
+    try {
+        await executeDependencyInstallPlan(answers, installPlan, {
+            enabled: installDependencies,
+            packageManager,
+            dryRun,
+        });
+    } catch (error) {
+        if (rollbackSnapshots.length > 0) {
+            try {
+                await restoreWizardRollbackSnapshots(rollbackSnapshots);
+            } catch (rollbackError) {
+                throw new Error(
+                    `${normalizeErrorMessage(error)}\nRollback failed: ${normalizeErrorMessage(rollbackError)}`
+                );
+            }
+        }
+        throw error;
+    }
 
     if (!options.skipDeploy && shouldApplyConvexEnv(answers)) {
         await applyConvexEnv(answers, {
@@ -340,6 +397,8 @@ export async function runWizardDeploy(
         let instructions = 'Local dev is running.';
         let accessUrl: string | undefined;
         let started = false;
+
+        await prepareLocalDevRuntime(answers.instanceDir);
 
         const portInUse = await isPortListening(3000, '127.0.0.1');
         if (portInUse) {
