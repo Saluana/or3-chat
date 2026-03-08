@@ -29,6 +29,31 @@
 import { v } from 'convex/values';
 import { mutation, query, type MutationCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
+import type { NotificationAction } from '~/core/hooks/hook-types';
+
+const notificationActionValidator = v.object({
+    id: v.string(),
+    label: v.string(),
+    kind: v.union(v.literal('navigate'), v.literal('callback')),
+    target: v.optional(
+        v.object({
+            threadId: v.optional(v.string()),
+            documentId: v.optional(v.string()),
+            route: v.optional(v.string()),
+        })
+    ),
+    data: v.optional(v.record(v.string(), v.any())),
+});
+
+function cloneNotificationActions(
+    actions: NotificationAction[] | undefined
+): NotificationAction[] | undefined {
+    return actions?.map((action) => ({
+        ...action,
+        target: action.target ? { ...action.target } : undefined,
+        data: action.data ? { ...action.data } : undefined,
+    }));
+}
 
 const nowSec = (): number => Math.floor(Date.now() / 1000);
 
@@ -78,12 +103,13 @@ export const create = mutation({
         type: v.string(),
         title: v.string(),
         body: v.optional(v.string()),
-        actions: v.optional(v.any()),
+        actions: v.optional(v.array(notificationActionValidator)),
     },
     handler: async (ctx, args) => {
         const now = nowSec();
         const id = crypto.randomUUID();
         const hlc = `${now}:server:${id.slice(0, 8)}`;
+        const actions = cloneNotificationActions(args.actions);
 
         await ctx.db.insert('notifications', {
             workspace_id: args.workspace_id,
@@ -94,7 +120,7 @@ export const create = mutation({
             type: args.type,
             title: args.title,
             body: args.body,
-            actions: args.actions,
+            actions,
             deleted: false,
             created_at: now,
             updated_at: now,
@@ -119,7 +145,7 @@ export const create = mutation({
                 type: args.type,
                 title: args.title,
                 body: args.body,
-                actions: args.actions,
+                actions,
                 deleted: false,
                 created_at: now,
                 updated_at: now,

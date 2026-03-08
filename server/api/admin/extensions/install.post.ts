@@ -60,7 +60,7 @@ async function readZipPayload(event: H3Event) {
         return { buffer: Buffer.from(file.data), force };
     }
 
-    const rawBody = await readBody(event);
+    const rawBody: unknown = await readBody(event);
 
     // Try URL-based install first
     const urlBody = UrlBodySchema.safeParse(rawBody);

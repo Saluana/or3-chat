@@ -21,6 +21,16 @@ export interface NotificationEmitter {
         jobId: string,
         error: string
     ): Promise<string | null>;
+    emitWebhookDeliveryFailed?(
+        input: {
+            webhookId: string;
+            workspaceId: string;
+            userId: string;
+            eventType: string;
+            attempt: number;
+            error: string | null;
+        }
+    ): Promise<string | null>;
 }
 
 const emitters = new Map<string, NotificationEmitter>();
@@ -38,4 +48,8 @@ export function getNotificationEmitter(id: string): NotificationEmitter | null {
 
 export function listNotificationEmitterIds(): string[] {
     return Array.from(emitters.keys());
+}
+
+export function resetNotificationEmitters(): void {
+    emitters.clear();
 }

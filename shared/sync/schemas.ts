@@ -220,6 +220,11 @@ export const PushResultItemSchema = z.object({
     success: z.boolean(),
     serverVersion: z.number().int().positive().optional(),
     error: z.string().optional(),
+    tableName: z.string().optional(),
+    operation: z.enum(['put', 'delete']).optional(),
+    payload: z.unknown().optional(),
+    wasExisting: z.boolean().optional(),
+    applied: z.boolean().optional(),
     errorCode: z
         .enum([
             'VALIDATION_ERROR',

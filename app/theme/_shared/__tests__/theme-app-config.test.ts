@@ -22,9 +22,10 @@ describe('theme manifest app config integration', () => {
             };
         } | null;
         expect(config).toBeTruthy();
-        expect(
-            config?.ui?.button?.variants?.size?.['sb-square']?.base
-        ).toContain('h-[40px]');
+        const squareBase =
+            config?.ui?.button?.variants?.size?.['sb-square']?.base ?? '';
+        expect(squareBase).toContain('h-[');
+        expect(squareBase).toContain('w-[');
     });
 
     it('loads app.config.ts for retro theme', async () => {

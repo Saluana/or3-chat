@@ -4,7 +4,7 @@
             class="blank2-chat-dropper"
             v-bind="attrs"
             :loading="props.loading"
-            :container-width="props.containerWidth"
+            :container-width="1"
             :thread-id="props.threadId"
             :streaming="props.streaming"
             :pane-id="props.paneId"
@@ -41,6 +41,7 @@ type ChatInputSendPayload = {
     model: string;
     settings: ImageSettings;
     webSearchEnabled: boolean;
+    thinkingEnabled: boolean;
 };
 
 type ResizePayload = {
@@ -207,11 +208,15 @@ function forwardResize(payload: ResizePayload) {
     scrollbar-color: color-mix(in srgb, var(--md-outline) 25%, transparent) transparent;
 }
 
-:deep(.blank2-chat-dropper .chat-input-editor),
-:deep(.blank2-chat-dropper .ProseMirror) {
+:deep(.blank2-chat-dropper .chat-input-editor) {
     min-height: 2.5rem !important;
     display: flex;
     align-items: center;
+    padding: 0;
+}
+
+:deep(.blank2-chat-dropper .ProseMirror) {
+    width: 100%;
     padding: 0;
     font-size: 0.975rem;
     line-height: 1.5;
@@ -261,7 +266,6 @@ function forwardResize(payload: ResizePayload) {
 :deep(.blank2-chat-dropper .chat-input-settings-btn button:hover) {
     background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important;
     color: var(--md-primary) !important;
-    transform: scale(1.08);
 }
 
 :deep(.blank2-chat-dropper .chat-input-attachment-btn button:active),
@@ -328,11 +332,13 @@ function forwardResize(payload: ResizePayload) {
         0 2px 8px -2px color-mix(in srgb, var(--md-error) 30%, transparent);
 }
 
-/* ── Attachments grid ── */
+/* ── Attachments grid: above input like ChatGPT ── */
 :deep(.blank2-chat-dropper .chat-input-attachments) {
+    order: -1;
     position: relative;
     z-index: 1;
-    margin: 0.5rem 1rem 3rem;
+    margin: 0.75rem 0.75rem 0;
+    padding: 0;
     gap: 0.5rem;
     grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
 }
@@ -370,7 +376,7 @@ function forwardResize(payload: ResizePayload) {
     }
 
     :deep(.blank2-chat-dropper .chat-input-attachments) {
-        margin-bottom: 2.75rem;
+        margin: 0.5rem 0.5rem 0;
     }
 
     :deep(.blank2-chat-dropper .chat-input-attachment-btn button),

@@ -69,6 +69,19 @@ describe('useAdminExtensions', () => {
                 installExtension({ kind: 'plugin', file: mockFile })
             ).rejects.toThrow('Network error');
         });
+
+        it('returns false when replacement is declined', async () => {
+            confirmMock.mockResolvedValue(false);
+            const error = new Error('Extension already installed');
+            const mockFetch = vi.fn().mockRejectedValue(error);
+            globalThis.$fetch = mockFetch as unknown as typeof $fetch;
+
+            const mockFile = new File([''], 'test.zip');
+
+            await expect(
+                installExtension({ kind: 'plugin', file: mockFile })
+            ).resolves.toBe(false);
+        });
     });
 
     describe('uninstallExtension', () => {

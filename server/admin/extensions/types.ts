@@ -43,7 +43,11 @@ const RuntimeServerRouteSchema = z.object({
         .string()
         .min(1)
         .refine((value) => !value.startsWith('/'), 'Handler must be relative')
-        .refine((value) => !value.includes('..'), 'Invalid handler path'),
+        .refine((value) => !value.includes('..'), 'Invalid handler path')
+        .refine(
+            (value) => !/\.(?:[cm]?ts|tsx)$/i.test(value),
+            'Runtime server handlers must be JavaScript files'
+        ),
 });
 
 const RuntimeServerSchema = z

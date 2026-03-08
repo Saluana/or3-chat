@@ -49,6 +49,7 @@ export interface SendMessageParams {
     file_hashes?: string[];
     extraTextParts?: string[];
     online: boolean;
+    thinking?: boolean;
     // Optional hashes to include for model context without reattaching to the new UI message.
     context_hashes?: string[];
 }

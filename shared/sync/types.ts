@@ -110,6 +110,11 @@ export interface PushResult {
         serverVersion?: number;
         error?: string;
         errorCode?: SyncErrorCode;
+        tableName?: string;
+        operation?: 'put' | 'delete';
+        payload?: unknown;
+        wasExisting?: boolean;
+        applied?: boolean;
     }>;
     serverVersion: number;
 }

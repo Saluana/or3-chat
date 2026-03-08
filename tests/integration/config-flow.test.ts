@@ -72,6 +72,22 @@ describe('Config integration: env to runtime', () => {
         expect(config.security?.forceHttps).toBe(true);
     });
 
+    it('shows env var to config field mapping for webhooks', () => {
+        const env = {
+            SSR_AUTH_ENABLED: 'true',
+            OR3_WEBHOOKS_MAX_PER_USER: '15',
+            OR3_WEBHOOKS_RATE_LIMIT_PER_MINUTE: '180',
+            OR3_WEBHOOKS_BLOCK_PRIVATE_IPS: 'true',
+        };
+
+        const config = buildOr3CloudConfigFromEnv(env);
+
+        expect(config.webhooks?.enabled).toBe(true);
+        expect(config.webhooks?.maxPerUser).toBe(15);
+        expect(config.webhooks?.rateLimitPerMinute).toBe(180);
+        expect(config.webhooks?.blockPrivateIps).toBe(true);
+    });
+
     it('shows env var to config field mapping for admin', () => {
         const env = {
             OR3_ADMIN_BASE_PATH: '/custom-admin',

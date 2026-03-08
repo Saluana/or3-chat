@@ -99,7 +99,7 @@ export default defineEventHandler(async (event) => {
     const shouldLogStatusRequest =
         effectiveStatus !== 'streaming' ||
         offset === null ||
-        !Number.isFinite(offset ?? NaN);
+        !Number.isFinite(offset);
     if (shouldLogStatusRequest) {
         logBgStream('jobs-status-request', {
             jobId,

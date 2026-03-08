@@ -435,7 +435,7 @@ const combinedItems = computed(() => {
             key: 'page-link-docs',
             type: 'page-link',
             label: 'Documents',
-            description: 'Open and manage your docs.',
+            description: 'View your documents.',
             icon: iconDocs.value,
             pageId: 'sidebar-docs',
             class: 'mb-3',

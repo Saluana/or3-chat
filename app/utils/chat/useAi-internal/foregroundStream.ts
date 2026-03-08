@@ -44,7 +44,10 @@ import {
     recordRawMessage,
     type UiChatMessage,
 } from '~/utils/chat/uiMessages';
-import { openRouterStream } from '~/utils/chat/openrouterStream';
+import {
+    openRouterStream,
+    type OpenRouterReasoningConfig,
+} from '~/utils/chat/openrouterStream';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
 import type {
     AssistantPersister,
@@ -104,6 +107,7 @@ export type ForegroundStreamContext = {
     modelId: string;
     orMessages: OpenRouterMessage[];
     modalities: string[];
+    reasoning?: OpenRouterReasoningConfig;
     tools?: ToolDefinition[];
     abortSignal: AbortSignal;
     assistantId: string;
@@ -215,6 +219,9 @@ export async function runForegroundStreamLoop(
                 typeof openRouterStream
             >[0]['orMessages'],
             modalities: ctx.modalities,
+            reasoning: ctx.reasoning,
+            threadId: ctx.threadId,
+            messageId: ctx.assistantId,
             tools: ctx.tools,
             signal: ctx.abortSignal,
         });

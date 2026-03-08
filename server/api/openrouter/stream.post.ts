@@ -39,6 +39,9 @@ import {
     startBackgroundStream,
     isBackgroundStreamingAvailable,
 } from '../../utils/background-jobs/stream-handler';
+import {
+    mirrorForegroundStreamCompletion,
+} from '../../utils/webhooks/foreground-stream-monitor';
 
 function logBgStream(
     _stage: string,
@@ -49,6 +52,14 @@ function warnBgStream(
     _stage: string,
     _details?: Record<string, unknown>
 ): void {}
+
+function getOptionalBodyString(
+    body: Record<string, unknown>,
+    key: string
+): string | null {
+    const value = body[key];
+    return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
 
 function parseForwardedProto(raw: string | undefined): 'http' | 'https' | null {
     if (!raw) return null;
@@ -433,5 +444,29 @@ export default defineEventHandler(async (event) => {
     logBgStream('api-stream-foreground-pipe-start', {
         status: upstream.status,
     });
-    return sendStream(event, upstream.body);
+    const session = await getSession();
+    const workspaceId =
+        session?.authenticated && session.workspace?.id ? session.workspace.id : null;
+    const threadId = getOptionalBodyString(body, '_threadId');
+    const messageId = getOptionalBodyString(body, '_messageId');
+    const modelId = getOptionalBodyString(body, 'model');
+    const [clientStream, inspectionStream] = upstream.body.tee();
+
+    void mirrorForegroundStreamCompletion({
+        stream: inspectionStream,
+        workspaceId,
+        threadId,
+        messageId,
+        modelId,
+        onError(error) {
+            warnBgStream('api-stream-foreground-hook-monitor-failed', {
+                workspaceId,
+                error: error instanceof Error ? error.message : String(error),
+                threadId,
+                messageId,
+            });
+        },
+    });
+
+    return sendStream(event, clientStream);
 });

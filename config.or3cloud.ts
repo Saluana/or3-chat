@@ -12,7 +12,15 @@ import {
     type StorageProviderId,
     type SyncProviderId,
 } from './shared/cloud/provider-ids';
-import { DEFAULT_OPENROUTER_BASE_URL } from './shared/config/constants';
+import {
+    DEFAULT_OPENROUTER_BASE_URL,
+    DEFAULT_WEBHOOKS_MAX_PER_USER,
+    DEFAULT_WEBHOOKS_ADMIN_MAX,
+    DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE,
+    DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
+    DEFAULT_WEBHOOKS_MAX_RETRY_HOURS,
+    DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS,
+} from './shared/config/constants';
 
 function envFirst(...keys: string[]): string | undefined {
     for (const key of keys) {
@@ -219,5 +227,30 @@ export const or3CloudConfig = defineOr3CloudConfig({
         jobTimeoutSeconds: process.env.OR3_BACKGROUND_JOB_TIMEOUT
             ? Number(process.env.OR3_BACKGROUND_JOB_TIMEOUT)
             : 300,
+    },
+    webhooks: {
+        enabled: authEnabled && process.env.OR3_WEBHOOKS_ENABLED !== 'false',
+        maxPerUser: process.env.OR3_WEBHOOKS_MAX_PER_USER
+            ? Number(process.env.OR3_WEBHOOKS_MAX_PER_USER)
+            : DEFAULT_WEBHOOKS_MAX_PER_USER,
+        adminMax: process.env.OR3_WEBHOOKS_ADMIN_MAX
+            ? Number(process.env.OR3_WEBHOOKS_ADMIN_MAX)
+            : DEFAULT_WEBHOOKS_ADMIN_MAX,
+        rateLimitPerMinute: process.env.OR3_WEBHOOKS_RATE_LIMIT_PER_MINUTE
+            ? Number(process.env.OR3_WEBHOOKS_RATE_LIMIT_PER_MINUTE)
+            : DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE,
+        deliveryTimeoutMs: process.env.OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS
+            ? Number(process.env.OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS)
+            : DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
+        blockPrivateIps: process.env.OR3_WEBHOOKS_BLOCK_PRIVATE_IPS === 'true',
+        encryptionKey:
+            envFirst('OR3_WEBHOOKS_ENCRYPTION_KEY', 'OR3_ADMIN_JWT_SECRET') ??
+            undefined,
+        maxRetryHours: process.env.OR3_WEBHOOKS_MAX_RETRY_HOURS
+            ? Number(process.env.OR3_WEBHOOKS_MAX_RETRY_HOURS)
+            : DEFAULT_WEBHOOKS_MAX_RETRY_HOURS,
+        logRetentionHours: process.env.OR3_WEBHOOKS_LOG_RETENTION_HOURS
+            ? Number(process.env.OR3_WEBHOOKS_LOG_RETENTION_HOURS)
+            : DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS,
     },
 });

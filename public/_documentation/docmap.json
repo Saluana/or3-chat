@@ -662,6 +662,12 @@
                     "summary": "Authoritative reference for every OR3 configuration setting (base + cloud). Documents all config paths and environment variables with defaults, validation rules, and how each setting affects behavior."
                 },
                 {
+                    "name": "webhooks.md",
+                    "path": "/cloud/webhooks",
+                    "category": "Guide",
+                    "summary": "Complete guide to OR3 webhooks. Covers quick-start setup, user and admin event catalogs with data shapes, payload envelope and headers, HMAC-SHA256 signature verification, a full Express.js receiver example with TypeScript, verification snippets for Python and Go, retry policy, SSRF protection, signing secret encryption, configuration reference, delivery logs, admin custom hook subscriptions, and troubleshooting."
+                },
+                {
                     "name": "or3-cloud-wizard.md",
                     "path": "/cloud/or3-cloud-wizard",
                     "category": "Guide",

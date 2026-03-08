@@ -16,6 +16,7 @@ import type * as rateLimits from "../rateLimits.js";
 import type * as storage from "../storage.js";
 import type * as sync from "../sync.js";
 import type * as users from "../users.js";
+import type * as webhooks from "../webhooks.js";
 import type * as workspaces from "../workspaces.js";
 
 import type {
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   storage: typeof storage;
   sync: typeof sync;
   users: typeof users;
+  webhooks: typeof webhooks;
   workspaces: typeof workspaces;
 }>;
 

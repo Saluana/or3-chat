@@ -193,6 +193,17 @@ const adminConfig = {
             : '',
     },
 };
+const webhooksConfig = {
+    enabled: or3CloudConfig.webhooks?.enabled ?? false,
+    maxPerUser: or3CloudConfig.webhooks?.maxPerUser ?? 20,
+    adminMax: or3CloudConfig.webhooks?.adminMax ?? 50,
+    rateLimitPerMinute: or3CloudConfig.webhooks?.rateLimitPerMinute ?? 120,
+    deliveryTimeoutMs: or3CloudConfig.webhooks?.deliveryTimeoutMs ?? 10_000,
+    blockPrivateIps: or3CloudConfig.webhooks?.blockPrivateIps ?? false,
+    encryptionKey: or3CloudConfig.webhooks?.encryptionKey ?? '',
+    maxRetryHours: or3CloudConfig.webhooks?.maxRetryHours ?? 1,
+    logRetentionHours: or3CloudConfig.webhooks?.logRetentionHours ?? 72,
+};
 
 const viteLogger = createLogger();
 const viteWarn = viteLogger.warn;
@@ -309,6 +320,7 @@ export default defineNuxtConfig({
             },
         },
         admin: adminConfig,
+        webhooks: webhooksConfig,
         wizardUi: {
             enabled: process.env.OR3_WIZARD_UI_ENABLED === 'true',
             token: process.env.OR3_WIZARD_UI_TOKEN ?? '',
@@ -367,6 +379,9 @@ export default defineNuxtConfig({
                 basePath: adminConfig.basePath,
                 pluginRuntimeLoaderEnabled: adminConfig.pluginRuntimeLoaderEnabled,
                 pluginRouteDispatcherEnabled: adminConfig.pluginRouteDispatcherEnabled,
+            },
+            webhooks: {
+                enabled: webhooksConfig.enabled,
             },
             wizardUi: {
                 enabled: process.env.OR3_WIZARD_UI_ENABLED === 'true',

@@ -52,6 +52,7 @@ import {
     abortBackgroundJob,
     isBackgroundStreamingEnabled,
     type BackgroundJobStatus,
+    type OpenRouterReasoningConfig,
 } from '../../utils/chat/openrouterStream';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { inferMimeFromUrl } from '~/utils/chat/files';
@@ -96,6 +97,43 @@ import {
 
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
+
+const THINKING_SUFFIX = ':thinking';
+
+function stripThinkingSuffix(modelId: string): string {
+    return modelId.endsWith(THINKING_SUFFIX)
+        ? modelId.slice(0, -THINKING_SUFFIX.length)
+        : modelId;
+}
+
+function readSupportedParameters(model: ModelInfo | undefined): string[] {
+    if (!model || typeof model !== 'object') return [];
+    const raw = model.supported_parameters;
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((value): value is string => typeof value === 'string');
+}
+
+function supportsThinkingByParams(params: string[]): boolean {
+    return params.some(
+        (parameter) =>
+            parameter === 'reasoning' ||
+            parameter.startsWith('reasoning.') ||
+            parameter === 'thinking'
+    );
+}
+
+function resolveReasoningPayload(
+    params: string[]
+): OpenRouterReasoningConfig | undefined {
+    if (!supportsThinkingByParams(params)) return undefined;
+    if (params.includes('reasoning.effort')) {
+        return { effort: 'medium' };
+    }
+    if (params.includes('reasoning.max_tokens')) {
+        return { max_tokens: 1024 };
+    }
+    return { enabled: true };
+}
 
 type GlobalWithPaneApi = typeof globalThis & {
     __or3MultiPaneApi?: UseMultiPaneApi;
@@ -162,13 +200,13 @@ export function useChat(
     const aborted = ref<boolean>(false);
     const { apiKey, setKey } = useUserApiKey();
     const runtimeConfig = useRuntimeConfig();
-    const syncConfig = runtimeConfig.public?.sync;
+    const syncConfig = runtimeConfig.public.sync;
     const serverNotificationsEnabled = computed(
         () =>
-            runtimeConfig.public?.ssrAuthEnabled === true &&
-            syncConfig?.enabled === true &&
-            syncConfig?.provider === CONVEX_PROVIDER_ID &&
-            Boolean(syncConfig?.convexUrl)
+            runtimeConfig.public.ssrAuthEnabled === true &&
+            syncConfig.enabled === true &&
+            syncConfig.provider === CONVEX_PROVIDER_ID &&
+            Boolean(syncConfig.convexUrl)
     );
     const sessionContext =
         runtimeConfig.public.ssrAuthEnabled === true ? useSessionContext() : null;
@@ -1402,7 +1440,7 @@ export function useChat(
 
         streamAcc.reset();
         let { files, model, file_hashes } = sendMessagesParams;
-        const { extraTextParts, online, context_hashes } = sendMessagesParams;
+        const { extraTextParts, online, thinking, context_hashes } = sendMessagesParams;
         const extendedParams = sendMessagesParams as ExtendedSendMessageParams;
         if (
             (!files || files.length === 0) &&
@@ -1430,6 +1468,21 @@ export function useChat(
                 );
         }
         if (!model) model = DEFAULT_AI_MODEL;
+        const originalModelId = model;
+        const normalizedModelId = stripThinkingSuffix(originalModelId);
+        const { catalog, favoriteModels } = useModelStore();
+        const modelMeta =
+            catalog.value.find((m: ModelInfo) => m.id === normalizedModelId) ||
+            favoriteModels.value.find(
+                (m: ModelInfo) => m.id === normalizedModelId
+            );
+        const supportedParameters = readSupportedParameters(modelMeta);
+        const requestedThinking =
+            thinking === true || originalModelId.endsWith(THINKING_SUFFIX);
+        const reasoning = requestedThinking
+            ? resolveReasoningPayload(supportedParameters)
+            : undefined;
+        model = normalizedModelId;
         if (online === true) model = model + ':online';
 
         file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
@@ -1691,6 +1744,7 @@ export function useChat(
                         modalities,
                         threadId: threadIdRef.value!,
                         messageId: assistantDbMsg.id,
+                        reasoning,
                         tools:
                             enabledToolDefs.length > 0
                                 ? enabledToolDefs
@@ -1783,6 +1837,7 @@ export function useChat(
                 modelId,
                 orMessages,
                 modalities,
+                reasoning,
                 tools:
                     enabledToolDefs.length > 0
                         ? enabledToolDefs

@@ -515,6 +515,8 @@ export async function continueMessageImpl(
             model: modelId,
             orMessages: orMessages as Parameters<typeof openRouterStream>[0]['orMessages'],
             modalities,
+            threadId: ctx.threadIdRef.value,
+            messageId: target.id,
             signal: ctx.abortController.value.signal,
         });
 

@@ -45,6 +45,12 @@ import {
     DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
     DEFAULT_BACKGROUND_MAX_JOBS_PER_USER,
     DEFAULT_OPENROUTER_BASE_URL,
+    DEFAULT_WEBHOOKS_MAX_PER_USER,
+    DEFAULT_WEBHOOKS_ADMIN_MAX,
+    DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE,
+    DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
+    DEFAULT_WEBHOOKS_MAX_RETRY_HOURS,
+    DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS,
 } from '../../../shared/config/constants';
 
 export type EnvMap = Record<string, string | undefined>;
@@ -373,6 +379,44 @@ export function buildOr3CloudConfigFromEnv(
                     DEFAULT_BACKGROUND_MAX_JOBS_PER_USER
                 ) ?? DEFAULT_BACKGROUND_MAX_JOBS_PER_USER,
             jobTimeoutSeconds: envNum(env.OR3_BACKGROUND_JOB_TIMEOUT, DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS) ?? DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
+        },
+        webhooks: {
+            enabled: authEnabled && env.OR3_WEBHOOKS_ENABLED !== 'false',
+            maxPerUser:
+                envNum(
+                    env.OR3_WEBHOOKS_MAX_PER_USER,
+                    DEFAULT_WEBHOOKS_MAX_PER_USER
+                ) ?? DEFAULT_WEBHOOKS_MAX_PER_USER,
+            adminMax:
+                envNum(
+                    env.OR3_WEBHOOKS_ADMIN_MAX,
+                    DEFAULT_WEBHOOKS_ADMIN_MAX
+                ) ?? DEFAULT_WEBHOOKS_ADMIN_MAX,
+            rateLimitPerMinute:
+                envNum(
+                    env.OR3_WEBHOOKS_RATE_LIMIT_PER_MINUTE,
+                    DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE
+                ) ?? DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE,
+            deliveryTimeoutMs:
+                envNum(
+                    env.OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS,
+                    DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS
+                ) ?? DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
+            blockPrivateIps: envBool(env.OR3_WEBHOOKS_BLOCK_PRIVATE_IPS, false),
+            encryptionKey:
+                env.OR3_WEBHOOKS_ENCRYPTION_KEY ||
+                env.OR3_ADMIN_JWT_SECRET ||
+                undefined,
+            maxRetryHours:
+                envNum(
+                    env.OR3_WEBHOOKS_MAX_RETRY_HOURS,
+                    DEFAULT_WEBHOOKS_MAX_RETRY_HOURS
+                ) ?? DEFAULT_WEBHOOKS_MAX_RETRY_HOURS,
+            logRetentionHours:
+                envNum(
+                    env.OR3_WEBHOOKS_LOG_RETENTION_HOURS,
+                    DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS
+                ) ?? DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS,
         },
     };
 

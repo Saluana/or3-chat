@@ -263,6 +263,66 @@ export interface Or3CloudConfig {
     };
 
     /**
+     * Webhook delivery configuration (SSR mode only).
+     * Controls outbound webhook delivery limits, timeouts, and secret storage.
+     */
+    webhooks?: {
+        /**
+         * Master enable flag for the webhook system.
+         * @default false
+         */
+        enabled?: boolean;
+
+        /**
+         * Maximum user-managed webhooks per user per workspace.
+         * @default 20
+         */
+        maxPerUser?: number;
+
+        /**
+         * Maximum admin-managed webhooks per instance.
+         * @default 50
+         */
+        adminMax?: number;
+
+        /**
+         * Per-webhook delivery rate limit in events per minute.
+         * @default 120
+         */
+        rateLimitPerMinute?: number;
+
+        /**
+         * HTTP timeout per delivery attempt in milliseconds.
+         * @default 10000
+         */
+        deliveryTimeoutMs?: number;
+
+        /**
+         * Block deliveries to private or internal IPs.
+         * @default false
+         */
+        blockPrivateIps?: boolean;
+
+        /**
+         * Server-side encryption key for webhook signing secrets.
+         * Falls back to the admin JWT secret when omitted.
+         */
+        encryptionKey?: string;
+
+        /**
+         * Maximum retry window in hours.
+         * @default 1
+         */
+        maxRetryHours?: number;
+
+        /**
+         * Delivery log retention window in hours.
+         * @default 72
+         */
+        logRetentionHours?: number;
+    };
+
+    /**
      * Security hardening options.
      */
     security?: {

@@ -198,6 +198,7 @@ describe('buildOr3CloudConfigFromEnv', () => {
         expect(config.sync.enabled).toBe(false);
         expect(config.storage.enabled).toBe(false);
         expect(config.auth.autoProvision).toBe(true);
+        expect(config.webhooks?.enabled).toBe(false);
     });
 
     it('maps auth provisioning controls from env', () => {
@@ -377,6 +378,41 @@ describe('buildOr3CloudConfigFromEnv', () => {
         expect(config.backgroundStreaming?.maxConcurrentJobs).toBe(50);
         expect(config.backgroundStreaming?.maxConcurrentJobsPerUser).toBe(7);
         expect(config.backgroundStreaming?.jobTimeoutSeconds).toBe(600);
+    });
+
+    it('parses webhook config correctly', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_WEBHOOKS_ENABLED: 'true',
+            OR3_WEBHOOKS_MAX_PER_USER: '12',
+            OR3_WEBHOOKS_ADMIN_MAX: '40',
+            OR3_WEBHOOKS_RATE_LIMIT_PER_MINUTE: '240',
+            OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS: '15000',
+            OR3_WEBHOOKS_BLOCK_PRIVATE_IPS: 'true',
+            OR3_ADMIN_JWT_SECRET: 'fallback-secret',
+            OR3_WEBHOOKS_MAX_RETRY_HOURS: '2',
+            OR3_WEBHOOKS_LOG_RETENTION_HOURS: '96',
+        });
+
+        expect(config.webhooks?.enabled).toBe(true);
+        expect(config.webhooks?.maxPerUser).toBe(12);
+        expect(config.webhooks?.adminMax).toBe(40);
+        expect(config.webhooks?.rateLimitPerMinute).toBe(240);
+        expect(config.webhooks?.deliveryTimeoutMs).toBe(15000);
+        expect(config.webhooks?.blockPrivateIps).toBe(true);
+        expect(config.webhooks?.encryptionKey).toBe('fallback-secret');
+        expect(config.webhooks?.maxRetryHours).toBe(2);
+        expect(config.webhooks?.logRetentionHours).toBe(96);
+    });
+
+    it('prefers OR3_WEBHOOKS_ENCRYPTION_KEY over the admin secret', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_WEBHOOKS_ENCRYPTION_KEY: 'explicit-key',
+            OR3_ADMIN_JWT_SECRET: 'fallback-secret',
+        });
+
+        expect(config.webhooks?.encryptionKey).toBe('explicit-key');
     });
 
     it('parses storage policy config correctly', () => {
