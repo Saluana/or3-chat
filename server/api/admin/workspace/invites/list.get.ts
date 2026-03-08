@@ -22,7 +22,10 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const adminCtx = await requireAdminApiContext(event, { ownerOnly: true });
+    const adminCtx = await requireAdminApiContext(event, {
+        ownerOnly: true,
+        allowWorkspaceAdmin: true,
+    });
     setResponseHeader(event, 'Cache-Control', 'no-store');
 
     const session = adminCtx.session;

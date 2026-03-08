@@ -123,7 +123,9 @@ This yields isolation without a second Nuxt app.
 ### Access
 
 - Access to Admin UI requires `admin.access`.
-- To satisfy the spec (“owner OR editor can access”), update `server/auth/can.ts` so `editor` includes `admin.access`.
+- Workspace owners receive `admin.access` for workspace-scoped admin surfaces.
+- Editors do not receive `admin.access`.
+- Deployment-wide admin routes remain `super_admin`-only unless they explicitly opt into workspace-owner access.
 
 ### Action-level permissioning (fail closed)
 
@@ -133,12 +135,11 @@ Admin actions are split into:
   - Membership management (`users.manage`)
   - Workspace settings (`workspace.settings.manage`)
   - Plugin enablement & settings (`plugins.manage` for writes; `workspace.read` for reads)
+  - Allowed for workspace owners (and super admins acting on a workspace)
 
 - **Deployment-scoped** actions (config apply, restart, install/uninstall extensions):
-  - Require owner-only via existing permissions (`workspace.settings.manage` or a new explicit `system.manage` permission).
-  - v1 keeps this minimal: require `workspace.settings.manage` and `admin.access`.
-
-> Note: Even for deployment-scoped actions, auth is still workspace-bound because session context is workspace-scoped. In v1, “owner of active workspace” is the operator. If multi-tenant deployments require a separate operator role later, add a distinct permission (e.g., `system.manage`).
+  - Require `super_admin` access.
+  - Workspace-owner sessions do not implicitly gain deployment-wide control.
 
 ---
 

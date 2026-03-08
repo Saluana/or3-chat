@@ -9,6 +9,8 @@
  */
 import { defineNuxtRouteMiddleware, navigateTo } from '#app';
 
+type AdminSessionKind = 'super_admin' | 'workspace_admin';
+
 type FetchLikeError = {
     statusCode?: number;
     status?: number;
@@ -23,6 +25,21 @@ function getStatus(error: unknown): number | undefined {
     return e.statusCode ?? e.status ?? e.response?.status;
 }
 
+function isWorkspaceScopedPath(path: string): boolean {
+    return (
+        path === '/admin' ||
+        path === '/admin/' ||
+        path === '/admin/plugins' ||
+        path.startsWith('/admin/plugins/') ||
+        path === '/admin/workspace' ||
+        path.startsWith('/admin/workspace/')
+    );
+}
+
+function resolveAdminLanding(kind: AdminSessionKind): string {
+    return kind === 'super_admin' ? '/admin' : '/admin/plugins';
+}
+
 export default defineNuxtRouteMiddleware(async (to) => {
     // Skip for login page
     if (to.path === '/admin/login' || to.path.startsWith('/admin/login/')) {
@@ -31,8 +48,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
     try {
         const requestFetch = useRequestFetch();
-        const data = await requestFetch<{ authenticated: boolean; kind: string }>('/api/admin/auth/session', {
+        const data = await requestFetch<{ authenticated: boolean; kind: AdminSessionKind }>('/api/admin/auth/session', {
             credentials: 'include',
+            cache: 'no-store',
             headers: {
                 Accept: 'application/json',
             },
@@ -42,15 +60,24 @@ export default defineNuxtRouteMiddleware(async (to) => {
             return;
         }
 
+        if (data.authenticated && data.kind === 'workspace_admin') {
+            if (isWorkspaceScopedPath(to.path)) {
+                if (to.path === '/admin' || to.path === '/admin/') {
+                    return navigateTo(resolveAdminLanding(data.kind));
+                }
+                return;
+            }
+
+            return navigateTo(resolveAdminLanding(data.kind));
+        }
+
         return navigateTo('/admin/login');
     } catch (error: unknown) {
         const status = getStatus(error);
 
         if (status === 404) {
-            // Admin endpoint not available (admin disabled or not configured)
-            // Redirect to home to avoid showing a broken page
-            console.log('[admin-auth middleware] Admin not available (404), redirecting to home');
-            return navigateTo('/');
+            console.log('[admin-auth middleware] Admin session route unavailable (404), redirecting to login');
+            return navigateTo('/admin/login');
         }
 
         if (status === 401 || status === 403) {

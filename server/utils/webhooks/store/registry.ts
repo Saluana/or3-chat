@@ -11,7 +11,7 @@ const registry = createRuntimeConfigRegistry<WebhookStore, WebhookStoreRegistryI
     warnLabel: 'webhooks:store:registry',
     cacheInstances: true,
     resolveActiveId(config) {
-        return config.sync.provider || config.public.sync.provider;
+        return config.sync?.provider || config.public.sync.provider;
     },
 });
 

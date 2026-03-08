@@ -32,13 +32,12 @@ import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
 import { recordSessionResolution, recordProviderError } from './metrics';
 import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { getDeploymentAdminChecker } from './deployment-admin';
-import { getWorkspaceSettingsStore } from '../admin/stores/registry';
-import { bootstrapDefaultEnabledPlugins } from '../admin/plugins/workspace-plugin-store';
 import {
     evaluateUnknownUserRegistration,
     resolveRegistrationMode,
 } from './registration';
 import { emitWebhookSystemHook } from '../utils/webhooks/runtime';
+import { provisionWorkspaceDefaults } from '../workspaces/provisioning';
 
 const SESSION_CONTEXT_KEY_PREFIX = '__or3_session_context_';
 const REQUEST_ID_KEY = '__or3_request_id';
@@ -67,7 +66,20 @@ function clearSharedSessionCacheEntry(
     providerUserId: string | undefined,
     storeId?: string
 ): void {
-    if (!providerId || !providerUserId) return;
+    if (!providerId || !providerUserId) {
+        if (storeId) {
+            const storeSuffix = `:${storeId}`;
+            for (const key of sharedSessionCache.keys()) {
+                if (key.endsWith(storeSuffix)) {
+                    sharedSessionCache.delete(key);
+                }
+            }
+            return;
+        }
+
+        sharedSessionCache.clear();
+        return;
+    }
 
     if (storeId) {
         sharedSessionCache.delete(
@@ -391,8 +403,19 @@ export async function resolveSessionContext(
         }
 
         // Get or create default workspace
-        const { workspaceId, workspaceName } =
+        const { workspaceId, workspaceName, created } =
             await store.getOrCreateDefaultWorkspace(userId);
+
+        if (created) {
+            try {
+                await provisionWorkspaceDefaults(event, workspaceId);
+            } catch (error) {
+                console.warn('[auth:session] Failed to provision new workspace defaults', {
+                    workspaceId,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
 
         // Get workspace role
         const role = await store.getWorkspaceRole({ userId, workspaceId });
@@ -415,29 +438,6 @@ export async function resolveSessionContext(
             name: workspaceName,
             role,
         };
-
-        const defaultEnabledPlugins = (
-            (config.plugins as { defaultEnabled?: unknown } | undefined)
-                ?.defaultEnabled
-        );
-        if (Array.isArray(defaultEnabledPlugins) && defaultEnabledPlugins.length > 0) {
-            try {
-                const settingsStore = getWorkspaceSettingsStore(event);
-                await bootstrapDefaultEnabledPlugins(
-                    settingsStore,
-                    workspaceId,
-                    defaultEnabledPlugins.filter(
-                        (value): value is string =>
-                            typeof value === 'string' && value.trim().length > 0
-                    )
-                );
-            } catch (error) {
-                console.warn('[auth:session] Failed to bootstrap default plugins', {
-                    workspaceId,
-                    error: error instanceof Error ? error.message : String(error),
-                });
-            }
-        }
 
         const sessionContext: SessionContext = {
             authenticated: true,

@@ -41,6 +41,42 @@ describe('admin route policy contracts', () => {
         }
     });
 
+    it('allows workspace owners on workspace-scoped admin routes', async () => {
+        const files = [
+            'server/api/admin/auth/session.get.ts',
+            'server/api/admin/workspace.get.ts',
+            'server/api/admin/plugins-page.get.ts',
+            'server/api/admin/plugins/workspace-settings.get.ts',
+            'server/api/admin/plugins/workspace-settings.post.ts',
+            'server/api/admin/plugins/workspace-enable.post.ts',
+            'server/api/admin/workspace/members/upsert.post.ts',
+            'server/api/admin/workspace/members/set-role.post.ts',
+            'server/api/admin/workspace/members/remove.post.ts',
+            'server/api/admin/workspace/guest-access/set.post.ts',
+            'server/api/admin/workspace/invites/create.post.ts',
+            'server/api/admin/workspace/invites/list.get.ts',
+            'server/api/admin/workspace/invites/revoke.post.ts',
+        ] as const;
+
+        for (const file of files) {
+            const source = await read(file);
+            expect(source).toContain('allowWorkspaceAdmin: true');
+        }
+    });
+
+    it('invalidates shared session cache after membership changes', async () => {
+        const files = [
+            'server/api/admin/workspace/members/upsert.post.ts',
+            'server/api/admin/workspace/members/set-role.post.ts',
+            'server/api/admin/workspace/members/remove.post.ts',
+        ] as const;
+
+        for (const file of files) {
+            const source = await read(file);
+            expect(source).toContain('invalidateSharedSessionCacheForIdentity');
+        }
+    });
+
     it('does not trust raw x-forwarded-for in extension install route', async () => {
         const source = await read('server/api/admin/extensions/install.post.ts');
 

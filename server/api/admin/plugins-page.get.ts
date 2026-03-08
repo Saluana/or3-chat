@@ -28,7 +28,10 @@ import { getWorkspaceSettingsStore } from '../../admin/stores/registry';
  * - Replaces 2 separate calls => ~50% latency reduction.
  */
 export default defineEventHandler(async (event) => {
-    const session = await requireAdminApi(event);
+    const session = await requireAdminApi(event, {
+        ownerOnly: true,
+        allowWorkspaceAdmin: true,
+    });
     
     if (!session.workspace?.id) {
         throw createError({

@@ -6,6 +6,7 @@
  */
 import { defineEventHandler, readBody, createError, getRouterParam } from 'h3';
 import { requireWorkspaceSession, resolveWorkspaceStore } from './_helpers';
+import { requireCan } from '../../auth/can';
 
 type UpdateWorkspaceBody = {
     name?: string;
@@ -44,6 +45,11 @@ export default defineEventHandler(async (event) => {
     if (!session.user?.id) {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
     }
+
+    requireCan(session, 'workspace.write', {
+        kind: 'workspace',
+        id: workspaceId,
+    });
 
     await store.updateWorkspace({
         userId: session.user.id,

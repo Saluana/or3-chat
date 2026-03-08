@@ -6,7 +6,9 @@
  */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { requireWorkspaceSession, resolveWorkspaceStore } from './_helpers';
+import { requireCan } from '../../auth/can';
 import { invalidateSharedSessionCacheForIdentity } from '../../auth/session';
+import { useRuntimeConfig } from '#imports';
 
 type SetActiveBody = { id?: string };
 
@@ -25,6 +27,11 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
     }
 
+    requireCan(session, 'workspace.read', {
+        kind: 'workspace',
+        id: workspaceId,
+    });
+
     await store.setActiveWorkspace({
         userId: session.user.id,
         workspaceId,
@@ -35,6 +42,10 @@ export default defineEventHandler(async (event) => {
     invalidateSharedSessionCacheForIdentity({
         provider: session.provider,
         providerUserId: session.providerUserId,
+        storeId:
+            (useRuntimeConfig(event).sync as { provider?: string } | undefined)?.provider ||
+            (useRuntimeConfig(event).public as { sync?: { provider?: string } }).sync?.provider ||
+            'convex',
     });
 
     return { ok: true };

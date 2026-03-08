@@ -22,7 +22,6 @@ definePageMeta({
 const router = useRouter();
 
 onMounted(() => {
-    // Redirect to the new workspaces list page
-    router.replace('/admin/workspaces');
+    router.replace('/admin');
 });
 </script>

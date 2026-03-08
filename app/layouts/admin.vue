@@ -395,14 +395,24 @@ interface NavLink {
 const isSuperAdmin = computed(
     () => adminSession.value?.kind === 'super_admin'
 );
+const isWorkspaceAdmin = computed(
+    () => adminSession.value?.kind === 'workspace_admin'
+);
 
 const navLinks = computed<NavLink[]>(() => {
-    const base: NavLink[] = [
-        { label: 'Overview', to: '/admin', icon: homeIcon.value },
-        { label: 'Plugins', to: '/admin/plugins', icon: pluginsIcon.value },
-        { label: 'Themes', to: '/admin/themes', icon: settingsIcon.value },
-        { label: 'System', to: '/admin/system', icon: systemIcon.value },
-    ];
+    const base: NavLink[] = [{ label: 'Overview', to: '/admin', icon: homeIcon.value }];
+
+    if (isSuperAdmin.value) {
+        base.push(
+            { label: 'Plugins', to: '/admin/plugins', icon: pluginsIcon.value },
+            { label: 'Themes', to: '/admin/themes', icon: settingsIcon.value },
+            { label: 'System', to: '/admin/system', icon: systemIcon.value }
+        );
+    }
+
+    if (isWorkspaceAdmin.value) {
+        base.push({ label: 'Plugins', to: '/admin/plugins', icon: pluginsIcon.value });
+    }
 
     if (isSuperAdmin.value) {
         base.splice(1, 0, {

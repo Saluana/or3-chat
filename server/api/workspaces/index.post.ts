@@ -6,6 +6,7 @@
  */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { requireWorkspaceSession, resolveWorkspaceStore } from './_helpers';
+import { provisionWorkspaceDefaults } from '../../workspaces/provisioning';
 
 type CreateWorkspaceBody = {
     name?: string;
@@ -45,6 +46,8 @@ export default defineEventHandler(async (event) => {
         name,
         description: description || null,
     });
+
+    await provisionWorkspaceDefaults(event, result.workspaceId);
 
     return { id: result.workspaceId };
 });

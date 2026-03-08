@@ -84,7 +84,11 @@ export interface AuthWorkspaceStore {
      */
     getOrCreateDefaultWorkspace(
         userId: string
-    ): Promise<{ workspaceId: string; workspaceName: string }>;
+    ): Promise<{
+        workspaceId: string;
+        workspaceName: string;
+        created?: boolean;
+    }>;
 
     /**
      * Purpose:

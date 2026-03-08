@@ -18,15 +18,22 @@ vi.mock('h3', () => ({
 const requireWorkspaceSessionMock = vi.fn();
 const setActiveWorkspaceMock = vi.fn();
 const invalidateSharedSessionCacheForIdentityMock = vi.fn();
+const requireCanMock = vi.fn();
 vi.mock('../_helpers', () => ({
     requireWorkspaceSession: (...args: unknown[]) => requireWorkspaceSessionMock(...args),
     resolveWorkspaceStore: () => ({
         setActiveWorkspace: (...args: unknown[]) => setActiveWorkspaceMock(...args),
     }),
 }));
+vi.mock('../../../auth/can', () => ({
+    requireCan: (...args: unknown[]) => requireCanMock(...args),
+}));
 vi.mock('../../../auth/session', () => ({
     invalidateSharedSessionCacheForIdentity: (...args: unknown[]) =>
         invalidateSharedSessionCacheForIdentityMock(...args),
+}));
+vi.mock('#imports', () => ({
+    useRuntimeConfig: () => ({ sync: { provider: 'test-sync' }, public: { sync: { provider: 'test-sync' } } }),
 }));
 
 function makeEvent(): H3Event {
@@ -45,6 +52,7 @@ describe('POST /api/workspaces/active', () => {
         });
         setActiveWorkspaceMock.mockReset().mockResolvedValue(undefined);
         invalidateSharedSessionCacheForIdentityMock.mockReset();
+        requireCanMock.mockReset();
     });
 
     it('returns 400 when workspace id is missing', async () => {
@@ -67,6 +75,11 @@ describe('POST /api/workspaces/active', () => {
         readBodyMock.mockResolvedValue({ id: 'ws-2' });
 
         await expect(handler(makeEvent())).resolves.toEqual({ ok: true });
+        expect(requireCanMock).toHaveBeenCalledWith(
+            expect.objectContaining({ workspace: { id: 'ws-1' } }),
+            'workspace.read',
+            { kind: 'workspace', id: 'ws-2' }
+        );
         expect(setActiveWorkspaceMock).toHaveBeenCalledWith({
             userId: 'user-1',
             workspaceId: 'ws-2',
@@ -74,6 +87,7 @@ describe('POST /api/workspaces/active', () => {
         expect(invalidateSharedSessionCacheForIdentityMock).toHaveBeenCalledWith({
             provider: 'test-provider',
             providerUserId: 'provider-user-1',
+            storeId: 'test-sync',
         });
     });
 

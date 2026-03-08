@@ -30,7 +30,11 @@ const BodySchema = z.object({
  * - Admin-only (Mutation).
  */
 export default defineEventHandler(async (event) => {
-    const session = await requireAdminApi(event, { ownerOnly: true, mutation: true });
+    const session = await requireAdminApi(event, {
+        ownerOnly: true,
+        mutation: true,
+        allowWorkspaceAdmin: true,
+    });
 
     const body = BodySchema.safeParse(await readBody(event));
     if (!body.success) {

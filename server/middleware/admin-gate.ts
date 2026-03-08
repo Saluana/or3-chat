@@ -82,6 +82,17 @@ function isLoginPath(path: string): boolean {
     );
 }
 
+function isWorkspaceScopedAdminUiPath(path: string): boolean {
+    return (
+        path === '/admin' ||
+        path === '/admin/' ||
+        path === '/admin/plugins' ||
+        path.startsWith('/admin/plugins/') ||
+        path === '/admin/workspace' ||
+        path.startsWith('/admin/workspace/')
+    );
+}
+
 /**
  * Admin route guard.
  *
@@ -177,6 +188,27 @@ export default defineEventHandler(async (event) => {
         } else {
             return sendRedirect(event, `${basePath}/login`, 307);
         }
+    }
+
+    // Workspace admins can access workspace-scoped admin UI routes.
+    if (adminContext.principal.kind === 'workspace_admin') {
+        if (event.path.startsWith('/api/')) {
+            throw createError({
+                statusCode: 403,
+                statusMessage: 'Forbidden: Super admin access required',
+            });
+        }
+
+        if (event.path === '/admin' || event.path === '/admin/') {
+            return sendRedirect(event, `${basePath}/plugins`, 307);
+        }
+
+        if (isWorkspaceScopedAdminUiPath(event.path)) {
+            event.context.admin = adminContext;
+            return;
+        }
+
+        return sendRedirect(event, `${basePath}/plugins`, 307);
     }
 
     // Super-admin-only admin panel/API policy.

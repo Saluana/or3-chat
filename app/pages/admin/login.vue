@@ -104,6 +104,12 @@ definePageMeta({
     layout: false,
 });
 
+type AdminSessionKind = 'super_admin' | 'workspace_admin';
+
+function resolveAdminLanding(kind: AdminSessionKind): string {
+    return kind === 'super_admin' ? '/admin' : '/admin/plugins';
+}
+
 const router = useRouter();
 const toast = useToast();
 const { getMessage } = useApiError();
@@ -120,6 +126,24 @@ const username = ref('');
 const password = ref('');
 const isLoading = ref(false);
 const error = ref<string | null>(null);
+
+onMounted(async () => {
+    try {
+        const session = await $fetch<{ authenticated: boolean; kind: AdminSessionKind }>(
+            '/api/admin/auth/session',
+            {
+                credentials: 'include',
+                cache: 'no-store',
+            }
+        );
+
+        if (session.authenticated) {
+            await router.replace(resolveAdminLanding(session.kind));
+        }
+    } catch {
+        // No active admin session; stay on the login page.
+    }
+});
 
 async function handleLogin() {
     if (!username.value || !password.value) return;
@@ -142,8 +166,7 @@ async function handleLogin() {
             color: 'success',
         });
 
-        // Redirect to workspaces page
-        router.push('/admin/workspaces');
+        await router.push('/admin');
     } catch (err: unknown) {
         error.value = getMessage(err, 'Login failed');
     } finally {

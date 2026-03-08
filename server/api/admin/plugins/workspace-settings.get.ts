@@ -28,7 +28,10 @@ const QuerySchema = z.object({
  * - Returns key-value pairs.
  */
 export default defineEventHandler(async (event) => {
-    const session = await requireAdminApi(event);
+    const session = await requireAdminApi(event, {
+        ownerOnly: true,
+        allowWorkspaceAdmin: true,
+    });
 
     const query = QuerySchema.safeParse(getQuery(event));
     if (!query.success) {

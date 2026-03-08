@@ -8,6 +8,8 @@ import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { requireAdminApi } from '../../../../admin/api';
 import { getWorkspaceAccessStore } from '../../../../admin/stores/registry';
+import { invalidateSharedSessionCacheForIdentity } from '../../../../auth/session';
+import { useRuntimeConfig } from '#imports';
 
 const BodySchema = z.object({
     userId: z.string().min(1),
@@ -26,7 +28,11 @@ const BodySchema = z.object({
  * - Emit `admin.user:action:role_changed` hook.
  */
 export default defineEventHandler(async (event) => {
-    const session = await requireAdminApi(event, { ownerOnly: true, mutation: true });
+    const session = await requireAdminApi(event, {
+        ownerOnly: true,
+        mutation: true,
+        allowWorkspaceAdmin: true,
+    });
 
     const body = BodySchema.safeParse(await readBody(event));
     if (!body.success) {
@@ -43,6 +49,13 @@ export default defineEventHandler(async (event) => {
         workspaceId,
         userId: body.data.userId,
         role: body.data.role,
+    });
+
+    invalidateSharedSessionCacheForIdentity({
+        storeId:
+            (useRuntimeConfig(event).sync as { provider?: string } | undefined)?.provider ||
+            (useRuntimeConfig(event).public as { sync?: { provider?: string } }).sync?.provider ||
+            'convex',
     });
 
     await event.context.adminHooks?.doAction('admin.user:action:role_changed', {

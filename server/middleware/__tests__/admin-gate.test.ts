@@ -163,7 +163,64 @@ describe('admin-gate proxy host allowlist', () => {
         expect(event.node.res.getHeader('location')).toBeUndefined();
     });
 
-    it('redirects workspace admin away from protected admin UI routes', async () => {
+    it('allows workspace admin on workspace-scoped admin UI routes', async () => {
+        resolveAdminRequestContextMock.mockResolvedValue({
+            principal: {
+                kind: 'workspace_admin',
+                userId: 'u_1',
+                session: {
+                    authenticated: true,
+                },
+            },
+            session: {
+                authenticated: true,
+            },
+        });
+
+        const event = makeEvent({
+            path: '/admin/plugins',
+            method: 'GET',
+            headers: {
+                host: 'internal.local',
+                'x-forwarded-host': 'admin.example.com',
+            },
+        });
+
+        await expect(adminGate(event)).resolves.toBeUndefined();
+        expect(event.context.admin).toBeTruthy();
+        expect(event.node.res.statusCode).toBe(200);
+        expect(event.node.res.getHeader('location')).toBeUndefined();
+    });
+
+    it('redirects workspace admin from /admin to plugins', async () => {
+        resolveAdminRequestContextMock.mockResolvedValue({
+            principal: {
+                kind: 'workspace_admin',
+                userId: 'u_1',
+                session: {
+                    authenticated: true,
+                },
+            },
+            session: {
+                authenticated: true,
+            },
+        });
+
+        const event = makeEvent({
+            path: '/admin',
+            method: 'GET',
+            headers: {
+                host: 'internal.local',
+                'x-forwarded-host': 'admin.example.com',
+            },
+        });
+
+        await expect(adminGate(event)).resolves.toBeUndefined();
+        expect(event.node.res.statusCode).toBe(307);
+        expect(event.node.res.getHeader('location')).toBe('/admin/plugins');
+    });
+
+    it('redirects workspace admin away from deployment admin UI routes', async () => {
         resolveAdminRequestContextMock.mockResolvedValue({
             principal: {
                 kind: 'workspace_admin',
@@ -188,6 +245,6 @@ describe('admin-gate proxy host allowlist', () => {
 
         await expect(adminGate(event)).resolves.toBeUndefined();
         expect(event.node.res.statusCode).toBe(307);
-        expect(event.node.res.getHeader('location')).toBe('/admin/login');
+        expect(event.node.res.getHeader('location')).toBe('/admin/plugins');
     });
 });

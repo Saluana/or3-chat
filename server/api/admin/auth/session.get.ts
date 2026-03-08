@@ -34,7 +34,10 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const context = await requireAdminApiContext(event);
+    const context = await requireAdminApiContext(event, {
+        ownerOnly: true,
+        allowWorkspaceAdmin: true,
+    });
 
     return {
         authenticated: true,

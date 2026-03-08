@@ -52,6 +52,7 @@ describe('can()', () => {
             'workspace.settings.manage',
             'users.manage',
             'plugins.manage',
+            'admin.access',
         ];
 
         it.each(ownerPermissions)('allows %s permission for owner', (permission) => {

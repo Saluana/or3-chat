@@ -37,7 +37,8 @@
  * @example
  * ```ts
  * normalizeHost('Example.com:443'); // 'example.com'
- * normalizeHost('[::1]:3000'); // '[::1]'
+ * normalizeHost('[::1]:3000'); // 'localhost'
+ * normalizeHost('127.0.0.1:3000'); // 'localhost'
  * ```
  */
 export function normalizeHost(host: string): string {
@@ -50,17 +51,26 @@ export function normalizeHost(host: string): string {
     if (lower.startsWith('[')) {
         const bracketEnd = lower.indexOf(']');
         if (bracketEnd !== -1) {
-            return lower.slice(0, bracketEnd + 1);
+            const addr = lower.slice(0, bracketEnd + 1);
+            // Canonicalize IPv6 loopback to localhost
+            if (addr === '[::1]') return 'localhost';
+            return addr;
         }
         return lower;
     }
 
     // IPv4 or hostname: remove port (everything after first colon)
     const colonIndex = lower.indexOf(':');
-    if (colonIndex === -1) return lower;
+    const hostname = colonIndex === -1
+        ? lower
+        : colonIndex === 0
+            ? ''
+            : lower.slice(0, colonIndex);
 
-    // Handle edge cases like ":" or ":8080" where there's no host before colon
-    if (colonIndex === 0) return '';
+    if (!hostname) return '';
 
-    return lower.slice(0, colonIndex);
+    // Canonicalize IPv4 loopback to localhost
+    if (hostname === '127.0.0.1') return 'localhost';
+
+    return hostname;
 }

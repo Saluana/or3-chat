@@ -49,11 +49,12 @@ Acceptance Criteria:
 
 ### 2. Access Model (Auth + Authorization)
 
-**2.1** As an authenticated user, I want admin access restricted to privileged workspace roles so that viewers/guests cannot access server controls.
+**2.1** As an authenticated user, I want admin access restricted to workspace owners and super admins so that editors/viewers/guests cannot access server controls.
 
 Acceptance Criteria:
 - WHEN a request to `/admin/*` is made THEN the server SHALL require an authenticated SSR session.
-- WHEN the session role is `owner` OR `editor` THEN the user SHALL be allowed to access the admin UI.
+- WHEN the session role is `owner` THEN the user SHALL be allowed to access workspace-scoped admin UI and APIs.
+- WHEN the caller is a `super admin` THEN they SHALL be allowed to access deployment-wide admin UI and APIs.
 - WHEN the session role is `viewer` OR the user is unauthenticated THEN access SHALL be denied (fail closed).
 
 **2.2** As a security reviewer, I want all enforcement to happen on the server through `can()` so that client-side guards cannot be bypassed.
@@ -62,11 +63,12 @@ Acceptance Criteria:
 - WHEN an admin API endpoint is called THEN it SHALL call `requireCan(session, <permission>)`.
 - IF `can()` denies access THEN the endpoint SHALL return `401` (unauthenticated) or `403` (forbidden).
 
-**2.3** As a deployment operator, I want dangerous operations limited to owners so that editors cannot restart or reconfigure the server.
+**2.3** As a deployment operator, I want dangerous operations limited to workspace owners or super admins so that editors cannot restart or reconfigure the server.
 
 Acceptance Criteria:
-- WHEN performing deployment-scoped mutations (config apply, restart, install/uninstall extensions) THEN the caller SHALL require `owner` privileges (via `can()` permissions).
-- WHEN an editor accesses deployment-scoped pages THEN mutation controls SHALL be disabled and server endpoints SHALL still reject writes.
+- WHEN performing workspace-scoped admin actions THEN the caller SHALL require `owner` privileges (via `can()` permissions).
+- WHEN performing deployment-scoped mutations (config apply, restart, install/uninstall extensions) THEN the caller SHALL require `super admin` privileges.
+- WHEN a non-owner workspace member accesses admin THEN the server SHALL reject the request.
 
 **2.4** As a deployment operator, I want the admin dashboard to keep working when auth/sync/storage providers are swapped so that OR3 Cloud remains provider-agnostic.
 

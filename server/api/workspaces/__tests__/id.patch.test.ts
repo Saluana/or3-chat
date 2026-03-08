@@ -19,11 +19,15 @@ vi.mock('h3', () => ({
 
 const requireWorkspaceSessionMock = vi.fn();
 const updateWorkspaceMock = vi.fn();
+const requireCanMock = vi.fn();
 vi.mock('../_helpers', () => ({
     requireWorkspaceSession: (...args: unknown[]) => requireWorkspaceSessionMock(...args),
     resolveWorkspaceStore: () => ({
         updateWorkspace: (...args: unknown[]) => updateWorkspaceMock(...args),
     }),
+}));
+vi.mock('../../../auth/can', () => ({
+    requireCan: (...args: unknown[]) => requireCanMock(...args),
 }));
 
 function makeEvent(): H3Event {
@@ -41,6 +45,7 @@ describe('PATCH /api/workspaces/:id', () => {
             role: 'owner',
         });
         updateWorkspaceMock.mockReset().mockResolvedValue(undefined);
+        requireCanMock.mockReset();
     });
 
     it('validates workspace id extraction', async () => {
@@ -77,6 +82,11 @@ describe('PATCH /api/workspaces/:id', () => {
         readBodyMock.mockResolvedValue({ name: '  Name  ', description: '  Desc  ' });
 
         await expect(handler(makeEvent())).resolves.toEqual({ ok: true });
+        expect(requireCanMock).toHaveBeenCalledWith(
+            expect.objectContaining({ workspace: { id: 'ws-1' } }),
+            'workspace.write',
+            { kind: 'workspace', id: 'ws-2' }
+        );
 
         expect(updateWorkspaceMock).toHaveBeenCalledWith({
             userId: 'user-1',

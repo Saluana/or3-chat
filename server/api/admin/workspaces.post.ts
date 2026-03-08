@@ -21,6 +21,7 @@ import { requireAdminApiContext } from '../../admin/api';
 import { getWorkspaceAccessStore } from '../../admin/stores/registry';
 import { isAdminEnabled } from '../../utils/admin/is-admin-enabled';
 import { checkGenericRateLimit, getClientIp } from '../../admin/auth/rate-limit';
+import { provisionWorkspaceDefaults } from '../../workspaces/provisioning';
 
 interface CreateWorkspaceBody {
     name: string;
@@ -123,6 +124,8 @@ export default defineEventHandler(async (event) => {
         description: sanitizedDescription,
         ownerUserId: ownerUserId.trim(),
     });
+
+    await provisionWorkspaceDefaults(event, result.workspaceId);
 
     const actorId = adminCtx.principal.kind === 'super_admin' 
         ? adminCtx.principal.username 

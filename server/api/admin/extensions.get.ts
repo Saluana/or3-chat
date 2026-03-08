@@ -22,7 +22,10 @@ import { listInstalledExtensions } from '../../admin/extensions/extension-manage
  * - Gated by `requireAdminApi`
  */
 export default defineEventHandler(async (event) => {
-    await requireAdminApi(event);
+    await requireAdminApi(event, {
+        ownerOnly: true,
+        allowWorkspaceAdmin: true,
+    });
 
     const items = await listInstalledExtensions();
 

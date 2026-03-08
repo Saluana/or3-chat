@@ -8,6 +8,8 @@ import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { requireAdminApi } from '../../../../admin/api';
 import { getWorkspaceAccessStore } from '../../../../admin/stores/registry';
+import { invalidateSharedSessionCacheForIdentity } from '../../../../auth/session';
+import { useRuntimeConfig } from '#imports';
 
 const BodySchema = z.object({
     emailOrProviderId: z.string().min(1),
@@ -27,7 +29,11 @@ const BodySchema = z.object({
  * - Idempotent for existing members.
  */
 export default defineEventHandler(async (event) => {
-    const session = await requireAdminApi(event, { ownerOnly: true, mutation: true });
+    const session = await requireAdminApi(event, {
+        ownerOnly: true,
+        mutation: true,
+        allowWorkspaceAdmin: true,
+    });
 
     const body = BodySchema.safeParse(await readBody(event));
     if (!body.success) {
@@ -45,6 +51,13 @@ export default defineEventHandler(async (event) => {
         emailOrProviderId: body.data.emailOrProviderId,
         role: body.data.role,
         provider: body.data.provider,
+    });
+
+    invalidateSharedSessionCacheForIdentity({
+        storeId:
+            (useRuntimeConfig(event).sync as { provider?: string } | undefined)?.provider ||
+            (useRuntimeConfig(event).public as { sync?: { provider?: string } }).sync?.provider ||
+            'convex',
     });
 
     return { ok: true };

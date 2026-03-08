@@ -43,9 +43,20 @@ describe('normalizeHost', () => {
         expect(normalizeHost('192.168.1.1:8080')).toBe('192.168.1.1');
     });
 
-    it('handles IPv6 addresses', () => {
-        expect(normalizeHost('[::1]')).toBe('[::1]');
-        expect(normalizeHost('[::1]:3000')).toBe('[::1]');
+    it('canonicalizes IPv4 loopback to localhost', () => {
+        expect(normalizeHost('127.0.0.1')).toBe('localhost');
+        expect(normalizeHost('127.0.0.1:3000')).toBe('localhost');
+        expect(normalizeHost('127.0.0.1:443')).toBe('localhost');
+    });
+
+    it('canonicalizes IPv6 loopback to localhost', () => {
+        expect(normalizeHost('[::1]')).toBe('localhost');
+        expect(normalizeHost('[::1]:3000')).toBe('localhost');
+    });
+
+    it('preserves non-loopback IPv6 addresses', () => {
+        expect(normalizeHost('[2001:db8::1]')).toBe('[2001:db8::1]');
+        expect(normalizeHost('[2001:db8::1]:443')).toBe('[2001:db8::1]');
     });
 
     it('handles empty or edge case inputs', () => {
@@ -54,9 +65,4 @@ describe('normalizeHost', () => {
         expect(normalizeHost(':8080')).toBe('');
     });
 
-    it('handles multiple colons correctly (only removes port)', () => {
-        // IPv6 full notation
-        expect(normalizeHost('[2001:db8::1]')).toBe('[2001:db8::1]');
-        expect(normalizeHost('[2001:db8::1]:443')).toBe('[2001:db8::1]');
-    });
 });

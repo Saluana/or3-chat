@@ -8,6 +8,8 @@ import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { requireAdminApi } from '../../../../admin/api';
 import { getWorkspaceAccessStore } from '../../../../admin/stores/registry';
+import { invalidateSharedSessionCacheForIdentity } from '../../../../auth/session';
+import { useRuntimeConfig } from '#imports';
 
 const BodySchema = z.object({
     userId: z.string().min(1),
@@ -24,7 +26,11 @@ const BodySchema = z.object({
  * - Does not delete the user, only the association.
  */
 export default defineEventHandler(async (event) => {
-    const session = await requireAdminApi(event, { ownerOnly: true, mutation: true });
+    const session = await requireAdminApi(event, {
+        ownerOnly: true,
+        mutation: true,
+        allowWorkspaceAdmin: true,
+    });
 
     const body = BodySchema.safeParse(await readBody(event));
     if (!body.success) {
@@ -40,6 +46,13 @@ export default defineEventHandler(async (event) => {
     await store.removeMember({
         workspaceId,
         userId: body.data.userId,
+    });
+
+    invalidateSharedSessionCacheForIdentity({
+        storeId:
+            (useRuntimeConfig(event).sync as { provider?: string } | undefined)?.provider ||
+            (useRuntimeConfig(event).public as { sync?: { provider?: string } }).sync?.provider ||
+            'convex',
     });
 
     return { ok: true };

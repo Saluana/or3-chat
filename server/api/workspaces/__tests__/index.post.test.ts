@@ -17,11 +17,15 @@ vi.mock('h3', () => ({
 
 const requireWorkspaceSessionMock = vi.fn();
 const createWorkspaceMock = vi.fn();
+const provisionWorkspaceDefaultsMock = vi.fn();
 vi.mock('../_helpers', () => ({
     requireWorkspaceSession: (...args: unknown[]) => requireWorkspaceSessionMock(...args),
     resolveWorkspaceStore: () => ({
         createWorkspace: (...args: unknown[]) => createWorkspaceMock(...args),
     }),
+}));
+vi.mock('../../../workspaces/provisioning', () => ({
+    provisionWorkspaceDefaults: (...args: unknown[]) => provisionWorkspaceDefaultsMock(...args),
 }));
 
 function makeEvent(): H3Event {
@@ -37,6 +41,7 @@ describe('POST /api/workspaces', () => {
             workspace: { id: 'ws-1' },
         });
         createWorkspaceMock.mockReset().mockResolvedValue({ workspaceId: 'ws-created' });
+        provisionWorkspaceDefaultsMock.mockReset().mockResolvedValue(undefined);
     });
 
     it('returns 400 for missing/blank name', async () => {
@@ -73,6 +78,10 @@ describe('POST /api/workspaces', () => {
             name: 'New Workspace',
             description: 'Desc',
         });
+        expect(provisionWorkspaceDefaultsMock).toHaveBeenCalledWith(
+            expect.any(Object),
+            'ws-created'
+        );
     });
 
     it('returns 401 when session user is missing', async () => {
@@ -89,5 +98,13 @@ describe('POST /api/workspaces', () => {
         createWorkspaceMock.mockRejectedValue(new Error('store failed'));
 
         await expect(handler(makeEvent())).rejects.toThrow('store failed');
+    });
+
+    it('surfaces provisioning errors predictably', async () => {
+        const handler = (await import('../index.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({ name: 'Valid Name' });
+        provisionWorkspaceDefaultsMock.mockRejectedValue(new Error('provision failed'));
+
+        await expect(handler(makeEvent())).rejects.toThrow('provision failed');
     });
 });

@@ -42,7 +42,10 @@ import { isSuperAdmin } from '../../admin/context';
  * - `guestAccessEnabled`: Boolean flag
  */
 export default defineEventHandler(async (event) => {
-    const session = await requireAdminApi(event);
+    const session = await requireAdminApi(event, {
+        ownerOnly: true,
+        allowWorkspaceAdmin: true,
+    });
     
     // Get admin context to check if super admin
     const adminContext = getAdminContext(event);
