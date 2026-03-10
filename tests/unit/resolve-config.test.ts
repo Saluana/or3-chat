@@ -198,6 +198,7 @@ describe('buildOr3CloudConfigFromEnv', () => {
         expect(config.sync.enabled).toBe(false);
         expect(config.storage.enabled).toBe(false);
         expect(config.auth.autoProvision).toBe(true);
+        expect(config.auth.lockPage?.enabled).toBe(false);
         expect(config.webhooks?.enabled).toBe(false);
     });
 
@@ -213,6 +214,18 @@ describe('buildOr3CloudConfigFromEnv', () => {
         expect(config.auth.guestAccessEnabled).toBe(true);
         expect(config.auth.autoProvision).toBe(false);
         expect(config.auth.sessionProvisioningFailure).toBe('service-unavailable');
+    });
+
+    it('maps lock page settings from env', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_AUTH_LOCK_PAGE_ENABLED: 'true',
+            OR3_AUTH_LOCK_PAGE_ADAPTER: 'marketing',
+            NODE_ENV: 'development',
+        });
+
+        expect(config.auth.lockPage?.enabled).toBe(true);
+        expect(config.auth.lockPage?.adapter).toBe('marketing');
     });
 
     it('ignores invalid provisioning failure mode values', () => {

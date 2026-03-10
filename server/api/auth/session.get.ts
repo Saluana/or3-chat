@@ -11,6 +11,7 @@
  */
 import { defineEventHandler, createError, setResponseHeader } from 'h3';
 import { resolveSessionContext } from '../../auth/session';
+import { can } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { 
     checkSyncRateLimit, 
@@ -38,7 +39,7 @@ import { getClientIp, normalizeProxyTrustConfig } from '../../utils/net/request-
 export default defineEventHandler(async (event) => {
     // If SSR auth is disabled, always return null session
     if (!isSsrAuthEnabled(event)) {
-        return { session: null };
+        return { session: null, appAccessAllowed: false };
     }
 
     // Get proxy-safe client IP
@@ -79,6 +80,12 @@ export default defineEventHandler(async (event) => {
 
     return {
         session: session.authenticated ? session : null,
+        appAccessAllowed: session.authenticated
+            ? can(session, 'workspace.read', {
+                  kind: 'workspace',
+                  id: session.workspace?.id,
+              }).allowed
+            : false,
     };
 });
 

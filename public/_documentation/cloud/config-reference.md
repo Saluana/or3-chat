@@ -33,6 +33,49 @@ Exceptions:
 - `SSR_AUTH_ENABLED` must be explicitly `true` to enable cloud features.
 - `OR3_OPENROUTER_REQUIRE_USER_KEY` only enables when `true`.
 
+### `or3-cloud-config.auth.lockPage`
+
+- Type: `{ enabled?: boolean; adapter?: string }`
+- Defaults:
+  - `enabled: false`
+  - `adapter: "default"`
+- Env:
+  - `OR3_AUTH_LOCK_PAGE_ENABLED`
+  - `OR3_AUTH_LOCK_PAGE_ADAPTER`
+- Purpose: Redirect protected shell routes to a public pre-auth page before `PageShell` initializes.
+- Notes:
+  - Ignored unless `SSR_AUTH_ENABLED=true`.
+  - Applies only to the main shell routes (`/`, `/chat`, `/docs`).
+  - Admin routes remain reachable.
+  - Guest access bypasses the lock page when `auth.guestAccessEnabled=true`.
+  - The lock page route is fixed at `/welcome`.
+  - Unknown adapter ids fall back to the built-in lock page.
+  - Successful sign-in redirects back to the original safe in-app destination via `?next=`.
+
+Example:
+
+```ts
+export const or3CloudConfig = defineOr3CloudConfig({
+  auth: {
+    enabled: true,
+    provider: 'basic-auth',
+    lockPage: {
+      enabled: true,
+      adapter: 'default',
+    },
+  },
+});
+```
+
+Equivalent env:
+
+```bash
+SSR_AUTH_ENABLED=true
+OR3_AUTH_PROVIDER=basic-auth
+OR3_AUTH_LOCK_PAGE_ENABLED=true
+OR3_AUTH_LOCK_PAGE_ADAPTER=default
+```
+
 ---
 
 ## Base Config (`or3-config`)

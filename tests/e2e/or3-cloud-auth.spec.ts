@@ -15,7 +15,10 @@ test.describe('OR3 Cloud Auth Integration', () => {
         expect(response.ok()).toBeTruthy();
 
         const payload = await response.json();
-        expect(payload).toEqual({ session: null });
+        expect(payload).toEqual({
+            session: null,
+            appAccessAllowed: false,
+        });
 
         const cacheControl = response.headers()['cache-control'];
         expect(cacheControl).toContain('no-store');

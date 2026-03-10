@@ -8,7 +8,10 @@ import { useFetch, useRuntimeConfig, useState } from '#imports';
 import type { ComputedRef, Ref } from 'vue';
 import type { SessionContext } from '~/core/hooks/hook-types';
 
-type SessionPayload = { session: SessionContext | null };
+export type SessionPayload = {
+    session: SessionContext | null;
+    appAccessAllowed: boolean;
+};
 type SessionContextState = {
     data: ComputedRef<SessionPayload | null>;
     pending: Ref<boolean>;
@@ -46,7 +49,10 @@ export function useSessionContext(): SessionContextState {
     const refresh = async () => {
         // Never fetch when auth is disabled (static builds, no server)
         if (isAuthDisabled()) {
-            state.value = { session: null };
+            state.value = {
+                session: null,
+                appAccessAllowed: false,
+            };
             return state.value;
         }
 

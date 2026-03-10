@@ -260,6 +260,12 @@ const adminConfig = {
             : '',
     },
 };
+const lockPageConfig = {
+    enabled:
+        effectiveSsrAuthEnabled &&
+        (or3CloudConfig.auth.lockPage?.enabled ?? false),
+    adapter: or3CloudConfig.auth.lockPage?.adapter || 'default',
+};
 const webhooksConfig = {
     enabled: or3CloudConfig.webhooks?.enabled ?? false,
     maxPerUser: or3CloudConfig.webhooks?.maxPerUser ?? 20,
@@ -336,6 +342,7 @@ export default defineNuxtConfig({
             registrationMode: resolvedRegistrationMode,
             sessionProvisioningFailure:
                 or3CloudConfig.auth.sessionProvisioningFailure ?? 'throw',
+            lockPage: lockPageConfig,
             invite: {
                 tokenSecret: process.env.OR3_AUTH_INVITE_TOKEN_SECRET,
                 tokenTtlSeconds: process.env.OR3_AUTH_INVITE_TOKEN_TTL_SECONDS
@@ -411,6 +418,7 @@ export default defineNuxtConfig({
             authProvider: or3CloudConfig.auth.provider,
             guestAccessEnabled: or3CloudConfig.auth.guestAccessEnabled ?? false,
             registrationMode: resolvedRegistrationMode,
+            lockPage: lockPageConfig,
             openRouter: {
                 allowUserOverride:
                     or3CloudConfig.services.llm?.openRouter?.allowUserOverride ??

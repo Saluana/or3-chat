@@ -8,7 +8,7 @@ date: 2026-03-08
 
 # Introduction
 
-OR3 Cloud needs an optional, deployment-level lock page that can replace the main app shell for visitors who are not allowed into the authenticated experience yet.
+OR3 Cloud needs an optional, deployment-level lock page that can sit at a dedicated public route and intercept app-shell navigation for visitors who are not allowed into the authenticated experience yet.
 
 The feature is intentionally:
 
@@ -28,8 +28,9 @@ As a deployment operator, I want to enable a lock page for OR3 Cloud, so that un
 
 Acceptance Criteria:
 - WHEN the feature is not configured THEN the application SHALL preserve current behavior.
-- WHEN the feature is enabled THEN routes backed by the main app shell SHALL render the lock experience instead of the normal shell for visitors who are not allowed through.
+- WHEN the feature is enabled THEN routes backed by the main app shell SHALL redirect unauthorised visitors to the lock-page route instead of rendering the normal shell.
 - WHEN `SSR_AUTH_ENABLED` is `false` THEN the lock page feature SHALL remain inert and SHALL NOT change static/local-first behavior.
+- The built-in lock-page route SHALL remain `/welcome` unless a future implementation adds real route aliasing.
 
 ### 2. Access decision must align with existing OR3 auth rules
 
@@ -40,6 +41,7 @@ Acceptance Criteria:
 - WHEN lock-page access is evaluated THEN it SHALL use the resolved SSR session context and existing OR3 auth policy helpers.
 - WHEN a visitor has a valid authenticated session with app access THEN the lock page SHALL NOT render.
 - WHEN guest access is enabled and the deployment policy allows guest entry THEN the lock page SHALL NOT block those guests.
+- Admin UI routes and the admin login route SHALL remain reachable and SHALL NOT be redirected through the lock page.
 - IF access state cannot be determined safely THEN the feature SHALL fail closed and SHALL NOT render the main app shell.
 
 ### 3. Built-in default lock experience
@@ -71,6 +73,7 @@ As a deployment operator, I want the lock page controlled through typed config, 
 Acceptance Criteria:
 - The feature SHALL be configured through typed OR3 Cloud configuration.
 - The config SHALL include an explicit enable/disable flag and a way to select the active lock page implementation.
+- The fixed lock-page route SHALL be documented as `/welcome`.
 - The config SHALL default to disabled.
 - Config validation SHALL reject malformed lock page settings.
 
@@ -80,7 +83,7 @@ Acceptance Criteria:
 As a developer, I want the lock page gate to happen before heavy app-shell setup, so that locked visitors do not pay for unnecessary sidebar/pane/dashboard work.
 
 Acceptance Criteria:
-- WHEN the lock page is rendered THEN the main `PageShell` chrome and pane content SHALL NOT initialize.
+- WHEN a locked visitor requests a protected shell route THEN the application SHALL redirect before the main `PageShell` chrome and pane content initialize.
 - The lock page SHALL cover the shared shell routes used for the main OR3 app entry experience.
 - The feature SHALL avoid duplicate access checks on hot render paths where request-local or composable-level state can be reused safely.
 

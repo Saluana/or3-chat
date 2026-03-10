@@ -45,6 +45,10 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         autoProvision: true,
         registrationMode: undefined,
         sessionProvisioningFailure: 'throw',
+        lockPage: {
+            enabled: false,
+            adapter: 'default',
+        },
         clerk: {
             publishableKey: undefined,
             secretKey: undefined,
@@ -172,6 +176,12 @@ const cloudConfigSchema = z
                 .optional(),
             sessionProvisioningFailure: z
                 .enum(['throw', 'unauthenticated', 'service-unavailable'])
+                .optional(),
+            lockPage: z
+                .object({
+                    enabled: z.boolean().optional(),
+                    adapter: z.string().min(1).optional(),
+                })
                 .optional(),
             clerk: z
                 .object({
@@ -309,6 +319,14 @@ function mergeConfig(config: Or3CloudConfig): Or3CloudConfig {
         auth: {
             ...DEFAULT_OR3_CLOUD_CONFIG.auth,
             ...config.auth,
+            lockPage: {
+                enabled:
+                    config.auth.lockPage?.enabled ??
+                    DEFAULT_OR3_CLOUD_CONFIG.auth.lockPage?.enabled,
+                adapter:
+                    config.auth.lockPage?.adapter ??
+                    DEFAULT_OR3_CLOUD_CONFIG.auth.lockPage?.adapter,
+            },
             clerk: {
                 ...DEFAULT_OR3_CLOUD_CONFIG.auth.clerk,
                 ...(config.auth.clerk ?? {}),
@@ -383,9 +401,20 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
         throw new Error(formatConfigErrors(errors));
     }
 
-    if (!strict) return;
+    const lockPage = config.auth.lockPage;
+    const nonStrictErrors: string[] = [];
+    if (lockPage?.adapter !== undefined && lockPage.adapter.trim().length === 0) {
+        nonStrictErrors.push('auth.lockPage.adapter must not be empty when provided.');
+    }
 
-    const errors: string[] = [];
+    if (!strict) {
+        if (nonStrictErrors.length > 0) {
+            throw new Error(formatConfigErrors(nonStrictErrors));
+        }
+        return;
+    }
+
+    const errors: string[] = [...nonStrictErrors];
 
     if (config.auth.enabled && config.auth.provider === CLERK_PROVIDER_ID) {
         if (!config.auth.clerk?.publishableKey) {

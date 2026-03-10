@@ -35,6 +35,8 @@ describe('defineOr3CloudConfig', () => {
         expect(config.backgroundStreaming?.maxConcurrentJobsPerUser).toBe(5);
         expect(config.webhooks?.maxPerUser).toBe(20);
         expect(config.webhooks?.rateLimitPerMinute).toBe(120);
+        expect(config.auth.lockPage?.enabled).toBe(false);
+        expect(config.auth.lockPage?.adapter).toBe('default');
     });
 
     it('throws in strict mode when instance key is required', () => {
@@ -149,6 +151,24 @@ describe('defineOr3CloudConfig', () => {
         // Should merge with defaults
         expect(config.services.llm?.openRouter?.allowUserOverride).toBe(true);
         expect(config.services.llm?.openRouter?.instanceApiKey).toBe('sk_test');
+    });
+
+    it('merges lock page config with defaults', () => {
+        const config = defineOr3CloudConfig({
+            ...baseConfig,
+            auth: {
+                enabled: true,
+                provider: 'basic-auth',
+                lockPage: {
+                    enabled: true,
+                    adapter: 'marketing',
+                },
+                clerk: {},
+            },
+        });
+
+        expect(config.auth.lockPage?.enabled).toBe(true);
+        expect(config.auth.lockPage?.adapter).toBe('marketing');
     });
 
     it('merges admin config with defaults', () => {

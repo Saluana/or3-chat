@@ -271,6 +271,10 @@ export function buildOr3CloudConfigFromEnv(
             sessionProvisioningFailure: parseSessionProvisioningFailureMode(
                 env.OR3_SESSION_PROVISIONING_FAILURE
             ),
+            lockPage: {
+                enabled: envBool(env.OR3_AUTH_LOCK_PAGE_ENABLED, false),
+                adapter: env.OR3_AUTH_LOCK_PAGE_ADAPTER || undefined,
+            },
             clerk: {
                 publishableKey: env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY || undefined,
                 secretKey: env.NUXT_CLERK_SECRET_KEY || undefined,

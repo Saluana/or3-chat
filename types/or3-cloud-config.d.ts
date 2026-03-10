@@ -45,6 +45,26 @@ export interface Or3CloudConfig {
          */
         sessionProvisioningFailure?: 'throw' | 'unauthenticated' | 'service-unavailable';
         /**
+         * Optional deployment-level lock page for pre-auth entry.
+         * When enabled, protected shell routes redirect unauthenticated visitors
+         * to a dedicated public route instead of rendering the main app shell.
+         */
+        lockPage?: {
+            /**
+             * Enable the lock page gate.
+             * Ignored when SSR auth is disabled.
+             * @default false
+             */
+            enabled?: boolean;
+
+            /**
+             * Registered lock page adapter id.
+             * Falls back to the built-in default renderer when missing.
+             * @default 'default'
+             */
+            adapter?: string;
+        };
+        /**
          * Provider-specific configuration.
          */
         clerk?: {

@@ -41,8 +41,50 @@ export const or3CloudConfig = defineOr3CloudConfig({
 | `auth.autoProvision` | `OR3_AUTH_AUTO_PROVISION` | `true` | Auto-provision users/workspaces on first authenticated session |
 | `auth.registrationMode` | `OR3_AUTH_REGISTRATION_MODE` | derived (from `autoProvision`) | First-time registration policy (`open` / `invite_only` / `disabled`) |
 | `auth.sessionProvisioningFailure` | `OR3_SESSION_PROVISIONING_FAILURE` | `"throw"` | What to do when provisioning fails (`throw` / `unauthenticated` / `service-unavailable`) |
+| `auth.lockPage.enabled` | `OR3_AUTH_LOCK_PAGE_ENABLED` | `false` | Redirect protected shell routes to a public lock page instead of rendering the app shell |
+| `auth.lockPage.adapter` | `OR3_AUTH_LOCK_PAGE_ADAPTER` | `"default"` | Registered lock page adapter id used by the lock page route |
 | `auth.clerk.publishableKey` | `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | — | Clerk publishable key |
 | `auth.clerk.secretKey` | `NUXT_CLERK_SECRET_KEY` | — | Clerk secret key |
+
+#### Lock Page (Optional)
+
+Use the lock page when you want signed-out visitors redirected away from the main shell (`/`, `/chat`, `/docs`) and onto a dedicated public route.
+
+- It stays inert unless `SSR_AUTH_ENABLED=true`.
+- It only applies to the authenticated shell entry points, not arbitrary public pages.
+- Admin routes remain reachable and are never redirected through the lock page.
+- Guest access still bypasses the lock page when `auth.guestAccessEnabled=true`.
+- Unknown adapter ids fall back to the built-in default renderer.
+
+```typescript
+auth: {
+    enabled: true,
+    provider: 'basic-auth',
+    lockPage: {
+        enabled: true,
+        adapter: 'default',
+    },
+}
+```
+
+The built-in lock page route is fixed at `/welcome`.
+
+Minimal env setup:
+
+```bash
+SSR_AUTH_ENABLED=true
+OR3_AUTH_PROVIDER=basic-auth
+OR3_AUTH_LOCK_PAGE_ENABLED=true
+OR3_AUTH_LOCK_PAGE_ADAPTER=default
+```
+
+Practical behavior:
+
+- Visiting `/`, `/chat`, or `/docs` while signed out redirects to `/welcome?next=...`.
+- After a successful sign-in, the user is sent back to the original safe in-app target.
+- The `next` target is sanitized so external redirects are ignored.
+
+To brand the experience, register a custom lock page adapter from normal app/plugin code and point `auth.lockPage.adapter` at that id. Forks that want full control can replace `app/pages/welcome.vue` directly.
 
 #### Invite Tokens (Optional)
 
