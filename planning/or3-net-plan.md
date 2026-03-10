@@ -30,6 +30,8 @@ A new sidebar/plugin surface (similar to existing plugins like `webhooks-dashboa
 - **Job submission** — pick an agent, provide input, optionally set timeout, and submit to `or3-net`.
 - **Recent jobs list** — shows job status with live indicators for running, completed, aborted, failed.
 - **Live job output** — streams text deltas, tool call events, and completion via SSE from `or3-net`.
+- **Nodes and services** — show approved node-backed apps/services, starting with OpenClaw, and offer service-oriented actions like `Open Dashboard`.
+- **Embedded previews** — show static websites and generated web artifacts inside a pane app when the preview is safe to embed.
 - **Saved network presets** — reusable config objects for host URLs, agents, and node preferences, stored using the same patterns the repo already uses for content/docs/custom post types.
 
 ### 2. Token exchange composable
@@ -60,6 +62,39 @@ This mirrors how existing plugins like `convex-sync.client.ts` and `notification
 - On disconnect, the plugin should reconnect and resume from the last received event (if the `or3-net` API supports cursor-based reconnect) or re-fetch current job status.
 - Abort sends `POST /v1/jobs/:jobId/abort` and updates local state to reflect the terminal status.
 
+### 5. Service launch UX for sandbox-backed dashboards
+
+For services like OpenClaw, the plugin should not ask the user to manage raw tunnels. Instead it should:
+
+- List known services/apps exposed by the selected node.
+- Call an `or3-net` launch endpoint when the user clicks `Open Dashboard`.
+- Receive an opaque, short-lived `launch_url` from `or3-net`.
+- Open that URL in a new tab or pane.
+
+For sandbox-backed nodes in v1, `or3-net` will likely back this flow with `or3-sandbox`'s existing signed browser tunnel URL capability. That means the browser gets a narrow, expiring service-launch path rather than sandbox bearer credentials.
+
+OpenClaw is the reference case because `or3-sandbox` already supports a browser-ready dashboard URL that combines:
+
+- the tunnel browser bootstrap URL
+- the narrow tunnel cookie bootstrap flow
+- the OpenClaw gateway token fragment used by the app itself
+
+The plugin should treat this as a service launch action, not as generic tunnel management.
+
+### 6. Embedded pane previews for static sites
+
+When the agent creates a static site or similar file-backed preview, the best UX is often to keep the user inside `or3-chat`.
+
+The expected flow is:
+
+- `or3-net` exposes a preview descriptor that marks the preview as iframe-safe.
+- The plugin opens a pane app containing an iframe pointed at the preview URL.
+- The pane header shows `Open in New Tab`, `Refresh`, and `Revoke`.
+
+This should only be used for workspace-owned preview URLs issued by `or3-net`, not arbitrary external sites.
+
+If the preview is not safe to embed, the pane should show a clear fallback state with `Open in New Tab`.
+
 ---
 
 ## What does NOT change
@@ -80,6 +115,8 @@ This mirrors how existing plugins like `convex-sync.client.ts` and `notification
 | Reuse `useSessionContext` | Avoids duplicating auth state. The workspace/session watcher is already battle-tested across multiple plugins. |
 | SSE for job output | Matches the pattern `or3-net` uses internally (relay from `or3-intern` SSE). No need for a custom WebSocket protocol for v1. |
 | Saved presets as content objects | Aligns with how the repo already handles docs, projects, and custom post types in Dexie + optional sync. |
+| Service launch, not raw tunnel UI | End users think in terms of apps like OpenClaw, not ports and proxy tokens. This is simpler and more secure. |
+| Embedded preview for static output | Keeps users inside chat for the common case of generated sites, while still allowing external launch when needed. |
 
 ---
 
@@ -91,6 +128,8 @@ This mirrors how existing plugins like `convex-sync.client.ts` and `notification
 | Sidebar page | `app/components/or3-network/Or3NetworkPage.vue` | Main plugin view shell |
 | Agent UI | `app/components/or3-network/AgentEditor.vue`, `AgentList.vue` | CRUD for agent definitions |
 | Job UI | `app/components/or3-network/JobSubmit.vue`, `JobList.vue`, `JobStream.vue` | Submit, list, and live output |
+| Node/service UI | `app/components/or3-network/NodeList.vue`, `ServiceLaunchCard.vue` | Node status and service actions like `Open Dashboard` |
+| Preview pane UI | `app/components/or3-network/PreviewPane.vue`, `PreviewHeader.vue` | Embedded iframe previews and fallback actions |
 | Token exchange | `app/composables/or3-net/useOr3NetAuth.ts` | Session exchange, refresh, workspace rebind |
 | API client | `app/composables/or3-net/useOr3NetClient.ts` | Typed fetch wrapper for host API calls |
 | Sidebar nav | `app/components/sidebar/SideNavContent.vue` | Add OR3 Network entry (gated on config) |
@@ -106,7 +145,9 @@ This mirrors how existing plugins like `convex-sync.client.ts` and `notification
 - [ ] **Agent management UI** — Add agent list and editor components. Agents are CRUD'd against `or3-net` and displayed in the sidebar page.
 - [ ] **Job submission UI** — Add a job submission form (select agent, provide input, set timeout) and a recent jobs list with status badges.
 - [ ] **Live job output view** — Add SSE-based streaming view that displays text deltas and tool call events in real time, with abort button and terminal state handling.
+- [ ] **Node/service view** — Add node cards and service actions. For OpenClaw-like services, show `Open Dashboard` and let the plugin open the returned `launch_url`.
+- [ ] **Embedded preview pane** — Add a pane app for static previews that loads iframe-safe preview URLs and shows `Open in New Tab` fallback in the header.
 - [ ] **Workspace switch handling** — Wire token invalidation and state rebind into the workspace change watcher, following the pattern in `convex-sync.client.ts`.
 - [ ] **Saved presets** — Add network/agent preset storage using the repo's content/doc patterns, so users can save and reuse host + agent configurations.
-- [ ] **Tests** — Add unit tests for token exchange (mock session, mock exchange endpoint), workspace switch rebind, SSE reconnect behavior, and abort state transitions.
+- [ ] **Tests** — Add unit tests for token exchange (mock session, mock exchange endpoint), workspace switch rebind, SSE reconnect behavior, abort state transitions, service launch URL handling, and iframe preview fallback behavior.
 - [ ] **Docs** — Add a brief plugin usage section to the repo docs or inline help explaining how to configure the `or3-net` host URL and use the plugin.
