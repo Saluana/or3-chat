@@ -54,7 +54,8 @@ Use the lock page when you want signed-out visitors redirected away from the mai
 - It only applies to the authenticated shell entry points, not arbitrary public pages.
 - Admin routes remain reachable and are never redirected through the lock page.
 - Guest access still bypasses the lock page when `auth.guestAccessEnabled=true`.
-- Unknown adapter ids fall back to the built-in default renderer.
+- With `adapter: 'default'`, OR3 prefers the active auth provider's registered lock page surface and falls back to the built-in generic renderer when none exists.
+- Unknown custom adapter ids fall back to the built-in default renderer.
 
 ```typescript
 auth: {
@@ -84,7 +85,7 @@ Practical behavior:
 - After a successful sign-in, the user is sent back to the original safe in-app target.
 - The `next` target is sanitized so external redirects are ignored.
 
-To brand the experience, register a custom lock page adapter from normal app/plugin code and point `auth.lockPage.adapter` at that id. Forks that want full control can replace `app/pages/welcome.vue` directly.
+To brand the experience, register a custom lock page adapter from normal app/plugin code and point `auth.lockPage.adapter` at that id. If left at `default`, the active provider can supply its own lock page UI. Forks that want full control can replace `app/pages/welcome.vue` directly.
 
 #### Invite Tokens (Optional)
 

@@ -51,15 +51,6 @@ export function isAdminRoute(path: string, adminBasePath: string): boolean {
     return isSameOrChildPath(path, adminBasePath);
 }
 
-export function isProtectedShellRoute(path: string): boolean {
-    const normalizedPath = normalizePath(path);
-    return (
-        normalizedPath === '/' ||
-        isSameOrChildPath(normalizedPath, '/chat') ||
-        isSameOrChildPath(normalizedPath, '/docs')
-    );
-}
-
 export function sanitizeLockPageRedirectTarget(
     value: unknown,
     fallback = '/'

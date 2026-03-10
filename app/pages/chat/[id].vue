@@ -7,6 +7,10 @@ import PageShell from '~/components/PageShell.vue';
 import { getThread } from '~/db/threads';
 import { useValidatedEntityPageShell } from '~/composables/useValidatedEntityPageShell';
 
+definePageMeta({
+    lockPageProtected: true,
+});
+
 const { ready, routeId } = useValidatedEntityPageShell({
     loadEntity(routeId) {
         return getThread(routeId);

@@ -1,5 +1,9 @@
 <template>
-    <component :is="lockPageComponent" />
+    <component
+        :is="lockPageComponent"
+        :access-reason="access.reason"
+        :error-message="access.errorMessage"
+    />
 </template>
 
 <script setup lang="ts">
@@ -11,7 +15,7 @@ import { computed } from 'vue';
 import { navigateTo, useRoute } from '#imports';
 import DefaultLockPage from '~/components/lock-page/DefaultLockPage.vue';
 import { resolveLockPageAccess } from '~/core/lock-page/access';
-import { resolveLockPageComponent } from '~/core/lock-page/registry';
+import { resolveRuntimeLockPageComponent } from '~/core/lock-page/registry';
 import {
     resolvePostAuthRedirectTarget,
     useLockPageRuntimeConfig,
@@ -29,6 +33,12 @@ if (access.allowed) {
 }
 
 const lockPageComponent = computed(() =>
-    resolveLockPageComponent(lockPageConfig.adapter, DefaultLockPage)
+    access.reason === 'session-error'
+        ? DefaultLockPage
+        : resolveRuntimeLockPageComponent({
+              adapterId: lockPageConfig.adapter,
+              authProviderId: lockPageConfig.authProvider,
+              fallback: DefaultLockPage,
+          })
 );
 </script>

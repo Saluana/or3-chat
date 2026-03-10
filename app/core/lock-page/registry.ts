@@ -40,6 +40,28 @@ export function resolveLockPageComponent(
     return resolveLockPageAdapter(id)?.component ?? fallback;
 }
 
+export function resolveRuntimeLockPageComponent(input: {
+    adapterId?: string | null;
+    authProviderId?: string | null;
+    fallback: Component;
+}): Component {
+    const explicitId = normalizeAdapterId(input.adapterId);
+    const authProviderId = normalizeAdapterId(input.authProviderId);
+
+    if (explicitId && explicitId !== 'default') {
+        return resolveLockPageComponent(explicitId, input.fallback);
+    }
+
+    if (authProviderId) {
+        const providerComponent = resolveLockPageAdapter(authProviderId)?.component;
+        if (providerComponent) {
+            return providerComponent;
+        }
+    }
+
+    return resolveLockPageComponent(explicitId || 'default', input.fallback);
+}
+
 export function listLockPageAdapters(): LockPageAdapter[] {
     return Array.from(lockPageAdapterRegistry.values());
 }

@@ -2,7 +2,6 @@ import { defineNuxtRouteMiddleware, navigateTo } from '#app';
 import { resolveLockPageAccess } from '~/core/lock-page/access';
 import {
     isAdminRoute,
-    isProtectedShellRoute,
     sanitizeLockPageRedirectTarget,
     useLockPageRuntimeConfig,
 } from '~/core/lock-page/runtime';
@@ -22,7 +21,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
         return;
     }
 
-    if (!isProtectedShellRoute(to.path)) {
+    if (to.meta.lockPageProtected !== true) {
         return;
     }
 

@@ -3,6 +3,11 @@ import type { SessionContext } from '../../app/core/hooks/hook-types';
 
 const useSessionContextMock = vi.fn();
 const useLockPageRuntimeConfigMock = vi.fn();
+const useStateMock = vi.fn();
+
+vi.mock('#imports', () => ({
+    useState: (key: string, init?: () => number) => useStateMock(key, init),
+}));
 
 vi.mock('~/composables/auth/useSessionContext', () => ({
     useSessionContext: () => useSessionContextMock(),
@@ -39,6 +44,7 @@ function createSession(overrides: Partial<SessionContext> = {}): SessionContext 
 
 describe('resolveLockPageAccess', () => {
     beforeEach(() => {
+        const state = { value: 0 };
         useLockPageRuntimeConfigMock.mockReset().mockReturnValue({
             ssrAuthEnabled: true,
             enabled: true,
@@ -49,10 +55,17 @@ describe('resolveLockPageAccess', () => {
             authProvider: 'basic-auth',
         });
         useSessionContextMock.mockReset();
+        useStateMock.mockReset().mockImplementation((_key: string, init?: () => number) => {
+            if (state.value === 0 && typeof init === 'function') {
+                state.value = init();
+            }
+            return state;
+        });
         vi.resetModules();
     });
 
-    it('keeps authenticated cached sessions allowed when a stale refresh error exists', async () => {
+    it('revalidates stale authenticated cache and returns a session error when refresh fails', async () => {
+        const refresh = vi.fn().mockRejectedValue(new Error('stale 429'));
         useSessionContextMock.mockReturnValue({
             data: {
                 value: {
@@ -61,8 +74,37 @@ describe('resolveLockPageAccess', () => {
                 },
             },
             pending: { value: false },
-            error: { value: new Error('stale 429') },
-            refresh: vi.fn(),
+            error: { value: null },
+            refresh,
+        });
+
+        const { resolveLockPageAccess } = await import(
+            '../../app/core/lock-page/access'
+        );
+
+        await expect(resolveLockPageAccess()).resolves.toMatchObject({
+            allowed: false,
+            reason: 'session-error',
+            errorMessage: 'stale 429',
+        });
+        expect(refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses fresh validated cache without re-fetching when within ttl', async () => {
+        useStateMock.mockReset().mockImplementation((_key: string) => ({
+            value: Date.now(),
+        }));
+        const refresh = vi.fn();
+        useSessionContextMock.mockReturnValue({
+            data: {
+                value: {
+                    session: createSession(),
+                    appAccessAllowed: true,
+                },
+            },
+            pending: { value: false },
+            error: { value: null },
+            refresh,
         });
 
         const { resolveLockPageAccess } = await import(
@@ -73,9 +115,11 @@ describe('resolveLockPageAccess', () => {
             allowed: true,
             reason: 'authenticated',
         });
+        expect(refresh).not.toHaveBeenCalled();
     });
 
-    it('denies authenticated cached sessions when app access is denied', async () => {
+    it('denies authenticated sessions when app access is denied after refresh', async () => {
+        const refresh = vi.fn().mockResolvedValue(undefined);
         useSessionContextMock.mockReturnValue({
             data: {
                 value: {
@@ -85,7 +129,7 @@ describe('resolveLockPageAccess', () => {
             },
             pending: { value: false },
             error: { value: null },
-            refresh: vi.fn(),
+            refresh,
         });
 
         const { resolveLockPageAccess } = await import(

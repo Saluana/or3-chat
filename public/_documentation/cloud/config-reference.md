@@ -49,7 +49,8 @@ Exceptions:
   - Admin routes remain reachable.
   - Guest access bypasses the lock page when `auth.guestAccessEnabled=true`.
   - The lock page route is fixed at `/welcome`.
-  - Unknown adapter ids fall back to the built-in lock page.
+  - `adapter: "default"` prefers the active auth provider's registered lock page component and falls back to the built-in generic lock page.
+  - Unknown custom adapter ids fall back to the built-in lock page.
   - Successful sign-in redirects back to the original safe in-app destination via `?next=`.
 
 Example:

@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type TestRoute = {
+    path: string;
+    fullPath: string;
+    meta: Record<string, unknown>;
+};
+
 const navigateToMock = vi.fn((target: unknown, _options?: unknown) => target);
 const resolveLockPageAccessMock = vi.fn();
 const useLockPageRuntimeConfigMock = vi.fn();
 const isAdminRouteMock = vi.fn();
-const isProtectedShellRouteMock = vi.fn();
 const sanitizeLockPageRedirectTargetMock = vi.fn(
     (value: unknown, _fallback?: string) => value
 );
@@ -22,7 +27,6 @@ vi.mock('~/core/lock-page/access', () => ({
 vi.mock('~/core/lock-page/runtime', () => ({
     useLockPageRuntimeConfig: () => useLockPageRuntimeConfigMock(),
     isAdminRoute: (...args: unknown[]) => isAdminRouteMock(...args),
-    isProtectedShellRoute: (...args: unknown[]) => isProtectedShellRouteMock(...args),
     sanitizeLockPageRedirectTarget: (value: unknown, fallback: string) =>
         sanitizeLockPageRedirectTargetMock(value, fallback),
 }));
@@ -34,7 +38,6 @@ describe('lock-page middleware', () => {
         resolveLockPageAccessMock.mockReset();
         useLockPageRuntimeConfigMock.mockReset();
         isAdminRouteMock.mockReset();
-        isProtectedShellRouteMock.mockReset();
         sanitizeLockPageRedirectTargetMock.mockReset();
         sanitizeLockPageRedirectTargetMock.mockImplementation((value: unknown) => value);
         useLockPageRuntimeConfigMock.mockReturnValue({
@@ -44,7 +47,6 @@ describe('lock-page middleware', () => {
             adminBasePath: '/admin',
         });
         isAdminRouteMock.mockReturnValue(false);
-        isProtectedShellRouteMock.mockReturnValue(true);
     });
 
     it('does nothing when the feature is disabled', async () => {
@@ -56,11 +58,11 @@ describe('lock-page middleware', () => {
         });
 
         const middleware = (await import('../lock-page.global')).default as (
-            to: { path: string; fullPath: string }
+            to: TestRoute
         ) => Promise<unknown>;
 
         await expect(
-            middleware({ path: '/', fullPath: '/' })
+            middleware({ path: '/', fullPath: '/', meta: { lockPageProtected: true } })
         ).resolves.toBeUndefined();
         expect(resolveLockPageAccessMock).not.toHaveBeenCalled();
     });
@@ -68,22 +70,33 @@ describe('lock-page middleware', () => {
     it('bypasses admin routes', async () => {
         isAdminRouteMock.mockReturnValue(true);
         const middleware = (await import('../lock-page.global')).default as (
-            to: { path: string; fullPath: string }
+            to: TestRoute
         ) => Promise<unknown>;
 
         await expect(
-            middleware({ path: '/admin', fullPath: '/admin' })
+            middleware({ path: '/admin', fullPath: '/admin', meta: {} })
         ).resolves.toBeUndefined();
         expect(resolveLockPageAccessMock).not.toHaveBeenCalled();
     });
 
     it('bypasses the lock page route itself', async () => {
         const middleware = (await import('../lock-page.global')).default as (
-            to: { path: string; fullPath: string }
+            to: TestRoute
         ) => Promise<unknown>;
 
         await expect(
-            middleware({ path: '/welcome', fullPath: '/welcome' })
+            middleware({ path: '/welcome', fullPath: '/welcome', meta: {} })
+        ).resolves.toBeUndefined();
+        expect(resolveLockPageAccessMock).not.toHaveBeenCalled();
+    });
+
+    it('bypasses routes without explicit lock page meta', async () => {
+        const middleware = (await import('../lock-page.global')).default as (
+            to: TestRoute
+        ) => Promise<unknown>;
+
+        await expect(
+            middleware({ path: '/images', fullPath: '/images', meta: {} })
         ).resolves.toBeUndefined();
         expect(resolveLockPageAccessMock).not.toHaveBeenCalled();
     });
@@ -95,11 +108,11 @@ describe('lock-page middleware', () => {
             session: { authenticated: true },
         });
         const middleware = (await import('../lock-page.global')).default as (
-            to: { path: string; fullPath: string }
+            to: TestRoute
         ) => Promise<unknown>;
 
         await expect(
-            middleware({ path: '/chat', fullPath: '/chat' })
+            middleware({ path: '/chat', fullPath: '/chat', meta: { lockPageProtected: true } })
         ).resolves.toBeUndefined();
         expect(navigateToMock).not.toHaveBeenCalled();
     });
@@ -112,11 +125,11 @@ describe('lock-page middleware', () => {
         });
         sanitizeLockPageRedirectTargetMock.mockReturnValue('/chat/123');
         const middleware = (await import('../lock-page.global')).default as (
-            to: { path: string; fullPath: string }
+            to: TestRoute
         ) => Promise<unknown>;
 
         await expect(
-            middleware({ path: '/chat/123', fullPath: '/chat/123' })
+            middleware({ path: '/chat/123', fullPath: '/chat/123', meta: { lockPageProtected: true } })
         ).resolves.toEqual({
             path: '/welcome',
             query: {

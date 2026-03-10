@@ -1,9 +1,12 @@
+import { useState } from '#imports';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import {
     type LockPageRuntimeConfig,
     useLockPageRuntimeConfig,
 } from './runtime';
+
+const LOCK_PAGE_SESSION_TTL_MS = 5_000;
 
 export type LockPageAccessReason =
     | 'disabled'
@@ -18,6 +21,19 @@ export interface LockPageAccessResult {
     allowed: boolean;
     reason: LockPageAccessReason;
     session: SessionContext | null;
+    errorMessage?: string;
+}
+
+function getSessionValidationState() {
+    const validatedAt = useState<number>('lock-page-session-validated-at', () => 0);
+    return { validatedAt };
+}
+
+function extractErrorMessage(error: unknown): string | undefined {
+    if (error instanceof Error && error.message.trim()) {
+        return error.message;
+    }
+    return undefined;
 }
 
 export function evaluateLockPageAccess(input: {
@@ -91,9 +107,9 @@ export function evaluateLockPageAccess(input: {
 export async function resolveLockPageAccess(): Promise<LockPageAccessResult> {
     const config = useLockPageRuntimeConfig();
     const sessionState = useSessionContext();
+    const { validatedAt } = getSessionValidationState();
     const cachedPayload = sessionState.data.value;
     const cachedSession = cachedPayload?.session ?? null;
-    const cachedAuthenticated = cachedSession?.authenticated === true;
 
     if (!config.ssrAuthEnabled || !config.enabled) {
         return evaluateLockPageAccess({
@@ -103,25 +119,34 @@ export async function resolveLockPageAccess(): Promise<LockPageAccessResult> {
         });
     }
 
-    let hadSessionError = !cachedAuthenticated && Boolean(sessionState.error.value);
+    const now = Date.now();
+    const shouldRefresh =
+        !sessionState.data.value ||
+        now - validatedAt.value > LOCK_PAGE_SESSION_TTL_MS;
+
+    let hadSessionError = false;
+    let errorMessage = extractErrorMessage(sessionState.error.value);
 
     try {
-        if (!sessionState.data.value && !hadSessionError) {
+        if (shouldRefresh && !sessionState.pending.value) {
             await sessionState.refresh();
-            hadSessionError = false;
+            validatedAt.value = Date.now();
+            errorMessage = undefined;
         }
-    } catch {
+    } catch (error) {
         hadSessionError = true;
+        validatedAt.value = Date.now();
+        errorMessage = extractErrorMessage(error) ?? errorMessage;
     }
 
     const payload = sessionState.data.value;
     const session = payload?.session ?? null;
-    return evaluateLockPageAccess({
+    const result = evaluateLockPageAccess({
         config,
         session,
         appAccessAllowed: payload?.appAccessAllowed,
-        hadSessionError:
-            hadSessionError ||
-            (!session?.authenticated && Boolean(sessionState.error.value)),
+        hadSessionError,
     });
+
+    return errorMessage ? { ...result, errorMessage } : result;
 }

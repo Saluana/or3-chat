@@ -7,6 +7,10 @@ import PageShell from '~/components/PageShell.vue';
 import { getDocument } from '~/db/documents';
 import { useValidatedEntityPageShell } from '~/composables/useValidatedEntityPageShell';
 
+definePageMeta({
+    lockPageProtected: true,
+});
+
 const { ready, routeId } = useValidatedEntityPageShell({
     loadEntity(routeId) {
         return getDocument(routeId);

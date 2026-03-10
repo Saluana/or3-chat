@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
     isAdminRoute,
-    isProtectedShellRoute,
     resolveLockPageRuntimeConfig,
     resolvePostAuthRedirectTarget,
     sanitizeLockPageRedirectTarget,
@@ -30,17 +29,6 @@ describe('lock page runtime helpers', () => {
         expect(config.adminBasePath).toBe('/admin');
         expect(config.guestAccessEnabled).toBe(true);
         expect(config.authProvider).toBe('basic-auth');
-    });
-
-    it('classifies protected shell routes explicitly', () => {
-        expect(isProtectedShellRoute('/')).toBe(true);
-        expect(isProtectedShellRoute('/chat')).toBe(true);
-        expect(isProtectedShellRoute('/chat/thread-1')).toBe(true);
-        expect(isProtectedShellRoute('/docs')).toBe(true);
-        expect(isProtectedShellRoute('/docs/abc')).toBe(true);
-        expect(isProtectedShellRoute('/welcome')).toBe(false);
-        expect(isProtectedShellRoute('/admin')).toBe(false);
-        expect(isProtectedShellRoute('/images')).toBe(false);
     });
 
     it('treats the configured admin base path as a bypass', () => {

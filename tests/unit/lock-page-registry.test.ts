@@ -5,6 +5,7 @@ import {
     registerLockPageAdapter,
     resolveLockPageAdapter,
     resolveLockPageComponent,
+    resolveRuntimeLockPageComponent,
     unregisterLockPageAdapter,
 } from '../../app/core/lock-page/registry';
 
@@ -49,6 +50,27 @@ describe('lock page adapter registry', () => {
         });
 
         expect(resolveLockPageComponent('marketing', fallback)).toBe(custom);
+
+        cleanupRegistry();
+    });
+
+    it('prefers provider-owned adapters when config uses the default adapter id', () => {
+        cleanupRegistry();
+        const providerComponent = { name: 'BasicAuthLockPage' } as Component;
+        const fallback = { name: 'DefaultLockPage' } as Component;
+
+        registerLockPageAdapter({
+            id: 'basic-auth',
+            component: providerComponent,
+        });
+
+        expect(
+            resolveRuntimeLockPageComponent({
+                adapterId: 'default',
+                authProviderId: 'basic-auth',
+                fallback,
+            })
+        ).toBe(providerComponent);
 
         cleanupRegistry();
     });
