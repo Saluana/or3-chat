@@ -18,6 +18,8 @@ OR3 Network (`or3-net`) is a Bun/TypeScript service that sits between `or3-chat`
 1. Exchanges the user's active chat session for a short-lived `or3-net` workspace token.
 2. Uses that token to call `or3-net` Host API endpoints from a plugin UI.
 
+`or3-chat` should treat its own thread or client conversation identifier as `client_session_id`. `or3-net` now resolves that value plus `client_kind: 'or3-chat'` into a durable `network_session_id`, while still binding the underlying execution to `or3-intern`'s `session_key`.
+
 ---
 
 ## What changes in `or3-chat`
@@ -45,6 +47,8 @@ A new composable (likely under `app/composables/or3-net/`) that:
 
 This composable is **provider-agnostic**: it uses the same `useSessionContext` + `useAuthTokenBroker` patterns that already power Convex sync auth and background streaming auth. It does not import Clerk or any specific provider SDK.
 
+The companion API client should preserve and reuse `network_session_id` returned by the first successful job/session lookup for a given chat thread so subsequent submits and inspection views can bind to the same durable coordination session.
+
 ### 3. Workspace switch handling
 
 When the user changes workspaces (via `WorkspaceManager.vue` → `useWorkspaceManagerSession`), the plugin must:
@@ -61,6 +65,14 @@ This mirrors how existing plugins like `convex-sync.client.ts` and `notification
 - Events include `text.delta`, `tool.call`, `tool.result`, `job.completed`, `job.aborted`, `job.failed`.
 - On disconnect, the plugin should reconnect and resume from the last received event (if the `or3-net` API supports cursor-based reconnect) or re-fetch current job status.
 - Abort sends `POST /v1/jobs/:jobId/abort` and updates local state to reflect the terminal status.
+
+The plugin should also consume the non-streaming session inspection routes:
+
+- `GET /v1/workspaces/:workspaceId/sessions`
+- `GET /v1/workspaces/:workspaceId/sessions/:sessionId`
+- `GET /v1/workspaces/:workspaceId/sessions/:sessionId/events`
+
+This lets `or3-chat` reload durable recent history for a thread after refresh or reconnect without depending on a live SSE stream replay.
 
 ### 5. Service launch UX for sandbox-backed dashboards
 
