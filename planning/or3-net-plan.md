@@ -132,6 +132,40 @@ If the preview is not safe to embed, the pane should show a clear fallback state
 
 ---
 
+## Repo-aligned implementation notes
+
+These notes capture the concrete `or3-chat` patterns the OR3 Network work should reuse when implementation starts.
+
+### Plugin registration model
+
+- Client plugins belong in `app/plugins/*.client.ts` and should register their surfaces during app startup.
+- Dashboard-style entry points should follow the existing dashboard registry model documented in `public/_documentation/composables/useDashboardPlugins.md`.
+- Sidebar chrome additions should follow the sidebar registry model documented in `public/_documentation/composables/useSidebarSections.md`.
+- Keep the feature lazy-loaded: register the OR3 Network entry eagerly, but defer importing the main page and heavy UI trees until the user opens it.
+
+### Session and auth model
+
+- Use `app/composables/auth/useSessionContext.ts` as the source of truth for active user/workspace identity.
+- Keep the `or3-net` token exchange provider-agnostic and behind existing abstractions; do not import Clerk or other provider SDKs into the plugin.
+- Cache exchanged `or3-net` tokens in memory only.
+- Preserve the durable `network_session_id` returned by the first successful binding for a chat thread and reuse it for subsequent submits, inspection, and reload recovery.
+
+### Workspace switch and lifecycle model
+
+- Mirror the workspace-sensitive watcher/teardown behavior already used by `app/plugins/convex-sync.client.ts`.
+- Mirror the client-only listener and cleanup discipline used by `app/plugins/notification-listeners.client.ts`.
+- Treat job streams, preview embeds, and service launch state as workspace-scoped resources that must be torn down on workspace switch.
+- Force a fresh token exchange before issuing new `or3-net` calls after workspace rebinding.
+
+### UI and persistence expectations
+
+- Reuse existing repo storage/content patterns for saved network presets and agent presets rather than introducing a parallel persistence model.
+- Use small KV-backed prefs only for lightweight plugin settings such as the selected host URL or default filters.
+- Prefer service-oriented actions (`Open Dashboard`, `Restart Service`, `Revoke`) over any raw tunnel-management UX.
+- Use the `or3-net` session inspection routes to repopulate durable history after refresh instead of assuming live SSE replay is always available.
+
+---
+
 ## Affected files and areas
 
 | Area | Likely files | Notes |
@@ -163,3 +197,47 @@ If the preview is not safe to embed, the pane should show a clear fallback state
 - [ ] **Saved presets** — Add network/agent preset storage using the repo's content/doc patterns, so users can save and reuse host + agent configurations.
 - [ ] **Tests** — Add unit tests for token exchange (mock session, mock exchange endpoint), workspace switch rebind, SSE reconnect behavior, abort state transitions, service launch URL handling, and iframe preview fallback behavior.
 - [ ] **Docs** — Add a brief plugin usage section to the repo docs or inline help explaining how to configure the `or3-net` host URL and use the plugin.
+
+---
+
+## Deferred contract and conformance follow-up
+
+These are the `or3-chat`-owned carry-over items from the cross-repo platform-standardization work. Keeping them here makes this file the place to resume later.
+
+### Session proof exchange freeze
+
+- [ ] Freeze the exchange request shape used by `or3-chat`: `{ provider, session_proof, workspace_hint? }`.
+- [ ] Document what `or3-chat` sends as `session_proof` for each supported auth provider.
+- [ ] Keep provider-specific auth details hidden behind existing abstractions such as session context and token broker helpers.
+
+### Workspace switch invalidation contract
+
+- [ ] Freeze the workspace-switch invalidation behavior for cached `or3-net` tokens.
+- [ ] Ensure active workspace-scoped views are torn down on workspace switch, especially job streams and preview embeds.
+- [ ] Document the invalidation contract so `or3-net` can rely on chat-side cleanup when rebinding coordination sessions.
+
+### Error envelope consumption
+
+- [ ] Parse canonical `ErrorEnvelope` responses from `or3-net` instead of assuming ad-hoc `{ error }` payloads.
+- [ ] Use `retry_after_ms` from `ErrorEnvelope` for `429` retry scheduling instead of fixed backoff.
+- [ ] Surface canonical error codes in user-facing states where they improve recovery guidance.
+
+### Contract fixtures and CI
+
+- [ ] Add `or3-chat` fixtures for `or3-net` exchange request/response shapes.
+- [ ] Add `or3-chat` fixtures for normalized `or3-net` job stream events.
+- [ ] Add fixture-backed contract tests for the frozen `or3-net` API shapes consumed by the plugin.
+- [ ] Add `or3-chat` CI coverage for those `or3-net` API contract fixtures.
+
+### Config alignment
+
+- [ ] Align any future `or3-chat` wizard/env emission with the canonical cross-repo naming convention.
+- [ ] Keep `or3-net` host configuration and preset setup documented alongside the plugin usage flow.
+
+---
+
+## Cross-repo references
+
+- Upstream chat-plugin scope is summarized in `or3-net/planning/06-chat-plugin.md`.
+- Deferred `or3-chat` standardization tasks are tracked in `or3-net/planning/platform-standardization/tasks.md`.
+- Non-chat contract and config alignment details live under `or3-net/planning/platform-standardization/`.
