@@ -89,6 +89,30 @@ type ToolRegistryLike = {
  */
 type RefLike<T> = { value: T };
 
+type StreamHookDispatcher = {
+    dispatch: (name: string, ...args: unknown[]) => void;
+    flush: () => Promise<void>;
+};
+
+function createStreamHookDispatcher(hooks: HooksLike): StreamHookDispatcher {
+    let queue: Promise<unknown> = Promise.resolve();
+
+    return {
+        dispatch(name: string, ...args: unknown[]) {
+            // Keep chunk hooks off the token hot path, but preserve their
+            // ordering before terminal stream actions run.
+            queue = queue
+                .then(() => hooks.doAction(name, ...args))
+                .catch(() => {
+                    /* intentionally empty */
+                });
+        },
+        async flush() {
+            await queue;
+        },
+    };
+}
+
 /**
  * Context object required for foreground streaming operations.
  *
@@ -211,6 +235,7 @@ export async function runForegroundStreamLoop(
     while (continueLoop && loopIteration < MAX_TOOL_ITERATIONS) {
         continueLoop = false;
         loopIteration++;
+        const streamHooks = createStreamHookDispatcher(ctx.hooks);
 
         const stream = openRouterStream({
             apiKey: ctx.apiKey,
@@ -283,26 +308,21 @@ export async function runForegroundStreamLoop(
                         current.reasoning_text = ev.text;
                     else current.reasoning_text += ev.text;
                     ctx.streamAcc.append(ev.text, { kind: 'reasoning' });
-                    try {
-                        await ctx.hooks.doAction(
-                            'ai.chat.stream:action:reasoning',
-                            ev.text,
-                            {
-                                threadId: ctx.threadId,
-                                assistantId: ctx.assistantId,
-                                streamId: ctx.streamId,
-                                reasoningLength:
-                                    current.reasoning_text?.length || 0,
-                            }
-                        );
-                    } catch {
-                        /* intentionally empty */
-                    }
+                    streamHooks.dispatch(
+                        'ai.chat.stream:action:reasoning',
+                        ev.text,
+                        {
+                            threadId: ctx.threadId,
+                            assistantId: ctx.assistantId,
+                            streamId: ctx.streamId,
+                            reasoningLength: current.reasoning_text?.length || 0,
+                        }
+                    );
                 } else if (ev.type === 'text') {
                     if (current.pending) current.pending = false;
                     const delta = ev.text;
                     ctx.streamAcc.append(delta, { kind: 'text' });
-                    await ctx.hooks.doAction(
+                    streamHooks.dispatch(
                         'ai.chat.stream:action:delta',
                         delta,
                         {
@@ -385,6 +405,8 @@ export async function runForegroundStreamLoop(
                     lastPersistAt = now;
                 }
             }
+
+            await streamHooks.flush();
 
             if (pendingToolCalls.length > 0) {
                 const toolResultsForNextLoop: ToolResultPayload[] = [];
@@ -480,6 +502,7 @@ export async function runForegroundStreamLoop(
                 continue;
             }
         } catch (streamError) {
+            await streamHooks.flush();
             if (loopIteration > 1) {
                 console.warn('[useChat] Stream error during tool loop', streamError);
                 continueLoop = false;

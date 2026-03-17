@@ -799,6 +799,30 @@ export function useChat(
         return messages.value.find((m) => m.id === messageId) ?? null;
     }
 
+    function syncTailAccumulator(
+        messageId: string,
+        nextContent: string,
+        delta: string
+    ): boolean {
+        if (tailAssistant.value?.id !== messageId) return false;
+        if (!nextContent) return true;
+
+        const currentContent = streamState.text || '';
+        const canAppendDelta =
+            delta.length > 0 &&
+            nextContent.length === currentContent.length + delta.length &&
+            nextContent.startsWith(currentContent);
+
+        if (canAppendDelta) {
+            streamAcc.append(delta, { kind: 'text' });
+            return true;
+        }
+
+        streamAcc.reset();
+        streamAcc.append(nextContent, { kind: 'text' });
+        return true;
+    }
+
     /**
      * Purpose:
      * Normalizes background tool call payloads into UI-safe tool call state.
@@ -964,6 +988,7 @@ export function useChat(
                     }
                     const target = resolveUiMessage(params.messageId);
                     if (!target) return;
+                    const previousText = target.text;
 
                     const nextToolCalls = normalizeBackgroundToolCalls(
                         status.tool_calls
@@ -985,15 +1010,17 @@ export function useChat(
                         target.pending = false;
                     }
 
-                    if (tailAssistant.value?.id === params.messageId) {
-                        if (contentChanged) {
-                            // Replace accumulator with full content
-                            streamAcc.reset();
-                            if (content.length > 0) {
-                                streamAcc.append(content, { kind: 'text' });
-                            }
-                        }
+                    if (syncTailAccumulator(params.messageId, content, delta)) {
+                        return;
                     } else if (delta || hasToolUpdate || contentChanged) {
+                        if (
+                            contentChanged &&
+                            delta.length > 0 &&
+                            content.length === previousText.length + delta.length &&
+                            content.startsWith(previousText)
+                        ) {
+                            return;
+                        }
                         messages.value = [...messages.value];
                     }
                 },
@@ -1024,12 +1051,7 @@ export function useChat(
                         target.toolCalls = nextToolCalls;
                     }
                     target.pending = false;
-                    if (tailAssistant.value?.id === params.messageId) {
-                        // Ensure stream accumulator has full content before finalizing
-                        streamAcc.reset();
-                        if (content) {
-                            streamAcc.append(content, { kind: 'text' });
-                        }
+                    if (syncTailAccumulator(params.messageId, content, content)) {
                         streamAcc.finalize();
                     } else {
                         messages.value = [...messages.value];

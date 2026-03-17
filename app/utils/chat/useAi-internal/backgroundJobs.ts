@@ -47,6 +47,7 @@ import {
 } from '~/utils/chat/openrouterStream';
 import { NotificationService } from '~/core/notifications/notification-service';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
 import type {
     BackgroundJobTracker,
     BackgroundJobSubscriber,
@@ -141,6 +142,44 @@ function resolveWorkflowHooks(): TypedHookEngine | null {
     if (!g.__NUXT_HOOKS__) return null;
     cachedWorkflowHooks = createTypedHookEngine(g.__NUXT_HOOKS__);
     return cachedWorkflowHooks;
+}
+
+function dispatchWorkflowStateUpdate(
+    messageId: string,
+    state: WorkflowMessageData
+): void {
+    const workflowHooks = resolveWorkflowHooks();
+    if (!workflowHooks?.hasAction('workflow.execution:action:state_update')) return;
+    void Promise.resolve()
+        .then(() =>
+            workflowHooks.doAction('workflow.execution:action:state_update', {
+                messageId,
+                state,
+            })
+        )
+        .catch(() => {
+            /* intentionally empty */
+        });
+}
+
+function dispatchWorkflowComplete(
+    messageId: string,
+    workflowId: string,
+    finalOutput?: string
+): void {
+    const workflowHooks = resolveWorkflowHooks();
+    if (!workflowHooks?.hasAction('workflow.execution:action:complete')) return;
+    void Promise.resolve()
+        .then(() =>
+            workflowHooks.doAction('workflow.execution:action:complete', {
+                messageId,
+                workflowId,
+                finalOutput,
+            })
+        )
+        .catch(() => {
+            /* intentionally empty */
+        });
 }
 
 /**
@@ -327,10 +366,17 @@ async function persistBackgroundJobUpdate(
 
     if (!statusChanged && !shouldPersistContent) return true;
 
-    const existing = (await getDb().messages.get(tracker.messageId)) as
-        | StoredMessage
-        | undefined;
+    const currentDb = getDb();
+    const currentDbName = currentDb.name;
+    const existing =
+        tracker.messageRecord && tracker.messageRecordDbName === currentDbName
+            ? tracker.messageRecord
+            : ((await currentDb.messages.get(tracker.messageId)) as
+                  | StoredMessage
+                  | undefined);
     if (!existing) {
+        tracker.messageRecord = null;
+        tracker.messageRecordDbName = null;
         bgStreamWarn('persist-message-missing', {
             jobId: tracker.jobId,
             messageId: tracker.messageId,
@@ -338,6 +384,8 @@ async function persistBackgroundJobUpdate(
         });
         return false;
     }
+    tracker.messageRecord = existing;
+    tracker.messageRecordDbName = currentDbName;
 
     const baseData =
         existing.data && typeof existing.data === 'object'
@@ -353,6 +401,12 @@ async function persistBackgroundJobUpdate(
         status.workflow_state && typeof status.workflow_state === 'object'
             ? status.workflow_state
             : null;
+    const persistedToolCalls = Array.isArray(status.tool_calls)
+        ? status.tool_calls.map((toolCall) => ({
+              ...toolCall,
+              status: toolCall.status === 'skipped' ? 'error' : toolCall.status,
+          }))
+        : undefined;
     const workflowVersion = workflowVersionOf(workflowState);
     const includeWorkflowState =
         workflowState !== null && workflowVersion >= tracker.lastWorkflowVersion;
@@ -370,16 +424,26 @@ async function persistBackgroundJobUpdate(
         background_job_status: status.status,
         ...(status.error ? { background_job_error: status.error } : {}),
         ...(nextError ? { error: nextError } : {}),
-        ...(status.tool_calls ? { tool_calls: status.tool_calls } : {}),
+        ...(persistedToolCalls ? { tool_calls: persistedToolCalls } : {}),
     };
 
-    await upsert.message({
+    const nextRecord: StoredMessage = {
         ...existing,
         pending: status.status === 'streaming',
         error: nextError,
         data: mergedData,
         updated_at: nowSec(),
-    });
+    };
+
+    await upsert.message(nextRecord);
+
+    if (getDb().name === currentDbName) {
+        tracker.messageRecord = nextRecord;
+        tracker.messageRecordDbName = currentDbName;
+    } else {
+        tracker.messageRecord = null;
+        tracker.messageRecordDbName = null;
+    }
 
     tracker.status = status.status;
     tracker.lastPersistAt = now;
@@ -548,21 +612,15 @@ async function handleBackgroundStatus(
         delta,
     };
     const workflowVersion = workflowVersionOf(nextStatus.workflow_state);
+    for (const subscriber of tracker.subscribers) {
+        subscriber.onUpdate?.(update);
+    }
     if (
         nextStatus.workflow_state &&
         typeof nextStatus.workflow_state === 'object' &&
         workflowVersion >= tracker.lastWorkflowVersion
     ) {
-        const workflowHooks = resolveWorkflowHooks();
-        if (workflowHooks?.hasAction('workflow.execution:action:state_update')) {
-            await workflowHooks.doAction('workflow.execution:action:state_update', {
-                messageId: tracker.messageId,
-                state: nextStatus.workflow_state,
-            });
-        }
-    }
-    for (const subscriber of tracker.subscribers) {
-        subscriber.onUpdate?.(update);
+        dispatchWorkflowStateUpdate(tracker.messageId, nextStatus.workflow_state);
     }
 
     if (nextStatus.status !== 'streaming') {
@@ -577,18 +635,15 @@ async function handleBackgroundStatus(
         }
         await emitBackgroundComplete(tracker, nextStatus);
         if (nextStatus.workflow_state && typeof nextStatus.workflow_state === 'object') {
-            const workflowHooks = resolveWorkflowHooks();
-            if (workflowHooks?.hasAction('workflow.execution:action:complete')) {
-                const state = nextStatus.workflow_state;
-                const workflowId = state.workflowId;
-                const finalOutput = state.finalOutput || undefined;
-                if (workflowId) {
-                    await workflowHooks.doAction('workflow.execution:action:complete', {
-                        messageId: tracker.messageId,
-                        workflowId,
-                        finalOutput,
-                    });
-                }
+            const state = nextStatus.workflow_state;
+            const workflowId = state.workflowId;
+            const finalOutput = state.finalOutput || undefined;
+            if (workflowId) {
+                dispatchWorkflowComplete(
+                    tracker.messageId,
+                    workflowId,
+                    finalOutput
+                );
             }
         }
         tracker.resolveCompletion(nextStatus);
@@ -1078,6 +1133,8 @@ export function ensureBackgroundJobTracker(
         active: false,
         preferSse: Boolean(params.useSse),
         pollRunId: 0,
+        messageRecord: null,
+        messageRecordDbName: null,
         subscribers: new Set<BackgroundJobSubscriber>(),
         completion,
         resolveCompletion,

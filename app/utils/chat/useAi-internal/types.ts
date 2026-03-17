@@ -48,6 +48,8 @@ export type BackgroundJobTracker = {
     preferSse?: boolean;
     pollRunId?: number;
     streamUnsubscribe?: () => void;
+    messageRecord?: StoredMessage | null;
+    messageRecordDbName?: string | null;
     subscribers: Set<BackgroundJobSubscriber>;
     completion: Promise<BackgroundJobStatus>;
     resolveCompletion: (status: BackgroundJobStatus) => void;

@@ -63,13 +63,17 @@ export async function useManagedWebhooks(options: UseManagedWebhooksOptions) {
           )
         : null;
 
-    const webhooks = computed(() => data.value?.webhooks ?? []);
-    const workspaceOptions = computed<ManagedWorkspaceOption[]>(() =>
-        (workspaceFetch?.data.value?.items ?? []).map((workspace) => ({
+    const webhooks = computed(() => data.value.webhooks);
+    const workspaceOptions = computed<ManagedWorkspaceOption[]>(() => {
+        if (!workspaceFetch) {
+            return [];
+        }
+
+        return workspaceFetch.data.value.items.map((workspace) => ({
             id: workspace.id,
             name: workspace.name,
-        }))
-    );
+        }));
+    });
     const errorMessage = computed(() =>
         error.value ? getMessage(error.value, options.loadErrorMessage) : null
     );

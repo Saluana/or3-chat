@@ -37,6 +37,8 @@ const runtimeConfigRef = {
         },
     },
 };
+const streamAccResetMock = vi.fn();
+const streamAccAppendMock = vi.fn();
 
 let resolveBackgroundStart: ((value: { jobId: string }) => void) | null = null;
 let latestTracker: any = null;
@@ -160,11 +162,13 @@ vi.mock('~/composables/chat/useStreamAccumulator', () => ({
         return {
             state,
             reset: () => {
+                streamAccResetMock();
                 state.text = '';
                 state.reasoningText = '';
                 state.finalized = false;
             },
             append: (chunk: string, opts?: { kind?: string }) => {
+                streamAccAppendMock(chunk, opts);
                 if (opts?.kind === 'reasoning') state.reasoningText += chunk;
                 else state.text += chunk;
                 state.version += 1;
@@ -292,6 +296,8 @@ describe('useChat background detach race', () => {
             async (_name: string, value: unknown) => value
         );
         runForegroundStreamLoopMock.mockResolvedValue(undefined);
+        streamAccResetMock.mockReset();
+        streamAccAppendMock.mockReset();
 
         appendMessageMock.mockImplementation(async (payload: any) => {
             const id = payload.role === 'user' ? 'user-msg-1' : 'assistant-msg-1';
@@ -503,5 +509,59 @@ describe('useChat background detach race', () => {
 
         expect(startBackgroundStreamMock).not.toHaveBeenCalled();
         expect(runForegroundStreamLoopMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('appends background deltas to the tail accumulator without full resets', async () => {
+        vi.resetModules();
+        vi.unmock('~/composables/chat/useAi');
+        const { useChat } = await import('~/composables/chat/useAi');
+
+        const chat = useChat([], 'thread-1');
+
+        const sendPromise = chat.sendMessage('hello', {
+            files: [],
+            model: 'test-model',
+            file_hashes: [],
+            online: false,
+            context_hashes: [],
+        } as any);
+
+        await waitForCall(startBackgroundStreamMock);
+        if (!resolveBackgroundStart) {
+            throw new Error('Background start resolver was not initialized');
+        }
+        resolveBackgroundStart({ jobId: 'job-delta-1' });
+        await sendPromise;
+        const resetCallsBeforeUpdates = streamAccResetMock.mock.calls.length;
+
+        const subscriber = latestTracker?.subscribers.values().next().value as
+            | {
+                  onUpdate?: (payload: {
+                      content: string;
+                      delta: string;
+                      status: Record<string, unknown>;
+                  }) => void;
+              }
+            | undefined;
+
+        subscriber?.onUpdate?.({
+            content: 'abc',
+            delta: 'abc',
+            status: { status: 'streaming' },
+        });
+        subscriber?.onUpdate?.({
+            content: 'abcd',
+            delta: 'd',
+            status: { status: 'streaming' },
+        });
+
+        expect(chat.streamState.text).toBe('abcd');
+        expect(streamAccAppendMock).toHaveBeenNthCalledWith(1, 'abc', {
+            kind: 'text',
+        });
+        expect(streamAccAppendMock).toHaveBeenNthCalledWith(2, 'd', {
+            kind: 'text',
+        });
+        expect(streamAccResetMock.mock.calls.length).toBe(resetCallsBeforeUpdates);
     });
 });

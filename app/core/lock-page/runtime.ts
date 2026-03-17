@@ -2,6 +2,19 @@ import { useRuntimeConfig } from '#imports';
 
 export const DEFAULT_LOCK_PAGE_ROUTE = '/welcome';
 
+interface LockPagePublicRuntimeConfig {
+    ssrAuthEnabled?: boolean;
+    guestAccessEnabled?: boolean;
+    authProvider?: string;
+    admin?: {
+        basePath?: string;
+    };
+    lockPage?: {
+        enabled?: boolean;
+        adapter?: string;
+    };
+}
+
 export interface LockPageRuntimeConfig {
     ssrAuthEnabled: boolean;
     enabled: boolean;
@@ -20,22 +33,26 @@ function normalizePath(value: string | null | undefined, fallback = '/'): string
     return withLeadingSlash.replace(/\/+$/, '') || '/';
 }
 
-export function resolveLockPageRuntimeConfig(publicConfig?: Record<string, any>): LockPageRuntimeConfig {
-    const adminBasePath = normalizePath(publicConfig?.admin?.basePath, '/admin');
+export function resolveLockPageRuntimeConfig(
+    publicConfig: LockPagePublicRuntimeConfig = {}
+): LockPageRuntimeConfig {
+    const adminBasePath = normalizePath(publicConfig.admin?.basePath, '/admin');
 
     return {
-        ssrAuthEnabled: publicConfig?.ssrAuthEnabled === true,
-        enabled: publicConfig?.lockPage?.enabled === true,
-        adapter: String(publicConfig?.lockPage?.adapter ?? 'default').trim() || 'default',
+        ssrAuthEnabled: publicConfig.ssrAuthEnabled === true,
+        enabled: publicConfig.lockPage?.enabled === true,
+        adapter: String(publicConfig.lockPage?.adapter ?? 'default').trim() || 'default',
         route: DEFAULT_LOCK_PAGE_ROUTE,
         adminBasePath,
-        guestAccessEnabled: publicConfig?.guestAccessEnabled === true,
-        authProvider: String(publicConfig?.authProvider ?? 'clerk').trim() || 'clerk',
+        guestAccessEnabled: publicConfig.guestAccessEnabled === true,
+        authProvider: String(publicConfig.authProvider ?? 'clerk').trim() || 'clerk',
     };
 }
 
 export function useLockPageRuntimeConfig(): LockPageRuntimeConfig {
-    return resolveLockPageRuntimeConfig(useRuntimeConfig().public as Record<string, any>);
+    return resolveLockPageRuntimeConfig(
+        useRuntimeConfig().public as LockPagePublicRuntimeConfig
+    );
 }
 
 export function isSameOrChildPath(path: string, basePath: string): boolean {
@@ -55,7 +72,9 @@ export function sanitizeLockPageRedirectTarget(
     value: unknown,
     fallback = '/'
 ): string {
-    const candidate = Array.isArray(value) ? value[0] : value;
+    const candidate: unknown = Array.isArray(value)
+        ? (value as unknown[])[0]
+        : value;
     if (typeof candidate !== 'string') return fallback;
 
     const trimmed = candidate.trim();
