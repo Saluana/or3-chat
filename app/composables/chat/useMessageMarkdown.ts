@@ -15,12 +15,25 @@ export function useMessageMarkdown(message: Ref<MessageLike>) {
         message.value.role === 'assistant' ? message.value.text || '' : ''
     );
 
+    let lastProcessedInput = '';
+    let lastProcessedOutput = '';
     const processedAssistantMarkdown = computed(() => {
         if (message.value.role !== 'assistant') return '';
-        return assistantMarkdown.value.replace(
+        const markdown = assistantMarkdown.value;
+        if (markdown === lastProcessedInput) {
+            return lastProcessedOutput;
+        }
+        if (!markdown.includes('file-hash:')) {
+            lastProcessedInput = markdown;
+            lastProcessedOutput = markdown;
+            return markdown;
+        }
+        lastProcessedInput = markdown;
+        lastProcessedOutput = markdown.replace(
             FILE_HASH_IMG_RE,
             (_, hash) => `![file-hash:${hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`
         );
+        return lastProcessedOutput;
     });
 
     const nuxtApp = useNuxtApp();

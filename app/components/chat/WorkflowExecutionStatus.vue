@@ -29,7 +29,7 @@
                     @click.stop="focusFirstPendingHitl"
                 >
                     <UIcon
-                        :name="useIcon('ui.warning').value"
+                        :name="warningIcon"
                         class="w-3 h-3 shrink-0"
                     />
                     {{ pendingHitlBadgeText }}
@@ -163,7 +163,7 @@
                             class="bg-[var(--md-error-container)] text-[var(--md-on-error-container)] p-2 rounded mb-2 text-xs flex items-start gap-2"
                         >
                             <UIcon
-                                :name="useIcon('ui.warning').value"
+                                :name="warningIcon"
                                 class="w-4 h-4 shrink-0 mt-0.5"
                             />
                             <span class="whitespace-pre-wrap">{{
@@ -183,7 +183,7 @@
                             >
                                 <div class="flex items-start gap-2">
                                     <UIcon
-                                        :name="useIcon('ui.warning').value"
+                                        :name="warningIcon"
                                         class="w-4 h-4 shrink-0 mt-0.5"
                                     />
                                     <div class="flex-1">
@@ -612,7 +612,7 @@ watch(
                 title: pendingHitlBadge.value || 'Approval needed',
                 description: getPendingHitlContextLabel(entry),
                 color: 'warning',
-                icon: useIcon('ui.warning').value,
+                icon: warningIcon.value,
                 actions: [
                     {
                         label: 'Review',
@@ -643,23 +643,62 @@ watch(
 // Icons
 const expandIcon = useIcon('shell.expand');
 const collapseIcon = useIcon('shell.collapse');
+const warningIcon = useIcon('ui.warning');
+const pendingStatusIcon = useIcon('workflow.status.pending');
+const runningStatusIcon = useIcon('workflow.status.running');
+const completedStatusIcon = useIcon('workflow.status.completed');
+const errorStatusIcon = useIcon('workflow.status.error');
+const stoppedStatusIcon = useIcon('workflow.status.stopped');
+
+const hitlRequestsByNode = computed(() => {
+    const grouped = new Map<string, HitlRequestState[]>();
+    const requests = props.workflowState.hitlRequests;
+    if (!requests) return grouped;
+    for (const request of Object.values(requests)) {
+        const existing = grouped.get(request.nodeId);
+        if (existing) {
+            existing.push(request);
+        } else {
+            grouped.set(request.nodeId, [request]);
+        }
+    }
+    return grouped;
+});
+
+const branchesByNode = computed(() => {
+    const grouped = new Map<string, BranchState[]>();
+    const branches = props.workflowState.branches;
+    if (!branches) return grouped;
+    for (const [key, branch] of Object.entries(branches)) {
+        if (branch.id === MERGE_BRANCH_ID) continue;
+        const [nodeId] = key.split(':', 1);
+        if (!nodeId) continue;
+        const existing = grouped.get(nodeId);
+        if (existing) {
+            existing.push(branch);
+        } else {
+            grouped.set(nodeId, [branch]);
+        }
+    }
+    return grouped;
+});
 
 const statusIcon = computed(() => {
     if (hasPendingHitl.value) {
-        return useIcon('workflow.status.pending').value;
+        return pendingStatusIcon.value;
     }
     switch (props.workflowState.executionState) {
         case 'running':
-            return useIcon('workflow.status.running').value;
+            return runningStatusIcon.value;
         case 'completed':
-            return useIcon('workflow.status.completed').value;
+            return completedStatusIcon.value;
         case 'error':
-            return useIcon('workflow.status.error').value;
+            return errorStatusIcon.value;
         case 'stopped':
         case 'interrupted':
-            return useIcon('workflow.status.stopped').value;
+            return stoppedStatusIcon.value;
         default:
-            return useIcon('workflow.status.pending').value;
+            return pendingStatusIcon.value;
     }
 });
 
@@ -751,19 +790,19 @@ function getNodeStatusIcon(nodeId: string) {
             execState === 'stopped' ||
             execState === 'error')
     ) {
-        return useIcon('workflow.status.stopped').value;
+        return stoppedStatusIcon.value;
     }
     switch (status) {
         case 'active':
-            return useIcon('workflow.status.running').value;
+            return runningStatusIcon.value;
         case 'waiting':
-            return useIcon('workflow.status.pending').value;
+            return pendingStatusIcon.value;
         case 'completed':
-            return useIcon('workflow.status.completed').value;
+            return completedStatusIcon.value;
         case 'error':
-            return useIcon('workflow.status.error').value;
+            return errorStatusIcon.value;
         default:
-            return useIcon('workflow.status.pending').value;
+            return pendingStatusIcon.value;
     }
 }
 
@@ -813,9 +852,7 @@ function getNodeToolCalls(nodeId: string): ToolCallState[] {
 }
 
 function getNodeHitlRequests(nodeId: string): HitlRequestState[] {
-    const requests = props.workflowState.hitlRequests;
-    if (!requests) return [];
-    return Object.values(requests).filter((req) => req.nodeId === nodeId);
+    return hitlRequestsByNode.value.get(nodeId) || [];
 }
 
 function getNodePendingHitlCount(nodeId: string): number {
@@ -900,19 +937,11 @@ const pendingHitlContextLabel = computed(() => {
 
 // Branch Helpers
 function hasBranches(nodeId: string): boolean {
-    if (!props.workflowState.branches) return false;
-    // Check if any branch key starts with nodeId + ':'
-    return Object.keys(props.workflowState.branches || {}).some((k) =>
-        k.startsWith(nodeId + ':')
-    );
+    return branchesByNode.value.has(nodeId);
 }
 
 function getBranches(nodeId: string): BranchState[] {
-    if (!props.workflowState.branches) return [];
-    return Object.entries(props.workflowState.branches)
-        .filter(([k]) => k.startsWith(nodeId + ':'))
-        .map(([_, v]) => v)
-        .filter((b) => b.id !== MERGE_BRANCH_ID);
+    return branchesByNode.value.get(nodeId) || [];
 }
 
 function getBranchLabel(branch: BranchState): string {
@@ -931,11 +960,11 @@ function getBranchContent(branch: BranchState): string {
 function getBranchStatusIcon(branch: BranchState) {
     switch (branch.status) {
         case 'active':
-            return useIcon('workflow.status.running').value;
+            return runningStatusIcon.value;
         case 'completed':
-            return useIcon('workflow.status.completed').value;
+            return completedStatusIcon.value;
         default:
-            return useIcon('workflow.status.pending').value;
+            return pendingStatusIcon.value;
     }
 }
 
@@ -957,13 +986,13 @@ function getBranchToolCalls(branch: BranchState): ToolCallState[] {
 function getToolStatusIcon(tool: ToolCallState) {
     switch (tool.status) {
         case 'active':
-            return useIcon('workflow.status.running').value;
+            return runningStatusIcon.value;
         case 'completed':
-            return useIcon('workflow.status.completed').value;
+            return completedStatusIcon.value;
         case 'error':
-            return useIcon('workflow.status.error').value;
+            return errorStatusIcon.value;
         default:
-            return useIcon('workflow.status.pending').value;
+            return pendingStatusIcon.value;
     }
 }
 

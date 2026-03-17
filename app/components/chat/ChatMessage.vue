@@ -350,7 +350,6 @@ import {
     watch,
     nextTick,
     onMounted,
-    watchEffect,
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
 import WorkflowChatMessage from './WorkflowChatMessage.vue';
@@ -382,144 +381,62 @@ const emit = defineEmits<{
     (e: 'save-edit', id: string): void;
 }>();
 
-// Theme overrides for message buttons
-const copyButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'message',
-        identifier: 'message.copy',
-        isNuxtUI: true,
-    });
+const copyIcon = useIcon('chat.message.copy');
+const retryIcon = useIcon('chat.message.retry');
+const continueIcon = useIcon('chat.message.continue');
+const branchIcon = useIcon('chat.message.branch');
+const editIcon = useIcon('chat.message.edit');
 
-    return {
-        icon: useIcon('chat.message.copy').value,
-        color: 'info' as const,
-        size: 'sm' as const,
-        class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...overrides.value,
-    };
+const copyButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'message',
+    identifier: 'message.copy',
+    isNuxtUI: true,
 });
-
-const retryButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'message',
-        identifier: 'message.retry',
-        isNuxtUI: true,
-    });
-
-    return {
-        icon: useIcon('chat.message.retry').value,
-        color: 'info' as const,
-        size: 'sm' as const,
-        class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...overrides.value,
-    };
+const retryButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'message',
+    identifier: 'message.retry',
+    isNuxtUI: true,
 });
-
-const continueButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'message',
-        identifier: 'message.continue',
-        isNuxtUI: true,
-    });
-    const continueIcon =
-        useIcon('chat.message.continue').value || 'heroicons:play-20-solid';
-
-    return {
-        icon: continueIcon,
-        color: 'success' as const,
-        size: 'sm' as const,
-        class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...overrides.value,
-    };
+const continueButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'message',
+    identifier: 'message.continue',
+    isNuxtUI: true,
 });
-
-const branchButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'message',
-        identifier: 'message.branch',
-        isNuxtUI: true,
-    });
-
-    return {
-        icon: useIcon('chat.message.branch').value,
-        color: 'info' as const,
-        size: 'sm' as const,
-        class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...overrides.value,
-    };
+const branchButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'message',
+    identifier: 'message.branch',
+    isNuxtUI: true,
 });
-
-const editButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'message',
-        identifier: 'message.edit',
-        isNuxtUI: true,
-    });
-
-    return {
-        icon: useIcon('chat.message.edit').value,
-        color: 'info' as const,
-        size: 'sm' as const,
-        class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...overrides.value,
-    };
+const editButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'message',
+    identifier: 'message.edit',
+    isNuxtUI: true,
 });
-
-const pluginActionButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'message',
-        identifier: 'message.plugin-action',
-        isNuxtUI: true,
-    });
-
-    return {
-        color: 'info' as const,
-        size: 'sm' as const,
-        class: 'text-black dark:text-white/95 flex items-center justify-center',
-        ...overrides.value,
-    };
+const pluginActionButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'message',
+    identifier: 'message.plugin-action',
+    isNuxtUI: true,
 });
-
-const saveEditButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'message',
-        identifier: 'message.save-edit',
-        isNuxtUI: true,
-    });
-
-    return {
-        size: 'sm' as const,
-        color: 'success' as const,
-        class: 'theme-btn',
-        ...overrides.value,
-    };
+const saveEditButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'message',
+    identifier: 'message.save-edit',
+    isNuxtUI: true,
 });
-
-const cancelEditButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'message',
-        identifier: 'message.cancel-edit',
-        isNuxtUI: true,
-    });
-
-    return {
-        size: 'sm' as const,
-        color: 'error' as const,
-        class: 'theme-btn',
-        ...overrides.value,
-    };
+const cancelEditButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'message',
+    identifier: 'message.cancel-edit',
+    isNuxtUI: true,
 });
-
-const messageContainerProps = computed(() => {
-    const overrides = useThemeOverrides({
+const messageContainerOverrides = useThemeOverrides(
+    computed(() => ({
         component: 'div',
         context: 'message',
         identifier:
@@ -527,10 +444,72 @@ const messageContainerProps = computed(() => {
                 ? 'message.user-container'
                 : 'message.assistant-container',
         isNuxtUI: false,
-    });
+    }))
+);
 
-    return overrides.value;
-});
+// Theme overrides for message buttons
+const copyButtonProps = computed(() => ({
+    icon: copyIcon.value,
+    color: 'info' as const,
+    size: 'sm' as const,
+    class: 'text-black dark:text-white/95 flex items-center justify-center',
+    ...copyButtonOverrides.value,
+}));
+
+const retryButtonProps = computed(() => ({
+    icon: retryIcon.value,
+    color: 'info' as const,
+    size: 'sm' as const,
+    class: 'text-black dark:text-white/95 flex items-center justify-center',
+    ...retryButtonOverrides.value,
+}));
+
+const continueButtonProps = computed(() => ({
+    icon: continueIcon.value || 'heroicons:play-20-solid',
+    color: 'success' as const,
+    size: 'sm' as const,
+    class: 'text-black dark:text-white/95 flex items-center justify-center',
+    ...continueButtonOverrides.value,
+}));
+
+const branchButtonProps = computed(() => ({
+    icon: branchIcon.value,
+    color: 'info' as const,
+    size: 'sm' as const,
+    class: 'text-black dark:text-white/95 flex items-center justify-center',
+    ...branchButtonOverrides.value,
+}));
+
+const editButtonProps = computed(() => ({
+    icon: editIcon.value,
+    color: 'info' as const,
+    size: 'sm' as const,
+    class: 'text-black dark:text-white/95 flex items-center justify-center',
+    ...editButtonOverrides.value,
+}));
+
+const pluginActionButtonProps = computed(() => ({
+    color: 'info' as const,
+    size: 'sm' as const,
+    class: 'text-black dark:text-white/95 flex items-center justify-center',
+    ...pluginActionButtonOverrides.value,
+}));
+
+const saveEditButtonProps = computed(() => ({
+    size: 'sm' as const,
+    color: 'success' as const,
+    class: 'theme-btn',
+    ...saveEditButtonOverrides.value,
+}));
+
+const cancelEditButtonProps = computed(() => ({
+    size: 'sm' as const,
+    color: 'error' as const,
+    class: 'theme-btn',
+    ...cancelEditButtonOverrides.value,
+}));
+
+const messageContainerProps = computed(() => messageContainerOverrides.value);
 
 const roleVariant = computed<'user' | 'assistant'>(() =>
     props.message.role === 'user' ? 'user' : 'assistant'
@@ -735,6 +714,17 @@ async function hydrateInlineImages() {
         }
     });
 }
+const thumbnailSignature = computed(() =>
+    hashList.value
+        .map((hash) => {
+            const state = thumbnails[hash];
+            return state?.status === 'ready'
+                ? `${hash}:ready:${state.url ?? ''}`
+                : `${hash}:${state?.status ?? 'missing'}`;
+        })
+        .join('|')
+);
+
 // Consolidated hydration + thumbnail readiness effect with throttling
 const rafHydrate = useRafFn(
     async () => {
@@ -749,30 +739,26 @@ const rafHydrate = useRafFn(
 let lastHydrateCheck = 0;
 const HYDRATE_THROTTLE_MS = 200; // Only check every 200ms during streaming
 
-watchEffect(() => {
-    if (props.message.role !== 'assistant') return; // only assistants hydrate
+watch(
+    [
+        assistantMarkdown,
+        () => props.message.role,
+        () => props.message.pending,
+        thumbnailSignature,
+    ],
+    () => {
+        if (props.message.role !== 'assistant') return;
 
-    // Throttle during streaming to reduce CPU load
-    const now = Date.now();
-    const isPending = props.message.pending === true;
-    if (isPending && now - lastHydrateCheck < HYDRATE_THROTTLE_MS) {
-        return;
-    }
-    lastHydrateCheck = now;
-
-    // reactive deps: markdown text, hash list, thumb states
-    void assistantMarkdown.value;
-    void hashList.value.length;
-    void Object.keys(thumbnails)
-        .map((h) => {
-            const st = thumbnails[h];
-            return st?.status === 'ready'
-                ? `ready:${st.url ?? ''}`
-                : st?.status;
-        })
-        .join('|');
-    rafHydrate.resume();
-});
+        const now = Date.now();
+        const isPending = props.message.pending === true;
+        if (isPending && now - lastHydrateCheck < HYDRATE_THROTTLE_MS) {
+            return;
+        }
+        lastHydrateCheck = now;
+        rafHydrate.resume();
+    },
+    { immediate: true }
+);
 
 // Detect if message has math or code content
 const hasMathContent = computed(() => {

@@ -156,7 +156,8 @@
                         @click="handleSend"
                         :disabled="
                             loading ||
-                            (!promptText.trim() && uploadedImages.length === 0)
+                            (!promptText.trim() &&
+                                uploadedImages.length === 0)
                         "
                         type="button"
                         aria-label="Send message"
@@ -184,20 +185,18 @@
         >
             <!-- Images -->
             <div
-                v-for="(image, index) in uploadedImages.filter(
-                    (att) => att.kind === 'image'
-                )"
-                :key="'img-' + index"
+                v-for="image in imageAttachments"
+                :key="image.key"
                 class="chat-input-attachment-image-container relative group aspect-square"
             >
                 <img
                     :src="image.url"
-                    :alt="'Uploaded Image ' + (index + 1)"
+                    :alt="'Uploaded Image ' + (image.displayIndex + 1)"
                     class="chat-input-attachment-image w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
                 />
                 <UButton
                     v-bind="attachmentRemoveBtnProps"
-                    @click="() => removeImage(uploadedImages.indexOf(image))"
+                    @click="removeImage(image.index)"
                     :disabled="loading"
                     aria-label="Remove image"
                 />
@@ -209,10 +208,8 @@
             </div>
             <!-- PDFs -->
             <div
-                v-for="(pdf, index) in uploadedImages.filter(
-                    (att) => att.kind === 'pdf'
-                )"
-                :key="'pdf-' + index"
+                v-for="pdf in pdfAttachments"
+                :key="pdf.key"
                 :class="[
                     'chat-input-attachment-pdf-container relative group aspect-square overflow-hidden flex items-center justify-center bg-(--md-surface-container-low) p-2 text-center',
                     attachmentPdfContainerProps?.class || '',
@@ -239,7 +236,7 @@
                 </div>
                 <UButton
                     v-bind="attachmentRemoveBtnProps"
-                    @click="() => removeImage(uploadedImages.indexOf(pdf))"
+                    @click="removeImage(pdf.index)"
                     :disabled="loading"
                     aria-label="Remove PDF"
                 />
@@ -323,6 +320,7 @@
 
 <script setup lang="ts">
 import {
+    computed,
     ref,
     nextTick,
     onMounted,
@@ -337,7 +335,6 @@ import { Editor, EditorContent } from '@tiptap/vue-3';
 import { Extension, Node } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
-import { computed } from 'vue';
 import { isMobile, state } from '~/state/global';
 import {
     useToast,
@@ -651,66 +648,48 @@ const composerActionButtonProps = useButtonOverrides(
     }
 );
 
-const mainContainerProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'div',
-        context: 'chat',
-        identifier: 'chat.input-main-container',
-        isNuxtUI: false,
-    });
-
-    return overrides.value;
+const mainContainerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.input-main-container',
+    isNuxtUI: false,
 });
 
-const containerProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'div',
-        context: 'chat',
-        identifier: 'chat.input-container',
-        isNuxtUI: false,
-    });
-
-    return overrides.value;
+const containerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.input-container',
+    isNuxtUI: false,
 });
 
-const editorProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'div',
-        context: 'chat',
-        identifier: 'chat.editor',
-        isNuxtUI: false,
-    });
-
-    return overrides.value;
+const editorProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.editor',
+    isNuxtUI: false,
 });
 
-const attachmentPdfContainerProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'div',
-        context: 'chat',
-        identifier: 'chat.attachment-pdf-container',
-        isNuxtUI: false,
-    });
-    return overrides.value;
+const attachmentPdfContainerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.attachment-pdf-container',
+    isNuxtUI: false,
 });
 
-const attachmentTextContainerProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'div',
-        context: 'chat',
-        identifier: 'chat.attachment-text-container',
-        isNuxtUI: false,
-    });
-    return overrides.value;
+const attachmentTextContainerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.attachment-text-container',
+    isNuxtUI: false,
 });
 
+const attachmentRemoveButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'chat',
+    identifier: 'chat.attachment-remove-btn',
+    isNuxtUI: true,
+});
 const attachmentRemoveBtnProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'chat',
-        identifier: 'chat.attachment-remove-btn',
-        isNuxtUI: true,
-    });
     const fallback = {
         type: 'button' as const,
         color: 'error' as const,
@@ -720,7 +699,8 @@ const attachmentRemoveBtnProps = computed(() => {
         icon: iconClose.value,
         class: 'chat-input-attachment-remove-btn flex items-center justify-center absolute top-1 right-1 h-[22px] w-[22px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white bg-[var(--md-error)]/85 hover:bg-[var(--md-error)]',
     };
-    const overrideValue = (overrides.value as Record<string, unknown>) || {};
+    const overrideValue =
+        (attachmentRemoveButtonOverrides.value as Record<string, unknown>) || {};
     const overrideClass =
         typeof overrideValue.class === 'string' ? overrideValue.class : '';
     const mergedClass = [fallback.class, overrideClass]
@@ -733,14 +713,11 @@ const attachmentRemoveBtnProps = computed(() => {
     };
 });
 
-const dragOverlayProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'div',
-        context: 'chat',
-        identifier: 'chat.drag-overlay',
-        isNuxtUI: false,
-    });
-    return overrides.value;
+const dragOverlayProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.drag-overlay',
+    isNuxtUI: false,
 });
 
 const or3Config = useOr3Config();
@@ -763,6 +740,36 @@ const {
     onImageAdd: (attachment) => emit('image-add', attachment),
     onImageRemove: (index) => emit('image-remove', index),
 });
+
+const imageAttachments = computed(() =>
+    uploadedImages.value
+        .map((attachment, index) => ({
+            ...attachment,
+            index,
+            key:
+                attachment.hash ||
+                attachment.url ||
+                `${index}:${attachment.name}`,
+        }))
+        .filter((attachment) => attachment.kind === 'image')
+        .map((attachment, displayIndex) => ({
+            ...attachment,
+            displayIndex,
+        }))
+);
+
+const pdfAttachments = computed(() =>
+    uploadedImages.value
+        .map((attachment, index) => ({
+            ...attachment,
+            index,
+            key:
+                attachment.hash ||
+                attachment.url ||
+                `${index}:${attachment.name}`,
+        }))
+        .filter((attachment) => attachment.kind === 'pdf')
+);
 
 const selectedModel = ref<string>('openai/gpt-oss-120b');
 
