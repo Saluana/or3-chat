@@ -36,11 +36,20 @@ export interface ORMessage {
     tool_calls?: unknown[];
 }
 
+// Internal assistant image placeholders can be persisted in either:
+// - current form: ![file-hash:HASH](data:image/gif;base64,...)
+// - legacy form:  ![alt text](file-hash:HASH) / ![alt text](blob:file-hash:HASH)
+// These should never be sent back to the model as literal text because the
+// real image payload is already reattached from `file_hashes`.
 const INTERNAL_FILE_HASH_MARKDOWN_RE =
+    // Pattern 1: ![file-hash:HASH](...)
+    // Pattern 2/3: ![alt](file-hash:HASH) or ![alt](blob:file-hash:HASH)
     /!\[file-hash:[^\]]+]\([^)]*\)|!\[[^\]]*]\((?:blob:)?file-hash:[^)]+\)/g;
 
 function stripInternalFileHashMarkdown(text: string): string {
-    if (!text || !text.includes('file-hash:')) return text;
+    if (!text) return text;
+    // Cheap guard for the hot path so we avoid regex work on normal messages.
+    if (!text.includes('file-hash:')) return text;
 
     return text
         .replace(INTERNAL_FILE_HASH_MARKDOWN_RE, '')
