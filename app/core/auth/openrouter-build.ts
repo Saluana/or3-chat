@@ -36,6 +36,19 @@ export interface ORMessage {
     tool_calls?: unknown[];
 }
 
+const INTERNAL_FILE_HASH_MARKDOWN_RE =
+    /!\[file-hash:[^\]]+]\([^)]*\)|!\[[^\]]*]\((?:blob:)?file-hash:[^)]+\)/g;
+
+function stripInternalFileHashMarkdown(text: string): string {
+    if (!text || !text.includes('file-hash:')) return text;
+
+    return text
+        .replace(INTERNAL_FILE_HASH_MARKDOWN_RE, '')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/^\n+|\n+$/g, '');
+}
+
 // Caches on global scope to avoid repeated blob -> base64 conversions.
 type GlobalCaches = {
     __or3ImageDataUrlCache?: Map<string, string>;
@@ -286,7 +299,13 @@ export async function buildOpenRouterMessages(
         if (Array.isArray(m.content)) {
             for (const part of m.content) {
                 if (part.type === 'text') {
-                    parts.push({ type: 'text', text: part.text || '' });
+                    parts.push({
+                        type: 'text',
+                        text:
+                            m.role === 'assistant'
+                                ? stripInternalFileHashMarkdown(part.text || '')
+                                : part.text || '',
+                    });
                     hasTextPart = true;
                     continue;
                 }
@@ -370,7 +389,13 @@ export async function buildOpenRouterMessages(
                 }
             }
         } else if (typeof m.content === 'string') {
-            parts.push({ type: 'text', text: m.content });
+            parts.push({
+                type: 'text',
+                text:
+                    m.role === 'assistant'
+                        ? stripInternalFileHashMarkdown(m.content)
+                        : m.content,
+            });
             hasTextPart = true;
         }
         if (!hasTextPart) {
