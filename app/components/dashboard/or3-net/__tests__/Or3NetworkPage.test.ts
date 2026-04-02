@@ -1,0 +1,539 @@
+import { flushPromises, mount } from '@vue/test-utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { computed, ref } from 'vue';
+
+import { testRuntimeConfig } from '~~/tests/setup';
+
+function mountPage(component: any) {
+    return mount(component.default, {
+        global: {
+            stubs: {
+                UCard: {
+                    template: '<div><div><slot name="header" /></div><slot /></div>',
+                },
+                UButton: {
+                    emits: ['click'],
+                    template: '<button type="button" v-bind="$attrs" @click="$emit(\'click\', $event)"><slot /></button>',
+                },
+            },
+        },
+    });
+}
+
+const activeWorkspaceId = ref<string | null>('ws-1');
+const authPending = ref(false);
+const authError = ref<Error | null>(null);
+const authToken = ref<string | null>('token-1');
+const authExpiresAt = ref<string | null>('2099-01-01T00:00:00.000Z');
+const sessionPending = ref(false);
+const sessionError = ref<Error | null>(null);
+const activeClientSessionId = ref<string | null>('thread-1');
+const networkSessionId = ref<string | null>('sess-1');
+const sessionRecord = ref<any>({
+    network_session_id: 'sess-1',
+    workspace_id: 'ws-1',
+    client_kind: 'chat',
+    client_session_id: 'thread-1',
+    intern_session_key: 'svc:sess-1',
+    status: 'active',
+    created_at: '2026-04-01T00:00:00.000Z',
+    updated_at: '2026-04-01T00:00:00.000Z',
+    last_activity_at: '2026-04-01T00:00:00.000Z',
+});
+
+const authRefreshMock = vi.fn();
+const sessionRefreshMock = vi.fn();
+const sessionRememberMock = vi.fn();
+const listJobsMock = vi.fn();
+const getJobMock = vi.fn();
+const createJobMock = vi.fn();
+const abortJobMock = vi.fn();
+const listNodesMock = vi.fn();
+const listNodeServicesMock = vi.fn();
+const launchNodeServiceMock = vi.fn();
+const restartNodeServiceMock = vi.fn();
+const revokeNodeServiceMock = vi.fn();
+const listPreviewsMock = vi.fn();
+const launchPreviewMock = vi.fn();
+const revokePreviewMock = vi.fn();
+const streamAttachMock = vi.fn();
+const streamDetachMock = vi.fn();
+const previewRememberMock = vi.fn();
+const previewClearWorkspaceMock = vi.fn();
+const newPaneForAppMock = vi.fn();
+const streamPending = ref(false);
+const streamConnected = ref(false);
+const streamError = ref<Error | null>(null);
+const streamStatus = ref<any>(null);
+const streamContent = ref('');
+const streamEvents = ref<any[]>([]);
+const streamResult = ref<unknown>(undefined);
+const streamFailure = ref<Record<string, unknown> | null>(null);
+const streamIsTerminal = ref(false);
+const streamActiveJobId = ref<string | null>(null);
+
+vi.mock('~/composables/workspace/useWorkspaceManager', () => ({
+    useWorkspaceManager: () => ({ activeWorkspaceId }),
+}));
+
+vi.mock('~/composables/or3-net/useOr3NetAuth', () => ({
+    useOr3NetAuth: () => ({
+        pending: authPending,
+        error: authError,
+        token: authToken,
+        expiresAt: authExpiresAt,
+        isConfigured: computed(() => true),
+        refresh: authRefreshMock,
+    }),
+}));
+
+vi.mock('~/composables/or3-net/useOr3NetSession', () => ({
+    useOr3NetSession: () => ({
+        pending: sessionPending,
+        error: sessionError,
+        session: sessionRecord,
+        networkSessionId: networkSessionId,
+        activeClientSessionId: activeClientSessionId,
+        hasBoundSession: computed(() => sessionRecord.value !== null),
+        refresh: sessionRefreshMock,
+        remember: sessionRememberMock,
+        invalidate: vi.fn(),
+    }),
+}));
+
+vi.mock('~/composables/or3-net/useOr3NetClient', () => ({
+    useOr3NetClient: () => ({
+        listJobs: listJobsMock,
+        getJob: getJobMock,
+        createJob: createJobMock,
+        abortJob: abortJobMock,
+        listNodes: listNodesMock,
+        listNodeServices: listNodeServicesMock,
+        launchNodeService: launchNodeServiceMock,
+        restartNodeService: restartNodeServiceMock,
+        revokeNodeService: revokeNodeServiceMock,
+        listPreviews: listPreviewsMock,
+        launchPreview: launchPreviewMock,
+        revokePreview: revokePreviewMock,
+    }),
+}));
+
+vi.mock('~/composables/or3-net/useOr3NetPreviewPaneState', () => ({
+    useOr3NetPreviewPaneState: () => ({
+        remember: previewRememberMock,
+        get: vi.fn(),
+        update: vi.fn(),
+        remove: vi.fn(),
+        clearWorkspace: previewClearWorkspaceMock,
+    }),
+}));
+
+vi.mock('~/utils/multiPaneApi', () => ({
+    getGlobalMultiPaneApi: () => ({
+        newPaneForApp: newPaneForAppMock,
+    }),
+}));
+
+vi.mock('~/composables/or3-net/useOr3NetJobStream', () => ({
+    useOr3NetJobStream: () => ({
+        activeJobId: streamActiveJobId,
+        pending: streamPending,
+        connected: streamConnected,
+        error: streamError,
+        status: streamStatus,
+        content: streamContent,
+        events: streamEvents,
+        result: streamResult,
+        failure: streamFailure,
+        isTerminal: streamIsTerminal,
+        attach: streamAttachMock,
+        detach: streamDetachMock,
+    }),
+}));
+
+describe('Or3NetworkPage', () => {
+    beforeEach(() => {
+        vi.resetModules();
+        authRefreshMock.mockReset();
+        sessionRefreshMock.mockReset().mockResolvedValue(sessionRecord.value);
+        sessionRememberMock.mockReset();
+        listJobsMock.mockReset();
+        getJobMock.mockReset();
+        createJobMock.mockReset();
+        abortJobMock.mockReset();
+        listNodesMock.mockReset().mockResolvedValue({ items: [] });
+        listNodeServicesMock.mockReset().mockResolvedValue({ items: [] });
+        launchNodeServiceMock.mockReset();
+        restartNodeServiceMock.mockReset();
+        revokeNodeServiceMock.mockReset();
+        listPreviewsMock.mockReset().mockResolvedValue({ items: [] });
+        launchPreviewMock.mockReset();
+        revokePreviewMock.mockReset();
+        previewRememberMock.mockReset().mockReturnValue({ id: 'pane-prev-1' });
+        previewClearWorkspaceMock.mockReset();
+        newPaneForAppMock.mockReset();
+        streamAttachMock.mockReset();
+        streamDetachMock.mockReset();
+        streamPending.value = false;
+        streamConnected.value = false;
+        streamError.value = null;
+        streamStatus.value = null;
+        streamContent.value = '';
+        streamEvents.value = [];
+        streamResult.value = undefined;
+        streamFailure.value = null;
+        streamIsTerminal.value = false;
+        streamActiveJobId.value = null;
+        activeWorkspaceId.value = 'ws-1';
+        activeClientSessionId.value = 'thread-1';
+        networkSessionId.value = 'sess-1';
+        sessionRecord.value = {
+            network_session_id: 'sess-1',
+            workspace_id: 'ws-1',
+            client_kind: 'chat',
+            client_session_id: 'thread-1',
+            intern_session_key: 'svc:sess-1',
+            status: 'active',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+            last_activity_at: '2026-04-01T00:00:00.000Z',
+        };
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            public: {
+                ...testRuntimeConfig.value.public,
+                or3Net: {
+                    enabled: true,
+                    hostUrl: 'https://net.test',
+                },
+            },
+        };
+    });
+
+    it('loads jobs for the current network session and fetches selected job detail', async () => {
+        listJobsMock.mockResolvedValue({
+            items: [
+                {
+                    job_id: 'job-1',
+                    status: 'running',
+                    node_id: 'node-1',
+                    created_at: '2026-04-01T10:00:00.000Z',
+                    started_at: '2026-04-01T10:01:00.000Z',
+                    completed_at: null,
+                    network_session_id: 'sess-1',
+                },
+            ],
+        });
+        getJobMock.mockResolvedValue({
+            job_id: 'job-1',
+            workspace_id: 'ws-1',
+            status: 'running',
+            created_at: '2026-04-01T10:00:00.000Z',
+            result: { output: 'hello' },
+        });
+
+        const component = await import('../Or3NetworkPage.vue');
+        const wrapper = mountPage(component);
+        await flushPromises();
+        await flushPromises();
+
+        expect(listJobsMock).toHaveBeenCalledWith(
+            'ws-1',
+            expect.any(URLSearchParams)
+        );
+        const query = listJobsMock.mock.calls[0]?.[1] as URLSearchParams;
+        expect(query.get('network_session_id')).toBe('sess-1');
+        expect(getJobMock).toHaveBeenCalledWith('job-1');
+        expect(streamAttachMock).toHaveBeenCalledWith('job-1');
+        expect(wrapper.text()).toContain('job-1');
+        expect(wrapper.text()).toContain('running');
+    });
+
+    it('submits the first job using the active chat thread when no session is bound', async () => {
+        networkSessionId.value = null;
+        sessionRecord.value = null;
+        sessionRefreshMock
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({
+                network_session_id: 'sess-1',
+                workspace_id: 'ws-1',
+                client_kind: 'chat',
+                client_session_id: 'thread-1',
+                intern_session_key: 'svc:sess-1',
+                status: 'active',
+                created_at: '2026-04-01T00:00:00.000Z',
+                updated_at: '2026-04-01T00:00:00.000Z',
+                last_activity_at: '2026-04-01T00:00:00.000Z',
+            });
+        listJobsMock
+            .mockResolvedValueOnce({ items: [] })
+            .mockResolvedValueOnce({
+                items: [
+                    {
+                        job_id: 'job-2',
+                        status: 'pending',
+                        node_id: null,
+                        created_at: '2026-04-01T11:00:00.000Z',
+                        started_at: null,
+                        completed_at: null,
+                        network_session_id: 'sess-1',
+                    },
+                ],
+            });
+        getJobMock.mockResolvedValue({
+            job_id: 'job-2',
+            workspace_id: 'ws-1',
+            status: 'pending',
+            created_at: '2026-04-01T11:00:00.000Z',
+        });
+        createJobMock.mockResolvedValue({
+            job_id: 'job-2',
+            status: 'pending',
+            workspace_id: 'ws-1',
+        });
+
+        const component = await import('../Or3NetworkPage.vue');
+        const wrapper = mountPage(component);
+        await flushPromises();
+
+        await wrapper.get('textarea').setValue('run the first network job');
+        const submitButton = wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Submit Job'));
+        await submitButton?.trigger('click');
+        await flushPromises();
+        await flushPromises();
+
+        expect(createJobMock).toHaveBeenCalledWith('ws-1', {
+            client_kind: 'chat',
+            client_session_id: 'thread-1',
+            message: 'run the first network job',
+            execution_target: 'local',
+        });
+    });
+
+    it('shows live stream state and aborts the selected running job', async () => {
+        listJobsMock.mockResolvedValue({
+            items: [
+                {
+                    job_id: 'job-1',
+                    status: 'running',
+                    node_id: 'node-1',
+                    created_at: '2026-04-01T10:00:00.000Z',
+                    started_at: '2026-04-01T10:01:00.000Z',
+                    completed_at: null,
+                    network_session_id: 'sess-1',
+                },
+            ],
+        });
+        getJobMock.mockResolvedValue({
+            job_id: 'job-1',
+            workspace_id: 'ws-1',
+            status: 'running',
+            created_at: '2026-04-01T10:00:00.000Z',
+        });
+        abortJobMock.mockResolvedValue({ ok: true, job_id: 'job-1' });
+        streamActiveJobId.value = 'job-1';
+        streamConnected.value = true;
+        streamStatus.value = 'running';
+        streamContent.value = 'hello from stream';
+        streamEvents.value = [{ event: 'text.delta', data: { text: 'hello from stream' } }];
+
+        const component = await import('../Or3NetworkPage.vue');
+        const wrapper = mountPage(component);
+        await flushPromises();
+        await flushPromises();
+
+        expect(wrapper.text()).toContain('hello from stream');
+        await wrapper.get('[data-testid="or3-net-abort-job"]').trigger('click');
+        await flushPromises();
+
+        expect(abortJobMock).toHaveBeenCalledWith('job-1');
+    });
+
+    it('loads nodes and launches the advertised dashboard service', async () => {
+        const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+        listJobsMock.mockResolvedValue({ items: [] });
+        listNodesMock.mockResolvedValue({
+            items: [
+                {
+                    workspace_id: 'ws-1',
+                    manifest: {
+                        node_id: 'node-1',
+                        adapter_kind: 'sandbox',
+                        capabilities: ['service:openclaw'],
+                        isolation_class: 'workspace',
+                        version: '1.0.0',
+                        resource_limits: {
+                            max_concurrent_jobs: 2,
+                            cpu_cores: 4,
+                            memory_mb: 8192,
+                            disk_mb: 20480,
+                        },
+                    },
+                    pubkey_fingerprint: 'fp-1',
+                    status: 'approved',
+                    health_status: 'healthy',
+                    approved_at: '2026-04-01T00:00:00.000Z',
+                    revoked_at: null,
+                    last_seen_at: '2026-04-01T11:58:00.000Z',
+                    last_error: null,
+                    created_at: '2026-04-01T00:00:00.000Z',
+                },
+            ],
+        });
+        listNodeServicesMock.mockResolvedValue({
+            items: [
+                {
+                    service_id: 'openclaw',
+                    label: 'OpenClaw',
+                    status: 'ready',
+                    launchable: true,
+                    target_port: 3001,
+                },
+            ],
+        });
+        launchNodeServiceMock.mockResolvedValue({
+            preview_id: 'prev-1',
+            workspace_id: 'ws-1',
+            launch_url: 'https://launch.test/openclaw',
+            delivery_mode: 'external',
+            supports_iframe: false,
+            supports_new_tab: true,
+            reused_tunnel: false,
+            service_status: 'ready',
+            expires_at: '2026-04-01T12:30:00.000Z',
+        });
+
+        const component = await import('../Or3NetworkPage.vue');
+        const wrapper = mountPage(component);
+        await flushPromises();
+        await flushPromises();
+
+        expect(listNodesMock).toHaveBeenCalledWith('ws-1');
+        expect(listNodeServicesMock).toHaveBeenCalledWith('ws-1', 'node-1');
+        expect(wrapper.text()).toContain('OpenClaw');
+
+        await wrapper
+            .get('[data-testid="or3-net-launch-node-1-openclaw"]')
+            .trigger('click');
+        await flushPromises();
+
+        expect(launchNodeServiceMock).toHaveBeenCalledWith(
+            'ws-1',
+            'node-1',
+            'openclaw'
+        );
+        expect(openSpy).toHaveBeenCalledWith(
+            'https://launch.test/openclaw',
+            '_blank',
+            'noopener,noreferrer'
+        );
+        openSpy.mockRestore();
+    });
+
+    it('opens embeddable previews in a pane and falls back to new-tab launch', async () => {
+        const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+        listJobsMock.mockResolvedValue({ items: [] });
+        listPreviewsMock.mockResolvedValue({
+            items: [
+                {
+                    preview_id: 'prev-1',
+                    workspace_id: 'ws-1',
+                    kind: 'static-site',
+                    delivery_mode: 'embedded',
+                    source_type: 'files',
+                    path: '/dist',
+                    entry_path: '/index.html',
+                    status: 'ready',
+                    supports_iframe: true,
+                    supports_new_tab: true,
+                },
+                {
+                    preview_id: 'prev-2',
+                    workspace_id: 'ws-1',
+                    kind: 'dashboard',
+                    delivery_mode: 'external',
+                    source_type: 'live-service',
+                    service_id: 'openclaw',
+                    status: 'ready',
+                    supports_iframe: false,
+                    supports_new_tab: true,
+                },
+            ],
+        });
+        launchPreviewMock
+            .mockResolvedValueOnce({
+                preview_id: 'prev-1',
+                workspace_id: 'ws-1',
+                launch_url: 'https://preview.test/prev-1',
+                embed_url: 'https://preview.test/prev-1/embed',
+                delivery_mode: 'embedded',
+                supports_iframe: true,
+                supports_new_tab: true,
+                reused_tunnel: false,
+                service_status: 'ready',
+                expires_at: '2026-04-01T13:00:00.000Z',
+            })
+            .mockResolvedValueOnce({
+                preview_id: 'prev-2',
+                workspace_id: 'ws-1',
+                launch_url: 'https://preview.test/prev-2',
+                delivery_mode: 'external',
+                supports_iframe: false,
+                supports_new_tab: true,
+                reused_tunnel: false,
+                service_status: 'ready',
+                expires_at: '2026-04-01T13:00:00.000Z',
+            });
+
+        const component = await import('../Or3NetworkPage.vue');
+        const wrapper = mountPage(component);
+        await flushPromises();
+        await flushPromises();
+
+        expect(wrapper.text()).toContain('/index.html');
+
+        await wrapper
+            .get('[data-testid="or3-net-preview-open-prev-1"]')
+            .trigger('click');
+        await flushPromises();
+
+        expect(launchPreviewMock).toHaveBeenNthCalledWith(1, 'ws-1', 'prev-1', {
+            launch_mode_hint: 'pane',
+        });
+        expect(previewRememberMock).toHaveBeenCalled();
+        expect(newPaneForAppMock).toHaveBeenCalledWith('or3-net-preview', {
+            initialRecordId: 'pane-prev-1',
+        });
+
+        await wrapper
+            .get('[data-testid="or3-net-preview-open-prev-2"]')
+            .trigger('click');
+        await flushPromises();
+
+        expect(launchPreviewMock).toHaveBeenNthCalledWith(2, 'ws-1', 'prev-2', {
+            launch_mode_hint: 'new_tab',
+        });
+        expect(openSpy).toHaveBeenCalledWith(
+            'https://preview.test/prev-2',
+            '_blank',
+            'noopener,noreferrer'
+        );
+        openSpy.mockRestore();
+    });
+
+    it('clears preview pane state when the workspace changes', async () => {
+        listJobsMock.mockResolvedValue({ items: [] });
+        listPreviewsMock.mockResolvedValue({ items: [] });
+
+        const component = await import('../Or3NetworkPage.vue');
+        mountPage(component);
+        await flushPromises();
+
+        activeWorkspaceId.value = 'ws-2';
+        await flushPromises();
+
+        expect(previewClearWorkspaceMock).toHaveBeenCalledWith('ws-1');
+    });
+});

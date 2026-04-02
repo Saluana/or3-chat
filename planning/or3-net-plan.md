@@ -36,6 +36,16 @@ A new sidebar/plugin surface (similar to existing plugins like `webhooks-dashboa
 - **Embedded previews** — show static websites and generated web artifacts inside a pane app when the preview is safe to embed.
 - **Saved network presets** — reusable config objects for host URLs, agents, and node preferences, stored using the same patterns the repo already uses for content/docs/custom post types.
 
+Current baseline implemented:
+
+- `app/plugins/or3-network.client.ts` registers a dashboard entry only when SSR auth and OR3 Net host config are enabled.
+- `app/plugins/or3-network.client.ts` also registers an `or3-net-preview` pane app for embedded preview launches.
+- `app/components/dashboard/or3-net/Or3NetworkPage.vue` provides the initial status shell for the active workspace.
+- `app/components/dashboard/or3-net/Or3NetworkPage.vue` now includes a thread-aware submit form plus recent jobs list/detail panel.
+- `app/components/dashboard/or3-net/Or3NetworkPage.vue` now attaches a live job stream, shows streamed text/event payloads, and exposes abort handling for running jobs.
+- `app/components/dashboard/or3-net/Or3NetworkPage.vue` now lists approved nodes, loads advertised services per node, and launches service dashboards through host-issued `launch_url` values.
+- `app/components/dashboard/or3-net/Or3NetworkPage.vue` now lists workspace previews and opens iframe-safe launches in the preview pane with a clean new-tab fallback.
+
 ### 2. Token exchange composable
 
 A new composable (likely under `app/composables/or3-net/`) that:
@@ -44,6 +54,13 @@ A new composable (likely under `app/composables/or3-net/`) that:
 - Calls `POST /v1/auth/exchange` on the configured `or3-net` host, passing a session proof the chat auth provider can produce.
 - Caches the returned short-lived `or3-net` bearer token in memory (not localStorage).
 - Automatically re-exchanges when the token expires or when the workspace switches.
+
+Current baseline implemented:
+
+- `app/composables/or3-net/useOr3NetAuth.ts` exchanges through local `POST /api/or3-net/exchange`.
+- The exchanged token stays in memory only and is invalidated on workspace change.
+- `app/composables/or3-net/useOr3NetClient.ts` performs bounded 401 refresh/retry for host API calls.
+- `app/composables/or3-net/useOr3NetSession.ts` recovers the current chat thread's `network_session_id` by matching host session records.
 
 This composable is **provider-agnostic**: it uses the same `useSessionContext` + `useAuthTokenBroker` patterns that already power Convex sync auth and background streaming auth. It does not import Clerk or any specific provider SDK.
 
@@ -65,6 +82,12 @@ This mirrors how existing plugins like `convex-sync.client.ts` and `notification
 - Events include `text.delta`, `tool.call`, `tool.result`, `job.completed`, `job.aborted`, `job.failed`.
 - On disconnect, the plugin should reconnect and resume from the last received event (if the `or3-net` API supports cursor-based reconnect) or re-fetch current job status.
 - Abort sends `POST /v1/jobs/:jobId/abort` and updates local state to reflect the terminal status.
+
+Current baseline implemented:
+
+- `app/composables/or3-net/useOr3NetJobStream.ts` uses a fetch-based SSE reader so bearer-authenticated job streams work without leaking tokens into query params.
+- The stream view reconnects after dropped connections and falls back to `getJob` state refresh for terminal status reconciliation.
+- The jobs page refreshes selected job detail and list state after terminal stream events and abort requests.
 
 The plugin should also consume the non-streaming session inspection routes:
 
@@ -93,6 +116,12 @@ OpenClaw is the reference case because `or3-sandbox` already supports a browser-
 
 The plugin should treat this as a service launch action, not as generic tunnel management.
 
+Current baseline implemented:
+
+- `app/composables/or3-net/useOr3NetClient.ts` now exposes typed node/service list, launch, restart, and revoke helpers.
+- The dashboard page lists approved nodes plus adapter-reported services for the active workspace.
+- `Open Dashboard` only renders for launchable services and opens validated `http(s)` `launch_url` values returned by `or3-net`.
+
 ### 6. Embedded pane previews for static sites
 
 When the agent creates a static site or similar file-backed preview, the best UX is often to keep the user inside `or3-chat`.
@@ -106,6 +135,12 @@ The expected flow is:
 This should only be used for workspace-owned preview URLs issued by `or3-net`, not arbitrary external sites.
 
 If the preview is not safe to embed, the pane should show a clear fallback state with `Open in New Tab`.
+
+Current baseline implemented:
+
+- `app/composables/or3-net/useOr3NetClient.ts` now exposes typed preview list, launch, and revoke helpers.
+- `app/components/dashboard/or3-net/Or3NetPreviewPane.vue` renders the iframe-safe preview shell with `Open in New Tab`, `Refresh`, and `Revoke` actions.
+- Preview launches request a fresh host-issued URL on open and refresh instead of reusing stale launch state.
 
 ---
 
@@ -185,18 +220,18 @@ These notes capture the concrete `or3-chat` patterns the OR3 Network work should
 
 ## Tasks
 
-- [ ] **Plugin shell** — Add `app/plugins/or3-network.client.ts` that registers the sidebar entry, route, and lazy-loaded page component. Gate activation on a configured `or3-net` host URL.
-- [ ] **Token exchange composable** — Add `useOr3NetAuth` that reads `useSessionContext`, calls `POST /v1/auth/exchange`, caches the token in a reactive ref, and re-exchanges on expiry or workspace switch.
-- [ ] **API client composable** — Add `useOr3NetClient` that wraps `$fetch` with the token from `useOr3NetAuth`, handles 401 retry, and provides typed methods for agent CRUD, job submit, job get, job abort.
+- [x] **Plugin shell** — Add `app/plugins/or3-network.client.ts` that registers the sidebar entry, route, and lazy-loaded page component. Gate activation on a configured `or3-net` host URL.
+- [x] **Token exchange composable** — Add `useOr3NetAuth` that reads `useSessionContext`, calls the local exchange adapter, caches the token in a reactive ref, and re-exchanges on expiry or workspace switch.
+- [x] **API client composable** — Add `useOr3NetClient` that wraps host requests with the token from `useOr3NetAuth`, handles 401 retry, and provides typed methods for jobs and session inspection.
 - [ ] **Agent management UI** — Add agent list and editor components. Agents are CRUD'd against `or3-net` and displayed in the sidebar page.
-- [ ] **Job submission UI** — Add a job submission form (select agent, provide input, set timeout) and a recent jobs list with status badges.
-- [ ] **Live job output view** — Add SSE-based streaming view that displays text deltas and tool call events in real time, with abort button and terminal state handling.
-- [ ] **Node/service view** — Add node cards and service actions. For OpenClaw-like services, show `Open Dashboard` and let the plugin open the returned `launch_url`.
-- [ ] **Embedded preview pane** — Add a pane app for static previews that loads iframe-safe preview URLs and shows `Open in New Tab` fallback in the header.
-- [ ] **Workspace switch handling** — Wire token invalidation and state rebind into the workspace change watcher, following the pattern in `convex-sync.client.ts`.
+- [x] **Job submission UI** — Add a minimal job submission form for the current chat thread plus a recent jobs list with status badges.
+- [x] **Live job output view** — Add SSE-based streaming view that displays text deltas and tool call events in real time, with abort button and terminal state handling.
+- [x] **Node/service view** — Add node cards and service actions. For OpenClaw-like services, show `Open Dashboard` and let the plugin open the returned `launch_url`.
+- [x] **Embedded preview pane** — Add a pane app for static previews that loads iframe-safe preview URLs and shows `Open in New Tab` fallback in the header.
+- [x] **Workspace switch handling** — Wire token invalidation and state rebind into the workspace change watcher, following the pattern in `convex-sync.client.ts`.
 - [ ] **Saved presets** — Add network/agent preset storage using the repo's content/doc patterns, so users can save and reuse host + agent configurations.
-- [ ] **Tests** — Add unit tests for token exchange (mock session, mock exchange endpoint), workspace switch rebind, SSE reconnect behavior, abort state transitions, service launch URL handling, and iframe preview fallback behavior.
-- [ ] **Docs** — Add a brief plugin usage section to the repo docs or inline help explaining how to configure the `or3-net` host URL and use the plugin.
+- [x] **Tests** — Add unit tests for token exchange, session binding recovery, workspace switch rebind, jobs page behavior, node/service launch behavior, preview pane behavior, exchange route error paths, and plugin host gating for the current slice.
+- [x] **Docs** — Add baseline planning notes explaining the local exchange adapter and minimum OR3 Net host configuration required to enable the plugin.
 
 ---
 
@@ -212,8 +247,8 @@ These are the `or3-chat`-owned carry-over items from the cross-repo platform-sta
 
 ### Workspace switch invalidation contract
 
-- [ ] Freeze the workspace-switch invalidation behavior for cached `or3-net` tokens.
-- [ ] Ensure active workspace-scoped views are torn down on workspace switch, especially job streams and preview embeds.
+- [x] Freeze the workspace-switch invalidation behavior for cached `or3-net` tokens.
+- [x] Ensure active workspace-scoped views are torn down on workspace switch, especially job streams and preview embeds.
 - [ ] Document the invalidation contract so `or3-net` can rely on chat-side cleanup when rebinding coordination sessions.
 
 ### Error envelope consumption
@@ -225,14 +260,30 @@ These are the `or3-chat`-owned carry-over items from the cross-repo platform-sta
 ### Contract fixtures and CI
 
 - [ ] Add `or3-chat` fixtures for `or3-net` exchange request/response shapes.
-- [ ] Add `or3-chat` fixtures for normalized `or3-net` job stream events.
+- [x] Add `or3-chat` fixtures for normalized `or3-net` job stream events.
 - [ ] Add fixture-backed contract tests for the frozen `or3-net` API shapes consumed by the plugin.
 - [ ] Add `or3-chat` CI coverage for those `or3-net` API contract fixtures.
 
 ### Config alignment
 
 - [ ] Align any future `or3-chat` wizard/env emission with the canonical cross-repo naming convention.
-- [ ] Keep `or3-net` host configuration and preset setup documented alongside the plugin usage flow.
+- [x] Keep `or3-net` host configuration documented alongside the plugin usage flow for the current baseline.
+
+## Minimum configuration
+
+Enable the current baseline with these env values in `or3-chat`:
+
+- `SSR_AUTH_ENABLED=true`
+- `OR3_NET_HOST_URL=https://your-or3-net-host`
+- `OR3_NET_EXCHANGE_SECRET=...`
+
+Optional overrides:
+
+- `OR3_NET_EXCHANGE_ISSUER`
+- `OR3_NET_EXCHANGE_AUDIENCE`
+- `OR3_NET_EXCHANGE_TTL_MS`
+
+Static builds remain unaffected because the client plugin stays inactive unless SSR auth is enabled and the public OR3 Net config is present.
 
 ---
 

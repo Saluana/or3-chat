@@ -10,6 +10,16 @@ import { or3Config } from './config.or3';
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
 const isWizardUiProcess = process.env.OR3_WIZARD_UI_ENABLED === 'true';
+const or3NetHostUrl =
+    process.env.OR3_NET_HOST_URL?.trim() ||
+    process.env.NUXT_PUBLIC_OR3_NET_HOST_URL?.trim() ||
+    '';
+const or3NetExchangeSecret = process.env.OR3_NET_EXCHANGE_SECRET?.trim() || '';
+const or3NetExchangeIssuer = process.env.OR3_NET_EXCHANGE_ISSUER?.trim() || 'or3-chat';
+const or3NetExchangeAudience = process.env.OR3_NET_EXCHANGE_AUDIENCE?.trim() || 'or3-net';
+const or3NetExchangeTtlMs = process.env.OR3_NET_EXCHANGE_TTL_MS
+    ? Number(process.env.OR3_NET_EXCHANGE_TTL_MS)
+    : 60_000;
 
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
 const convexAdminKey = or3CloudConfig.sync.convex?.adminKey || '';
@@ -174,6 +184,10 @@ const effectiveStorageEnabled =
     effectiveSsrAuthEnabled &&
     or3CloudConfig.storage.enabled &&
     storageProviderAvailable;
+const or3NetEnabled =
+    effectiveSsrAuthEnabled &&
+    or3NetHostUrl.length > 0 &&
+    or3NetExchangeSecret.length > 0;
 
 if (isSsrAuthEnabled && !authProviderAvailable) {
     console.warn(
@@ -188,6 +202,11 @@ if (isSsrAuthEnabled && !syncProviderAvailable) {
 if (or3CloudConfig.storage.enabled && !storageProviderAvailable) {
     console.warn(
         `[or3-provider] Storage provider "${or3CloudConfig.storage.provider}" is not available. Cloud storage is disabled.`
+    );
+}
+if (or3NetHostUrl && !or3NetExchangeSecret) {
+    console.warn(
+        '[or3-net] OR3_NET_HOST_URL is set but OR3_NET_EXCHANGE_SECRET is missing. OR3 Network chat integration is disabled.'
     );
 }
 
@@ -399,6 +418,15 @@ export default defineNuxtConfig({
             enabled: process.env.OR3_WIZARD_UI_ENABLED === 'true',
             token: process.env.OR3_WIZARD_UI_TOKEN ?? '',
         },
+        or3Net: {
+            hostUrl: or3NetHostUrl,
+            exchangeSecret: or3NetExchangeSecret,
+            exchangeIssuer: or3NetExchangeIssuer,
+            exchangeAudience: or3NetExchangeAudience,
+            exchangeTtlMs: Number.isFinite(or3NetExchangeTtlMs)
+                ? Math.max(1_000, Math.floor(or3NetExchangeTtlMs))
+                : 60_000,
+        },
         // Background streaming configuration (SSR mode only)
         backgroundJobs: {
             enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
@@ -460,6 +488,10 @@ export default defineNuxtConfig({
             },
             wizardUi: {
                 enabled: process.env.OR3_WIZARD_UI_ENABLED === 'true',
+            },
+            or3Net: {
+                enabled: or3NetEnabled,
+                hostUrl: or3NetHostUrl,
             },
             // Feature toggles from OR3 config - exposed for client-side gating
             features: {

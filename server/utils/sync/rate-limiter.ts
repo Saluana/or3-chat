@@ -66,6 +66,8 @@ export const STORAGE_RATE_LIMITS: Record<string, RateLimitConfig> = {
 export const AUTH_RATE_LIMITS: Record<string, RateLimitConfig> = {
     // Auth session: 60 per minute per IP
     'auth:session': { windowMs: 60_000, maxRequests: 60 },
+    // OR3 Net exchange: lower-volume auth bridge, 30 per minute per IP
+    'auth:or3-net-exchange': { windowMs: 60_000, maxRequests: 30 },
 };
 
 /**
