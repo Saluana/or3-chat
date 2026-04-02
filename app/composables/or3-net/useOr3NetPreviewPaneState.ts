@@ -18,14 +18,7 @@ export interface Or3NetPreviewPaneRecord {
     expires_at: string;
 }
 
-type PreviewPaneStateGlobals = typeof globalThis & {
-    __or3NetPreviewPaneRecords?: Map<string, Or3NetPreviewPaneRecord>;
-};
-
-const globals = globalThis as PreviewPaneStateGlobals;
-const registry =
-    globals.__or3NetPreviewPaneRecords ??
-    (globals.__or3NetPreviewPaneRecords = new Map<string, Or3NetPreviewPaneRecord>());
+const registry = new Map<string, Or3NetPreviewPaneRecord>();
 
 const records = ref(new Map(registry));
 

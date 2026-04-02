@@ -7,6 +7,7 @@ export interface Or3NetServerConfig {
 	exchangeIssuer: string;
 	exchangeAudience: string;
 	exchangeTtlMs: number;
+	exchangeTimeoutMs: number;
 }
 
 function normalizeHttpUrl(value: string): string {
@@ -39,6 +40,10 @@ export function getOr3NetServerConfig(): Or3NetServerConfig {
 		typeof config.exchangeTtlMs === 'number' && Number.isFinite(config.exchangeTtlMs) && config.exchangeTtlMs > 0
 			? Math.floor(config.exchangeTtlMs)
 			: 60_000;
+	const exchangeTimeoutMs =
+		typeof config.exchangeTimeoutMs === 'number' && Number.isFinite(config.exchangeTimeoutMs) && config.exchangeTimeoutMs > 0
+			? Math.floor(config.exchangeTimeoutMs)
+			: 10_000;
 
 	return {
 		enabled: Boolean(hostUrl && exchangeSecret),
@@ -47,5 +52,6 @@ export function getOr3NetServerConfig(): Or3NetServerConfig {
 		exchangeIssuer,
 		exchangeAudience,
 		exchangeTtlMs,
+		exchangeTimeoutMs,
 	};
 }

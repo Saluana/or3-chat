@@ -435,6 +435,7 @@ interface Or3NetServerConfig {
   exchangeIssuer: string;   // default: 'or3-chat'
   exchangeAudience: string; // default: 'or3-net'
   exchangeTtlMs: number;    // default: 60_000 (1 minute)
+  exchangeTimeoutMs: number; // default: 10_000 (10 seconds)
 }
 ```
 
@@ -619,6 +620,7 @@ user switches workspace
 | `OR3_NET_EXCHANGE_ISSUER` | `or3-chat` | JWT `iss` field in the session proof. |
 | `OR3_NET_EXCHANGE_AUDIENCE` | `or3-net` | JWT `aud` field in the session proof. |
 | `OR3_NET_EXCHANGE_TTL_MS` | `60000` | Token TTL in milliseconds (min 1000). |
+| `OR3_NET_EXCHANGE_TIMEOUT_MS` | `10000` | Upstream timeout for `/v1/auth/exchange` in milliseconds (min 1000). |
 | `NUXT_PUBLIC_OR3_NET_HOST_URL` | — | Alternative way to set host URL (public runtimeConfig). |
 
 ### What happens when variables are missing

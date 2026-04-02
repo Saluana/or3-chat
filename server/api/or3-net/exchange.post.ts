@@ -51,7 +51,10 @@ function enforceSameOriginMutation(event: H3Event): void {
         getRequestHeader(event, 'origin') ?? getRequestHeader(event, 'referer');
 
     if (!originHeader) {
-        return;
+        throw createError({
+            statusCode: 403,
+            statusMessage: 'Forbidden: Origin header required',
+        });
     }
 
     const originHost = getOriginHost(originHeader);
@@ -184,7 +187,7 @@ export default defineEventHandler(async (event) => {
                 session_proof: sessionProof,
                 workspace_id: activeWorkspaceId,
             }),
-            signal: AbortSignal.timeout(10_000),
+            signal: AbortSignal.timeout(or3NetConfig.exchangeTimeoutMs),
         });
     } catch (error) {
         throw createError({

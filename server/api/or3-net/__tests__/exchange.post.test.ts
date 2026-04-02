@@ -70,6 +70,7 @@ vi.mock('../../../utils/or3-net/config', () => ({
         exchangeIssuer: 'or3-chat',
         exchangeAudience: 'or3-net',
         exchangeTtlMs: 60_000,
+        exchangeTimeoutMs: 10_000,
     }),
 }));
 
@@ -182,6 +183,19 @@ describe('POST /api/or3-net/exchange', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({
             statusCode: 403,
         });
+    });
+
+    it('rejects mutation requests without an origin or referer header', async () => {
+        getRequestHeaderMock.mockImplementation((_, name: string) => {
+            if (name === 'host') return 'chat.test';
+            return undefined;
+        });
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 403,
+            message: 'Forbidden: Origin header required',
+        });
+        expect(fetch).not.toHaveBeenCalled();
     });
 
     it('returns 429 when rate limited', async () => {

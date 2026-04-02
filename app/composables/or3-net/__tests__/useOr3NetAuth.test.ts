@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick, ref } from 'vue';
 
 import { testRuntimeConfig } from '~~/tests/setup';
@@ -30,6 +30,10 @@ describe('useOr3NetAuth', () => {
                 },
             },
         };
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
     it('exchanges a token through the local SSR adapter', async () => {
@@ -116,6 +120,70 @@ describe('useOr3NetAuth', () => {
 
         expect(auth.token.value).toBe('token-2');
         expect(auth.workspaceId.value).toBe('ws-2');
+    });
+
+    it('refreshes tokens that are close to expiry', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-04-01T00:00:00.000Z'));
+        fetchMock
+            .mockResolvedValueOnce({
+                token: 'token-1',
+                workspace_id: 'ws-1',
+                expires_at: '2026-04-01T00:00:10.000Z',
+                scopes: ['jobs:read'],
+            })
+            .mockResolvedValueOnce({
+                token: 'token-2',
+                workspace_id: 'ws-1',
+                expires_at: '2026-04-01T00:01:00.000Z',
+                scopes: ['jobs:read'],
+            });
+
+        const { useOr3NetAuth } = await import('../useOr3NetAuth');
+        const auth = useOr3NetAuth();
+        await auth.refresh();
+
+        await expect(auth.getAccessToken()).resolves.toBe('token-2');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(auth.token.value).toBe('token-2');
+    });
+
+    it('clears pending state immediately when the workspace changes mid-exchange', async () => {
+        type ExchangePayload = {
+            token: string;
+            workspace_id: string;
+            expires_at: string;
+            scopes: string[];
+        };
+
+        const deferred: { resolve?: (value: ExchangePayload) => void } = {};
+        fetchMock.mockImplementationOnce(
+            () =>
+                new Promise<ExchangePayload>((resolve) => {
+                    deferred.resolve = resolve;
+                })
+        );
+
+        const { useOr3NetAuth } = await import('../useOr3NetAuth');
+        const auth = useOr3NetAuth();
+        const pendingRequest = auth.refresh();
+
+        expect(auth.pending.value).toBe(true);
+
+        activeWorkspaceId.value = 'ws-2';
+        await nextTick();
+
+        expect(auth.pending.value).toBe(false);
+
+        deferred.resolve?.({
+            token: 'token-1',
+            workspace_id: 'ws-1',
+            expires_at: '2099-01-01T00:00:00.000Z',
+            scopes: ['jobs:read'],
+        });
+
+        await expect(pendingRequest).resolves.toBeNull();
+        expect(auth.pending.value).toBe(false);
     });
 
     it('stays inactive when OR3 Net is disabled', async () => {

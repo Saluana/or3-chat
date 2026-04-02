@@ -95,6 +95,7 @@ describe('useOr3NetJobStream', () => {
     });
 
     it('reconnects after a dropped stream and replays retained history without duplicating output', async () => {
+        const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
         const fetchMock = vi
             .fn()
             .mockResolvedValueOnce(
@@ -130,5 +131,77 @@ describe('useOr3NetJobStream', () => {
         expect(stream.content.value).toBe('hello');
         expect(stream.status.value).toBe('completed');
         expect(stream.isTerminal.value).toBe(true);
+        randomSpy.mockRestore();
+    });
+
+    it('backs off reconnect attempts exponentially', async () => {
+        const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                createSseResponse([
+                    'event: job.accepted\ndata: {"job_id":"job-1"}\n\n',
+                ])
+            )
+            .mockResolvedValueOnce(
+                createSseResponse([
+                    'event: job.accepted\ndata: {"job_id":"job-1"}\n\n',
+                ])
+            )
+            .mockResolvedValueOnce(
+                createSseResponse([
+                    'event: job.accepted\ndata: {"job_id":"job-1"}\n\n',
+                    'event: job.completed\ndata: {"job_id":"job-1"}\n\n',
+                ])
+            );
+        vi.stubGlobal('fetch', fetchMock);
+        getJobMock.mockResolvedValue({
+            job_id: 'job-1',
+            workspace_id: 'ws-1',
+            status: 'running',
+            created_at: '2026-04-01T00:00:00.000Z',
+        });
+
+        const { useOr3NetJobStream } = await import('../useOr3NetJobStream');
+        const stream = useOr3NetJobStream();
+        await stream.attach('job-1');
+
+        await vi.advanceTimersByTimeAsync(499);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        await vi.advanceTimersByTimeAsync(1);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+
+        await vi.advanceTimersByTimeAsync(999);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+
+        await vi.advanceTimersByTimeAsync(1);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(stream.status.value).toBe('completed');
+
+        randomSpy.mockRestore();
+    });
+
+    it('caps the retained event log and clears terminal state on detach', async () => {
+        const chunks = Array.from({ length: 105 }, (_, index) => {
+            return `event: text.delta\ndata: {"text":"${index}"}\n\n`;
+        });
+        chunks.push('event: job.completed\ndata: {"job_id":"job-1"}\n\n');
+        vi.stubGlobal('fetch', vi.fn(async () => createSseResponse(chunks)));
+
+        const { useOr3NetJobStream } = await import('../useOr3NetJobStream');
+        const stream = useOr3NetJobStream();
+        await stream.attach('job-1');
+
+        expect(stream.events.value).toHaveLength(100);
+        expect(stream.events.value[0]?.event).toBe('text.delta');
+        expect(stream.isTerminal.value).toBe(true);
+
+        stream.detach();
+        expect(stream.isTerminal.value).toBe(false);
     });
 });
