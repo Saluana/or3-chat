@@ -5,6 +5,58 @@ export interface Or3NetExchangeResponse {
     scopes: string[];
 }
 
+export type Or3NetToolPolicyMode =
+    | 'allow_all'
+    | 'deny_all'
+    | 'allow_list'
+    | 'deny_list';
+
+export interface Or3NetToolPolicy {
+    mode: Or3NetToolPolicyMode;
+    allowed_tools: string[];
+    blocked_tools: string[];
+}
+
+export interface Or3NetNodeRequirements {
+    adapter_kind?: 'local' | 'remote' | 'sandbox';
+    capabilities: string[];
+    isolation_class?: string;
+    preferred_node_ids: string[];
+}
+
+export interface Or3NetAgent {
+    agent_id: string;
+    workspace_id: string;
+    name: string;
+    instructions: string;
+    tool_policy: Or3NetToolPolicy;
+    node_requirements: Or3NetNodeRequirements;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface Or3NetAgentDraftSnapshot {
+    agent_id: string;
+    name: string;
+    instructions: string;
+    tool_policy_mode: Or3NetToolPolicyMode;
+    allowed_tools_text: string;
+    blocked_tools_text: string;
+    adapter_kind: '' | 'local' | 'remote' | 'sandbox';
+    capabilities_text: string;
+    isolation_class: string;
+    preferred_node_ids_text: string;
+}
+
+export interface Or3NetPreset {
+    name: string;
+    host_url: string | null;
+    execution_target: 'local' | 'remote';
+    agent_draft: Or3NetAgentDraftSnapshot;
+    created_at: number;
+    updated_at: number;
+}
+
 export type Or3NetJobStatus =
     | 'pending'
     | 'scheduled'

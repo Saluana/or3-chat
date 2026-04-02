@@ -44,6 +44,14 @@ const sessionRecord = ref<any>({
 const authRefreshMock = vi.fn();
 const sessionRefreshMock = vi.fn();
 const sessionRememberMock = vi.fn();
+const presetsEnsureLoadedMock = vi.fn();
+const presetsSaveMock = vi.fn();
+const presetsDeleteMock = vi.fn();
+const presetItems = ref<any[]>([]);
+const listAgentsMock = vi.fn();
+const createAgentMock = vi.fn();
+const updateAgentMock = vi.fn();
+const deleteAgentMock = vi.fn();
 const listJobsMock = vi.fn();
 const getJobMock = vi.fn();
 const createJobMock = vi.fn();
@@ -101,8 +109,22 @@ vi.mock('~/composables/or3-net/useOr3NetSession', () => ({
     }),
 }));
 
+vi.mock('~/composables/or3-net/useOr3NetPresets', () => ({
+    useOr3NetPresets: () => ({
+        presets: presetItems,
+        ensureLoaded: presetsEnsureLoadedMock,
+        savePreset: presetsSaveMock,
+        deletePreset: presetsDeleteMock,
+        hydrate: computed(() => true),
+    }),
+}));
+
 vi.mock('~/composables/or3-net/useOr3NetClient', () => ({
     useOr3NetClient: () => ({
+        listAgents: listAgentsMock,
+        createAgent: createAgentMock,
+        updateAgent: updateAgentMock,
+        deleteAgent: deleteAgentMock,
         listJobs: listJobsMock,
         getJob: getJobMock,
         createJob: createJobMock,
@@ -157,6 +179,14 @@ describe('Or3NetworkPage', () => {
         authRefreshMock.mockReset();
         sessionRefreshMock.mockReset().mockResolvedValue(sessionRecord.value);
         sessionRememberMock.mockReset();
+        presetsEnsureLoadedMock.mockReset().mockResolvedValue(undefined);
+        presetsSaveMock.mockReset().mockResolvedValue(undefined);
+        presetsDeleteMock.mockReset().mockResolvedValue(undefined);
+        presetItems.value = [];
+        listAgentsMock.mockReset().mockResolvedValue({ items: [] });
+        createAgentMock.mockReset();
+        updateAgentMock.mockReset();
+        deleteAgentMock.mockReset().mockResolvedValue(null);
         listJobsMock.mockReset();
         getJobMock.mockReset();
         createJobMock.mockReset();
@@ -249,6 +279,151 @@ describe('Or3NetworkPage', () => {
         expect(wrapper.text()).toContain('running');
     });
 
+    it('loads, creates, updates, and deletes workspace agents', async () => {
+        let agentItems = [
+            {
+                agent_id: 'agent-1',
+                workspace_id: 'ws-1',
+                name: 'Agent One',
+                instructions: 'Initial instructions',
+                tool_policy: {
+                    mode: 'allow_all',
+                    allowed_tools: [],
+                    blocked_tools: [],
+                },
+                node_requirements: {
+                    capabilities: ['exec'],
+                    preferred_node_ids: [],
+                },
+            },
+        ];
+        listAgentsMock.mockImplementation(async () => ({ items: agentItems }));
+        createAgentMock.mockImplementation(async (_workspaceId, payload) => {
+            agentItems = [payload];
+            return { agent: payload };
+        });
+        updateAgentMock.mockImplementation(async (_workspaceId, _agentId, payload) => {
+            agentItems = [payload];
+            return { agent: payload };
+        });
+        deleteAgentMock.mockImplementation(async () => {
+            agentItems = [];
+            return null;
+        });
+        listJobsMock.mockResolvedValue({ items: [] });
+
+        const component = await import('../Or3NetworkPage.vue');
+        const wrapper = mountPage(component);
+        await flushPromises();
+        await flushPromises();
+
+        expect(listAgentsMock).toHaveBeenCalledWith('ws-1');
+        expect(wrapper.text()).toContain('Agent One');
+
+        await wrapper.get('[data-testid="or3-net-agent-name"]').setValue('Agent One Updated');
+        await wrapper.get('[data-testid="or3-net-agent-save"]').trigger('click');
+        await flushPromises();
+
+        expect(updateAgentMock).toHaveBeenCalledWith('ws-1', 'agent-1', {
+            agent_id: 'agent-1',
+            workspace_id: 'ws-1',
+            name: 'Agent One Updated',
+            instructions: 'Initial instructions',
+            tool_policy: {
+                mode: 'allow_all',
+                allowed_tools: [],
+                blocked_tools: [],
+            },
+            node_requirements: {
+                capabilities: ['exec'],
+                preferred_node_ids: [],
+            },
+        });
+
+        await wrapper.get('[data-testid="or3-net-agent-new"]').trigger('click');
+        await wrapper.get('[data-testid="or3-net-agent-id"]').setValue('agent-2');
+        await wrapper.get('[data-testid="or3-net-agent-name"]').setValue('Agent Two');
+        await wrapper.get('[data-testid="or3-net-agent-instructions"]').setValue('Second instructions');
+        await wrapper.get('[data-testid="or3-net-agent-tool-mode"]').setValue('allow_list');
+        await wrapper.get('[data-testid="or3-net-agent-allowed-tools"]').setValue('read_file, grep_search');
+        await wrapper.get('[data-testid="or3-net-agent-save"]').trigger('click');
+        await flushPromises();
+
+        expect(createAgentMock).toHaveBeenCalledWith('ws-1', {
+            agent_id: 'agent-2',
+            workspace_id: 'ws-1',
+            name: 'Agent Two',
+            instructions: 'Second instructions',
+            tool_policy: {
+                mode: 'allow_list',
+                allowed_tools: ['read_file', 'grep_search'],
+                blocked_tools: [],
+            },
+            node_requirements: {
+                capabilities: [],
+                preferred_node_ids: [],
+            },
+        });
+
+        await wrapper.get('[data-testid="or3-net-agent-delete"]').trigger('click');
+        await flushPromises();
+
+        expect(deleteAgentMock).toHaveBeenCalledWith('ws-1', 'agent-2');
+    });
+
+    it('saves, applies, and deletes local presets', async () => {
+        presetItems.value = [
+            {
+                name: 'Preset One',
+                host_url: 'https://net.test',
+                execution_target: 'remote',
+                agent_draft: {
+                    agent_id: 'agent-preset',
+                    name: 'Preset Agent',
+                    instructions: 'Preset instructions',
+                    tool_policy_mode: 'allow_list',
+                    allowed_tools_text: 'read_file',
+                    blocked_tools_text: '',
+                    adapter_kind: 'remote',
+                    capabilities_text: 'exec',
+                    isolation_class: 'workspace',
+                    preferred_node_ids_text: 'node-a',
+                },
+                created_at: 1,
+                updated_at: 1,
+            },
+        ];
+        listJobsMock.mockResolvedValue({ items: [] });
+
+        const component = await import('../Or3NetworkPage.vue');
+        const wrapper = mountPage(component);
+        await flushPromises();
+        await flushPromises();
+
+        await wrapper.get('[data-testid="or3-net-preset-name"]').setValue('Preset Two');
+        await wrapper.get('[data-testid="or3-net-preset-save"]').trigger('click');
+        await flushPromises();
+
+        expect(presetsSaveMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                name: 'Preset Two',
+                host_url: 'https://net.test',
+                execution_target: 'local',
+            })
+        );
+
+        await wrapper.get('[data-testid="or3-net-preset-apply-Preset One"]').trigger('click');
+        await flushPromises();
+
+        expect((wrapper.get('[data-testid="or3-net-agent-name"]').element as HTMLInputElement).value).toBe('Preset Agent');
+        expect((wrapper.get('[data-testid="or3-net-agent-tool-mode"]').element as HTMLSelectElement).value).toBe('allow_list');
+
+        await wrapper.get('[data-testid="or3-net-preset-delete-Preset One"]').trigger('click');
+        await flushPromises();
+
+        expect(presetsDeleteMock).toHaveBeenCalledWith('Preset One');
+    });
+
     it('submits the first job using the active chat thread when no session is bound', async () => {
         networkSessionId.value = null;
         sessionRecord.value = null;
@@ -296,11 +471,8 @@ describe('Or3NetworkPage', () => {
         const wrapper = mountPage(component);
         await flushPromises();
 
-        await wrapper.get('textarea').setValue('run the first network job');
-        const submitButton = wrapper
-            .findAll('button')
-            .find((button) => button.text().includes('Submit Job'));
-        await submitButton?.trigger('click');
+        await wrapper.get('[data-testid="or3-net-job-message"]').setValue('run the first network job');
+        await wrapper.get('[data-testid="or3-net-submit-job"]').trigger('click');
         await flushPromises();
         await flushPromises();
 

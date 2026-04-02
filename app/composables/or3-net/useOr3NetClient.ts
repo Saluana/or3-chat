@@ -4,6 +4,7 @@ import { useOr3NetAuth } from './useOr3NetAuth';
 import {
     normalizeOr3NetHostUrl,
     Or3NetRequestError,
+    type Or3NetAgent,
     type Or3NetCreateJobInput,
     type Or3NetCreateJobResponse,
     type Or3NetErrorEnvelope,
@@ -127,6 +128,42 @@ export function useOr3NetClient() {
 
     return {
         request,
+        listAgents(workspaceId: string) {
+            return request<{ items: Or3NetAgent[] }>(
+                `/v1/workspaces/${encodeURIComponent(workspaceId)}/agents`
+            );
+        },
+        createAgent(workspaceId: string, body: Or3NetAgent) {
+            return request<{ agent: Or3NetAgent }>(
+                `/v1/workspaces/${encodeURIComponent(workspaceId)}/agents`,
+                {
+                    method: 'POST',
+                    body,
+                }
+            );
+        },
+        getAgent(workspaceId: string, agentId: string) {
+            return request<{ agent: Or3NetAgent }>(
+                `/v1/workspaces/${encodeURIComponent(workspaceId)}/agents/${encodeURIComponent(agentId)}`
+            );
+        },
+        updateAgent(workspaceId: string, agentId: string, body: Or3NetAgent) {
+            return request<{ agent: Or3NetAgent }>(
+                `/v1/workspaces/${encodeURIComponent(workspaceId)}/agents/${encodeURIComponent(agentId)}`,
+                {
+                    method: 'PUT',
+                    body,
+                }
+            );
+        },
+        deleteAgent(workspaceId: string, agentId: string) {
+            return request<null>(
+                `/v1/workspaces/${encodeURIComponent(workspaceId)}/agents/${encodeURIComponent(agentId)}`,
+                {
+                    method: 'DELETE',
+                }
+            );
+        },
         listJobs(workspaceId: string, query?: URLSearchParams) {
             const suffix = query && query.toString() ? `?${query.toString()}` : '';
             return request<{ items: Or3NetJobSummary[] }>(

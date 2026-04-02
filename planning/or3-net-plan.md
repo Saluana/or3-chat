@@ -7,18 +7,18 @@
 
 ## Context — What is OR3 Network?
 
-OR3 Network (`or3-net`) is a Bun/TypeScript service that sits between `or3-chat` and the OR3 execution infrastructure (`or3-intern` + `or3-sandbox`). It owns:
+OR3 Network (`or3-net`) is a Bun/TypeScript service that sits between `or3-chat` and the OR3 execution infrastructure (`or3-intern` + approved nodes such as `or3-node`). It owns:
 
 - Workspace-scoped node registry, lease scheduling, and job routing.
 - A public Host API (`/v1/...`) for job submission, streaming, node management, and auth exchange.
-- TypeScript SDKs for `or3-intern` and `or3-sandbox`.
+- TypeScript SDKs and adapters for `or3-intern` plus node/runtime backends used by the control plane.
 
-`or3-chat` remains the **identity/session authority**. It never talks directly to nodes, `or3-intern`, or `or3-sandbox`. Instead it:
+`or3-chat` remains the **identity/session authority**. It never talks directly to nodes, `or3-intern`, or `or3-node`. Instead it:
 
 1. Exchanges the user's active chat session for a short-lived `or3-net` workspace token.
 2. Uses that token to call `or3-net` Host API endpoints from a plugin UI.
 
-`or3-chat` should treat its own thread or client conversation identifier as `client_session_id`. `or3-net` now resolves that value plus `client_kind: 'or3-chat'` into a durable `network_session_id`, while still binding the underlying execution to `or3-intern`'s `session_key`.
+`or3-chat` should treat its own thread or client conversation identifier as `client_session_id`. `or3-net` now resolves that value plus `client_kind: 'chat'` into a durable `network_session_id`, while still binding the underlying execution to `or3-intern`'s `session_key`.
 
 ---
 
@@ -34,13 +34,16 @@ A new sidebar/plugin surface (similar to existing plugins like `webhooks-dashboa
 - **Live job output** — streams text deltas, tool call events, and completion via SSE from `or3-net`.
 - **Nodes and services** — show approved node-backed apps/services, starting with OpenClaw, and offer service-oriented actions like `Open Dashboard`.
 - **Embedded previews** — show static websites and generated web artifacts inside a pane app when the preview is safe to embed.
-- **Saved network presets** — reusable config objects for host URLs, agents, and node preferences, stored using the same patterns the repo already uses for content/docs/custom post types.
+- **Saved network presets** — reusable config snapshots for host/agent/node preferences, stored locally with the repo’s workspace-scoped Dexie KV persistence pattern.
 
 Current baseline implemented:
 
 - `app/plugins/or3-network.client.ts` registers a dashboard entry only when SSR auth and OR3 Net host config are enabled.
 - `app/plugins/or3-network.client.ts` also registers an `or3-net-preview` pane app for embedded preview launches.
 - `app/components/dashboard/or3-net/Or3NetworkPage.vue` provides the initial status shell for the active workspace.
+- `app/components/dashboard/or3-net/Or3NetworkPage.vue` now includes a workspace-scoped agent list/editor for CRUD-style OR3 Net agent definitions.
+- `app/composables/or3-net/useOr3NetPresets.ts` now persists workspace-local OR3 Net presets in Dexie KV.
+- `app/components/dashboard/or3-net/Or3NetworkPage.vue` now includes saved preset apply/save/delete UI for the current agent draft and execution target.
 - `app/components/dashboard/or3-net/Or3NetworkPage.vue` now includes a thread-aware submit form plus recent jobs list/detail panel.
 - `app/components/dashboard/or3-net/Or3NetworkPage.vue` now attaches a live job stream, shows streamed text/event payloads, and exposes abort handling for running jobs.
 - `app/components/dashboard/or3-net/Or3NetworkPage.vue` now lists approved nodes, loads advertised services per node, and launches service dashboards through host-issued `launch_url` values.
@@ -106,9 +109,9 @@ For services like OpenClaw, the plugin should not ask the user to manage raw tun
 - Receive an opaque, short-lived `launch_url` from `or3-net`.
 - Open that URL in a new tab or pane.
 
-For sandbox-backed nodes in v1, `or3-net` will likely back this flow with `or3-sandbox`'s existing signed browser tunnel URL capability. That means the browser gets a narrow, expiring service-launch path rather than sandbox bearer credentials.
+For approved node-backed services in v1, `or3-net` backs this flow with the control-plane launch capability path rather than exposing runtime credentials directly. That means the browser gets a narrow, expiring service-launch URL rather than node or tunnel credentials.
 
-OpenClaw is the reference case because `or3-sandbox` already supports a browser-ready dashboard URL that combines:
+OpenClaw is the reference case because the current node/runtime path already supports a browser-ready dashboard launch that combines:
 
 - the tunnel browser bootstrap URL
 - the narrow tunnel cookie bootstrap flow
@@ -161,7 +164,7 @@ Current baseline implemented:
 | Token in memory only | Short-lived tokens should not survive page refresh in localStorage. Re-exchange is cheap and the session proof is already available. |
 | Reuse `useSessionContext` | Avoids duplicating auth state. The workspace/session watcher is already battle-tested across multiple plugins. |
 | SSE for job output | Matches the pattern `or3-net` uses internally (relay from `or3-intern` SSE). No need for a custom WebSocket protocol for v1. |
-| Saved presets as content objects | Aligns with how the repo already handles docs, projects, and custom post types in Dexie + optional sync. |
+| Saved presets in workspace KV | Keeps preset persistence local-first, workspace-scoped, and consistent with other lightweight persisted UI state. |
 | Service launch, not raw tunnel UI | End users think in terms of apps like OpenClaw, not ports and proxy tokens. This is simpler and more secure. |
 | Embedded preview for static output | Keeps users inside chat for the common case of generated sites, while still allowing external launch when needed. |
 
@@ -194,7 +197,7 @@ These notes capture the concrete `or3-chat` patterns the OR3 Network work should
 
 ### UI and persistence expectations
 
-- Reuse existing repo storage/content patterns for saved network presets and agent presets rather than introducing a parallel persistence model.
+- Reuse existing workspace-scoped KV persistence for saved network presets rather than introducing a parallel storage layer or server dependency.
 - Use small KV-backed prefs only for lightweight plugin settings such as the selected host URL or default filters.
 - Prefer service-oriented actions (`Open Dashboard`, `Restart Service`, `Revoke`) over any raw tunnel-management UX.
 - Use the `or3-net` session inspection routes to repopulate durable history after refresh instead of assuming live SSE replay is always available.
@@ -223,14 +226,14 @@ These notes capture the concrete `or3-chat` patterns the OR3 Network work should
 - [x] **Plugin shell** — Add `app/plugins/or3-network.client.ts` that registers the sidebar entry, route, and lazy-loaded page component. Gate activation on a configured `or3-net` host URL.
 - [x] **Token exchange composable** — Add `useOr3NetAuth` that reads `useSessionContext`, calls the local exchange adapter, caches the token in a reactive ref, and re-exchanges on expiry or workspace switch.
 - [x] **API client composable** — Add `useOr3NetClient` that wraps host requests with the token from `useOr3NetAuth`, handles 401 retry, and provides typed methods for jobs and session inspection.
-- [ ] **Agent management UI** — Add agent list and editor components. Agents are CRUD'd against `or3-net` and displayed in the sidebar page.
+- [x] **Agent management UI** — Add agent list and editor UI for workspace-scoped OR3 Net agent definitions in the dashboard page.
 - [x] **Job submission UI** — Add a minimal job submission form for the current chat thread plus a recent jobs list with status badges.
 - [x] **Live job output view** — Add SSE-based streaming view that displays text deltas and tool call events in real time, with abort button and terminal state handling.
 - [x] **Node/service view** — Add node cards and service actions. For OpenClaw-like services, show `Open Dashboard` and let the plugin open the returned `launch_url`.
 - [x] **Embedded preview pane** — Add a pane app for static previews that loads iframe-safe preview URLs and shows `Open in New Tab` fallback in the header.
 - [x] **Workspace switch handling** — Wire token invalidation and state rebind into the workspace change watcher, following the pattern in `convex-sync.client.ts`.
-- [ ] **Saved presets** — Add network/agent preset storage using the repo's content/doc patterns, so users can save and reuse host + agent configurations.
-- [x] **Tests** — Add unit tests for token exchange, session binding recovery, workspace switch rebind, jobs page behavior, node/service launch behavior, preview pane behavior, exchange route error paths, and plugin host gating for the current slice.
+- [x] **Saved presets** — Add workspace-local preset storage for agent draft + execution-target snapshots using the repo’s Dexie KV persistence pattern.
+- [x] **Tests** — Add unit tests for token exchange, session binding recovery, workspace switch rebind, jobs page behavior, node/service launch behavior, preview pane behavior, exchange route error paths, plugin host gating, and an integrated page flow covering exchange → session recovery → submit → stream → service/preview launch for the current slice.
 - [x] **Docs** — Add baseline planning notes explaining the local exchange adapter and minimum OR3 Net host configuration required to enable the plugin.
 
 ---

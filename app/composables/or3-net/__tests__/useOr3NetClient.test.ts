@@ -214,4 +214,81 @@ describe('useOr3NetClient', () => {
             })
         );
     });
+
+    it('builds agent CRUD routes with the correct workspace and agent ids', async () => {
+        getAccessTokenMock.mockResolvedValue('token-a');
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ items: [] }), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                })
+            )
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ agent: { agent_id: 'agent-1' } }), {
+                    status: 201,
+                    headers: { 'Content-Type': 'application/json' },
+                })
+            )
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ agent: { agent_id: 'agent-1' } }), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                })
+            )
+            .mockResolvedValueOnce(new Response(null, { status: 204 }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const { useOr3NetClient } = await import('../useOr3NetClient');
+        const client = useOr3NetClient();
+        const payload = {
+            agent_id: 'agent-1',
+            workspace_id: 'ws 1',
+            name: 'Agent One',
+            instructions: 'Help carefully',
+            tool_policy: {
+                mode: 'allow_all' as const,
+                allowed_tools: [],
+                blocked_tools: [],
+            },
+            node_requirements: {
+                capabilities: [],
+                preferred_node_ids: [],
+            },
+        };
+
+        await client.listAgents('ws 1');
+        await client.createAgent('ws 1', payload);
+        await client.updateAgent('ws 1', 'agent/1', payload);
+        await client.deleteAgent('ws 1', 'agent/1');
+
+        expect(fetchMock.mock.calls[0]?.[0]).toBe(
+            'https://net.test/v1/workspaces/ws%201/agents'
+        );
+        expect(fetchMock.mock.calls[1]?.[0]).toBe(
+            'https://net.test/v1/workspaces/ws%201/agents'
+        );
+        expect(fetchMock.mock.calls[1]?.[1]).toEqual(
+            expect.objectContaining({
+                method: 'POST',
+                body: JSON.stringify(payload),
+            })
+        );
+        expect(fetchMock.mock.calls[2]?.[0]).toBe(
+            'https://net.test/v1/workspaces/ws%201/agents/agent%2F1'
+        );
+        expect(fetchMock.mock.calls[2]?.[1]).toEqual(
+            expect.objectContaining({
+                method: 'PUT',
+                body: JSON.stringify(payload),
+            })
+        );
+        expect(fetchMock.mock.calls[3]?.[0]).toBe(
+            'https://net.test/v1/workspaces/ws%201/agents/agent%2F1'
+        );
+        expect(fetchMock.mock.calls[3]?.[1]).toEqual(
+            expect.objectContaining({ method: 'DELETE' })
+        );
+    });
 });
