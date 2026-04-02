@@ -430,7 +430,7 @@ Reads and normalizes environment variables into `Or3NetServerConfig`:
 ```ts
 interface Or3NetServerConfig {
   enabled: boolean;         // true iff hostUrl AND exchangeSecret are present
-  hostUrl: string;          // normalized http(s) URL, no trailing slash
+  hostUrl: string;          // normalized HTTP(S) URL, no trailing slash
   exchangeSecret: string;   // raw secret string
   exchangeIssuer: string;   // default: 'or3-chat'
   exchangeAudience: string; // default: 'or3-net'
@@ -500,7 +500,7 @@ Shows: configured host URL, active chat thread ID, active workspace ID, bound ne
 #### Section 5: Nodes & Services
 - Lists approved nodes for the workspace with status, capabilities, adapter kind, version, and resource limits.
 - For each node, lists services with **Open Dashboard**, **Restart**, and **Revoke** actions.
-- `Open Dashboard` calls `launchNodeService(…)` and opens the returned URL in a new tab (only for `launchable` services with valid http(s) URLs).
+- `Open Dashboard` calls `launchNodeService(…)` and opens the returned URL in a new tab (only for `launchable` services with valid HTTP(S) URLs).
 
 #### Section 6: Previews
 - Lists workspace previews with kind, source type, delivery mode, and status.
@@ -573,7 +573,7 @@ User clicks "Open Pane" on a preview
   ├─ client.launchPreview(workspaceId, previewId, { launch_mode_hint: 'pane' })
   │    → returns Or3NetLaunchMetadata { launch_url, embed_url, supports_iframe, ... }
   │
-  ├─ Validate launch_url protocol is http(s)
+  ├─ Validate launch_url protocol is HTTP(S)
   │
   ├─ if supports_iframe AND multi-pane API is available:
   │    previewPaneState.remember({ preview, launch })  → returns Or3NetPreviewPaneRecord

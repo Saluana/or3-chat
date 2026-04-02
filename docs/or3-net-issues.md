@@ -443,4 +443,4 @@ The preview iframe:
 />
 ```
 
-No `sandbox` attribute is applied. Without `sandbox`, the embedded page can execute scripts, navigate the top-level frame, and access `window.opener`. While the preview URL is validated to be `http(s)` only and is workspace-owned, adding a `sandbox` attribute (e.g. `sandbox="allow-scripts allow-same-origin allow-forms"`) would follow the principle of least privilege and reduce the blast radius if a preview URL is ever compromised.
+No `sandbox` attribute is applied. Without `sandbox`, the embedded page can execute scripts, navigate the top-level frame, and access `window.opener`. While the preview URL is validated to be HTTP(S) only and is workspace-owned, adding a `sandbox` attribute (e.g. `sandbox="allow-scripts allow-same-origin allow-forms"`) would follow the principle of least privilege and reduce the blast radius if a preview URL is ever compromised.
