@@ -121,4 +121,35 @@ describe('Or3NetPreviewPane', () => {
         );
         openSpy.mockRestore();
     });
+
+    it('sandboxes embedded previews', async () => {
+        currentRecord = {
+            ...currentRecord,
+            embed_url: 'https://preview.test/prev-1/embed',
+            supports_iframe: true,
+            delivery_mode: 'embedded',
+        };
+
+        const component = await import('../Or3NetPreviewPane.vue');
+        const wrapper = mount(component.default, {
+            props: {
+                paneId: 'pane-1',
+                recordId: 'pane-prev-1',
+                postType: 'or3-net-preview',
+                postApi: null,
+            },
+            global: {
+                stubs: {
+                    UButton: {
+                        emits: ['click'],
+                        template: '<button type="button" v-bind="$attrs" @click="$emit(\'click\', $event)"><slot /></button>',
+                    },
+                },
+            },
+        });
+
+        expect(wrapper.find('iframe').attributes('sandbox')).toBe(
+            'allow-scripts allow-same-origin allow-forms'
+        );
+    });
 });

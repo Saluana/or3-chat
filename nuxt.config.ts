@@ -20,6 +20,9 @@ const or3NetExchangeAudience = process.env.OR3_NET_EXCHANGE_AUDIENCE?.trim() || 
 const or3NetExchangeTtlMs = process.env.OR3_NET_EXCHANGE_TTL_MS
     ? Number(process.env.OR3_NET_EXCHANGE_TTL_MS)
     : 60_000;
+const or3NetExchangeTimeoutMs = process.env.OR3_NET_EXCHANGE_TIMEOUT_MS
+    ? Number(process.env.OR3_NET_EXCHANGE_TIMEOUT_MS)
+    : 10_000;
 
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
 const convexAdminKey = or3CloudConfig.sync.convex?.adminKey || '';
@@ -426,6 +429,9 @@ export default defineNuxtConfig({
             exchangeTtlMs: Number.isFinite(or3NetExchangeTtlMs)
                 ? Math.max(1_000, Math.floor(or3NetExchangeTtlMs))
                 : 60_000,
+            exchangeTimeoutMs: Number.isFinite(or3NetExchangeTimeoutMs)
+                ? Math.max(1_000, Math.floor(or3NetExchangeTimeoutMs))
+                : 10_000,
         },
         // Background streaming configuration (SSR mode only)
         backgroundJobs: {

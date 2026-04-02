@@ -42,6 +42,7 @@
                 title="OR3 Net Preview"
                 loading="lazy"
                 referrerpolicy="no-referrer"
+                sandbox="allow-scripts allow-same-origin allow-forms"
             />
         </div>
         <div

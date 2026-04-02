@@ -18,6 +18,8 @@ function invalidateState(): void {
     payload.value = null;
     error.value = null;
     boundWorkspaceId.value = null;
+    pendingExchangeCount = 0;
+    pending.value = false;
 }
 
 function startPendingExchange(): void {
@@ -49,7 +51,7 @@ function hasFreshPayload(workspaceId: string | null): boolean {
         return false;
     }
 
-    return expiresAtMs - Date.now() > 5_000;
+    return expiresAtMs - Date.now() > 15_000;
 }
 
 function installWorkspaceWatcher(): void {

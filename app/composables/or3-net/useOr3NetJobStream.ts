@@ -11,7 +11,9 @@ import {
     type Or3NetJobStreamEvent,
 } from './types';
 
-const RECONNECT_DELAY_MS = 500;
+const RECONNECT_BASE_DELAY_MS = 500;
+const RECONNECT_MAX_DELAY_MS = 30_000;
+const RECONNECT_JITTER_RATIO = 0.2;
 
 const TERMINAL_STATUSES = new Set<Or3NetJobStatus>([
     'completed',
@@ -47,6 +49,7 @@ export function useOr3NetJobStream() {
     let activeController: AbortController | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let connectionRunId = 0;
+    let reconnectAttempt = 0;
 
     function clearReconnectTimer(): void {
         if (reconnectTimer !== null) {
@@ -55,7 +58,10 @@ export function useOr3NetJobStream() {
         }
     }
 
-    function clearTransport(): void {
+    function clearTransport(options: {
+        resetReconnectAttempt?: boolean;
+        resetTerminal?: boolean;
+    } = {}): void {
         clearReconnectTimer();
         if (activeController) {
             activeController.abort();
@@ -63,6 +69,12 @@ export function useOr3NetJobStream() {
         }
         connected.value = false;
         pending.value = false;
+        if (options.resetReconnectAttempt !== false) {
+            reconnectAttempt = 0;
+        }
+        if (options.resetTerminal !== false) {
+            isTerminal.value = false;
+        }
     }
 
     function resetStreamState(jobId: string | null): void {
@@ -77,7 +89,10 @@ export function useOr3NetJobStream() {
     }
 
     function recordEvent(event: Or3NetJobStreamEvent): void {
-        events.value = [...events.value, event].slice(-100);
+        if (events.value.length >= 100) {
+            events.value.shift();
+        }
+        events.value.push(event);
     }
 
     function applyEvent(event: Or3NetJobStreamEvent): void {
@@ -240,11 +255,22 @@ export function useOr3NetJobStream() {
         }
     }
 
+    function getReconnectDelayMs(): number {
+        const baseDelayMs = Math.min(
+            RECONNECT_BASE_DELAY_MS * 2 ** reconnectAttempt,
+            RECONNECT_MAX_DELAY_MS
+        );
+        reconnectAttempt += 1;
+        const jitter = 1 + (Math.random() * 2 - 1) * RECONNECT_JITTER_RATIO;
+        return Math.max(RECONNECT_BASE_DELAY_MS, Math.round(baseDelayMs * jitter));
+    }
+
     function scheduleReconnect(jobId: string): void {
         clearReconnectTimer();
+        const delayMs = getReconnectDelayMs();
         reconnectTimer = setTimeout(() => {
             void connect(jobId, true).catch(() => undefined);
-        }, RECONNECT_DELAY_MS);
+        }, delayMs);
     }
 
     async function connect(jobId: string, isReconnect = false): Promise<void> {
@@ -257,7 +283,7 @@ export function useOr3NetJobStream() {
             throw new Error('OR3 Network token unavailable');
         }
 
-        clearTransport();
+        clearTransport({ resetReconnectAttempt: false, resetTerminal: false });
         connectionRunId += 1;
         const runId = connectionRunId;
         resetStreamState(jobId);
