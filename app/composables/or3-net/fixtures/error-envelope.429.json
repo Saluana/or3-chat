@@ -1,0 +1,7 @@
+{
+  "error": "too many requests",
+  "code": "rate.limit_exceeded",
+  "status": 429,
+  "request_id": "req_rate",
+  "retry_after_ms": 1500
+}

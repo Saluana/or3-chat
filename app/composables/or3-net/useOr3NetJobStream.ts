@@ -1,11 +1,14 @@
 import { readonly, ref } from 'vue';
 import { useRuntimeConfig } from '#imports';
 
+import {
+    normalizeOr3NetJobStreamEvent,
+    parseOr3NetErrorEnvelope,
+} from './contracts';
 import { useOr3NetAuth } from './useOr3NetAuth';
 import { useOr3NetClient } from './useOr3NetClient';
 import {
     normalizeOr3NetHostUrl,
-    type Or3NetErrorEnvelope,
     type Or3NetJobDetail,
     type Or3NetJobStatus,
     type Or3NetJobStreamEvent,
@@ -145,70 +148,6 @@ export function useOr3NetJobStream() {
         }
     }
 
-    function toStreamEvent(
-        eventName: string,
-        payload: unknown
-    ): Or3NetJobStreamEvent | null {
-        switch (eventName) {
-            case 'job.accepted':
-                return {
-                    event: 'job.accepted',
-                    data: (payload ?? {}) as { job_id: string },
-                };
-            case 'job.started':
-                return {
-                    event: 'job.started',
-                    data: (payload ?? {}) as { job_id: string; started_at?: string },
-                };
-            case 'text.delta':
-                return {
-                    event: 'text.delta',
-                    data: (payload ?? {}) as { text: string },
-                };
-            case 'tool.call':
-                return {
-                    event: 'tool.call',
-                    data: (payload ?? {}) as {
-                        name: string;
-                        tool_call_id?: string;
-                        arguments?: string | Record<string, unknown>;
-                    },
-                };
-            case 'tool.result':
-                return {
-                    event: 'tool.result',
-                    data: (payload ?? {}) as {
-                        name: string;
-                        tool_call_id?: string;
-                        result?: string | Record<string, unknown>;
-                        content?: string;
-                    },
-                };
-            case 'job.completed':
-                return {
-                    event: 'job.completed',
-                    data: (payload ?? {}) as Record<string, unknown> & { job_id?: string },
-                };
-            case 'job.failed':
-                return {
-                    event: 'job.failed',
-                    data: (payload ?? {}) as Record<string, unknown>,
-                };
-            case 'job.aborted':
-                return {
-                    event: 'job.aborted',
-                    data: (payload ?? {}) as { job_id: string },
-                };
-            case 'error':
-                return {
-                    event: 'error',
-                    data: (payload ?? {}) as Or3NetErrorEnvelope,
-                };
-            default:
-                return null;
-        }
-    }
-
     function parseAndApplyFrame(frame: string): void {
         let eventName = 'message';
         const dataLines: string[] = [];
@@ -227,7 +166,7 @@ export function useOr3NetJobStream() {
         }
 
         const payload = parseJsonData(dataLines.join('\n'));
-        const event = toStreamEvent(eventName, payload);
+        const event = normalizeOr3NetJobStreamEvent(eventName, payload);
         if (!event) {
             return;
         }
@@ -313,9 +252,7 @@ export function useOr3NetJobStream() {
 
             if (!response.ok || !response.body) {
                 const bodyText = await response.text().catch(() => '');
-                const envelope = parseJsonData(bodyText) as
-                    | Or3NetErrorEnvelope
-                    | null;
+                const envelope = parseOr3NetErrorEnvelope(parseJsonData(bodyText));
                 throw new Error(
                     envelope?.error ||
                         response.statusText ||

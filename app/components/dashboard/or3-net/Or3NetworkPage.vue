@@ -772,6 +772,7 @@ import { useOr3NetJobStream } from '~/composables/or3-net/useOr3NetJobStream';
 import { useOr3NetPresets } from '~/composables/or3-net/useOr3NetPresets';
 import { useOr3NetPreviewPaneState } from '~/composables/or3-net/useOr3NetPreviewPaneState';
 import { useOr3NetSession } from '~/composables/or3-net/useOr3NetSession';
+import { formatOr3NetUiError } from '~/composables/or3-net/ui-errors';
 import type {
     Or3NetAgent,
     Or3NetAgentDraftSnapshot,
@@ -941,6 +942,14 @@ const streamStatusLabel = computed(() => {
     return 'Idle';
 });
 
+const connectionErrorMessage = computed(() =>
+    connectionError.value ? formatOr3NetUiError(connectionError.value) : null
+);
+
+const sessionErrorMessage = computed(() =>
+    sessionError.value ? formatOr3NetUiError(sessionError.value) : null
+);
+
 watch(
     [activeWorkspaceId, networkSessionId],
     () => {
@@ -1025,7 +1034,7 @@ async function refreshPresets(): Promise<void> {
     try {
         await presetsStore.ensureLoaded();
     } catch (cause) {
-        presetActionError.value = cause instanceof Error ? cause.message : String(cause);
+        presetActionError.value = formatOr3NetUiError(cause);
     } finally {
         presetsPending.value = false;
     }
@@ -1065,7 +1074,7 @@ async function refreshAgents(): Promise<void> {
         }
     } catch (cause) {
         agents.value = [];
-        agentsError.value = cause instanceof Error ? cause.message : String(cause);
+        agentsError.value = formatOr3NetUiError(cause);
     } finally {
         agentsPending.value = false;
     }
@@ -1098,7 +1107,7 @@ async function refreshNodes(): Promise<void> {
     } catch (cause) {
         nodes.value = [];
         servicesByNodeId.value = {};
-        nodesError.value = cause instanceof Error ? cause.message : String(cause);
+        nodesError.value = formatOr3NetUiError(cause);
     } finally {
         nodesPending.value = false;
     }
@@ -1118,7 +1127,7 @@ async function refreshPreviews(): Promise<void> {
         previews.value = response.items;
     } catch (cause) {
         previews.value = [];
-        previewsError.value = cause instanceof Error ? cause.message : String(cause);
+        previewsError.value = formatOr3NetUiError(cause);
     } finally {
         previewsPending.value = false;
     }
@@ -1156,7 +1165,7 @@ async function refreshJobs(): Promise<void> {
     } catch (cause) {
         jobs.value = [];
         selectedJobId.value = null;
-        jobsError.value = cause instanceof Error ? cause.message : String(cause);
+        jobsError.value = formatOr3NetUiError(cause);
     } finally {
         jobsPending.value = false;
     }
@@ -1203,7 +1212,7 @@ async function saveAgent(): Promise<void> {
         agentEditorInitialized.value = true;
         await refreshAgents();
     } catch (cause) {
-        agentActionError.value = cause instanceof Error ? cause.message : String(cause);
+        agentActionError.value = formatOr3NetUiError(cause);
     } finally {
         agentSavePending.value = false;
     }
@@ -1226,7 +1235,7 @@ async function deleteSelectedAgent(): Promise<void> {
         startNewAgent();
         await refreshAgents();
     } catch (cause) {
-        agentActionError.value = cause instanceof Error ? cause.message : String(cause);
+        agentActionError.value = formatOr3NetUiError(cause);
     } finally {
         agentDeletePending.value = false;
     }
@@ -1254,7 +1263,7 @@ async function saveCurrentPreset(): Promise<void> {
         presetActionMessage.value = `${trimmedName} saved.`;
         presetName.value = '';
     } catch (cause) {
-        presetActionError.value = cause instanceof Error ? cause.message : String(cause);
+        presetActionError.value = formatOr3NetUiError(cause);
     } finally {
         presetsPending.value = false;
     }
@@ -1276,7 +1285,7 @@ async function deletePreset(name: string): Promise<void> {
         await presetsStore.deletePreset(name);
         presetActionMessage.value = `${name} deleted.`;
     } catch (cause) {
-        presetActionError.value = cause instanceof Error ? cause.message : String(cause);
+        presetActionError.value = formatOr3NetUiError(cause);
     } finally {
         presetsPending.value = false;
     }
@@ -1289,8 +1298,7 @@ async function loadSelectedJob(jobId: string): Promise<void> {
         selectedJob.value = await client.getJob(jobId);
     } catch (cause) {
         selectedJob.value = null;
-        selectedJobError.value =
-            cause instanceof Error ? cause.message : String(cause);
+        selectedJobError.value = formatOr3NetUiError(cause);
     } finally {
         selectedJobPending.value = false;
     }
@@ -1322,7 +1330,7 @@ async function submitJob(): Promise<void> {
         await refreshJobs();
         selectedJobId.value = created.job_id;
     } catch (cause) {
-        submitError.value = cause instanceof Error ? cause.message : String(cause);
+        submitError.value = formatOr3NetUiError(cause);
     } finally {
         submitPending.value = false;
     }
@@ -1342,8 +1350,7 @@ async function abortSelectedJob(): Promise<void> {
             refreshJobs(),
         ]);
     } catch (cause) {
-        selectedJobError.value =
-            cause instanceof Error ? cause.message : String(cause);
+        selectedJobError.value = formatOr3NetUiError(cause);
     } finally {
         abortPending.value = false;
     }
@@ -1367,8 +1374,7 @@ async function launchService(nodeId: string, serviceId: string): Promise<void> {
         window.open(safeUrl, '_blank', 'noopener,noreferrer');
         serviceActionMessage.value = `Opened ${serviceId}. Expires ${formatTimestamp(launch.expires_at)}.`;
     } catch (cause) {
-        serviceActionError.value =
-            cause instanceof Error ? cause.message : String(cause);
+        serviceActionError.value = formatOr3NetUiError(cause);
     } finally {
         serviceActionPendingKey.value = null;
     }
@@ -1388,8 +1394,7 @@ async function restartService(nodeId: string, serviceId: string): Promise<void> 
         serviceActionMessage.value = `Restarted ${serviceId}.`;
         await refreshNodes();
     } catch (cause) {
-        serviceActionError.value =
-            cause instanceof Error ? cause.message : String(cause);
+        serviceActionError.value = formatOr3NetUiError(cause);
     } finally {
         serviceActionPendingKey.value = null;
     }
@@ -1408,8 +1413,7 @@ async function revokeService(nodeId: string, serviceId: string): Promise<void> {
         const result = await client.revokeNodeService(workspaceId, nodeId, serviceId);
         serviceActionMessage.value = `Revoked ${result.revoked} launch grant${result.revoked === 1 ? '' : 's'} for ${serviceId}.`;
     } catch (cause) {
-        serviceActionError.value =
-            cause instanceof Error ? cause.message : String(cause);
+        serviceActionError.value = formatOr3NetUiError(cause);
     } finally {
         serviceActionPendingKey.value = null;
     }
@@ -1456,7 +1460,7 @@ async function openPreview(preview: Or3NetPreviewDescriptor): Promise<void> {
         window.open(safeLaunchUrl, '_blank', 'noopener,noreferrer');
         previewActionMessage.value = `Opened ${preview.preview_id} in a new tab.`;
     } catch (cause) {
-        previewActionError.value = cause instanceof Error ? cause.message : String(cause);
+        previewActionError.value = formatOr3NetUiError(cause);
     } finally {
         previewActionPendingKey.value = null;
     }
@@ -1482,7 +1486,7 @@ async function openPreviewExternal(preview: Or3NetPreviewDescriptor): Promise<vo
         window.open(safeLaunchUrl, '_blank', 'noopener,noreferrer');
         previewActionMessage.value = `Opened ${preview.preview_id} in a new tab.`;
     } catch (cause) {
-        previewActionError.value = cause instanceof Error ? cause.message : String(cause);
+        previewActionError.value = formatOr3NetUiError(cause);
     } finally {
         previewActionPendingKey.value = null;
     }
@@ -1502,7 +1506,7 @@ async function revokePreview(preview: Or3NetPreviewDescriptor): Promise<void> {
         previewActionMessage.value = `Revoked ${preview.preview_id}.`;
         await refreshPreviews();
     } catch (cause) {
-        previewActionError.value = cause instanceof Error ? cause.message : String(cause);
+        previewActionError.value = formatOr3NetUiError(cause);
     } finally {
         previewActionPendingKey.value = null;
     }

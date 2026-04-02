@@ -1,0 +1,10 @@
+{
+  "event": "tool.call",
+  "data": {
+    "name": "read_file",
+    "tool_call_id": "tool_1",
+    "arguments": {
+      "filePath": "/tmp/demo.txt"
+    }
+  }
+}

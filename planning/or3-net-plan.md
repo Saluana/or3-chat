@@ -53,8 +53,8 @@ Current baseline implemented:
 
 A new composable (likely under `app/composables/or3-net/`) that:
 
-- Reads the current user/workspace identity from the existing `useSessionContext()` flow (in `app/composables/auth/useSessionContext.ts`).
-- Calls `POST /v1/auth/exchange` on the configured `or3-net` host, passing a session proof the chat auth provider can produce.
+- Reads the current user/workspace identity from the existing SSR session flow.
+- Calls the local `POST /api/or3-net/exchange` adapter, which then exchanges with `or3-net` server-to-server.
 - Caches the returned short-lived `or3-net` bearer token in memory (not localStorage).
 - Automatically re-exchanges when the token expires or when the workspace switches.
 
@@ -65,7 +65,21 @@ Current baseline implemented:
 - `app/composables/or3-net/useOr3NetClient.ts` performs bounded 401 refresh/retry for host API calls.
 - `app/composables/or3-net/useOr3NetSession.ts` recovers the current chat thread's `network_session_id` by matching host session records.
 
-This composable is **provider-agnostic**: it uses the same `useSessionContext` + `useAuthTokenBroker` patterns that already power Convex sync auth and background streaming auth. It does not import Clerk or any specific provider SDK.
+This composable is **provider-agnostic**: the browser does not mint provider-specific OR3 Net proof. Instead, the chat server resolves the active authenticated session and issues an `or3-chat-assertion-v1` session proof for the local exchange bridge.
+
+The frozen request shape used by the server bridge is:
+
+- `provider`
+- `session_proof`
+- optional `workspace_id`
+
+The current shipped values are:
+
+- `provider: 'or3-chat'`
+- `session_proof.format: 'or3-chat-assertion-v1'`
+- `session_proof.assertion`: host-signed server-side assertion
+
+Provider-specific auth details stay behind existing session-resolution and server-bridge abstractions. The browser remains provider-agnostic.
 
 The companion API client should preserve and reuse `network_session_id` returned by the first successful job/session lookup for a given chat thread so subsequent submits and inspection views can bind to the same durable coordination session.
 
@@ -78,6 +92,13 @@ When the user changes workspaces (via `WorkspaceManager.vue` → `useWorkspaceMa
 - Rebind the job list, agent definitions, and any active SSE subscription to the new workspace context.
 
 This mirrors how existing plugins like `convex-sync.client.ts` and `notification-listeners.client.ts` already watch session/workspace changes.
+
+Current invalidation contract:
+
+- `useOr3NetAuth()` clears the cached host token and bound workspace when the active workspace changes.
+- `useOr3NetSession()` clears the bound `network_session_id` whenever the workspace or active chat thread changes.
+- The dashboard tears down workspace-scoped UI state on workspace switch, including active preview pane state, preview/service action state, agent/preset editor state, and any selected job/stream binding that should not bleed into the next workspace.
+- After invalidation, the next authenticated read path re-exchanges for a workspace-scoped host token, re-resolves the current thread binding, and repopulates jobs/agents/nodes/previews for the new workspace.
 
 ### 4. SSE streaming and abort UX
 
@@ -240,37 +261,39 @@ These notes capture the concrete `or3-chat` patterns the OR3 Network work should
 
 ## Deferred contract and conformance follow-up
 
-These are the `or3-chat`-owned carry-over items from the cross-repo platform-standardization work. Keeping them here makes this file the place to resume later.
+These are the `or3-chat`-owned carry-over items from the cross-repo platform-standardization work. The shipped product surface is already in place; what remains here is contract hardening, fixture coverage, CI, and future config alignment.
 
 ### Session proof exchange freeze
 
-- [ ] Freeze the exchange request shape used by `or3-chat`: `{ provider, session_proof, workspace_hint? }`.
-- [ ] Document what `or3-chat` sends as `session_proof` for each supported auth provider.
-- [ ] Keep provider-specific auth details hidden behind existing abstractions such as session context and token broker helpers.
+- [x] Freeze the exchange request shape used by `or3-chat`: `{ provider, session_proof, workspace_id? }`.
+- [x] Document the shipped `or3-chat` session proof shape: `provider = 'or3-chat'`, `session_proof.format = 'or3-chat-assertion-v1'`, assertion minted server-side.
+- [x] Keep provider-specific auth details hidden behind existing abstractions such as session resolution and the server-side exchange bridge.
 
 ### Workspace switch invalidation contract
 
 - [x] Freeze the workspace-switch invalidation behavior for cached `or3-net` tokens.
 - [x] Ensure active workspace-scoped views are torn down on workspace switch, especially job streams and preview embeds.
-- [ ] Document the invalidation contract so `or3-net` can rely on chat-side cleanup when rebinding coordination sessions.
+- [x] Document the invalidation contract so `or3-net` can rely on chat-side cleanup when rebinding coordination sessions.
 
 ### Error envelope consumption
 
-- [ ] Parse canonical `ErrorEnvelope` responses from `or3-net` instead of assuming ad-hoc `{ error }` payloads.
-- [ ] Use `retry_after_ms` from `ErrorEnvelope` for `429` retry scheduling instead of fixed backoff.
-- [ ] Surface canonical error codes in user-facing states where they improve recovery guidance.
+- [x] Parse canonical `ErrorEnvelope` responses from `or3-net` instead of assuming ad-hoc `{ error }` payloads at the transport layer.
+- [x] Use `retry_after_ms` from `ErrorEnvelope` for retry-aware client error handling where supported.
+- [x] Surface canonical error codes in user-facing states where they improve recovery guidance.
 
 ### Contract fixtures and CI
 
-- [ ] Add `or3-chat` fixtures for `or3-net` exchange request/response shapes.
+- [x] Add `or3-chat` fixtures for `or3-net` exchange request/response shapes.
 - [x] Add `or3-chat` fixtures for normalized `or3-net` job stream events.
-- [ ] Add fixture-backed contract tests for the frozen `or3-net` API shapes consumed by the plugin.
-- [ ] Add `or3-chat` CI coverage for those `or3-net` API contract fixtures.
+- [x] Add fixture-backed contract tests for the frozen `or3-net` API shapes consumed by the plugin.
+- [x] Add `or3-chat` CI coverage for those `or3-net` API contract fixtures via `.github/workflows/or3-net-contracts.yml`.
 
 ### Config alignment
 
-- [ ] Align any future `or3-chat` wizard/env emission with the canonical cross-repo naming convention.
+- [x] Keep the current OR3 Net env/config emission aligned with the canonical `OR3_NET_*` naming used by the shipped baseline.
 - [x] Keep `or3-net` host configuration documented alongside the plugin usage flow for the current baseline.
+
+For the execution backlog that remains after this baseline, see `planning/or3-net/tasks.md`.
 
 ## Minimum configuration
 

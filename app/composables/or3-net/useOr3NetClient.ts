@@ -1,5 +1,6 @@
 import { useRuntimeConfig } from '#imports';
 
+import { parseOr3NetErrorEnvelope } from './contracts';
 import { useOr3NetAuth } from './useOr3NetAuth';
 import {
     normalizeOr3NetHostUrl,
@@ -7,7 +8,6 @@ import {
     type Or3NetAgent,
     type Or3NetCreateJobInput,
     type Or3NetCreateJobResponse,
-    type Or3NetErrorEnvelope,
     type Or3NetJobDetail,
     type Or3NetJobSummary,
     type Or3NetLaunchMetadata,
@@ -30,7 +30,10 @@ async function readJsonSafely(response: Response): Promise<unknown> {
     }
 }
 
-function toRetryAfterMs(response: Response, payload: Or3NetErrorEnvelope | null): number | undefined {
+function toRetryAfterMs(
+    response: Response,
+    payload: ReturnType<typeof parseOr3NetErrorEnvelope>
+): number | undefined {
     if (typeof payload?.retry_after_ms === 'number' && Number.isFinite(payload.retry_after_ms)) {
         return payload.retry_after_ms;
     }
@@ -103,10 +106,7 @@ export function useOr3NetClient() {
 
             const payload = await readJsonSafely(response);
             if (!response.ok) {
-                const envelope =
-                    payload && typeof payload === 'object'
-                        ? (payload as Or3NetErrorEnvelope)
-                        : null;
+                const envelope = parseOr3NetErrorEnvelope(payload);
                 throw new Or3NetRequestError({
                     message:
                         envelope?.error ||

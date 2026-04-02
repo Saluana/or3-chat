@@ -457,6 +457,6 @@ describe('Or3NetworkPage integration', () => {
         await wrapper.get('[data-testid="or3-net-preview-open-prev-expired"]').trigger('click');
         await flushPromises();
 
-        expect(wrapper.text()).toContain('preview launch has expired');
+        expect(wrapper.text()).toContain('launch expired');
     });
 });

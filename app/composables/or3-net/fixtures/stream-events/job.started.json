@@ -1,0 +1,7 @@
+{
+  "event": "job.started",
+  "data": {
+    "job_id": "job_123",
+    "started_at": "2099-01-01T00:00:01.000Z"
+  }
+}

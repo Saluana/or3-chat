@@ -1,0 +1,6 @@
+{
+  "event": "job.aborted",
+  "data": {
+    "job_id": "job_123"
+  }
+}

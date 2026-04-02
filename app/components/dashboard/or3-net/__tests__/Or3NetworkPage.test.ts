@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
 
 import { testRuntimeConfig } from '~~/tests/setup';
+import { Or3NetRequestError } from '~/composables/or3-net/types';
 
 function mountPage(component: any) {
     return mount(component.default, {
@@ -484,6 +485,31 @@ describe('Or3NetworkPage', () => {
         });
     });
 
+    it('shows retry guidance when OR3 Net rate-limits job submission', async () => {
+        networkSessionId.value = null;
+        sessionRecord.value = null;
+        listJobsMock.mockResolvedValue({ items: [] });
+        createJobMock.mockRejectedValue(
+            new Or3NetRequestError({
+                message: 'Too many requests',
+                status: 429,
+                code: 'rate.limit_exceeded',
+                retryAfterMs: 1500,
+            })
+        );
+
+        const component = await import('../Or3NetworkPage.vue');
+        const wrapper = mountPage(component);
+        await flushPromises();
+
+        await wrapper.get('[data-testid="or3-net-job-message"]').setValue('run slowly');
+        await wrapper.get('[data-testid="or3-net-submit-job"]').trigger('click');
+        await flushPromises();
+
+        expect(wrapper.text()).toContain('OR3 Net rate-limited this action.');
+        expect(wrapper.text()).toContain('Try again in 2s.');
+    });
+
     it('shows live stream state and aborts the selected running job', async () => {
         listJobsMock.mockResolvedValue({
             items: [
@@ -693,6 +719,41 @@ describe('Or3NetworkPage', () => {
             'noopener,noreferrer'
         );
         openSpy.mockRestore();
+    });
+
+    it('shows scope guidance when preview launch lacks the required OR3 Net scope', async () => {
+        listJobsMock.mockResolvedValue({ items: [] });
+        listPreviewsMock.mockResolvedValue({
+            items: [
+                {
+                    preview_id: 'prev-1',
+                    workspace_id: 'ws-1',
+                    kind: 'static-site',
+                    delivery_mode: 'external',
+                    source_type: 'files',
+                    status: 'ready',
+                    supports_iframe: false,
+                    supports_new_tab: true,
+                },
+            ],
+        });
+        launchPreviewMock.mockRejectedValue(
+            new Or3NetRequestError({
+                message: 'Forbidden',
+                status: 403,
+                code: 'auth.insufficient_scope',
+            })
+        );
+
+        const component = await import('../Or3NetworkPage.vue');
+        const wrapper = mountPage(component);
+        await flushPromises();
+        await flushPromises();
+
+        await wrapper.get('[data-testid="or3-net-preview-open-prev-1"]').trigger('click');
+        await flushPromises();
+
+        expect(wrapper.text()).toContain('current token lacks the required scope');
     });
 
     it('clears preview pane state when the workspace changes', async () => {

@@ -1,0 +1,6 @@
+{
+  "event": "text.delta",
+  "data": {
+    "text": "hello world"
+  }
+}

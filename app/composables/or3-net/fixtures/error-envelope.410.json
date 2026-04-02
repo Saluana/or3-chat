@@ -1,0 +1,6 @@
+{
+  "error": "launch capability expired",
+  "code": "capability.expired",
+  "status": 410,
+  "request_id": "req_expired"
+}
