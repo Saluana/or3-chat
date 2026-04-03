@@ -17,8 +17,13 @@ let invalidationWatcherInstalled = false;
 let pendingResolveCount = 0;
 
 function normalizeRouteThreadId(value: unknown): string | null {
-    const routeValue = Array.isArray(value) ? value[0] : value;
-    if (typeof routeValue !== 'string') return null;
+    const routeValue =
+        typeof value === 'string'
+            ? value
+            : Array.isArray(value) && typeof value[0] === 'string'
+              ? value[0]
+              : null;
+    if (routeValue === null) return null;
     const trimmed = routeValue.trim();
     return trimmed.length > 0 ? trimmed : null;
 }
@@ -28,7 +33,7 @@ function getActiveChatThreadIdFromPane(): string | null {
     if (!multiPane) return null;
     const pane = multiPane.panes.value[multiPane.activePaneIndex.value];
     if (!pane || pane.mode !== 'chat') return null;
-    const threadId = pane.threadId?.trim();
+    const threadId = pane.threadId.trim();
     return threadId ? threadId : null;
 }
 

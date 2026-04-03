@@ -267,7 +267,7 @@ export function useOr3NetJobStream() {
             const decoder = new TextDecoder();
             let buffer = '';
 
-            while (true) {
+            for (;;) {
                 const { done, value } = await reader.read();
                 if (runId !== connectionRunId) {
                     return;
@@ -293,7 +293,8 @@ export function useOr3NetJobStream() {
                 parseAndApplyFrame(tail);
             }
             connected.value = false;
-            if (!isTerminal.value && !controller.signal.aborted) {
+            const shouldReconnect = !isTerminal.value && !controller.signal.aborted;
+            if (shouldReconnect) {
                 await syncJobState(jobId);
                 if (!isTerminal.value) {
                     scheduleReconnect(jobId);

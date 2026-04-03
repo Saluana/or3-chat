@@ -732,6 +732,10 @@ export default defineNuxtConfig({
             skipWaiting: true, // activate new SW immediately
             clientsClaim: true, // control pages right away
             cleanupOutdatedCaches: true,
+            // The app bundle currently exceeds Workbox's 2 MiB default during
+            // production preview/E2E builds. Raise the cap so local preview and
+            // Playwright can boot instead of hard-failing the build.
+            maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
             // Ensure the prerendered callback HTML can be matched regardless of auth params
             ignoreURLParametersMatching: [/^code$/, /^state$/],
             // Never serve the generic SPA fallback for these routes.
