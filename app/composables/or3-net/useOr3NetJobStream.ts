@@ -9,6 +9,7 @@ import { useOr3NetAuth } from './useOr3NetAuth';
 import { useOr3NetClient } from './useOr3NetClient';
 import {
     normalizeOr3NetHostUrl,
+    Or3NetRequestError,
     type Or3NetJobDetail,
     type Or3NetJobStatus,
     type Or3NetJobStreamEvent,
@@ -139,14 +140,34 @@ export function useOr3NetJobStream() {
         }
     }
 
-    function parseJsonData(text: string): unknown {
-        if (!text.trim()) return null;
-        try {
-            return JSON.parse(text) as unknown;
-        } catch {
-            return text;
-        }
+function parseJsonData(text: string): unknown {
+    if (!text.trim()) return null;
+    try {
+        return JSON.parse(text) as unknown;
+    } catch {
+        return text;
     }
+}
+
+function toRetryAfterMs(response: Response, bodyText: string): number | undefined {
+    const envelope = parseOr3NetErrorEnvelope(parseJsonData(bodyText));
+    if (
+        typeof envelope?.retry_after_ms === 'number' &&
+        Number.isFinite(envelope.retry_after_ms)
+    ) {
+        return envelope.retry_after_ms;
+    }
+
+    const headerValue = response.headers.get('Retry-After');
+    if (!headerValue) return undefined;
+
+    const retryAfterSeconds = Number(headerValue);
+    if (!Number.isFinite(retryAfterSeconds) || retryAfterSeconds < 0) {
+        return undefined;
+    }
+
+    return Math.ceil(retryAfterSeconds * 1000);
+}
 
     function parseAndApplyFrame(frame: string): void {
         let eventName = 'message';
@@ -194,7 +215,11 @@ export function useOr3NetJobStream() {
         }
     }
 
-    function getReconnectDelayMs(): number {
+    function getReconnectDelayMs(retryAfterMs?: number): number {
+        if (typeof retryAfterMs === 'number' && Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
+            return Math.max(RECONNECT_BASE_DELAY_MS, Math.ceil(retryAfterMs));
+        }
+
         const baseDelayMs = Math.min(
             RECONNECT_BASE_DELAY_MS * 2 ** reconnectAttempt,
             RECONNECT_MAX_DELAY_MS
@@ -204,9 +229,9 @@ export function useOr3NetJobStream() {
         return Math.max(RECONNECT_BASE_DELAY_MS, Math.round(baseDelayMs * jitter));
     }
 
-    function scheduleReconnect(jobId: string): void {
+    function scheduleReconnect(jobId: string, retryAfterMs?: number): void {
         clearReconnectTimer();
-        const delayMs = getReconnectDelayMs();
+        const delayMs = getReconnectDelayMs(retryAfterMs);
         reconnectTimer = setTimeout(() => {
             void connect(jobId, true).catch(() => undefined);
         }, delayMs);
@@ -253,11 +278,17 @@ export function useOr3NetJobStream() {
             if (!response.ok || !response.body) {
                 const bodyText = await response.text().catch(() => '');
                 const envelope = parseOr3NetErrorEnvelope(parseJsonData(bodyText));
-                throw new Error(
-                    envelope?.error ||
+                throw new Or3NetRequestError({
+                    message:
+                        envelope?.error ||
                         response.statusText ||
-                        'OR3 Net stream request failed'
-                );
+                        'OR3 Net stream request failed',
+                    status: response.status,
+                    code: envelope?.code,
+                    requestId: envelope?.request_id,
+                    retryAfterMs: toRetryAfterMs(response, bodyText),
+                    data: parseJsonData(bodyText),
+                });
             }
 
             pending.value = false;
@@ -310,7 +341,12 @@ export function useOr3NetJobStream() {
             connected.value = false;
             await syncJobState(jobId);
             if (!isTerminal.value) {
-                scheduleReconnect(jobId);
+                scheduleReconnect(
+                    jobId,
+                    normalized instanceof Or3NetRequestError && normalized.status === 429
+                        ? normalized.retryAfterMs
+                        : undefined
+                );
             }
         } finally {
             if (runId === connectionRunId) {

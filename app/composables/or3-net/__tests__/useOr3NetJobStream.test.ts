@@ -186,6 +186,50 @@ describe('useOr3NetJobStream', () => {
         randomSpy.mockRestore();
     });
 
+    it('uses retry_after_ms from 429 stream errors instead of the default reconnect backoff', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        error: 'slow down',
+                        code: 'rate.limit_exceeded',
+                        retry_after_ms: 4_000,
+                    }),
+                    {
+                        status: 429,
+                        headers: { 'Content-Type': 'application/json' },
+                    }
+                )
+            )
+            .mockResolvedValueOnce(
+                createSseResponse([
+                    'event: job.accepted\ndata: {"job_id":"job-1"}\n\n',
+                    'event: job.completed\ndata: {"job_id":"job-1"}\n\n',
+                ])
+            );
+        vi.stubGlobal('fetch', fetchMock);
+        getJobMock.mockResolvedValue({
+            job_id: 'job-1',
+            workspace_id: 'ws-1',
+            status: 'running',
+            created_at: '2026-04-01T00:00:00.000Z',
+        });
+
+        const { useOr3NetJobStream } = await import('../useOr3NetJobStream');
+        const stream = useOr3NetJobStream();
+        await stream.attach('job-1');
+
+        await vi.advanceTimersByTimeAsync(3_999);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        await vi.advanceTimersByTimeAsync(1);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(stream.status.value).toBe('completed');
+    });
+
     it('caps the retained event log and clears terminal state on detach', async () => {
         const chunks = Array.from({ length: 105 }, (_, index) => {
             return `event: text.delta\ndata: {"text":"${index}"}\n\n`;

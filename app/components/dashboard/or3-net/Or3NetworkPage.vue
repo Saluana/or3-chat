@@ -976,7 +976,14 @@ watch(
             return;
         }
 
+        stream.detach();
+        selectedJobId.value = null;
+        selectedJob.value = null;
+        selectedJobError.value = null;
         previewPaneState.clearWorkspace(previousWorkspaceId);
+        serviceActionPendingKey.value = null;
+        serviceActionMessage.value = null;
+        serviceActionError.value = null;
         previewActionPendingKey.value = null;
         previewActionMessage.value = null;
         previewActionError.value = null;

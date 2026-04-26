@@ -757,16 +757,39 @@ describe('Or3NetworkPage', () => {
     });
 
     it('clears preview pane state when the workspace changes', async () => {
-        listJobsMock.mockResolvedValue({ items: [] });
+        listJobsMock.mockResolvedValue({
+            items: [
+                {
+                    job_id: 'job-1',
+                    status: 'running',
+                    node_id: 'node-1',
+                    created_at: '2026-04-01T10:00:00.000Z',
+                    started_at: '2026-04-01T10:01:00.000Z',
+                    completed_at: null,
+                    network_session_id: 'sess-1',
+                },
+            ],
+        });
+        getJobMock.mockResolvedValue({
+            job_id: 'job-1',
+            workspace_id: 'ws-1',
+            status: 'running',
+            node_id: 'node-1',
+            created_at: '2026-04-01T10:00:00.000Z',
+            started_at: '2026-04-01T10:01:00.000Z',
+            completed_at: null,
+        });
         listPreviewsMock.mockResolvedValue({ items: [] });
 
         const component = await import('../Or3NetworkPage.vue');
         mountPage(component);
         await flushPromises();
+        expect(streamAttachMock).toHaveBeenCalledWith('job-1');
 
         activeWorkspaceId.value = 'ws-2';
         await flushPromises();
 
         expect(previewClearWorkspaceMock).toHaveBeenCalledWith('ws-1');
+        expect(streamDetachMock).toHaveBeenCalled();
     });
 });

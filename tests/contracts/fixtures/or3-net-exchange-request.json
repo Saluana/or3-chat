@@ -1,0 +1,8 @@
+{
+  "provider": "or3-chat",
+  "session_proof": {
+    "format": "or3-chat-assertion-v1",
+    "assertion": "payload.signature"
+  },
+  "workspace_id": "ws_demo"
+}

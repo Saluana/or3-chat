@@ -207,7 +207,7 @@ hasFreshPayload(workspaceId)?
                            store result → payload.value
 ```
 
-- Tokens are considered stale when they expire within the next **5 seconds**.
+- Tokens are considered stale when they expire within the next **15 seconds**.
 - On workspace switch (detected via `watch(activeWorkspaceId, ...)`), the cached payload is immediately invalidated.
 - The workspace watcher is installed once at module level (guarded by `workspaceWatcherInstalled` flag).
 
@@ -698,19 +698,11 @@ Private config (`or3Net`):
 
 ---
 
-## 13. Remaining & Deferred Work
+## 13. Follow-Up
 
-These items are tracked in `planning/or3-net/tasks.md` and `planning/or3-net-plan.md`:
+The consumer-side contract hardening for the current OR3 Net baseline is now shipped:
 
-### High priority
-- **Freeze the exchange contract** — document the exact request shape (`provider`, `session_proof`, optional `workspace_id`) and the `or3-chat-assertion-v1` proof fields that or3-net relies on.
-- **Document workspace-switch invalidation contract** — write down what is torn down on switch so or3-net can rely on chat-side cleanup semantics.
-- **Error-envelope adoption in UI** — currently `Or3NetRequestError.code` and `retryAfterMs` are often discarded in favour of plain message strings. Surface these in the UI for better recovery guidance.
+- Exchange contract, workspace invalidation, canonical error-envelope parsing, fixture-backed contract tests, and CI coverage are implemented in `or3-chat`.
+- The exact cross-repo backlog still lives in `planning/or3-net/tasks.md` and the upstream `or3-net/planning/platform-standardization/tasks.md`.
 
-### Medium priority
-- **Contract fixtures** — add exchange request/response and error-envelope fixtures as consumer-side tests.
-- **CI coverage** — add a GitHub Actions workflow running the or3-net contract test suite.
-
-### Low priority
-- **Config alignment** — align future wizard/env emission with canonical cross-repo naming conventions.
-- **Stale planning doc cleanup** — several planning docs still describe pre-ship uncertainty as active work.
+The main deferred item in `or3-chat` after this baseline is future config/wizard alignment if the install flow needs stricter `OR3_NET_*` emission guarantees.
