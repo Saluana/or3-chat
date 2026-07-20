@@ -6046,7 +6046,7 @@
     },
     {
       "source": "app/composables/plugins/workspace-runtime.ts",
-      "apiSha256": "bb5c6a1902b606f66554ed20558dba53331f006fde72273a8023ff4c6efd354c",
+      "apiSha256": "c5da29a753347bf073f8d50c469c98ac87452bad7cff2c794d2f225a02f4fe43",
       "runtime": "client",
       "publicPaths": [
         "~/composables/plugins/workspace-runtime"
@@ -6068,7 +6068,7 @@
               "resolvedReturnType": "{ api: Or3WorkspacePluginApi; dispose: () => void; }",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 77,
+                "line": 61,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createWorkspacePluginApi(): {\n    api: Or3WorkspacePluginApi;\n    dispose: () => void;\n};"
               }
@@ -6077,7 +6077,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 77,
+              "line": 61,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createWorkspacePluginApi(): {\n    api: Or3WorkspacePluginApi;\n    dispose: () => void;\n};"
             }
@@ -6094,7 +6094,7 @@
               "resolvedReturnType": "{ id: string; source: WorkspacePluginSource; }[]",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 192,
+                "line": 186,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listWorkspacePluginInstances(): Array<{ id: string; source: WorkspacePluginSource }>;"
               }
@@ -6103,7 +6103,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 192,
+              "line": 186,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listWorkspacePluginInstances(): Array<{ id: string; source: WorkspacePluginSource }>;"
             }
@@ -6117,7 +6117,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 29,
+              "line": 30,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface Or3WorkspacePlugin {\n    id: string;\n    register(api: Or3WorkspacePluginApi): void | Promise<void>;\n}"
             }
@@ -6131,7 +6131,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 20,
+              "line": 21,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface Or3WorkspacePluginApi {\n    registerDashboardPlugin: (plugin: DashboardPlugin) => RegistrationHandle;\n    registerSidebarPage: (def: SidebarPageDef) => () => void;\n    registerPaneApp: (def: PaneAppDef) => RegistrationHandle;\n    registerMessageAction: (action: ChatMessageAction) => RegistrationHandle;\n    registerTool: (def: ExtendedToolDefinition, handler: ToolHandler) => RegistrationHandle;\n    onCleanup: (fn: () => void | Promise<void>) => void;\n}"
             }
@@ -6148,7 +6148,7 @@
               "resolvedReturnType": "{ accepted: boolean; replacedSource?: WorkspacePluginSource; }",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 144,
+                "line": 138,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerWorkspacePluginInstance(\n    id: string,\n    source: WorkspacePluginSource,\n    dispose: () => void | Promise<void>\n): { accepted: boolean; replacedSource?: WorkspacePluginSource };"
               }
@@ -6157,7 +6157,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 144,
+              "line": 138,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerWorkspacePluginInstance(\n    id: string,\n    source: WorkspacePluginSource,\n    dispose: () => void | Promise<void>\n): { accepted: boolean; replacedSource?: WorkspacePluginSource };"
             }
@@ -6174,7 +6174,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 176,
+                "line": 170,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterWorkspacePluginInstance(id: string): void;"
               }
@@ -6183,7 +6183,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 176,
+              "line": 170,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterWorkspacePluginInstance(id: string): void;"
             }
@@ -6197,7 +6197,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 13,
+              "line": 14,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspacePluginSource = 'builtin' | 'extension';"
             }

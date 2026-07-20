@@ -9,6 +9,7 @@ import type { PaneAppDef } from '~/composables/core/usePaneApps';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import type { ExtendedToolDefinition, ToolHandler } from '~/utils/chat/tool-registry';
 import type { RegistrationHandle } from '~~/shared/plugins/registration-handle';
+import { LegacyPluginScope } from '~~/shared/plugins/legacy-plugin-scope';
 
 export type WorkspacePluginSource = 'builtin' | 'extension';
 
@@ -57,28 +58,17 @@ function toDisposer(
     };
 }
 
-function toCleanupRunner(cleanups: Array<() => void | Promise<void>>): () => void {
-    return () => {
-        for (const cleanup of cleanups.splice(0)) {
-            try {
-                const result = cleanup();
-                if (result && typeof (result as Promise<void>).then === 'function') {
-                    void result;
-                }
-            } catch (error) {
-                if (import.meta.dev) {
-                    console.warn('[workspace-plugin-runtime] cleanup failed', error);
-                }
-            }
-        }
-    };
-}
-
 export function createWorkspacePluginApi(): {
     api: Or3WorkspacePluginApi;
     dispose: () => void;
 } {
-    const cleanups: Array<() => void | Promise<void>> = [];
+    const scope = new LegacyPluginScope({
+        onCleanupError({ error }) {
+            if (import.meta.dev) {
+                console.warn('[workspace-plugin-runtime] cleanup failed', error);
+            }
+        },
+    });
     const { registerPaneApp } = usePaneApps();
     const tools = useToolRegistry();
 
@@ -86,7 +76,7 @@ export function createWorkspacePluginApi(): {
         registerDashboardPlugin(plugin) {
             const handle = registerDashboardPlugin(plugin);
             const cleanup = toDisposer(handle);
-            cleanups.push(cleanup);
+            scope.onCleanup(cleanup);
             return handle;
         },
         registerSidebarPage(def) {
@@ -94,19 +84,19 @@ export function createWorkspacePluginApi(): {
                 clientOnly: true,
                 hmrCleanup: false,
             });
-            cleanups.push(cleanup);
+            scope.onCleanup(cleanup);
             return cleanup;
         },
         registerPaneApp(def) {
             const handle = registerPaneApp(def);
             const cleanup = toDisposer(handle);
-            cleanups.push(cleanup);
+            scope.onCleanup(cleanup);
             return handle;
         },
         registerMessageAction(action) {
             const handle = registerMessageAction(action);
             const cleanup = toDisposer(handle);
-            cleanups.push(cleanup);
+            scope.onCleanup(cleanup);
             return handle;
         },
         registerTool(def, handler) {
@@ -125,19 +115,23 @@ export function createWorkspacePluginApi(): {
                     return removed;
                 },
             };
-            cleanups.push(() => {
+            scope.onCleanup(() => {
                 handle.dispose();
             });
             return handle;
         },
         onCleanup(fn) {
-            cleanups.push(fn);
+            scope.onCleanup(fn);
         },
     };
 
     return {
         api,
-        dispose: toCleanupRunner(cleanups),
+        dispose() {
+            // Invocation remains synchronous/FIFO. Promise settlement is owned
+            // by the compatibility scope without changing this V1 void return.
+            void scope.dispose();
+        },
     };
 }
 

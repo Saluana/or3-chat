@@ -177,6 +177,7 @@ describe('GET /api/plugins/runtime-manifest', () => {
             loadDeniedReason: 'plugin-disabled',
         });
         expect(result.runtime.alpha).toMatchObject({
+            mediatedLifecycleCoverage: 'managed-v1-api',
             lifecycleCoverage: 'legacy-global-possible',
             descriptorStatus: 'ready',
             descriptor: {
@@ -201,6 +202,7 @@ describe('GET /api/plugins/runtime-manifest', () => {
         const { descriptorKey, ...identity } = result.runtime.alpha.descriptor;
         expect(await createDescriptorKey(identity)).toBe(descriptorKey);
         expect(result.runtime.beta).toMatchObject({
+            mediatedLifecycleCoverage: 'managed-v1-api',
             lifecycleCoverage: 'legacy-global-possible',
             descriptorStatus: 'rebuild-required',
             rebuildRequiredReason: 'not-in-host-build',

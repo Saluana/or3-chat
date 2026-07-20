@@ -25,6 +25,7 @@ import type {
 } from '../../../shared/plugins/runtime-descriptor';
 import type { PluginRuntimeManifestResponse } from '../../../shared/plugins/runtime-manifest';
 import { isNonCorePluginDiscoveryDisabled } from '../../../shared/plugins/safe-mode';
+import { LEGACY_LIFECYCLE_COVERAGE } from '../../../shared/plugins/legacy-plugin-scope';
 
 export type { PluginRuntimeManifestResponse } from '../../../shared/plugins/runtime-manifest';
 
@@ -160,7 +161,8 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
             hasServerRoutes: Boolean(plugin.runtime?.server?.routes?.length),
             loadAllowed,
             loadDeniedReason,
-            lifecycleCoverage: 'legacy-global-possible' as const,
+            mediatedLifecycleCoverage: LEGACY_LIFECYCLE_COVERAGE.mediated,
+            lifecycleCoverage: LEGACY_LIFECYCLE_COVERAGE.overall,
         };
         const artifactResolution = resolveBundledPluginArtifact(
             bundledPluginCatalog,

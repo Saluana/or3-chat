@@ -9,6 +9,8 @@ export interface LegacyPluginRuntimeManifestEntry {
     hasServerRoutes: boolean;
     loadAllowed: boolean;
     loadDeniedReason?: string;
+    /** Additive ownership detail; overall V1 coverage stays conservative. */
+    mediatedLifecycleCoverage?: Extract<PluginLifecycleCoverage, 'managed-v1-api'>;
 }
 
 interface PluginRuntimeManifestEntryBase extends LegacyPluginRuntimeManifestEntry {

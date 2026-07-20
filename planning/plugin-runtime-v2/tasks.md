@@ -122,19 +122,19 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
 
 ## 3. Milestones 2–3 — V1-safe lifecycle and manager cutover
 
-- [ ] 3.1 Implement idempotent scope-owned abort and cleanup record primitives
+- [x] 3.1 Implement idempotent scope-owned abort and cleanup record primitives
       Requirements: R3.AC1, R3.AC8
       Done when: duplicate abort/dispose calls are no-ops and stale owners cannot affect current records.
 
-- [ ] 3.2 Implement the V1 cleanup runner with FIFO invocation, concurrently collected thenables, per-error reporting, and one overall timeout
+- [x] 3.2 Implement the V1 cleanup runner with FIFO invocation, concurrently collected thenables, per-error reporting, and one overall timeout
       Requirements: R3.AC6, R3.AC9
       Done when: tests prove invocation order, non-serialized promise starts, all-settled behavior, thrown cleanup continuation, and timeout completion.
 
-- [ ] 3.3 Adapt `createWorkspacePluginApi` to `LegacyPluginScope` without changing immediate registration visibility or public returns
+- [x] 3.3 Adapt `createWorkspacePluginApi` to `LegacyPluginScope` without changing immediate registration visibility or public returns
       Requirements: R1.AC2, R3.AC5, R3.AC7
       Done when: registration-time visibility fixtures and existing workspace-runtime tests pass unchanged.
 
-- [ ] 3.4 Add lifecycle-coverage reporting for passed-API ownership versus `legacy-global-possible`
+- [x] 3.4 Add lifecycle-coverage reporting for passed-API ownership versus `legacy-global-possible`
       Requirements: R2.AC4, R3.AC7, R9.AC3
       Done when: all V1 packages default conservatively and the UI never labels arbitrary V1 code fully managed.
 

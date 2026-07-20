@@ -62,6 +62,11 @@
                     <dd>{{ record.desired }} / {{ record.status }}</dd>
                     <dt class="opacity-65">Lifecycle coverage</dt>
                     <dd>{{ record.lifecycleCoverage }}</dd>
+                    <dt class="opacity-65">Passed V1 API</dt>
+                    <dd>
+                        managed-v1-api; direct imports, timers, listeners, and arbitrary side
+                        effects remain legacy-global-possible
+                    </dd>
                     <dt class="opacity-65">Trust / source</dt>
                     <dd>{{ record.descriptor.trust }} / {{ record.descriptor.source }}</dd>
                     <dt class="opacity-65">Workspace</dt>
