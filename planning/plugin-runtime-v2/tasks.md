@@ -294,7 +294,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC7, R5.AC6, R9.AC3
       Done when: inspector refresh/reset works and no app code needs mutable internals.
 
-- [ ] 5.10 Add metadata/plan-only shadow comparison and assert no callback dual execution
+- [x] 5.10 Add metadata/plan-only shadow comparison and assert no callback dual execution
       Requirements: R5.AC7, R9.AC5
       Done when: a side-effect counter increments once while shadow plan differences remain inspectable.
 
