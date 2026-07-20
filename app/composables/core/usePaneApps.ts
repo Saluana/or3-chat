@@ -6,6 +6,10 @@ import {
     type ComputedRef,
 } from 'vue';
 import { z } from 'zod';
+import {
+    createRegistrationHandle,
+    type RegistrationHandle,
+} from '~~/shared/plugins/registration-handle';
 
 /**
  * Pane app definition: describes a custom pane application that can be registered
@@ -75,7 +79,22 @@ const PaneAppDefSchema = z.object({
     createInitialRecord: z.function().optional(),
 });
 
+type OwnedPaneApp = {
+    app: RegisteredPaneApp;
+    owner: symbol;
+};
+
 // Global registry storage
+const ownedRegistry: Map<string, OwnedPaneApp> = (() => {
+    const g = globalThis as {
+        __or3PaneAppsOwnedRegistry?: Map<string, OwnedPaneApp>;
+    };
+    if (!g.__or3PaneAppsOwnedRegistry) {
+        g.__or3PaneAppsOwnedRegistry = new Map();
+    }
+    return g.__or3PaneAppsOwnedRegistry;
+})();
+
 const registry: Map<string, RegisteredPaneApp> = (() => {
     const g = globalThis as {
         __or3PaneAppsRegistry?: Map<string, RegisteredPaneApp>;
@@ -123,7 +142,7 @@ export function usePaneApps() {
     /**
      * Register a new pane app. If an app with the same id exists, it is replaced.
      */
-    function registerPaneApp(def: PaneAppDef): void {
+    function registerPaneApp(def: PaneAppDef): RegistrationHandle {
         // Validate input with Zod schema
         const parsed = PaneAppDefSchema.safeParse(def);
         if (!parsed.success) {
@@ -133,6 +152,7 @@ export function usePaneApps() {
             );
         }
 
+        const owner = Symbol(`pane-app:${def.id}`);
         const normalized: RegisteredPaneApp = {
             ...def,
             component: markRaw(
@@ -142,15 +162,28 @@ export function usePaneApps() {
             ),
             order: def.order ?? DEFAULT_ORDER,
         };
+        ownedRegistry.set(def.id, { app: normalized, owner });
         registry.set(def.id, normalized);
         // Trigger reactivity by mutating the reactive wrapper
         reactiveRegistry.registry = new Map(registry);
+        return createRegistrationHandle({
+            id: def.id,
+            owner,
+            isCurrent: () => ownedRegistry.get(def.id)?.owner === owner,
+            remove: () => {
+                if (ownedRegistry.get(def.id)?.owner !== owner) return;
+                ownedRegistry.delete(def.id);
+                registry.delete(def.id);
+                reactiveRegistry.registry = new Map(registry);
+            },
+        });
     }
 
     /**
      * Unregister a pane app by id.
      */
     function unregisterPaneApp(id: string): void {
+        ownedRegistry.delete(id);
         registry.delete(id);
         // Trigger reactivity
         reactiveRegistry.registry = new Map(registry);

@@ -4,16 +4,16 @@
  * - no filters => decision unchanged
  * - filter can restrict allowed=true -> false
  * - filter cannot grant allowed=false -> true (must be ignored/overridden)
- * - filter throws => decision unchanged + diagnostic increment
+ * - filter throws => fail closed (deny) + diagnostic increment
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { can } from '../can';
-import { 
-    initializeAuthHookEngine, 
+import {
+    initializeAuthHookEngine,
     getAuthHookEngine,
     isAuthHookEngineInitialized,
     _resetAuthHookEngineForTesting,
-    type AuthAccessDecisionFilter 
+    type AuthAccessDecisionFilter,
 } from '../hooks';
 import { createHookEngine } from '../../hooks/hook-engine';
 import type { AccessDecision, SessionContext } from '~/core/hooks/hook-types';
@@ -141,42 +141,52 @@ describe('auth hooks and can() filter enforcement', () => {
     });
 
     describe('filter error handling', () => {
-        it('should keep decision unchanged when filter throws', () => {
-            // Reset and create fresh engine
+        it('should fail closed when a constraint throws', () => {
             _resetAuthHookEngineForTesting();
             const hookEngine = createHookEngine();
-            initializeAuthHookEngine(hookEngine);
-            
-            // Filter that throws
-            const throwingFilter: AuthAccessDecisionFilter = () => {
+            const authEngine = initializeAuthHookEngine(hookEngine);
+
+            authEngine.addAccessDecisionFilter(() => {
                 throw new Error('Filter error');
-            };
-            
-            // Add filter via the hook engine directly
-            hookEngine.addFilter('auth.access:filter:decision', throwingFilter as any);
-            
+            });
+
             const decision = can(mockSession, 'workspace.read');
-            
-            // Should still be allowed (base decision), filter error was caught
-            expect(decision.allowed).toBe(true);
-            
-            // Verify error was recorded
-            const errorCount = hookEngine._diagnostics.errors['auth.access:filter:decision'] || 0;
-            expect(errorCount).toBeGreaterThan(0);
+
+            expect(decision.allowed).toBe(false);
+            expect(decision.reason).toBe('auth-constraint-error');
+            expect(
+                hookEngine._diagnostics.errors['auth.access:constraint:error'] || 0
+            ).toBeGreaterThan(0);
+        });
+
+        it('should fail closed when a constraint returns a Promise', () => {
+            _resetAuthHookEngineForTesting();
+            const hookEngine = createHookEngine();
+            const authEngine = initializeAuthHookEngine(hookEngine);
+
+            authEngine.addAuthorizationConstraint({
+                id: 'async-bad',
+                // Intentionally invalid async constraint for fail-closed coverage.
+                evaluate: (() =>
+                    Promise.resolve({ allowed: true })) as unknown as () => {
+                    allowed: true;
+                },
+            });
+
+            const decision = can(mockSession, 'workspace.read');
+            expect(decision.allowed).toBe(false);
+            expect(decision.reason).toBe('auth-constraint-async');
         });
 
         it('should not crash when filter throws', () => {
             _resetAuthHookEngineForTesting();
             const hookEngine = createHookEngine();
-            initializeAuthHookEngine(hookEngine);
-            
-            const throwingFilter: AuthAccessDecisionFilter = () => {
+            const authEngine = initializeAuthHookEngine(hookEngine);
+
+            authEngine.addAccessDecisionFilter(() => {
                 throw new Error('Filter error');
-            };
-            
-            hookEngine.addFilter('auth.access:filter:decision', throwingFilter as any);
-            
-            // Should not throw despite filter error
+            });
+
             expect(() => can(mockSession, 'workspace.read')).not.toThrow();
         });
     });

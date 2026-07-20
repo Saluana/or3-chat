@@ -28,6 +28,7 @@ import { z } from 'zod';
 import { requireAdminApi } from '../../../admin/api';
 import { getClientIp } from '../../../admin/auth/rate-limit';
 import {
+    ExtensionAlreadyInstalledError,
     installExtensionFromZip,
     resolveExtensionInstallLimits,
 } from '../../../admin/extensions/install';
@@ -168,6 +169,12 @@ export default defineEventHandler(async (event) => {
             restartRequired: manifest.kind === 'theme',
         };
     } catch (error) {
+        if (error instanceof ExtensionAlreadyInstalledError) {
+            throw createError({
+                statusCode: 409,
+                statusMessage: error.message,
+            });
+        }
         throw createError({
             statusCode: 400,
             statusMessage: error instanceof Error ? error.message : 'Install failed',

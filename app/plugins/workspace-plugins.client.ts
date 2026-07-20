@@ -17,6 +17,8 @@ type PluginRuntimeManifestResponse = {
         {
             clientEntry?: string;
             hasServerRoutes: boolean;
+            loadAllowed?: boolean;
+            loadDeniedReason?: string;
         }
     >;
     revision: string;
@@ -125,7 +127,13 @@ export default defineNuxtPlugin(() => {
             return;
         }
 
-        const enabledSet = new Set(manifest.enabledPluginIds);
+        // Server-authoritative load set: only plugins the host decided are loadable.
+        const enabledSet = new Set(
+            manifest.enabledPluginIds.filter((pluginId) => {
+                const runtime = manifest.runtime[pluginId];
+                return runtime?.loadAllowed !== false;
+            })
+        );
 
         for (const id of Array.from(managedPluginIds)) {
             if (!enabledSet.has(id)) {
@@ -134,23 +142,36 @@ export default defineNuxtPlugin(() => {
             }
         }
 
-        for (const pluginId of manifest.enabledPluginIds) {
+        let hadFailure = false;
+
+        for (const pluginId of Array.from(enabledSet)) {
+            if (token !== syncToken) return;
+
+            if (managedPluginIds.has(pluginId)) {
+                continue;
+            }
+
             const loader = findLoader(modules, pluginId, manifest.runtime[pluginId]?.clientEntry);
             if (!loader) {
                 const clientEntry = manifest.runtime[pluginId]?.clientEntry;
                 if (clientEntry) {
                     console.warn(
                         `[workspace-plugins] no bundled client entry resolved for plugin "${pluginId}". ` +
-                            `If it was installed after the current build, run Rebuild + Restart ` +
-                            `before enabling it (${clientEntry}).`
+                            `Post-build ZIP installs require a rebuild so Vite can include the client entry ` +
+                            `(${clientEntry}).`
                     );
                 }
+                hadFailure = true;
                 continue;
             }
 
             let dispose: (() => void) | null = null;
             try {
                 const mod = await loader();
+                if (token !== syncToken) {
+                    return;
+                }
+
                 const plugin = parseWorkspacePlugin(mod, pluginId);
                 if (!plugin) {
                     throw new Error('Invalid plugin module export or plugin id mismatch');
@@ -159,6 +180,11 @@ export default defineNuxtPlugin(() => {
                 const runtime = createWorkspacePluginApi();
                 dispose = runtime.dispose;
                 await plugin.register(runtime.api);
+                if (token !== syncToken) {
+                    dispose();
+                    return;
+                }
+
                 const registration = registerWorkspacePluginInstance(
                     pluginId,
                     'extension',
@@ -172,6 +198,7 @@ export default defineNuxtPlugin(() => {
                 managedPluginIds.add(pluginId);
                 dispose = null;
             } catch (error) {
+                hadFailure = true;
                 if (dispose) {
                     dispose();
                 }
@@ -184,7 +211,12 @@ export default defineNuxtPlugin(() => {
             }
         }
 
-        currentRevision = manifest.revision;
+        if (token !== syncToken) return;
+
+        // Only commit revision after a fully successful sync so transient failures retry.
+        if (!hadFailure) {
+            currentRevision = manifest.revision;
+        }
     };
 
     const stopWatcher = watch(

@@ -80,7 +80,9 @@ export default defineEventHandler(async (event) => {
         action: `${method.toLowerCase()}:${normalizeRoutePath(requestPath) || '/'}`,
     });
 
-    requireCan(session, 'workspace.read', {
+    const workspacePermission =
+        method === 'GET' || method === 'HEAD' ? 'workspace.read' : 'workspace.write';
+    requireCan(session, workspacePermission, {
         kind: 'workspace',
         id: session.workspace?.id,
     });

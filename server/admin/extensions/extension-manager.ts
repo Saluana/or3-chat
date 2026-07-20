@@ -18,9 +18,9 @@
  * - Dynamic code execution (loading is handled by the application core).
  */
 import { promises as fs } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import type { ExtensionKind, InstalledExtensionRecord } from './types';
-import { Or3ExtensionManifestSchema } from './types';
+import { ExtensionIdSchema, Or3ExtensionManifestSchema } from './types';
 import { ensureExtensionsDirs, EXTENSIONS_BASE_DIR, getKindDir } from './paths';
 import { removeSyncedThemeFromApp } from './theme-install-sync';
 
@@ -85,14 +85,9 @@ async function listExtensionsInDir(
         try {
             const manifest = await readManifest(manifestPath);
             if (!manifest) continue;
+            // Preserve the full validated manifest (including runtime metadata).
             results.push({
-                id: manifest.id,
-                name: manifest.name,
-                version: manifest.version,
-                kind: manifest.kind,
-                description: manifest.description,
-                capabilities: manifest.capabilities,
-                access: manifest.access,
+                ...manifest,
                 path: join(root, entry),
             });
         } catch {
@@ -143,12 +138,18 @@ export function invalidateExtensionsCache(): void {
     cache = undefined;
 }
 
+function isPathInside(root: string, candidate: string): boolean {
+    const normalizedRoot = root.endsWith(sep) ? root : `${root}${sep}`;
+    return candidate === root || candidate.startsWith(normalizedRoot);
+}
+
 /**
  * Purpose:
  * Completely removes an extension from the filesystem.
  *
  * Behavior:
- * Deletes the extension's directory under the corresponding kind folder.
+ * Validates the extension id, resolves the path under the kind directory,
+ * verifies containment (including symlink realpath), then deletes recursively.
  *
  * @param kind - The category of the extension to remove.
  * @param id - The unique ID of the extension (matches its folder name).
@@ -157,11 +158,48 @@ export async function uninstallExtension(
     kind: ExtensionKind,
     id: string
 ): Promise<void> {
+    const parsedId = ExtensionIdSchema.safeParse(id);
+    if (!parsedId.success) {
+        throw new Error('Invalid extension id');
+    }
+
     await ensureExtensionsDirs();
     const kindDir = getKindDir(kind);
-    const targetDir = join(EXTENSIONS_BASE_DIR, kindDir, id);
+    const kindRoot = resolve(EXTENSIONS_BASE_DIR, kindDir);
+    const targetDir = resolve(kindRoot, parsedId.data);
+
+    if (!isPathInside(kindRoot, targetDir)) {
+        throw new Error('Invalid extension id');
+    }
+
+    let realKindRoot: string;
+    try {
+        realKindRoot = await fs.realpath(kindRoot);
+    } catch {
+        throw new Error('Extension kind directory unavailable');
+    }
+
+    let realTarget: string;
+    try {
+        realTarget = await fs.realpath(targetDir);
+    } catch (error) {
+        if (
+            error &&
+            typeof error === 'object' &&
+            'code' in error &&
+            (error as { code?: string }).code === 'ENOENT'
+        ) {
+            throw new Error('Extension not found');
+        }
+        throw error;
+    }
+
+    if (!isPathInside(realKindRoot, realTarget)) {
+        throw new Error('Invalid extension path');
+    }
+
     await fs.rm(targetDir, { recursive: true, force: true });
     if (kind === 'theme') {
-        await removeSyncedThemeFromApp(id);
+        await removeSyncedThemeFromApp(parsedId.data);
     }
 }

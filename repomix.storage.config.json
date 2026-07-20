@@ -1,0 +1,44 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "style": "markdown",
+    "filePath": "or3-storage-layer-audit.md",
+    "removeComments": false,
+    "showLineNumbers": true,
+    "topFilesLength": 20,
+    "headerText": "OR3 DB Storage / Blob Transfer Layer — Security Audit Pack\n\nScope: Presign upload/download/commit/GC APIs, expiry + quota helpers, gateway storage adapter registry, client transfer queue/leases, local file/attachment Dexie helpers, related docs/tests.\n\nPrimary surfaces:\n1. server/api/storage/* — presign-upload/download, commit, GC (can()-gated, no-store)\n2. server/utils/storage/* — presign expiry caps, quotas, metrics\n3. server/storage/gateway — adapter registry/types\n4. app/core/storage/* — transfer queue, leases, gateway client provider\n5. app/db/files*.ts + attachments — local metadata / ref_count semantics\n6. app/plugins/storage-transfer.client.ts — client bootstrap\n\nNote: Concrete FS/S3 upload handlers often live in provider packages (or3-provider-fs / or3-provider-s3). This pack covers the in-repo gateway + API contract those providers plug into.\n\nExcluded: Sync engine (separate), auth engine (separate), AI proxy, themes/plugins/webhooks."
+  },
+  "include": [
+    "app/core/storage/**",
+    "server/api/storage/**",
+    "server/utils/storage/**",
+    "server/storage/**",
+    "shared/storage/**",
+    "shared/testing/contracts/storage.ts",
+    "app/plugins/storage-transfer.client.ts",
+    "app/db/files.ts",
+    "app/db/files-util.ts",
+    "app/db/files-select.ts",
+    "app/db/attachments.ts",
+    "app/db/message-files.ts",
+    "app/db/__tests__/files-*.ts",
+    "app/db/__tests__/transfer-lease-migration.test.ts",
+    "planning/complete/db-storage-system/**",
+    "planning/complete/s3-storage-provider/**",
+    "public/_documentation/cloud/storage-layer.md",
+    "public/_documentation/cloud/provider-fs.md",
+    "public/_documentation/cloud/provider-s3.md"
+  ],
+  "ignore": {
+    "customPatterns": [
+      "**/node_modules/**",
+      "**/.nuxt/**",
+      "**/.output/**",
+      "**/webhooks/**",
+      "**/*webhook*",
+      "or3-*-audit.md",
+      "or3-repo.md",
+      "or3-intern-full-codebase.md"
+    ]
+  }
+}

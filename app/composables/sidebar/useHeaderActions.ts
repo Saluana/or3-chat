@@ -136,7 +136,7 @@ const registry = createRegistry<HeaderAction>('__or3HeaderActionsRegistry');
  * - Does not validate action payload beyond the registry behavior
  */
 export function registerHeaderAction(action: HeaderAction) {
-    registry.register(action);
+    return registry.register(action);
 }
 
 /**

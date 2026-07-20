@@ -79,13 +79,15 @@ const RuntimeSchema = z.object({
  * Purpose:
  * Schema for extension identifiers.
  * Enforces safe naming conventions suitable for directory names and lookup keys.
+ * Exported so every install/uninstall/API boundary reuses one canonical validator.
  */
-const ExtensionIdSchema = z
+export const ExtensionIdSchema = z
     .string()
     .min(1)
     .regex(/^[A-Za-z0-9._-]+$/, 'Invalid extension id')
     .refine((id) => !id.includes('..'), 'Invalid extension id');
 
+export type ExtensionId = z.infer<typeof ExtensionIdSchema>;
 /**
  * Purpose:
  * The source-of-truth schema for `or3.manifest.json`.

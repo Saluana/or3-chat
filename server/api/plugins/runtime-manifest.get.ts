@@ -6,6 +6,7 @@ import { listInstalledExtensions } from '../../admin/extensions/extension-manage
 import { getWorkspaceSettingsStore } from '../../admin/stores/registry';
 import { getEnabledPlugins } from '../../admin/plugins/workspace-plugin-store';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
+import { checkPluginAccess } from '../../utils/plugins/access/require-plugin-access';
 
 export interface PluginRuntimeManifestResponse {
     workspaceId: string | null;
@@ -16,6 +17,9 @@ export interface PluginRuntimeManifestResponse {
         {
             clientEntry?: string;
             hasServerRoutes: boolean;
+            /** Server-authoritative decision: client may import/register this plugin. */
+            loadAllowed: boolean;
+            loadDeniedReason?: string;
         }
     >;
     revision: string;
@@ -24,7 +28,13 @@ export interface PluginRuntimeManifestResponse {
 function buildRevision(payload: {
     workspaceId: string | null;
     enabledPluginIds: string[];
-    installed: Array<{ id: string; version: string; clientEntry?: string; hasServerRoutes: boolean }>;
+    installed: Array<{
+        id: string;
+        version: string;
+        clientEntry?: string;
+        hasServerRoutes: boolean;
+        loadAllowed: boolean;
+    }>;
 }): string {
     const raw = JSON.stringify(payload);
     return createHash('sha1').update(raw).digest('hex');
@@ -70,16 +80,41 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
 
     const installedPluginIds = installedPlugins.map((plugin) => plugin.id);
     const installedSet = new Set(installedPluginIds);
-    const enabledPluginIds = Array.from(
+    const configuredEnabled = Array.from(
         new Set(enabledConfigured.filter((id) => installedSet.has(id)))
     ).sort((a, b) => a.localeCompare(b));
 
     const runtime: PluginRuntimeManifestResponse['runtime'] = {};
+    const enabledPluginIds: string[] = [];
+
     for (const plugin of installedPlugins) {
+        const configured = configuredEnabled.includes(plugin.id);
+        let loadAllowed = false;
+        let loadDeniedReason: string | undefined = configured
+            ? undefined
+            : 'plugin-disabled';
+
+        if (configured) {
+            const access = await checkPluginAccess(event, {
+                pluginId: plugin.id,
+                action: 'runtime.load',
+            });
+            loadAllowed = access.decision.allowed;
+            if (!loadAllowed) {
+                loadDeniedReason = access.decision.reasons[0] ?? 'forbidden';
+            }
+        }
+
         runtime[plugin.id] = {
             clientEntry: plugin.runtime?.client?.entry,
             hasServerRoutes: Boolean(plugin.runtime?.server?.routes?.length),
+            loadAllowed,
+            loadDeniedReason,
         };
+
+        if (loadAllowed) {
+            enabledPluginIds.push(plugin.id);
+        }
     }
 
     const revision = buildRevision({
@@ -90,6 +125,7 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
             version: plugin.version,
             clientEntry: plugin.runtime?.client?.entry,
             hasServerRoutes: Boolean(plugin.runtime?.server?.routes?.length),
+            loadAllowed: runtime[plugin.id]?.loadAllowed ?? false,
         })),
     });
 

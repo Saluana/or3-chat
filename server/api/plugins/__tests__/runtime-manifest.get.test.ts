@@ -30,6 +30,17 @@ vi.mock('../../../admin/plugins/workspace-plugin-store', () => ({
     getEnabledPlugins: getEnabledPluginsMock as any,
 }));
 
+const checkPluginAccessMock = vi.fn();
+vi.mock('../../../utils/plugins/access/require-plugin-access', () => ({
+    checkPluginAccess: checkPluginAccessMock as any,
+}));
+
+vi.mock('#imports', () => ({
+    useRuntimeConfig: () => ({
+        admin: { pluginRuntimeLoaderEnabled: true },
+    }),
+}));
+
 function makeEvent(): H3Event {
     return { context: {}, node: { req: { headers: {} } } } as H3Event;
 }
@@ -44,6 +55,10 @@ describe('GET /api/plugins/runtime-manifest', () => {
         listInstalledExtensionsMock.mockReset().mockResolvedValue([]);
         getWorkspaceSettingsStoreMock.mockReset().mockReturnValue({ id: 'store' });
         getEnabledPluginsMock.mockReset().mockResolvedValue([]);
+        checkPluginAccessMock.mockReset().mockResolvedValue({
+            session: { authenticated: true },
+            decision: { allowed: true, reasons: [], effectivePolicy: {} },
+        });
     });
 
     it('returns empty manifest when SSR auth is disabled', async () => {
@@ -114,12 +129,48 @@ describe('GET /api/plugins/runtime-manifest', () => {
         expect(result.runtime.alpha).toEqual({
             clientEntry: 'client/main.client.ts',
             hasServerRoutes: true,
+            loadAllowed: true,
+            loadDeniedReason: undefined,
         });
         expect(result.runtime.beta).toEqual({
             clientEntry: undefined,
             hasServerRoutes: false,
+            loadAllowed: false,
+            loadDeniedReason: 'plugin-disabled',
         });
         expect(typeof result.revision).toBe('string');
         expect(result.revision.length).toBeGreaterThan(0);
+    });
+
+    it('excludes access-denied plugins from enabledPluginIds', async () => {
+        listInstalledExtensionsMock.mockResolvedValue([
+            {
+                kind: 'plugin',
+                id: 'alpha',
+                name: 'Alpha',
+                version: '1.0.0',
+                capabilities: [],
+                path: '/tmp/alpha',
+                runtime: { client: { entry: 'plugin.client.ts' } },
+            },
+        ]);
+        getEnabledPluginsMock.mockResolvedValue(['alpha']);
+        checkPluginAccessMock.mockResolvedValue({
+            session: { authenticated: true },
+            decision: {
+                allowed: false,
+                reasons: ['insufficient-role'],
+                effectivePolicy: {},
+            },
+        });
+
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+
+        const result = await handler(makeEvent());
+        expect(result.enabledPluginIds).toEqual([]);
+        expect(result.runtime.alpha.loadAllowed).toBe(false);
+        expect(result.runtime.alpha.loadDeniedReason).toBe('insufficient-role');
     });
 });

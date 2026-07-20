@@ -17,6 +17,10 @@ import type { ComputedRef } from 'vue';
 import type { Editor } from '@tiptap/vue-3';
 import type { ChromeActionColor } from './useSidebarSections';
 import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
+import {
+    createRegistrationHandle,
+    type RegistrationHandle,
+} from '~~/shared/plugins/registration-handle';
 import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 
 /**
@@ -121,10 +125,19 @@ const DEFAULT_ORDER = 200;
  *
  * Ensures actions persist across component instances.
  */
+type OwnedComposerAction = {
+    action: ComposerAction;
+    owner: symbol;
+};
+
 interface ComposerActionsGlobalThis {
     __or3ComposerActionsRegistry?: Map<string, ComposerAction>;
+    __or3ComposerActionsOwnedRegistry?: Map<string, OwnedComposerAction>;
 }
 const g = globalThis as typeof globalThis & ComposerActionsGlobalThis;
+const ownedRegistry: Map<string, OwnedComposerAction> =
+    g.__or3ComposerActionsOwnedRegistry ??
+    (g.__or3ComposerActionsOwnedRegistry = new Map<string, OwnedComposerAction>());
 const registry: Map<string, ComposerAction> =
     g.__or3ComposerActionsRegistry ??
     (g.__or3ComposerActionsRegistry = new Map<string, ComposerAction>());
@@ -160,15 +173,28 @@ function sync() {
  * Non-Goals:
  * - Does not validate action schemas beyond basic presence
  */
-export function registerComposerAction(action: ComposerAction) {
+export function registerComposerAction(action: ComposerAction): RegistrationHandle {
     if (import.meta.dev && registry.has(action.id)) {
         console.warn(
             `[useComposerActions] Overwriting existing action: ${action.id}`
         );
     }
-    const frozen = Object.freeze({ ...action });
+    const owner = Symbol(`composer:${action.id}`);
+    const frozen = Object.freeze({ ...action }) as ComposerAction;
+    ownedRegistry.set(action.id, { action: frozen, owner });
     registry.set(action.id, frozen);
     sync();
+    return createRegistrationHandle({
+        id: action.id,
+        owner,
+        isCurrent: () => ownedRegistry.get(action.id)?.owner === owner,
+        remove: () => {
+            if (ownedRegistry.get(action.id)?.owner !== owner) return;
+            ownedRegistry.delete(action.id);
+            registry.delete(action.id);
+            sync();
+        },
+    });
 }
 
 /**
@@ -187,6 +213,7 @@ export function registerComposerAction(action: ComposerAction) {
  * - Does not run any teardown hook for removed actions
  */
 export function unregisterComposerAction(id: string) {
+    ownedRegistry.delete(id);
     if (registry.delete(id)) sync();
 }
 

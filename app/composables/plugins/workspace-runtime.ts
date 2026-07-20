@@ -1,19 +1,14 @@
-import {
-    registerDashboardPlugin,
-    unregisterDashboardPlugin,
-} from '~/composables/dashboard/useDashboardPlugins';
+import { registerDashboardPlugin } from '~/composables/dashboard/useDashboardPlugins';
 import { registerSidebarPage } from '~/composables/sidebar/registerSidebarPage';
 import { usePaneApps } from '~/composables/core/usePaneApps';
-import {
-    registerMessageAction,
-    unregisterMessageAction,
-} from '~/composables/chat/useMessageActions';
+import { registerMessageAction } from '~/composables/chat/useMessageActions';
 import { useToolRegistry } from '~/utils/chat/tools-public';
 import type { DashboardPlugin } from '~/composables/dashboard/useDashboardPlugins';
 import type { SidebarPageDef } from '~/composables/sidebar/useSidebarPages';
 import type { PaneAppDef } from '~/composables/core/usePaneApps';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import type { ExtendedToolDefinition, ToolHandler } from '~/utils/chat/tool-registry';
+import type { RegistrationHandle } from '~~/shared/plugins/registration-handle';
 
 export type WorkspacePluginSource = 'builtin' | 'extension';
 
@@ -23,11 +18,11 @@ const SOURCE_PRIORITY: Record<WorkspacePluginSource, number> = {
 };
 
 export interface Or3WorkspacePluginApi {
-    registerDashboardPlugin: (plugin: DashboardPlugin) => () => void;
+    registerDashboardPlugin: (plugin: DashboardPlugin) => RegistrationHandle;
     registerSidebarPage: (def: SidebarPageDef) => () => void;
-    registerPaneApp: (def: PaneAppDef) => () => void;
-    registerMessageAction: (action: ChatMessageAction) => () => void;
-    registerTool: (def: ExtendedToolDefinition, handler: ToolHandler) => () => void;
+    registerPaneApp: (def: PaneAppDef) => RegistrationHandle;
+    registerMessageAction: (action: ChatMessageAction) => RegistrationHandle;
+    registerTool: (def: ExtendedToolDefinition, handler: ToolHandler) => RegistrationHandle;
     onCleanup: (fn: () => void | Promise<void>) => void;
 }
 
@@ -51,6 +46,17 @@ const instanceRegistry =
     globals.__or3WorkspacePluginInstances ??
     (globals.__or3WorkspacePluginInstances = new Map<string, WorkspacePluginInstance>());
 
+function toDisposer(
+    handle: RegistrationHandle | (() => void)
+): () => void {
+    if (typeof handle === 'function') {
+        return handle;
+    }
+    return () => {
+        handle.dispose();
+    };
+}
+
 function toCleanupRunner(cleanups: Array<() => void | Promise<void>>): () => void {
     return () => {
         for (const cleanup of cleanups.splice(0)) {
@@ -73,17 +79,15 @@ export function createWorkspacePluginApi(): {
     dispose: () => void;
 } {
     const cleanups: Array<() => void | Promise<void>> = [];
-    const { registerPaneApp, unregisterPaneApp } = usePaneApps();
+    const { registerPaneApp } = usePaneApps();
     const tools = useToolRegistry();
 
     const api: Or3WorkspacePluginApi = {
         registerDashboardPlugin(plugin) {
-            registerDashboardPlugin(plugin);
-            const cleanup = () => {
-                unregisterDashboardPlugin(plugin.id);
-            };
+            const handle = registerDashboardPlugin(plugin);
+            const cleanup = toDisposer(handle);
             cleanups.push(cleanup);
-            return cleanup;
+            return handle;
         },
         registerSidebarPage(def) {
             const cleanup = registerSidebarPage(def, {
@@ -94,24 +98,37 @@ export function createWorkspacePluginApi(): {
             return cleanup;
         },
         registerPaneApp(def) {
-            registerPaneApp(def);
-            const cleanup = () => unregisterPaneApp(def.id);
+            const handle = registerPaneApp(def);
+            const cleanup = toDisposer(handle);
             cleanups.push(cleanup);
-            return cleanup;
+            return handle;
         },
         registerMessageAction(action) {
-            registerMessageAction(action);
-            const cleanup = () => {
-                unregisterMessageAction(action.id);
-            };
+            const handle = registerMessageAction(action);
+            const cleanup = toDisposer(handle);
             cleanups.push(cleanup);
-            return cleanup;
+            return handle;
         },
         registerTool(def, handler) {
-            tools.registerTool(def, handler, { override: true });
-            const cleanup = () => tools.unregisterTool(def.function.name);
-            cleanups.push(cleanup);
-            return cleanup;
+            const tool = tools.registerTool(def, handler, { override: true });
+            let disposed = false;
+            const handle: RegistrationHandle = {
+                id: def.function.name,
+                owner: tool._owner,
+                get disposed() {
+                    return disposed;
+                },
+                dispose() {
+                    if (disposed) return false;
+                    const removed = tool.dispose();
+                    disposed = true;
+                    return removed;
+                },
+            };
+            cleanups.push(() => {
+                handle.dispose();
+            });
+            return handle;
         },
         onCleanup(fn) {
             cleanups.push(fn);

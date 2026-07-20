@@ -3,8 +3,16 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { zipSync } from 'fflate';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
-import { installExtensionFromZip } from '../install';
+import {
+    ExtensionAlreadyInstalledError,
+    installExtensionFromZip,
+} from '../install';
 import { EXTENSIONS_BASE_DIR } from '../paths';
+import {
+    invalidateExtensionsCache,
+    listInstalledExtensions,
+    uninstallExtension,
+} from '../extension-manager';
 
 function makeZip(entries: Record<string, string>): Buffer {
     const data: Record<string, Uint8Array> = {};
@@ -151,5 +159,211 @@ describe('installExtensionFromZip', () => {
         });
 
         await expect(installExtensionFromZip(zip, false)).rejects.toThrow('Invalid manifest');
+    });
+
+    it('rejects duplicate install when force is false', async () => {
+        const zip = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Test',
+                version: '0.0.1',
+                capabilities: [],
+            }),
+            'index.js': 'export default {}',
+        });
+
+        await installExtensionFromZip(zip, false);
+        await expect(installExtensionFromZip(zip, false)).rejects.toBeInstanceOf(
+            ExtensionAlreadyInstalledError
+        );
+
+        const marker = join(EXTENSIONS_BASE_DIR, 'plugins', 'test-plugin', 'index.js');
+        await expect(fs.readFile(marker, 'utf8')).resolves.toContain('export default');
+    });
+
+    it('replaces atomically with force and restores on failed staging rename', async () => {
+        const first = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Test',
+                version: '0.0.1',
+                capabilities: [],
+            }),
+            'marker.txt': 'v1',
+        });
+        const second = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Test',
+                version: '0.0.2',
+                capabilities: [],
+            }),
+            'marker.txt': 'v2',
+        });
+
+        await installExtensionFromZip(first, false);
+        await installExtensionFromZip(second, true);
+
+        const marker = join(EXTENSIONS_BASE_DIR, 'plugins', 'test-plugin', 'marker.txt');
+        await expect(fs.readFile(marker, 'utf8')).resolves.toBe('v2');
+    });
+
+    it('install -> inventory preserves runtime -> uninstall validates ids', async () => {
+        const zip = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Test',
+                version: '0.0.1',
+                capabilities: [],
+                runtime: {
+                    client: { entry: 'plugin.client.ts' },
+                    server: {
+                        routes: [
+                            {
+                                method: 'GET',
+                                path: 'hello',
+                                handler: 'server/hello.get.js',
+                            },
+                        ],
+                    },
+                },
+            }),
+            'plugin.client.ts': 'export default {}',
+            'server/hello.get.js': 'export default () => ({ ok: true })',
+        });
+
+        await installExtensionFromZip(zip, true);
+        invalidateExtensionsCache();
+        const installed = await listInstalledExtensions();
+        const record = installed.find((item) => item.id === 'test-plugin');
+        expect(record?.runtime?.client?.entry).toBe('plugin.client.ts');
+        expect(record?.runtime?.server?.routes?.[0]?.handler).toBe('server/hello.get.js');
+
+        await expect(uninstallExtension('plugin', '../evil')).rejects.toThrow(
+            'Invalid extension id'
+        );
+        await uninstallExtension('plugin', 'test-plugin');
+        invalidateExtensionsCache();
+        const after = await listInstalledExtensions();
+        expect(after.some((item) => item.id === 'test-plugin')).toBe(false);
+    });
+
+    it('keeps the previous install when a forced replacement fails extraction', async () => {
+        const good = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Test',
+                version: '0.0.1',
+                capabilities: [],
+            }),
+            'marker.txt': 'keep-me',
+        });
+        const bad = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Test',
+                version: '0.0.2',
+                capabilities: [],
+            }),
+            '../escape.bin': 'nope',
+        });
+
+        await installExtensionFromZip(good, false);
+        await expect(installExtensionFromZip(bad, true)).rejects.toThrow('Invalid archive path');
+
+        const marker = join(EXTENSIONS_BASE_DIR, 'plugins', 'test-plugin', 'marker.txt');
+        await expect(fs.readFile(marker, 'utf8')).resolves.toBe('keep-me');
+    });
+
+    it('rejects disallowed file types without leaving a partial install', async () => {
+        const zip = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Test',
+                version: '0.0.1',
+                capabilities: [],
+            }),
+            'payload.exe': 'MZ',
+        });
+
+        await expect(installExtensionFromZip(zip, false)).rejects.toThrow(
+            'Extension type not allowed'
+        );
+        await expect(
+            fs.access(join(EXTENSIONS_BASE_DIR, 'plugins', 'test-plugin'))
+        ).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+
+    it('rejects absolute archive entry paths', async () => {
+        const zip = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Test',
+                version: '0.0.1',
+                capabilities: [],
+            }),
+            '/tmp/evil.js': 'export default {}',
+        });
+
+        await expect(installExtensionFromZip(zip, false)).rejects.toThrow('Invalid archive path');
+    });
+
+    it('accepts nested zip prefix and installs at package root', async () => {
+        const zip = makeZip({
+            'pkg/or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Nested',
+                version: '0.0.1',
+                capabilities: [],
+                runtime: { client: { entry: 'plugin.client.js' } },
+            }),
+            'pkg/plugin.client.js': 'export default {}',
+            'pkg/readme': 'ok',
+        });
+
+        await installExtensionFromZip(zip, false);
+        invalidateExtensionsCache();
+        const installed = await listInstalledExtensions();
+        const record = installed.find((item) => item.id === 'test-plugin');
+        expect(record?.runtime?.client?.entry).toBe('plugin.client.js');
+        await expect(
+            fs.readFile(
+                join(EXTENSIONS_BASE_DIR, 'plugins', 'test-plugin', 'plugin.client.js'),
+                'utf8'
+            )
+        ).resolves.toContain('export default');
+    });
+
+    it('conflict error message remains client-recognizable', async () => {
+        const zip = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Test',
+                version: '0.0.1',
+                capabilities: [],
+            }),
+            'index.js': 'export default {}',
+        });
+        await installExtensionFromZip(zip, false);
+        try {
+            await installExtensionFromZip(zip, false);
+            expect.fail('expected conflict');
+        } catch (error) {
+            expect(error).toBeInstanceOf(ExtensionAlreadyInstalledError);
+            expect((error as Error).message.toLowerCase()).toContain('already installed');
+            expect((error as ExtensionAlreadyInstalledError).code).toBe(
+                'EXTENSION_ALREADY_INSTALLED'
+            );
+        }
     });
 });

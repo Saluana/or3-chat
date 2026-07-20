@@ -13,6 +13,10 @@ import {
     mergePluginGatePolicy,
     type PluginGatePolicy,
 } from '~~/shared/plugins/access-policy';
+import {
+    createRegistrationHandle,
+    type RegistrationHandle,
+} from '~~/shared/plugins/registration-handle';
 import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 
 export interface DashboardPlugin {
@@ -72,8 +76,19 @@ type DashboardGlobals = typeof globalThis & {
     __or3DashboardNavigationRuntime?: DashboardNavigationRuntime;
 };
 
+type OwnedDashboardPlugin = {
+    plugin: DashboardPlugin;
+    owner: symbol;
+};
+
 // Global singleton (survives HMR)
-const g = globalThis as DashboardGlobals;
+const g = globalThis as DashboardGlobals & {
+    __or3DashboardPluginsOwnedRegistry?: Map<string, OwnedDashboardPlugin>;
+};
+const ownedRegistry: Map<string, OwnedDashboardPlugin> =
+    g.__or3DashboardPluginsOwnedRegistry ??
+    (g.__or3DashboardPluginsOwnedRegistry = new Map<string, OwnedDashboardPlugin>());
+// Back-compat alias used by existing helpers that still expect a plugin map.
 const registry: Map<string, DashboardPlugin> =
     g.__or3DashboardPluginsRegistry ??
     (g.__or3DashboardPluginsRegistry = new Map<string, DashboardPlugin>());
@@ -216,7 +231,7 @@ function isDashboardPageAllowed(pluginId: string, page: DashboardPluginPage): bo
  * });
  * ```
  */
-export function registerDashboardPlugin(plugin: DashboardPlugin) {
+export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle {
     const isDev =
         import.meta.dev ||
         (typeof process !== 'undefined' &&
@@ -230,14 +245,26 @@ export function registerDashboardPlugin(plugin: DashboardPlugin) {
     const frozen = Object.freeze({
         ...plugin,
         pages: plugin.pages ? [...plugin.pages] : undefined,
-    });
-    registry.set(plugin.id, frozen as DashboardPlugin);
+    }) as DashboardPlugin;
+    const owner = Symbol(`dashboard:${plugin.id}`);
+    ownedRegistry.set(plugin.id, { plugin: frozen, owner });
+    registry.set(plugin.id, frozen);
     sync();
     // If inline pages provided, replace existing pages for that plugin in a single pass (avoid redundant sync cycles)
     if (plugin.pages) {
         unregisterDashboardPluginPage(plugin.id); // clear existing pages + cache
         for (const p of plugin.pages) registerDashboardPluginPage(plugin.id, p);
     }
+    return createRegistrationHandle({
+        id: plugin.id,
+        owner,
+        isCurrent: () => ownedRegistry.get(plugin.id)?.owner === owner,
+        remove: () => {
+            if (ownedRegistry.get(plugin.id)?.owner !== owner) return;
+            ownedRegistry.delete(plugin.id);
+            unregisterDashboardPlugin(plugin.id);
+        },
+    });
 }
 
 /**
@@ -259,6 +286,7 @@ export function registerDashboardPlugin(plugin: DashboardPlugin) {
  * ```
  */
 export function unregisterDashboardPlugin(id: string) {
+    ownedRegistry.delete(id);
     if (registry.delete(id)) sync();
     unregisterDashboardPluginPage(id); // also clears pages + cache + reactivePages entry
     deleteAllPluginPageCache(id);

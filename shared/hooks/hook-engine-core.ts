@@ -102,6 +102,14 @@ function sortCallbacks<T extends CallbackEntry>(arr: T[]): T[] {
     return arr.sort((a, b) => a.priority - b.priority || a.id - b.id);
 }
 
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        typeof (value as { then?: unknown }).then === 'function'
+    );
+}
+
 export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
     const DEFAULT_PRIORITY = 10;
     const resolveOnKind =
@@ -383,9 +391,32 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
                 const start = performance.now();
                 try {
                     if (isFilter) {
-                        value = fn(value, ...args);
+                        const next = fn(value, ...args);
+                        if (isThenable(next)) {
+                            recordError(name);
+                            logCallbackError(
+                                new Error(
+                                    'Synchronous filter callback returned a Promise'
+                                ),
+                                name,
+                                true
+                            );
+                            // Keep previous value; sync APIs must not accept thenables.
+                        } else {
+                            value = next;
+                        }
                     } else {
-                        fn(...args);
+                        const result = fn(...args);
+                        if (isThenable(result)) {
+                            recordError(name);
+                            logCallbackError(
+                                new Error(
+                                    'Synchronous action callback returned a Promise'
+                                ),
+                                name,
+                                false
+                            );
+                        }
                     }
                 } catch (error) {
                     recordError(name);
@@ -467,12 +498,21 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
                 : false;
         },
         onceAction(name, fn, priority) {
+            let settled = false;
             const wrapper = (...args: unknown[]) => {
-                try {
-                    fn(...args);
-                } finally {
-                    engine.removeAction(name, wrapper, priority);
+                if (settled) return;
+                settled = true;
+                engine.removeAction(name, wrapper, priority);
+                const result = fn(...args);
+                if (isThenable(result)) {
+                    // Ensure async onceAction participates in doAction awaiting
+                    // and records failures instead of leaving unhandled rejections.
+                    return Promise.resolve(result).catch((error) => {
+                        recordError(name);
+                        logCallbackError(error, name, false);
+                    });
                 }
+                return result;
             };
 
             engine.addAction(name, wrapper, priority);

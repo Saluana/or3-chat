@@ -101,7 +101,7 @@ const registry = createRegistry<ChatMessageAction>(
  * @param action - Action definition
  */
 export function registerMessageAction(action: ChatMessageAction) {
-    registry.register(action);
+    return registry.register(action);
 }
 
 /**

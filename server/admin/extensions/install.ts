@@ -83,6 +83,19 @@ const DEFAULT_LIMITS: ExtensionInstallLimits = {
 
 /**
  * Purpose:
+ * Structured conflict error so API layers can map to HTTP 409.
+ */
+export class ExtensionAlreadyInstalledError extends Error {
+    readonly code = 'EXTENSION_ALREADY_INSTALLED' as const;
+
+    constructor(id: string) {
+        super(`Extension already installed: ${id}`);
+        this.name = 'ExtensionAlreadyInstalledError';
+    }
+}
+
+/**
+ * Purpose:
  * Low-level validation to block directory traversal attempts.
  * Throws if the path escaping its root.
  */
@@ -90,6 +103,23 @@ function ensureSafePath(path: string) {
     if (path.includes('..')) throw new Error('Invalid archive path');
     if (path.startsWith('/')) throw new Error('Invalid archive path');
     if (/^[A-Za-z]:/.test(path)) throw new Error('Invalid archive path');
+}
+
+async function pathExists(path: string): Promise<boolean> {
+    try {
+        await fs.access(path);
+        return true;
+    } catch (error) {
+        if (
+            error &&
+            typeof error === 'object' &&
+            'code' in error &&
+            (error as { code?: string }).code === 'ENOENT'
+        ) {
+            return false;
+        }
+        throw error;
+    }
 }
 
 /**
@@ -221,20 +251,19 @@ export async function installExtensionFromZip(
 
     const kindDir = getKindDir(manifest.kind);
     const targetDir = join(EXTENSIONS_BASE_DIR, kindDir, manifest.id);
-    const tmpDir = join(EXTENSIONS_BASE_DIR, '.tmp', `${manifest.id}-${Date.now()}`);
+    const stagingToken = `${manifest.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const tmpDir = join(EXTENSIONS_BASE_DIR, '.tmp', `stage-${stagingToken}`);
+    const backupDir = join(EXTENSIONS_BASE_DIR, '.tmp', `backup-${stagingToken}`);
 
-    try {
-        await fs.access(targetDir);
-        if (!force) {
-            throw new Error('Extension already installed');
-        }
-    } catch {
-        if (force === true) {
-            await fs.rm(targetDir, { recursive: true, force: true });
-        }
+    const targetExists = await pathExists(targetDir);
+    if (targetExists && !force) {
+        throw new ExtensionAlreadyInstalledError(manifest.id);
     }
 
     await fs.mkdir(tmpDir, { recursive: true });
+
+    let swapped = false;
+    let backedUp = false;
 
     try {
         let fileCount = 0;
@@ -343,22 +372,51 @@ export async function installExtensionFromZip(
         const finalManifestPath = join(tmpDir, 'or3.manifest.json');
         await fs.access(finalManifestPath);
 
-        await fs.rm(targetDir, { recursive: true, force: true });
+        // Atomic-ish swap: backup current -> move staging into place -> drop backup.
+        if (targetExists) {
+            await fs.rename(targetDir, backupDir);
+            backedUp = true;
+        }
         await fs.rename(tmpDir, targetDir);
+        swapped = true;
 
         if (manifest.kind === 'theme') {
             try {
                 await syncInstalledThemeToApp(manifest.id, targetDir);
             } catch (error) {
+                // Restore previous install if theme sync fails after swap.
                 await fs.rm(targetDir, { recursive: true, force: true });
+                if (backedUp) {
+                    await fs.rename(backupDir, targetDir);
+                    backedUp = false;
+                }
                 await removeSyncedThemeFromApp(manifest.id);
                 throw error;
             }
         }
 
+        if (backedUp) {
+            await fs.rm(backupDir, { recursive: true, force: true });
+            backedUp = false;
+        }
+
         return manifest;
     } catch (error) {
-        await fs.rm(tmpDir, { recursive: true, force: true });
+        if (!swapped) {
+            await fs.rm(tmpDir, { recursive: true, force: true });
+        }
+        if (backedUp) {
+            // Staging rename failed or post-swap work failed before cleanup:
+            // restore the previous working version when possible.
+            if (swapped && (await pathExists(targetDir))) {
+                await fs.rm(targetDir, { recursive: true, force: true });
+            }
+            if (!(await pathExists(targetDir)) && (await pathExists(backupDir))) {
+                await fs.rename(backupDir, targetDir);
+            } else {
+                await fs.rm(backupDir, { recursive: true, force: true });
+            }
+        }
         throw error;
     }
 }

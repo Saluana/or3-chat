@@ -2,91 +2,93 @@
  * @module server/auth/hooks.ts
  *
  * Purpose:
- * Specialized hook engine for server-side access control. This module facilitates
- * the `auth.access:filter:decision` hook, which allows plugins to dynamically
- * deny access based on custom business logic.
- *
- * Architecture:
- * - Operates within the `can()` authorization flow.
- * - Singleton instance shared across the server life-cycle.
- * - Initialized via a Nitro plugin during server startup.
+ * Specialized authorization constraint engine for server-side access control.
+ * Constraints are deny-only and fail closed on errors, timeouts, invalid returns,
+ * or Promise-returning callbacks.
  *
  * Invariants:
- * - **Cannot Grant**: Filters can only transition a decision from `allowed: true`
- *   to `allowed: false`. If a filter attempts to grant access (false -> true),
- *   the engine will override it back to `false` and record a diagnostic error.
- *   This ensures that core security policies cannot be bypassed by plugins.
+ * - Constraints can only transition a decision from `allowed: true` to `allowed: false`.
+ * - Any exception, thenable, or invalid return denies access.
+ * - Attempts to grant (`false -> true`) are rejected and recorded.
  */
 
 import type { AccessDecision, SessionContext } from '~/core/hooks/hook-types';
-import { createHookEngine, type HookEngine } from '../hooks/hook-engine';
+import type { HookEngine } from '../hooks/hook-engine';
+
+export type AuthorizationConstraintResult =
+    | { allowed: true }
+    | { allowed: false; reason: string };
+
+export interface AuthorizationContext {
+    decision: AccessDecision;
+    session: SessionContext | null;
+}
+
+export interface AuthorizationConstraint {
+    id: string;
+    evaluate(context: AuthorizationContext): AuthorizationConstraintResult;
+}
 
 /**
- * Purpose:
- * Signature for an access decision filter.
- *
- * @param decision - The current access decision state.
- * @param ctx - Context including the user session.
- * @returns The potentially modified access decision.
+ * Legacy filter signature kept for compatibility with existing callers.
+ * Prefer AuthorizationConstraint for new code.
  */
 export type AuthAccessDecisionFilter = (
     decision: AccessDecision,
     ctx: { session: SessionContext | null }
 ) => AccessDecision;
 
-/**
- * Purpose:
- * Public interface for the Auth Hook Engine.
- */
 export interface AuthHookEngine {
-    /**
-     * Purpose:
-     * Executes all registered filters against a base access decision.
-     *
-     * Behavior:
-     * 1. Runs the `auth.access:filter:decision` pipeline.
-     * 2. Validates that no filter attempted to grant access where it was not already allowed.
-     * 3. Returns the final (potentially denied) decision.
-     *
-     * @param decision - The initial decision determined by permissions/roles.
-     * @param ctx - The session context for the request.
-     */
     applyAccessDecisionFilters(
         decision: AccessDecision,
         ctx: { session: SessionContext | null }
     ): AccessDecision;
 
-    /**
-     * Purpose:
-     * Registers a new access filter.
-     *
-     * @param fn - The filter function to add.
-     * @param priority - Execution priority (lower runs earlier, default 10).
-     * @returns A function to remove the filter.
-     */
     addAccessDecisionFilter(fn: AuthAccessDecisionFilter, priority?: number): () => void;
+
+    addAuthorizationConstraint(
+        constraint: AuthorizationConstraint,
+        priority?: number
+    ): () => void;
 }
 
-/**
- * @example
- * ```ts
- * const authEngine = getAuthHookEngine();
- *
- * // Register a filter to deny access to 'restricted-area' on weekends
- * authEngine.addAccessDecisionFilter((decision, ctx) => {
- *   if (decision.permission === 'access.restricted-area') {
- *     const isWeekend = new Date().getDay() % 6 === 0;
- *     if (isWeekend) {
- *       return { ...decision, allowed: false, reason: 'weekend-lockdown' };
- *     }
- *   }
- *   return decision;
- * });
- * ```
- */
+type ConstraintEntry = {
+    constraint: AuthorizationConstraint;
+    priority: number;
+    seq: number;
+    owner: symbol;
+};
 
-// Singleton instance managed by Nitro lifecycle
 let authHookEngine: AuthHookEngine | null = null;
+let constraintSeq = 0;
+
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        typeof (value as { then?: unknown }).then === 'function'
+    );
+}
+
+function isAuthorizationConstraintResult(
+    value: unknown
+): value is AuthorizationConstraintResult {
+    if (!value || typeof value !== 'object') return false;
+    const allowed = (value as { allowed?: unknown }).allowed;
+    if (allowed === true) return true;
+    if (allowed === false) {
+        return typeof (value as { reason?: unknown }).reason === 'string';
+    }
+    return false;
+}
+
+function deny(decision: AccessDecision, reason: string): AccessDecision {
+    return {
+        ...decision,
+        allowed: false,
+        reason,
+    };
+}
 
 /**
  * Purpose:
@@ -114,49 +116,133 @@ export function isAuthHookEngineInitialized(): boolean {
  * Bootstraps the Auth Hook Engine. This is typically only called once
  * by `server/plugins/auth-hooks.ts`.
  *
- * @param engine - The base hook engine to use for filter registration.
+ * @param engine - The base hook engine used for diagnostics / observability.
  */
 export function initializeAuthHookEngine(engine: HookEngine): AuthHookEngine {
     if (authHookEngine) {
-        // Already initialized, return existing
         return authHookEngine;
     }
 
+    const constraints: ConstraintEntry[] = [];
+
     const instance: AuthHookEngine = {
         applyAccessDecisionFilters(baseDecision, ctx) {
-            // Apply filters via the hook engine
-            const result = engine.applyFiltersSync(
-                'auth.access:filter:decision',
-                baseDecision,
-                ctx
+            let decision = baseDecision;
+            const ordered = [...constraints].sort(
+                (a, b) => a.priority - b.priority || a.seq - b.seq
             );
 
-            // Enforce "cannot grant" invariant: filters can deny, but never authorize.
-            if (baseDecision.allowed === false && result.allowed === true) {
-                // Record diagnostic for audit logs
-                engine._diagnostics.errors['auth.access:filter:decision:grant-attempt'] =
-                    (engine._diagnostics.errors['auth.access:filter:decision:grant-attempt'] || 0) + 1;
+            for (const entry of ordered) {
+                try {
+                    const result: unknown = entry.constraint.evaluate({
+                        decision,
+                        session: ctx.session,
+                    });
 
-                // Override back to false to maintain security baseline
-                return {
-                    ...result,
-                    allowed: false,
-                    reason: 'forbidden',
-                };
+                    if (isThenable(result)) {
+                        engine._diagnostics.errors[
+                            'auth.access:constraint:async'
+                        ] =
+                            (engine._diagnostics.errors[
+                                'auth.access:constraint:async'
+                            ] || 0) + 1;
+                        return deny(decision, 'auth-constraint-async');
+                    }
+
+                    if (!isAuthorizationConstraintResult(result)) {
+                        engine._diagnostics.errors[
+                            'auth.access:constraint:invalid'
+                        ] =
+                            (engine._diagnostics.errors[
+                                'auth.access:constraint:invalid'
+                            ] || 0) + 1;
+                        return deny(decision, 'auth-constraint-invalid');
+                    }
+
+                    if (result.allowed === false) {
+                        decision = deny(decision, result.reason);
+                        continue;
+                    }
+
+                    // allowed:true is a no-op; constraints cannot grant.
+                    if (baseDecision.allowed === false && decision.allowed === true) {
+                        engine._diagnostics.errors[
+                            'auth.access:filter:decision:grant-attempt'
+                        ] =
+                            (engine._diagnostics.errors[
+                                'auth.access:filter:decision:grant-attempt'
+                            ] || 0) + 1;
+                        return deny(decision, 'forbidden');
+                    }
+                } catch {
+                    engine._diagnostics.errors['auth.access:constraint:error'] =
+                        (engine._diagnostics.errors[
+                            'auth.access:constraint:error'
+                        ] || 0) + 1;
+                    return deny(decision, 'auth-constraint-error');
+                }
             }
 
-            return result;
+            // Enforce "cannot grant" invariant against the original base decision.
+            if (baseDecision.allowed === false && decision.allowed === true) {
+                engine._diagnostics.errors[
+                    'auth.access:filter:decision:grant-attempt'
+                ] =
+                    (engine._diagnostics.errors[
+                        'auth.access:filter:decision:grant-attempt'
+                    ] || 0) + 1;
+                return deny(decision, 'forbidden');
+            }
+
+            return decision;
+        },
+
+        addAuthorizationConstraint(constraint, priority = 10) {
+            const owner = Symbol(constraint.id);
+            const entry: ConstraintEntry = {
+                constraint,
+                priority,
+                seq: ++constraintSeq,
+                owner,
+            };
+            constraints.push(entry);
+            return () => {
+                const index = constraints.findIndex((item) => item.owner === owner);
+                if (index >= 0) constraints.splice(index, 1);
+            };
         },
 
         addAccessDecisionFilter(fn, priority = 10) {
-            const wrapped = (decision: unknown, ctx: unknown) =>
-                fn(
-                    decision as AccessDecision,
-                    ctx as { session: SessionContext | null }
-                );
-            engine.addFilter('auth.access:filter:decision', wrapped, priority);
-            return () =>
-                engine.removeFilter('auth.access:filter:decision', wrapped, priority);
+            // Adapt legacy filters into deny-only constraints.
+            return instance.addAuthorizationConstraint(
+                {
+                    id: `legacy-filter:${++constraintSeq}`,
+                    evaluate({ decision, session }) {
+                        const next = fn(decision, { session });
+                        if (isThenable(next)) {
+                            return { allowed: false, reason: 'auth-constraint-async' };
+                        }
+                        if (!next || typeof next !== 'object') {
+                            return { allowed: false, reason: 'auth-constraint-invalid' };
+                        }
+                        if (decision.allowed && next.allowed === false) {
+                            return {
+                                allowed: false,
+                                reason:
+                                    typeof next.reason === 'string'
+                                        ? next.reason
+                                        : 'forbidden',
+                            };
+                        }
+                        if (!decision.allowed && next.allowed === true) {
+                            // Grant attempts are ignored here; outer apply enforces deny.
+                            return { allowed: true };
+                        }
+                        return { allowed: true };
+                    },
+                },
+                priority
+            );
         },
     };
 
@@ -170,4 +256,5 @@ export function initializeAuthHookEngine(engine: HookEngine): AuthHookEngine {
  */
 export function _resetAuthHookEngineForTesting(): void {
     authHookEngine = null;
+    constraintSeq = 0;
 }

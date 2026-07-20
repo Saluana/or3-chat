@@ -266,7 +266,7 @@ export function unregisterSidebarSection(id: string) {
  * - Does not validate action handlers
  */
 export function registerSidebarFooterAction(action: SidebarFooterAction) {
-    footerRegistry.register(action);
+    return footerRegistry.register(action);
 }
 
 /**

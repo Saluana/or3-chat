@@ -116,7 +116,60 @@ describe('plugin route dispatcher', () => {
             expect.anything(),
             expect.objectContaining({ pluginId: 'plugin.a' })
         );
-        expect(requireCanMock).toHaveBeenCalled();
+        expect(requireCanMock).toHaveBeenCalledWith(
+            expect.anything(),
+            'workspace.read',
+            expect.anything()
+        );
+    });
+
+    it('requires workspace.write for mutating plugin routes', async () => {
+        getMethodMock.mockReturnValue('POST');
+        getRouterParamMock.mockImplementation((_event, key: string) => {
+            if (key === 'pluginId') return 'plugin.a';
+            if (key === 'path') return 'mutate';
+            return undefined;
+        });
+
+        mkdirSync(join(pluginDir, 'server'), { recursive: true });
+        writeFileSync(
+            join(pluginDir, 'server', 'mutate.post.mjs'),
+            'export default async () => ({ ok: true, mutated: true });',
+            'utf8'
+        );
+
+        listInstalledExtensionsMock.mockResolvedValue([
+            {
+                kind: 'plugin',
+                id: 'plugin.a',
+                name: 'Plugin A',
+                version: '1.0.0',
+                capabilities: [],
+                path: pluginDir,
+                runtime: {
+                    server: {
+                        routes: [
+                            {
+                                method: 'POST',
+                                path: 'mutate',
+                                handler: 'server/mutate.post.mjs',
+                            },
+                        ],
+                    },
+                },
+            },
+        ]);
+
+        const handler = (await import('../[pluginId]/[...path]')).default as (
+            event: H3Event
+        ) => Promise<any>;
+
+        await expect(handler(makeEvent())).resolves.toEqual({ ok: true, mutated: true });
+        expect(requireCanMock).toHaveBeenCalledWith(
+            expect.anything(),
+            'workspace.write',
+            expect.anything()
+        );
     });
 
     it('returns 404 for undeclared routes', async () => {

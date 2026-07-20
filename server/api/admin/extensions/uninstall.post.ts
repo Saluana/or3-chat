@@ -11,9 +11,10 @@ import {
     uninstallExtension,
     invalidateExtensionsCache,
 } from '../../../admin/extensions/extension-manager';
+import { ExtensionIdSchema } from '../../../admin/extensions/types';
 
 const BodySchema = z.object({
-    id: z.string().min(1),
+    id: ExtensionIdSchema,
     kind: z.enum(['plugin', 'theme', 'admin_plugin']),
 });
 
