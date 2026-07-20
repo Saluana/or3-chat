@@ -278,7 +278,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R3.AC2-R3.AC4, R5.AC5
       Done when: hook callbacks and registry records from one V2 owner become visible on the same activation revision.
 
-- [ ] 5.6 Implement bounded metric counters/rings, a 2,048-series cap with overflow aggregation, and immutable diagnostics snapshots/reset
+- [x] 5.6 Implement bounded metric counters/rings, a 2,048-series cap with overflow aggregation, and immutable diagnostics snapshots/reset
       Requirements: R5.AC6, R9.AC7
       Done when: recent samples cap at 128, series cap at 2,048, overflow remains observable, snapshots cannot mutate runtime state, and high-cardinality tests stay within the committed bound.
 

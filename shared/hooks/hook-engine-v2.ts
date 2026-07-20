@@ -1,4 +1,5 @@
 import { ActivationTable } from '../plugins/activation-table';
+import { HookDiagnostics } from './hook-diagnostics';
 import { HookRecordStore, type HookRecord } from './hook-record-store';
 import type {
     HookEngine,
@@ -69,6 +70,7 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
 
 export interface HookEngineV2Runtime {
     readonly activationTable: ActivationTable;
+    readonly diagnostics: HookDiagnostics;
     readonly records: HookRecordStore;
     defineHook(input: DefineHookInput): HookDefinition;
     inspectDefinitions(): readonly HookDefinition[];
@@ -94,6 +96,7 @@ export function createHookEngineV2(
             explicitKind ?? 'action');
     const currentPriorityStack: number[] = [];
     const definitions = new Map<string, HookDefinition>();
+    const runtimeDiagnostics = new HookDiagnostics();
     const diagnostics = {
         timings: {} as Record<string, number[]>,
         errors: {} as Record<string, number>,
@@ -103,6 +106,7 @@ export function createHookEngineV2(
     };
 
     function recordTiming(name: string, ms: number): void {
+        runtimeDiagnostics.recordTiming(name, ms);
         if (Object.hasOwn(diagnostics.timings, name)) {
             diagnostics.timings[name]!.push(ms);
             return;
@@ -111,6 +115,7 @@ export function createHookEngineV2(
     }
 
     function recordError(name: string): void {
+        runtimeDiagnostics.recordError(name);
         diagnostics.errors[name] = Object.hasOwn(diagnostics.errors, name)
             ? diagnostics.errors[name]! + 1
             : 1;
@@ -592,6 +597,7 @@ export function createHookEngineV2(
         _diagnostics: diagnostics,
         _runtimeV2: Object.freeze({
             activationTable,
+            diagnostics: runtimeDiagnostics,
             records,
             defineHook,
             inspectDefinitions: () =>
