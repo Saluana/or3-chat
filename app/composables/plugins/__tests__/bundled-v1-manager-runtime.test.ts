@@ -147,6 +147,50 @@ describe('bundled V1 workspace manager runtime', () => {
         expect(runtimeMocks.unregisterInstance).not.toHaveBeenCalled();
     });
 
+    it('stops the old workspace before registering the new workspace generation', async () => {
+        let workspaceId = 'workspace-1';
+        const register = vi.fn();
+        const manager = createBundledV1WorkspaceManager({
+            loader: new BundledV1Loader(catalog(), {
+                'alpha-module': async () => ({ id: 'alpha', register }),
+            }),
+            getWorkspaceId: () => workspaceId,
+            fetchManifest: async () => manifest({ workspaceId, revision: workspaceId }),
+        });
+        await manager.schedule('boot');
+        workspaceId = 'workspace-2';
+
+        await manager.stopAll('workspace-session-change');
+        await manager.schedule('workspace-session-change');
+
+        expect(register).toHaveBeenCalledTimes(2);
+        expect(runtimeMocks.unregisterInstance).toHaveBeenCalledTimes(1);
+        expect(manager.listRecords()[0]?.descriptor.workspaceId).toBe('workspace-2');
+    });
+
+    it('preserves V1 extension-over-builtin registration precedence', async () => {
+        runtimeMocks.registerInstance.mockReturnValue({
+            accepted: true,
+            replacedSource: 'builtin',
+        });
+        const manager = createBundledV1WorkspaceManager({
+            loader: new BundledV1Loader(catalog(), {
+                'alpha-module': async () => ({ id: 'alpha', register: vi.fn() }),
+            }),
+            getWorkspaceId: () => 'workspace-1',
+            fetchManifest: async () => manifest({ revision: '1' }),
+        });
+
+        await manager.schedule('boot');
+
+        expect(runtimeMocks.registerInstance).toHaveBeenCalledWith(
+            'alpha',
+            'extension',
+            expect.any(Function)
+        );
+        expect(manager.listActivePluginIds()).toEqual(['alpha']);
+    });
+
     it('snapshots workspace canary flags so live mutation cannot switch kernels', () => {
         const flags = { enabled: true, workspaceIds: ['workspace-1'] };
         const select = createWorkspaceManagerCanarySelector(flags);

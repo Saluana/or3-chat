@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "qualificationVersion": "milestone-2-3-manager-v1",
+  "milestone": "Milestones 2–3 — V1-safe lifecycle and manager cutover",
+  "entryEvidence": [
+    "shared/plugins/legacy-plugin-scope.ts",
+    "shared/plugins/lifecycle-coordinator.ts",
+    "shared/plugins/bundled-v1-loader.ts",
+    "shared/plugins/bundled-v1-diff.ts",
+    "shared/plugins/bundled-v1-manager.ts",
+    "app/composables/plugins/workspace-runtime.ts",
+    "app/composables/plugins/bundled-v1-manager-runtime.ts",
+    "app/plugins/workspace-plugins.client.ts",
+    "planning/plugin-runtime-v2/qualification/manager-canary-rollback.md"
+  ],
+  "gates": [
+    {
+      "id": "manager-lifecycle-and-adversarial",
+      "commands": [
+        [
+          "bun",
+          "x",
+          "vitest",
+          "run",
+          "shared/plugins/__tests__/legacy-plugin-scope.test.ts",
+          "shared/plugins/__tests__/lifecycle-coordinator.test.ts",
+          "shared/plugins/__tests__/bundled-v1-loader.test.ts",
+          "shared/plugins/__tests__/bundled-v1-diff.test.ts",
+          "shared/plugins/__tests__/bundled-v1-manager.test.ts",
+          "app/composables/plugins/__tests__/bundled-v1-manager-runtime.test.ts"
+        ]
+      ]
+    },
+    {
+      "id": "manager-canary-rollback-drill",
+      "commands": [
+        [
+          "bun",
+          "x",
+          "vitest",
+          "run",
+          "app/composables/plugins/__tests__/manager-canary-rollback.test.ts",
+          "app/composables/plugins/__tests__/workspace-runtime.test.ts",
+          "tests/unit/or3-cloud-config.test.ts",
+          "tests/unit/resolve-config.test.ts"
+        ],
+        ["bun", "run", "plugin-runtime:compatibility:check"],
+        ["bun", "run", "plugin-runtime:contracts:check"]
+      ]
+    },
+    {
+      "id": "frozen-v1-qualification",
+      "commands": [["bun", "run", "plugin-runtime:milestone-0:qualify"]]
+    }
+  ],
+  "rollback": {
+    "scope": "Disable only the manager canary at startup; keep the legacy workspace loader, bundled artifacts, installed packages, plugin settings, and shadow observer unchanged.",
+    "procedure": [
+      "Set OR3_PLUGIN_RUNTIME_V2_ENABLED=false outside the plugin admin UI.",
+      "Restart the OR3 process before any non-core plugin executes.",
+      "Verify the Runtime Inspector reports the V2 startup selector disabled and exercise the V1 plugin corpus.",
+      "Keep the manager disabled if the complete frozen Milestone 0 qualification is not green."
+    ],
+    "drill": "The manager-canary-rollback-drill proves flag-off does not construct the manager and preserves exactly one V1 import/register trace; the frozen-v1-qualification gate then re-runs every Milestone 0 exit gate."
+  }
+}

@@ -60,8 +60,11 @@ function instance(options: {
 
 describe('BundledV1PluginManager', () => {
     it('starts healthy plugins independently when one plugin fails', async () => {
+        const healthy = Array.from({ length: 10 }, (_, index) =>
+            descriptor(`good-${index}`, String.fromCharCode(98 + index))
+        );
         let desired: BundledV1ManagerDesiredState = {
-            descriptors: [descriptor('bad'), descriptor('good', 'b')],
+            descriptors: [descriptor('bad'), ...healthy],
             revision: '1',
         };
         const manager = new BundledV1PluginManager({
@@ -75,11 +78,11 @@ describe('BundledV1PluginManager', () => {
 
         await manager.schedule('boot');
 
-        expect(manager.listActivePluginIds()).toEqual(['good']);
-        expect(manager.listRecords().map(({ descriptor: value, status }) => [value.id, status])).toEqual([
-            ['bad', 'failed'],
-            ['good', 'active'],
-        ]);
+        expect(manager.listActivePluginIds()).toEqual(healthy.map((entry) => entry.id).sort());
+        expect(manager.listRecords().filter((record) => record.status === 'active')).toHaveLength(10);
+        expect(manager.listRecords().find((record) => record.descriptor.id === 'bad')).toMatchObject({
+            status: 'failed',
+        });
         desired = { ...desired, revision: '2' };
     });
 
@@ -143,6 +146,91 @@ describe('BundledV1PluginManager', () => {
         expect(manager.listRecords()[0]).toMatchObject({
             status: 'failed',
             lastError: { code: 'unsafe-v1-replacement', retryable: false },
+        });
+    });
+
+    it('contains a registration throw and disposes the partial instance', async () => {
+        const partial = instance({
+            register: () => {
+                throw new Error('register boom');
+            },
+        });
+        const manager = new BundledV1PluginManager({
+            fetchDesired: async () => ({ descriptors: [descriptor('alpha')], revision: '1' }),
+            load: async () => partial,
+        });
+
+        await manager.schedule('boot');
+
+        expect(partial.stop).toHaveBeenCalledTimes(1);
+        expect(manager.listActivePluginIds()).toEqual([]);
+        expect(manager.listRecords()[0]).toMatchObject({
+            status: 'failed',
+            lastError: { phase: 'activation' },
+        });
+    });
+
+    it.each(['throw', 'reject'] as const)(
+        'contains cleanup %s and refuses to overlap a replacement',
+        async (failure) => {
+            let desired: BundledV1ManagerDesiredState = {
+                descriptors: [descriptor('alpha')],
+                revision: '1',
+            };
+            const manager = new BundledV1PluginManager({
+                fetchDesired: async () => desired,
+                load: async (entry) =>
+                    instance({
+                        stop:
+                            entry.artifact.hostBuildId !== 'build-1'
+                                ? async () => report()
+                                : failure === 'throw'
+                                  ? (vi.fn(() => {
+                                        throw new Error('cleanup boom');
+                                    }) as unknown as () => Promise<LegacyCleanupReport>)
+                                  : vi.fn(async () => {
+                                        throw new Error('cleanup rejected');
+                                    }),
+                    }),
+            });
+            await manager.schedule('boot');
+            desired = {
+                descriptors: [descriptor('alpha', 'b', 'build-2')],
+                revision: '2',
+            };
+
+            await manager.schedule('replace');
+
+            expect(manager.listActivePluginIds()).toEqual(['alpha']);
+            expect(manager.listRecords()[0]).toMatchObject({
+                status: 'failed',
+                lastError: { code: 'cleanup-failed', phase: 'stop' },
+            });
+        }
+    );
+
+    it('bounds a hung cleanup and refuses unsafe replacement', async () => {
+        let desired: BundledV1ManagerDesiredState = {
+            descriptors: [descriptor('alpha')],
+            revision: '1',
+        };
+        const manager = new BundledV1PluginManager({
+            fetchDesired: async () => desired,
+            load: async () => instance({ stop: () => new Promise(() => undefined) }),
+            cleanupTimeoutMs: 5,
+        });
+        await manager.schedule('boot');
+        desired = {
+            descriptors: [descriptor('alpha', 'b', 'build-2')],
+            revision: '2',
+        };
+
+        await manager.schedule('replace');
+
+        expect(manager.listActivePluginIds()).toEqual([]);
+        expect(manager.listRecords()[0]).toMatchObject({
+            status: 'failed',
+            lastError: { code: 'unsafe-v1-replacement' },
         });
     });
 
@@ -223,6 +311,41 @@ describe('BundledV1PluginManager', () => {
         expect(manager.listActivePluginIds()).toEqual(['alpha']);
         expect(manager.listRecords()[0]).toMatchObject({ status: 'active' });
     });
+
+    it.each(['import', 'register'] as const)(
+        'finishes disabled when disable arrives during %s',
+        async (boundary) => {
+            const gate = deferred<unknown>();
+            let desired: BundledV1ManagerDesiredState = {
+                descriptors: [descriptor('alpha')],
+                revision: '1',
+            };
+            const partial = instance({
+                register: boundary === 'register' ? () => gate.promise.then(() => undefined) : undefined,
+            });
+            const manager = new BundledV1PluginManager({
+                fetchDesired: async () => desired,
+                load: async () =>
+                    boundary === 'import'
+                        ? (gate.promise as Promise<ManagedBundledV1Instance>)
+                        : partial,
+            });
+
+            const starting = manager.schedule('boot');
+            await vi.waitFor(() => {
+                const status = manager.listRecords()[0]?.status;
+                expect(status).toBe('preparing');
+            });
+            desired = { descriptors: [], revision: '2' };
+            manager.schedule('local-admin-change');
+            gate.resolve(boundary === 'import' ? partial : undefined);
+            await starting;
+
+            expect(partial.stop).toHaveBeenCalledTimes(1);
+            expect(manager.listActivePluginIds()).toEqual([]);
+            expect(manager.listRecords()).toEqual([]);
+        }
+    );
 
     it('checks generation after stop and prevents stale publication', async () => {
         const stopGate = deferred<LegacyCleanupReport>();

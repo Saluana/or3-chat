@@ -44,6 +44,7 @@ export interface BundledV1PluginManagerOptions {
     quarantineThreshold?: number;
     retryBaseMs?: number;
     retryMaxMs?: number;
+    cleanupTimeoutMs?: number;
     now?: () => number;
 }
 
@@ -76,7 +77,10 @@ function serializeError(
 /** Manager-canary kernel for bundled V1 plugins. It is inert until selected by a startup flag. */
 export class BundledV1PluginManager {
     readonly #options: Required<
-        Pick<BundledV1PluginManagerOptions, 'quarantineThreshold' | 'retryBaseMs' | 'retryMaxMs'>
+        Pick<
+            BundledV1PluginManagerOptions,
+            'quarantineThreshold' | 'retryBaseMs' | 'retryMaxMs' | 'cleanupTimeoutMs'
+        >
     > & BundledV1PluginManagerOptions;
     readonly #now: () => number;
     readonly #generationClock = new PluginGenerationClock();
@@ -94,6 +98,7 @@ export class BundledV1PluginManager {
             quarantineThreshold: options.quarantineThreshold ?? 3,
             retryBaseMs: options.retryBaseMs ?? 1_000,
             retryMaxMs: options.retryMaxMs ?? 30_000,
+            cleanupTimeoutMs: options.cleanupTimeoutMs ?? 6_000,
         };
         this.#now = options.now ?? Date.now;
         this.#coordinator = new SerializedReconcileCoordinator(({ value }) =>
@@ -187,7 +192,9 @@ export class BundledV1PluginManager {
             desiredState.descriptors.map((descriptor) => [descriptor.id, descriptor])
         );
         this.#lastDesired = desired;
-        const ids = Array.from(new Set([...this.#active.keys(), ...desired.keys()])).sort();
+        const ids = Array.from(
+            new Set([...this.#active.keys(), ...this.#records.keys(), ...desired.keys()])
+        ).sort();
         await Promise.allSettled(
             ids.map((pluginId) =>
                 this.#mutex.runExclusive(pluginId, () =>
@@ -206,7 +213,10 @@ export class BundledV1PluginManager {
         reconcileLease.assertCurrent('validation');
         const active = this.#active.get(pluginId);
         const diff = diffBundledV1Descriptors({ active: active?.descriptor, desired });
-        if (diff.action === 'none') return;
+        if (diff.action === 'none') {
+            if (!active && !desired) this.#records.delete(pluginId);
+            return;
+        }
         if (diff.action === 'rebuild-required') {
             if (desired) {
                 this.#records.set(pluginId, {
@@ -338,12 +348,29 @@ export class BundledV1PluginManager {
             diff,
             updatedAt: this.#now(),
         });
-        const report = await this.#afterBoundary(
-            reconcileLease,
-            pluginLease,
-            'stop',
-            active.instance.stop(diff.action)
-        );
+        let report: LegacyCleanupReport;
+        try {
+            report = await this.#afterBoundary(
+                reconcileLease,
+                pluginLease,
+                'stop',
+                this.#boundedStop(active.instance, diff.action)
+            );
+        } catch (error) {
+            if (error instanceof StalePluginGenerationError) throw error;
+            this.#records.set(active.descriptor.id, {
+                descriptor: active.descriptor,
+                desired: diff.action === 'stop' ? 'inactive' : 'active',
+                status: 'failed',
+                generation: pluginLease.generation,
+                lifecycleCoverage: 'legacy-global-possible',
+                failureCount: 1,
+                lastError: serializeError(error, 'stop', true, 'cleanup-failed'),
+                diff,
+                updatedAt: this.#now(),
+            });
+            return false;
+        }
         this.#active.delete(active.descriptor.id);
         if (report.timedOut && diff.action !== 'stop') {
             this.#records.set(active.descriptor.id, {
@@ -366,5 +393,35 @@ export class BundledV1PluginManager {
         }
         if (diff.action === 'stop') this.#records.delete(active.descriptor.id);
         return true;
+    }
+
+    async #boundedStop(
+        instance: ManagedBundledV1Instance,
+        reason: unknown
+    ): Promise<LegacyCleanupReport> {
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<LegacyCleanupReport>((resolve) => {
+            timeoutHandle = setTimeout(
+                () =>
+                    resolve({
+                        status: 'degraded',
+                        timedOut: true,
+                        invokedCount: 0,
+                        settledThenableCount: 0,
+                        errors: [],
+                        durationMs: this.#options.cleanupTimeoutMs,
+                    }),
+                this.#options.cleanupTimeoutMs
+            );
+            timeoutHandle.unref?.();
+        });
+        try {
+            return await Promise.race([
+                Promise.resolve().then(() => instance.stop(reason)),
+                timeout,
+            ]);
+        } finally {
+            if (timeoutHandle) clearTimeout(timeoutHandle);
+        }
     }
 }

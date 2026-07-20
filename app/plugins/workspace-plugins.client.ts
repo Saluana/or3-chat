@@ -14,6 +14,7 @@ import { BundledV1Loader } from '~~/shared/plugins/bundled-v1-loader';
 import {
     WORKSPACE_PLUGIN_RECONCILE_EVENT,
     createWorkspaceManagerCanarySelector,
+    createStartupSelectedWorkspaceManager,
     createBundledV1WorkspaceManager,
     parseWorkspacePluginModule,
     type WorkspacePluginReconcileEventDetail,
@@ -53,15 +54,17 @@ export default defineNuxtPlugin(() => {
         ]),
     });
     const isManagerWorkspace = createWorkspaceManagerCanarySelector(managerFlags);
-    const v2Manager = createBundledV1WorkspaceManager({
-        loader: bundledV1Loader,
-        getWorkspaceId: () => session.data.value?.session?.workspace?.id,
-        fetchManifest: (signal) =>
-            $fetch<PluginRuntimeManifestResponse>('/api/plugins/runtime-manifest', {
-                cache: 'no-store',
-                signal,
-            }),
-    });
+    const v2Manager = createStartupSelectedWorkspaceManager(managerFlags.enabled, () =>
+        createBundledV1WorkspaceManager({
+            loader: bundledV1Loader,
+            getWorkspaceId: () => session.data.value?.session?.workspace?.id,
+            fetchManifest: (signal) =>
+                $fetch<PluginRuntimeManifestResponse>('/api/plugins/runtime-manifest', {
+                    cache: 'no-store',
+                    signal,
+                }),
+        })
+    );
     const shadowObserver = createWorkspacePluginShadowObserver({
         enabled: runtimeConfig.public?.admin?.pluginRuntimeShadowEnabled !== false,
         catalog: bundledPluginCatalog,
@@ -234,11 +237,11 @@ export default defineNuxtPlugin(() => {
         const transition = ++workspaceTransition;
         // A workspace/session boundary must never retain the previous tenant's
         // active generations if the next manifest fetch is unavailable.
-        await v2Manager.stopAll('workspace-session-change');
+        await v2Manager?.stopAll('workspace-session-change');
         if (transition !== workspaceTransition) return;
         if (isManagerWorkspace(workspaceId)) {
             stopLegacyPlugins();
-            await v2Manager.schedule(reason);
+            await v2Manager?.schedule(reason);
             return;
         }
         await syncManifest();
@@ -255,7 +258,7 @@ export default defineNuxtPlugin(() => {
     const onFocus = () => {
         const workspaceId = session.data.value?.session?.workspace?.id;
         if (isManagerWorkspace(workspaceId)) {
-            void v2Manager.schedule('focus-refresh');
+            void v2Manager?.schedule('focus-refresh');
         } else {
             void syncManifest();
         }
@@ -264,7 +267,7 @@ export default defineNuxtPlugin(() => {
         const detail = (event as CustomEvent<WorkspacePluginReconcileEventDetail>).detail;
         const workspaceId = session.data.value?.session?.workspace?.id;
         if (isManagerWorkspace(workspaceId)) {
-            void v2Manager.schedule(detail?.reason ?? 'local-admin-change');
+            void v2Manager?.schedule(detail?.reason ?? 'local-admin-change');
         } else {
             void syncManifest();
         }
@@ -278,7 +281,7 @@ export default defineNuxtPlugin(() => {
             window.removeEventListener('focus', onFocus);
             window.removeEventListener(WORKSPACE_PLUGIN_RECONCILE_EVENT, onRuntimeReconcile);
             stopLegacyPlugins();
-            void v2Manager.stopAll('hmr-dispose');
+            void v2Manager?.stopAll('hmr-dispose');
         });
     }
 });

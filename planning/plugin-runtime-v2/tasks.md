@@ -170,7 +170,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R9.AC1, R9.AC8
       Done when: non-canary workspaces use the untouched V1 loader and a live flag mutation cannot switch an active kernel.
 
-- [ ] 3.13 Add adversarial manager integration tests for register throw, cleanup throw/reject/hang, disable during import/register, workspace switch, built-in precedence, and transient manifest failure
+- [x] 3.13 Add adversarial manager integration tests for register throw, cleanup throw/reject/hang, disable during import/register, workspace switch, built-in precedence, and transient manifest failure
       Requirements: R1.AC9, R2.AC7-R2.AC8, R3.AC5-R3.AC9
       Done when: healthy current generations remain on unknown manifest failure and all stale-generation assertions pass.
 

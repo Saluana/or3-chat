@@ -17,3 +17,11 @@ bun run plugin-runtime:milestone-1:qualify
 ```
 
 The final Milestone 1 gate invokes the complete Milestone 0 qualification. The operator procedure and exact rollback boundary are documented in [shadow-rollback.md](./shadow-rollback.md). Use `plugin-runtime:milestone-1:record` only to publish reviewed evidence under `results/milestone-1-shadow-v1.json`.
+
+Run the Milestones 2–3 lifecycle/manager gates and manager-only rollback drill with:
+
+```sh
+bun run plugin-runtime:milestone-2-3:qualify
+```
+
+The final gate invokes the complete Milestone 0 qualification. The exact startup-only rollback boundary is documented in [manager-canary-rollback.md](./manager-canary-rollback.md). Use `plugin-runtime:milestone-2-3:record` only to publish reviewed evidence under `results/milestone-2-3-manager-v1.json`.
