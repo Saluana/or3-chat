@@ -6,6 +6,7 @@ on:
     paths:
       - 'app/composables/**'
       - 'app/core/hooks/**'
+      - 'app/plugins/examples/**'
       - 'app/utils/chat/**'
       - 'server/hooks/**'
       - 'server/utils/chat/**'
@@ -13,6 +14,8 @@ on:
       - 'shared/plugins/**'
       - 'scripts/plugin-runtime/**'
       - 'scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts'
+      - 'scripts/__tests__/plugin-runtime-example-fixtures.test.ts'
+      - 'tests/plugin-runtime/**'
       - 'planning/plugin-runtime-v2/**'
       - 'nuxt.config.ts'
       - 'package.json'
@@ -23,6 +26,7 @@ on:
     paths:
       - 'app/composables/**'
       - 'app/core/hooks/**'
+      - 'app/plugins/examples/**'
       - 'app/utils/chat/**'
       - 'server/hooks/**'
       - 'server/utils/chat/**'
@@ -30,6 +34,8 @@ on:
       - 'shared/plugins/**'
       - 'scripts/plugin-runtime/**'
       - 'scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts'
+      - 'scripts/__tests__/plugin-runtime-example-fixtures.test.ts'
+      - 'tests/plugin-runtime/**'
       - 'planning/plugin-runtime-v2/**'
       - 'nuxt.config.ts'
       - 'package.json'
@@ -58,3 +64,6 @@ jobs:
 
       - name: Prove snapshot regressions fail the gate
         run: bunx vitest run scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts
+
+      - name: Compile unchanged V1 example plugins
+        run: bun run plugin-runtime:examples:check

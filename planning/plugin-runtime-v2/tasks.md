@@ -26,7 +26,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC1, R1.AC2, R9.AC6
       Done when: a fixture that removes an import or changes a `void`/disposer/handle/tool return causes the snapshot job to fail.
 
-- [ ] 1.3 Add unchanged compile fixtures for every plugin under `app/plugins/examples`
+- [x] 1.3 Add unchanged compile fixtures for every plugin under `app/plugins/examples`
       Requirements: R1.AC1, R1.AC10, R9.AC6
       Done when: fixtures compile through the Nuxt project context with the same explicit/auto imports as the source examples.
 
