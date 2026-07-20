@@ -46,7 +46,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC5, R4.AC4, R4.AC7
       Done when: message/header/composer/footer/history/project/editor-toolbar profiles have golden tests and ledger entries.
 
-- [ ] 1.8 Record sidebar page and pane profiles for validation text, server no-op, defaulting, `markRaw`, async wrapping, retry/timeout, order-only ties, access filtering, and disposer/handle behavior
+- [x] 1.8 Record sidebar page and pane profiles for validation text, server no-op, defaulting, `markRaw`, async wrapping, retry/timeout, order-only ties, access filtering, and disposer/handle behavior
       Requirements: R1.AC5, R4.AC4
       Done when: profile tests distinguish these surfaces from the shared registry profile.
 

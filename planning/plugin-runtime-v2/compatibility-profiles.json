@@ -57,6 +57,22 @@
       "globalKeys": ["__or3EditorToolbarRegistry"],
       "implementation": "shared-createRegistry",
       "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy-with-editor-visible-filter", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "void", "disposal": "id-only-public-api" }
+    },
+    {
+      "id": "registry.sidebar-pages",
+      "family": "sidebar pages",
+      "sources": ["app/composables/sidebar/useSidebarPages.ts", "app/composables/sidebar/registerSidebarPage.ts"],
+      "globalKeys": ["__or3SidebarPagesRegistry"],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "replace-by-id", "validation": "zod-first-issue-message", "serverRegistration": "no-op-disposer", "defaultOrder": 200, "defaultHeader": "sidebar-home-only", "equalOrderTie": "map-insertion", "component": "markRaw-static-or-defineAsyncComponent", "asyncTimeoutMs": 15000, "asyncRetryCount": 2, "asyncSuspensible": false, "projection": "computed-access-filtered", "globalPersistence": "globalThis-map", "registerReturn": "disposer-function", "disposal": "exact-normalized-value" }
+    },
+    {
+      "id": "registry.pane-apps",
+      "family": "pane apps",
+      "sources": ["app/composables/core/usePaneApps.ts"],
+      "globalKeys": ["__or3PaneAppsRegistry", "__or3PaneAppsOwnedRegistry"],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "replace-by-id", "validation": "zod-first-issue-message", "serverRegistration": "supported", "defaultOrder": 200, "equalOrderTie": "map-insertion", "component": "markRaw-without-async-wrapper", "projection": "computed-unfiltered", "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
     }
   ]
 }
