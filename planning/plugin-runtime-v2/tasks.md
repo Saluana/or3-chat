@@ -340,7 +340,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R6.AC5, R6.AC6, R7.AC4
       Done when: V1 private-import fixture remains valid while the equivalent V2 fixture fails with a clear code.
 
-- [ ] 6.10 Implement state-compatibility preflight and admin update explanation model
+- [x] 6.10 Implement state-compatibility preflight and admin update explanation model
       Requirements: R10.AC3-R10.AC5
       Done when: upgrade/rollback eligibility is computed without mutating state and incompatible rollback is clearly represented.
 
