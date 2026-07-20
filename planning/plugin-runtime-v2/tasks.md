@@ -174,7 +174,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC9, R2.AC7-R2.AC8, R3.AC5-R3.AC9
       Done when: healthy current generations remain on unknown manifest failure and all stale-generation assertions pass.
 
-- [ ] 3.14 Run the manager-canary rollback drill and qualification gate
+- [x] 3.14 Run the manager-canary rollback drill and qualification gate
       Requirements: R1.AC10, R9.AC4, R9.AC8
       Done when: flag-off after reload restores the old loader with no duplicated callbacks/contributions and Milestone 0 remains green.
 
