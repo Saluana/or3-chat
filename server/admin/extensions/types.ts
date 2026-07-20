@@ -75,6 +75,182 @@ const RuntimeSchema = z.object({
     server: RuntimeServerSchema.optional(),
 });
 
+const V2PluginIdSchema = z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9][a-z0-9._-]*$/, 'V2 plugin id must be lowercase and path-safe')
+    .refine((id) => !id.includes('..'), 'Invalid V2 plugin id');
+
+const PackagePathSchema = z
+    .string()
+    .min(1)
+    .refine(
+        (value) => !value.startsWith('/') && !value.includes('\\'),
+        'Package path must be relative'
+    )
+    .refine(
+        (value) =>
+            value
+                .split('/')
+                .every((segment) => segment !== '' && segment !== '.' && segment !== '..'),
+        'Package path contains an invalid segment'
+    );
+
+const ExecutablePackagePathSchema = PackagePathSchema.refine(
+    (value) => /\.(?:mjs|js)$/i.test(value),
+    'V2 runtime entrypoints must be JavaScript ESM files'
+);
+
+const V2RuntimeClientSchema = z
+    .object({
+        entry: ExecutablePackagePathSchema,
+        format: z.literal('esm'),
+        isolation: z.enum(['host', 'iframe', 'worker']),
+    })
+    .strict();
+
+const V2RuntimeServerRouteSchema = z
+    .object({
+        method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
+        path: z
+            .string()
+            .min(1)
+            .refine((value) => !value.startsWith('/'), 'Route path must be plugin-local')
+            .refine((value) => !value.includes('..'), 'Invalid route path'),
+        handler: ExecutablePackagePathSchema,
+        permission: z.string().min(1).optional(),
+    })
+    .strict();
+
+const V2RuntimeServerSchema = z
+    .object({
+        entry: ExecutablePackagePathSchema.optional(),
+        routes: z.array(V2RuntimeServerRouteSchema).default([]),
+    })
+    .strict()
+    .superRefine((value, ctx) => {
+        if (!value.entry && value.routes.length === 0) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'V2 server runtime must declare an entrypoint or route',
+            });
+        }
+        const seen = new Set<string>();
+        for (const route of value.routes) {
+            const key = `${route.method}:${route.path}`;
+            if (seen.has(key)) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: `Duplicate runtime route declaration: ${key}`,
+                });
+            }
+            seen.add(key);
+        }
+    });
+
+const V2RuntimeSchema = z
+    .object({
+        client: V2RuntimeClientSchema.optional(),
+        server: V2RuntimeServerSchema.optional(),
+    })
+    .strict()
+    .refine((value) => Boolean(value.client || value.server), {
+        message: 'V2 runtime must declare a client or server entrypoint',
+    });
+
+const V2GrantSchema = z
+    .string()
+    .min(1)
+    .regex(/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)+$/, 'Invalid plugin grant');
+
+const V2FeatureSchema = z
+    .string()
+    .min(1)
+    .regex(/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$/, 'Invalid dependency feature');
+
+const V2DependencySchema = z
+    .object({
+        id: V2PluginIdSchema,
+        range: z.string().trim().min(1),
+        features: z.array(V2FeatureSchema).default([]),
+    })
+    .strict()
+    .superRefine((value, ctx) => {
+        if (new Set(value.features).size !== value.features.length) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['features'],
+                message: 'Dependency features must be unique',
+            });
+        }
+    });
+
+const V2DependenciesSchema = z
+    .object({
+        required: z.array(V2DependencySchema),
+        optional: z.array(V2DependencySchema),
+    })
+    .strict()
+    .superRefine((value, ctx) => {
+        const seen = new Set<string>();
+        for (const [group, dependencies] of Object.entries(value)) {
+            for (const dependency of dependencies) {
+                if (seen.has(dependency.id)) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        path: [group],
+                        message: `Duplicate dependency declaration: ${dependency.id}`,
+                    });
+                }
+                seen.add(dependency.id);
+            }
+        }
+    });
+
+const V2SettingsSchema = z
+    .object({
+        schema: PackagePathSchema.refine((value) => value.endsWith('.json'), {
+            message: 'Settings schema must be a JSON package path',
+        }).optional(),
+        version: z.number().int().min(1),
+    })
+    .strict();
+
+const V2StateCompatibilitySchema = z
+    .object({
+        version: z.number().int().min(1),
+        reads: z
+            .object({
+                minimum: z.number().int().min(1),
+                maximum: z.number().int().min(1),
+            })
+            .strict(),
+        rollback: z.enum(['safe', 'migration-required', 'unsupported']),
+    })
+    .strict()
+    .superRefine((value, ctx) => {
+        if (value.reads.minimum > value.reads.maximum) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['reads'],
+                message: 'Readable state version minimum cannot exceed maximum',
+            });
+        }
+        if (value.version < value.reads.minimum || value.version > value.reads.maximum) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['version'],
+                message: 'Current state version must be readable by this package',
+            });
+        }
+    });
+
+const V2IntegritySchema = z
+    .object({
+        package: z.string().regex(/^sha256-[a-f0-9]{64}$/, 'Invalid package integrity'),
+    })
+    .strict();
+
 /**
  * Purpose:
  * Schema for extension identifiers.
@@ -136,9 +312,66 @@ export const Or3ExtensionManifestV1Schema = z
 export const Or3ExtensionManifestV2Schema = z
     .object({
         ...Or3ExtensionManifestFields,
+        kind: z.literal('plugin'),
+        id: V2PluginIdSchema,
+        engines: z
+            .object({
+                or3: z.string().trim().min(1),
+                pluginApi: z.string().trim().min(1),
+            })
+            .strict(),
+        runtime: V2RuntimeSchema,
+        requestedGrants: z.array(V2GrantSchema),
+        dependencies: V2DependenciesSchema,
+        trust: z.enum(['trusted-host', 'isolated-client', 'isolated-server']),
+        settings: V2SettingsSchema,
+        stateCompatibility: V2StateCompatibilitySchema,
+        integrity: V2IntegritySchema.optional(),
         manifestVersion: z.literal(2),
     })
-    .strict();
+    .strict()
+    .superRefine((value, ctx) => {
+        if (new Set(value.requestedGrants).size !== value.requestedGrants.length) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['requestedGrants'],
+                message: 'Requested grants must be unique',
+            });
+        }
+        if (
+            value.trust === 'trusted-host' &&
+            value.runtime.client?.isolation !== undefined &&
+            value.runtime.client.isolation !== 'host'
+        ) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['runtime', 'client', 'isolation'],
+                message: 'Trusted-host plugins must use host client isolation',
+            });
+        }
+        if (value.trust === 'isolated-client') {
+            if (!value.runtime.client) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ['runtime', 'client'],
+                    message: 'Isolated-client plugins must declare a client entrypoint',
+                });
+            } else if (value.runtime.client.isolation === 'host') {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ['runtime', 'client', 'isolation'],
+                    message: 'Isolated-client plugins cannot use host isolation',
+                });
+            }
+        }
+        if (value.trust === 'isolated-server' && !value.runtime.server) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['runtime', 'server'],
+                message: 'Isolated-server plugins must declare a server entrypoint',
+            });
+        }
+    });
 
 /** Dispatches with `manifestVersion ?? 1` while preventing V2 fallback to V1. */
 export const Or3ExtensionManifestSchema = z.union([

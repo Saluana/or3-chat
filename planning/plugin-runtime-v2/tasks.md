@@ -308,7 +308,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC6, R6.AC1
       Done when: all stored V1 manifest fixtures normalize identically and invalid V2 fields fail before import.
 
-- [ ] 6.2 Add V2 engine ranges, entrypoints, requested grants, dependencies, trust, settings version, and state-compatibility fields
+- [x] 6.2 Add V2 engine ranges, entrypoints, requested grants, dependencies, trust, settings version, and state-compatibility fields
       Requirements: R6.AC2, R10.AC3
       Done when: schema tests cover valid/minimal and every incompatible/invalid state.
 

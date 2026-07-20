@@ -59,6 +59,23 @@ describe('installExtensionFromZip', () => {
                 version: '2.0.0',
                 capabilities: [],
                 manifestVersion: 2,
+                engines: { or3: '^0.2.0', pluginApi: '^2.0.0' },
+                runtime: {
+                    client: {
+                        entry: 'index.js',
+                        format: 'esm',
+                        isolation: 'host',
+                    },
+                },
+                requestedGrants: [],
+                dependencies: { required: [], optional: [] },
+                trust: 'trusted-host',
+                settings: { version: 1 },
+                stateCompatibility: {
+                    version: 1,
+                    reads: { minimum: 1, maximum: 1 },
+                    rollback: 'safe',
+                },
                 undeclaredV2Field: true,
             }),
             'index.js': 'throw new Error("must not execute")',
