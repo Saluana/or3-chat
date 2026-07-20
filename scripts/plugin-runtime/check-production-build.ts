@@ -1,5 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, relative, resolve } from 'node:path';
+import {
+    inspectProductionHostEsmFacade,
+    recordProductionHostEsmFacadeReport,
+} from './check-host-esm-facade';
 
 type Mode = 'ssr' | 'static';
 
@@ -65,6 +69,18 @@ if (findMarker(serverFiles, NON_CLIENT_SENTINEL).length) {
 }
 
 const fixtureChunks = fixtureFiles.map((file) => relative(repoRoot, file)).sort();
+const hostFacadeReport = inspectProductionHostEsmFacade(outputRoot);
+recordProductionHostEsmFacadeReport(outputRoot, hostFacadeReport);
+if (hostFacadeReport.cspUnsafeFacadeFiles.length > 0) {
+    fail(
+        `candidate host ESM facade contains CSP-unsafe execution in ${hostFacadeReport.cspUnsafeFacadeFiles.join(', ')}`
+    );
+}
 console.log(
     `[plugin-runtime-build:${modeArg}] verified built-ins and bundled V1 fixture in ${fixtureChunks.join(', ')}; client fixture absent from server output`
+);
+console.log(
+    hostFacadeReport.decision.status === 'supported'
+        ? '[plugin-runtime-build] trusted-host ModuleV2Loader UI production ABI is supported'
+        : `[plugin-runtime-build] trusted-host ModuleV2Loader UI remains rebuild-required (${hostFacadeReport.decision.blockCodes.join(', ')})`
 );

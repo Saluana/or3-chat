@@ -348,7 +348,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R3.AC2-R3.AC4, R6.AC4-R6.AC6
       Done when: sample setup, atomic visibility, grant denial, rollback, and cleanup pass without app-private imports.
 
-- [ ] 6.12 Prototype the build-generated host ESM facade/import map for Vue and SDK externals in a production Nuxt build
+- [x] 6.12 Prototype the build-generated host ESM facade/import map for Vue and SDK externals in a production Nuxt build
       Requirements: R7.AC3, R7.AC4, R7.AC11
       Done when: identity/reactivity/component/CSP tests prove the plugin and host share compatible Vue/SDK modules, or ModuleV2Loader trusted UI is formally blocked in favor of rebuild-required/isolated UI.
 
