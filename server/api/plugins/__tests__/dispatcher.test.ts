@@ -64,9 +64,13 @@ describe('plugin route dispatcher', () => {
             return undefined;
         });
         useRuntimeConfigMock.mockReset().mockReturnValue({
-            admin: { pluginRouteDispatcherEnabled: true },
+            admin: {
+                pluginRouteDispatcherEnabled: true,
+                disableNonCorePlugins: false,
+            },
         });
         isSsrAuthEnabledMock.mockReset().mockReturnValue(true);
+        listInstalledExtensionsMock.mockReset();
         requirePluginAccessMock.mockReset().mockResolvedValue({
             session: {
                 authenticated: true,
@@ -216,6 +220,23 @@ describe('plugin route dispatcher', () => {
         ) => Promise<any>;
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    it('does not inspect or import plugin handlers in pre-discovery safe mode', async () => {
+        useRuntimeConfigMock.mockReturnValue({
+            admin: {
+                pluginRouteDispatcherEnabled: true,
+                disableNonCorePlugins: true,
+            },
+        });
+        const handler = (await import('../[pluginId]/[...path]')).default as (
+            event: H3Event
+        ) => Promise<any>;
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 404 });
+        expect(getRouterParamMock).not.toHaveBeenCalled();
+        expect(listInstalledExtensionsMock).not.toHaveBeenCalled();
+        expect(requirePluginAccessMock).not.toHaveBeenCalled();
     });
 
     it('rejects route handlers that escape plugin root', async () => {

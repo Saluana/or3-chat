@@ -34,6 +34,9 @@
             <UBadge color="neutral" variant="subtle">Manager: shadow observer</UBadge>
             <UBadge color="neutral" variant="subtle">Module loader: bundled-v1</UBadge>
             <UBadge color="neutral" variant="subtle">Hook engine: V1</UBadge>
+            <UBadge :color="safeModeEnabled ? 'warning' : 'neutral'" variant="subtle">
+                Safe mode: {{ safeModeEnabled ? 'enabled' : 'disabled' }}
+            </UBadge>
             <UBadge :color="ssrAuthEnabled ? 'success' : 'neutral'" variant="subtle">
                 SSR auth: {{ ssrAuthEnabled ? 'enabled' : 'disabled' }}
             </UBadge>
@@ -112,6 +115,9 @@ const manager = getShadowPluginManager();
 const records = shallowRef(manager.listRecords());
 const divergences = shallowRef(manager.listDivergences());
 const ssrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;
+const safeModeEnabled =
+    (runtimeConfig.public as { admin?: { disableNonCorePlugins?: boolean } }).admin
+        ?.disableNonCorePlugins === true;
 const runtimeLoaderEnabled =
     (runtimeConfig.public as { admin?: { pluginRuntimeLoaderEnabled?: boolean } }).admin
         ?.pluginRuntimeLoaderEnabled !== false;

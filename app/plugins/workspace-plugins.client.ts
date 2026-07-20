@@ -12,6 +12,7 @@ import { resolveBundledPluginArtifact } from '~~/shared/plugins/bundled-plugin-c
 import { createDescriptorResolver } from '~~/shared/plugins/descriptor-resolver';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 import { getShadowPluginManager } from '~/composables/plugins/shadow-plugin-manager';
+import { discoverNonCorePlugins } from '~~/shared/plugins/safe-mode';
 
 function findLoader(
     modules: Record<string, () => Promise<unknown>>,
@@ -50,7 +51,7 @@ export default defineNuxtPlugin(() => {
         return;
     }
 
-    const modules = {
+    const modules = discoverNonCorePlugins(runtimeConfig.public?.admin, () => ({
         ...import.meta.glob('../../extensions/plugins/*/**/*.client.ts'),
         ...import.meta.glob('../../extensions/plugins/*/**/*.client.js'),
         ...import.meta.glob('../../extensions/plugins/*/**/*.client.mjs'),
@@ -60,7 +61,8 @@ export default defineNuxtPlugin(() => {
         ...import.meta.glob(
             '../../tests/plugin-runtime/build-fixtures/extensions/plugins/*/**/*.client.ts'
         ),
-    } as Record<string, () => Promise<unknown>>;
+    })) as Record<string, () => Promise<unknown>> | undefined;
+    if (!modules) return;
 
     const session = useSessionContext();
     const descriptorResolver = createDescriptorResolver(bundledPluginCatalog);

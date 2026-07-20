@@ -7,9 +7,14 @@ import { createLogger } from 'vite';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
 import { printStartupBanner as printOr3StartupBanner } from './shared/dev/startup-banner';
+import {
+    discoverNonCorePlugins,
+    isNonCorePluginDiscoveryDisabled,
+} from './shared/plugins/safe-mode';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
+const disableNonCorePlugins = isNonCorePluginDiscoveryDisabled(or3CloudConfig.admin);
 const isWizardUiProcess = process.env.OR3_WIZARD_UI_ENABLED === 'true';
 const isStaticGenerateBuild = process.argv.includes('generate');
 const isStaticCloudDisabledBuild = isStaticGenerateBuild && !isSsrAuthEnabled;
@@ -131,8 +136,10 @@ for (const providerId of providerIdsFromConfig) {
 }
 
 const configuredPluginModules =
-    or3Config.extensions?.plugins?.modules?.filter((entry) =>
-        typeof entry === 'string' ? entry.trim().length > 0 : false
+    discoverNonCorePlugins(or3CloudConfig.admin, () =>
+        or3Config.extensions?.plugins?.modules?.filter((entry) =>
+            typeof entry === 'string' ? entry.trim().length > 0 : false
+        ) ?? []
     ) ?? [];
 const pluginModulesFromConfig: string[] = [];
 for (const moduleId of configuredPluginModules) {
@@ -262,6 +269,7 @@ const adminConfig = {
     allowedHosts: or3CloudConfig.admin?.allowedHosts || [],
     allowRestart: Boolean(or3CloudConfig.admin?.allowRestart),
     allowRebuild: Boolean(or3CloudConfig.admin?.allowRebuild),
+    disableNonCorePlugins,
     pluginRuntimeLoaderEnabled:
         or3CloudConfig.admin?.pluginRuntimeLoaderEnabled !== false,
     pluginZipInstallEnabled:
@@ -496,6 +504,7 @@ export default defineNuxtConfig({
             },
             admin: {
                 basePath: adminConfig.basePath,
+                disableNonCorePlugins: adminConfig.disableNonCorePlugins,
                 pluginRuntimeLoaderEnabled: adminConfig.pluginRuntimeLoaderEnabled,
                 pluginRouteDispatcherEnabled: adminConfig.pluginRouteDispatcherEnabled,
             },

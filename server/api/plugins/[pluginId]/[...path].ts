@@ -6,6 +6,7 @@ import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { listInstalledExtensions } from '../../../admin/extensions/extension-manager';
 import { requirePluginAccess } from '../../../utils/plugins/access/require-plugin-access';
 import { requireCan } from '../../../auth/can';
+import { isNonCorePluginDiscoveryDisabled } from '../../../../shared/plugins/safe-mode';
 
 type RuntimeRouteDef = {
     method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -41,6 +42,13 @@ export default defineEventHandler(async (event) => {
     }
 
     const runtimeConfig = useRuntimeConfig();
+    if (
+        isNonCorePluginDiscoveryDisabled(
+            runtimeConfig.admin as { disableNonCorePlugins?: boolean } | undefined
+        )
+    ) {
+        throw createError({ statusCode: 404, statusMessage: 'Not Found' });
+    }
     const dispatcherEnabled =
         (runtimeConfig.admin as { pluginRouteDispatcherEnabled?: boolean } | undefined)
             ?.pluginRouteDispatcherEnabled !== false;

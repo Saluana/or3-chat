@@ -24,6 +24,7 @@ import type {
     Sha256,
 } from '../../../shared/plugins/runtime-descriptor';
 import type { PluginRuntimeManifestResponse } from '../../../shared/plugins/runtime-manifest';
+import { isNonCorePluginDiscoveryDisabled } from '../../../shared/plugins/safe-mode';
 
 export type { PluginRuntimeManifestResponse } from '../../../shared/plugins/runtime-manifest';
 
@@ -82,6 +83,13 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
     }
 
     const runtimeConfig = useRuntimeConfig();
+    if (
+        isNonCorePluginDiscoveryDisabled(
+            runtimeConfig.admin as { disableNonCorePlugins?: boolean } | undefined
+        )
+    ) {
+        return emptyManifest();
+    }
     const runtimeLoaderEnabled =
         (runtimeConfig.admin as { pluginRuntimeLoaderEnabled?: boolean } | undefined)
             ?.pluginRuntimeLoaderEnabled !== false;

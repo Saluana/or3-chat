@@ -495,6 +495,15 @@ describe('buildOr3CloudConfigFromEnv', () => {
         expect(config.admin?.rebuildCommand).toBe('bun run custom:build');
     });
 
+    it('parses the boot-time non-core plugin safe-mode flag', () => {
+        expect(buildOr3CloudConfigFromEnv({}).admin?.disableNonCorePlugins).toBe(false);
+        expect(
+            buildOr3CloudConfigFromEnv({
+                OR3_DISABLE_NON_CORE_PLUGINS: 'true',
+            }).admin?.disableNonCorePlugins
+        ).toBe(true);
+    });
+
     it('parses admin extension limits', () => {
         const config = buildOr3CloudConfigFromEnv({
             OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES: '10485760',

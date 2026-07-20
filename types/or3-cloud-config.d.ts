@@ -442,6 +442,15 @@ export interface Or3CloudConfig {
         extensionAllowedExtensions?: string[];
 
         /**
+         * Disables non-core plugin discovery before plugin code executes.
+         * This boot-time recovery switch is intentionally independent of the
+         * plugin admin UI.
+         * @env OR3_DISABLE_NON_CORE_PLUGINS
+         * @default false
+         */
+        disableNonCorePlugins?: boolean;
+
+        /**
          * Enables client workspace plugin runtime loader paths.
          * @default true
          */

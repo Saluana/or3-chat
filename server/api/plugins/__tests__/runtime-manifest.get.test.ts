@@ -36,10 +36,11 @@ vi.mock('../../../utils/plugins/access/require-plugin-access', () => ({
     checkPluginAccess: checkPluginAccessMock as any,
 }));
 
+const useRuntimeConfigMock = vi.fn(() => ({
+    admin: { pluginRuntimeLoaderEnabled: true, disableNonCorePlugins: false },
+}));
 vi.mock('#imports', () => ({
-    useRuntimeConfig: () => ({
-        admin: { pluginRuntimeLoaderEnabled: true },
-    }),
+    useRuntimeConfig: useRuntimeConfigMock as any,
 }));
 
 function makeEvent(): H3Event {
@@ -76,6 +77,9 @@ describe('GET /api/plugins/runtime-manifest', () => {
             session: { authenticated: true },
             decision: { allowed: true, reasons: [], effectivePolicy: defaultEffectivePolicy },
         });
+        useRuntimeConfigMock.mockReset().mockReturnValue({
+            admin: { pluginRuntimeLoaderEnabled: true, disableNonCorePlugins: false },
+        });
     });
 
     it('returns empty manifest when SSR auth is disabled', async () => {
@@ -89,6 +93,22 @@ describe('GET /api/plugins/runtime-manifest', () => {
         expect(result.enabledPluginIds).toEqual([]);
         expect(result.installedPluginIds).toEqual([]);
         expect(result.runtime).toEqual({});
+    });
+
+    it('does not discover installed plugins in pre-discovery safe mode', async () => {
+        useRuntimeConfigMock.mockReturnValue({
+            admin: { pluginRuntimeLoaderEnabled: true, disableNonCorePlugins: true },
+        });
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+
+        const result = await handler(makeEvent());
+
+        expect(result.enabledPluginIds).toEqual([]);
+        expect(resolveSessionContextMock).not.toHaveBeenCalled();
+        expect(listInstalledExtensionsMock).not.toHaveBeenCalled();
+        expect(getEnabledPluginsMock).not.toHaveBeenCalled();
     });
 
     it('returns empty manifest when workspace is not resolved', async () => {

@@ -353,6 +353,10 @@ export function buildOr3CloudConfigFromEnv(
                 : [],
             allowRestart: env.OR3_ADMIN_ALLOW_RESTART === 'true',
             allowRebuild: env.OR3_ADMIN_ALLOW_REBUILD === 'true',
+            disableNonCorePlugins: envBool(
+                env.OR3_DISABLE_NON_CORE_PLUGINS,
+                false
+            ),
             rebuildCommand: env.OR3_ADMIN_REBUILD_COMMAND || DEFAULT_REBUILD_COMMAND,
             extensionMaxZipBytes: envNum(env.OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES),
             extensionMaxFiles: envNum(env.OR3_ADMIN_EXTENSION_MAX_FILES),

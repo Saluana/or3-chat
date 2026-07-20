@@ -112,7 +112,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R9.AC1, R9.AC3
       Done when: the panel labels client/process/persisted scope, reports actual shadow data, and does not infer active state from workspace enablement.
 
-- [ ] 2.10 Implement pre-discovery `disableNonCorePlugins` safe-mode configuration
+- [x] 2.10 Implement pre-discovery `disableNonCorePlugins` safe-mode configuration
       Requirements: R9.AC1, R9.AC2
       Done when: a boot test proves no non-core loader/import function is called in safe mode.
 
