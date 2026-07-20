@@ -104,7 +104,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC4, R9.AC5
       Done when: shadow records match V1 managed IDs and generations while callback/contribution counts stay unchanged.
 
-- [ ] 2.8 Add bounded shadow divergence records for desired ID, observed ID, source, workspace, and rebuild-required mismatch
+- [x] 2.8 Add bounded shadow divergence records for desired ID, observed ID, source, workspace, and rebuild-required mismatch
       Requirements: R2.AC3, R9.AC3, R9.AC5
       Done when: divergences are inspectable, capped, and contain no plugin payload/secrets.
 

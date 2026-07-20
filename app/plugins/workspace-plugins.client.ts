@@ -132,6 +132,20 @@ export default defineNuxtPlugin(() => {
             const loader = findLoader(modules, pluginId, manifest.runtime[pluginId]?.clientEntry);
             if (!loader) {
                 const clientEntry = manifest.runtime[pluginId]?.clientEntry;
+                const runtimeEntry = manifest.runtime[pluginId];
+                shadowManager.recordDivergence({
+                    kind:
+                        runtimeEntry?.descriptorStatus === 'rebuild-required'
+                            ? 'rebuild-required'
+                            : 'desired-not-observed',
+                    desiredPluginId: pluginId,
+                    desiredSource: 'extension',
+                    desiredWorkspaceId: manifest.workspaceId ?? workspaceId,
+                    rebuildRequiredReason:
+                        runtimeEntry?.descriptorStatus === 'rebuild-required'
+                            ? runtimeEntry.rebuildRequiredReason
+                            : undefined,
+                });
                 if (clientEntry) {
                     console.warn(
                         `[workspace-plugins] no bundled client entry resolved for plugin "${pluginId}". ` +
@@ -186,10 +200,31 @@ export default defineNuxtPlugin(() => {
                     })
                     .then((resolution) => {
                         if (
-                            resolution.status !== 'ready' ||
                             shadowObservationTokens.get(pluginId) !== shadowObservationToken ||
                             !managedPluginIds.has(pluginId)
                         ) {
+                            return;
+                        }
+                        if (resolution.status !== 'ready') {
+                            shadowManager.recordDivergence({
+                                kind:
+                                    resolution.failure.code === 'rebuild-required'
+                                        ? 'rebuild-required'
+                                        : resolution.failure.code === 'workspace-id-mismatch'
+                                          ? 'workspace-mismatch'
+                                          : 'identity-mismatch',
+                                desiredPluginId: pluginId,
+                                observedPluginId: pluginId,
+                                desiredSource: 'extension',
+                                observedSource: 'extension',
+                                desiredWorkspaceId: manifest.workspaceId ?? workspaceId,
+                                observedWorkspaceId: workspaceId,
+                                rebuildRequiredReason:
+                                    manifest.runtime[pluginId]?.descriptorStatus ===
+                                    'rebuild-required'
+                                        ? manifest.runtime[pluginId]?.rebuildRequiredReason
+                                        : undefined,
+                            });
                             return;
                         }
                         shadowManager.observeManagedActivation({
@@ -202,6 +237,12 @@ export default defineNuxtPlugin(() => {
                 dispose = null;
             } catch (error) {
                 hadFailure = true;
+                shadowManager.recordDivergence({
+                    kind: 'desired-not-observed',
+                    desiredPluginId: pluginId,
+                    desiredSource: 'extension',
+                    desiredWorkspaceId: manifest.workspaceId ?? workspaceId,
+                });
                 if (dispose) {
                     dispose();
                 }

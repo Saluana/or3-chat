@@ -94,4 +94,62 @@ describe('ShadowPluginManager', () => {
         expect(Object.isFrozen(records[0]?.descriptor)).toBe(true);
         expect(Object.isFrozen(records[0]?.descriptor.artifact)).toBe(true);
     });
+
+    it('caps divergences and exposes only bounded allowlisted metadata', () => {
+        const manager = new ShadowPluginManager(3);
+        manager.recordDivergence({
+            kind: 'desired-not-observed',
+            desiredPluginId: 'alpha',
+            desiredSource: 'extension',
+            desiredWorkspaceId: 'workspace-1',
+            observedAt: 10,
+            secret: 'must-not-survive',
+            payload: { token: 'must-not-survive' },
+        } as never);
+        manager.recordDivergence({
+            kind: 'source-mismatch',
+            desiredPluginId: 'beta',
+            observedPluginId: 'beta',
+            desiredSource: 'package',
+            observedSource: 'extension',
+            observedAt: 20,
+        });
+        manager.recordDivergence({
+            kind: 'workspace-mismatch',
+            desiredPluginId: 'gamma',
+            observedPluginId: 'gamma',
+            desiredWorkspaceId: 'workspace-2',
+            observedWorkspaceId: 'workspace-1',
+            observedAt: 30,
+        });
+        manager.recordDivergence({
+            kind: 'rebuild-required',
+            desiredPluginId: 'delta'.repeat(100),
+            desiredSource: 'extension',
+            rebuildRequiredReason: 'not-in-host-build',
+            observedAt: 40,
+        });
+
+        const records = manager.listDivergences();
+        expect(records).toHaveLength(3);
+        expect(records.map((record) => record.sequence)).toEqual([2, 3, 4]);
+        expect(records[0]).toMatchObject({
+            kind: 'source-mismatch',
+            desiredSource: 'package',
+            observedSource: 'extension',
+        });
+        expect(records[1]).toMatchObject({
+            kind: 'workspace-mismatch',
+            desiredWorkspaceId: 'workspace-2',
+            observedWorkspaceId: 'workspace-1',
+        });
+        expect(records[2]?.desiredPluginId).toHaveLength(256);
+        expect(JSON.stringify(records)).not.toContain('must-not-survive');
+        expect(Object.isFrozen(records)).toBe(true);
+        expect(records.every(Object.isFrozen)).toBe(true);
+    });
+
+    it.each([0, 1.5, 1001])('rejects an unsafe divergence limit (%s)', (limit) => {
+        expect(() => new ShadowPluginManager(limit)).toThrow(RangeError);
+    });
 });
