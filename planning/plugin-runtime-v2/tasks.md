@@ -92,7 +92,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC1-R2.AC5
       Done when: V1 response fields remain present and old response fixtures still parse.
 
-- [ ] 2.5 Implement the pure runtime state machine and transition table
+- [x] 2.5 Implement the pure runtime state machine and transition table
       Requirements: R2.AC4, R2.AC8
       Done when: every legal transition and every rejected transition has a table-driven unit test.
 
