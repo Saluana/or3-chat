@@ -2,15 +2,11 @@ import { ref, shallowRef, type Ref } from 'vue';
 import { callWithNuxt, type NuxtApp } from '#app';
 import { useAppConfig, useHead, useRuntimeConfig } from '#imports';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
-import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
 import type { CompiledTheme, ThemePlugin } from '~/theme/_shared/types';
-import { generateThemeCssVariables } from '~/theme/_shared/generate-css-variables';
-import { iconRegistry } from '~/theme/_shared/icon-registry';
+import { IconRegistry } from '~/theme/_shared/icon-registry';
+import { prepareThemeEntry } from '~/theme/_shared/prepare-theme';
 import {
     loadThemeManifest,
-    loadThemeStylesheets,
-    updateManifestEntry,
-    loadThemeAppConfig,
     resolveThemeStylesheetHref,
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
@@ -18,8 +14,8 @@ import { pickDefaultTheme } from '~/theme/_shared/default-theme';
 import { FALLBACK_THEME_NAME } from '~/theme/_shared/constants';
 import {
     cloneDeep,
-    deepMerge,
-    recursiveUpdate,
+    computeEffectiveAppConfig,
+    replaceReactiveObject,
     sanitizeThemeName,
     readCookie,
 } from '~/theme/_shared/theme-core';
@@ -35,6 +31,7 @@ import {
 
 export default defineNuxtPlugin(async (nuxtApp) => {
     const ACTIVE_THEME_COOKIE = 'or3_active_theme';
+    const iconRegistry = new IconRegistry();
 
     const manifestResult = await loadThemeManifest();
     const manifestEntries = manifestResult.entries;
@@ -63,18 +60,17 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         payload.data.__or3ThemeAppConfigPatch = cloneDeep(patch);
     };
 
-    const applyThemeAppConfigPatch = (patch?: Record<string, any> | null) => {
-        const merged = deepMerge(cloneDeep(baseAppConfig), patch || undefined);
-        recursiveUpdate(appConfig, merged);
-    };
-
-    const applyThemeUiConfig = (theme?: CompiledTheme | null) => {
-        const startingUi = cloneDeep(appConfig.ui || {});
-        const mergedUi = deepMerge(
-            startingUi,
-            (theme?.ui as Record<string, any> | undefined) || undefined
+    const applyEffectiveAppConfig = (
+        theme?: CompiledTheme | null,
+        patch?: Record<string, unknown> | null
+    ) => {
+        replaceReactiveObject(
+            appConfig,
+            computeEffectiveAppConfig(baseAppConfig, {
+                appPatch: patch,
+                uiPatch: theme?.ui,
+            })
         );
-        appConfig.ui = mergedUi;
     };
 
     if (manifestEntries.length === 0 && import.meta.dev) {
@@ -106,6 +102,14 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         fallbackThemeName: FALLBACK_THEME_NAME,
     });
     const DEFAULT_THEME = defaultDecision.defaultTheme;
+    const branding = (runtimeConfig.public as Record<string, unknown>).branding as
+        | Record<string, unknown>
+        | undefined;
+    const disabledThemes = new Set(
+        Array.isArray(branding?.disabledThemes)
+            ? (branding.disabledThemes as string[]).filter(Boolean)
+            : []
+    );
 
     if (
         import.meta.dev &&
@@ -160,51 +164,13 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             return;
         }
 
-        const themeModule = await manifestEntry.loader();
-        const definition = themeModule?.default;
-        if (!definition) {
-            throw new Error(`Theme "${themeName}" has no default export.`);
-        }
-
-        updateManifestEntry(manifestEntry, definition);
-        await loadThemeStylesheets(manifestEntry, definition.stylesheets);
-
-        let themeIcons = definition.icons;
-        if (!themeIcons && manifestEntry.iconsLoader) {
-            try {
-                const iconsModule = await manifestEntry.iconsLoader();
-                themeIcons = iconsModule?.default || undefined;
-            } catch (e) {
-                if (import.meta.dev) {
-                    console.warn(
-                        `[theme] Failed to load icons for theme "${themeName}" during SSR:`,
-                        e
-                    );
-                }
-            }
-        }
-
-        const compiledTheme: CompiledTheme = {
-            name: definition.name,
-            isDefault: manifestEntry.isDefault,
-            stylesheets: manifestEntry.stylesheets,
-            displayName: definition.displayName,
-            description: definition.description,
-            cssVariables: generateThemeCssVariables(definition),
-            overrides: compileOverridesRuntime(definition.overrides || {}),
-            cssSelectors: definition.cssSelectors,
-            ui: definition.ui,
-            propMaps: definition.propMaps,
-            backgrounds: definition.backgrounds,
-            icons: themeIcons,
-            customComponents: definition.customComponents,
-        };
+        const { compiledTheme, appConfig: themeSpecificConfig } =
+            await prepareThemeEntry(manifestEntry);
 
         themeRegistry.set(themeName, compiledTheme);
         if (compiledTheme.icons) {
             iconRegistry.registerTheme(themeName, compiledTheme.icons);
         }
-        const themeSpecificConfig = (await loadThemeAppConfig(manifestEntry)) ?? null;
         themeAppConfigOverrides.set(themeName, themeSpecificConfig);
         resolverRegistry.set(themeName, new RuntimeResolver(compiledTheme));
     };
@@ -356,6 +322,10 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     const setActiveTheme = async (themeName: string) => {
         let target = sanitize(themeName) ?? DEFAULT_THEME;
+
+        if (disabledThemes.has(target) && target !== DEFAULT_THEME) {
+            target = DEFAULT_THEME;
+        }
         if (!themeManifest.has(target) && manifestEntries[0]) {
             target = manifestEntries[0].name;
         }
@@ -391,10 +361,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         iconRegistry.setActiveTheme(target);
         cleanupInactiveThemes(target);
         const patch = themeAppConfigOverrides.get(target) ?? null;
-        applyThemeAppConfigPatch(patch);
-        recordInitialAppConfigPatch(patch);
         const compiledTheme = themeRegistry.get(target);
-        applyThemeUiConfig(compiledTheme || null);
+        applyEffectiveAppConfig(compiledTheme ?? null, patch);
+        recordInitialAppConfigPatch(patch);
         syncActiveComponents();
 
         // Inject CSS variables and stylesheets into the head for SSR/Static builds
@@ -473,9 +442,16 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         loadTheme,
         getTheme: (themeName: string) => themeRegistry.get(themeName) || null,
         activeComponents,
+        availableThemes: manifestEntries.map((entry) => ({
+            name: entry.name,
+            displayName: entry.displayName,
+            description: entry.description,
+        })),
     };
 
     nuxtApp.provide('theme', themeApi);
+    nuxtApp.payload.iconRegistry = iconRegistry.state;
+    nuxtApp.provide('iconRegistry', iconRegistry);
 });
 
 function detectServerScheme(

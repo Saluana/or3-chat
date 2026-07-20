@@ -34,16 +34,13 @@ import type {
     ThemeBackgroundSlots,
 } from '../../theme/_shared/types';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
+import { COLOR_TOKEN_REGISTRY } from '~/theme/_shared/design-token-registry';
 import {
     applyThemeBackgrounds,
     createThemeBackgroundTokenResolver,
 } from './backgrounds';
 import { isBrowser } from '~/utils/env';
 const backgroundTokenResolver = createThemeBackgroundTokenResolver();
-
-type NuxtAppGlobals = typeof globalThis & {
-    useNuxtApp?: () => { $theme?: ThemePlugin };
-};
 
 /**
  * Purpose:
@@ -60,15 +57,13 @@ type NuxtAppGlobals = typeof globalThis & {
  */
 export async function applyMergedTheme(
     mode: 'light' | 'dark',
-    overrides: UserThemeOverrides
+    overrides: UserThemeOverrides,
+    themePlugin?: ThemePlugin,
+    shouldCommit?: () => boolean
 ) {
     if (!isBrowser()) return;
 
     // Get active base theme (from theme plugin registry)
-    const g = globalThis as NuxtAppGlobals;
-    const nuxtApp = g.useNuxtApp?.();
-    const themePlugin = nuxtApp?.$theme;
-
     if (!themePlugin) {
         console.warn('[apply-merged-theme] Theme plugin not found');
         return;
@@ -82,8 +77,10 @@ export async function applyMergedTheme(
 
     // Fallback: ensure theme is loaded once if cache missed (e.g. on app boot)
     if (!theme) {
+        if (typeof themePlugin.loadTheme !== 'function') return;
         theme = (await themePlugin.loadTheme(activeThemeName)) ?? null;
     }
+    if (shouldCommit && !shouldCommit()) return;
 
     if (!theme) {
         console.warn('[apply-merged-theme] Failed to resolve theme');
@@ -111,13 +108,13 @@ export async function applyMergedTheme(
             '--app-font-sans-current',
             useSystem
                 ? 'ui-sans-serif, system-ui, sans-serif'
-                : '"VT323", ui-sans-serif, system-ui, sans-serif'
+                : 'var(--font-sans)'
         );
         r.setProperty(
             '--app-font-heading-current',
             useSystem
                 ? 'ui-sans-serif, system-ui, sans-serif'
-                : '"Press Start 2P", ui-sans-serif, system-ui, sans-serif'
+                : 'var(--font-heading)'
         );
     } else {
         r.removeProperty('--app-font-sans-current');
@@ -126,85 +123,16 @@ export async function applyMergedTheme(
 
     // 2. Apply color palette overrides
     if (overrides.colors?.enabled) {
-        const colorMap: Array<[keyof typeof overrides.colors, string]> = [
-            // Primary colors
-            ['primary', '--md-primary'],
-            ['onPrimary', '--md-on-primary'],
-            ['primaryContainer', '--md-primary-container'],
-            ['onPrimaryContainer', '--md-on-primary-container'],
-            // Secondary colors
-            ['secondary', '--md-secondary'],
-            ['onSecondary', '--md-on-secondary'],
-            ['secondaryContainer', '--md-secondary-container'],
-            ['onSecondaryContainer', '--md-on-secondary-container'],
-            // Tertiary colors
-            ['tertiary', '--md-tertiary'],
-            ['onTertiary', '--md-on-tertiary'],
-            ['tertiaryContainer', '--md-tertiary-container'],
-            ['onTertiaryContainer', '--md-on-tertiary-container'],
-            // Error colors
-            ['error', '--md-error'],
-            ['onError', '--md-on-error'],
-            ['errorContainer', '--md-error-container'],
-            ['onErrorContainer', '--md-on-error-container'],
-            // Surface colors
-            ['surface', '--md-surface'],
-            ['onSurface', '--md-on-surface'],
-            ['surfaceVariant', '--md-surface-variant'],
-            ['onSurfaceVariant', '--md-on-surface-variant'],
-            ['inverseSurface', '--md-inverse-surface'],
-            ['inverseOnSurface', '--md-inverse-on-surface'],
-            // Outline colors
-            ['outline', '--md-outline'],
-            ['outlineVariant', '--md-outline-variant'],
-        ];
-        for (const [key, cssVar] of colorMap) {
-            const val = overrides.colors[key];
+        for (const [key, cssVar] of Object.entries(COLOR_TOKEN_REGISTRY)) {
+            const val = (overrides.colors as Record<string, unknown>)[key];
             if (val && typeof val === 'string') r.setProperty(cssVar, val);
-        }
-
-        // Handle semantic colors separately (they use extended color tokens)
-        if (overrides.colors.success) {
-            r.setProperty(
-                '--md-extended-color-success-color',
-                overrides.colors.success
-            );
-        }
-        if (overrides.colors.warning) {
-            r.setProperty(
-                '--md-extended-color-warning-color',
-                overrides.colors.warning
-            );
+            else r.removeProperty(cssVar);
         }
     } else {
         // Remove overrides to let base theme values cascade
-        r.removeProperty('--md-primary');
-        r.removeProperty('--md-on-primary');
-        r.removeProperty('--md-primary-container');
-        r.removeProperty('--md-on-primary-container');
-        r.removeProperty('--md-secondary');
-        r.removeProperty('--md-on-secondary');
-        r.removeProperty('--md-secondary-container');
-        r.removeProperty('--md-on-secondary-container');
-        r.removeProperty('--md-tertiary');
-        r.removeProperty('--md-on-tertiary');
-        r.removeProperty('--md-tertiary-container');
-        r.removeProperty('--md-on-tertiary-container');
-        r.removeProperty('--md-error');
-        r.removeProperty('--md-on-error');
-        r.removeProperty('--md-error-container');
-        r.removeProperty('--md-on-error-container');
-        r.removeProperty('--md-surface');
-        r.removeProperty('--md-on-surface');
-        r.removeProperty('--md-surface-variant');
-        r.removeProperty('--md-on-surface-variant');
-        r.removeProperty('--md-inverse-surface');
-        r.removeProperty('--md-inverse-on-surface');
-        r.removeProperty('--md-outline');
-        r.removeProperty('--md-outline-variant');
-        // Semantic colors (extended color tokens)
-        r.removeProperty('--md-extended-color-success-color');
-        r.removeProperty('--md-extended-color-warning-color');
+        for (const cssVar of Object.values(COLOR_TOKEN_REGISTRY)) {
+            r.removeProperty(cssVar);
+        }
     }
 
     // 3. Build merged backgrounds
@@ -214,6 +142,7 @@ export async function applyMergedTheme(
     );
     await applyThemeBackgrounds(mergedBackgrounds, {
         resolveToken: backgroundTokenResolver,
+        shouldCommit,
     });
 
     // 4. Apply background color overrides (if enabled)
@@ -257,18 +186,13 @@ export async function applyMergedTheme(
             '--app-header-gradient-display',
             overrides.backgrounds.headerGradient.enabled ? 'block' : 'none'
         );
-    }
+    } else r.removeProperty('--app-header-gradient-display');
     if (overrides.backgrounds?.bottomNavGradient?.enabled !== undefined) {
         r.setProperty(
             '--app-bottomnav-gradient-display',
             overrides.backgrounds.bottomNavGradient.enabled ? 'block' : 'none'
         );
-    }
-
-    // 6. High-contrast pattern reduction
-    if (overrides.ui?.reducePatternsInHighContrast && isHighContrastActive()) {
-        clampBackgroundOpacities();
-    }
+    } else r.removeProperty('--app-bottomnav-gradient-display');
 }
 
 function hasColor(value: string | null | undefined): boolean {
@@ -312,6 +236,18 @@ function buildMergedBackgrounds(
             result.sidebar,
             convertLayerToThemeFormat(overrides.backgrounds.sidebar)
         );
+    }
+
+    if (overrides.ui?.reducePatternsInHighContrast && isHighContrastActive()) {
+        for (const layer of [
+            result.content?.base,
+            result.content?.overlay,
+            result.sidebar,
+        ]) {
+            if (layer?.opacity !== undefined) {
+                layer.opacity = Math.min(layer.opacity, 0.04);
+            }
+        }
     }
 
     return result;
@@ -359,40 +295,28 @@ interface LayerInput {
 }
 
 interface ThemeLayerFormat {
-    image: string | null;
+    image?: string | null;
     opacity?: number;
     size?: string;
     repeat?: 'repeat' | 'no-repeat';
 }
 
 function convertLayerToThemeFormat(layer: LayerInput): ThemeLayerFormat {
-    return {
-        image: layer.url || null,
-        opacity: layer.opacity,
-        size: layer.fit
+    const result: ThemeLayerFormat = {};
+    if ('url' in layer) result.image = layer.url;
+    if (layer.opacity !== undefined) result.opacity = layer.opacity;
+    if (layer.fit !== undefined || layer.sizePx !== undefined) {
+        result.size = layer.fit
             ? 'cover'
-            : layer.sizePx
-            ? layer.sizePx + 'px'
-            : undefined,
-        repeat: layer.repeat,
-    };
+            : layer.sizePx !== undefined
+            ? `${layer.sizePx}px`
+            : undefined;
+    }
+    if (layer.repeat !== undefined) result.repeat = layer.repeat;
+    return result;
 }
 
 function isHighContrastActive(): boolean {
     if (!isBrowser()) return false;
     return /high-contrast/.test(document.documentElement.className);
-}
-
-function clampBackgroundOpacities() {
-    const r = document.documentElement.style;
-    const clamp = (v: string) => String(Math.min(parseFloat(v) || 0, 0.04));
-    const vars = [
-        '--app-content-bg-1-opacity',
-        '--app-content-bg-2-opacity',
-        '--app-sidebar-bg-1-opacity',
-    ];
-    for (const v of vars) {
-        const current = r.getPropertyValue(v);
-        if (current) r.setProperty(v, clamp(current));
-    }
 }

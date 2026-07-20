@@ -23,7 +23,12 @@ import type { CSSelectorConfig } from './types';
 /**
  * Internal cache for class application per element.
  */
-const classApplicationCache = new WeakMap<HTMLElement, Set<string>>();
+export interface ThemeClassSession {
+    cancel(): void;
+    remove(): void;
+}
+
+const activeSessions = new Map<string, ThemeClassSession>();
 
 /**
  * `applyThemeClasses`
@@ -38,9 +43,28 @@ const classApplicationCache = new WeakMap<HTMLElement, Set<string>>();
 export function applyThemeClasses(
     themeName: string,
     selectors: Record<string, CSSelectorConfig>
-): void {
+): ThemeClassSession {
+    activeSessions.get(themeName)?.remove();
     const entries = Object.entries(selectors);
-    if (entries.length === 0) return;
+    const owned = new Map<HTMLElement, Set<string>>();
+    let cancelled = false;
+    let frame: number | ReturnType<typeof setTimeout> | null = null;
+    let observer: MutationObserver | null = null;
+
+    const addClasses = (element: Element, classes: string[]) => {
+        if (!(element instanceof HTMLElement) || cancelled) return;
+        let additions = owned.get(element);
+        if (!additions) {
+            additions = new Set();
+            owned.set(element, additions);
+        }
+        for (const className of classes) {
+            if (!element.classList.contains(className)) {
+                element.classList.add(className);
+                additions.add(className);
+            }
+        }
+    };
 
     const applyEntry = ([selector, config]: [string, CSSelectorConfig]) => {
         if (!config.class) return;
@@ -51,22 +75,7 @@ export function applyThemeClasses(
         try {
             const elements = document.querySelectorAll(selector);
 
-            elements.forEach((element) => {
-                if (!(element instanceof HTMLElement)) return;
-
-                // Track what we've added to avoid duplicates
-                if (!classApplicationCache.has(element)) {
-                    classApplicationCache.set(element, new Set());
-                }
-
-                const applied = classApplicationCache.get(element)!;
-                const newClasses = classes.filter((c: string) => !applied.has(c));
-
-                if (newClasses.length > 0) {
-                    element.classList.add(...newClasses);
-                    newClasses.forEach((c: string) => applied.add(c));
-                }
-            });
+            elements.forEach((element) => addClasses(element, classes));
         } catch (error) {
             if (import.meta.dev) {
                 console.warn(
@@ -77,11 +86,63 @@ export function applyThemeClasses(
         }
     };
 
+    const session: ThemeClassSession = {
+        cancel() {
+            cancelled = true;
+            observer?.disconnect();
+            observer = null;
+            if (frame !== null) {
+                if (typeof frame === 'number' && typeof cancelAnimationFrame !== 'undefined') {
+                    cancelAnimationFrame(frame);
+                } else {
+                    clearTimeout(frame as ReturnType<typeof setTimeout>);
+                }
+                frame = null;
+            }
+        },
+        remove() {
+            this.cancel();
+            for (const [element, classes] of owned) {
+                for (const className of classes) element.classList.remove(className);
+            }
+            owned.clear();
+            if (activeSessions.get(themeName) === session) {
+                activeSessions.delete(themeName);
+            }
+        },
+    };
+    activeSessions.set(themeName, session);
+
+    if (entries.length === 0) return session;
+
+    const observeAdditions = () => {
+        if (typeof MutationObserver === 'undefined' || cancelled) return;
+        observer = new MutationObserver((records) => {
+            for (const record of records) {
+                for (const node of record.addedNodes) {
+                    if (!(node instanceof Element)) continue;
+                    for (const [selector, config] of entries) {
+                        const classes = config.class?.split(/\s+/).filter(Boolean) ?? [];
+                        if (classes.length === 0) continue;
+                        try {
+                            if (node.matches(selector)) addClasses(node, classes);
+                            node.querySelectorAll(selector).forEach((el) => addClasses(el, classes));
+                        } catch {
+                            // Invalid selectors are already reported during the initial pass.
+                        }
+                    }
+                }
+            }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+    };
+
     if (import.meta.test) {
         for (const entry of entries) {
             applyEntry(entry);
         }
-        return;
+        observeAdditions();
+        return session;
     }
 
     // Chunking execution to prevent frame drops
@@ -98,14 +159,17 @@ export function applyThemeClasses(
 
         if (index < entries.length) {
             if (typeof requestAnimationFrame !== 'undefined') {
-                requestAnimationFrame(processChunk);
+                frame = requestAnimationFrame(processChunk);
             } else {
-                setTimeout(processChunk, 0);
+                frame = setTimeout(processChunk, 0);
             }
+        } else {
+            observeAdditions();
         }
     };
 
     processChunk();
+    return session;
 }
 
 /**
@@ -115,36 +179,9 @@ export function applyThemeClasses(
  * Removes class based selector overrides from matched elements.
  */
 export function removeThemeClasses(
-    selectors: Record<string, CSSelectorConfig>
+    themeName: string
 ): void {
-    for (const [selector, config] of Object.entries(selectors)) {
-        if (!config.class) continue;
-
-        const classes = config.class.split(/\s+/).filter(Boolean);
-        if (classes.length === 0) continue;
-
-        try {
-            const elements = document.querySelectorAll(selector);
-
-            elements.forEach((element) => {
-                if (!(element instanceof HTMLElement)) return;
-
-                element.classList.remove(...classes);
-
-                // Clear cache for this element
-                if (classApplicationCache.has(element)) {
-                    classApplicationCache.delete(element);
-                }
-            });
-        } catch (error) {
-            if (import.meta.dev) {
-                console.warn(
-                    `[theme] Failed to remove classes for selector: "${selector}"`,
-                    error
-                );
-            }
-        }
-    }
+    activeSessions.get(themeName)?.remove();
 }
 
 /**

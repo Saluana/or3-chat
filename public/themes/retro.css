@@ -47,7 +47,10 @@
   border-right: var(--md-border-width) solid var(--md-border-color);
 }
 
-[data-theme="retro"] #nav-top-section, #nav-footer-section, #nav-pages-section, #nav-middle-section {
+[data-theme="retro"] #nav-top-section,
+[data-theme="retro"] #nav-footer-section,
+[data-theme="retro"] #nav-pages-section,
+[data-theme="retro"] #nav-middle-section {
   background-color: transparent;
 }
 

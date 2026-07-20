@@ -15,6 +15,8 @@
  * - Enforces a connection/response timeout.
  */
 import { resolve as dnsResolve } from 'node:dns/promises';
+import { request as httpsRequest } from 'node:https';
+import { Readable } from 'node:stream';
 
 /** Configuration for URL fetch operations. */
 export interface UrlFetchOptions {
@@ -198,10 +200,10 @@ export function validateFetchUrl(rawUrl: string): URL {
 export async function validateResolvedIps(
     hostname: string,
     resolver?: (hostname: string) => Promise<string[]>
-): Promise<void> {
+): Promise<string[]> {
     // If the hostname is already a bare IPv4, it was validated in validateFetchUrl
     if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
-        return;
+        return [hostname];
     }
 
     const resolve = resolver ?? ((h: string) => dnsResolve(h, 'A') as Promise<string[]>);
@@ -224,6 +226,57 @@ export async function validateResolvedIps(
             );
         }
     }
+    return addresses;
+}
+
+function fetchPinnedToAddress(
+    rawUrl: string,
+    address: string,
+    signal: AbortSignal
+): Promise<Response> {
+    const url = new URL(rawUrl);
+    return new Promise((resolve, reject) => {
+        const request = httpsRequest(
+            {
+                protocol: 'https:',
+                hostname: url.hostname,
+                port: url.port || 443,
+                path: `${url.pathname}${url.search}`,
+                method: 'GET',
+                servername: url.hostname,
+                headers: {
+                    Accept: 'application/zip, application/octet-stream, */*',
+                    'User-Agent': 'OR3-Chat-Extension-Installer/1.0',
+                },
+                lookup: (_hostname, _options, callback) =>
+                    callback(null, address, 4),
+            },
+            (incoming) => {
+                const headers = new Headers();
+                for (const [name, value] of Object.entries(incoming.headers)) {
+                    if (Array.isArray(value)) {
+                        for (const item of value) headers.append(name, item);
+                    } else if (value !== undefined) {
+                        headers.set(name, String(value));
+                    }
+                }
+                resolve(
+                    new Response(Readable.toWeb(incoming) as ReadableStream, {
+                        status: incoming.statusCode ?? 500,
+                        statusText: incoming.statusMessage,
+                        headers,
+                    })
+                );
+            }
+        );
+        request.on('error', reject);
+        signal.addEventListener(
+            'abort',
+            () => request.destroy(new DOMException('Aborted', 'AbortError')),
+            { once: true }
+        );
+        request.end();
+    });
 }
 
 // ── Redirect status codes ───────────────────────────────────────────
@@ -267,16 +320,22 @@ export async function fetchZipFromUrl(
             const parsed = validateFetchUrl(currentUrl);
 
             // Resolve DNS and validate IPs on every hop (prevents rebinding)
-            await validateResolvedIps(parsed.hostname, dnsResolver);
+            const addresses = await validateResolvedIps(parsed.hostname, dnsResolver);
 
-            const response = await fetch(currentUrl, {
-                signal: controller.signal,
-                redirect: 'manual',
-                headers: {
-                    'Accept': 'application/zip, application/octet-stream, */*',
-                    'User-Agent': 'OR3-Chat-Extension-Installer/1.0',
-                },
-            });
+            const response = dnsResolver
+                ? await fetch(currentUrl, {
+                      signal: controller.signal,
+                      redirect: 'manual',
+                      headers: {
+                          Accept: 'application/zip, application/octet-stream, */*',
+                          'User-Agent': 'OR3-Chat-Extension-Installer/1.0',
+                      },
+                  })
+                : await fetchPinnedToAddress(
+                      currentUrl,
+                      addresses[0]!,
+                      controller.signal
+                  );
 
             // Handle redirects manually so we can validate each hop
             if (REDIRECT_STATUSES.has(response.status)) {

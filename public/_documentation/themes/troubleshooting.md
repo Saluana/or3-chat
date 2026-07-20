@@ -29,14 +29,15 @@ const { setActiveTheme } = useThemeResolver();
 await setActiveTheme('my-theme');
 ```
 
-3. Confirm components use `v-theme` or `useThemeOverrides`.
+3. Confirm component props bind `useThemeOverrides()` with `v-bind`; use
+   `v-theme` only for DOM decoration/target annotation.
 
 ## Overrides not working
 
 ### Identifier and context mismatch
 
 Remember: `v-theme="'chat.send'"` sets **identifier** only. Context is detected
-separately or passed explicitly.
+separately or passed explicitly. It does not mutate Vue component props.
 
 ```vue
 <UButton v-theme="{ identifier: 'chat.send', context: 'chat' }" />

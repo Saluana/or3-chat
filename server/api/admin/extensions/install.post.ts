@@ -35,15 +35,18 @@ import {
 import { invalidateExtensionsCache } from '../../../admin/extensions/extension-manager';
 import { checkRateLimit } from '../../../utils/rate-limit';
 import { fetchZipFromUrl } from '../../../admin/extensions/url-fetch';
+import { ExtensionKindSchema } from '../../../admin/extensions/types';
 
 const BodySchema = z.object({
     zipBase64: z.string().min(1),
     force: z.boolean().optional(),
+    expectedKind: ExtensionKindSchema,
 });
 
 const UrlBodySchema = z.object({
     url: z.string().url().min(1),
     force: z.boolean().optional(),
+    expectedKind: ExtensionKindSchema,
 });
 
 async function readZipPayload(event: H3Event) {
@@ -54,11 +57,24 @@ async function readZipPayload(event: H3Event) {
         const file = form.find((item) => item.name === 'file');
         if (!file || !('data' in file)) return null;
         const forceField = form.find((item) => item.name === 'force');
+        const expectedKindField = form.find(
+            (item) => item.name === 'expectedKind'
+        );
         const force =
             forceField && 'data' in forceField
                 ? Buffer.from(forceField.data).toString('utf8') === 'true'
                 : false;
-        return { buffer: Buffer.from(file.data), force };
+        const expectedKindRaw =
+            expectedKindField && 'data' in expectedKindField
+                ? Buffer.from(expectedKindField.data).toString('utf8')
+                : undefined;
+        const expectedKind = ExtensionKindSchema.safeParse(expectedKindRaw);
+        if (!expectedKind.success) return null;
+        return {
+            buffer: Buffer.from(file.data),
+            force,
+            expectedKind: expectedKind.data,
+        };
     }
 
     const rawBody: unknown = await readBody(event);
@@ -68,7 +84,11 @@ async function readZipPayload(event: H3Event) {
     if (urlBody.success) {
         try {
             const buffer = await fetchZipFromUrl(urlBody.data.url);
-            return { buffer, force: Boolean(urlBody.data.force) };
+            return {
+                buffer,
+                force: Boolean(urlBody.data.force),
+                expectedKind: urlBody.data.expectedKind,
+            };
         } catch (error) {
             throw createError({
                 statusCode: 422,
@@ -82,7 +102,11 @@ async function readZipPayload(event: H3Event) {
     // Fall back to base64 payload
     const body = BodySchema.safeParse(rawBody);
     if (!body.success) return null;
-    return { buffer: Buffer.from(body.data.zipBase64, 'base64'), force: Boolean(body.data.force) };
+    return {
+        buffer: Buffer.from(body.data.zipBase64, 'base64'),
+        force: Boolean(body.data.force),
+        expectedKind: body.data.expectedKind,
+    };
 }
 
 /**
@@ -156,7 +180,12 @@ export default defineEventHandler(async (event) => {
             : undefined,
     });
     try {
-        const manifest = await installExtensionFromZip(payload.buffer, payload.force, limits);
+        const manifest = await installExtensionFromZip(
+            payload.buffer,
+            payload.force,
+            limits,
+            payload.expectedKind
+        );
         invalidateExtensionsCache();
         await event.context.adminHooks?.doAction('admin.plugin:action:installed', {
             id: manifest.id,

@@ -178,7 +178,7 @@ describe('validateResolvedIps', () => {
         const resolver = vi.fn().mockResolvedValue(['140.82.121.3']);
         await expect(
             validateResolvedIps('github.com', resolver)
-        ).resolves.toBeUndefined();
+        ).resolves.toEqual(['140.82.121.3']);
     });
 
     it('rejects if any resolved IP is private', async () => {
@@ -204,7 +204,7 @@ describe('validateResolvedIps', () => {
 
     it('skips resolution for bare IPv4 hostnames', async () => {
         const resolver = vi.fn();
-        await validateResolvedIps('8.8.8.8', resolver);
+        await expect(validateResolvedIps('8.8.8.8', resolver)).resolves.toEqual(['8.8.8.8']);
         expect(resolver).not.toHaveBeenCalled();
     });
 });

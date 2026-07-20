@@ -16,6 +16,7 @@
  */
 
 import type { ThemeDefinition, ColorPalette, ThemeFontSet } from './types';
+import { COLOR_TOKEN_REGISTRY } from './design-token-registry';
 
 /**
  * `generateThemeCssVariables`
@@ -75,7 +76,9 @@ function buildPalette(colors: ColorPalette): Record<string, string> {
         const value = colors[key as keyof ColorPalette];
         if (typeof value !== 'string') continue;
         // prefix variables with md for material design tokens
-        const varName = `--md-${kebab(key)}`;
+        const varName =
+            COLOR_TOKEN_REGISTRY[key as keyof typeof COLOR_TOKEN_REGISTRY] ??
+            `--md-${kebab(key)}`;
         entries[varName] = value;
     }
     return entries;

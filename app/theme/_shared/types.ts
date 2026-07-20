@@ -35,6 +35,9 @@ export const APP_THEME_COMPONENT_KEYS = [
 ] as const;
 
 export type AppThemeComponent = (typeof APP_THEME_COMPONENT_KEYS)[number];
+export const THEME_COMPONENT_CONTRACT_VERSION = 1 as const;
+export type ThemeComponentContractVersion =
+    typeof THEME_COMPONENT_CONTRACT_VERSION;
 
 type CustomColorTokens = Record<string, string | undefined>;
 
@@ -172,8 +175,8 @@ export interface AttributeMatcher {
 /**
  * Override props that can be applied to components
  *
- * For Nuxt UI components: Props like variant, color, size are passed directly
- * For custom components: These props are mapped to CSS classes via prop-class-maps
+ * `useThemeOverrides()` exposes these values for `v-bind` on Nuxt UI components.
+ * Non-Nuxt UI resolution can map variant, color, and size through prop maps.
  */
 export interface OverrideProps {
     /** Component variant (e.g., 'solid', 'outline', 'ghost', 'soft', 'link') */
@@ -302,6 +305,9 @@ export interface ThemeDefinition {
 
     /** Theme-provided Vue component overrides keyed by supported app surface */
     customComponents?: Partial<Record<AppThemeComponent, string>>;
+
+    /** Compatibility version for trusted custom component replacements */
+    componentContractVersion?: ThemeComponentContractVersion;
 }
 
 export interface ThemeFontSet {
@@ -386,6 +392,9 @@ export interface CompiledOverride {
 
     /** Pre-calculated specificity score */
     specificity: number;
+
+    /** Declaration order within the theme; later equal-specificity rules win */
+    sourceOrder?: number;
 }
 
 /**
@@ -433,6 +442,9 @@ export interface CompiledTheme {
 
     /** Theme-provided Vue component override paths */
     customComponents?: Partial<Record<AppThemeComponent, string>>;
+
+    /** Compatibility version for trusted custom component replacements */
+    componentContractVersion?: ThemeComponentContractVersion;
 }
 
 /**
@@ -502,8 +514,8 @@ export interface ResolveParams {
     /** State (optional) */
     state?: string;
 
-    /** HTML element for attribute matching (optional) */
-    element?: HTMLElement;
+    /** Element-like attribute source for selector matching (optional) */
+    element?: { getAttribute(name: string): string | null };
 
     /** Whether component is a Nuxt UI component */
     isNuxtUI?: boolean;
@@ -538,4 +550,9 @@ export interface ThemePlugin {
     loadTheme: (themeName: string) => Promise<CompiledTheme | null>;
     getTheme: (themeName: string) => CompiledTheme | null;
     activeComponents: ShallowRef<Record<AppThemeComponent, Component>>;
+    availableThemes?: ReadonlyArray<{
+        name: string;
+        displayName?: string;
+        description?: string;
+    }>;
 }

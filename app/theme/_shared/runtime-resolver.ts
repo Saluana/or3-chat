@@ -98,7 +98,9 @@ export class RuntimeResolver {
         // Overrides should already be sorted by specificity in the compiled theme
         // but we sort here for safety and to maintain test compatibility
         this.overrides = [...compiledTheme.overrides].sort(
-            (a, b) => b.specificity - a.specificity
+            (a, b) =>
+                b.specificity - a.specificity ||
+                (b.sourceOrder ?? 0) - (a.sourceOrder ?? 0)
         );
 
         this.overrideIndex = new Map();
@@ -118,8 +120,18 @@ export class RuntimeResolver {
 
         // Store prop-to-class mappings (merge with defaults)
         this.propMaps = {
-            ...defaultPropMaps,
-            ...(compiledTheme.propMaps || {}),
+            variant: {
+                ...defaultPropMaps.variant,
+                ...compiledTheme.propMaps?.variant,
+            },
+            size: {
+                ...defaultPropMaps.size,
+                ...compiledTheme.propMaps?.size,
+            },
+            color: {
+                ...defaultPropMaps.color,
+                ...compiledTheme.propMaps?.color,
+            },
         };
         this.themeName = compiledTheme.name;
         // Use LRU cache with max 100 entries to limit memory usage
@@ -215,6 +227,7 @@ export class RuntimeResolver {
             } else {
                 result = merged;
             }
+            this.deepFreeze(result.props);
 
             // Cache the result
             if (canCache && cacheKey) {
@@ -315,7 +328,7 @@ export class RuntimeResolver {
      * @returns true if element matches
      */
     private matchesAttribute(
-        element: HTMLElement | undefined,
+        element: { getAttribute(name: string): string | null } | undefined,
         matcher: AttributeMatcher
     ): boolean {
         if (!element) return false;
@@ -385,12 +398,16 @@ export class RuntimeResolver {
                     merged[key] =
                         String(value) + (existingClassStr ? ` ${existingClassStr}` : '');
                 } else if (key === 'ui') {
-                    // Deep merge ui objects
                     const existingUi = merged[key];
                     merged[key] = this.deepMerge(
                         (existingUi && typeof existingUi === 'object' ? existingUi : {}) as Record<string, unknown>,
                         value as Record<string, unknown>
                     );
+                } else if (key === 'style') {
+                    merged.style = {
+                        ...(merged.style ?? {}),
+                        ...(value as Record<string, string>),
+                    };
                 } else {
                     // Higher specificity wins
                     merged[key] = value;
@@ -433,6 +450,15 @@ export class RuntimeResolver {
         }
 
         return result;
+    }
+
+    private deepFreeze<T extends Record<string, unknown>>(value: T): T {
+        for (const child of Object.values(value)) {
+            if (child && typeof child === 'object' && !Object.isFrozen(child)) {
+                this.deepFreeze(child as Record<string, unknown>);
+            }
+        }
+        return Object.freeze(value);
     }
 
     /**

@@ -83,4 +83,17 @@ describe('IconRegistry', () => {
 
         expect(registry.resolve('ui.trash')).toBe('hydrated:trash');
     });
+
+    it('keeps concurrent request registries isolated', () => {
+        const requestA = new IconRegistry(DEFAULT_ICONS);
+        const requestB = new IconRegistry(DEFAULT_ICONS);
+        requestA.registerTheme('a', { 'ui.trash': 'a:trash' });
+        requestB.registerTheme('b', { 'ui.trash': 'b:trash' });
+        requestA.setActiveTheme('a');
+        requestB.setActiveTheme('b');
+
+        expect(requestA.resolve('ui.trash')).toBe('a:trash');
+        expect(requestB.resolve('ui.trash')).toBe('b:trash');
+        expect(requestA.state).not.toEqual(requestB.state);
+    });
 });

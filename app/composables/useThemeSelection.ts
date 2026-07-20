@@ -14,9 +14,12 @@ const LEGACY_STORAGE_KEY = 'activeTheme';
 
 // Module-level singleton state
 const _selectedTheme = ref<string | null>(null);
+const _selectionSource = ref<'kv' | 'local-migration' | 'none'>('none');
 let _loaded = false;
 let _loadedDbName: string | null = null;
 let _loadPromise: Promise<void> | null = null;
+let _saveRevision = 0;
+let _saveQueue: Promise<void> = Promise.resolve();
 
 /**
  * Migrate from legacy localStorage to KV (one-time)
@@ -31,8 +34,6 @@ function migrateFromLocalStorage(): string | null {
 
     // Mark as migrated by removing from localStorage
     // Note: We keep the cookie for SSR, but localStorage is no longer the source of truth
-    console.log('[useThemeSelection] Migrated theme selection from localStorage to KV');
-
     return stored;
 }
 
@@ -55,6 +56,7 @@ async function loadSelection(): Promise<void> {
             const kvRecord = await getKvByName(THEME_SELECTION_KV_KEY);
             if (kvRecord?.value) {
                 _selectedTheme.value = kvRecord.value;
+                _selectionSource.value = 'kv';
                 _loaded = true;
                 return;
             }
@@ -63,6 +65,7 @@ async function loadSelection(): Promise<void> {
             const migrated = migrateFromLocalStorage();
             if (migrated) {
                 _selectedTheme.value = migrated;
+                _selectionSource.value = 'local-migration';
                 await setKvByName(THEME_SELECTION_KV_KEY, migrated);
                 _loaded = true;
                 return;
@@ -70,6 +73,7 @@ async function loadSelection(): Promise<void> {
             
             // No existing selection
             _selectedTheme.value = null;
+            _selectionSource.value = 'none';
             _loaded = true;
         } catch (error) {
             console.error('[useThemeSelection] Failed to load theme selection:', error);
@@ -85,12 +89,18 @@ async function loadSelection(): Promise<void> {
  * Save theme selection to KV
  */
 async function saveSelection(themeName: string): Promise<void> {
-    try {
-        _selectedTheme.value = themeName;
-        await setKvByName(THEME_SELECTION_KV_KEY, themeName);
-    } catch (error) {
-        console.error('[useThemeSelection] Failed to save theme selection:', error);
-    }
+    const revision = ++_saveRevision;
+    _selectedTheme.value = themeName;
+    _selectionSource.value = 'kv';
+    _saveQueue = _saveQueue.then(async () => {
+        if (revision !== _saveRevision) return;
+        try {
+            await setKvByName(THEME_SELECTION_KV_KEY, themeName);
+        } catch (error) {
+            console.error('[useThemeSelection] Failed to save theme selection:', error);
+        }
+    });
+    await _saveQueue;
 }
 
 /** Public composable API */
@@ -109,6 +119,7 @@ export function useThemeSelection() {
 
     return {
         selectedTheme,
+        selectionSource: readonly(_selectionSource),
         setSelectedTheme,
         ensureLoaded: loadSelection,
     };

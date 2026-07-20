@@ -3,8 +3,39 @@ import {
     loadThemeManifest,
     loadThemeAppConfig,
 } from '../../_shared/theme-manifest';
+import {
+    computeEffectiveAppConfig,
+    replaceReactiveObject,
+} from '../../_shared/theme-core';
 
 describe('theme manifest app config integration', () => {
+    it('recomputes A -> B -> A from the immutable base without leaked keys', () => {
+        const base = { ui: { button: { size: 'md' } }, productName: 'OR3' };
+        const themeA = computeEffectiveAppConfig(base, {
+            appPatch: { onlyA: true },
+            uiPatch: { button: { color: 'red' } },
+        });
+        const live = structuredClone(themeA);
+
+        replaceReactiveObject(
+            live,
+            computeEffectiveAppConfig(base, {
+                appPatch: { onlyB: true },
+                uiPatch: { button: { variant: 'ghost' } },
+            })
+        );
+        expect(live).not.toHaveProperty('onlyA');
+        expect(live).toMatchObject({ onlyB: true, productName: 'OR3' });
+        expect(live.ui).toEqual({
+            button: { size: 'md', variant: 'ghost' },
+        });
+
+        replaceReactiveObject(live, themeA);
+        expect(live).not.toHaveProperty('onlyB');
+        expect(live).toEqual(themeA);
+        expect(base).toEqual({ ui: { button: { size: 'md' } }, productName: 'OR3' });
+    });
+
     it('loads app.config.ts for themes that provide one', async () => {
         const { entries: manifest } = await loadThemeManifest();
         const blankEntry = manifest.find((entry) => entry.dirName === 'blank');
@@ -45,7 +76,6 @@ describe('theme manifest app config integration', () => {
         const mockEntry = {
             name: 'mock-theme',
             dirName: 'mock',
-            definition: {} as never,
             loader: async () => ({ default: {} as never }),
             stylesheets: [],
             isDefault: false,

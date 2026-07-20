@@ -1,9 +1,9 @@
 /**
  * Auto-Theme Directive Plugin (Client-side only)
  *
- * Provides the v-theme directive for automatic theme override application.
- * This directive detects component type, context, and identifier, then
- * resolves and applies theme overrides without needing wrapper components.
+ * Provides the compatibility v-theme directive for owned DOM decoration.
+ * It detects a semantic target, context, and identifier, then applies resolved
+ * classes, inline styles, and data annotations to the rendered element.
  *
  * **Important: Vue Warning about Non-Element Root Nodes**
  *
@@ -16,14 +16,14 @@
  * This is a **known limitation** of Vue's directive system. Vue directives are
  * designed for plain HTML elements, not for components that wrap other components.
  *
- * **The directive WILL still work correctly** - it applies theme overrides by:
+ * The directive remains useful for DOM decoration by:
  * 1. Finding the actual rendered root element of the component
  * 2. Applying data attributes that can be styled with CSS
  * 3. Adding classes for theme styling
  *
  * **To avoid the warning**, use one of these alternatives:
  * 1. Wrap the component in a plain element: `<div v-theme><UButton /></div>`
- * 2. Use a theme composable: `const theme = useTheme(); const props = theme.resolve(...)`
+ * 2. Bind `useThemeOverrides()` with `v-bind` for Vue component props
  * 3. Use wrapper components that already handle theming
  *
  * **If the warning bothers you**, you can filter it in your Vue config or browser console.
@@ -36,15 +36,11 @@
  * - <UButton v-theme="{ identifier: 'chat.send', theme: 'nature' }" /> - Full control
  */
 
-import type {
-    Directive,
-    VNode,
-    ComponentInternalInstance,
-    ObjectDirective,
-} from 'vue';
-import { watch, onScopeDispose } from 'vue';
+import type { VNode, ComponentInternalInstance, ObjectDirective } from 'vue';
+import { watch, type WatchStopHandle } from 'vue';
 import type { ResolveParams } from '~/theme/_shared/runtime-resolver';
 import type { ThemePlugin } from './90.theme.client';
+import { findThemeTarget } from '~/theme/_shared/theme-target-registry';
 
 /**
  * Directive binding value types
@@ -56,41 +52,6 @@ type ThemeDirectiveValue =
           theme?: string;
           context?: string;
       };
-
-/**
- * Known Nuxt UI component names (lowercase)
- * These components receive props directly without mapping
- */
-const NUXT_UI_COMPONENTS = new Set([
-    'ubutton',
-    'uinput',
-    'umodal',
-    'ucard',
-    'ubadge',
-    'ualert',
-    'uavatar',
-    'utable',
-    'uselect',
-    'utextarea',
-    'uform',
-    'uformgroup',
-    'utabs',
-    'uaccordion',
-    'udropdown',
-    'upopover',
-    'utooltip',
-    'unotification',
-    'ucommandpalette',
-    'uslideover', // Fixed: was duplicated as 'uslideoveruslideoverpanel'
-    'udivider',
-    'uskeleton',
-    'ukbd',
-    'urange',
-    'utoggle',
-    'ucheckbox',
-    'uradio',
-    'uicon',
-]);
 
 /**
  * Detect context from DOM ancestry
@@ -152,7 +113,8 @@ function getComponentName(vnode: VNode): string {
         return (vnode.el as HTMLElement).tagName?.toLowerCase() || 'div';
     }
 
-    return name || 'button'; // Reasonable default
+    const target = name ? findThemeTarget(name) : null;
+    return target?.target || name || 'div';
 }
 
 /**
@@ -162,7 +124,7 @@ function getComponentName(vnode: VNode): string {
  * @returns true if component is from Nuxt UI
  */
 function isNuxtUIComponent(componentName: string): boolean {
-    return NUXT_UI_COMPONENTS.has(componentName);
+    return findThemeTarget(componentName)?.kind === 'nuxt-ui';
 }
 
 /**
@@ -204,35 +166,14 @@ function parseDirectiveValue(value: ThemeDirectiveValue | undefined): {
  */
 function applyOverrides(
     el: HTMLElement,
-    vnode: VNode,
+    _vnode: VNode,
     resolvedProps: Record<string, unknown>,
     identifier?: string
 ) {
-    const instance = vnode.component;
-
-    if (!instance) {
-        // For plain elements, apply as data attributes that can be read by CSS
-        // Include identifier in props for data-id setting
-        const propsWithIdentifier = identifier
-            ? { ...resolvedProps, identifier }
-            : resolvedProps;
-        applyToElement(el, propsWithIdentifier);
-        return;
-    }
-
-    // For components, we need to update the vnode's props before rendering
-    // Store resolved props on the element for reactive updates
-    const dataKey = '__theme_overrides__';
-    (el as any)[dataKey] = resolvedProps;
-
-    // Apply to the actual rendered element if possible
-    // This works for components that forward refs or have a root element
-    if (instance.subTree?.el) {
-        const propsWithIdentifier = identifier
-            ? { ...resolvedProps, identifier }
-            : resolvedProps;
-        applyToElement(instance.subTree.el as HTMLElement, propsWithIdentifier);
-    }
+    const propsWithIdentifier = identifier
+        ? { ...resolvedProps, identifier }
+        : resolvedProps;
+    applyToElement(el, propsWithIdentifier);
 }
 
 /**
@@ -241,41 +182,83 @@ function applyOverrides(
  * @param el - DOM element
  * @param props - Props to apply
  */
+interface AppliedDomThemeState {
+    classes: Set<string>;
+    attributes: Map<string, string | null>;
+    styles: Map<string, { value: string; priority: string }>;
+}
+
+const appliedDomTheme = new WeakMap<HTMLElement, AppliedDomThemeState>();
+
+function restoreDomTheme(el: HTMLElement): void {
+    const state = appliedDomTheme.get(el);
+    if (!state) return;
+    for (const className of state.classes) el.classList.remove(className);
+    for (const [name, previous] of state.attributes) {
+        if (previous === null) el.removeAttribute(name);
+        else el.setAttribute(name, previous);
+    }
+    for (const [property, previous] of state.styles) {
+        if (previous.value) {
+            el.style.setProperty(property, previous.value, previous.priority);
+        } else {
+            el.style.removeProperty(property);
+        }
+    }
+    appliedDomTheme.delete(el);
+}
+
 function applyToElement(el: HTMLElement, props: Record<string, unknown>) {
+    restoreDomTheme(el);
+    const state: AppliedDomThemeState = {
+        classes: new Set(),
+        attributes: new Map(),
+        styles: new Map(),
+    };
+    const setOwnedAttribute = (name: string, value: unknown) => {
+        if (!state.attributes.has(name)) {
+            state.attributes.set(name, el.getAttribute(name));
+        }
+        el.setAttribute(name, String(value));
+    };
+
     // Apply identifier as data-id if present
     if (props.identifier) {
-        el.setAttribute('data-id', String(props.identifier));
+        setOwnedAttribute('data-id', props.identifier);
     }
 
     // Apply color as data attribute
     if (props.color) {
-        el.setAttribute('data-theme-color', String(props.color));
+        setOwnedAttribute('data-theme-color', props.color);
     }
 
     // Apply variant as data attribute
     if (props.variant) {
-        el.setAttribute('data-theme-variant', String(props.variant));
+        setOwnedAttribute('data-theme-variant', props.variant);
     }
 
     // Apply size as data attribute
     if (props.size) {
-        el.setAttribute('data-theme-size', String(props.size));
+        setOwnedAttribute('data-theme-size', props.size);
     }
 
     // Apply classes if present
     if (props.class && typeof props.class === 'string') {
-        const existingClasses = el.className;
-        const themeClasses = props.class;
+        for (const className of props.class.split(/\s+/).filter(Boolean)) {
+            if (el.classList.contains(className)) continue;
+            el.classList.add(className);
+            state.classes.add(className);
+        }
+    }
 
-        // Only add if not already present
-        const classesToAdd = themeClasses
-            .split(' ')
-            .filter((cls) => cls && !existingClasses.includes(cls));
-
-        if (classesToAdd.length > 0) {
-            el.className = `${existingClasses} ${classesToAdd.join(
-                ' '
-            )}`.trim();
+    if (props.style && typeof props.style === 'object') {
+        for (const [property, value] of Object.entries(props.style)) {
+            if (typeof value !== 'string') continue;
+            state.styles.set(property, {
+                value: el.style.getPropertyValue(property),
+                priority: el.style.getPropertyPriority(property),
+            });
+            el.style.setProperty(property, value);
         }
     }
 
@@ -284,8 +267,9 @@ function applyToElement(el: HTMLElement, props: Record<string, unknown>) {
         if (!key.startsWith('data-')) continue;
         if (value === undefined || value === null) continue;
 
-        el.setAttribute(key, String(value));
+        setOwnedAttribute(key, value);
     }
+    appliedDomTheme.set(el, state);
 }
 
 /**
@@ -309,6 +293,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         );
         return;
     }
+    const stops = new WeakMap<HTMLElement, WatchStopHandle>();
 
     /**
      * Apply theme directive logic
@@ -375,9 +360,6 @@ export default defineNuxtPlugin((nuxtApp) => {
             // Apply to component or element (use target element)
             applyOverrides(targetEl, vnode, resolved.props, identifier);
 
-            // Theme changes are now handled globally by 92.theme-lazy-sync.client.ts,
-            // which uses $forceUpdate to re-render components when themes change.
-            // This eliminates thousands of individual watchers and saves significant memory.
         } catch (error) {
             // Graceful degradation
             if (import.meta.dev) {
@@ -398,20 +380,27 @@ export default defineNuxtPlugin((nuxtApp) => {
 
         mounted(el, binding, vnode) {
             applyThemeDirective(el, binding, vnode);
+            stops.set(
+                el,
+                watch(
+                    [
+                        () => themePlugin.activeTheme.value,
+                        () => themePlugin.resolversVersion.value,
+                    ],
+                    () => applyThemeDirective(el, binding, vnode)
+                )
+            );
         },
 
         // Update when binding value changes
         updated(el, binding, vnode) {
-            // Only re-resolve if binding value actually changed
-            if (binding.value === binding.oldValue) {
-                return;
-            }
-
-            // Re-apply with new binding value
             applyThemeDirective(el, binding, vnode);
         },
 
         beforeUnmount(el) {
+            stops.get(el)?.();
+            stops.delete(el);
+            restoreDomTheme(el);
             // Clean up data attributes
             el.removeAttribute('data-v-theme');
             el.removeAttribute('data-theme-color');

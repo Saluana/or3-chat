@@ -53,6 +53,11 @@ describe('useUserThemeOverrides', () => {
     beforeEach(() => {
         // Force delete the singleton completely
         const g: any = globalThis;
+        g.__or3UserThemeOverrides?.stopWatch?.();
+        g.__or3UserThemeOverrides?.observer?.disconnect?.();
+        if (g.__or3UserThemeOverrides?.persistTimer) {
+            clearTimeout(g.__or3UserThemeOverrides.persistTimer);
+        }
         delete g.__or3UserThemeOverrides;
 
         setupBrowserMocks();
@@ -73,7 +78,7 @@ describe('useUserThemeOverrides', () => {
 
     // Note: This test may fail when run with others due to singleton state sharing
     // Run in isolation: bunx vitest run app/core/theme/__tests__/user-overrides.test.ts -t "overrides load"
-    it.skip('overrides load from localStorage on init', () => {
+    it('overrides load from localStorage on init', () => {
         // Completely reset for this test
         delete (globalThis as any).__or3UserThemeOverrides;
         localStorageMock.clear();
@@ -104,10 +109,12 @@ describe('useUserThemeOverrides', () => {
         expect(overrides.value.colors?.primary).toBe('#ff0000');
     });
 
-    it('set() persists to localStorage', () => {
+    it('set() persists to localStorage through one debounced write', async () => {
+        vi.useFakeTimers();
         const { set, activeMode } = useUserThemeOverrides();
 
         set({ typography: { baseFontPx: 18 } });
+        await vi.advanceTimersByTimeAsync(60);
 
         const key = `or3:user-theme-overrides:${activeMode.value}`;
         const stored = localStorageMock.getItem(key);
@@ -115,6 +122,7 @@ describe('useUserThemeOverrides', () => {
 
         const parsed = JSON.parse(stored!);
         expect(parsed.typography?.baseFontPx).toBe(18);
+        vi.useRealTimers();
     });
 
     it('switchMode() toggles between light/dark', () => {
@@ -223,35 +231,29 @@ describe('useUserThemeOverrides', () => {
         expect(overrides.value.backgrounds?.content?.base?.opacity).toBe(0.5);
     });
 
-    // Note: DOMException can't be properly mocked in Node.js test environment
-    // This test should be covered by e2e tests in browser environment
-    it.skip('handles quota exceeded error gracefully', () => {
-        const consoleError = vi
-            .spyOn(console, 'error')
-            .mockImplementation(() => {});
-
-        // Mock quota exceeded with proper DOMException
+    it('handles quota exceeded error gracefully', async () => {
+        vi.useFakeTimers();
+        const add = vi.fn();
         vi.spyOn(localStorageMock, 'setItem').mockImplementation(() => {
-            const error = new Error('QuotaExceededError');
-            error.name = 'QuotaExceededError';
-            // Make it look like DOMException
-            Object.setPrototypeOf(error, DOMException.prototype);
-            throw error;
+            throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
         });
 
         const { set } = useUserThemeOverrides();
+        (globalThis as any).__or3UserThemeOverrides.toast = { add };
         set({ colors: { primary: '#test' } });
+        await vi.advanceTimersByTimeAsync(60);
 
-        expect(consoleError).toHaveBeenCalledWith(
-            expect.stringContaining('Storage quota exceeded'),
-            expect.anything()
+        expect(add).toHaveBeenCalledWith(
+            expect.objectContaining({
+                title: 'Storage Full',
+                color: 'red',
+            })
         );
-
-        consoleError.mockRestore();
+        vi.useRealTimers();
     });
 
     // Note: This test may fail when run with others due to singleton state sharing
-    it.skip('handles corrupted localStorage data', () => {
+    it('handles corrupted localStorage data', () => {
         const consoleWarn = vi
             .spyOn(console, 'warn')
             .mockImplementation(() => {});

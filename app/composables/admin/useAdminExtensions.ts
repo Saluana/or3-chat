@@ -37,6 +37,7 @@ export async function installExtension(options: ExtensionInstallOptions): Promis
     const { file, force = false, onSuccess } = options;
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('expectedKind', options.kind);
     if (force) {
         formData.append('force', 'true');
     }
@@ -86,7 +87,7 @@ export async function installExtensionFromUrl(options: ExtensionUrlInstallOption
     try {
         await $fetch('/api/admin/extensions/install', {
             method: 'POST',
-            body: { url, force },
+            body: { url, force, expectedKind: options.kind },
             headers: ADMIN_HEADERS,
         });
         if (onSuccess) await onSuccess();

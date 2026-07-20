@@ -35,19 +35,19 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, ref, watch, onBeforeUnmount } from 'vue';
+import { reactive, computed, watch } from 'vue';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useDebounceFn } from '@vueuse/core';
 import { isBrowser } from '~/utils/env';
-import { createOrRefFile, getFileBlob } from '~/db/files';
+import { createOrRefFile } from '~/db/files';
+import { useResolvedThemeAsset } from '~/core/theme/useResolvedThemeAsset';
 import { isAllowedImageType, validateImageMagicNumber } from './types';
 import type { BackgroundPreset } from './types';
 
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides;
 const set = themeApi.set;
-const activeMode = themeApi.activeMode;
 
 // Computed helpers for cleaner bindings
 const bgEnabled = computed(() => overrides.value.backgrounds?.enabled ?? false);
@@ -79,88 +79,69 @@ type OpacityLocalKey = 'contentBg1Opacity' | 'contentBg2Opacity' | 'sidebarBgOpa
 type SizeLocalKey = 'contentBg1SizePx' | 'contentBg2SizePx' | 'sidebarBgSizePx';
 
 // Theme overrides for buttons/inputs
+const presetButtonOverride = useThemeOverrides({
+    component: 'button', context: 'dashboard', identifier: 'dashboard.theme.preset', isNuxtUI: true,
+});
 const presetButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.preset',
-        isNuxtUI: true,
-    });
     return {
         size: 'sm' as const,
         variant: 'outline' as const,
         color: 'on-surface' as const,
-        ...(overrides.value as any),
+        ...(presetButtonOverride.value as any),
     };
 });
 
+const removeLayerButtonOverride = useThemeOverrides({
+    component: 'button', context: 'dashboard', identifier: 'dashboard.theme.remove-layer', isNuxtUI: true,
+});
 const removeLayerButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.remove-layer',
-        isNuxtUI: true,
-    });
     return {
         size: 'sm' as const,
         variant: 'outline' as const,
         color: 'on-surface' as const,
-        ...(overrides.value as any),
+        ...(removeLayerButtonOverride.value as any),
     };
 });
 
+const repeatButtonOverride = useThemeOverrides({
+    component: 'button', context: 'dashboard', identifier: 'dashboard.theme.repeat', isNuxtUI: true,
+});
 const repeatButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.repeat',
-        isNuxtUI: true,
-    });
     return {
         size: 'sm' as const,
         variant: 'outline' as const,
         color: 'on-surface' as const,
-        ...(overrides.value as any),
+        ...(repeatButtonOverride.value as any),
     };
 });
 
-const backgroundColorPickerProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'color-picker',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.background-picker',
-        isNuxtUI: true,
-    });
-    return overrides.value || {};
+const backgroundColorPickerOverride = useThemeOverrides({
+    component: 'color-picker', context: 'dashboard', identifier: 'dashboard.theme.background-picker', isNuxtUI: true,
 });
+const backgroundColorPickerProps = computed(() => backgroundColorPickerOverride.value || {});
 
+const hexInputOverride = useThemeOverrides({
+    component: 'input', context: 'dashboard', identifier: 'dashboard.theme.hex-input', isNuxtUI: true,
+});
 const hexInputProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'input',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.hex-input',
-        isNuxtUI: true,
-    });
     return {
         size: 'sm' as const,
         variant: 'outline' as const,
-        ...(overrides.value as any),
+        ...(hexInputOverride.value as any),
     };
 });
 
+const copyButtonOverride = useThemeOverrides({
+    component: 'button', context: 'dashboard', identifier: 'dashboard.theme.copy-color', isNuxtUI: true,
+});
+const copyIcon = useIcon('ui.copy');
 const copyButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.copy-color',
-        isNuxtUI: true,
-    });
     return {
         size: 'sm' as const,
         variant: 'ghost' as const,
-        icon: useIcon('ui.copy').value,
+        icon: copyIcon.value,
         square: true,
-        ...(overrides.value as any),
+        ...(copyButtonOverride.value as any),
     };
 });
 
@@ -313,42 +294,6 @@ const layerEditors = computed(() => [
     },
 ]);
 
-// Cache of resolved object URLs for internal-file tokens
-const internalUrlCache = new Map<string, string>();
-const objectUrls = new Set<string>();
-// Initialize immediately to avoid null checks
-const abortController = ref<AbortController>(new AbortController());
-
-function registerObjectUrl(u: string) {
-    objectUrls.add(u);
-}
-
-function revokeAll() {
-    objectUrls.forEach((u) => URL.revokeObjectURL(u));
-    objectUrls.clear();
-}
-
-async function resolveInternalPath(v: string | null): Promise<string | null> {
-    if (!v) return null;
-    if (!v.startsWith('internal-file://')) return v;
-    const hash = v.slice('internal-file://'.length);
-    if (internalUrlCache.has(hash)) return internalUrlCache.get(hash)!;
-    
-    // Check if aborted (no null check needed now)
-    if (abortController.value.signal.aborted) return null;
-    
-    try {
-        const blob = await getFileBlob(hash);
-        if (!blob || abortController.value.signal.aborted) return null;
-        const u = URL.createObjectURL(blob);
-        internalUrlCache.set(hash, u);
-        registerObjectUrl(u);
-        return u;
-    } catch {
-        return null;
-    }
-}
-
 function getCssVarUrl(cssVar: string): string | null {
     if (!isBrowser()) return null;
     const computed = getComputedStyle(document.documentElement);
@@ -365,43 +310,9 @@ function getCssVarUrl(cssVar: string): string | null {
     }
 }
 
-// Reactive resolved URLs
-const resolvedContentBg1 = ref<string | null>(null);
-const resolvedContentBg2 = ref<string | null>(null);
-const resolvedSidebarBg = ref<string | null>(null);
-
-async function refreshResolved() {
-    const o1 = overrides.value.backgrounds?.content?.base?.url || null;
-    const r1 = await resolveInternalPath(o1);
-    resolvedContentBg1.value = r1 || getCssVarUrl('--app-content-bg-1');
-
-    const o2 = overrides.value.backgrounds?.content?.overlay?.url || null;
-    const r2 = await resolveInternalPath(o2);
-    resolvedContentBg2.value = r2 || getCssVarUrl('--app-content-bg-2');
-
-    const os = overrides.value.backgrounds?.sidebar?.url || null;
-    const rs = await resolveInternalPath(os);
-    resolvedSidebarBg.value = rs || getCssVarUrl('--app-sidebar-bg-1');
-}
-
-watch(
-    () => [
-        overrides.value.backgrounds?.content?.base?.url,
-        overrides.value.backgrounds?.content?.overlay?.url,
-        overrides.value.backgrounds?.sidebar?.url,
-    ],
-    () => {
-        refreshResolved();
-    },
-    { immediate: true }
-);
-
-// Revoke ObjectURLs when switching modes to prevent leak
-watch(activeMode, () => {
-    revokeAll();
-    internalUrlCache.clear();
-    refreshResolved();
-});
+const resolvedContentBg1 = useResolvedThemeAsset(contentBg1Url);
+const resolvedContentBg2 = useResolvedThemeAsset(contentBg2Url);
+const resolvedSidebarBg = useResolvedThemeAsset(sidebarBgUrl);
 
 // Preview styles
 const contentBg1PreviewStyle = computed(() => {
@@ -409,9 +320,9 @@ const contentBg1PreviewStyle = computed(() => {
     const repeatEnabled = overrides.value.backgrounds?.content?.base?.repeat === 'repeat' && !fit;
     
     return {
-        backgroundImage: resolvedContentBg1.value ? `url(${resolvedContentBg1.value})` : 'none',
+        backgroundImage: resolvedContentBg1.value ? `url(${resolvedContentBg1.value})` : `url(${getCssVarUrl('--app-content-bg-1') || ''})`,
         backgroundRepeat: repeatEnabled ? 'repeat' : 'no-repeat',
-        backgroundSize: fit ? 'cover' : repeatEnabled ? '32px 32px' : 'contain',
+        backgroundSize: fit ? 'cover' : repeatEnabled ? `${local.contentBg1SizePx}px` : 'contain',
         backgroundPosition: 'center',
     } as const;
 });
@@ -421,9 +332,9 @@ const contentBg2PreviewStyle = computed(() => {
     const repeatEnabled = overrides.value.backgrounds?.content?.overlay?.repeat === 'repeat' && !fit;
     
     return {
-        backgroundImage: resolvedContentBg2.value ? `url(${resolvedContentBg2.value})` : 'none',
+        backgroundImage: resolvedContentBg2.value ? `url(${resolvedContentBg2.value})` : `url(${getCssVarUrl('--app-content-bg-2') || ''})`,
         backgroundRepeat: repeatEnabled ? 'repeat' : 'no-repeat',
-        backgroundSize: fit ? 'cover' : repeatEnabled ? '32px 32px' : 'contain',
+        backgroundSize: fit ? 'cover' : repeatEnabled ? `${local.contentBg2SizePx}px` : 'contain',
         backgroundPosition: 'center',
     } as const;
 });
@@ -433,9 +344,9 @@ const sidebarBgPreviewStyle = computed(() => {
     const repeatEnabled = overrides.value.backgrounds?.sidebar?.repeat === 'repeat' && !fit;
     
     return {
-        backgroundImage: resolvedSidebarBg.value ? `url(${resolvedSidebarBg.value})` : 'none',
+        backgroundImage: resolvedSidebarBg.value ? `url(${resolvedSidebarBg.value})` : `url(${getCssVarUrl('--app-sidebar-bg-1') || ''})`,
         backgroundRepeat: repeatEnabled ? 'repeat' : 'no-repeat',
-        backgroundSize: fit ? 'cover' : repeatEnabled ? '32px 32px' : 'contain',
+        backgroundSize: fit ? 'cover' : repeatEnabled ? `${local.sidebarBgSizePx}px` : 'contain',
         backgroundPosition: 'center',
     } as const;
 });
@@ -478,12 +389,6 @@ async function handleLayerUpload(file: File, which: 'contentBg1' | 'contentBg2' 
         console.error('[BackgroundLayersSection] Upload failed:', e?.message);
     }
 }
-
-// Lifecycle - abort pending operations on unmount
-onBeforeUnmount(() => {
-    abortController.value.abort();
-    revokeAll();
-});
 
 // Sync local sliders when overrides change (targeted updates only)
 // Note: We rely on the existing specific watchers (L351-360) for URL changes.

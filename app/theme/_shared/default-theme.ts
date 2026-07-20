@@ -54,9 +54,18 @@ export function pickDefaultTheme(
         };
     }
 
-    if (inputs.manifestNames[0]) {
+    if (availableThemes.has(fallbackThemeName)) {
         return {
-            defaultTheme: inputs.manifestNames[0],
+            defaultTheme: fallbackThemeName,
+            reason: 'fallback-constant',
+            warnings,
+        };
+    }
+
+    const stableFirst = [...inputs.manifestNames].sort()[0];
+    if (stableFirst) {
+        return {
+            defaultTheme: stableFirst,
             reason: 'first-manifest-entry',
             warnings,
         };

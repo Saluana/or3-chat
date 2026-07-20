@@ -145,59 +145,48 @@ function determineSize(
     return fallback;
 }
 
-async function applyLayer(
+async function resolveLayer(
     cssVar: string,
     layer: ThemeBackgroundLayer | undefined,
     resolveToken: (token: string) => Promise<string | null>
-) {
-    if (!isBrowserWithDocument()) return;
-    const style = document.documentElement.style;
+): Promise<Record<string, string>> {
+    const result: Record<string, string> = {};
     const colorVar = getColorVar(cssVar);
 
     if (colorVar) {
         if (layer?.color && layer.color.trim().length > 0) {
-            style.setProperty(colorVar, layer.color);
+            result[colorVar] = layer.color;
         } else {
-            style.removeProperty(colorVar);
+            result[colorVar] = '';
         }
     }
 
-    if (!layer) {
-        style.setProperty(cssVar, 'none');
-        style.setProperty(`${cssVar}-opacity`, '1');
-        style.setProperty(`${cssVar}-repeat`, DEFAULT_REPEAT);
-        style.setProperty(`${cssVar}-size`, DEFAULT_SIZE);
-        return;
-    }
-
-    if (!layer.image) {
-        style.setProperty(cssVar, 'none');
-        style.setProperty(`${cssVar}-opacity`, '1');
-        style.setProperty(`${cssVar}-repeat`, DEFAULT_REPEAT);
-        style.setProperty(`${cssVar}-size`, DEFAULT_SIZE);
-        return;
+    if (!layer?.image) {
+        result[cssVar] = 'none';
+        result[`${cssVar}-opacity`] = '1';
+        result[`${cssVar}-repeat`] = DEFAULT_REPEAT;
+        result[`${cssVar}-size`] = DEFAULT_SIZE;
+        return result;
     }
 
     const url = await resolveToken(layer.image);
-    style.setProperty(cssVar, url ? `url("${url}")` : 'none');
-    style.setProperty(`${cssVar}-opacity`, String(clampOpacity(layer.opacity)));
-    style.setProperty(`${cssVar}-repeat`, normalizeRepeat(layer.repeat));
-    style.setProperty(`${cssVar}-size`, determineSize(layer, DEFAULT_SIZE));
+    result[cssVar] = url ? `url("${url}")` : 'none';
+    result[`${cssVar}-opacity`] = String(clampOpacity(layer.opacity));
+    result[`${cssVar}-repeat`] = normalizeRepeat(layer.repeat);
+    result[`${cssVar}-size`] = determineSize(layer, DEFAULT_SIZE);
+    return result;
 }
 
-async function applyGradient(
+async function resolveGradient(
     cssVar: string,
     layer: ThemeBackgroundLayer | undefined,
     resolveToken: (token: string) => Promise<string | null>
-) {
-    if (!isBrowserWithDocument()) return;
-    const style = document.documentElement.style;
+): Promise<Record<string, string>> {
     if (!layer || !layer.image) {
-        style.setProperty(cssVar, 'none');
-        return;
+        return { [cssVar]: 'none' };
     }
     const url = await resolveToken(layer.image);
-    style.setProperty(cssVar, url ? `url("${url}")` : 'none');
+    return { [cssVar]: url ? `url("${url}")` : 'none' };
 }
 
 function getColorVar(cssVar: string): string | null {
@@ -226,36 +215,45 @@ function getColorVar(cssVar: string): string | null {
  */
 export async function applyThemeBackgrounds(
     backgrounds: ThemeBackgrounds | undefined,
-    options: { resolveToken: (token: string) => Promise<string | null> }
+    options: {
+        resolveToken: (token: string) => Promise<string | null>;
+        shouldCommit?: () => boolean;
+    }
 ) {
     if (!isBrowserWithDocument()) return;
-    await Promise.all([
-        applyLayer(
+    const plans = await Promise.all([
+        resolveLayer(
             '--app-content-bg-1',
             backgrounds?.content?.base,
             options.resolveToken
         ),
-        applyLayer(
+        resolveLayer(
             '--app-content-bg-2',
             backgrounds?.content?.overlay,
             options.resolveToken
         ),
-        applyLayer(
+        resolveLayer(
             '--app-sidebar-bg-1',
             backgrounds?.sidebar,
             options.resolveToken
         ),
-    ]);
-    await Promise.all([
-        applyGradient(
+        resolveGradient(
             '--app-header-gradient',
             backgrounds?.headerGradient,
             options.resolveToken
         ),
-        applyGradient(
+        resolveGradient(
             '--app-bottomnav-gradient',
             backgrounds?.bottomNavGradient,
             options.resolveToken
         ),
     ]);
+    if (options.shouldCommit && !options.shouldCommit()) return;
+    const style = document.documentElement.style;
+    for (const plan of plans) {
+        for (const [property, value] of Object.entries(plan)) {
+            if (value) style.setProperty(property, value);
+            else style.removeProperty(property);
+        }
+    }
 }

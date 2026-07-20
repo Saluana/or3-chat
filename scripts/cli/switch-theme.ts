@@ -46,48 +46,34 @@ async function discoverThemes(): Promise<ThemeInfo[]> {
 
 async function getCurrentTheme(): Promise<string | null> {
   try {
-    // Try to read from app config
-    const configPath = join(process.cwd(), 'app.config.ts');
+    const configPath = join(process.cwd(), '.env');
     const configContent = await readFile(configPath, 'utf-8');
-    
-    // Look for defaultTheme setting
-    const match = configContent.match(/defaultTheme:\s*['"]([^'"]+)['"]/);
+    const match = configContent.match(/^OR3_DEFAULT_THEME=(.*)$/m);
     if (match) {
-      return match[1];
+      return match[1].trim().replace(/^['"]|['"]$/g, '');
     }
-    
-    // Default to retro if not found
-    return 'retro';
+    return 'blank';
   } catch {
-    return null;
+    return 'blank';
   }
 }
 
 async function setDefaultTheme(themeName: string): Promise<void> {
   try {
-    const configPath = join(process.cwd(), 'app.config.ts');
-    let configContent = await readFile(configPath, 'utf-8');
-    
-    // Update or add defaultTheme setting
-    if (configContent.includes('defaultTheme:')) {
+    const configPath = join(process.cwd(), '.env');
+    let configContent = '';
+    try {
+      configContent = await readFile(configPath, 'utf-8');
+    } catch {
+      // Create the deployment env file if it does not exist.
+    }
+    if (/^OR3_DEFAULT_THEME=/m.test(configContent)) {
       configContent = configContent.replace(
-        /defaultTheme:\s*['"][^'"]*['"]/,
-        `defaultTheme: '${themeName}'`
+        /^OR3_DEFAULT_THEME=.*$/m,
+        `OR3_DEFAULT_THEME=${themeName}`
       );
     } else {
-      // Add to theme config if it exists
-      if (configContent.includes('theme:')) {
-        configContent = configContent.replace(
-          /theme:\s*{/,
-          `theme: {\n    defaultTheme: '${themeName}',`
-        );
-      } else {
-        // Add new theme config section before export
-        configContent = configContent.replace(
-          /export default defineAppConfig\({/,
-          `export default defineAppConfig({\n  theme: {\n    defaultTheme: '${themeName}',\n  },`
-        );
-      }
+      configContent = `${configContent.trimEnd()}${configContent ? '\n' : ''}OR3_DEFAULT_THEME=${themeName}\n`;
     }
     
     await writeFile(configPath, configContent, 'utf-8');

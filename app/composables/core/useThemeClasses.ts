@@ -1,8 +1,3 @@
-import { onMounted } from 'vue';
-import { useNuxtApp } from '#app';
-import { applyThemeClasses } from '~/theme/_shared/css-selector-runtime';
-import type { ThemePlugin } from '~/plugins/90.theme.client';
-
 /**
  * `useThemeClasses`
  *
@@ -27,28 +22,9 @@ import type { ThemePlugin } from '~/plugins/90.theme.client';
  * ```
  */
 export function useThemeClasses() {
-    const nuxtApp = useNuxtApp();
-    const themePlugin = nuxtApp.$theme as ThemePlugin | undefined;
-
-    if (!themePlugin) {
-        if (import.meta.dev) {
-            console.warn('[useThemeClasses] Theme plugin is not available.');
-        }
-        return;
+    if (import.meta.dev) {
+        console.warn(
+            '[useThemeClasses] Deprecated: active theme selector classes now observe added DOM automatically.'
+        );
     }
-
-    const { activeTheme, loadTheme } = themePlugin;
-
-    onMounted(async () => {
-        // Get current theme
-        const themeName = activeTheme.value;
-
-        // Ensure theme is loaded
-        const theme = await loadTheme(themeName);
-
-        // Apply classes if theme has cssSelectors
-        if (theme?.cssSelectors) {
-            applyThemeClasses(themeName, theme.cssSelectors);
-        }
-    });
 }

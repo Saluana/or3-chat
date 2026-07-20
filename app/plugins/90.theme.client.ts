@@ -1,34 +1,31 @@
 import { ref, shallowRef } from 'vue';
 import { defineNuxtPlugin, useAppConfig, useRuntimeConfig } from '#imports';
-import { defu } from 'defu';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import type { CompiledTheme, ThemePlugin } from '~/theme/_shared/types';
-import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
 import {
     applyThemeClasses,
     removeThemeClasses,
     loadThemeCSS,
     unloadThemeCSS,
 } from '~/theme/_shared/css-selector-runtime';
-import {
-    applyThemeBackgrounds,
-    createThemeBackgroundTokenResolver,
-    revokeBackgroundBlobs,
-} from '~/core/theme/backgrounds';
+import { revokeBackgroundBlobs } from '~/core/theme/backgrounds';
 import {
     loadThemeManifest,
     loadThemeStylesheets,
     unloadThemeStylesheets,
-    updateManifestEntry,
-    loadThemeAppConfig,
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
-import { generateThemeCssVariables } from '~/theme/_shared/generate-css-variables';
+import { prepareThemeEntry } from '~/theme/_shared/prepare-theme';
 import { iconRegistry } from '~/theme/_shared/icon-registry';
-import { setKvByName } from '~/db/kv';
+import { useThemeSelection } from '~/composables/useThemeSelection';
 import { pickDefaultTheme } from '~/theme/_shared/default-theme';
 import { FALLBACK_THEME_NAME } from '~/theme/_shared/constants';
 import { readCookie, sanitizeThemeName } from '~/theme/_shared/theme-core';
+import {
+    cloneDeep,
+    computeEffectiveAppConfig,
+    replaceReactiveObject,
+} from '~/theme/_shared/theme-core';
 import {
     ensureThemeLoaded as ensureThemeLoadedShared,
     setActiveThemeSafe,
@@ -38,19 +35,9 @@ import {
     CORE_APP_COMPONENT_DEFAULTS,
     createThemeComponentMap,
 } from '~/theme/_shared/theme-components-registry';
+import { ThemeActivationCoordinator } from '~/theme/_shared/activation-transaction';
 
 export type { ThemePlugin } from '~/theme/_shared/types';
-
-// Helper to persist theme selection to KV for cross-device sync
-const saveThemeToKv = (themeName: string) => {
-    // Fire-and-forget - don't block theme application
-    void setKvByName('theme_selection', themeName).catch((error) => {
-        console.warn('[theme] Failed to save theme to KV:', error);
-    });
-};
-
-// Module-level variable for page:finish debouncing
-let pageFinishTimeout: ReturnType<typeof setTimeout> | null = null;
 
 export default defineNuxtPlugin(async (nuxtApp) => {
     const THEME_CLASSES = [
@@ -95,38 +82,37 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const appConfig = useAppConfig() as any;
     // Create a JSON snapshot of the original appConfig for restoration
     // This saves significant memory compared to deep cloning
-    const baseAppConfigSnapshot = JSON.stringify(appConfig);
+    const baseAppConfig = cloneDeep(appConfig) as Record<string, unknown>;
 
     const initialPatch = (nuxtApp.payload as any)?.data
         ?.__or3ThemeAppConfigPatch;
     if (initialPatch && typeof initialPatch === 'object') {
-        Object.assign(appConfig, defu(initialPatch, appConfig));
+        replaceReactiveObject(
+            appConfig,
+            computeEffectiveAppConfig(baseAppConfig, { appPatch: initialPatch })
+        );
     }
 
     registerCleanup(() => {
         // Restore from snapshot only on cleanup
-        const restored = JSON.parse(baseAppConfigSnapshot);
-        Object.assign(appConfig, restored);
+        replaceReactiveObject(appConfig, baseAppConfig);
     });
     const themeAppConfigOverrides = new Map<
         string,
         Record<string, any> | null
     >();
 
-    const applyThemeUiConfig = (theme?: CompiledTheme | null) => {
-        // Directly merge into appConfig.ui without extra cloning
-        if (!appConfig.ui) {
-            appConfig.ui = {};
-        }
-        if (theme?.ui) {
-            appConfig.ui = defu(theme.ui, appConfig.ui);
-        }
-    };
-
-    const applyThemeAppConfigPatch = (patch?: Record<string, any> | null) => {
-        if (patch) {
-            Object.assign(appConfig, defu(patch, appConfig));
-        }
+    const applyEffectiveAppConfig = (
+        theme?: CompiledTheme | null,
+        patch?: Record<string, unknown> | null
+    ) => {
+        replaceReactiveObject(
+            appConfig,
+            computeEffectiveAppConfig(baseAppConfig, {
+                appPatch: patch,
+                uiPatch: theme?.ui,
+            })
+        );
     };
 
     const runtimeConfig = useRuntimeConfig();
@@ -229,7 +215,8 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     const storageKey = 'theme';
     const root = document.documentElement;
-    const themeBackgroundTokenResolver = createThemeBackgroundTokenResolver();
+    const selectionRepository = useThemeSelection();
+    await selectionRepository.ensureLoaded();
 
     const getSystemPref = () =>
         window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -291,7 +278,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         if (typeof document === 'undefined') return;
         themeRegistry.forEach((theme, name) => {
             if (theme.cssSelectors) {
-                removeThemeClasses(theme.cssSelectors);
+                removeThemeClasses(name);
             }
             if (theme.hasStyleSelectors) {
                 unloadThemeCSS(name);
@@ -319,7 +306,10 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const sanitizeTheme = (themeName: string | null) =>
         sanitizeThemeName(themeName, availableThemes);
 
-    const rawStoredTheme = readActiveTheme() || readActiveThemeCookie();
+    const rawStoredTheme =
+        selectionRepository.selectedTheme.value ||
+        readActiveThemeCookie() ||
+        readActiveTheme();
     const storedTheme = sanitizeTheme(rawStoredTheme);
 
     // Active theme name (for refined theme system)
@@ -335,6 +325,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         loadedThemes: new Set<string>(),
         loadingThemes: new Map<string, Promise<boolean>>(),
     };
+    const activationCoordinator = new ThemeActivationCoordinator();
     const syncActiveComponents = () => {
         const theme = themeRegistry.get(activeTheme.value);
         const manifest = themeManifest.get(activeTheme.value);
@@ -368,60 +359,13 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             return;
         }
 
-        const themeModule = await manifestEntry.loader();
-        const definition = themeModule?.default;
-        if (!definition) {
-            throw new Error(`Theme "${themeName}" has no default export.`);
-        }
-
-        updateManifestEntry(manifestEntry, definition);
-        const stylesheetPromise = loadThemeStylesheets(
-            manifestEntry,
-            definition.stylesheets
-        );
-
-        let iconsPromise: Promise<Record<string, string> | null> = Promise.resolve(
-            definition.icons ?? null
-        );
-        if (!definition.icons && manifestEntry.iconsLoader) {
-            iconsPromise = manifestEntry
-                .iconsLoader()
-                .then((m) => m?.default || null)
-                .catch((e: unknown) => {
-                    if (import.meta.dev) {
-                        console.warn(
-                            `[theme] Failed to load icons for theme "${themeName}":`,
-                            e
-                        );
-                    }
-                    return null;
-                });
-        }
-
-        const [, themeIcons] = await Promise.all([stylesheetPromise, iconsPromise]);
-
-        const compiledTheme: CompiledTheme = {
-            name: definition.name,
-            isDefault: manifestEntry.isDefault,
-            stylesheets: manifestEntry.stylesheets,
-            displayName: definition.displayName,
-            description: definition.description,
-            cssVariables: generateThemeCssVariables(definition),
-            overrides: compileOverridesRuntime(definition.overrides || {}),
-            cssSelectors: definition.cssSelectors,
-            hasStyleSelectors: manifestEntry.hasCssSelectorStyles,
-            ui: definition.ui,
-            propMaps: definition.propMaps,
-            backgrounds: definition.backgrounds,
-            icons: themeIcons ?? undefined,
-            customComponents: definition.customComponents,
-        };
+        const { compiledTheme, appConfig: themeSpecificConfig } =
+            await prepareThemeEntry(manifestEntry);
 
         themeRegistry.set(themeName, compiledTheme);
         if (compiledTheme.icons) {
             iconRegistry.registerTheme(themeName, compiledTheme.icons);
         }
-        const themeSpecificConfig = (await loadThemeAppConfig(manifestEntry)) ?? null;
         themeAppConfigOverrides.set(themeName, themeSpecificConfig);
         resolverRegistry.set(themeName, new RuntimeResolver(compiledTheme));
     };
@@ -489,37 +433,12 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     };
 
     /**
-     * Cleanup theme resources when switching away from it
-     * Keeps only the active theme and default theme loaded to save memory
-     */
-    const cleanupInactiveThemes = (activeThemeName: string) => {
-        const themesToKeep = new Set([activeThemeName, DEFAULT_THEME]);
-        
-        // Collect themes to delete first, then delete them
-        const themesToDelete: string[] = [];
-        for (const [themeName] of themeRegistry) {
-            if (!themesToKeep.has(themeName)) {
-                themesToDelete.push(themeName);
-            }
-        }
-        
-        // Delete collected themes
-        for (const themeName of themesToDelete) {
-            themeRegistry.delete(themeName);
-            resolverRegistry.delete(themeName);
-            iconRegistry.unregisterTheme(themeName);
-            themeAppConfigOverrides.delete(themeName);
-            loadState.loadedThemes.delete(themeName);
-            loadState.loadingThemes.delete(themeName);
-        }
-    };
-
-    /**
      * Set active theme (for refined theme system)
      *
      * This switches the active theme and persists the selection.
      */
     const setActiveTheme = async (themeName: string) => {
+        const transaction = activationCoordinator.begin();
         let target = sanitizeTheme(themeName) ?? DEFAULT_THEME;
 
         if (!themeManifest.has(target) && manifestEntries[0]) {
@@ -548,6 +467,8 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             ensureLoaded: ensureThemeLoaded,
         });
 
+        if (!transaction.isCurrent()) return;
+
         if (!activation.ok) {
             if (import.meta.dev) {
                 console.warn(
@@ -559,10 +480,22 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
         target = activation.activeTheme;
 
+        const theme = themeRegistry.get(target);
+        const manifest = themeManifest.get(target);
+        if (theme && manifest) {
+            await Promise.all([
+                loadThemeStylesheets(manifest),
+                theme.hasStyleSelectors
+                    ? loadThemeCSS(target)
+                    : Promise.resolve(),
+            ]);
+        }
+        if (!transaction.isCurrent()) return;
+
         // Remove classes and stylesheets from previous theme
         const previousTheme = themeRegistry.get(activeTheme.value);
         if (previousTheme?.cssSelectors) {
-            removeThemeClasses(previousTheme.cssSelectors);
+            removeThemeClasses(previousTheme.name);
         }
 
         if (previousTheme?.hasStyleSelectors) {
@@ -576,28 +509,16 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
         activeTheme.value = target;
         localStorage.setItem(activeThemeStorageKey, target);
-        saveThemeToKv(target);
+        void selectionRepository.setSelectedTheme(target);
         writeActiveThemeCookie(target);
         iconRegistry.setActiveTheme(target);
 
-        // Clean up inactive themes to save memory
-        cleanupInactiveThemes(target);
-
-        // Load CSS file and apply classes for new theme
-        const theme = themeRegistry.get(target);
-        const manifest = themeManifest.get(target);
+        // Loaded compiled themes remain cached; visual resources are managed separately.
         const themePatch = themeAppConfigOverrides.get(target) ?? null;
-        applyThemeAppConfigPatch(themePatch);
-        applyThemeUiConfig(theme ?? null);
+        applyEffectiveAppConfig(theme ?? null, themePatch);
 
         if (theme && manifest) {
-            // Load theme-specific stylesheets (from stylesheets array)
-            await loadThemeStylesheets(manifest);
-
-            // Load CSS file (build-time generated styles from cssSelectors)
-            if (theme.hasStyleSelectors) {
-                await loadThemeCSS(target);
-            } else {
+            if (!theme.hasStyleSelectors) {
                 unloadThemeCSS(target);
             }
 
@@ -614,10 +535,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 injectThemeVariables(target, theme.cssVariables);
             }
 
-            await applyThemeBackgrounds(theme.backgrounds, {
-                resolveToken: themeBackgroundTokenResolver,
-            });
         }
+
+        if (!transaction.isCurrent()) return;
 
         syncActiveComponents();
 
@@ -694,6 +614,11 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         loadTheme, // Function to dynamically load a theme
         getTheme: (themeName: string) => themeRegistry.get(themeName) || null, // Get cached theme
         activeComponents,
+        availableThemes: manifestEntries.map((entry) => ({
+            name: entry.name,
+            displayName: entry.displayName,
+            description: entry.description,
+        })),
     };
 
     nuxtApp.provide('theme', themeApi);
@@ -713,31 +638,6 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         }
     }
 
-    // Auto-apply theme classes on page navigation (for lazy-loaded components)
-    const removePageFinishHook = nuxtApp.hook('page:finish', () => {
-        if (!import.meta.client) {
-            return;
-        }
-
-        if (pageFinishTimeout) {
-            clearTimeout(pageFinishTimeout);
-        }
-
-        pageFinishTimeout = setTimeout(() => {
-            pageFinishTimeout = null;
-            const theme = themeApi.getTheme?.(themeApi.activeTheme.value);
-            if (theme?.cssSelectors) {
-                applyThemeClasses(themeApi.activeTheme.value, theme.cssSelectors);
-            }
-        }, 100);
-    });
-    registerCleanup(() => {
-        removePageFinishHook();
-        if (pageFinishTimeout) {
-            clearTimeout(pageFinishTimeout);
-            pageFinishTimeout = null;
-        }
-    });
 });
 
 // Maintain one <style> element per theme for CSS vars

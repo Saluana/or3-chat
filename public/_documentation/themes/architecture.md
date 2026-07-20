@@ -11,7 +11,7 @@ Theme Definition (app/theme/*/theme.ts)
   -> Runtime compile + CSS variables
   -> Theme plugin ($theme) applies theme
   -> RuntimeResolver resolves overrides
-  -> v-theme / useThemeOverrides apply props
+  -> useThemeOverrides applies Vue props; v-theme decorates DOM targets
   -> cssSelectors apply styles/classes
 ```
 
@@ -30,8 +30,11 @@ Default theme precedence is:
 
 1. `runtimeConfig.public.branding.defaultTheme` (if valid)
 2. Theme marked with `isDefault`
-3. First manifest entry
-4. Fallback constant (`retro`)
+3. Fallback constant (`retro`)
+4. First sorted manifest entry
+
+Multiple manifest defaults are rejected so selection cannot depend on import
+order.
 
 In dev mode, OR3 logs one warning when runtime config overrides manifest
 default selection.
@@ -44,8 +47,8 @@ When a theme is loaded:
 - CSS variables are generated with `generateThemeCssVariables()`.
 - A `RuntimeResolver` instance is created for the theme.
 
-This happens in `app/plugins/90.theme.client.ts` (client) and
-`app/plugins/90.theme.server.ts` (SSR).
+The canonical `compileThemeDefinition()` path is shared by the client, SSR,
+and build tooling so all environments produce the same payload fields.
 
 ## 3) Theme application
 
@@ -60,9 +63,11 @@ Activating a theme does the following:
 7. Merges `app.config.ts` and `theme.ui` into `app.config`.
 8. Registers theme icons with `iconRegistry`.
 
-Theme selection is stored in `localStorage` (`activeTheme`) and a cookie
-(`or3_active_theme`). Light/dark mode is separate and stored in `theme`
-localStorage via `$theme.set()` and `$theme.toggle()`.
+The signed-in preference repository is canonical once account storage is
+ready. The SSR cookie supplies first paint, and localStorage is a migration and
+offline cache. The selected source is exposed for diagnostics. Light/dark mode
+is separate and stored in `theme` localStorage via `$theme.set()` and
+`$theme.toggle()`.
 
 ## 4) Override resolution
 
@@ -86,7 +91,11 @@ Matches are merged by specificity. Non-Nuxt UI components map `variant`/`size`/
 - detects component name from the VNode
 - auto-detects context from DOM containers
 - resolves overrides via `$theme.getResolver()`
-- applies props and data attributes
+- applies owned classes, inline styles, and `data-*` annotations to the rendered
+  element
+
+It cannot mutate Vue component props. Bind `useThemeOverrides()` with `v-bind`
+when `variant`, `color`, `size`, `ui`, or other component props must change.
 
 ### useThemeOverrides
 
@@ -103,8 +112,20 @@ programmatic resolution and reactive updates on theme changes.
 
 Theme CSS is scoped by `[data-theme="<name>"]` to avoid cross-theme bleed.
 
-## 7) Lazy components
+## 7) Dynamic DOM
 
-Lazy-loaded components are re-rendered on theme changes via
-`app/plugins/92.theme-lazy-sync.client.ts`. For DOM elements that appear
-after theme application, use `useThemeClasses()` to re-apply selector classes.
+One selector session observes added DOM and applies matching runtime classes.
+It tracks only the classes it owns, cancels stale jobs during activation, and
+restores classes when a theme is removed. No global force-render mixin or
+page-level rescans are required.
+
+## Capability truth table
+
+| Mechanism | Tokens | Vue props | DOM class/style | Trusted code | SSR |
+|---|---:|---:|---:|---:|---:|
+| Theme colors/fonts/backgrounds | Yes | No | CSS variables | No | Yes |
+| `useThemeOverrides()` + `v-bind` | No | Yes | Via bound `class`/`style` | No | Yes |
+| `v-theme` | No | No | Yes, owned DOM state | No | Annotation only |
+| `cssSelectors.style` | No | No | Yes, generated/scoped | No | Yes |
+| `customComponents` | Any | Any | Any | Yes | Yes |
+| User overrides | Yes | No | Effective variables/backgrounds | No | Hydrated client |

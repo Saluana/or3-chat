@@ -22,6 +22,7 @@ export default defineTheme({
     customComponents: {
         'chat-input': './components/ChatInput.vue',
     },
+    componentContractVersion: 1,
     colors: {
         // Primary: near-black like ChatGPT
         primary: '#0d0d0d',

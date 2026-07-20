@@ -365,7 +365,9 @@ The manifest is required for ZIP installation. Create it at the theme root:
   "name": "Ocean Dark",
   "version": "1.0.0",
   "description": "Deep-sea blues with bioluminescent accents",
-  "capabilities": []
+  "capabilities": [],
+  "themeTrust": "trusted-code",
+  "componentContractVersion": 1
 }
 ```
 
@@ -374,6 +376,9 @@ Rules:
 - `id` must **not** collide with a built-in theme (`blank`, `retro`, `cyberpunk`). If it does, install will fail with a conflict error.
 - `kind` must be `"theme"`.
 - `version` follows semver.
+- This tutorial authors `theme.ts`, so it uses `trusted-code`. Prefer the
+  declarative tier and `or3.theme.json` when no code or Vue replacements are
+  needed.
 
 ---
 
@@ -444,8 +449,9 @@ There are two ways to install from the admin panel:
    ```
    https://github.com/user/repo/archive/refs/heads/main.zip
    ```
-4. Click **Install**. The server fetches the ZIP, validates the URL (HTTPS-only,
-   no private IPs, DNS rebinding protection), then runs the same install pipeline.
+4. Click **Install**. The server fetches the ZIP over HTTPS, rejects
+   private/reserved addresses, and pins each connection to the public DNS answer
+   validated for that redirect hop before running the install pipeline.
 5. **Restart** as described above.
 
 > **URL requirements**: Only HTTPS URLs are accepted. The server blocks requests
@@ -460,6 +466,7 @@ There are two ways to install from the admin panel:
 curl -X POST https://your-or3-instance.com/api/admin/extensions/install \
   -H "Cookie: <admin-session-cookie>" \
   -F "file=@ocean-dark-v1.0.0.zip" \
+  -F "expectedKind=theme" \
   -F "force=false"
 ```
 
@@ -475,7 +482,7 @@ Pass `force=true` to overwrite an existing version:
 curl -X POST https://your-or3-instance.com/api/admin/extensions/install \
   -H "Content-Type: application/json" \
   -H "Cookie: <admin-session-cookie>" \
-  -d '{"url": "https://github.com/user/repo/archive/refs/heads/main.zip", "force": false}'
+  -d '{"url": "https://github.com/user/repo/archive/refs/heads/main.zip", "expectedKind": "theme", "force": false}'
 ```
 
 ### Installing via Base64 JSON body
@@ -484,8 +491,20 @@ curl -X POST https://your-or3-instance.com/api/admin/extensions/install \
 curl -X POST https://your-or3-instance.com/api/admin/extensions/install \
   -H "Content-Type: application/json" \
   -H "Cookie: <admin-session-cookie>" \
-  -d "{\"zipBase64\": \"$(base64 -i ocean-dark-v1.0.0.zip)\", \"force\": false}"
+  -d "{\"zipBase64\": \"$(base64 -i ocean-dark-v1.0.0.zip)\", \"expectedKind\": \"theme\", \"force\": false}"
 ```
+
+### Theme trust tiers
+
+Use `"themeTrust": "declarative"` for installable visual themes. These packages
+provide `or3.theme.json`; executable JS/TS/Vue and CSS preprocessors are rejected,
+the definition is schema-validated, and OR3 generates the runtime module.
+
+Use `"themeTrust": "trusted-code"` only when the theme requires TypeScript,
+Vue component replacements, or app-config code. Installing that tier is
+equivalent to installing application code and should only be done from a source
+you trust. Legacy theme packages without `themeTrust` are treated as trusted
+code for compatibility.
 
 ---
 

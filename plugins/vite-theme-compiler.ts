@@ -32,7 +32,7 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
     } = options;
 
     let compiler: ThemeCompiler | null = null;
-    let compiled = false;
+    let compilation: Promise<CompilationResult> | null = null;
 
     /**
      * Compile themes
@@ -40,9 +40,6 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
     async function compileThemes(
         context: (PluginContext & { warn?: (msg: string) => void }) | null
     ) {
-        if (compiled) return; // Only compile once per build
-        compiled = true;
-
         if (!compiler) {
             compiler = new ThemeCompiler();
         }
@@ -50,7 +47,8 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
         console.log('\n[theme-compiler] Compiling themes...');
 
         try {
-            const result = await compiler.compileAll();
+            compilation ??= compiler.compileAll();
+            const result = await compilation;
 
             // Log summary
             console.log(
@@ -117,8 +115,10 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
         /**
          * Also compile on config resolution for dev mode
          */
-        async configResolved() {
-            await compileThemes(null);
+        async configResolved(config) {
+            if (config.command === 'serve') {
+                await compileThemes(null);
+            }
         },
 
         /**
@@ -134,17 +134,16 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
             const rel = normalized.slice(markerIdx + '/app/theme/'.length);
             if (rel.startsWith('_')) return;
 
-            const isEntryFile =
-                file.endsWith('theme.ts') || file.endsWith('icons.config.ts');
+            const affectsThemeEntry = /\.(?:ts|tsx|vue|css|scss|sass|less)$/.test(file);
 
             console.log(`[theme-compiler] Theme file changed: ${rel}`);
 
             try {
                 // For entry files, also recompile theme definitions & types
-                if (isEntryFile) {
-                    compiled = false;
+                if (affectsThemeEntry) {
+                    compilation = null;
                     if (!compiler) compiler = new ThemeCompiler();
-                    const result = await compiler.compileAll();
+                    const result = await (compilation = compiler.compileAll());
                     if (result.totalErrors > 0) {
                         console.error(formatErrors(result));
                     }

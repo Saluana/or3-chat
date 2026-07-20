@@ -23,13 +23,18 @@ overrides: {
 Use attributes or states only when needed. State selectors (`:hover`, `:active`)
 only match when you pass `state` to the resolver manually.
 
-## Use v-theme everywhere
+## Choose the correct component boundary
 
-If a component should be themed, add `v-theme`. Remove hardcoded props that the
-theme is responsible for.
+Use `useThemeOverrides()` with `v-bind` for Vue component props. Use `v-theme`
+for DOM classes, inline style declarations, identifiers, and target annotations.
 
 ```vue
-<UButton v-theme="'chat.send'">Send</UButton>
+<script setup lang="ts">
+const sendTheme = useThemeOverrides({
+  component: 'button', context: 'chat', identifier: 'chat.send', isNuxtUI: true,
+});
+</script>
+<UButton v-bind="sendTheme" v-theme="'chat.send'">Send</UButton>
 ```
 
 Keep dynamic props (disabled/loading/etc.) explicit.

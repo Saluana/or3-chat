@@ -3,6 +3,12 @@
 Theme component overrides let a theme replace selected OR3 app components with
 theme-local Vue components.
 
+They are a **trusted-code** capability. Declarative themes cannot ship Vue
+components. The current component contract version is `1`.
+Machine-readable contracts in
+`app/theme/_shared/theme-component-contracts.ts` cover every supported target
+and record required props, emits, slots, and accessibility expectations.
+
 This is the highest-leverage part of the theme system when you need to change
 real structure, layout, or interaction chrome instead of only changing props or
 CSS.
@@ -102,6 +108,7 @@ export default defineTheme({
     sidebar: './components/MySidebar.vue',
     'chat-input': './components/MyChatInput.vue',
   },
+  componentContractVersion: 1,
 });
 ```
 
@@ -111,6 +118,7 @@ Important rules:
 - The path must point to a `.vue` file discovered by the theme runtime.
 - You can override one target, several targets, or none.
 - Any target you do not override keeps the core default component.
+- Declare `componentContractVersion: 1`; incompatible versions fail validation.
 
 ## How The Runtime Applies Overrides
 

@@ -24,12 +24,15 @@ function makeZip(entries: Record<string, string>): Buffer {
 
 async function cleanup(id: string) {
     await fs.rm(join(EXTENSIONS_BASE_DIR, 'plugins', id), { recursive: true, force: true });
+    await fs.rm(join(EXTENSIONS_BASE_DIR, 'themes', id), { recursive: true, force: true });
+    await fs.rm(join(process.cwd(), 'app', 'theme', id), { recursive: true, force: true });
     await fs.rm(join(EXTENSIONS_BASE_DIR, '.tmp'), { recursive: true, force: true });
 }
 
 describe('installExtensionFromZip', () => {
     afterEach(async () => {
         await cleanup('test-plugin');
+        await cleanup('test-declarative-theme');
     });
 
     it('rejects missing manifest', async () => {
@@ -59,6 +62,98 @@ describe('installExtensionFromZip', () => {
         });
 
         await expect(installExtensionFromZip(zip, false)).rejects.toThrow('Invalid manifest');
+    });
+
+    it('rejects an archive whose kind does not match the requested install surface', async () => {
+        const zip = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'wrong-kind-plugin',
+                name: 'Wrong Kind',
+                version: '0.0.1',
+                capabilities: [],
+            }),
+            'index.js': 'export default {}',
+        });
+
+        await expect(
+            installExtensionFromZip(zip, false, undefined, 'theme')
+        ).rejects.toThrow('Extension kind mismatch');
+    });
+
+    it('requires theme ids to use lower-kebab-case', async () => {
+        const zip = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'theme',
+                id: 'Theme_With_Underscores',
+                name: 'Bad Theme ID',
+                version: '0.0.1',
+                capabilities: [],
+            }),
+            'theme.ts': 'export default {}',
+        });
+
+        await expect(
+            installExtensionFromZip(zip, false, undefined, 'theme')
+        ).rejects.toThrow('lower-kebab-case');
+    });
+
+    it('installs a schema-validated declarative theme without executable source', async () => {
+        const definition = {
+            name: 'test-declarative-theme',
+            displayName: 'Test Declarative Theme',
+            colors: {
+                primary: '#3366ff',
+                secondary: '#6633ff',
+                surface: '#ffffff',
+            },
+        };
+        const zip = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'theme',
+                id: 'test-declarative-theme',
+                name: 'Test Declarative Theme',
+                version: '0.0.1',
+                capabilities: [],
+                themeTrust: 'declarative',
+            }),
+            'or3.theme.json': JSON.stringify(definition),
+        });
+
+        const manifest = await installExtensionFromZip(zip, false, undefined, 'theme');
+        expect(manifest.themeTrust).toBe('declarative');
+        await expect(
+            fs.readFile(
+                join(EXTENSIONS_BASE_DIR, 'themes', 'test-declarative-theme', 'theme.ts'),
+                'utf8'
+            )
+        ).resolves.toContain('"name": "test-declarative-theme"');
+    });
+
+    it('rejects executable files in a declarative theme', async () => {
+        const zip = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'theme',
+                id: 'test-declarative-theme',
+                name: 'Test Declarative Theme',
+                version: '0.0.1',
+                capabilities: [],
+                themeTrust: 'declarative',
+            }),
+            'or3.theme.json': JSON.stringify({
+                name: 'test-declarative-theme',
+                colors: {
+                    primary: '#3366ff',
+                    secondary: '#6633ff',
+                    surface: '#ffffff',
+                },
+            }),
+            'component.vue': '<template><div /></template>',
+        });
+
+        await expect(
+            installExtensionFromZip(zip, false, undefined, 'theme')
+        ).rejects.toThrow('Declarative themes cannot contain executable code');
     });
 
     it('blocks zip slip paths', async () => {

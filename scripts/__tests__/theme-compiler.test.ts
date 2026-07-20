@@ -216,17 +216,12 @@ describe('ThemeCompiler', () => {
             expect(specificity).toBe(31);
         });
 
-        it('should handle complex selectors', () => {
-            const parsed = parseSelector(
-                'button[data-id="chat.send"][data-context="chat"]:hover:focus'
-            );
-            const specificity = calculateSpecificity(
-                'button[data-id="chat.send"][data-context="chat"]:hover:focus',
-                parsed
-            );
-
-            // 1 (element) + 10 (identifier extra) + 10 (attr) + 10 (attr) + 10 (pseudo) + 10 (pseudo) = 51
-            expect(specificity).toBe(51);
+        it('rejects unsupported multiple-state selectors', () => {
+            expect(() =>
+                parseSelector(
+                    'button[data-id="chat.send"][data-context="chat"]:hover:focus'
+                )
+            ).toThrow('Unsupported theme state');
         });
     });
 
@@ -240,7 +235,7 @@ describe('ThemeCompiler', () => {
 
             const css = (compiler as any).generateCSSVariables(colors);
 
-            expect(css).toContain('.light');
+            expect(css).toContain('html[data-theme="compiler-test"]');
             expect(css).toContain('--md-primary: #3f8452');
             expect(css).toContain('--md-secondary: #5a7b62');
             expect(css).toContain('--md-surface: #f5faf5');
@@ -258,7 +253,7 @@ describe('ThemeCompiler', () => {
 
             const css = (compiler as any).generateCSSVariables(colors);
 
-            expect(css).toContain('.dark');
+            expect(css).toContain('html[data-theme="compiler-test"].dark');
             expect(css).toContain('--md-primary: #8dd29a');
             expect(css).toContain('--md-surface: #0c130d');
         });

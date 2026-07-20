@@ -109,6 +109,8 @@ export const Or3ExtensionManifestSchema = z.object({
     capabilities: z.array(z.string()).default([]),
     access: PluginGatePolicySchema.optional(),
     runtime: RuntimeSchema.optional(),
+    themeTrust: z.enum(['declarative', 'trusted-code']).optional(),
+    componentContractVersion: z.literal(1).optional(),
 });
 
 export type Or3ExtensionManifest = z.infer<typeof Or3ExtensionManifestSchema>;

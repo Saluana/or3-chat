@@ -144,7 +144,7 @@ describe('CSS Selector Runtime', () => {
     describe('removeThemeClasses', () => {
         it('should remove classes from elements', () => {
             container.innerHTML =
-                '<div class="test-element applied-class">Content</div>';
+                '<div class="test-element">Content</div>';
             const element = container.querySelector(
                 '.test-element'
             ) as HTMLElement;
@@ -155,7 +155,8 @@ describe('CSS Selector Runtime', () => {
                 },
             };
 
-            removeThemeClasses(selectors);
+            applyThemeClasses('remove-theme', selectors);
+            removeThemeClasses('remove-theme');
 
             expect(element.classList.contains('applied-class')).toBe(false);
             expect(element.classList.contains('test-element')).toBe(true);
@@ -163,7 +164,7 @@ describe('CSS Selector Runtime', () => {
 
         it('should handle multiple classes', () => {
             container.innerHTML =
-                '<div class="test-element class1 class2 class3">Content</div>';
+                '<div class="test-element class3">Content</div>';
             const element = container.querySelector(
                 '.test-element'
             ) as HTMLElement;
@@ -174,7 +175,8 @@ describe('CSS Selector Runtime', () => {
                 },
             };
 
-            removeThemeClasses(selectors);
+            applyThemeClasses('multi-remove-theme', selectors);
+            removeThemeClasses('multi-remove-theme');
 
             expect(element.classList.contains('class1')).toBe(false);
             expect(element.classList.contains('class2')).toBe(false);
@@ -191,7 +193,34 @@ describe('CSS Selector Runtime', () => {
             };
 
             // Should not throw
-            expect(() => removeThemeClasses(selectors)).not.toThrow();
+            expect(() => removeThemeClasses('missing-theme')).not.toThrow();
+        });
+
+        it('preserves a class that existed before the theme applied', () => {
+            container.innerHTML =
+                '<div class="test-element app-owned">Content</div>';
+            const element = container.querySelector('.test-element') as HTMLElement;
+            const selectors = {
+                '.test-element': { class: 'app-owned theme-owned' },
+            };
+
+            applyThemeClasses('ownership-theme', selectors);
+            removeThemeClasses('ownership-theme');
+
+            expect(element.classList.contains('app-owned')).toBe(true);
+            expect(element.classList.contains('theme-owned')).toBe(false);
+        });
+
+        it('removes owned classes even when the element no longer matches', () => {
+            container.innerHTML = '<div class="match-me">Content</div>';
+            const element = container.firstElementChild as HTMLElement;
+            applyThemeClasses('stale-selector-theme', {
+                '.match-me': { class: 'theme-owned' },
+            });
+            element.classList.remove('match-me');
+
+            removeThemeClasses('stale-selector-theme');
+            expect(element.classList.contains('theme-owned')).toBe(false);
         });
     });
 
@@ -309,7 +338,7 @@ describe('CSS Selector Runtime', () => {
             expect(el2.classList.contains('theme1-class')).toBe(true);
 
             // Switch to theme 2
-            removeThemeClasses(theme1Selectors);
+            removeThemeClasses('theme1');
             unloadThemeCSS('theme1');
 
             const promise2 = loadThemeCSS('theme2');

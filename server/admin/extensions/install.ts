@@ -28,6 +28,8 @@ import type { ExtensionKind, Or3ExtensionManifest } from './types';
 import { Or3ExtensionManifestSchema } from './types';
 import { ensureExtensionsDirs, EXTENSIONS_BASE_DIR, getKindDir } from './paths';
 import { removeSyncedThemeFromApp, syncInstalledThemeToApp } from './theme-install-sync';
+import { validateThemeDefinition } from '../../../app/theme/_shared/validate-theme';
+import type { ThemeDefinition } from '../../../app/theme/_shared/types';
 
 /**
  * Purpose:
@@ -239,7 +241,8 @@ async function extractManifestFromZip(buffer: Buffer): Promise<{
 export async function installExtensionFromZip(
     buffer: Buffer,
     force: boolean,
-    limits: ExtensionInstallLimits = DEFAULT_LIMITS
+    limits: ExtensionInstallLimits = DEFAULT_LIMITS,
+    expectedKind?: ExtensionKind
 ): Promise<Or3ExtensionManifest> {
     await ensureExtensionsDirs();
 
@@ -248,6 +251,16 @@ export async function installExtensionFromZip(
     }
 
     const { manifest, prefix } = await extractManifestFromZip(buffer);
+
+    if (expectedKind && manifest.kind !== expectedKind) {
+        throw new Error(
+            `Extension kind mismatch: expected ${expectedKind}, received ${manifest.kind}`
+        );
+    }
+
+    if (manifest.kind === 'theme' && !/^[a-z][a-z0-9-]*$/.test(manifest.id)) {
+        throw new Error('Theme id must use lower-kebab-case');
+    }
 
     const kindDir = getKindDir(manifest.kind);
     const targetDir = join(EXTENSIONS_BASE_DIR, kindDir, manifest.id);
@@ -371,6 +384,50 @@ export async function installExtensionFromZip(
 
         const finalManifestPath = join(tmpDir, 'or3.manifest.json');
         await fs.access(finalManifestPath);
+
+        if (manifest.kind === 'theme') {
+            const declarativePath = join(tmpDir, 'or3.theme.json');
+            const sourcePath = join(tmpDir, 'theme.ts');
+            if (manifest.themeTrust === 'declarative') {
+                const disallowedCodeExtensions = new Set([
+                    '.js', '.mjs', '.cjs', '.ts', '.tsx', '.vue',
+                    '.scss', '.sass', '.less',
+                ]);
+                if ([...seenPaths].some((path) => disallowedCodeExtensions.has(extname(path).toLowerCase()))) {
+                    throw new Error('Declarative themes cannot contain executable code');
+                }
+                let definition: ThemeDefinition;
+                try {
+                    definition = JSON.parse(
+                        await fs.readFile(declarativePath, 'utf8')
+                    ) as ThemeDefinition;
+                } catch {
+                    throw new Error('Declarative theme requires valid or3.theme.json');
+                }
+                if (definition.name !== manifest.id) {
+                    throw new Error('Theme definition name must match manifest id');
+                }
+                const validation = validateThemeDefinition(definition);
+                if (!validation.valid) {
+                    throw new Error(
+                        `Invalid declarative theme: ${validation.errors
+                            .map((error) => error.message)
+                            .join('; ')}`
+                    );
+                }
+                await fs.writeFile(
+                    sourcePath,
+                    `export default ${JSON.stringify(definition, null, 2)};\n`,
+                    'utf8'
+                );
+            } else {
+                try {
+                    await fs.access(sourcePath);
+                } catch {
+                    throw new Error('Trusted code theme requires theme.ts');
+                }
+            }
+        }
 
         // Atomic-ish swap: backup current -> move staging into place -> drop backup.
         if (targetExists) {

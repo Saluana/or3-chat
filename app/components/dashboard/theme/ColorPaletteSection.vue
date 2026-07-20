@@ -97,6 +97,7 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useClipboard } from '@vueuse/core';
 import { isBrowser } from '~/utils/env';
 import type { ColorKey } from './types';
+import { COLOR_TOKEN_REGISTRY } from '~/theme/_shared/design-token-registry';
 
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides;
@@ -171,34 +172,7 @@ const allColorKeys = colorGroups.flatMap((group) =>
     group.colors.map((color) => color.key as ColorKey)
 );
 
-const colorCssVarMap: Record<ColorKey, string> = {
-    primary: '--md-primary',
-    onPrimary: '--md-on-primary',
-    primaryContainer: '--md-primary-container',
-    onPrimaryContainer: '--md-on-primary-container',
-    secondary: '--md-secondary',
-    onSecondary: '--md-on-secondary',
-    secondaryContainer: '--md-secondary-container',
-    onSecondaryContainer: '--md-on-secondary-container',
-    tertiary: '--md-tertiary',
-    onTertiary: '--md-on-tertiary',
-    tertiaryContainer: '--md-tertiary-container',
-    onTertiaryContainer: '--md-on-tertiary-container',
-    error: '--md-error',
-    onError: '--md-on-error',
-    errorContainer: '--md-error-container',
-    onErrorContainer: '--md-on-error-container',
-    surface: '--md-surface',
-    onSurface: '--md-on-surface',
-    surfaceVariant: '--md-surface-variant',
-    onSurfaceVariant: '--md-on-surface-variant',
-    inverseSurface: '--md-inverse-surface',
-    inverseOnSurface: '--md-inverse-on-surface',
-    outline: '--md-outline',
-    outlineVariant: '--md-outline-variant',
-    success: '--md-extended-color-success-color',
-    warning: '--md-extended-color-warning-color',
-};
+const colorCssVarMap = COLOR_TOKEN_REGISTRY as Record<ColorKey, string>;
 
 // Local hex inputs
 const localHex: Record<ColorKey, string> = reactive(
@@ -211,43 +185,42 @@ const localHex: Record<ColorKey, string> = reactive(
 );
 
 // Theme overrides for UI components
-const paletteColorPickerProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'color-picker',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.palette-picker',
-        isNuxtUI: true,
-    });
-    return overrides.value || {};
+const paletteColorPickerOverride = useThemeOverrides({
+    component: 'color-picker',
+    context: 'dashboard',
+    identifier: 'dashboard.theme.palette-picker',
+    isNuxtUI: true,
 });
+const paletteColorPickerProps = computed(() => paletteColorPickerOverride.value || {});
 
+const hexInputOverride = useThemeOverrides({
+    component: 'input',
+    context: 'dashboard',
+    identifier: 'dashboard.theme.hex-input',
+    isNuxtUI: true,
+});
 const hexInputProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'input',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.hex-input',
-        isNuxtUI: true,
-    });
     return {
         size: 'sm' as const,
         variant: 'outline' as const,
-        ...(overrides.value as any),
+        ...(hexInputOverride.value as any),
     };
 });
 
+const copyButtonOverride = useThemeOverrides({
+    component: 'button',
+    context: 'dashboard',
+    identifier: 'dashboard.theme.copy-color',
+    isNuxtUI: true,
+});
+const copyIcon = useIcon('ui.copy');
 const copyButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.copy-color',
-        isNuxtUI: true,
-    });
     return {
         size: 'sm' as const,
         variant: 'ghost' as const,
-        icon: useIcon('ui.copy').value,
+        icon: copyIcon.value,
         square: true,
-        ...(overrides.value as any),
+        ...(copyButtonOverride.value as any),
     };
 });
 
@@ -344,18 +317,3 @@ watch(
     { deep: true }
 );
 </script>
-
-<style scoped>
-.group-heading {
-    margin-top: -0.25rem;
-    letter-spacing: 0.08em;
-}
-
-.supporting-text {
-    font-size: 10px;
-    line-height: 1.2;
-    max-width: 56ch;
-    color: var(--md-on-surface-variant, var(--md-on-surface));
-    opacity: 0.7;
-}
-</style>

@@ -221,7 +221,25 @@ These values come from the shared context list used by the theme runtime (`app/t
 
 The directive sets `data-v-theme` and may add `data-id`,
 `data-theme-color`, `data-theme-variant`, and `data-theme-size`
-on the rendered element.
+on the rendered element. It also applies resolved `class` and `style` values
+and removes only the DOM state it owns when the theme changes or the directive
+unmounts.
+
+The directive does **not** mutate Vue component props. For component props,
+bind the reactive result from `useThemeOverrides()`:
+
+```vue
+<script setup lang="ts">
+const sendTheme = useThemeOverrides({
+  component: 'button',
+  context: 'chat',
+  identifier: 'chat.send',
+  isNuxtUI: true,
+});
+</script>
+
+<template><UButton v-bind="sendTheme">Send</UButton></template>
+```
 
 ## RuntimeResolver
 
@@ -317,7 +335,7 @@ structure than the core component.
   `types/theme-generated.d.ts`.
 - `bun run theme:build-css` build `/public/themes/<name>.css` from
   `cssSelectors.style`.
-- `bun run theme:switch` update the default theme in app config
+- `bun run theme:switch` update `OR3_DEFAULT_THEME` in `.env`
   (does not change the current runtime theme).
 
 ## Generated Types

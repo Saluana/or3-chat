@@ -112,6 +112,55 @@ export function recursiveUpdate(
     }
 }
 
+/** Build a theme's app config from an immutable base snapshot. */
+export function computeEffectiveAppConfig(
+    base: Record<string, unknown>,
+    options: {
+        appPatch?: Record<string, unknown> | null;
+        uiPatch?: Record<string, unknown> | null;
+    } = {}
+): Record<string, unknown> {
+    const effective = deepMerge(cloneDeep(base), options.appPatch ?? undefined);
+    if (options.uiPatch) {
+        const baseUi =
+            effective.ui &&
+            typeof effective.ui === 'object' &&
+            !Array.isArray(effective.ui)
+                ? (effective.ui as Record<string, unknown>)
+                : {};
+        effective.ui = deepMerge(baseUi, options.uiPatch);
+    }
+    return effective;
+}
+
+/** Replace a reactive object while deleting keys absent from the next value. */
+export function replaceReactiveObject(
+    target: Record<string, unknown>,
+    source: Record<string, unknown>
+): void {
+    for (const key of Object.keys(target)) {
+        if (!(key in source)) delete target[key];
+    }
+    for (const [key, value] of Object.entries(source)) {
+        const current = target[key];
+        if (
+            current &&
+            value &&
+            typeof current === 'object' &&
+            typeof value === 'object' &&
+            !Array.isArray(current) &&
+            !Array.isArray(value)
+        ) {
+            replaceReactiveObject(
+                current as Record<string, unknown>,
+                value as Record<string, unknown>
+            );
+        } else {
+            target[key] = cloneDeep(value);
+        }
+    }
+}
+
 // ============================================================================
 // Theme Name Validation
 // ============================================================================

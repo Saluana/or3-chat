@@ -196,24 +196,19 @@ const scrollParentStyle = computed<CSSProperties>(() => ({
 }));
 
 // Mobile fixed wrapper classes/styles
-// Use fixed positioning on both mobile & desktop so top bars / multi-pane layout shifts don't push input off viewport.
-// CLS fix: Reserve stable height to prevent layout shift when lazy input hydrates
-const inputWrapperClass = computed(() =>
-    isMobile.value
-        ? 'pointer-events-none fixed inset-x-0 bottom-0 z-40'
-        : // Desktop: keep input scoped to its pane container
-          'pointer-events-none absolute inset-x-0 bottom-0 z-10'
-);
+// Use CSS breakpoints (not JS isMobile) so SSR HTML matches the first client
+// render. ChatContainer is async-hydrated after useResponsiveState may already
+// have flipped global isMobile, which previously caused hydration class mismatches.
+// Breakpoint matches useResponsiveState: (max-width: 768px).
+const inputWrapperClass =
+    'pointer-events-none absolute inset-x-0 bottom-0 z-10 max-[768px]:fixed max-[768px]:z-40';
 const inputWrapperStyle = computed<CSSProperties>(() => ({
     minHeight: `${DEFAULT_INPUT_HEIGHT}px`, // Reserve space to prevent CLS
     // Prevent child content from changing wrapper height during hydration
     contain: 'layout' as const,
 }));
-const innerInputContainerClass = computed(() =>
-    isMobile.value
-        ? 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-[calc(env(safe-area-inset-bottom)+6px)]'
-        : 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-2'
-);
+const innerInputContainerClass =
+    'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-2 max-[768px]:pb-[calc(env(safe-area-inset-bottom)+6px)]';
 function onInputResize(e: { height: number }) {
     emittedInputHeight.value = e?.height || null;
 }

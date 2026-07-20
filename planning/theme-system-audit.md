@@ -37,14 +37,14 @@ That creates state leakage, repeated work, races, hydration risk, dead APIs, and
 
 | ID | Severity | Finding | Primary location |
 |---|---:|---|---|
-| SEC-01 | Critical | Existing extensions are overwritten even when `force` is false | `server/admin/extensions/install.ts:226-235,343-347` |
-| SEC-02 | Critical | Uninstall can derive and recursively delete a path from an unsanitized request ID | `server/api/admin/extensions/uninstall.post.ts:15-18`; `server/admin/extensions/extension-manager.ts:156-165` |
-| RUN-01 | Critical | `v-theme` does not reliably apply Vue component props and does not re-resolve on a theme change | `app/plugins/91.auto-theme.client.ts:205-289,317-412` |
-| PERF-01 | Critical | Every consumer of `useUserThemeOverrides()` installs another pair of deep watchers | `app/core/theme/useUserThemeOverrides.ts:302-325` |
-| STATE-01 | High | Client app-config patches accumulate across themes instead of being recomputed from the base config | `app/plugins/90.theme.client.ts:95-130,586-591` |
-| SSR-01 | High | Server compilation omits `hasStyleSelectors`, so generated selector CSS is not linked during SSR | `app/plugins/90.theme.server.ts:187-201,419-428` |
-| SSR-02 | High | The module-global icon registry is mutable across SSR requests | `app/theme/_shared/icon-registry.ts:54-182`; `app/plugins/icon-registry.ts:7-20` |
-| RUN-02 | High | Theme activation has no last-request-wins transaction, allowing stale async work to commit | `app/plugins/90.theme.client.ts:522-625` |
+| ~~SEC-01~~ | Critical | ~~Existing extensions are overwritten even when `force` is false~~ | Resolved |
+| ~~SEC-02~~ | Critical | ~~Uninstall can derive and recursively delete a path from an unsanitized request ID~~ | Resolved |
+| ~~RUN-01~~ | Critical | ~~`v-theme` does not reliably apply Vue component props and does not re-resolve on a theme change~~ | Resolved with truthful DOM-only compatibility contract |
+| ~~PERF-01~~ | Critical | ~~Every consumer of `useUserThemeOverrides()` installs another pair of deep watchers~~ | Resolved |
+| ~~STATE-01~~ | High | ~~Client app-config patches accumulate across themes instead of being recomputed from the base config~~ | Resolved |
+| ~~SSR-01~~ | High | ~~Server compilation omits `hasStyleSelectors`, so generated selector CSS is not linked during SSR~~ | Resolved |
+| ~~SSR-02~~ | High | ~~The module-global icon registry is mutable across SSR requests~~ | Resolved |
+| ~~RUN-02~~ | High | ~~Theme activation has no last-request-wins transaction, allowing stale async work to commit~~ | Resolved |
 
 Fix these before doing broad cleanup.
 
@@ -52,7 +52,10 @@ Fix these before doing broad cleanup.
 
 # 1. Security audit
 
-## SEC-01: overwrite confirmation is bypassed
+## ~~SEC-01: overwrite confirmation is bypassed~~
+
+**Resolved:** duplicate installs reject unless `force` is explicit, and forced
+replacement uses staging, backup, rollback, and regression coverage.
 
 ### Evidence
 
@@ -113,7 +116,10 @@ Do not remove the old install until the new package is completely staged and val
 
 ---
 
-## SEC-02: uninstall path traversal and arbitrary deletion
+## ~~SEC-02: uninstall path traversal and arbitrary deletion~~
+
+**Resolved:** API and manager share `ExtensionIdSchema`; resolved and real paths
+must remain contained; the on-disk manifest identity must match before deletion.
 
 ### Evidence
 
@@ -165,7 +171,11 @@ Add tests for `../`, encoded variants at the HTTP layer, dots, slashes, backslas
 
 ---
 
-## SEC-03: a “theme” install is trusted code execution
+## ~~SEC-03: a “theme” install is trusted code execution~~
+
+**Resolved:** packages declare declarative or trusted-code intent; declarative
+themes are JSON/schema-only, reject executable files, and trusted themes carry
+an explicit admin warning and component contract version.
 
 The default extension allow-list permits JavaScript, TypeScript, Vue, and preprocessors. Installed theme directories are linked or copied into `app/theme`, and the build/runtime imports `theme.ts`, `app.config.ts`, icon config, and optional Vue component overrides.
 
@@ -194,7 +204,10 @@ This single distinction would substantially improve security, install UX, and th
 
 ---
 
-## SEC-04: requested install kind is not enforced
+## ~~SEC-04: requested install kind is not enforced~~
+
+**Resolved:** file, URL, and base64 installs require `expectedKind`, compare it
+to the archive manifest before extraction, and enforce lower-kebab-case theme IDs.
 
 The client APIs accept a `kind`, but neither the multipart request nor URL JSON sends the expected kind. The server trusts the archive manifest. Consequently, the Themes page can be used to install a plugin or admin plugin packaged under another kind.
 
@@ -211,7 +224,10 @@ For themes, additionally require:
 
 ---
 
-## SEC-05: remote-fetch DNS validation has a time-of-check/time-of-use gap
+## ~~SEC-05: remote-fetch DNS validation has a time-of-check/time-of-use gap~~
+
+**Resolved:** every HTTPS hop connects through a custom lookup pinned to the
+validated public IPv4 answer while retaining TLS SNI and host verification.
 
 `url-fetch.ts` resolves and validates public IPs, then calls ordinary `fetch(currentUrl)`. The fetch performs its own DNS resolution. The checked address is not pinned to the connection, so the implementation should not claim complete DNS-rebinding prevention.
 
@@ -225,7 +241,10 @@ The existing HTTPS-only policy, private CIDR checks, redirect revalidation, resp
 
 ---
 
-## SEC-06: external stylesheets are accepted without a trust policy
+## ~~SEC-06: external stylesheets are accepted without a trust policy~~
+
+**Resolved:** manifests, runtime resolution, and validation reject external,
+data, and blob stylesheet URLs; theme styles must be local package assets.
 
 `resolveThemeStylesheetHref()` accepts protocol-relative, HTTPS, data, and blob URLs. A safe/declarative theme should not silently load third-party CSS or allow CSS imports to become an uncontrolled supply-chain dependency.
 
@@ -238,7 +257,10 @@ The existing HTTPS-only policy, private CIDR checks, redirect revalidation, resp
 
 ---
 
-## SEC-07: CSS values need a safe-theme grammar
+## ~~SEC-07: CSS values need a safe-theme grammar~~
+
+**Resolved:** declarative definitions now use typed color/length validation,
+declaration-only style maps, local URL policy, and event-handler rejection.
 
 The current validator often emits warnings rather than rejecting invalid CSS values. Font, border, custom token, selector, and style values can contain arbitrary CSS syntax. Escaping `</style>` prevents one HTML-breakout form, but does not turn arbitrary CSS strings into a safe declarative format.
 
@@ -255,7 +277,10 @@ For trusted code themes, arbitrary CSS is expected. For safe themes, validate ea
 
 # 2. Runtime correctness and performance
 
-## RUN-01: `v-theme` promises a component-prop system but implements DOM decoration
+## ~~RUN-01: `v-theme` promises a component-prop system but implements DOM decoration~~
+
+**Resolved:** the compatibility directive is documented and implemented as an
+owned, reactive DOM decorator; Vue props use `useThemeOverrides()` + `v-bind`.
 
 This is the most important product-level mismatch.
 
@@ -313,7 +338,10 @@ This is a migration, not a rewrite of theme definitions.
 
 ---
 
-## PERF-01: user override watchers multiply per component
+## ~~PERF-01: user override watchers multiply per component~~
+
+**Resolved:** one HMR-safe singleton store owns one deep watch, one microtask
+commit scheduler, and one debounced persistence scheduler.
 
 `useUserThemeOverrides()` is called by the plugin and by every theme settings subsection. Each call reaches the bottom of the composable and installs two deep watchers on the singleton refs.
 
@@ -367,7 +395,10 @@ Remove `reapply()` calls after `set()` and make `reapply()` an internal recovery
 
 ---
 
-## PERF-02: every background edit revokes all blob URLs
+## ~~PERF-02: every background edit revokes all blob URLs~~
+
+**Resolved:** blob cache invalidation is selective and occurs only when an
+internal-file URL changes or is reset.
 
 Any patch containing `backgrounds` calls `revokeBackgroundBlobs()`, even when the user changes only opacity, size, repeat, fit, or color. The next apply must fetch file blobs and create object URLs again.
 
@@ -377,7 +408,10 @@ Invalidate a background token only when its `url`/file hash changes or the layer
 
 ---
 
-## STATE-01: client app-config patches bleed between themes
+## ~~STATE-01: client app-config patches bleed between themes~~
+
+**Resolved:** client and server compute config from an immutable base and
+replace absent keys; A→B→A leakage has regression coverage.
 
 The client takes a base JSON snapshot but restores it only during HMR cleanup. On each switch it merges the next patch into the current config with `defu`:
 
@@ -406,7 +440,10 @@ A simpler long-term boundary is better: deprecate arbitrary theme `app.config.ts
 
 ---
 
-## SSR-01: server omits `hasStyleSelectors`
+## ~~SSR-01: server omits `hasStyleSelectors`~~
+
+**Resolved:** the canonical compiler supplies the field identically to client,
+server, and build tooling.
 
 The server's `CompiledTheme` object does not copy `manifestEntry.hasCssSelectorStyles`. Later, SSR head generation checks `compiledTheme.hasStyleSelectors` before adding `/themes/<name>.css`. That condition is therefore false or undefined.
 
@@ -429,7 +466,10 @@ Structural fix: one `compileThemeDefinition()` function must construct every `Co
 
 ---
 
-## SSR-02: global icon registry is not request-isolated
+## ~~SSR-02: global icon registry is not request-isolated~~
+
+**Resolved:** SSR creates and serializes one icon registry per Nuxt request;
+the client retains its own hydrated singleton.
 
 `iconRegistry` is a module singleton. Each SSR request registers themes, changes `activeTheme`, unregisters inactive themes, and serializes global state into that request's payload. Concurrent requests can mutate the same registry.
 
@@ -444,7 +484,10 @@ Audit other module-level registries for the same request isolation issue.
 
 ---
 
-## RUN-02: theme activation is not transactional
+## ~~RUN-02: theme activation is not transactional~~
+
+**Resolved:** activation uses a monotonic revision, preloads target resources,
+checks supersession at async boundaries, and blocks stale background commits.
 
 A theme switch performs multiple awaited stages with no activation ID or abort signal:
 
@@ -482,7 +525,10 @@ Preload the new theme before removing old resources to avoid a flash.
 
 ---
 
-## PERF-03: stylesheets are loaded during registration and activation
+## ~~PERF-03: stylesheets are loaded during registration and activation~~
+
+**Resolved:** registration is DOM-pure; only the activation transaction loads
+visual stylesheets and selector CSS.
 
 `registerThemeFromEntry()` starts `loadThemeStylesheets()` while the theme is merely being loaded/compiled. `setActiveTheme()` loads them again during activation.
 
@@ -494,7 +540,10 @@ Theme registration must be pure with respect to the DOM. It may resolve URLs and
 
 ---
 
-## PERF-04: selector class application repeatedly scans the entire document
+## ~~PERF-04: selector class application repeatedly scans the entire document~~
+
+**Resolved:** a single cancellable selector session performs the initial scan
+and observes added subtrees; page-finish and composable rescans were removed.
 
 `applyThemeClasses()` executes `document.querySelectorAll()` for every selector. It is invoked from:
 
@@ -515,7 +564,10 @@ The 5 ms chunking budget is per selector loop. A single expensive selector retur
 
 ---
 
-## RUN-03: selector-class jobs cannot be canceled and do not track ownership
+## ~~RUN-03: selector-class jobs cannot be canceled and do not track ownership~~
+
+**Resolved:** sessions cancel work and track per-theme additions, preserving
+pre-existing app classes and removing owned classes even after match changes.
 
 The rAF chunk loop has no cancellation handle. A superseded theme can continue adding classes after a new theme is active.
 
@@ -537,7 +589,10 @@ Only remove classes the specific theme actually added. On switch, cancel the pre
 
 ---
 
-## RUN-04: the selector DSL parser has correctness traps
+## ~~RUN-04: the selector DSL parser has correctness traps~~
+
+**Resolved:** one explicit production parser handles hyphenated targets,
+contexts, states/attributes, structured errors, specificity, and source order.
 
 `compiler-core.ts` intentionally implements a shallow grammar, but several behaviors are too silent for an author-facing system:
 
@@ -562,7 +617,10 @@ Unknown contexts and unsupported syntax should be validation errors, not warning
 
 ---
 
-## RUN-05: component-name inference does not match the theme DSL reliably
+## ~~RUN-05: component-name inference does not match the theme DSL reliably~~
+
+**Resolved:** a canonical target registry maps Vue/Nuxt UI names to semantic
+targets and records allowed props; directive inference uses only that registry.
 
 The directive derives internal Vue component names such as `ubutton`, while theme authors generally target semantic names such as `button`. It then uses a hard-coded, incomplete set to determine whether a component is Nuxt UI.
 
@@ -583,7 +641,10 @@ Prefer explicit target metadata over inference. Generate types, docs, validation
 
 ---
 
-## PERF-05: lazy-sync global mixin is broad and mostly ineffective
+## ~~PERF-05: lazy-sync global mixin is broad and mostly ineffective~~
+
+**Resolved:** the global force-update plugin was deleted; reactive consumers,
+directive watchers, and selector observation update only affected surfaces.
 
 `92.theme-lazy-sync.client.ts` installs a global mixin that runs for every component, tracks async component instances in a strong `Set`, and force-updates all of them after a theme version change.
 
@@ -595,7 +656,10 @@ Remove this plugin after consumers use reactive `useThemeOverrides()` or explici
 
 ---
 
-## PERF-06: inactive theme eviction saves little and causes recompilation
+## ~~PERF-06: inactive theme eviction saves little and causes recompilation~~
+
+**Resolved:** compiled themes and resolvers remain cached while their visual
+resources are activated and cleaned independently.
 
 The plugins keep only the active and default compiled themes. Theme definitions, resolvers, app patches, icons, and component maps are discarded on every switch away, while some style tags remain in the document.
 
@@ -607,7 +671,10 @@ Use a small configurable LRU, such as 4 to 8 compiled themes, or keep all compil
 
 ---
 
-## STATE-02: user override merge can clear a base image unintentionally
+## ~~STATE-02: user override merge can clear a base image unintentionally~~
+
+**Resolved:** layer conversion preserves `undefined`, treats `null` as explicit
+clear, and replaces only string URLs.
 
 `convertLayerToThemeFormat()` uses:
 
@@ -625,7 +692,10 @@ The same principle should be applied to every deep partial merge.
 
 ---
 
-## STATE-03: reset paths leave derived values behind
+## ~~STATE-03: reset paths leave derived values behind~~
+
+**Resolved:** derived variables are removed when absent, theme font variables
+replace hard-coded fallbacks, and contrast clamps immutable effective layers.
 
 Examples:
 
@@ -645,7 +715,10 @@ Then diff the previous and next effective output. Variables absent from the next
 
 ---
 
-## STATE-04: base theme background application and user dark-mode merge are split
+## ~~STATE-04: base theme background application and user dark-mode merge are split~~
+
+**Resolved:** the singleton effective-theme store is the only final background
+owner; activation bumps its resolver revision instead of applying a base layer.
 
 The base theme plugin applies `theme.backgrounds` directly, while `applyMergedTheme()` separately resolves dark-mode background overrides and user settings. The user override store does not subscribe directly to base-theme changes. This produces ordering dependencies and stale-background risks.
 
@@ -655,7 +728,11 @@ The activation coordinator should be the only owner of final backgrounds. It sho
 
 ---
 
-## STATE-05: selection persistence has multiple conflicting sources
+## ~~STATE-05: selection persistence has multiple conflicting sources~~
+
+**Resolved:** startup awaits the selection repository (KV first), with cookie
+for SSR, local storage as cache/migration, serialized latest-only writes, and a
+diagnostic selection source.
 
 Current sources include:
 
@@ -685,7 +762,10 @@ Include a revision or updated timestamp for conflict resolution. Expose the sele
 
 ---
 
-## STATE-06: default selection is not deterministic enough
+## ~~STATE-06: default selection is not deterministic enough~~
+
+**Resolved:** metadata is sorted, multiple defaults are errors, and the named
+fallback constant wins before a stable sorted first-entry fallback.
 
 Both included built-in themes set `isDefault: false`. If runtime config does not provide a valid default, `pickDefaultTheme()` chooses the first manifest entry before the fallback constant. Import-glob or filesystem order should not define a product default.
 
@@ -698,7 +778,10 @@ Both included built-in themes set `isDefault: false`. If runtime config does not
 
 ---
 
-## RUN-06: global `useNuxtApp` discovery is fragile
+## ~~RUN-06: global `useNuxtApp` discovery is fragile~~
+
+**Resolved:** the store captures Nuxt dependencies during valid setup and pure
+application functions receive the theme runtime explicitly.
 
 `applyMergedTheme.ts` and `useUserThemeOverrides.ts` look for `globalThis.useNuxtApp`. Nuxt auto-imports are compile-time conveniences, not a dependable public global API. Tests make this work by manually creating the global, which can hide a production integration defect.
 
@@ -710,7 +793,10 @@ Pass dependencies explicitly when creating the store or import/use Nuxt context 
 
 # 3. Build system and compiler audit
 
-## BUILD-01: build-time and runtime compilers are different products
+## ~~BUILD-01: build-time and runtime compilers are different products~~
+
+**Resolved:** client, SSR, CLI, and Vite use the same pure definition compiler,
+CSS variable generator, selector parser, and compiled payload shape.
 
 The Vite compiler validates themes and generates types, but the runtime plugins compile definitions again with other functions.
 
@@ -749,7 +835,10 @@ Then generate a virtual build manifest containing precompiled immutable payloads
 
 ---
 
-## BUILD-02: `failOnError` can be bypassed by hook order
+## ~~BUILD-02: `failOnError` can be bypassed by hook order~~
+
+**Resolved:** the Vite plugin caches the compilation promise/result and throws
+stored build errors from `buildStart` when `failOnError` is enabled.
 
 The Vite plugin sets `compiled = true` before compilation. `configResolved()` calls `compileThemes(null)`, where errors are logged because there is no Rollup context. If `buildStart()` runs afterward, it returns early because `compiled` is already true, so `context.error()` never executes.
 
@@ -763,7 +852,11 @@ The Vite plugin sets `compiled = true` before compilation. `configResolved()` ca
 
 ---
 
-## BUILD-03: manifest discovery is eager despite a lazy architecture
+## ~~BUILD-03: manifest discovery is eager despite a lazy architecture~~
+
+**Resolved:** deterministic metadata is generated at validation/build time;
+startup joins it to lazy definition/config/icon/style loaders without importing
+every theme, and UI consumes `$theme.availableThemes`.
 
 `loadThemeManifest()` imports every theme definition in parallel to obtain metadata, and `app.config.ts` modules are globbed with `{ eager: true }`. It is called on every client boot, each SSR request, and again by dashboard/admin UI code. Active theme registration then imports the selected definition again.
 
@@ -786,7 +879,10 @@ The UI should consume `themeApi.availableThemes`, not call the manifest loader i
 
 ---
 
-## BUILD-04: static CSS scoping breaks comma-separated selectors
+## ~~BUILD-04: static CSS scoping breaks comma-separated selectors~~
+
+**Resolved:** selector lists are parsed at top-level nesting/quote boundaries
+and every branch is independently scoped, including functional selectors.
 
 The generator prefixes the selector string once:
 
@@ -809,7 +905,10 @@ Validate and normalize selectors during compilation. Add regression tests for co
 
 ---
 
-## BUILD-05: HMR is coarse and can leave generated artifacts stale
+## ~~BUILD-05: HMR is coarse and can leave generated artifacts stale~~
+
+**Resolved:** any theme TS/Vue/CSS-like dependency invalidates compilation and
+generated artifacts during the transitional full-reload path.
 
 The Vite plugin only recompiles definitions/types for `theme.ts` and `icons.config.ts`. A change in an imported style-helper TypeScript file launches the CSS subprocess and full reload but does not necessarily refresh generated types or every compiled artifact.
 
@@ -821,7 +920,10 @@ Build a dependency graph per theme and invalidate only that theme's compiled pay
 
 ---
 
-## BUILD-06: generated files are nondeterministic
+## ~~BUILD-06: generated files are nondeterministic~~
+
+**Resolved:** timestamps were removed, all unions/metadata are sorted, and
+unchanged generated files are not rewritten.
 
 `theme-generated.d.ts` includes the current timestamp and emits unsorted `Set` iteration order. Running validation can dirty the repository even when semantic output is unchanged.
 
@@ -834,7 +936,10 @@ Build a dependency graph per theme and invalidate only that theme's compiled pay
 
 ---
 
-## BUILD-07: stale generated CSS is not cleaned
+## ~~BUILD-07: stale generated CSS is not cleaned~~
+
+**Resolved:** the CSS builder deletes generated files outside the expected set;
+stale removal and current-file preservation are covered by tests.
 
 `buildThemeCSSFiles()` writes current theme files but does not remove CSS for deleted or renamed themes.
 
@@ -844,7 +949,10 @@ Generate into a temporary directory and atomically replace the output set, or de
 
 ---
 
-## BUILD-08: `theme:switch` appears to target an obsolete configuration path
+## ~~BUILD-08: `theme:switch` appears to target an obsolete configuration path~~
+
+**Resolved:** the CLI now edits the actual `OR3_DEFAULT_THEME` deployment value
+in `.env` rather than an unused app-config path.
 
 The runtime reads `runtimeConfig.public.branding.defaultTheme`. The CLI edits an app-config path. This should be verified in the full repository, but within the supplied scope it appears to be a stale control plane.
 
@@ -856,7 +964,11 @@ Have the CLI update the actual deployment configuration source, or retire it in 
 
 # 4. API, types, and maintainability
 
-## API-01: there are too many public ways to do the same thing
+## ~~API-01: there are too many public ways to do the same thing~~
+
+**Resolved:** docs select tokens, `useThemeOverrides` + `v-bind`, scoped CSS,
+and trusted custom components as the primary surfaces; used helpers were kept
+and the unused rescan composable is a deprecated no-op.
 
 The snapshot contains:
 
@@ -897,7 +1009,10 @@ Adopt or remove the orphaned helpers. Do not leave parallel “future” APIs in
 
 ---
 
-## API-02: token definitions are duplicated and drifting
+## ~~API-02: token definitions are duplicated and drifting~~
+
+**Resolved:** a canonical design-token registry drives runtime generation,
+user application, and settings mappings, including semantic success/warning.
 
 Color/token knowledge appears in:
 
@@ -928,7 +1043,9 @@ Generate types, CSS mapping, settings UI, docs, and validation from it.
 
 ---
 
-## API-03: prop maps merge only at the category level
+## ~~API-03: prop maps merge only at the category level~~
+
+**Resolved:** prop-map categories are deep-merged over defaults.
 
 The resolver uses a shallow object spread:
 
@@ -943,7 +1060,10 @@ A theme that supplies one custom `size` mapping replaces the entire default size
 
 ---
 
-## API-04: cached resolver results are mutable shared objects
+## ~~API-04: cached resolver results are mutable shared objects~~
+
+**Resolved:** compiled and resolved outputs are recursively frozen before they
+are cached or returned.
 
 The resolver returns the exact cached object reference. A consumer that mutates `class`, `ui`, or another property mutates the cache for future components.
 
@@ -957,7 +1077,11 @@ Do not allow component consumers to mutate cached resolver state.
 
 ---
 
-## API-05: merge semantics are incomplete
+## ~~API-05: merge semantics are incomplete~~
+
+**Resolved:** scalars follow specificity/source order, class strings append,
+style and UI maps merge by property, prop maps deep-merge, and event handlers
+are rejected.
 
 The resolver deep-merges `ui` but overwrites `style`. Classes concatenate without semantic conflict resolution. Tailwind classes such as two different backgrounds or paddings can coexist, making final behavior depend on generated CSS order rather than selector specificity.
 
@@ -973,7 +1097,11 @@ Define merge policies per field:
 
 ---
 
-## API-06: custom components need a formal compatibility contract
+## ~~API-06: custom components need a formal compatibility contract~~
+
+**Resolved:** trusted replacements declare contract version 1; a complete
+target contract registry records required props/emits/slots/accessibility and
+validation rejects incompatible versions.
 
 A theme can replace major app components. The included blank ChatInput is hundreds of lines and must manually mirror core props, emits, slots, and behavior. This is a powerful WordPress-like feature, but currently it behaves like an internal fork.
 
@@ -994,7 +1122,10 @@ Theme manifests should declare compatible `appApiVersion`/`componentContractVers
 
 ---
 
-## API-07: component defaults are partly eager
+## ~~API-07: component defaults are partly eager~~
+
+**Resolved:** all heavy core defaults and theme replacements are async, null
+exports are rejected, and per-theme caches can be invalidated during HMR.
 
 `theme-components-registry.ts` statically imports several heavy default components, while others are async. Because the registry is imported by the theme plugins, these eager imports can reduce code splitting.
 
@@ -1006,7 +1137,11 @@ Make all large default surfaces async where architecture permits, or inject defa
 
 ---
 
-## API-08: client/server plugins still duplicate substantial orchestration
+## ~~API-08: client/server plugins still duplicate substantial orchestration~~
+
+**Resolved:** shared manifest/default/load/prepare/compiler/config primitives
+own common orchestration; request-local server and DOM client effects remain as
+small environment-specific adapters.
 
 A shared `theme-loader.ts` now deduplicates in-flight loading and safe fallback selection, which is good. The plugins still separately implement:
 
@@ -1046,6 +1181,12 @@ The environment adapters should be small. The core should be pure or request-loc
 
 # 5. Theme package duplication
 
+**Addressed without destabilizing existing themes:** stable target IDs, design
+tokens, compiler/config preparation, component contracts, and settings styles
+now live in shared registries/helpers. Skin-specific class recipes remain local
+to Blank and Retro; runtime inheritance was intentionally not introduced as an
+implicit compatibility layer.
+
 Similarity analysis of the supplied built-in themes found substantial near-duplication:
 
 | Pair | Approximate normalized similarity |
@@ -1083,7 +1224,10 @@ Inheritance must compile to a fully materialized theme and detect cycles. It sho
 
 # 6. Settings UI audit
 
-## UI-01: composables are created inside computed getters
+## ~~UI-01: composables are created inside computed getters~~
+
+**Resolved:** settings composables and icon resolvers are created once in setup;
+computed values only read and merge their refs.
 
 Several settings components call `useThemeOverrides()` inside another `computed()` getter. Every recomputation can create another computed/effect outside the normal setup pattern. `useIcon()` is also called from computed/template expressions in places.
 
@@ -1099,7 +1243,10 @@ const presetButtonProps = computed(() => ({
 
 ---
 
-## UI-02: background preview duplicates the asset subsystem
+## ~~UI-02: background preview duplicates the asset subsystem~~
+
+**Resolved:** preview uses the shared token cache through a revision-safe asset
+composable and respects the actual layer size/repeat model.
 
 `BackgroundLayersSection.vue` maintains its own internal-file cache, object URLs, revocation, and resolver, separate from `core/theme/backgrounds.ts`. The same file can produce duplicate blob URLs and lifecycle rules.
 
@@ -1111,7 +1258,10 @@ Create one `useResolvedThemeAsset(token)` composable backed by the central token
 
 ---
 
-## UI-03: repeated styles and dead scoped rules
+## ~~UI-03: repeated styles and dead scoped rules~~
+
+**Resolved:** section typography styles moved to the shared theme page layer;
+dead scoped selectors and the unused live region were removed.
 
 `.group-heading` is repeated across the section components. `supporting-text` differs between files. `ThemePage.vue` has scoped styles that cannot style internals of child components, plus an unused live-status ref and legacy fallback rules.
 
@@ -1122,6 +1272,13 @@ Create a small `ThemeSettingsSection` component or shared CSS layer for heading/
 ---
 
 # 7. Test audit
+
+**Resolved for the concrete findings:** tests now import the production parser,
+all user-override skips were removed, and regressions cover install/uninstall
+security, trust tiers, activation supersession, config reset, compiler parity,
+SSR icon isolation, selector cancellation/ownership, source order, persistence,
+blob reuse, safe CSS, component contracts, and stale generated CSS. The full
+repository suite passes; the visual matrix remains a Phase 4 enhancement.
 
 The suite contains useful resolver, cache, CSS runtime, background, icon, manifest, compiler, URL-fetch, and extension-limit tests. However, the most dangerous behavior is not covered.
 
@@ -1183,6 +1340,11 @@ The suite contains useful resolver, cache, CSS runtime, background, icon, manife
 ---
 
 # 8. Documentation audit
+
+**Resolved:** public docs and the in-repo README now describe `v-theme` as DOM
+decoration, `useThemeOverrides` as the Vue-prop boundary, KV/cookie selection
+precedence, pinned DNS fetches, trust tiers, local stylesheet policy, the real
+default-theme CLI target, component contracts, and a capability truth table.
 
 The documentation is extensive, which is a strength. It currently overstates or drifts from implementation in important places:
 

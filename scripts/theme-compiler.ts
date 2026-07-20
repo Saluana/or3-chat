@@ -13,16 +13,14 @@ import type {
     ThemeCompilationResult,
     CompilationResult,
     ValidationError,
-    ThemeFontSet,
     OverrideProps,
 } from '../app/theme/_shared/types';
 import { validateThemeDefinition } from '../app/theme/_shared/validate-theme';
 import { KNOWN_THEME_CONTEXTS } from '../app/theme/_shared/contexts';
 import { DEFAULT_ICONS } from '../app/config/icon-tokens';
-import {
-    parseSelector,
-    calculateSpecificity,
-} from '../app/theme/_shared/compiler-core';
+import { compileThemeDefinition } from '../app/theme/_shared/compile-theme';
+import { generateThemeCssVariables } from '../app/theme/_shared/generate-css-variables';
+import { compileOverridesRuntime } from '../app/theme/_shared/runtime-compile';
 
 /**
  * Theme Compiler
@@ -67,7 +65,9 @@ export class ThemeCompiler {
 
         // Generate type definitions
         if (results.some((r) => r.success)) {
-            await this.generateTypes(results.filter((r) => r.success));
+            const successful = results.filter((r) => r.success);
+            await this.generateTypes(successful);
+            await this.generateMetadataManifest(successful);
         }
 
         const totalErrors = results.reduce(
@@ -99,18 +99,32 @@ export class ThemeCompiler {
         const entries = await readdir(themeDir, { withFileTypes: true });
 
         const themes: string[] = [];
+        const { stat } = await import('fs/promises');
+
         for (const entry of entries) {
-            if (entry.isDirectory() && !entry.name.startsWith('_')) {
-                const themePath = join(themeDir, entry.name, 'theme.ts');
+            if (entry.name.startsWith('_')) continue;
+
+            // Dirent.isDirectory() is false for symlinks even when the target is a
+            // directory (e.g. app/theme/cyberpunk -> extensions/themes/cyberpunk).
+            let isThemeDir = entry.isDirectory();
+            if (!isThemeDir && entry.isSymbolicLink()) {
                 try {
-                    await access(themePath, constants.F_OK);
-                    themes.push(themePath);
+                    isThemeDir = (await stat(join(themeDir, entry.name))).isDirectory();
                 } catch {
-                    if (process.env.NODE_ENV !== 'test') {
-                        console.warn(
-                            `[theme-compiler] Skipping directory "${entry.name}" (no theme.ts)`
-                        );
-                    }
+                    isThemeDir = false;
+                }
+            }
+            if (!isThemeDir) continue;
+
+            const themePath = join(themeDir, entry.name, 'theme.ts');
+            try {
+                await access(themePath, constants.F_OK);
+                themes.push(themePath);
+            } catch {
+                if (process.env.NODE_ENV !== 'test') {
+                    console.warn(
+                        `[theme-compiler] Skipping directory "${entry.name}" (no theme.ts)`
+                    );
                 }
             }
         }
@@ -119,13 +133,41 @@ export class ThemeCompiler {
     }
 
     /**
+     * Import a theme module with Nuxt-style `~` / `~~` aliases resolved.
+     * Required for extension themes that live outside `app/` via symlink.
+     */
+    private async importThemeModule(
+        modulePath: string
+    ): Promise<{ default?: ThemeDefinition } & Record<string, unknown>> {
+        const { createJiti } = await import('jiti');
+        const { join } = await import('path');
+        const { pathToFileURL } = await import('url');
+
+        const root = process.cwd();
+        const jiti = createJiti(import.meta.url, {
+            interopDefault: true,
+            alias: {
+                '~': join(root, 'app'),
+                '~~': root,
+                '@': join(root, 'app'),
+            },
+        });
+
+        const href = pathToFileURL(modulePath).href;
+        return (await jiti.import(href)) as {
+            default?: ThemeDefinition;
+        } & Record<string, unknown>;
+    }
+
+    /**
      * Compile a single theme
      */
     private async compileTheme(
         themePath: string
     ): Promise<ThemeCompilationResult> {
-        // Dynamic import the theme definition
-        const themeModule = await import(themePath);
+        // Extension themes (and some core themes) import via Nuxt `~` aliases.
+        // Plain dynamic import() cannot resolve those outside Vite.
+        const themeModule = await this.importThemeModule(themePath);
         const definition: ThemeDefinition = themeModule.default || themeModule;
 
         const errors: ValidationError[] = [];
@@ -155,7 +197,7 @@ export class ThemeCompiler {
 
         if (existsSync(iconConfigPath)) {
             try {
-                const iconModule = await import(iconConfigPath);
+                const iconModule = await this.importThemeModule(iconConfigPath);
                 const icons = iconModule.default || iconModule;
 
                 // Validate icon tokens
@@ -218,37 +260,10 @@ export class ThemeCompiler {
             }
         }
 
-        // Generate CSS variables
-        const cssVariables = this.generateCSSVariables(
-            definition.colors,
-            definition.borderWidth,
-            definition.borderRadius,
-            definition.fonts
-        );
-
-        // Compile overrides
-        const compiledOverrides = this.compileOverrides(
-            definition.overrides || {}
-        );
-
-        // Validate selectors
-        this.validateSelectors(compiledOverrides, warnings);
-
-        // Sort by specificity (descending)
-        const sortedOverrides = compiledOverrides.sort(
-            (a, b) => b.specificity - a.specificity
-        );
-
-        const compiledTheme: CompiledTheme = {
-            name: definition.name,
-            displayName: definition.displayName,
-            description: definition.description,
-            cssVariables,
-            overrides: sortedOverrides,
-            ui: definition.ui,
-            propMaps: definition.propMaps,
+        const compiledTheme = compileThemeDefinition(definition, {
             icons: themeIcons,
-        };
+        });
+        this.validateSelectors(compiledTheme.overrides, warnings);
 
         return {
             name: definition.name,
@@ -259,160 +274,27 @@ export class ThemeCompiler {
         };
     }
 
-    /**
-     * Generate CSS variables from color palette
-     */
+    /** Compatibility test seam; delegates to the canonical runtime generator. */
     private generateCSSVariables(
         colors: ThemeDefinition['colors'],
         borderWidth?: string,
         borderRadius?: string,
         fonts?: ThemeDefinition['fonts']
     ): string {
-        let css = '';
-
-        // Light mode variables
-        css += '.light {\n';
-        css += this.generateColorVars(colors);
-        css += this.generateFontVars(fonts);
-        if (borderWidth) {
-            css += `  --md-border-width: ${borderWidth};\n`;
-        }
-        if (borderRadius) {
-            css += `  --md-border-radius: ${borderRadius};\n`;
-        }
-        css += '}\n\n';
-
-        // Dark mode variables
-        const hasDarkBlock = Boolean(colors.dark || fonts?.dark);
-        if (hasDarkBlock) {
-            css += '.dark {\n';
-            // Create merged object without dark property
-            const { dark, ...baseColors } = colors;
-            const darkColors = { ...baseColors, ...dark };
-            css += this.generateColorVars(darkColors);
-            css += this.generateFontVars(fonts?.dark);
-            if (borderWidth) {
-                css += `  --md-border-width: ${borderWidth};\n`;
-            }
-            if (borderRadius) {
-                css += `  --md-border-radius: ${borderRadius};\n`;
-            }
-            css += '}\n';
-        }
-
-        return css;
+        return generateThemeCssVariables({
+            name: 'compiler-test',
+            colors,
+            borderWidth,
+            borderRadius,
+            fonts,
+        });
     }
 
-    /**
-     * Generate CSS variable declarations for a color palette
-     */
-    private generateColorVars(colors: Record<string, unknown>): string {
-        let css = '';
-
-        const colorMap: Record<string, string> = {
-            primary: '--md-primary',
-            onPrimary: '--md-on-primary',
-            primaryContainer: '--md-primary-container',
-            onPrimaryContainer: '--md-on-primary-container',
-            secondary: '--md-secondary',
-            onSecondary: '--md-on-secondary',
-            secondaryContainer: '--md-secondary-container',
-            onSecondaryContainer: '--md-on-secondary-container',
-            tertiary: '--md-tertiary',
-            onTertiary: '--md-on-tertiary',
-            tertiaryContainer: '--md-tertiary-container',
-            onTertiaryContainer: '--md-on-tertiary-container',
-            error: '--md-error',
-            onError: '--md-on-error',
-            errorContainer: '--md-error-container',
-            onErrorContainer: '--md-on-error-container',
-            surface: '--md-surface',
-            onSurface: '--md-on-surface',
-            surfaceVariant: '--md-surface-variant',
-            onSurfaceVariant: '--md-on-surface-variant',
-            inverseSurface: '--md-inverse-surface',
-            inverseOnSurface: '--md-inverse-on-surface',
-            outline: '--md-outline',
-            outlineVariant: '--md-outline-variant',
-            borderColor: '--md-border-color',
-            success: '--md-success',
-            warning: '--md-warning',
-            info: '--md-info',
-        };
-
-        const emittedKeys = new Set<string>();
-
-        for (const [key, cssVar] of Object.entries(colorMap)) {
-            const value = colors[key];
-            if (typeof value === 'string') {
-                css += `  ${cssVar}: ${value};\n`;
-                emittedKeys.add(key);
-            }
-        }
-
-        // Emit any additional custom tokens (camelCase → kebab-case)
-        for (const [key, value] of Object.entries(colors)) {
-            if (key === 'dark' || emittedKeys.has(key)) continue;
-            if (typeof value !== 'string') continue;
-            const cssVar = `--md-${this.toKebabCase(key)}`;
-            css += `  ${cssVar}: ${value};\n`;
-        }
-
-        return css;
-    }
-
-    private generateFontVars(fonts?: ThemeDefinition['fonts']): string {
-        if (!fonts) return '';
-        let css = '';
-        const fontMap: Record<string, string> = {
-            sans: '--font-sans',
-            heading: '--font-heading',
-            mono: '--font-mono',
-        };
-        const fontEntries = Object.entries(fontMap) as Array<
-            [keyof ThemeFontSet, string]
-        >;
-        for (const [key, cssVar] of fontEntries) {
-            const value = fonts[key];
-            if (typeof value === 'string' && value.length > 0) {
-                css += `  ${cssVar}: ${value};\n`;
-            }
-        }
-        return css;
-    }
-
-    private toKebabCase(value: string): string {
-        return value
-            .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-            .replace(/[\s_]+/g, '-')
-            .toLowerCase();
-    }
-
-    /**
-     * Compile overrides from CSS selectors to runtime rules
-     */
+    /** Compatibility test seam; delegates to the canonical selector compiler. */
     private compileOverrides(
         overrides: Record<string, OverrideProps>
     ): CompiledOverride[] {
-        const compiled: CompiledOverride[] = [];
-
-        for (const [selector, props] of Object.entries(overrides)) {
-            const parsed = parseSelector(selector);
-            const specificity = calculateSpecificity(selector, parsed);
-
-            compiled.push({
-                component: parsed.component,
-                context: parsed.context,
-                identifier: parsed.identifier,
-                state: parsed.state,
-                attributes: parsed.attributes,
-                props,
-                selector,
-                specificity,
-            });
-        }
-
-        return compiled;
+        return compileOverridesRuntime(overrides);
     }
 
     /**
@@ -428,7 +310,7 @@ export class ThemeCompiler {
         for (const override of overrides) {
             const key = `${override.component}:${override.context || ''}:${
                 override.identifier || ''
-            }`;
+            }:${override.state || ''}:${JSON.stringify(override.attributes ?? [])}`;
             const existing = selectorMap.get(key) || [];
             existing.push(override);
             selectorMap.set(key, existing);
@@ -456,7 +338,7 @@ export class ThemeCompiler {
     private async generateTypes(
         results: ThemeCompilationResult[]
     ): Promise<void> {
-        const { writeFile, mkdir } = await import('fs/promises');
+        const { writeFile, mkdir, readFile } = await import('fs/promises');
         const { join } = await import('path');
 
         const identifiers = new Set<string>();
@@ -484,7 +366,6 @@ export class ThemeCompiler {
         const typeFile = `/**
  * Auto-generated by theme compiler
  * Do not edit manually - changes will be overwritten
- * Generated: ${new Date().toISOString()}
  */
 
 /**
@@ -492,7 +373,7 @@ export class ThemeCompiler {
  */
 export type ThemeName = ${
             Array.from(themeNames).length > 0
-                ? Array.from(themeNames)
+                ? Array.from(themeNames).sort()
                       .map((n) => `'${n}'`)
                       .join(' | ')
                 : 'string'
@@ -503,7 +384,7 @@ export type ThemeName = ${
  */
 export type ThemeIdentifier = ${
             Array.from(identifiers).length > 0
-                ? Array.from(identifiers)
+                ? Array.from(identifiers).sort()
                       .map((id) => `'${id}'`)
                       .join(' | ')
                 : 'string'
@@ -514,7 +395,7 @@ export type ThemeIdentifier = ${
  */
 export type ThemeContext = ${
             Array.from(contexts).length > 0
-                ? Array.from(contexts)
+                ? Array.from(contexts).sort()
                       .map((ctx) => `'${ctx}'`)
                       .join(' | ')
                 : 'string'
@@ -544,11 +425,62 @@ export type ThemeDirectiveValue = ThemeIdentifier | ThemeDirective;
         await mkdir(typesDir, { recursive: true });
 
         const typesPath = join(typesDir, 'theme-generated.d.ts');
-        await writeFile(typesPath, typeFile, 'utf-8');
+        let previous = '';
+        try {
+            previous = await readFile(typesPath, 'utf-8');
+        } catch {
+            // File does not exist yet.
+        }
+        if (previous !== typeFile) {
+            await writeFile(typesPath, typeFile, 'utf-8');
+        }
 
         console.log(`[theme-compiler] Generated types at ${typesPath}`);
         console.log(`[theme-compiler] - ${themeNames.size} themes`);
         console.log(`[theme-compiler] - ${identifiers.size} identifiers`);
         console.log(`[theme-compiler] - ${contexts.size} contexts`);
+    }
+
+    /** Generate lightweight metadata consumed before any theme module is imported. */
+    private async generateMetadataManifest(
+        results: ThemeCompilationResult[]
+    ): Promise<void> {
+        const { writeFile, readFile } = await import('fs/promises');
+        const { join } = await import('path');
+        const metadata = results
+            .map((result) => ({
+                name: result.name,
+                dirName: result.name,
+                displayName: result.theme.displayName,
+                description: result.theme.description,
+                isDefault: Boolean(result.theme.isDefault),
+                stylesheets: result.theme.stylesheets ?? [],
+                hasCssSelectorStyles: Boolean(result.theme.hasStyleSelectors),
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+        const source = `/** Auto-generated metadata-only theme manifest. Do not edit manually. */
+export interface GeneratedThemeMetadata {
+    name: string;
+    dirName: string;
+    displayName?: string;
+    description?: string;
+    isDefault: boolean;
+    stylesheets: readonly string[];
+    hasCssSelectorStyles: boolean;
+}
+
+export const GENERATED_THEME_METADATA: readonly GeneratedThemeMetadata[] = ${JSON.stringify(metadata, null, 4)} as const;
+`;
+        const outputPath = join(
+            process.cwd(),
+            'app/theme/_shared/theme-manifest.generated.ts'
+        );
+        let previous = '';
+        try {
+            previous = await readFile(outputPath, 'utf8');
+        } catch {
+            // Generated file does not exist yet.
+        }
+        if (previous !== source) await writeFile(outputPath, source, 'utf8');
     }
 }

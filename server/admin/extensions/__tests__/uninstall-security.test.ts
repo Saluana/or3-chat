@@ -104,4 +104,24 @@ describe('uninstallExtension security edges', () => {
 
         await fs.rm(siblingDir, { recursive: true, force: true });
     });
+
+    it('refuses to delete a directory whose manifest identity does not match', async () => {
+        await seedPlugin();
+        await fs.writeFile(
+            join(pluginDir, 'or3.manifest.json'),
+            JSON.stringify({
+                kind: 'plugin',
+                id: 'different-plugin',
+                name: 'Mismatch',
+                version: '0.0.1',
+                capabilities: [],
+            }),
+            'utf8'
+        );
+
+        await expect(uninstallExtension('plugin', PLUGIN_ID)).rejects.toThrow(
+            'Extension identity mismatch'
+        );
+        await expect(fs.access(pluginDir)).resolves.toBeUndefined();
+    });
 });

@@ -26,7 +26,7 @@ export function compileOverridesRuntime(
 ): CompiledOverride[] {
     const compiled: CompiledOverride[] = [];
 
-    for (const [selector, props] of Object.entries(overrides)) {
+    for (const [sourceOrder, [selector, props]] of Object.entries(overrides).entries()) {
         const parsed = parseSelector(selector);
         const specificity = calculateSpecificity(selector, parsed);
 
@@ -39,9 +39,14 @@ export function compileOverridesRuntime(
             props,
             selector,
             specificity,
+            sourceOrder,
         });
     }
 
     // Sort by specificity (descending)
-    return compiled.sort((a, b) => b.specificity - a.specificity);
+    return compiled.sort(
+        (a, b) =>
+            b.specificity - a.specificity ||
+            (b.sourceOrder ?? 0) - (a.sourceOrder ?? 0)
+    );
 }

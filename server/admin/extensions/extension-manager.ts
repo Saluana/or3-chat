@@ -19,7 +19,11 @@
  */
 import { promises as fs } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
-import type { ExtensionKind, InstalledExtensionRecord } from './types';
+import type {
+    ExtensionKind,
+    InstalledExtensionRecord,
+    Or3ExtensionManifest,
+} from './types';
 import { ExtensionIdSchema, Or3ExtensionManifestSchema } from './types';
 import { ensureExtensionsDirs, EXTENSIONS_BASE_DIR, getKindDir } from './paths';
 import { removeSyncedThemeFromApp } from './theme-install-sync';
@@ -196,6 +200,21 @@ export async function uninstallExtension(
 
     if (!isPathInside(realKindRoot, realTarget)) {
         throw new Error('Invalid extension path');
+    }
+
+    let manifest: Or3ExtensionManifest;
+    try {
+        const raw = await fs.readFile(
+            join(realTarget, 'or3.manifest.json'),
+            'utf8'
+        );
+        manifest = Or3ExtensionManifestSchema.parse(JSON.parse(raw));
+    } catch {
+        throw new Error('Invalid extension manifest');
+    }
+
+    if (manifest.id !== parsedId.data || manifest.kind !== kind) {
+        throw new Error('Extension identity mismatch');
     }
 
     await fs.rm(targetDir, { recursive: true, force: true });

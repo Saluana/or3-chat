@@ -1,13 +1,4 @@
 import { defineAsyncComponent, type Component } from 'vue';
-import ChatContainer from '~/components/chat/ChatContainer.vue';
-import ChatInputDropper from '~/components/chat/ChatInputDropper.vue';
-import ChatMessage from '~/components/chat/ChatMessage.vue';
-import ModelSelect from '~/components/chat/ModelSelect.vue';
-import DocumentationShell from '~/components/DocumentationShell.vue';
-import SideBar from '~/components/sidebar/SideBar.vue';
-import SideNavContentCollapsed from '~/components/sidebar/SideNavContentCollapsed.vue';
-import SidebarAuthButton from '~/components/sidebar/SidebarAuthButton.vue';
-import WorkflowExecutionStatus from '~/components/chat/WorkflowExecutionStatus.vue';
 import {
     APP_THEME_COMPONENT_KEYS,
     type AppThemeComponent,
@@ -16,7 +7,10 @@ import {
 type ThemeComponentLoader = () => Promise<Component>;
 
 function isComponentLike(value: unknown): value is Component {
-    return typeof value === 'function' || typeof value === 'object';
+    return (
+        value !== null &&
+        (typeof value === 'function' || typeof value === 'object')
+    );
 }
 
 function requireComponent(value: unknown, source: string): Component {
@@ -61,36 +55,49 @@ const DocumentEditorDefault = defineAsyncVueComponent(
     () => import('~/components/documents/DocumentEditor.vue')
 );
 
+const SidebarDefault = defineAsyncVueComponent(
+    () => import('~/components/sidebar/SideBar.vue')
+);
+const SidebarCollapsedDefault = defineAsyncVueComponent(
+    () => import('~/components/sidebar/SideNavContentCollapsed.vue')
+);
+const ChatPageDefault = defineAsyncVueComponent(
+    () => import('~/components/chat/ChatContainer.vue')
+);
+const ChatMessageDefault = defineAsyncVueComponent(
+    () => import('~/components/chat/ChatMessage.vue')
+);
+const ChatInputDefault = defineAsyncVueComponent(
+    () => import('~/components/chat/ChatInputDropper.vue')
+);
+const ModelSelectorDefault = defineAsyncVueComponent(
+    () => import('~/components/chat/ModelSelect.vue')
+);
+const SidebarAuthButtonDefault = defineAsyncVueComponent(
+    () => import('~/components/sidebar/SidebarAuthButton.vue')
+);
+const DocumentationShellDefault = defineAsyncVueComponent(
+    () => import('~/components/DocumentationShell.vue')
+);
+const WorkflowStatusDefault = defineAsyncVueComponent(
+    () => import('~/components/chat/WorkflowExecutionStatus.vue')
+);
+
 export const CORE_APP_COMPONENT_DEFAULTS: Record<AppThemeComponent, Component> =
     {
-        sidebar: requireComponent(SideBar, 'SideBar.vue'),
-        'sidebar-collapsed': requireComponent(
-            SideNavContentCollapsed,
-            'SideNavContentCollapsed.vue'
-        ),
-        'chat-page': requireComponent(ChatContainer, 'ChatContainer.vue'),
-        'chat-message': requireComponent(ChatMessage, 'ChatMessage.vue'),
-        'chat-input': requireComponent(
-            ChatInputDropper,
-            'ChatInputDropper.vue'
-        ),
+        sidebar: SidebarDefault,
+        'sidebar-collapsed': SidebarCollapsedDefault,
+        'chat-page': ChatPageDefault,
+        'chat-message': ChatMessageDefault,
+        'chat-input': ChatInputDefault,
         'document-editor': DocumentEditorDefault,
         'dashboard-modal': DashboardModalDefault,
-        'model-selector': requireComponent(ModelSelect, 'ModelSelect.vue'),
+        'model-selector': ModelSelectorDefault,
         'system-prompts-modal': SystemPromptsModalDefault,
         'model-catalog-modal': ModelCatalogModalDefault,
-        'sidebar-auth-button': requireComponent(
-            SidebarAuthButton,
-            'SidebarAuthButton.vue'
-        ),
-        'documentation-shell': requireComponent(
-            DocumentationShell,
-            'DocumentationShell.vue'
-        ),
-        'workflow-status': requireComponent(
-            WorkflowExecutionStatus,
-            'WorkflowExecutionStatus.vue'
-        ),
+        'sidebar-auth-button': SidebarAuthButtonDefault,
+        'documentation-shell': DocumentationShellDefault,
+        'workflow-status': WorkflowStatusDefault,
     };
 
 const shouldWarnThemeComponentFallback =

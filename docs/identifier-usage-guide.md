@@ -44,7 +44,8 @@ export default defineTheme({
 ```
 
 ### 2. Component Usage
-Use the `v-theme` directive with identifiers:
+Use `v-theme` to put identifiers and DOM theme hooks on the rendered element.
+Bind `useThemeOverrides()` separately when the theme must change Vue props:
 
 ```vue
 <template>
@@ -68,6 +69,23 @@ Use the `v-theme` directive with identifiers:
     
     <!-- Custom component with identifier -->
     <MyCustomComponent v-theme="'my-plugin.action'" />
+</template>
+```
+
+For example, a Nuxt UI button that consumes theme props should use:
+
+```vue
+<script setup lang="ts">
+const sendTheme = useThemeOverrides({
+    component: 'button',
+    context: 'chat',
+    identifier: 'chat.send',
+    isNuxtUI: true,
+});
+</script>
+
+<template>
+    <UButton v-bind="sendTheme" v-theme="'chat.send'">Send Message</UButton>
 </template>
 ```
 
@@ -168,7 +186,8 @@ When you use `v-theme="'chat.send'"`:
 2. Sets `data-id="chat.send"` on the element
 3. Detects context from DOM (e.g., 'chat')
 4. Resolves theme overrides using: `component + context + identifier`
-5. Applies resolved props as data attributes
+5. Applies resolved classes, inline styles, and supported values as data
+   attributes. Vue component props require `useThemeOverrides()` + `v-bind`.
 
 ## Testing Identifiers
 

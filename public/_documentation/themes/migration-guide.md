@@ -6,7 +6,8 @@ theme system.
 ## What changed
 
 - Themes are defined in `app/theme/<theme>/theme.ts`.
-- Component styling is driven by overrides and `v-theme`.
+- Component props are driven by overrides bound through `useThemeOverrides()`;
+  `v-theme` supplies DOM classes/styles and target annotations.
 - CSS variables are generated automatically from `colors`.
 - `cssSelectors` are available for third-party DOM and legacy code.
 
@@ -66,16 +67,22 @@ overrides: {
 After (component):
 
 ```vue
-<UButton v-theme="'chat.send'">Send</UButton>
+<script setup lang="ts">
+const sendTheme = useThemeOverrides({
+  component: 'button', context: 'chat', identifier: 'chat.send', isNuxtUI: true,
+});
+</script>
+<UButton v-bind="sendTheme" v-theme="'chat.send'">Send</UButton>
 ```
 
-## Step 4: Add `v-theme` to components
+## Step 4: Bind component props and annotate DOM targets
 
-Use `v-theme` for any component that should be themed:
+Use the resolver result for component props. Add `v-theme` when the rendered
+element also needs identifier attributes, theme classes, or inline styles:
 
 ```vue
-<UButton v-theme>Default</UButton>
-<UButton v-theme="'chat.send'">Send</UButton>
+<UButton v-bind="defaultButtonTheme" v-theme>Default</UButton>
+<UButton v-bind="sendTheme" v-theme="'chat.send'">Send</UButton>
 ```
 
 Context is detected from DOM containers. For custom areas, add:

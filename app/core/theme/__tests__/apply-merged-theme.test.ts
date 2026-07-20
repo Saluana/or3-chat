@@ -70,7 +70,7 @@ describe('applyMergedTheme', () => {
             ui: {},
         };
 
-        await applyMergedTheme('light', overrides);
+        await applyMergedTheme('light', overrides, mockThemePlugin as any);
 
         const style = document.documentElement.style;
         expect(style.getPropertyValue('--app-font-size-root')).toBe('18px');
@@ -91,7 +91,7 @@ describe('applyMergedTheme', () => {
             ui: {},
         };
 
-        await applyMergedTheme('light', overrides);
+        await applyMergedTheme('light', overrides, mockThemePlugin as any);
 
         const style = document.documentElement.style;
         expect(style.getPropertyValue('--md-primary')).toBe('#ff0000');
@@ -110,7 +110,7 @@ describe('applyMergedTheme', () => {
             ui: {},
         };
 
-        await applyMergedTheme('light', enabledOverrides);
+        await applyMergedTheme('light', enabledOverrides, mockThemePlugin as any);
 
         const style = document.documentElement.style;
         expect(style.getPropertyValue('--md-primary')).toBe('#ff0000');
@@ -123,9 +123,27 @@ describe('applyMergedTheme', () => {
             ui: {},
         };
 
-        await applyMergedTheme('light', disabledOverrides);
+        await applyMergedTheme('light', disabledOverrides, mockThemePlugin as any);
 
         expect(style.getPropertyValue('--md-primary')).toBe('');
+    });
+
+    it('removes an omitted color while user colors remain enabled', async () => {
+        const style = document.documentElement.style;
+        style.setProperty('--md-secondary', '#00ff00');
+        await applyMergedTheme(
+            'light',
+            {
+                colors: { enabled: true, primary: '#ff0000' },
+                backgrounds: { enabled: false },
+                typography: {},
+                ui: {},
+            },
+            mockThemePlugin as any
+        );
+
+        expect(style.getPropertyValue('--md-primary')).toBe('#ff0000');
+        expect(style.getPropertyValue('--md-secondary')).toBe('');
     });
 
     it('should merge background layers correctly', async () => {
@@ -147,7 +165,7 @@ describe('applyMergedTheme', () => {
             ui: {},
         };
 
-        await applyMergedTheme('light', overrides);
+        await applyMergedTheme('light', overrides, mockThemePlugin as any);
 
         expect(applyThemeBackgrounds).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -183,7 +201,7 @@ describe('applyMergedTheme', () => {
             ui: {},
         };
 
-        await applyMergedTheme('light', overrides);
+        await applyMergedTheme('light', overrides, mockThemePlugin as any);
 
         const style = document.documentElement.style;
         expect(style.getPropertyValue('--app-content-bg-1-color')).toBe(
@@ -205,7 +223,7 @@ describe('applyMergedTheme', () => {
             ui: {},
         };
 
-        await applyMergedTheme('light', overrides);
+        await applyMergedTheme('light', overrides, mockThemePlugin as any);
 
         expect(
             document.documentElement.style.getPropertyValue(
@@ -225,7 +243,7 @@ describe('applyMergedTheme', () => {
             ui: {},
         };
 
-        await applyMergedTheme('light', overrides);
+        await applyMergedTheme('light', overrides, mockThemePlugin as any);
 
         const style = document.documentElement.style;
         expect(style.getPropertyValue('--app-header-gradient-display')).toBe(
@@ -248,7 +266,7 @@ describe('applyMergedTheme', () => {
             ui: {},
         };
 
-        await applyMergedTheme('light', overrides);
+        await applyMergedTheme('light', overrides, undefined);
 
         // Should not call applyThemeBackgrounds
         expect(applyThemeBackgrounds).not.toHaveBeenCalled();
@@ -264,7 +282,7 @@ describe('applyMergedTheme', () => {
             ui: {},
         };
 
-        await applyMergedTheme('light', overrides);
+        await applyMergedTheme('light', overrides, mockThemePlugin as any);
 
         // Should not call applyThemeBackgrounds
         expect(applyThemeBackgrounds).not.toHaveBeenCalled();

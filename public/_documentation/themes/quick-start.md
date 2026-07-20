@@ -77,11 +77,12 @@ If you want a theme CSS file:
 stylesheets: ['./styles.css'],
 ```
 
-Paths can be `./styles.css`, `~/theme/my-theme/styles.css`, or external URLs.
+Paths must resolve to local theme assets. External stylesheets are rejected;
+this keeps theme CSS within the deployment's CSP and trust boundary.
 
 ## 4) Use the theme in components
 
-### v-theme directive (recommended)
+### v-theme directive (DOM decoration)
 
 ```vue
 <template>
@@ -91,7 +92,10 @@ Paths can be `./styles.css`, `~/theme/my-theme/styles.css`, or external URLs.
 </template>
 ```
 
-### Programmatic overrides
+`v-theme` adds owned classes, inline styles, and theme data attributes to the
+rendered element. It does not change Vue component props.
+
+### Programmatic component props (recommended for components)
 
 ```vue
 <script setup lang="ts">
@@ -185,7 +189,8 @@ For the full contract, lifecycle, and best-practices guide, see
 
 ## Troubleshooting quick hits
 
-- No overrides? Ensure `v-theme` is used and the identifier matches.
+- No DOM decoration? Ensure `v-theme` is used and the identifier matches.
+- No component prop override? Bind `useThemeOverrides()` with `v-bind`.
 - Wrong context? Add `data-context` or use `context` in the directive.
 - Missing CSS selector styles? Run `bun run theme:build-css`.
 - Component override not showing? Check the `customComponents` key and file path.

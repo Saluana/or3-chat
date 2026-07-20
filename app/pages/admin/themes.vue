@@ -10,6 +10,12 @@
             <p class="text-sm opacity-70">
                 Manage and switch active themes.
             </p>
+            <p class="mt-2 text-xs text-[var(--md-warning)]">
+                Trusted-code themes can contain TypeScript and Vue components and
+                are equivalent to installing application code. Install them only
+                from publishers you trust. Declarative themes are schema-validated
+                and cannot include executable files.
+            </p>
         </div>
 
         <div v-if="pending" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-pulse">
@@ -297,16 +303,23 @@ const activeTheme = computed(() => {
     return themeApi?.activeTheme?.value ?? '';
 });
 
-onMounted(async () => {
-    try {
-        const { loadThemeManifest } = await import('~/theme/_shared/theme-manifest');
-        const manifest = await loadThemeManifest();
-        builtInThemes.value = manifest.entries.map((entry) => ({
+onMounted(() => {
+    const themeApi = (nuxtApp as unknown as {
+        $theme?: {
+            availableThemes?: Array<{
+                name: string;
+                displayName?: string;
+                description?: string;
+            }>;
+        };
+    }).$theme;
+    if (themeApi?.availableThemes) {
+        builtInThemes.value = themeApi.availableThemes.map((entry) => ({
             id: entry.name,
-            name: entry.definition?.displayName || entry.name,
-            description: entry.definition?.description,
+            name: entry.displayName || entry.name,
+            description: entry.description,
         }));
-    } catch {
+    } else {
         builtInThemes.value = [
             { id: 'retro', name: 'Retro' },
             { id: 'blank', name: 'Blank' },

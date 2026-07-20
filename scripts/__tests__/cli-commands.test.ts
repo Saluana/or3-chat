@@ -234,6 +234,8 @@ describe('CLI Commands', () => {
                 .filter(Boolean);
 
             expect(themeNames).toContain('retro');
+            // Symlinked extension themes (e.g. cyberpunk) must be discoverable too.
+            expect(themeNames).toContain('cyberpunk');
         });
     });
 

@@ -73,23 +73,16 @@ const availableThemes = computed(() =>
     allThemes.value.filter(t => !disabledThemes.value.has(t.name))
 );
 
-onMounted(async () => {
-    // Load available themes from manifest
-    try {
-        const { loadThemeManifest } = await import(
-            '~/theme/_shared/theme-manifest'
-        );
-        const manifest = await loadThemeManifest();
-        allThemes.value = manifest.entries.map((entry) => ({
+onMounted(() => {
+    if (themePlugin?.availableThemes) {
+        allThemes.value = themePlugin.availableThemes.map((entry) => ({
             name: entry.name,
             displayName:
-                entry.definition?.displayName ||
+                entry.displayName ||
                 entry.name.charAt(0).toUpperCase() + entry.name.slice(1),
-            description: entry.definition?.description,
+            description: entry.description,
         }));
-    } catch (error) {
-        console.error('[ThemeSelector] Failed to load theme manifest:', error);
-        // Fallback to known themes
+    } else {
         allThemes.value = [
             { name: 'retro', displayName: 'Retro' },
             { name: 'blank', displayName: 'Blank' },
@@ -102,18 +95,18 @@ async function selectTheme(themeName: string) {
     await themePlugin.setActiveTheme(themeName);
 }
 
+const themeButtonOverride = useThemeOverrides({
+    component: 'button',
+    context: 'dashboard',
+    identifier: 'dashboard.theme.selector',
+    isNuxtUI: true,
+});
 const themeButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.selector',
-        isNuxtUI: true,
-    });
     return {
         size: 'md' as const,
         variant: 'soft' as const,
         color: 'primary' as const,
-        ...overrides.value,
+        ...themeButtonOverride.value,
     };
 });
 </script>

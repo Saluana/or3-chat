@@ -16,6 +16,7 @@
  */
 
 import type { ThemeDefinition } from './types';
+import { GENERATED_THEME_METADATA } from './theme-manifest.generated';
 
 type ThemeModuleLoader = () => Promise<{ default: ThemeDefinition }>;
 
@@ -54,7 +55,10 @@ const stylesheetModules = import.meta.glob('../**/*.css', {
     import: 'default',
 }) as Record<string, StylesheetModuleLoader>;
 
-const configModules = import.meta.glob('../*/app.config.ts', { eager: true });
+const configModules = import.meta.glob('../*/app.config.ts') as Record<
+    string,
+    ThemeAppConfigLoader
+>;
 
 const rawThemeEntries: RawThemeEntry[] = Object.entries(themeModules).map(
     ([path, loader]) => {
@@ -75,8 +79,9 @@ export interface ThemeManifestEntry {
     name: string;
     /** Directory name inside app/theme */
     dirName: string;
-    /** Latest theme definition */
-    definition: ThemeDefinition;
+    /** Human-readable metadata generated without importing theme code */
+    displayName?: string;
+    description?: string;
     /** Loader for hot-module replacement */
     loader: ThemeModuleLoader;
     /** Cached stylesheet list */
@@ -93,7 +98,18 @@ export interface ThemeManifestEntry {
 
 export interface ThemeManifestError {
     path: string;
-    error: unknown;
+    /** Human-readable message (POJO-safe for Nuxt payload / dev log stringify). */
+    message: string;
+}
+
+function toManifestError(path: string, error: unknown): ThemeManifestError {
+    const message =
+        error instanceof Error
+            ? error.message
+            : typeof error === 'string'
+              ? error
+              : 'Unknown theme manifest error';
+    return { path, message };
 }
 
 export interface ThemeManifestResult {
@@ -105,7 +121,7 @@ export interface ThemeManifestResult {
  * `loadThemeManifest`
  *
  * Purpose:
- * Loads all theme definitions and builds the manifest.
+ * Joins generated metadata with lazy module loaders without importing theme code.
  *
  * Constraints:
  * - Missing or invalid theme modules are skipped in dev
@@ -114,55 +130,48 @@ export async function loadThemeManifest(): Promise<ThemeManifestResult> {
     const manifest: ThemeManifestEntry[] = [];
     const errors: ThemeManifestError[] = [];
 
-    const results = await Promise.all(
-        rawThemeEntries.map(async (entry) => {
-            try {
-                const module = await entry.loader();
-                const definition = module.default as
-                    | ThemeDefinition
-                    | undefined;
-
-                if (!definition?.name) {
-                    if (import.meta.dev) {
-                        console.warn(
-                            `[theme] Skipping ${entry.path}: missing theme name.`
-                        );
-                    }
-                    return null;
-                }
-
-                return {
-                    name: definition.name,
-                    dirName: entry.dirName,
-                    definition,
-                    loader: entry.loader,
-                    stylesheets: definition.stylesheets ?? [],
-                    isDefault: Boolean(definition.isDefault),
-                    hasCssSelectorStyles: containsStyleSelectors(definition),
-                    appConfigLoader: configModules[
-                        `../${entry.dirName}/app.config.ts`
-                    ]
-                        ? () =>
-                              Promise.resolve(
-                                  configModules[
-                                      `../${entry.dirName}/app.config.ts`
-                                  ] as { default: ThemeAppConfig } | ThemeAppConfig
-                              )
-                        : undefined,
-                    iconsLoader:
-                        iconModules[`../${entry.dirName}/icons.config.ts`],
-                };
-            } catch (error) {
-                errors.push({ path: entry.path, error });
-                return null;
-            }
-        })
-    );
-
-    for (const result of results) {
-        if (result) {
-            manifest.push(result);
+    const rawByDir = new Map(rawThemeEntries.map((entry) => [entry.dirName, entry]));
+    for (const metadata of GENERATED_THEME_METADATA) {
+        const entry = rawByDir.get(metadata.dirName);
+        if (!entry) {
+            errors.push(
+                toManifestError(
+                    `app/theme/${metadata.dirName}/theme.ts`,
+                    'Generated theme metadata has no matching module'
+                )
+            );
+            continue;
         }
+        manifest.push({
+            ...metadata,
+            stylesheets: [...metadata.stylesheets],
+            loader: entry.loader,
+            appConfigLoader: configModules[`../${entry.dirName}/app.config.ts`],
+            iconsLoader: iconModules[`../${entry.dirName}/icons.config.ts`],
+        });
+        rawByDir.delete(metadata.dirName);
+    }
+    for (const entry of rawByDir.values()) {
+        errors.push(
+            toManifestError(
+                entry.path,
+                'Theme is missing generated metadata; run bun run theme:validate'
+            )
+        );
+    }
+
+    manifest.sort((a, b) => a.name.localeCompare(b.name));
+
+    const defaults = manifest.filter((entry) => entry.isDefault);
+    if (defaults.length > 1) {
+        errors.push(
+            toManifestError(
+                'app/theme/*/theme.ts',
+                `Multiple themes declare isDefault: ${defaults
+                    .map((entry) => entry.name)
+                    .join(', ')}`
+            )
+        );
     }
 
     if (import.meta.dev && errors.length > 0) {
@@ -280,7 +289,8 @@ export function updateManifestEntry(
     entry: ThemeManifestEntry,
     definition: ThemeDefinition
 ): void {
-    entry.definition = definition;
+    entry.displayName = definition.displayName;
+    entry.description = definition.description;
     entry.stylesheets = definition.stylesheets ?? [];
     entry.isDefault = Boolean(definition.isDefault);
     entry.hasCssSelectorStyles = containsStyleSelectors(definition);
@@ -339,6 +349,15 @@ export async function resolveThemeStylesheetHref(
         /^(?:[a-z]+:)?\/\//i.test(trimmed) ||
         trimmed.startsWith('data:') ||
         trimmed.startsWith('blob:');
+
+    if (isExternal) {
+        if (import.meta.dev) {
+            console.warn(
+                `[theme] External stylesheet rejected for theme "${entry.name}": ${trimmed}`
+            );
+        }
+        return null;
+    }
 
     // Try resolving via emitted asset URL first
     const moduleKeyCandidates = new Set<string>();

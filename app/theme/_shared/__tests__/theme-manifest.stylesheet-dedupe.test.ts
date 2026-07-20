@@ -1,6 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { loadThemeStylesheets, type ThemeManifestEntry } from '../theme-manifest';
-import type { ThemeDefinition } from '../types';
 
 describe('loadThemeStylesheets dedupe', () => {
     beforeEach(() => {
@@ -13,7 +12,6 @@ describe('loadThemeStylesheets dedupe', () => {
         const entry: ThemeManifestEntry = {
             name: 'retro',
             dirName: 'retro',
-            definition: { name: 'retro', colors: { primary: '#000', secondary: '#111', surface: '#fff' } } as ThemeDefinition,
             loader: async () => ({
                 default: {
                     name: 'retro',

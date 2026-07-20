@@ -25,14 +25,25 @@ describe('pickDefaultTheme', () => {
         expect(result.reason).toBe('manifest-isDefault');
     });
 
-    it('falls back to first manifest entry', () => {
+    it('prefers the fallback constant before manifest ordering', () => {
         const result = pickDefaultTheme({
             manifestNames: ['blank', 'retro'],
             manifestDefaultName: null,
             configuredDefaultName: null,
         });
 
-        expect(result.defaultTheme).toBe('blank');
+        expect(result.defaultTheme).toBe('retro');
+        expect(result.reason).toBe('fallback-constant');
+    });
+
+    it('uses a sorted manifest fallback when the constant is unavailable', () => {
+        const result = pickDefaultTheme({
+            manifestNames: ['zeta', 'alpha'],
+            manifestDefaultName: null,
+            configuredDefaultName: null,
+        });
+
+        expect(result.defaultTheme).toBe('alpha');
         expect(result.reason).toBe('first-manifest-entry');
     });
 });
